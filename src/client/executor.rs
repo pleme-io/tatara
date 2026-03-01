@@ -1,0 +1,204 @@
+use anyhow::{Context, Result};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::RwLock;
+use tracing::{error, info, warn};
+use uuid::Uuid;
+
+use crate::domain::allocation::{Allocation, AllocationState, TaskRunState};
+use crate::domain::state_store::StateStore;
+use crate::drivers::{DriverRegistry, TaskHandle};
+
+struct RunningTask {
+    handle: TaskHandle,
+    task_name: String,
+    alloc_id: Uuid,
+}
+
+pub struct Executor {
+    store: Arc<StateStore>,
+    drivers: Arc<DriverRegistry>,
+    alloc_dir: PathBuf,
+    running: RwLock<HashMap<Uuid, Vec<RunningTask>>>,
+}
+
+impl Executor {
+    pub fn new(store: Arc<StateStore>, drivers: Arc<DriverRegistry>, alloc_dir: PathBuf) -> Self {
+        Self {
+            store,
+            drivers,
+            alloc_dir,
+            running: RwLock::new(HashMap::new()),
+        }
+    }
+
+    pub async fn start_allocation(&self, alloc: Allocation) -> Result<()> {
+        let alloc_id = alloc.id;
+        let job = self
+            .store
+            .get_job(&alloc.job_id)
+            .await
+            .context("Job not found for allocation")?;
+
+        let group = job
+            .groups
+            .iter()
+            .find(|g| g.name == alloc.group_name)
+            .context("Task group not found in job")?;
+
+        let alloc_path = self.alloc_dir.join(alloc_id.to_string());
+        tokio::fs::create_dir_all(&alloc_path).await?;
+
+        let mut tasks = Vec::new();
+
+        for task in &group.tasks {
+            let driver = self
+                .drivers
+                .get(&task.driver)
+                .with_context(|| format!("Driver {:?} not available", task.driver))?;
+
+            match driver.start(task, &alloc_path).await {
+                Ok(handle) => {
+                    info!(
+                        alloc_id = %alloc_id,
+                        task = %task.name,
+                        driver = %driver.name(),
+                        pid = ?handle.pid,
+                        "Task started"
+                    );
+
+                    // Update task state to running
+                    self.store
+                        .update_allocation(&alloc_id, |a| {
+                            if let Some(ts) = a.task_states.get_mut(&task.name) {
+                                ts.state = TaskRunState::Running;
+                                ts.pid = handle.pid;
+                                ts.started_at = Some(handle.started_at);
+                            }
+                        })
+                        .await?;
+
+                    tasks.push(RunningTask {
+                        handle,
+                        task_name: task.name.clone(),
+                        alloc_id,
+                    });
+                }
+                Err(e) => {
+                    error!(
+                        alloc_id = %alloc_id,
+                        task = %task.name,
+                        error = %e,
+                        "Failed to start task"
+                    );
+
+                    self.store
+                        .update_allocation(&alloc_id, |a| {
+                            if let Some(ts) = a.task_states.get_mut(&task.name) {
+                                ts.state = TaskRunState::Dead;
+                            }
+                            a.state = AllocationState::Failed;
+                        })
+                        .await?;
+
+                    return Err(e);
+                }
+            }
+        }
+
+        // Mark allocation as running
+        self.store
+            .update_allocation(&alloc_id, |a| {
+                a.state = AllocationState::Running;
+            })
+            .await?;
+
+        self.running.write().await.insert(alloc_id, tasks);
+
+        Ok(())
+    }
+
+    pub async fn stop_allocation(&self, alloc_id: &Uuid, timeout: Duration) -> Result<()> {
+        let mut running = self.running.write().await;
+
+        if let Some(tasks) = running.remove(alloc_id) {
+            for rt in &tasks {
+                let driver = self
+                    .drivers
+                    .get(&rt.handle.driver)
+                    .context("Driver not found")?;
+
+                if let Err(e) = driver.stop(&rt.handle, timeout).await {
+                    warn!(
+                        alloc_id = %alloc_id,
+                        task = %rt.task_name,
+                        error = %e,
+                        "Failed to stop task"
+                    );
+                }
+            }
+        }
+
+        self.store
+            .update_allocation(alloc_id, |a| {
+                a.state = AllocationState::Complete;
+                for ts in a.task_states.values_mut() {
+                    ts.state = TaskRunState::Dead;
+                    ts.finished_at = Some(chrono::Utc::now());
+                }
+            })
+            .await?;
+
+        Ok(())
+    }
+
+    /// Check health of all running allocations. Returns dead allocations.
+    pub async fn check_health(&self) -> Vec<Uuid> {
+        let running = self.running.read().await;
+        let mut dead = Vec::new();
+
+        for (alloc_id, tasks) in running.iter() {
+            let mut all_dead = true;
+
+            for rt in tasks {
+                if let Some(driver) = self.drivers.get(&rt.handle.driver) {
+                    match driver.status(&rt.handle).await {
+                        Ok(TaskRunState::Running) => {
+                            all_dead = false;
+                        }
+                        Ok(TaskRunState::Dead) => {
+                            let _ = self
+                                .store
+                                .update_allocation(alloc_id, |a| {
+                                    if let Some(ts) = a.task_states.get_mut(&rt.task_name) {
+                                        ts.state = TaskRunState::Dead;
+                                        ts.finished_at = Some(chrono::Utc::now());
+                                    }
+                                })
+                                .await;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            if all_dead {
+                dead.push(*alloc_id);
+            }
+        }
+
+        dead
+    }
+
+    pub async fn get_task_handle(&self, alloc_id: &Uuid, task_name: &str) -> Option<TaskHandle> {
+        let running = self.running.read().await;
+        running.get(alloc_id).and_then(|tasks| {
+            tasks
+                .iter()
+                .find(|t| t.task_name == task_name)
+                .map(|t| t.handle.clone())
+        })
+    }
+}

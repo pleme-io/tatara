@@ -1,0 +1,330 @@
+syntax = "proto3";
+package tatara.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ── External API (server exposes to users) ──
+
+service TataraApi {
+  rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+  rpc StopJob(StopJobRequest) returns (StopJobResponse);
+  rpc GetJob(GetJobRequest) returns (GetJobResponse);
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  rpc GetAllocation(GetAllocationRequest) returns (GetAllocationResponse);
+  rpc ListAllocations(ListAllocationsRequest) returns (ListAllocationsResponse);
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  rpc StreamLogs(StreamLogsRequest) returns (stream LogEntry);
+}
+
+// ── Internal Protocol (server ↔ client) ──
+
+service TataraNode {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Heartbeat(stream HeartbeatRequest) returns (stream HeartbeatResponse);
+  rpc StartAllocation(StartAllocationRequest) returns (StartAllocationResponse);
+  rpc StopAllocation(StopAllocationRequest) returns (StopAllocationResponse);
+  rpc StreamTaskLogs(stream TaskLogEntry) returns (LogAck);
+}
+
+// ── Common Types ──
+
+enum JobType {
+  JOB_TYPE_UNSPECIFIED = 0;
+  JOB_TYPE_SERVICE = 1;
+  JOB_TYPE_BATCH = 2;
+  JOB_TYPE_SYSTEM = 3;
+}
+
+enum JobStatus {
+  JOB_STATUS_UNSPECIFIED = 0;
+  JOB_STATUS_PENDING = 1;
+  JOB_STATUS_RUNNING = 2;
+  JOB_STATUS_DEAD = 3;
+}
+
+enum AllocationState {
+  ALLOCATION_STATE_UNSPECIFIED = 0;
+  ALLOCATION_STATE_PENDING = 1;
+  ALLOCATION_STATE_RUNNING = 2;
+  ALLOCATION_STATE_COMPLETE = 3;
+  ALLOCATION_STATE_FAILED = 4;
+  ALLOCATION_STATE_LOST = 5;
+}
+
+enum TaskRunState {
+  TASK_RUN_STATE_UNSPECIFIED = 0;
+  TASK_RUN_STATE_PENDING = 1;
+  TASK_RUN_STATE_RUNNING = 2;
+  TASK_RUN_STATE_DEAD = 3;
+}
+
+enum DriverType {
+  DRIVER_TYPE_UNSPECIFIED = 0;
+  DRIVER_TYPE_EXEC = 1;
+  DRIVER_TYPE_OCI = 2;
+  DRIVER_TYPE_NIX = 3;
+}
+
+enum NodeStatus {
+  NODE_STATUS_UNSPECIFIED = 0;
+  NODE_STATUS_READY = 1;
+  NODE_STATUS_DOWN = 2;
+  NODE_STATUS_DRAINING = 3;
+}
+
+enum RestartMode {
+  RESTART_MODE_UNSPECIFIED = 0;
+  RESTART_MODE_ON_FAILURE = 1;
+  RESTART_MODE_ALWAYS = 2;
+  RESTART_MODE_NEVER = 3;
+}
+
+message Resources {
+  uint64 cpu_mhz = 1;
+  uint64 memory_mb = 2;
+}
+
+message RestartPolicy {
+  RestartMode mode = 1;
+  uint32 attempts = 2;
+  uint64 interval_secs = 3;
+  uint64 delay_secs = 4;
+}
+
+message Constraint {
+  string attribute = 1;
+  string operator = 2;  // "=", "!=", "in", "not_in"
+  string value = 3;
+}
+
+message HealthCheck {
+  oneof check {
+    HttpHealthCheck http = 1;
+    ExecHealthCheck exec = 2;
+    TcpHealthCheck tcp = 3;
+  }
+  uint64 interval_secs = 4;
+  uint64 timeout_secs = 5;
+}
+
+message HttpHealthCheck {
+  uint32 port = 1;
+  string path = 2;
+}
+
+message ExecHealthCheck {
+  string command = 1;
+}
+
+message TcpHealthCheck {
+  uint32 port = 1;
+}
+
+message ExecConfig {
+  string command = 1;
+  repeated string args = 2;
+  string working_dir = 3;
+}
+
+message OciConfig {
+  string image = 1;
+  map<string, string> ports = 2;
+  map<string, string> volumes = 3;
+  repeated string entrypoint = 4;
+  repeated string command = 5;
+}
+
+message NixConfig {
+  string flake_ref = 1;
+  repeated string args = 2;
+}
+
+message TaskSpec {
+  string name = 1;
+  DriverType driver = 2;
+  oneof config {
+    ExecConfig exec_config = 3;
+    OciConfig oci_config = 4;
+    NixConfig nix_config = 5;
+  }
+  map<string, string> env = 6;
+  Resources resources = 7;
+  repeated HealthCheck health_checks = 8;
+}
+
+message TaskGroupSpec {
+  string name = 1;
+  uint32 count = 2;
+  repeated TaskSpec tasks = 3;
+  RestartPolicy restart_policy = 4;
+  Resources resources = 5;
+}
+
+message JobSpec {
+  string id = 1;
+  JobType job_type = 2;
+  repeated TaskGroupSpec groups = 3;
+  repeated Constraint constraints = 4;
+  map<string, string> meta = 5;
+}
+
+message TaskStateProto {
+  TaskRunState state = 1;
+  uint32 pid = 2;
+  int32 exit_code = 3;
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp finished_at = 5;
+  uint32 restarts = 6;
+}
+
+message AllocationProto {
+  string id = 1;
+  string job_id = 2;
+  string group_name = 3;
+  string node_id = 4;
+  AllocationState state = 5;
+  google.protobuf.Timestamp created_at = 6;
+  map<string, TaskStateProto> task_states = 7;
+}
+
+message JobProto {
+  string id = 1;
+  uint64 version = 2;
+  JobType job_type = 3;
+  JobStatus status = 4;
+  google.protobuf.Timestamp submitted_at = 5;
+  repeated TaskGroupSpec groups = 6;
+  repeated Constraint constraints = 7;
+  map<string, string> meta = 8;
+}
+
+message NodeProto {
+  string id = 1;
+  string address = 2;
+  NodeStatus status = 3;
+  Resources total_resources = 4;
+  Resources available_resources = 5;
+  map<string, string> attributes = 6;
+  repeated DriverType drivers = 7;
+  google.protobuf.Timestamp last_heartbeat = 8;
+  repeated string allocation_ids = 9;
+}
+
+message LogEntry {
+  string task_name = 1;
+  string message = 2;
+  string stream = 3;  // "stdout" or "stderr"
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// ── External API Messages ──
+
+message SubmitJobRequest {
+  JobSpec spec = 1;
+}
+
+message SubmitJobResponse {
+  string job_id = 1;
+  uint64 version = 2;
+}
+
+message StopJobRequest {
+  string job_id = 1;
+}
+
+message StopJobResponse {}
+
+message GetJobRequest {
+  string job_id = 1;
+}
+
+message GetJobResponse {
+  JobProto job = 1;
+  repeated AllocationProto allocations = 2;
+}
+
+message ListJobsRequest {}
+
+message ListJobsResponse {
+  repeated JobProto jobs = 1;
+}
+
+message GetAllocationRequest {
+  string allocation_id = 1;
+}
+
+message GetAllocationResponse {
+  AllocationProto allocation = 1;
+}
+
+message ListAllocationsRequest {
+  string job_id = 1;  // optional filter
+}
+
+message ListAllocationsResponse {
+  repeated AllocationProto allocations = 1;
+}
+
+message ListNodesRequest {}
+
+message ListNodesResponse {
+  repeated NodeProto nodes = 1;
+}
+
+message StreamLogsRequest {
+  string allocation_id = 1;
+  string task_name = 2;  // optional filter
+  bool follow = 3;
+}
+
+// ── Internal Protocol Messages ──
+
+message RegisterRequest {
+  string node_id = 1;
+  string address = 2;
+  Resources total_resources = 3;
+  map<string, string> attributes = 4;
+  repeated DriverType drivers = 5;
+}
+
+message RegisterResponse {
+  bool accepted = 1;
+}
+
+message HeartbeatRequest {
+  string node_id = 1;
+  Resources available_resources = 2;
+  repeated string running_allocations = 3;
+}
+
+message HeartbeatResponse {
+  repeated string allocations_to_stop = 1;
+}
+
+message StartAllocationRequest {
+  AllocationProto allocation = 1;
+  JobSpec job_spec = 2;
+}
+
+message StartAllocationResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message StopAllocationRequest {
+  string allocation_id = 1;
+}
+
+message StopAllocationResponse {
+  bool success = 1;
+}
+
+message TaskLogEntry {
+  string allocation_id = 1;
+  string task_name = 2;
+  string message = 3;
+  string stream = 4;
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+message LogAck {}

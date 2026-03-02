@@ -37,6 +37,14 @@ pub enum EventKind {
     SpecDriftDetected,
     RollingUpdateStarted,
     RollingUpdateCompleted,
+    SourceCreated,
+    SourceReconciled,
+    SourceFailed,
+    SourceSuspended,
+    SourceResumed,
+    SourceJobCreated,
+    SourceJobUpdated,
+    SourceJobRemoved,
 }
 
 impl std::fmt::Display for EventKind {
@@ -63,6 +71,14 @@ impl std::fmt::Display for EventKind {
             Self::SpecDriftDetected => write!(f, "spec_drift_detected"),
             Self::RollingUpdateStarted => write!(f, "rolling_update_started"),
             Self::RollingUpdateCompleted => write!(f, "rolling_update_completed"),
+            Self::SourceCreated => write!(f, "source_created"),
+            Self::SourceReconciled => write!(f, "source_reconciled"),
+            Self::SourceFailed => write!(f, "source_failed"),
+            Self::SourceSuspended => write!(f, "source_suspended"),
+            Self::SourceResumed => write!(f, "source_resumed"),
+            Self::SourceJobCreated => write!(f, "source_job_created"),
+            Self::SourceJobUpdated => write!(f, "source_job_updated"),
+            Self::SourceJobRemoved => write!(f, "source_job_removed"),
         }
     }
 }
@@ -91,6 +107,14 @@ impl EventKind {
             "spec_drift_detected" => Some(Self::SpecDriftDetected),
             "rolling_update_started" => Some(Self::RollingUpdateStarted),
             "rolling_update_completed" => Some(Self::RollingUpdateCompleted),
+            "source_created" => Some(Self::SourceCreated),
+            "source_reconciled" => Some(Self::SourceReconciled),
+            "source_failed" => Some(Self::SourceFailed),
+            "source_suspended" => Some(Self::SourceSuspended),
+            "source_resumed" => Some(Self::SourceResumed),
+            "source_job_created" => Some(Self::SourceJobCreated),
+            "source_job_updated" => Some(Self::SourceJobUpdated),
+            "source_job_removed" => Some(Self::SourceJobRemoved),
             _ => None,
         }
     }

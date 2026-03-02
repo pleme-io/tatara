@@ -7,6 +7,7 @@ pub mod job;
 pub mod node;
 pub mod output;
 pub mod release;
+pub mod source;
 pub mod top;
 
 use clap::{Parser, Subcommand};
@@ -121,6 +122,12 @@ pub enum Commands {
     Forge {
         #[command(subcommand)]
         command: ForgeCmd,
+    },
+
+    /// Manage sources (GitOps flake watchers)
+    Source {
+        #[command(subcommand)]
+        command: SourceCmd,
     },
 
     // ── Backwards-compatible aliases ──
@@ -342,6 +349,47 @@ pub enum ForgeCmd {
     Inspect {
         /// Flake reference or local path
         flake_ref: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SourceCmd {
+    /// List all sources
+    List,
+    /// Get source details
+    Get {
+        /// Source name or ID
+        name_or_id: String,
+    },
+    /// Add a new source
+    Add {
+        /// Source name
+        name: String,
+        /// Flake reference (e.g., "github:pleme-io/tatara-infra")
+        flake_ref: String,
+        /// Source kind
+        #[arg(long, default_value = "git-flake")]
+        kind: String,
+    },
+    /// Delete a source and its managed jobs
+    Delete {
+        /// Source name or ID
+        name_or_id: String,
+    },
+    /// Force immediate sync
+    Sync {
+        /// Source name or ID
+        name_or_id: String,
+    },
+    /// Suspend reconciliation
+    Suspend {
+        /// Source name or ID
+        name_or_id: String,
+    },
+    /// Resume reconciliation
+    Resume {
+        /// Source name or ID
+        name_or_id: String,
     },
 }
 

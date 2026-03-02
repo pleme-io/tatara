@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use super::types::{ClusterCommand, ClusterResponse, ClusterState, JobVersionEntry, NodeId};
 use crate::domain::event::{Event, EventKind};
 use crate::domain::job::{JobSpec, JobStatus};
-use crate::domain::release::ReleaseStatus;
+use crate::domain::source::SourceStatus;
 
 openraft::declare_raft_types!(
     pub TypeConfig:
@@ -423,6 +423,84 @@ fn apply_command(state: &mut ClusterState, cmd: ClusterCommand) -> ClusterRespon
                 ClusterResponse::Ok
             } else {
                 ClusterResponse::Error(format!("Node not found: {}", node_id))
+            }
+        }
+
+        // ── Sources ──
+
+        ClusterCommand::PutSource(source) => {
+            let source_clone = source.clone();
+            state.events.push(Event::new(
+                EventKind::SourceCreated,
+                serde_json::json!({
+                    "source_id": source.id.to_string(),
+                    "name": &source.name,
+                    "flake_ref": &source.flake_ref,
+                }),
+            ));
+            state.sources.insert(source.id, source);
+            ClusterResponse::Source(source_clone)
+        }
+
+        ClusterCommand::UpdateSource {
+            source_id,
+            status,
+            last_rev,
+            last_error,
+            managed_jobs,
+        } => {
+            if let Some(source) = state.sources.get_mut(&source_id) {
+                let old_status = source.status.clone();
+                source.status = status.clone();
+                if let Some(rev) = last_rev {
+                    source.last_rev = Some(rev);
+                }
+                source.last_error = last_error;
+                if let Some(jobs) = managed_jobs {
+                    source.managed_jobs = jobs;
+                }
+                source.last_reconciled_at = Some(chrono::Utc::now());
+
+                // Emit appropriate event
+                let kind = match &status {
+                    SourceStatus::Ready => EventKind::SourceReconciled,
+                    SourceStatus::Failed => EventKind::SourceFailed,
+                    SourceStatus::Suspended if old_status != SourceStatus::Suspended => {
+                        EventKind::SourceSuspended
+                    }
+                    SourceStatus::Pending if old_status == SourceStatus::Suspended => {
+                        EventKind::SourceResumed
+                    }
+                    _ => EventKind::SourceReconciled,
+                };
+                state.events.push(Event::new(
+                    kind,
+                    serde_json::json!({
+                        "source_id": source_id.to_string(),
+                        "name": &source.name,
+                        "status": &status,
+                    }),
+                ));
+
+                ClusterResponse::Source(source.clone())
+            } else {
+                ClusterResponse::Error(format!("Source not found: {}", source_id))
+            }
+        }
+
+        ClusterCommand::DeleteSource { source_id } => {
+            if let Some(source) = state.sources.remove(&source_id) {
+                state.events.push(Event::new(
+                    EventKind::SourceReconciled,
+                    serde_json::json!({
+                        "source_id": source_id.to_string(),
+                        "name": &source.name,
+                        "action": "deleted",
+                    }),
+                ));
+                ClusterResponse::Ok
+            } else {
+                ClusterResponse::Error(format!("Source not found: {}", source_id))
             }
         }
     }

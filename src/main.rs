@@ -14,7 +14,7 @@ mod server;
 
 use clap::Parser;
 use cli::{
-    AllocCmd, Cli, Commands, ContextCmd, EventCmd, ForgeCmd, JobCmd, NodeCmd, ReleaseCmd,
+    AllocCmd, Cli, Commands, ContextCmd, EventCmd, ForgeCmd, JobCmd, NodeCmd, ReleaseCmd, SourceCmd,
 };
 
 #[tokio::main]
@@ -145,6 +145,31 @@ async fn main() -> anyhow::Result<()> {
             ForgeCmd::Init { name } => cli::forge::init(&name).await,
             ForgeCmd::Validate { path } => cli::forge::validate(&path, output).await,
             ForgeCmd::Inspect { flake_ref } => cli::forge::inspect(&flake_ref, output).await,
+        },
+
+        // ── Source ──
+        Commands::Source { command } => match command {
+            SourceCmd::List => cli::source::list(output, endpoint).await,
+            SourceCmd::Get { name_or_id } => {
+                cli::source::get(&name_or_id, output, endpoint).await
+            }
+            SourceCmd::Add {
+                name,
+                flake_ref,
+                kind,
+            } => cli::source::add(&name, &flake_ref, &kind, endpoint, output).await,
+            SourceCmd::Delete { name_or_id } => {
+                cli::source::delete(&name_or_id, endpoint, output).await
+            }
+            SourceCmd::Sync { name_or_id } => {
+                cli::source::sync(&name_or_id, endpoint, output).await
+            }
+            SourceCmd::Suspend { name_or_id } => {
+                cli::source::suspend(&name_or_id, endpoint, output).await
+            }
+            SourceCmd::Resume { name_or_id } => {
+                cli::source::resume(&name_or_id, endpoint, output).await
+            }
         },
 
         // ── Backwards-compatible aliases ──

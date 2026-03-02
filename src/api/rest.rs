@@ -18,6 +18,7 @@ use crate::domain::allocation::Allocation;
 use crate::domain::event::EventKind;
 use crate::domain::job::{Job, JobSpec, JobStatus};
 use crate::domain::release::{CreateReleaseRequest, Release, ReleaseStatus};
+use crate::domain::source::{CreateSourceRequest, Source, SourceStatus};
 use crate::drivers::LogEntry;
 
 #[derive(Clone)]
@@ -66,6 +67,24 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/releases/{release_id}/rollback",
             post(rollback_release),
+        )
+        // Sources
+        .route("/api/v1/sources", get(list_sources).post(create_source))
+        .route(
+            "/api/v1/sources/{source_id}",
+            get(get_source).delete(delete_source),
+        )
+        .route(
+            "/api/v1/sources/{source_id}/sync",
+            post(sync_source),
+        )
+        .route(
+            "/api/v1/sources/{source_id}/suspend",
+            post(suspend_source),
+        )
+        .route(
+            "/api/v1/sources/{source_id}/resume",
+            post(resume_source),
         )
         .with_state(state)
 }
@@ -419,6 +438,136 @@ async fn rollback_release(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    Ok(Json(result.value))
+}
+
+// ── Sources ──
+
+async fn list_sources(State(state): State<AppState>) -> Json<Vec<Source>> {
+    Json(state.cluster_store.list_sources().await)
+}
+
+async fn create_source(
+    State(state): State<AppState>,
+    Json(req): Json<CreateSourceRequest>,
+) -> Result<Json<Source>, (StatusCode, String)> {
+    let source = Source::new(req.name, req.kind, req.flake_ref);
+
+    let result = state
+        .cluster_store
+        .put_source(source)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tracing::info!(
+        source_id = %result.value.id,
+        name = %result.value.name,
+        "Source created via REST"
+    );
+    Ok(Json(result.value))
+}
+
+async fn get_source(
+    State(state): State<AppState>,
+    Path(source_id): Path<String>,
+) -> Result<Json<Source>, (StatusCode, String)> {
+    let id: Uuid = source_id
+        .parse()
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid source ID".to_string()))?;
+
+    state
+        .cluster_store
+        .get_source(&id)
+        .await
+        .map(Json)
+        .ok_or((StatusCode::NOT_FOUND, "Source not found".to_string()))
+}
+
+async fn delete_source(
+    State(state): State<AppState>,
+    Path(source_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let id: Uuid = source_id
+        .parse()
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid source ID".to_string()))?;
+
+    // Get source to find managed jobs
+    let source = state
+        .cluster_store
+        .get_source(&id)
+        .await
+        .ok_or((StatusCode::NOT_FOUND, "Source not found".to_string()))?;
+
+    // Stop all managed jobs
+    for job_name in source.managed_jobs.keys() {
+        let _ = state
+            .cluster_store
+            .update_job_status(job_name, JobStatus::Dead)
+            .await;
+    }
+
+    state
+        .cluster_store
+        .delete_source(id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tracing::info!(source_id = %source_id, "Source deleted via REST");
+    Ok(Json(serde_json::json!({ "deleted": source_id })))
+}
+
+async fn sync_source(
+    State(state): State<AppState>,
+    Path(source_id): Path<String>,
+) -> Result<Json<Source>, (StatusCode, String)> {
+    let id: Uuid = source_id
+        .parse()
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid source ID".to_string()))?;
+
+    // Force re-evaluation by clearing last_rev
+    let result = state
+        .cluster_store
+        .update_source(id, SourceStatus::Pending, None, None, None)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tracing::info!(source_id = %source_id, "Source sync triggered via REST");
+    Ok(Json(result.value))
+}
+
+async fn suspend_source(
+    State(state): State<AppState>,
+    Path(source_id): Path<String>,
+) -> Result<Json<Source>, (StatusCode, String)> {
+    let id: Uuid = source_id
+        .parse()
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid source ID".to_string()))?;
+
+    let result = state
+        .cluster_store
+        .update_source(id, SourceStatus::Suspended, None, None, None)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tracing::info!(source_id = %source_id, "Source suspended via REST");
+    Ok(Json(result.value))
+}
+
+async fn resume_source(
+    State(state): State<AppState>,
+    Path(source_id): Path<String>,
+) -> Result<Json<Source>, (StatusCode, String)> {
+    let id: Uuid = source_id
+        .parse()
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid source ID".to_string()))?;
+
+    let result = state
+        .cluster_store
+        .update_source(id, SourceStatus::Pending, None, None, None)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tracing::info!(source_id = %source_id, "Source resumed via REST");
     Ok(Json(result.value))
 }
 

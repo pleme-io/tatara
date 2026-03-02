@@ -13,6 +13,7 @@ use crate::domain::allocation::{Allocation, AllocationState, TaskState};
 use crate::domain::event::{Event, EventKind};
 use crate::domain::job::{Job, JobStatus};
 use crate::domain::release::{Release, ReleaseStatus};
+use crate::domain::source::{Source, SourceStatus};
 
 /// Cluster-backed store that reads from the in-memory Raft state machine
 /// and writes through Raft consensus with full propagation tracking.
@@ -136,6 +137,28 @@ impl ClusterStore {
     pub async fn get_release(&self, id: &uuid::Uuid) -> Option<Release> {
         let data = self.state.read().await;
         data.cluster_state.releases.get(id).cloned()
+    }
+
+    /// List all sources.
+    pub async fn list_sources(&self) -> Vec<Source> {
+        let data = self.state.read().await;
+        data.cluster_state.sources.values().cloned().collect()
+    }
+
+    /// Get a specific source.
+    pub async fn get_source(&self, id: &uuid::Uuid) -> Option<Source> {
+        let data = self.state.read().await;
+        data.cluster_state.sources.get(id).cloned()
+    }
+
+    /// Get a source by name.
+    pub async fn get_source_by_name(&self, name: &str) -> Option<Source> {
+        let data = self.state.read().await;
+        data.cluster_state
+            .sources
+            .values()
+            .find(|s| s.name == name)
+            .cloned()
     }
 
     /// Linearizable read — confirms leadership first. Use for operations
@@ -401,6 +424,82 @@ impl ClusterStore {
         let resp = self
             .raft
             .write(ClusterCommand::SetNodeEligibility { node_id, eligible })
+            .await?;
+        match resp {
+            ClusterResponse::Ok => Ok(()),
+            ClusterResponse::Error(e) => anyhow::bail!("{}", e),
+            _ => Ok(()),
+        }
+    }
+
+    /// Create a source.
+    pub async fn put_source(&self, source: Source) -> Result<WriteResult<Source>> {
+        let resp = self
+            .raft
+            .write(ClusterCommand::PutSource(source))
+            .await?;
+
+        let source = match resp {
+            ClusterResponse::Source(s) => s,
+            ClusterResponse::Error(e) => anyhow::bail!("Failed to put source: {}", e),
+            _ => anyhow::bail!("Unexpected response from Raft"),
+        };
+
+        let log_index = self.current_commit_index().await;
+        let prop = self.await_propagation(log_index).await;
+
+        Ok(WriteResult {
+            value: source,
+            log_index,
+            fully_propagated: prop.fully_propagated,
+            propagated_count: prop.propagated_count,
+            total_nodes: prop.total_nodes,
+        })
+    }
+
+    /// Update source status, revision, error, and managed jobs.
+    pub async fn update_source(
+        &self,
+        source_id: uuid::Uuid,
+        status: SourceStatus,
+        last_rev: Option<String>,
+        last_error: Option<String>,
+        managed_jobs: Option<std::collections::HashMap<String, String>>,
+    ) -> Result<WriteResult<Source>> {
+        let resp = self
+            .raft
+            .write(ClusterCommand::UpdateSource {
+                source_id,
+                status,
+                last_rev,
+                last_error,
+                managed_jobs,
+            })
+            .await?;
+
+        let source = match resp {
+            ClusterResponse::Source(s) => s,
+            ClusterResponse::Error(e) => anyhow::bail!("{}", e),
+            _ => anyhow::bail!("Unexpected response from Raft"),
+        };
+
+        let log_index = self.current_commit_index().await;
+        let prop = self.await_propagation(log_index).await;
+
+        Ok(WriteResult {
+            value: source,
+            log_index,
+            fully_propagated: prop.fully_propagated,
+            propagated_count: prop.propagated_count,
+            total_nodes: prop.total_nodes,
+        })
+    }
+
+    /// Delete a source.
+    pub async fn delete_source(&self, source_id: uuid::Uuid) -> Result<()> {
+        let resp = self
+            .raft
+            .write(ClusterCommand::DeleteSource { source_id })
             .await?;
         match resp {
             ClusterResponse::Ok => Ok(()),

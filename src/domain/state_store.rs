@@ -8,12 +8,15 @@ use uuid::Uuid;
 use super::allocation::Allocation;
 use super::job::Job;
 use super::node::Node;
+use super::source::Source;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct StateSnapshot {
     jobs: HashMap<String, Job>,
     allocations: HashMap<Uuid, Allocation>,
     nodes: HashMap<String, Node>,
+    #[serde(default)]
+    sources: HashMap<Uuid, Source>,
 }
 
 pub struct StateStore {
@@ -129,6 +132,48 @@ impl StateStore {
     pub async fn list_nodes(&self) -> Vec<Node> {
         let state = self.state.read().await;
         state.nodes.values().cloned().collect()
+    }
+
+    pub async fn put_source(&self, source: Source) -> Result<()> {
+        let mut state = self.state.write().await;
+        state.sources.insert(source.id, source);
+        self.persist(&state).await
+    }
+
+    pub async fn get_source(&self, id: &Uuid) -> Option<Source> {
+        let state = self.state.read().await;
+        state.sources.get(id).cloned()
+    }
+
+    pub async fn get_source_by_name(&self, name: &str) -> Option<Source> {
+        let state = self.state.read().await;
+        state.sources.values().find(|s| s.name == name).cloned()
+    }
+
+    pub async fn list_sources(&self) -> Vec<Source> {
+        let state = self.state.read().await;
+        state.sources.values().cloned().collect()
+    }
+
+    pub async fn update_source<F>(&self, id: &Uuid, f: F) -> Result<Option<Source>>
+    where
+        F: FnOnce(&mut Source),
+    {
+        let mut state = self.state.write().await;
+        if let Some(source) = state.sources.get_mut(id) {
+            f(source);
+            let source = source.clone();
+            self.persist(&state).await?;
+            Ok(Some(source))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn delete_source(&self, id: &Uuid) -> Result<()> {
+        let mut state = self.state.write().await;
+        state.sources.remove(id);
+        self.persist(&state).await
     }
 
     async fn persist(&self, state: &StateSnapshot) -> Result<()> {

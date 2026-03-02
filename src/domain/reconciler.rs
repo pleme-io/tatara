@@ -11,6 +11,7 @@ use crate::nix_eval::evaluator::NixEvaluator;
 use super::allocation::{Allocation, AllocationState, TaskRunState};
 use super::job::{Job, JobStatus, JobType, RestartMode};
 use super::node::{Node, NodeStatus};
+use super::source::{Source, SourceStatus};
 use super::state_store::StateStore;
 
 /// Continuously converges actual state toward desired state.
@@ -95,6 +96,13 @@ impl Reconciler {
             {
                 self.reconcile_drift(job).await?;
             }
+        }
+
+        // Pass 5: Source reconciliation (periodic)
+        if self.config.source_reconciliation
+            && self.tick_count % self.config.source_reeval_every_n_ticks == 0
+        {
+            self.reconcile_sources().await?;
         }
 
         debug!(tick = self.tick_count, "Reconcile tick completed");
@@ -533,6 +541,150 @@ impl Reconciler {
             "Rolling update completed"
         );
 
+        Ok(())
+    }
+
+    /// Pass 5: Source reconciliation.
+    ///
+    /// For each non-suspended source, check if the flake revision has changed.
+    /// If it has, re-evaluate tataraJobs and create/update/remove managed jobs.
+    async fn reconcile_sources(&self) -> Result<()> {
+        let sources = self.store.list_sources().await;
+
+        for source in &sources {
+            if source.status == SourceStatus::Suspended {
+                continue;
+            }
+
+            if let Err(e) = self.reconcile_single_source(source).await {
+                warn!(source = %source.name, error = %e, "Source reconciliation failed");
+                let _ = self
+                    .store
+                    .update_source(&source.id, |s| {
+                        s.status = SourceStatus::Failed;
+                        s.last_error = Some(e.to_string());
+                    })
+                    .await;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Reconcile a single source against its flake.
+    async fn reconcile_single_source(&self, source: &Source) -> Result<()> {
+        // Step 1: Check revision
+        let metadata = NixEvaluator::flake_metadata(
+            &source.flake_ref,
+            self.config.flake_metadata_timeout_secs,
+        )
+        .await?;
+
+        let current_rev = metadata
+            .rev
+            .as_deref()
+            .or(Some(&metadata.last_modified.to_string()))
+            .map(|s| s.to_string());
+
+        // If rev matches last_rev, skip (no changes)
+        if let (Some(last), Some(current)) = (&source.last_rev, &current_rev) {
+            if last == current {
+                debug!(source = %source.name, rev = %current, "Source unchanged, skipping");
+                return Ok(());
+            }
+        }
+
+        info!(
+            source = %source.name,
+            old_rev = ?source.last_rev,
+            new_rev = ?current_rev,
+            "Source revision changed, evaluating tataraJobs"
+        );
+
+        // Step 2: Evaluate jobs
+        let flake_jobs = NixEvaluator::eval_tatara_jobs(&source.flake_ref).await?;
+
+        // Step 3: Diff against managed_jobs
+        let mut new_managed: std::collections::HashMap<String, String> =
+            source.managed_jobs.clone();
+
+        // Create or update jobs from flake
+        for (job_name, spec) in &flake_jobs {
+            let spec_hash = spec.content_hash();
+
+            match source.managed_jobs.get(job_name) {
+                None => {
+                    // New job — create it
+                    let job = spec.clone().into_job();
+                    self.store.put_job(job).await?;
+                    new_managed.insert(job_name.clone(), spec_hash);
+                    info!(
+                        source = %source.name,
+                        job = %job_name,
+                        "Source created new job"
+                    );
+                }
+                Some(old_hash) if *old_hash != spec_hash => {
+                    // Spec changed — update the job
+                    let _ = self
+                        .store
+                        .update_job(job_name, |j| {
+                            j.groups = spec.groups.clone();
+                            j.constraints = spec.constraints.clone();
+                            j.meta = spec.meta.clone();
+                            j.spec_hash = Some(spec_hash.clone());
+                            j.version += 1;
+                        })
+                        .await;
+                    new_managed.insert(job_name.clone(), spec_hash);
+                    info!(
+                        source = %source.name,
+                        job = %job_name,
+                        "Source updated job spec"
+                    );
+                }
+                _ => {
+                    // Hash matches — no change
+                }
+            }
+        }
+
+        // Garbage collect jobs no longer in flake output
+        let removed: Vec<String> = source
+            .managed_jobs
+            .keys()
+            .filter(|name| !flake_jobs.contains_key(*name))
+            .cloned()
+            .collect();
+
+        for job_name in &removed {
+            let _ = self
+                .store
+                .update_job(job_name, |j| {
+                    j.status = JobStatus::Dead;
+                })
+                .await;
+            new_managed.remove(job_name);
+            info!(
+                source = %source.name,
+                job = %job_name,
+                "Source removed job (no longer in flake)"
+            );
+        }
+
+        // Step 4: Update source state
+        let _ = self
+            .store
+            .update_source(&source.id, |s| {
+                s.last_rev = current_rev;
+                s.last_reconciled_at = Some(chrono::Utc::now());
+                s.managed_jobs = new_managed;
+                s.status = SourceStatus::Ready;
+                s.last_error = None;
+            })
+            .await;
+
+        info!(source = %source.name, "Source reconciliation completed");
         Ok(())
     }
 }

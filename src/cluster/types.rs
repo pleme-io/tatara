@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use crate::domain::event::{Event, EventRing};
 use crate::domain::job::{DriverType, JobSpec, Resources};
 use crate::domain::release::Release;
+use crate::domain::source::{Source, SourceStatus};
 
 /// Unique node identifier within the cluster.
 pub type NodeId = u64;
@@ -80,6 +81,9 @@ pub struct ClusterState {
     /// Release tracking.
     #[serde(default)]
     pub releases: HashMap<uuid::Uuid, Release>,
+    /// Source tracking (GitOps flake watchers).
+    #[serde(default)]
+    pub sources: HashMap<uuid::Uuid, Source>,
 }
 
 /// A snapshot of a job at a particular version.
@@ -147,6 +151,19 @@ pub enum ClusterCommand {
         node_id: NodeId,
         eligible: bool,
     },
+
+    // ── Sources ──
+    PutSource(Source),
+    UpdateSource {
+        source_id: uuid::Uuid,
+        status: SourceStatus,
+        last_rev: Option<String>,
+        last_error: Option<String>,
+        managed_jobs: Option<HashMap<String, String>>,
+    },
+    DeleteSource {
+        source_id: uuid::Uuid,
+    },
 }
 
 /// Response from applying a command.
@@ -156,6 +173,7 @@ pub enum ClusterResponse {
     Job(crate::domain::job::Job),
     Allocation(crate::domain::allocation::Allocation),
     Release(Release),
+    Source(Source),
     JobHistory(Vec<JobVersionEntry>),
     Events(Vec<Event>),
     Error(String),

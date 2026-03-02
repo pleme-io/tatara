@@ -57,6 +57,18 @@ pub struct ReconcilerConfig {
     /// Enable spec drift detection via Nix re-evaluation.
     #[serde(default = "default_true")]
     pub drift_detection: bool,
+
+    /// Enable source reconciliation (Pass 5).
+    #[serde(default = "default_true")]
+    pub source_reconciliation: bool,
+
+    /// Source re-check happens every Nth reconcile tick.
+    #[serde(default = "default_source_reeval_frequency")]
+    pub source_reeval_every_n_ticks: u64,
+
+    /// Timeout for `nix flake metadata` calls (seconds).
+    #[serde(default = "default_flake_metadata_timeout")]
+    pub flake_metadata_timeout_secs: u64,
 }
 
 /// Cluster configuration — gossip, raft, discovery.
@@ -224,6 +236,9 @@ impl Default for ReconcilerConfig {
             reeval_every_n_ticks: default_reeval_frequency(),
             max_concurrent_evals: default_max_concurrent_evals(),
             drift_detection: true,
+            source_reconciliation: true,
+            source_reeval_every_n_ticks: default_source_reeval_frequency(),
+            flake_metadata_timeout_secs: default_flake_metadata_timeout(),
         }
     }
 }
@@ -382,6 +397,14 @@ fn default_max_concurrent_evals() -> usize {
 }
 
 fn default_heartbeat_grace() -> u64 {
+    30
+}
+
+fn default_source_reeval_frequency() -> u64 {
+    3
+}
+
+fn default_flake_metadata_timeout() -> u64 {
     30
 }
 

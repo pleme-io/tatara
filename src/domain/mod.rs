@@ -6,4 +6,5 @@ pub mod node;
 pub mod reconciler;
 pub mod release;
 pub mod scheduler;
+pub mod source;
 pub mod state_store;

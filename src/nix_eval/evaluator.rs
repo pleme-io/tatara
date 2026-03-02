@@ -6,7 +6,7 @@ use tokio::process::Command;
 use tracing::{debug, info};
 
 use crate::domain::job::JobSpec;
-use crate::domain::source::FlakeMetadata;
+use crate::domain::source::{FlakeMetadata, SourceError};
 
 pub struct NixEvaluator;
 
@@ -70,29 +70,53 @@ impl NixEvaluator {
     }
 
     /// Get flake metadata (revision, last modified, resolved URL).
-    pub async fn flake_metadata(flake_ref: &str, timeout_secs: u64) -> Result<FlakeMetadata> {
+    pub async fn flake_metadata(flake_ref: &str, timeout_secs: u64) -> Result<FlakeMetadata, SourceError> {
         info!(flake_ref = %flake_ref, "Fetching flake metadata");
 
-        let output = tokio::time::timeout(
+        let output = match tokio::time::timeout(
             Duration::from_secs(timeout_secs),
             Command::new("nix")
                 .args(["flake", "metadata", "--json", "--refresh", flake_ref])
                 .output(),
         )
         .await
-        .context("nix flake metadata timed out")?
-        .context("Failed to run nix flake metadata")?;
+        {
+            Ok(Ok(output)) => output,
+            Ok(Err(e)) => {
+                return Err(SourceError::MetadataFetchFailed {
+                    flake_ref: flake_ref.to_string(),
+                    reason: format!("failed to run nix flake metadata: {}", e),
+                });
+            }
+            Err(_) => {
+                return Err(SourceError::Timeout {
+                    flake_ref: flake_ref.to_string(),
+                    timeout_secs,
+                });
+            }
+        };
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("nix flake metadata failed: {}", stderr);
+            return Err(SourceError::MetadataFetchFailed {
+                flake_ref: flake_ref.to_string(),
+                reason: stderr.to_string(),
+            });
         }
 
-        let json = String::from_utf8(output.stdout)
-            .context("nix flake metadata output is not valid UTF-8")?;
+        let json = String::from_utf8(output.stdout).map_err(|e| {
+            SourceError::MetadataFetchFailed {
+                flake_ref: flake_ref.to_string(),
+                reason: format!("output is not valid UTF-8: {}", e),
+            }
+        })?;
 
-        let raw: serde_json::Value = serde_json::from_str(&json)
-            .context("Failed to parse nix flake metadata JSON")?;
+        let raw: serde_json::Value = serde_json::from_str(&json).map_err(|e| {
+            SourceError::MetadataFetchFailed {
+                flake_ref: flake_ref.to_string(),
+                reason: format!("failed to parse JSON: {}", e),
+            }
+        })?;
 
         let rev = raw.get("revision")
             .or_else(|| raw.get("rev"))
@@ -118,8 +142,64 @@ impl NixEvaluator {
         })
     }
 
+    /// Validate that a flake exports the expected outputs for source reconciliation.
+    /// Checks for tataraJobs and tataraMeta. Returns Ok(()) if valid, or
+    /// SourceError::ValidationFailed with a list of issues.
+    pub async fn validate_source(flake_ref: &str, source_name: &str) -> Result<(), SourceError> {
+        // Check `nix flake show` for expected outputs
+        let output = Command::new("nix")
+            .args(["flake", "show", "--json", flake_ref])
+            .output()
+            .await
+            .map_err(|e| SourceError::ValidationFailed {
+                name: source_name.to_string(),
+                errors: vec![format!("failed to run nix flake show: {}", e)],
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(SourceError::ValidationFailed {
+                name: source_name.to_string(),
+                errors: vec![format!("nix flake show failed: {}", stderr)],
+            });
+        }
+
+        let json = String::from_utf8(output.stdout).map_err(|e| {
+            SourceError::ValidationFailed {
+                name: source_name.to_string(),
+                errors: vec![format!("output is not valid UTF-8: {}", e)],
+            }
+        })?;
+
+        let raw: serde_json::Value = serde_json::from_str(&json).map_err(|e| {
+            SourceError::ValidationFailed {
+                name: source_name.to_string(),
+                errors: vec![format!("failed to parse JSON: {}", e)],
+            }
+        })?;
+
+        let mut errors = Vec::new();
+
+        if raw.get("tataraJobs").is_none() {
+            errors.push("Missing 'tataraJobs' output — source must export tataraJobs.<system>".to_string());
+        }
+
+        if raw.get("tataraMeta").is_none() {
+            errors.push("Missing 'tataraMeta' output — source should export name and version".to_string());
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(SourceError::ValidationFailed {
+                name: source_name.to_string(),
+                errors,
+            })
+        }
+    }
+
     /// Evaluate tataraJobs from a flake, returning a map of job name to JobSpec.
-    pub async fn eval_tatara_jobs(flake_ref: &str) -> Result<HashMap<String, JobSpec>> {
+    pub async fn eval_tatara_jobs(flake_ref: &str) -> Result<HashMap<String, JobSpec>, SourceError> {
         let expr = format!(
             "(builtins.getFlake \"{}\").tataraJobs.${{builtins.currentSystem}} or {{}}",
             flake_ref
@@ -131,20 +211,34 @@ impl NixEvaluator {
             .args(["eval", "--json", "--impure", "--expr", &expr])
             .output()
             .await
-            .context("Failed to run nix eval for tataraJobs")?;
+            .map_err(|e| SourceError::EvalFailed {
+                flake_ref: flake_ref.to_string(),
+                reason: format!("failed to run nix eval: {}", e),
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("nix eval tataraJobs failed: {}", stderr);
+            return Err(SourceError::EvalFailed {
+                flake_ref: flake_ref.to_string(),
+                reason: stderr.to_string(),
+            });
         }
 
-        let json = String::from_utf8(output.stdout)
-            .context("nix eval tataraJobs output is not valid UTF-8")?;
+        let json = String::from_utf8(output.stdout).map_err(|e| {
+            SourceError::EvalFailed {
+                flake_ref: flake_ref.to_string(),
+                reason: format!("output is not valid UTF-8: {}", e),
+            }
+        })?;
 
         debug!(json = %json, "tataraJobs eval result");
 
-        let jobs: HashMap<String, JobSpec> = serde_json::from_str(&json)
-            .context("Failed to parse tataraJobs output")?;
+        let jobs: HashMap<String, JobSpec> = serde_json::from_str(&json).map_err(|e| {
+            SourceError::EvalFailed {
+                flake_ref: flake_ref.to_string(),
+                reason: format!("failed to parse tataraJobs: {}", e),
+            }
+        })?;
 
         info!(count = jobs.len(), "Evaluated tataraJobs");
 

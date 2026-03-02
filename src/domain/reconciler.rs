@@ -11,7 +11,7 @@ use crate::nix_eval::evaluator::NixEvaluator;
 use super::allocation::{Allocation, AllocationState, TaskRunState};
 use super::job::{Job, JobStatus, JobType, RestartMode};
 use super::node::{Node, NodeStatus};
-use super::source::{Source, SourceStatus};
+use super::source::{Source, SourceError, SourceStatus};
 use super::state_store::StateStore;
 
 /// Continuously converges actual state toward desired state.
@@ -557,7 +557,47 @@ impl Reconciler {
             }
 
             if let Err(e) = self.reconcile_single_source(source).await {
-                warn!(source = %source.name, error = %e, "Source reconciliation failed");
+                match &e {
+                    SourceError::Timeout { flake_ref, timeout_secs } => {
+                        warn!(
+                            source = %source.name,
+                            flake_ref = %flake_ref,
+                            timeout_secs = timeout_secs,
+                            "Source reconciliation timed out"
+                        );
+                    }
+                    SourceError::MetadataFetchFailed { flake_ref, reason } => {
+                        warn!(
+                            source = %source.name,
+                            flake_ref = %flake_ref,
+                            reason = %reason,
+                            "Failed to fetch source metadata"
+                        );
+                    }
+                    SourceError::EvalFailed { flake_ref, reason } => {
+                        warn!(
+                            source = %source.name,
+                            flake_ref = %flake_ref,
+                            reason = %reason,
+                            "Failed to evaluate source tataraJobs"
+                        );
+                    }
+                    SourceError::ValidationFailed { name, errors } => {
+                        warn!(
+                            source = %name,
+                            errors = ?errors,
+                            "Source validation failed"
+                        );
+                    }
+                    SourceError::JobOperationFailed { source_name, job_name, reason } => {
+                        warn!(
+                            source = %source_name,
+                            job = %job_name,
+                            reason = %reason,
+                            "Source job operation failed"
+                        );
+                    }
+                }
                 let _ = self
                     .store
                     .update_source(&source.id, |s| {
@@ -572,7 +612,12 @@ impl Reconciler {
     }
 
     /// Reconcile a single source against its flake.
-    async fn reconcile_single_source(&self, source: &Source) -> Result<()> {
+    async fn reconcile_single_source(&self, source: &Source) -> Result<(), SourceError> {
+        // Step 0: Validate source on first reconciliation
+        if source.last_rev.is_none() {
+            NixEvaluator::validate_source(&source.flake_ref, &source.name).await?;
+        }
+
         // Step 1: Check revision
         let metadata = NixEvaluator::flake_metadata(
             &source.flake_ref,
@@ -616,7 +661,13 @@ impl Reconciler {
                 None => {
                     // New job — create it
                     let job = spec.clone().into_job();
-                    self.store.put_job(job).await?;
+                    self.store.put_job(job).await.map_err(|e| {
+                        SourceError::JobOperationFailed {
+                            source_name: source.name.clone(),
+                            job_name: job_name.clone(),
+                            reason: format!("failed to create job: {}", e),
+                        }
+                    })?;
                     new_managed.insert(job_name.clone(), spec_hash);
                     info!(
                         source = %source.name,

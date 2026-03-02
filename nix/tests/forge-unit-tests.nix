@@ -283,4 +283,41 @@ lib.runTests {
     expr = builtins.match ".*nixpkgs.url.*" templateResult != null;
     expected = true;
   };
+
+  # ── sourceTemplate ──
+
+  testSourceTemplateContainsName = {
+    expr = builtins.match ".*my-infra.*" (forge.sourceTemplate "my-infra") != null;
+    expected = true;
+  };
+
+  testSourceTemplateContainsTataraJobs = {
+    expr = builtins.match ".*tataraJobs.*" (forge.sourceTemplate "my-infra") != null;
+    expected = true;
+  };
+
+  testSourceTemplateContainsTataraMeta = {
+    expr = builtins.match ".*tataraMeta.*" (forge.sourceTemplate "my-infra") != null;
+    expected = true;
+  };
+
+  testSourceTemplateContainsVersion = {
+    expr = builtins.match ".*version.*" (forge.sourceTemplate "my-infra") != null;
+    expected = true;
+  };
+
+  testSourceTemplateContainsTataraInput = {
+    expr = builtins.match ".*tatara.url.*" (forge.sourceTemplate "my-infra") != null;
+    expected = true;
+  };
+
+  testSourceTemplateContainsNormalizeJob = {
+    expr = builtins.match ".*normalizeJob.*" (forge.sourceTemplate "my-infra") != null;
+    expected = true;
+  };
+
+  testSourceTemplateDoesNotContainModules = {
+    expr = builtins.match ".*tataraModules.*" (forge.sourceTemplate "my-infra") == null;
+    expected = true;
+  };
 }

@@ -79,3 +79,43 @@ pub struct FlakeMetadata {
     /// Resolved URL.
     pub url: String,
 }
+
+/// Structured errors for source reconciliation.
+#[derive(Debug, thiserror::Error)]
+pub enum SourceError {
+    /// Failed to fetch flake metadata (network, auth, invalid ref).
+    #[error("metadata fetch failed for '{flake_ref}': {reason}")]
+    MetadataFetchFailed {
+        flake_ref: String,
+        reason: String,
+    },
+
+    /// Failed to evaluate tataraJobs from the flake.
+    #[error("eval failed for '{flake_ref}': {reason}")]
+    EvalFailed {
+        flake_ref: String,
+        reason: String,
+    },
+
+    /// Source validation failed (missing outputs, bad structure).
+    #[error("validation failed for source '{name}': {errors:?}")]
+    ValidationFailed {
+        name: String,
+        errors: Vec<String>,
+    },
+
+    /// Failed to apply a job change (create/update/delete).
+    #[error("job operation failed for '{job_name}' in source '{source_name}': {reason}")]
+    JobOperationFailed {
+        source_name: String,
+        job_name: String,
+        reason: String,
+    },
+
+    /// Timeout during a nix operation.
+    #[error("operation timed out for '{flake_ref}' after {timeout_secs}s")]
+    Timeout {
+        flake_ref: String,
+        timeout_secs: u64,
+    },
+}

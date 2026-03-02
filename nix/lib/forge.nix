@@ -162,6 +162,83 @@ let
       inherit errors;
     };
 
+  # ── evalSource ──
+  #
+  # Evaluate a source flake (a repo that exports tataraJobs but may not
+  # have tataraModules). Lighter than evalForge — designed for infra repos
+  # and plain job declarations.
+  #
+  # Returns: { jobs = { <name> = <normalized-job-spec>; ... }; meta = { ... }; }
+  #
+  evalSource =
+    sourcePath: overrides:
+    let
+      sourceFlake = builtins.getFlake (toString sourcePath);
+      system = builtins.currentSystem or "x86_64-linux";
+
+      jobs = sourceFlake.tataraJobs.${system} or { };
+
+      meta = sourceFlake.tataraMeta or {
+        name = "unknown-source";
+        version = "0.0.0";
+      };
+
+      applyOverrides =
+        jobSpec:
+        let
+          jobOverrides =
+            if overrides ? ${jobSpec.id or "default"} then
+              overrides.${jobSpec.id or "default"}
+            else if overrides != { } then
+              overrides
+            else
+              { };
+        in
+        lib.recursiveUpdate jobSpec jobOverrides;
+    in
+    {
+      inherit meta;
+      jobs = builtins.mapAttrs (_name: applyOverrides) jobs;
+    };
+
+  # ── validateSource ──
+  #
+  # Validate that a source flake has the expected structure for
+  # tatara source reconciliation. Lighter requirements than validateForge —
+  # tataraModules are optional, but tataraJobs and tataraMeta are required.
+  #
+  # Returns: { valid = bool; errors = [ ... ]; warnings = [ ... ]; }
+  #
+  validateSource =
+    sourcePath:
+    let
+      sourceFlake = builtins.getFlake (toString sourcePath);
+      system = builtins.currentSystem or "x86_64-linux";
+
+      errors =
+        (
+          if !(sourceFlake ? tataraJobs)
+          then [ "Missing 'tataraJobs' output — source must export tataraJobs.<system>" ]
+          else if !(sourceFlake.tataraJobs ? ${system})
+          then [ "Missing 'tataraJobs.${system}' — current system not supported" ]
+          else [ ]
+        )
+        ++ (
+          if !(sourceFlake ? tataraMeta)
+          then [ "Missing 'tataraMeta' output — source should export name and version" ]
+          else
+            (if !(sourceFlake.tataraMeta ? name) then [ "tataraMeta missing 'name'" ] else [ ])
+            ++ (if !(sourceFlake.tataraMeta ? version) then [ "tataraMeta missing 'version'" ] else [ ])
+        );
+
+      warnings =
+        (if !(sourceFlake ? tataraModules) then [ "No 'tataraModules' — consumers cannot use typed module configuration" ] else [ ]);
+    in
+    {
+      valid = errors == [ ];
+      inherit errors warnings;
+    };
+
   # ── Forge template scaffolding ──
   #
   # Returns a string containing the content of a new forge's flake.nix.
@@ -240,6 +317,61 @@ let
       }
     '';
 
+  # ── Source template scaffolding ──
+  #
+  # Returns a string containing the content of a new source repo's flake.nix.
+  # Sources are simpler than forges — they export tataraJobs and tataraMeta
+  # but don't need tataraModules or the full module system.
+  #
+  sourceTemplate =
+    name:
+    ''
+      {
+        description = "${name} — tatara source";
+
+        inputs = {
+          nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+          tatara.url = "github:pleme-io/tatara";
+        };
+
+        outputs = { self, nixpkgs, tatara, ... }:
+        let
+          systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+          forAllSystems = nixpkgs.lib.genAttrs systems;
+        in
+        {
+          # Job specs per system — the reconciler evaluates this output
+          tataraJobs = forAllSystems (system: {
+            # Example:
+            # my-service = tatara.lib.normalizeJob "my-service" {
+            #   type = "service";
+            #   groups.main = {
+            #     count = 2;
+            #     tasks.server = {
+            #       driver = "nix";
+            #       config.flake_ref = "github:you/my-service";
+            #       env = {};
+            #       resources = { cpu_mhz = 500; memory_mb = 256; };
+            #       health_checks = [];
+            #     };
+            #     restart_policy = {};
+            #     resources = {};
+            #   };
+            #   constraints = [];
+            #   meta = {};
+            # };
+          });
+
+          # Source metadata
+          tataraMeta = {
+            name = "${name}";
+            version = "0.1.0";
+            description = "${name} infrastructure workloads for tatara";
+          };
+        };
+      }
+    '';
+
 in
 {
   inherit
@@ -247,6 +379,9 @@ in
     evalForge
     validateForge
     forgeTemplate
+    evalSource
+    validateSource
+    sourceTemplate
     ;
   # Re-export job module utilities
   inherit (jobModule) normalizeJob;

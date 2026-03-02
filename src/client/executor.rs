@@ -192,6 +192,122 @@ impl Executor {
         dead
     }
 
+    /// Check health of all running allocations, returning per-task status.
+    pub async fn check_task_health_detailed(
+        &self,
+    ) -> HashMap<Uuid, Vec<(String, TaskRunState)>> {
+        let running = self.running.read().await;
+        let mut result: HashMap<Uuid, Vec<(String, TaskRunState)>> = HashMap::new();
+
+        for (alloc_id, tasks) in running.iter() {
+            let mut task_states = Vec::new();
+
+            for rt in tasks {
+                let state = if let Some(driver) = self.drivers.get(&rt.handle.driver) {
+                    match driver.status(&rt.handle).await {
+                        Ok(s) => s,
+                        Err(_) => TaskRunState::Dead,
+                    }
+                } else {
+                    TaskRunState::Dead
+                };
+                task_states.push((rt.task_name.clone(), state));
+            }
+
+            result.insert(*alloc_id, task_states);
+        }
+
+        result
+    }
+
+    /// Restart a single task within a running allocation.
+    pub async fn restart_task(
+        &self,
+        alloc_id: &Uuid,
+        task_name: &str,
+    ) -> Result<()> {
+        let alloc = self
+            .store
+            .get_allocation(alloc_id)
+            .await
+            .context("Allocation not found")?;
+
+        let job = self
+            .store
+            .get_job(&alloc.job_id)
+            .await
+            .context("Job not found for allocation")?;
+
+        let group = job
+            .groups
+            .iter()
+            .find(|g| g.name == alloc.group_name)
+            .context("Task group not found in job")?;
+
+        let task = group
+            .tasks
+            .iter()
+            .find(|t| t.name == task_name)
+            .with_context(|| format!("Task {} not found in group {}", task_name, group.name))?;
+
+        // Stop the old process
+        {
+            let mut running = self.running.write().await;
+            if let Some(tasks) = running.get_mut(alloc_id) {
+                if let Some(rt) = tasks.iter().find(|t| t.task_name == task_name) {
+                    if let Some(driver) = self.drivers.get(&rt.handle.driver) {
+                        let _ = driver.stop(&rt.handle, Duration::from_secs(10)).await;
+                    }
+                }
+                tasks.retain(|t| t.task_name != task_name);
+            }
+        }
+
+        // Start the task fresh
+        let alloc_path = self.alloc_dir.join(alloc_id.to_string());
+        tokio::fs::create_dir_all(&alloc_path).await?;
+
+        let driver = self
+            .drivers
+            .get(&task.driver)
+            .with_context(|| format!("Driver {:?} not available", task.driver))?;
+
+        let handle = driver.start(task, &alloc_path).await?;
+
+        info!(
+            alloc_id = %alloc_id,
+            task = %task_name,
+            pid = ?handle.pid,
+            "Task restarted"
+        );
+
+        // Update task state in store
+        self.store
+            .update_allocation(alloc_id, |a| {
+                if let Some(ts) = a.task_states.get_mut(task_name) {
+                    ts.state = TaskRunState::Running;
+                    ts.pid = handle.pid;
+                    ts.started_at = Some(handle.started_at);
+                    ts.restarts += 1;
+                }
+            })
+            .await?;
+
+        // Re-add to running map
+        self.running
+            .write()
+            .await
+            .entry(*alloc_id)
+            .or_default()
+            .push(RunningTask {
+                handle,
+                task_name: task_name.to_string(),
+                alloc_id: *alloc_id,
+            });
+
+        Ok(())
+    }
+
     pub async fn get_task_handle(&self, alloc_id: &Uuid, task_name: &str) -> Option<TaskHandle> {
         let running = self.running.read().await;
         running.get(alloc_id).and_then(|tasks| {

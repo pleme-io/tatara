@@ -22,6 +22,7 @@ use crate::cluster::roles;
 use crate::cluster::store::ClusterStore;
 use crate::cluster::types::NodeMeta;
 use crate::config::ServerConfig;
+use crate::domain::reconciler::Reconciler;
 use crate::domain::scheduler::Scheduler;
 use crate::domain::state_store::StateStore;
 use crate::drivers::DriverRegistry;
@@ -317,22 +318,15 @@ pub async fn run(config: ServerConfig) -> Result<()> {
         }
     });
 
-    // ── Health check loop ──
-    let health_executor = executor.clone();
-    let health_store = local_store.clone();
+    // ── Reconciler loop (replaces health check loop) ──
+    let mut reconciler = Reconciler::new(
+        local_store.clone(),
+        executor.clone(),
+        config.reconciler.clone(),
+    );
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(5));
-        loop {
-            interval.tick().await;
-            let dead = health_executor.check_health().await;
-            for alloc_id in dead {
-                warn!(alloc_id = %alloc_id, "Allocation tasks all dead");
-                let _ = health_store
-                    .update_allocation(&alloc_id, |a| {
-                        a.state = crate::domain::allocation::AllocationState::Complete;
-                    })
-                    .await;
-            }
+        if let Err(e) = reconciler.run().await {
+            tracing::error!(error = %e, "Reconciler loop failed");
         }
     });
 

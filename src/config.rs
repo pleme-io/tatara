@@ -21,6 +21,8 @@ pub struct ServerConfig {
     pub p2p: P2pConfig,
     #[serde(default)]
     pub kindling: KindlingConfig,
+    #[serde(default)]
+    pub reconciler: ReconcilerConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +37,26 @@ pub struct SchedulerConfig {
     pub eval_interval_secs: u64,
     #[serde(default = "default_heartbeat_grace")]
     pub heartbeat_grace_secs: u64,
+}
+
+/// Reconciler configuration — controls the reconciliation loop.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReconcilerConfig {
+    /// Reconciliation loop interval in seconds.
+    #[serde(default = "default_reconcile_interval")]
+    pub reconcile_interval_secs: u64,
+
+    /// Nix re-evaluation happens every Nth reconcile tick.
+    #[serde(default = "default_reeval_frequency")]
+    pub reeval_every_n_ticks: u64,
+
+    /// Max concurrent Nix evaluations.
+    #[serde(default = "default_max_concurrent_evals")]
+    pub max_concurrent_evals: usize,
+
+    /// Enable spec drift detection via Nix re-evaluation.
+    #[serde(default = "default_true")]
+    pub drift_detection: bool,
 }
 
 /// Cluster configuration — gossip, raft, discovery.
@@ -190,6 +212,18 @@ impl Default for ServerConfig {
             cluster: ClusterConfig::default(),
             p2p: P2pConfig::default(),
             kindling: KindlingConfig::default(),
+            reconciler: ReconcilerConfig::default(),
+        }
+    }
+}
+
+impl Default for ReconcilerConfig {
+    fn default() -> Self {
+        Self {
+            reconcile_interval_secs: default_reconcile_interval(),
+            reeval_every_n_ticks: default_reeval_frequency(),
+            max_concurrent_evals: default_max_concurrent_evals(),
+            drift_detection: true,
         }
     }
 }
@@ -333,6 +367,18 @@ fn default_client_server_addr() -> String {
 
 fn default_eval_interval() -> u64 {
     1
+}
+
+fn default_reconcile_interval() -> u64 {
+    10
+}
+
+fn default_reeval_frequency() -> u64 {
+    6
+}
+
+fn default_max_concurrent_evals() -> usize {
+    2
 }
 
 fn default_heartbeat_grace() -> u64 {

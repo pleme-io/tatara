@@ -30,6 +30,13 @@ pub enum EventKind {
     EvaluationCompleted,
     DeploymentStarted,
     DeploymentCompleted,
+    AllocationRestarted,
+    AllocationLost,
+    AllocationRescheduled,
+    ReconcileCompleted,
+    SpecDriftDetected,
+    RollingUpdateStarted,
+    RollingUpdateCompleted,
 }
 
 impl std::fmt::Display for EventKind {
@@ -49,6 +56,13 @@ impl std::fmt::Display for EventKind {
             Self::EvaluationCompleted => write!(f, "evaluation_completed"),
             Self::DeploymentStarted => write!(f, "deployment_started"),
             Self::DeploymentCompleted => write!(f, "deployment_completed"),
+            Self::AllocationRestarted => write!(f, "allocation_restarted"),
+            Self::AllocationLost => write!(f, "allocation_lost"),
+            Self::AllocationRescheduled => write!(f, "allocation_rescheduled"),
+            Self::ReconcileCompleted => write!(f, "reconcile_completed"),
+            Self::SpecDriftDetected => write!(f, "spec_drift_detected"),
+            Self::RollingUpdateStarted => write!(f, "rolling_update_started"),
+            Self::RollingUpdateCompleted => write!(f, "rolling_update_completed"),
         }
     }
 }
@@ -70,6 +84,13 @@ impl EventKind {
             "evaluation_completed" => Some(Self::EvaluationCompleted),
             "deployment_started" => Some(Self::DeploymentStarted),
             "deployment_completed" => Some(Self::DeploymentCompleted),
+            "allocation_restarted" => Some(Self::AllocationRestarted),
+            "allocation_lost" => Some(Self::AllocationLost),
+            "allocation_rescheduled" => Some(Self::AllocationRescheduled),
+            "reconcile_completed" => Some(Self::ReconcileCompleted),
+            "spec_drift_detected" => Some(Self::SpecDriftDetected),
+            "rolling_update_started" => Some(Self::RollingUpdateStarted),
+            "rolling_update_completed" => Some(Self::RollingUpdateCompleted),
             _ => None,
         }
     }

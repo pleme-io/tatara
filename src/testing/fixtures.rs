@@ -40,6 +40,7 @@ pub fn job_with_group(
         }],
         constraints: vec![],
         meta: HashMap::new(),
+        spec_hash: None,
     }
 }
 

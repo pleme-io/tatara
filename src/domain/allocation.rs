@@ -30,6 +30,9 @@ pub struct Allocation {
     pub state: AllocationState,
     pub created_at: DateTime<Utc>,
     pub task_states: HashMap<String, TaskState>,
+    /// The job version this allocation was created from.
+    #[serde(default)]
+    pub job_version: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,7 +60,13 @@ impl Allocation {
             state: AllocationState::Pending,
             created_at: Utc::now(),
             task_states,
+            job_version: 0,
         }
+    }
+
+    pub fn with_job_version(mut self, version: u64) -> Self {
+        self.job_version = version;
+        self
     }
 
     pub fn is_terminal(&self) -> bool {

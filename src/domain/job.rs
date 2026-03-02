@@ -46,6 +46,9 @@ pub struct Job {
     pub constraints: Vec<Constraint>,
     #[serde(default)]
     pub meta: HashMap<String, String>,
+    /// SHA-256 hash of the serialized JobSpec, used for drift detection.
+    #[serde(default)]
+    pub spec_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,6 +184,7 @@ pub struct JobSpec {
 
 impl JobSpec {
     pub fn into_job(self) -> Job {
+        let spec_hash = Some(self.content_hash());
         Job {
             id: self.id,
             version: 1,
@@ -190,7 +194,16 @@ impl JobSpec {
             groups: self.groups,
             constraints: self.constraints,
             meta: self.meta,
+            spec_hash,
         }
+    }
+
+    /// Compute a SHA-256 hash of the canonical JSON representation of this spec.
+    pub fn content_hash(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let canonical = serde_json::to_string(self).unwrap_or_default();
+        let hash = Sha256::digest(canonical.as_bytes());
+        format!("{:x}", hash)
     }
 }
 

@@ -3,6 +3,7 @@ pub mod evaluation;
 pub mod event;
 pub mod job;
 pub mod node;
+pub mod reconciler;
 pub mod release;
 pub mod scheduler;
 pub mod state_store;

@@ -79,6 +79,7 @@ impl Driver for KasouDriver {
         let serial_log = alloc_dir.join(format!("{}-console.log", task.name));
 
         let vm_config = kasou::VmConfig {
+            id: kasou::VmId::from(task.name.as_str()),
             cpus: *cpus,
             memory_mib: *memory_mib,
             boot: kasou::BootConfig {

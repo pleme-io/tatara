@@ -69,7 +69,12 @@ impl Driver for KasouDriver {
         }
 
         let mac = mac_address.clone()
-            .or_else(|| Some(kasou::MacAddress::deterministic(&task.name).to_string()));
+            .or_else(|| {
+                let seed = hostname::get()
+                    .map(|h| h.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                Some(kasou::MacAddress::deterministic(&seed, &task.name).to_string())
+            });
 
         let serial_log = alloc_dir.join(format!("{}-console.log", task.name));
 

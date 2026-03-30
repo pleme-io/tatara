@@ -1,4 +1,6 @@
 pub mod exec;
+#[cfg(target_os = "macos")]
+pub mod kasou;
 pub mod nix;
 pub mod oci;
 
@@ -62,6 +64,14 @@ impl DriverRegistry {
             drivers.push(Box::new(nix));
         }
 
+        #[cfg(target_os = "macos")]
+        {
+            let kasou_driver = kasou::KasouDriver::new();
+            if kasou_driver.available().await {
+                drivers.push(Box::new(kasou_driver));
+            }
+        }
+
         Self { drivers }
     }
 
@@ -70,6 +80,7 @@ impl DriverRegistry {
             DriverType::Exec => "exec",
             DriverType::Oci => "oci",
             DriverType::Nix => "nix",
+            DriverType::Kasou => "kasou",
         };
         self.drivers.iter().find(|d| d.name() == name).map(|d| d.as_ref())
     }
@@ -81,6 +92,7 @@ impl DriverRegistry {
                 "exec" => Some(DriverType::Exec),
                 "oci" => Some(DriverType::Oci),
                 "nix" => Some(DriverType::Nix),
+                "kasou" => Some(DriverType::Kasou),
                 _ => None,
             })
             .collect()

@@ -91,6 +91,10 @@ mdns-sd = "0.18"
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["signal", "process"] }
 
+# macOS VM platform (kasou — Apple Virtualization.framework)
+[target.'cfg(target_os = "macos")'.dependencies]
+kasou = { git = "https://github.com/pleme-io/kasou" }
+
 # gRPC (optional)
 tonic = { version = "0.12", features = ["transport"], optional = true }
 prost = { version = "0.13", optional = true }

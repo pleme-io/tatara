@@ -24,6 +24,7 @@ pub enum DriverType {
     Exec,
     Oci,
     Nix,
+    Kasou,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -112,7 +113,30 @@ pub enum TaskConfig {
         #[serde(default)]
         args: Vec<String>,
     },
+    Kasou {
+        /// Path to kernel image for direct boot.
+        kernel: String,
+        /// Path to initrd.
+        initrd: String,
+        /// Kernel command line.
+        #[serde(default)]
+        cmdline: String,
+        /// Disk image paths (first is root, rest are data/seed).
+        #[serde(default)]
+        disks: Vec<String>,
+        /// MAC address (colon-separated, e.g., "5a:94:ef:ab:cd:12").
+        mac_address: Option<String>,
+        /// Number of vCPUs.
+        #[serde(default = "default_kasou_cpus")]
+        cpus: u32,
+        /// Memory in MiB.
+        #[serde(default = "default_kasou_memory")]
+        memory_mib: u64,
+    },
 }
+
+fn default_kasou_cpus() -> u32 { 2 }
+fn default_kasou_memory() -> u64 { 2048 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Resources {

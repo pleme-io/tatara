@@ -68,9 +68,8 @@ impl Driver for KasouDriver {
             });
         }
 
-        let mac = mac_address.clone().or_else(|| {
-            Some(kasou::MacAddress::deterministic(&task.name).to_string())
-        });
+        let mac = mac_address.clone()
+            .or_else(|| Some(kasou::MacAddress::deterministic(&task.name).to_string()));
 
         let serial_log = alloc_dir.join(format!("{}-console.log", task.name));
 
@@ -114,27 +113,23 @@ impl Driver for KasouDriver {
 
         Ok(TaskHandle {
             driver: DriverType::Kasou,
-            pid: Some(pid),
-            container_id: None,
+            pid: None, // in-process VM, no separate PID
+            container_id: Some(task.name.clone()), // task name for stop/status lookup
             started_at: Utc::now(),
         })
     }
 
-    async fn stop(&self, _handle: &TaskHandle, timeout: Duration) -> Result<()> {
-        // Extract the VM handle from the map (releases the lock before await)
-        let (key, vm_handle) = {
-            let mut handles = self.handles.lock().unwrap();
-            let key = handles.keys().next().cloned();
-            match key {
-                Some(k) => {
-                    let h = handles.remove(&k);
-                    (Some(k), h)
-                }
-                None => (None, None),
-            }
+    async fn stop(&self, handle: &TaskHandle, timeout: Duration) -> Result<()> {
+        let task_name = handle.container_id.as_deref()
+            .context("TaskHandle missing task name (container_id)")?;
+
+        let vm_handle = {
+            self.handles.lock().unwrap().remove(task_name)
         };
 
-        if let (Some(key), Some(vm_handle)) = (key, vm_handle) {
+        let key = task_name.to_string();
+
+        if let Some(vm_handle) = vm_handle {
             info!(task = %key, "stopping VM via kasou");
 
             // Try graceful stop first
@@ -160,19 +155,24 @@ impl Driver for KasouDriver {
         Ok(())
     }
 
-    async fn status(&self, _handle: &TaskHandle) -> Result<TaskRunState> {
+    async fn status(&self, handle: &TaskHandle) -> Result<TaskRunState> {
+        let task_name = handle.container_id.as_deref()
+            .context("TaskHandle missing task name (container_id)")?;
+
         let handles = self.handles.lock().unwrap();
-        // Check if any VM is running
-        for vm_handle in handles.values() {
-            return Ok(match vm_handle.state() {
+        match handles.get(task_name) {
+            Some(vm_handle) => Ok(match vm_handle.state() {
                 kasou::VmState::Running => TaskRunState::Running,
                 kasou::VmState::Starting
                 | kasou::VmState::Pausing
-                | kasou::VmState::Resuming => TaskRunState::Pending,
+                | kasou::VmState::Paused
+                | kasou::VmState::Resuming
+                | kasou::VmState::Saving
+                | kasou::VmState::Restoring => TaskRunState::Pending,
                 _ => TaskRunState::Dead,
-            });
+            }),
+            None => Ok(TaskRunState::Dead),
         }
-        Ok(TaskRunState::Dead)
     }
 
     async fn logs(&self, _handle: &TaskHandle) -> Result<mpsc::Receiver<LogEntry>> {

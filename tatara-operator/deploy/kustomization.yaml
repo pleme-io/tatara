@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: tatara-system
 
 resources:
+  - namespace.yaml
   - crds.yaml
   - rbac.yaml
   - deployment.yaml

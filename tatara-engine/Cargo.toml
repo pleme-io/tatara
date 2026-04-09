@@ -1,0 +1,85 @@
+[package]
+name = "tatara-engine"
+description = "Drivers, nix eval, cluster logic, P2P, and scheduling engine for tatara"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[features]
+default = []
+grpc = ["dep:tonic", "dep:prost", "dep:prost-types", "dep:tonic-build"]
+
+[dependencies]
+tatara-core = { path = "../tatara-core" }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+async-trait = "0.1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Time + IDs
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Hashing
+sha2 = "0.10"
+blake3 = "1.6"
+hex = "0.4"
+bincode = "1.3"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
+
+# Cluster: Gossip
+chitchat = "0.10"
+
+# Cluster: Raft consensus
+openraft = { version = "0.9", features = ["serde", "storage-v2"] }
+
+# Cluster: Persistent storage for Raft
+redb = "3.1"
+
+# Cluster: mDNS discovery
+mdns-sd = "0.18"
+
+# Random
+rand = "0.9"
+
+# Hostname
+hostname = "0.4"
+
+# Directories
+dirs = "6.0"
+
+# Stream processing
+futures-core = "0.3"
+
+# Unix process management
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["signal", "process"] }
+
+# macOS VM platform
+[target.'cfg(target_os = "macos")'.dependencies]
+kasou = { git = "https://github.com/pleme-io/kasou" }
+
+# gRPC (optional)
+tonic = { version = "0.12", features = ["transport"], optional = true }
+prost = { version = "0.13", optional = true }
+prost-types = { version = "0.13", optional = true }
+
+[build-dependencies]
+tonic-build = { version = "0.12", optional = true }

@@ -1,115 +1,19 @@
 [workspace]
-members = [".", "tatara-operator"]
+members = [
+    "tatara-core",
+    "tatara-engine",
+    "tatara-api",
+    "tatara-cli",
+    "tatara-operator",
+    "tatara-testing",
+]
 resolver = "2"
 
-[package]
-name = "tatara"
+[workspace.package]
 version = "0.2.0"
 edition = "2021"
-description = "Nix-native workload orchestrator"
 authors = ["Pleme.io <engineering@pleme.io>"]
-
-[lib]
-name = "tatara"
-path = "src/lib.rs"
-
-[[bin]]
-name = "tatara"
-path = "src/main.rs"
-
-[features]
-default = []
-grpc = ["dep:tonic", "dep:prost", "dep:prost-types", "dep:tonic-build"]
-
-[dependencies]
-# CLI
-clap = { version = "4.5", features = ["derive"] }
-anyhow = "1.0"
-thiserror = "2.0"
-serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
-dirs = "6.0"
-
-# Stream processing
-futures-core = "0.3"
-
-# CLI output formatting + TUI
-comfy-table = "7"
-crossterm = "0.28"
-ratatui = "0.29"
-diff = "0.1"
-
-# Async runtime
-tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1"
-
-# HTTP server
-axum = { version = "0.8", features = ["json"] }
-async-stream = "0.3"
-tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["trace", "cors"] }
-
-# GraphQL
-async-graphql = { version = "7.0", features = ["tracing", "chrono"] }
-async-graphql-axum = "7.0"
-
-# HTTP client
-reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
-
-# Serialization + logging
-serde_json = "1.0"
-serde_yaml = "0.9"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-chrono = { version = "0.4", features = ["serde"] }
-hostname = "0.4"
-bincode = "1.3"
-
-# Hashing (content-addressed data, allocation IDs, state integrity)
-sha2 = "0.10"
-blake3 = "1.6"
-hex = "0.4"
-
-# UUID for job/allocation IDs
-uuid = { version = "1", features = ["v4", "serde"] }
-
-# Async trait
-async-trait = "0.1"
-
-# Random
-rand = "0.9"
-
-# ── Cluster: Gossip (membership + KV state) ──
-chitchat = "0.10"
-
-# ── Cluster: Raft consensus ──
-openraft = { version = "0.9", features = ["serde", "storage-v2"] }
-
-# ── Cluster: Persistent storage for Raft log ──
-redb = "3.1"
-
-# ── Cluster: mDNS bootstrap discovery ──
-mdns-sd = "0.18"
-
-# Unix process management
-[target.'cfg(unix)'.dependencies]
-nix = { version = "0.29", features = ["signal", "process"] }
-
-# macOS VM platform (kasou — Apple Virtualization.framework)
-[target.'cfg(target_os = "macos")'.dependencies]
-kasou = { git = "https://github.com/pleme-io/kasou" }
-
-# gRPC (optional)
-tonic = { version = "0.12", features = ["transport"], optional = true }
-prost = { version = "0.13", optional = true }
-prost-types = { version = "0.13", optional = true }
-
-[build-dependencies]
-tonic-build = { version = "0.12", optional = true }
-
-[dev-dependencies]
-# Property-based testing
-proptest = "1"
+license = "MIT"
 
 [profile.release]
 opt-level = "z"

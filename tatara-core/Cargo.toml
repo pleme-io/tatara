@@ -1,0 +1,36 @@
+[package]
+name = "tatara-core"
+description = "Shared domain types, config, and cluster types for tatara"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Time + IDs
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Hashing (content-addressed data, spec hashes)
+sha2 = "0.10"
+
+# Directories
+dirs = "6.0"
+
+# Hostname detection
+hostname = "0.4"
+
+# Logging
+tracing = "0.1"
+
+# Raft types (for cluster types: NodeId, BasicNode)
+openraft = { version = "0.9", features = ["serde", "storage-v2"] }

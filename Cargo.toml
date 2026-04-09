@@ -6,6 +6,7 @@ members = [
     "tatara-cli",
     "tatara-operator",
     "tatara-testing",
+    "ro-cli",
 ]
 resolver = "2"
 

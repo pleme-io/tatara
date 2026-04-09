@@ -52,7 +52,16 @@ in
     # Install the ro client tools
     home.packages = [
       pkgs.attic-client
+      # ro CLI is built from this repo's flake:
+      #   pkgs.ro  (from tatara overlay)
+      # Add when available: pkgs.ro
     ];
+
+    # Write shikumi config file for the ro CLI
+    # This is the Nix → YAML → Rust bridge
+    xdg.configFile."ro/ro.yaml".text = builtins.toJSON {
+      api_endpoint = cfg.apiEndpoint;
+    };
 
     # Computed values — derived from the single apiEndpoint.
     # The ro platform uses a consistent subdomain structure:

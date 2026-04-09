@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "tatara-operator"]
+resolver = "2"
+
 [package]
 name = "tatara"
 version = "0.2.0"

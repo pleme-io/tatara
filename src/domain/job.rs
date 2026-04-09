@@ -24,6 +24,7 @@ pub enum DriverType {
     Exec,
     Oci,
     Nix,
+    NixBuild,
     Kasou,
 }
 
@@ -112,6 +113,22 @@ pub enum TaskConfig {
         flake_ref: String,
         #[serde(default)]
         args: Vec<String>,
+    },
+    /// `nix build` — produces a store path in the Nix store.
+    /// Used for building derivations (packages, Docker images) rather than running them.
+    /// Optionally pushes the result to an Attic binary cache.
+    NixBuild {
+        /// Flake reference (e.g., "github:pleme-io/blackmatter-akeyless#akeyless-backend-auth")
+        flake_ref: String,
+        /// Target system (e.g., "x86_64-linux"). If set, passed as --system.
+        #[serde(default)]
+        system: Option<String>,
+        /// Additional nix build flags (e.g., ["--impure"])
+        #[serde(default)]
+        extra_args: Vec<String>,
+        /// Attic cache name to push the result to (e.g., "main")
+        #[serde(default)]
+        attic_cache: Option<String>,
     },
     Kasou {
         /// Path to kernel image for direct boot.

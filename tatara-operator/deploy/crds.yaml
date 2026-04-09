@@ -1,0 +1,392 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: nixbuilds.tatara.pleme.io
+spec:
+  group: tatara.pleme.io
+  names:
+    categories: []
+    kind: NixBuild
+    plural: nixbuilds
+    shortNames: []
+    singular: nixbuild
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.storePath
+      name: Store Path
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for NixBuildSpec via `CustomResource`
+        properties:
+          spec:
+            description: |-
+              NixBuild CRD — declarative Nix build request.
+
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: NixBuild metadata: name: akeyless-auth spec: flakeRef: "github:pleme-io/blackmatter-akeyless#akeyless-backend-auth" system: x86_64-linux atticCache: main ```
+            properties:
+              attic_cache:
+                description: Attic cache name to push results to
+                nullable: true
+                type: string
+              extra_args:
+                default: []
+                description: Additional nix build arguments (e.g., ["--impure"])
+                items:
+                  type: string
+                type: array
+              flake_ref:
+                description: Nix flake reference (e.g., "github:pleme-io/repo#package" or ".#package")
+                type: string
+              priority:
+                default: 0
+                description: 'Priority (higher = built first). Default: 0'
+                format: int32
+                type: integer
+              system:
+                default: x86_64-linux
+                description: Target system (e.g., "x86_64-linux", "aarch64-linux")
+                type: string
+            required:
+            - flake_ref
+            type: object
+          status:
+            nullable: true
+            properties:
+              build_id:
+                description: Unique build ID (maps to NATS message)
+                nullable: true
+                type: string
+              builder_node:
+                description: Node that executed the build
+                nullable: true
+                type: string
+              completed_at:
+                description: When the build completed
+                format: date-time
+                nullable: true
+                type: string
+              error:
+                description: Error message (set on failure)
+                nullable: true
+                type: string
+              log_ref:
+                description: Build log reference (e.g., log stream URL)
+                nullable: true
+                type: string
+              phase:
+                default: Pending
+                description: Current phase of the build
+                enum:
+                - Pending
+                - Queued
+                - Building
+                - Pushing
+                - Complete
+                - Failed
+                type: string
+              started_at:
+                description: When the build started
+                format: date-time
+                nullable: true
+                type: string
+              store_path:
+                description: Nix store output path (set on completion)
+                nullable: true
+                type: string
+            type: object
+        required:
+        - spec
+        title: NixBuild
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: nixbuildpools.tatara.pleme.io
+spec:
+  group: tatara.pleme.io
+  names:
+    categories: []
+    kind: NixBuildPool
+    plural: nixbuildpools
+    shortNames: []
+    singular: nixbuildpool
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.readyNodes
+      name: Ready
+      type: integer
+    - jsonPath: .status.activeBuilds
+      name: Active Builds
+      type: integer
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for NixBuildPoolSpec via `CustomResource`
+        properties:
+          spec:
+            description: |-
+              NixBuildPool CRD — defines a pool of tatara build nodes.
+
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: NixBuildPool metadata: name: default spec: minNodes: 0 maxNodes: 4 nodeGroupRef: scale-test-tatara-builders systems: [x86_64-linux, aarch64-linux] ```
+            properties:
+              idle_timeout_secs:
+                default: 300
+                description: Idle timeout before scaling down (seconds)
+                format: uint64
+                minimum: 0.0
+                type: integer
+              max_nodes:
+                default: 4
+                description: Maximum number of tatara nodes
+                format: uint32
+                minimum: 0.0
+                type: integer
+              min_nodes:
+                default: 0
+                description: Minimum number of tatara nodes (0 = scale to zero)
+                format: uint32
+                minimum: 0.0
+                type: integer
+              node_group_ref:
+                description: Reference to the EKS/ASG node group name
+                nullable: true
+                type: string
+              systems:
+                default:
+                - x86_64-linux
+                description: Supported build systems
+                items:
+                  type: string
+                type: array
+            type: object
+          status:
+            nullable: true
+            properties:
+              active_builds:
+                default: 0
+                description: Number of currently active builds
+                format: uint32
+                minimum: 0.0
+                type: integer
+              queued_builds:
+                default: 0
+                description: Number of queued builds waiting
+                format: uint32
+                minimum: 0.0
+                type: integer
+              ready_nodes:
+                default: 0
+                description: Number of ready tatara nodes
+                format: uint32
+                minimum: 0.0
+                type: integer
+            type: object
+        required:
+        - spec
+        title: NixBuildPool
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: flakesources.tatara.pleme.io
+spec:
+  group: tatara.pleme.io
+  names:
+    categories: []
+    kind: FlakeSource
+    plural: flakesources
+    shortNames: []
+    singular: flakesource
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.repo
+      name: Repo
+      type: string
+    - jsonPath: .spec.branch
+      name: Branch
+      type: string
+    - jsonPath: .status.lastCommit
+      name: Last Commit
+      type: string
+    - jsonPath: .status.cachedOutputs
+      name: Outputs
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for FlakeSourceSpec via `CustomResource`
+        properties:
+          spec:
+            description: |-
+              FlakeSource CRD — declares a Git repo with Nix flake outputs to watch and auto-build.
+
+              The operator polls the repo for new commits on the specified branch. When a change is detected, it creates NixBuild CRs for each declared output, which triggers builds on tatara nodes and populates the Attic cache.
+
+              Clients never trigger builds — the cache is always warm.
+
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: FlakeSource metadata: name: blackmatter-akeyless spec: repo: github:pleme-io/blackmatter-akeyless branch: main pollInterval: 5m outputs: - attr: packages.x86_64-linux.akeyless-backend-auth system: x86_64-linux - attr: packages.x86_64-linux.akeyless-backend-kfm system: x86_64-linux atticCache: main ```
+            properties:
+              attic_cache:
+                default: main
+                description: Attic cache name to push results to
+                type: string
+              branch:
+                default: main
+                description: 'Branch to watch (default: main)'
+                type: string
+              build_on_create:
+                default: true
+                description: Whether to also build on initial creation (not just on changes)
+                type: boolean
+              extra_args:
+                default: []
+                description: Extra nix build args applied to all outputs (e.g., ["--impure"])
+                items:
+                  type: string
+                type: array
+              outputs:
+                description: Flake outputs to build and cache on each change
+                items:
+                  description: A specific flake output to build.
+                  properties:
+                    attr:
+                      description: Flake attribute path (e.g., "packages.x86_64-linux.akeyless-backend-auth")
+                      type: string
+                    extra_args:
+                      default: []
+                      description: Extra args for this specific output
+                      items:
+                        type: string
+                      type: array
+                    system:
+                      default: x86_64-linux
+                      description: Target system (e.g., "x86_64-linux")
+                      type: string
+                  required:
+                  - attr
+                  type: object
+                type: array
+              poll_interval:
+                default: 5m
+                description: 'How often to poll for changes as fallback (default: 5m). Primary trigger is GitHub webhooks — polling is backup only.'
+                type: string
+              repo:
+                description: Git repository reference (e.g., "github:pleme-io/blackmatter-akeyless")
+                type: string
+              webhook_secret_ref:
+                description: GitHub webhook secret for validating push events. When set, the operator exposes a webhook endpoint at /webhooks/github/{namespace}/{name} that GitHub calls on push. This eliminates polling — builds fire within seconds of a commit.
+                nullable: true
+                properties:
+                  key:
+                    default: webhook-secret
+                    description: Key in the secret containing the webhook secret string
+                    type: string
+                  name:
+                    description: Secret name in the same namespace
+                    type: string
+                required:
+                - name
+                type: object
+            required:
+            - outputs
+            - repo
+            type: object
+          status:
+            nullable: true
+            properties:
+              cached_outputs:
+                default: 0
+                description: Number of outputs currently cached in Attic
+                format: uint32
+                minimum: 0.0
+                type: integer
+              last_commit:
+                description: Latest commit SHA on the watched branch
+                nullable: true
+                type: string
+              last_error:
+                description: Any error from the last poll
+                nullable: true
+                type: string
+              last_polled:
+                description: When the repo was last polled
+                format: date-time
+                nullable: true
+                type: string
+              output_statuses:
+                default: []
+                description: Per-output build status
+                items:
+                  properties:
+                    attr:
+                      description: Flake attribute path
+                      type: string
+                    build_ref:
+                      description: Reference to the NixBuild CR name (if building)
+                      nullable: true
+                      type: string
+                    last_built:
+                      description: When this output was last built
+                      format: date-time
+                      nullable: true
+                      type: string
+                    state:
+                      description: Current state
+                      enum:
+                      - Pending
+                      - Building
+                      - Cached
+                      - Failed
+                      type: string
+                    store_path:
+                      description: Nix store path (if built)
+                      nullable: true
+                      type: string
+                  required:
+                  - attr
+                  - state
+                  type: object
+                type: array
+              previous_commit:
+                description: Previous commit SHA (before the current one)
+                nullable: true
+                type: string
+              total_outputs:
+                default: 0
+                description: Total number of declared outputs
+                format: uint32
+                minimum: 0.0
+                type: integer
+            type: object
+        required:
+        - spec
+        title: FlakeSource
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

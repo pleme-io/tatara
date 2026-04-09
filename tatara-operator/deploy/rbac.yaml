@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tatara-operator
+  labels:
+    app.kubernetes.io/name: tatara-operator
+    app.kubernetes.io/part-of: tatara
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tatara-operator
+  labels:
+    app.kubernetes.io/name: tatara-operator
+    app.kubernetes.io/part-of: tatara
+rules:
+  # CRDs — full control over tatara resources
+  - apiGroups: ["tatara.pleme.io"]
+    resources:
+      - nixbuilds
+      - nixbuildpools
+      - flakesources
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # CRD status subresource
+  - apiGroups: ["tatara.pleme.io"]
+    resources:
+      - nixbuilds/status
+      - nixbuildpools/status
+      - flakesources/status
+    verbs: ["get", "update", "patch"]
+  # Events — for recording controller events
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Secrets — read webhook secrets referenced by FlakeSource
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tatara-operator
+  labels:
+    app.kubernetes.io/name: tatara-operator
+    app.kubernetes.io/part-of: tatara
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tatara-operator
+subjects:
+  - kind: ServiceAccount
+    name: tatara-operator
+    namespace: tatara-system

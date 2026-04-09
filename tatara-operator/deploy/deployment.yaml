@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tatara-operator
+  labels:
+    app.kubernetes.io/name: tatara-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/part-of: tatara
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tatara-operator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tatara-operator
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/part-of: tatara
+    spec:
+      serviceAccountName: tatara-operator
+      containers:
+        - name: operator
+          image: ghcr.io/pleme-io/tatara-operator:latest
+          env:
+            - name: NATS_URL
+              value: "nats://nats.nats.svc:4222"
+            - name: RUST_LOG
+              value: "info"
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

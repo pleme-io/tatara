@@ -1,6 +1,3 @@
-mod controllers;
-mod crds;
-
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -12,8 +9,8 @@ use kube::{Api, Client};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use controllers::nix_build::{self, NixBuildContext};
-use crds::nix_build::NixBuild;
+use tatara_operator::controllers::nix_build::{self, NixBuildContext};
+use tatara_operator::crds::nix_build::NixBuild;
 
 #[tokio::main]
 async fn main() -> Result<()> {

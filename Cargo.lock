@@ -3365,6 +3365,7 @@ dependencies = [
  "clap",
  "colored",
  "comfy-table",
+ "dirs",
  "futures",
  "reqwest",
  "serde",

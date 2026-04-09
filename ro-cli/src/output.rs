@@ -5,6 +5,7 @@ use colored::Colorize;
 use comfy_table::{presets::UTF8_FULL, Table};
 
 use crate::api::{BuildResponse, BuildStatus, CacheInfo, PlatformConfig, RoClient, SourceStatus};
+use crate::nix_config::{CachedConfig, ConfigApplyResult};
 
 pub fn print_build_submitted(resp: &BuildResponse) {
     println!(
@@ -146,5 +147,57 @@ pub fn print_health(healthy: bool) {
         println!("{} ro platform is healthy", "✓".green().bold());
     } else {
         println!("{} ro platform is unreachable", "✗".red().bold());
+    }
+}
+
+pub fn print_init_result(result: &ConfigApplyResult) {
+    println!("{} ro initialized", "✓".green().bold());
+    println!("  Config: {}", result.ro_conf_path.display());
+    if result.include_added {
+        println!("  Added !include to nix.conf");
+    }
+    println!("\nSubstituters configured:");
+    for s in &result.substituters {
+        println!("  {}", s.cyan());
+    }
+    println!("\nTrusted public keys:");
+    for k in &result.trusted_keys {
+        println!("  {}", k.dimmed());
+    }
+    println!("\nNix is now configured to use the ro binary cache.");
+    println!("Run {} to refresh config from the platform.", "ro refresh".bold());
+}
+
+pub fn print_configure_result(result: &ConfigApplyResult) {
+    if result.config_changed {
+        println!("{} nix configuration updated", "✓".green().bold());
+    } else {
+        println!("{} nix configuration unchanged", "·".dimmed());
+    }
+    println!("  {}", result.ro_conf_path.display());
+}
+
+pub fn print_refresh_result(result: &ConfigApplyResult, old: Option<&CachedConfig>) {
+    if result.config_changed {
+        println!("{} config updated", "✓".green().bold());
+
+        // Show what changed
+        if let Some(old) = old {
+            let old_subs: std::collections::HashSet<_> = old.config.substituters.iter().collect();
+            let new_subs: std::collections::HashSet<_> = result.substituters.iter().collect();
+
+            for s in &result.substituters {
+                if !old_subs.contains(s) {
+                    println!("  {} substituter {}", "+".green(), s);
+                }
+            }
+            for s in &old.config.substituters {
+                if !new_subs.contains(s) {
+                    println!("  {} substituter {}", "-".red(), s);
+                }
+            }
+        }
+    } else {
+        println!("{} config unchanged (already up to date)", "·".dimmed());
     }
 }

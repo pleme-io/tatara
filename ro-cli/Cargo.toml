@@ -33,6 +33,9 @@ shikumi = { git = "https://github.com/pleme-io/shikumi" }
 comfy-table = "7"
 colored = "3"
 
+# Filesystem
+dirs = "6"
+
 # Error handling + logging
 anyhow = "1"
 tracing = "0.1"

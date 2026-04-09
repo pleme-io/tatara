@@ -1,6 +1,7 @@
 mod api;
 mod commands;
 mod config;
+mod nix_config;
 mod output;
 
 use anyhow::Result;

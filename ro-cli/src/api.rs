@@ -39,7 +39,7 @@ pub struct BuildStatus {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlatformConfig {
     pub substituters: Vec<String>,
     pub trusted_public_keys: Vec<String>,
@@ -159,6 +159,10 @@ impl RoClient {
 
         resp.error_for_status_ref()?;
         resp.json().await.context("Failed to parse cache info")
+    }
+
+    pub fn base_url(&self) -> &str {
+        &self.base_url
     }
 
     /// GET /health — check API health

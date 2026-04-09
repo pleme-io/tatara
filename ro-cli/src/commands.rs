@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 use crate::api::{BuildRequest, RoClient};
+use crate::nix_config;
 use crate::output;
 
 #[derive(Parser)]
@@ -71,6 +72,19 @@ enum Command {
 
     /// Check platform health
     Health,
+
+    /// First-time setup — fetch config and apply nix configuration
+    Init,
+
+    /// Apply/update local nix configuration from the platform
+    Configure {
+        /// Show what would change without writing files
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Refresh cached config from the platform API
+    Refresh,
 }
 
 impl Cli {
@@ -134,6 +148,47 @@ impl Cli {
             Command::Health => {
                 let healthy = client.health().await?;
                 output::print_health(healthy);
+                Ok(())
+            }
+
+            Command::Init => {
+                println!("Connecting to ro platform...");
+                let config = client.get_config().await?;
+                nix_config::save_cached(&config, &client.base_url())?;
+                let result = nix_config::apply_nix_config(&config)?;
+                output::print_init_result(&result);
+                Ok(())
+            }
+
+            Command::Configure { dry_run } => {
+                // Use cached config if available, otherwise fetch
+                let config = if let Some(cached) = nix_config::load_cached()? {
+                    println!("Using cached config (fetched {})", cached.fetched_at);
+                    cached.config
+                } else {
+                    println!("No cached config, fetching from API...");
+                    let config = client.get_config().await?;
+                    nix_config::save_cached(&config, &client.base_url())?;
+                    config
+                };
+
+                if *dry_run {
+                    output::print_platform_config(&config);
+                    println!("\n(dry run — no files written)");
+                } else {
+                    let result = nix_config::apply_nix_config(&config)?;
+                    output::print_configure_result(&result);
+                }
+                Ok(())
+            }
+
+            Command::Refresh => {
+                let old = nix_config::load_cached()?;
+                println!("Fetching latest platform config...");
+                let config = client.get_config().await?;
+                nix_config::save_cached(&config, &client.base_url())?;
+                let result = nix_config::apply_nix_config(&config)?;
+                output::print_refresh_result(&result, old.as_ref());
                 Ok(())
             }
         }

@@ -1,0 +1,57 @@
+[package]
+name = "tatara-kube"
+description = "Nix-native Kubernetes reconciler — replaces FluxCD with Server-Side Apply"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[features]
+default = ["standalone"]
+standalone = ["dep:clap", "dep:tracing-subscriber"]
+crds = ["dep:schemars"]
+
+[dependencies]
+tatara-core = { path = "../tatara-core" }
+
+# Kubernetes
+kube = { version = "0.99", features = ["runtime", "derive", "client"] }
+k8s-openapi = { version = "0.24", features = ["latest"] }
+schemars = { version = "0.8", features = ["chrono"], optional = true }
+
+# Async
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling + logging
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
+
+# Hashing
+sha2 = "0.10"
+
+# IDs + time
+chrono = { version = "0.4", features = ["serde"] }
+
+# CLI (standalone mode)
+clap = { version = "4.5", features = ["derive"], optional = true }
+
+# Hostname
+hostname = "0.4"
+
+# YAML parsing (for helm template output)
+serde_yaml_ng = "0.10"
+
+[[bin]]
+name = "tatara-kube"
+path = "src/bin/main.rs"
+required-features = ["standalone"]
+
+[lints.clippy]
+pedantic = "warn"

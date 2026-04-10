@@ -1420,6 +1420,11 @@ rec {
             packageId = "axum-core 0.5.6";
           }
           {
+            name = "axum-macros";
+            packageId = "axum-macros";
+            optional = true;
+          }
+          {
             name = "base64";
             packageId = "base64";
             optional = true;
@@ -1596,7 +1601,7 @@ rec {
           "tracing" = [ "dep:tracing" "axum-core/tracing" ];
           "ws" = [ "dep:hyper" "tokio" "dep:tokio-tungstenite" "dep:sha1" "dep:base64" ];
         };
-        resolvedDefaultFeatures = [ "default" "form" "http1" "json" "matched-path" "original-uri" "query" "tokio" "tower-log" "tracing" "ws" ];
+        resolvedDefaultFeatures = [ "default" "form" "http1" "json" "macros" "matched-path" "original-uri" "query" "tokio" "tower-log" "tracing" "ws" ];
       };
       "axum-core 0.4.5" = rec {
         crateName = "axum-core";
@@ -1728,6 +1733,40 @@ rec {
           "tracing" = [ "dep:tracing" ];
         };
         resolvedDefaultFeatures = [ "tracing" ];
+      };
+      "axum-macros" = rec {
+        crateName = "axum-macros";
+        version = "0.5.0";
+        edition = "2021";
+        sha256 = "0p6011ld0izk22fmdxsps58cigilq2yhnmyqw4f8bslg09gdwkv0";
+        procMacro = true;
+        libName = "axum_macros";
+        dependencies = [
+          {
+            name = "proc-macro2";
+            packageId = "proc-macro2";
+          }
+          {
+            name = "quote";
+            packageId = "quote";
+          }
+          {
+            name = "syn";
+            packageId = "syn 2.0.117";
+            features = [ "full" "parsing" "extra-traits" ];
+          }
+        ];
+        devDependencies = [
+          {
+            name = "syn";
+            packageId = "syn 2.0.117";
+            features = [ "full" "extra-traits" ];
+          }
+        ];
+        features = {
+          "__private" = [ "syn/visit-mut" ];
+        };
+        resolvedDefaultFeatures = [ "default" ];
       };
       "backon" = rec {
         crateName = "backon";
@@ -3621,6 +3660,12 @@ rec {
             name = "crypto-common";
             packageId = "crypto-common";
           }
+          {
+            name = "subtle";
+            packageId = "subtle";
+            optional = true;
+            usesDefaultFeatures = false;
+          }
         ];
         features = {
           "blobby" = [ "dep:blobby" ];
@@ -3635,7 +3680,7 @@ rec {
           "std" = [ "alloc" "crypto-common/std" ];
           "subtle" = [ "dep:subtle" ];
         };
-        resolvedDefaultFeatures = [ "alloc" "block-buffer" "core-api" "default" "std" ];
+        resolvedDefaultFeatures = [ "alloc" "block-buffer" "core-api" "default" "mac" "std" "subtle" ];
       };
       "dirs" = rec {
         crateName = "dirs";
@@ -5285,6 +5330,32 @@ rec {
           "std" = [ "alloc" ];
         };
         resolvedDefaultFeatures = [ "alloc" "default" "std" ];
+      };
+      "hmac" = rec {
+        crateName = "hmac";
+        version = "0.12.1";
+        edition = "2018";
+        sha256 = "0pmbr069sfg76z7wsssfk5ddcqd9ncp79fyz6zcm6yn115yc6jbc";
+        authors = [
+          "RustCrypto Developers"
+        ];
+        dependencies = [
+          {
+            name = "digest";
+            packageId = "digest";
+            features = [ "mac" ];
+          }
+        ];
+        devDependencies = [
+          {
+            name = "digest";
+            packageId = "digest";
+            features = [ "dev" ];
+          }
+        ];
+        features = {
+          "std" = [ "digest/std" ];
+        };
       };
       "home" = rec {
         crateName = "home";
@@ -14334,6 +14405,11 @@ rec {
             packageId = "async-nats";
           }
           {
+            name = "axum";
+            packageId = "axum 0.8.8";
+            features = [ "macros" ];
+          }
+          {
             name = "chrono";
             packageId = "chrono";
             features = [ "serde" ];
@@ -14341,6 +14417,14 @@ rec {
           {
             name = "futures";
             packageId = "futures";
+          }
+          {
+            name = "hex";
+            packageId = "hex";
+          }
+          {
+            name = "hmac";
+            packageId = "hmac";
           }
           {
             name = "k8s-openapi";
@@ -14351,6 +14435,12 @@ rec {
             name = "kube";
             packageId = "kube";
             features = [ "runtime" "derive" "client" ];
+          }
+          {
+            name = "reqwest";
+            packageId = "reqwest";
+            usesDefaultFeatures = false;
+            features = [ "json" "rustls-tls" ];
           }
           {
             name = "schemars";
@@ -14369,6 +14459,10 @@ rec {
           {
             name = "serde_yaml";
             packageId = "serde_yaml";
+          }
+          {
+            name = "sha2";
+            packageId = "sha2";
           }
           {
             name = "thiserror";

@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -9,8 +10,11 @@ use kube::{Api, Client};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
+use tatara_operator::controllers::flake_source::{self, FlakeSourceContext};
 use tatara_operator::controllers::nix_build::{self, NixBuildContext};
+use tatara_operator::crds::flake_source::FlakeSource;
 use tatara_operator::crds::nix_build::NixBuild;
+use tatara_operator::webhooks;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -41,31 +45,71 @@ async fn main() -> Result<()> {
 
     info!("Connected to NATS at {}", nats_url);
 
-    let ctx = Arc::new(NixBuildContext {
+    // ── NixBuild controller ──────────────────────────────────────────────
+
+    let nix_ctx = Arc::new(NixBuildContext {
         kube_client: kube_client.clone(),
         nats_client,
         jetstream,
     });
 
-    // Start completion subscriber (background)
-    let ctx_sub = ctx.clone();
+    // NATS completion subscriber (background)
+    let ctx_sub = nix_ctx.clone();
     tokio::spawn(async move {
         if let Err(e) = nix_build::start_completion_subscriber(ctx_sub).await {
             tracing::error!(error = %e, "Completion subscriber failed");
         }
     });
 
-    // Start NixBuild controller
-    let builds: Api<NixBuild> = Api::all(kube_client);
-    Controller::new(builds, Config::default())
-        .run(nix_build::reconcile, nix_build::error_policy, ctx)
+    let builds: Api<NixBuild> = Api::all(kube_client.clone());
+    let nix_build_controller = Controller::new(builds, Config::default())
+        .run(nix_build::reconcile, nix_build::error_policy, nix_ctx)
         .for_each(|res| async move {
             match res {
-                Ok(o) => info!(resource = ?o, "Reconciled"),
-                Err(e) => tracing::error!(error = %e, "Reconcile failed"),
+                Ok(o) => info!(resource = ?o, "NixBuild reconciled"),
+                Err(e) => tracing::error!(error = %e, "NixBuild reconcile failed"),
             }
-        })
-        .await;
+        });
+
+    // ── FlakeSource controller ───────────────────────────────────────────
+
+    let flake_ctx = Arc::new(FlakeSourceContext {
+        kube_client: kube_client.clone(),
+        http_client: reqwest::Client::new(),
+        github_token: std::env::var("GITHUB_TOKEN").ok(),
+    });
+
+    let sources: Api<FlakeSource> = Api::all(kube_client.clone());
+    let flake_source_controller = Controller::new(sources, Config::default())
+        .run(
+            flake_source::reconcile,
+            flake_source::error_policy,
+            flake_ctx,
+        )
+        .for_each(|res| async move {
+            match res {
+                Ok(o) => info!(resource = ?o, "FlakeSource reconciled"),
+                Err(e) => tracing::error!(error = %e, "FlakeSource reconcile failed"),
+            }
+        });
+
+    // ── Webhook server (background) ──────────────────────────────────────
+
+    let webhook_addr: SocketAddr = "0.0.0.0:8081".parse().unwrap();
+    let webhook_kube = kube_client;
+    tokio::spawn(async move {
+        if let Err(e) = webhooks::start_webhook_server(webhook_addr, webhook_kube).await {
+            tracing::error!(error = %e, "Webhook server failed");
+        }
+    });
+
+    // ── Run both controllers concurrently ────────────────────────────────
+
+    info!("Controllers started");
+    tokio::select! {
+        () = nix_build_controller => {},
+        () = flake_source_controller => {},
+    }
 
     Ok(())
 }

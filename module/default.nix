@@ -4,6 +4,6 @@
 {
   imports = [
     (import ./tatara-service.nix { inherit hmHelpers; })
-    ./ro.nix
+    (import ./ro.nix { inherit hmHelpers; })
   ];
 }

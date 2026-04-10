@@ -42,6 +42,16 @@ in
       description = "Interval in seconds for periodic `ro refresh` (default: 1h)";
     };
 
+    # Organizations to watch via tend → ro build integration.
+    # When tend detects a new commit in any repo in these orgs,
+    # it calls `ro build` to trigger a Nix build via the ro API.
+    watchOrgs = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = "GitHub orgs to watch for cache warming via tend → ro build";
+      example = [ "pleme-io" "akeylesslabs" "akeyless-community" ];
+    };
+
     # Read-only computed outputs for consumption by the nix repo.
     _computed = {
       substituterUrl = mkOption {

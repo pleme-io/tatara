@@ -10,11 +10,11 @@ use kube::{Api, Client};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
+use tatara_operator::api_server;
 use tatara_operator::controllers::flake_source::{self, FlakeSourceContext};
 use tatara_operator::controllers::nix_build::{self, NixBuildContext};
 use tatara_operator::crds::flake_source::FlakeSource;
 use tatara_operator::crds::nix_build::NixBuild;
-use tatara_operator::webhooks;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -93,13 +93,13 @@ async fn main() -> Result<()> {
             }
         });
 
-    // ── Webhook server (background) ──────────────────────────────────────
+    // ── API server (build submission + webhooks + config) ──────────────
 
-    let webhook_addr: SocketAddr = "0.0.0.0:8081".parse().unwrap();
-    let webhook_kube = kube_client;
+    let api_addr: SocketAddr = "0.0.0.0:8081".parse().unwrap();
+    let api_kube = kube_client;
     tokio::spawn(async move {
-        if let Err(e) = webhooks::start_webhook_server(webhook_addr, webhook_kube).await {
-            tracing::error!(error = %e, "Webhook server failed");
+        if let Err(e) = api_server::start_api_server(api_addr, api_kube).await {
+            tracing::error!(error = %e, "API server failed");
         }
     });
 

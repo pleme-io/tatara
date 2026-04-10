@@ -13,6 +13,11 @@ pub struct RoConfig {
     /// The ro platform API endpoint (e.g., https://api.ro.ben-kar.com)
     pub api_endpoint: String,
 
+    /// API token for authenticated endpoints (build submission, status).
+    /// Can also be set via RO_API_TOKEN env var.
+    #[serde(default)]
+    pub api_token: Option<String>,
+
     /// Output format for CLI commands
     #[serde(default = "default_format")]
     pub output_format: OutputFormat,
@@ -47,6 +52,7 @@ impl Default for RoConfig {
     fn default() -> Self {
         Self {
             api_endpoint: "https://api.ro.ben-kar.com".to_string(),
+            api_token: None,
             output_format: OutputFormat::Table,
             timeout_secs: 120,
             follow_logs: false,
@@ -78,8 +84,10 @@ impl RoConfig {
             Err(_) => {
                 // No config file found — try env var, then default
                 if let Ok(endpoint) = std::env::var("RO_API_ENDPOINT") {
+                    let api_token = std::env::var("RO_API_TOKEN").ok();
                     Ok(Self {
                         api_endpoint: endpoint,
+                        api_token,
                         ..Self::default()
                     })
                 } else {

@@ -8,6 +8,8 @@ use crate::config::RoConfig;
 pub struct RoClient {
     http: Client,
     base_url: String,
+    #[allow(dead_code)]
+    api_token: Option<String>,
 }
 
 // ── API types ────────────────────────────────────────────────────────────
@@ -69,14 +71,25 @@ pub struct CacheInfo {
 
 impl RoClient {
     pub fn new(config: &RoConfig) -> Result<Self> {
-        let http = Client::builder()
-            .user_agent("ro-cli/0.1.0")
-            .build()
-            .context("Failed to create HTTP client")?;
+        let mut builder = Client::builder().user_agent("ro-cli/0.1.0");
+
+        // If token is set, inject as default auth header
+        if let Some(token) = &config.api_token {
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                reqwest::header::AUTHORIZATION,
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+                    .context("Invalid API token")?,
+            );
+            builder = builder.default_headers(headers);
+        }
+
+        let http = builder.build().context("Failed to create HTTP client")?;
 
         Ok(Self {
             http,
             base_url: config.api_endpoint.trim_end_matches('/').to_string(),
+            api_token: config.api_token.clone(),
         })
     }
 

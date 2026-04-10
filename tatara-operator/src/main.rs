@@ -11,8 +11,10 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use tatara_operator::api_server;
+use tatara_operator::controllers::flake_org::{self, FlakeOrgContext};
 use tatara_operator::controllers::flake_source::{self, FlakeSourceContext};
 use tatara_operator::controllers::nix_build::{self, NixBuildContext};
+use tatara_operator::crds::flake_org::FlakeOrg;
 use tatara_operator::crds::flake_source::FlakeSource;
 use tatara_operator::crds::nix_build::NixBuild;
 
@@ -93,6 +95,24 @@ async fn main() -> Result<()> {
             }
         });
 
+    // ── FlakeOrg controller ────────────────────────────────────────────
+
+    let org_ctx = Arc::new(FlakeOrgContext {
+        kube_client: kube_client.clone(),
+        http_client: reqwest::Client::new(),
+        github_token: std::env::var("GITHUB_TOKEN").ok(),
+    });
+
+    let orgs: Api<FlakeOrg> = Api::all(kube_client.clone());
+    let flake_org_controller = Controller::new(orgs, Config::default())
+        .run(flake_org::reconcile, flake_org::error_policy, org_ctx)
+        .for_each(|res| async move {
+            match res {
+                Ok(o) => info!(resource = ?o, "FlakeOrg reconciled"),
+                Err(e) => tracing::error!(error = %e, "FlakeOrg reconcile failed"),
+            }
+        });
+
     // ── API server (build submission + webhooks + config) ──────────────
 
     let api_addr: SocketAddr = "0.0.0.0:8081".parse().unwrap();
@@ -103,12 +123,13 @@ async fn main() -> Result<()> {
         }
     });
 
-    // ── Run both controllers concurrently ────────────────────────────────
+    // ── Run all controllers concurrently ─────────────────────────────────
 
     info!("Controllers started");
     tokio::select! {
         () = nix_build_controller => {},
         () = flake_source_controller => {},
+        () = flake_org_controller => {},
     }
 
     Ok(())

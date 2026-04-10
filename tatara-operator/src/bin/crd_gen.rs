@@ -15,4 +15,9 @@ fn main() {
         "{}",
         serde_yaml::to_string(&tatara_operator::crds::flake_source::FlakeSource::crd()).unwrap()
     );
+    println!("---");
+    print!(
+        "{}",
+        serde_yaml::to_string(&tatara_operator::crds::flake_org::FlakeOrg::crd()).unwrap()
+    );
 }

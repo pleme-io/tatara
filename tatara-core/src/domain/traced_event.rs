@@ -165,6 +165,11 @@ impl TracedEvent {
 }
 
 /// A correlation context that tracks a workload through its lifecycle.
+///
+/// # Thread Safety
+/// This type is NOT thread-safe. It uses interior mutation via `&mut self`
+/// in `emit()`. Each workload should own a single CorrelationContext.
+/// For concurrent access, wrap in `Arc<Mutex<CorrelationContext>>`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorrelationContext {
     /// The correlation ID for this workload.

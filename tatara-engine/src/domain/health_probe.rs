@@ -89,9 +89,14 @@ impl ProbeExecutor {
             Ok(Ok(resp)) => {
                 let latency_ms = start.elapsed().as_millis() as u64;
                 let status = resp.status();
-                if status.is_success() || status.as_u16() == 429 {
+                if status.is_success() {
                     debug!(url = %url, status = %status, latency_ms, "health check passed");
                     ProbeResult::Passing { latency_ms }
+                } else if status.as_u16() == 429 {
+                    ProbeResult::Warning {
+                        message: format!("rate limited (HTTP 429)"),
+                        latency_ms,
+                    }
                 } else if status.is_server_error() {
                     ProbeResult::Critical {
                         message: format!("HTTP {status}"),

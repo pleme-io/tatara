@@ -503,5 +503,92 @@ fn apply_command(state: &mut ClusterState, cmd: ClusterCommand) -> ClusterRespon
                 ClusterResponse::Error(format!("Source not found: {}", source_id))
             }
         }
+
+        // ── Distributed state machine commands ──
+
+        ClusterCommand::ProposeAllocations {
+            expected_generation,
+            allocations,
+            job_status_updates,
+        } => {
+            if state.scheduling_generation != expected_generation {
+                return ClusterResponse::Error(format!(
+                    "scheduling generation conflict: expected {}, current {}",
+                    expected_generation, state.scheduling_generation
+                ));
+            }
+            state.scheduling_generation += 1;
+            for alloc in allocations {
+                state.desired_allocations.insert(alloc.alloc_id, alloc);
+            }
+            for (job_id, status) in job_status_updates {
+                if let Some(job) = state.jobs.get_mut(&job_id) {
+                    job.status = status;
+                }
+            }
+            ClusterResponse::Ok
+        }
+
+        ClusterCommand::SetDesiredAllocation(desired) => {
+            state.desired_allocations.insert(desired.alloc_id, desired);
+            ClusterResponse::Ok
+        }
+
+        ClusterCommand::RemoveDesiredAllocation { alloc_id } => {
+            state.desired_allocations.remove(&alloc_id);
+            ClusterResponse::Ok
+        }
+
+        ClusterCommand::ReportObservation {
+            node_id,
+            alloc_id,
+            phase,
+            observation_seq,
+        } => {
+            let observed = tatara_core::domain::lifecycle::ObservedAllocationState {
+                alloc_id,
+                node_id: format!("{node_id}"),
+                phase,
+                observed_at: chrono::Utc::now(),
+                observation_seq,
+            };
+            state.observed_allocations.insert(alloc_id, observed);
+            ClusterResponse::Ok
+        }
+
+        ClusterCommand::BatchObservations {
+            node_id,
+            observations,
+            observation_seq,
+        } => {
+            for (alloc_id, phase) in observations {
+                let observed = tatara_core::domain::lifecycle::ObservedAllocationState {
+                    alloc_id,
+                    node_id: format!("{}", node_id),
+                    phase,
+                    observed_at: chrono::Utc::now(),
+                    observation_seq,
+                };
+                state.observed_allocations.insert(alloc_id, observed);
+            }
+            ClusterResponse::Ok
+        }
+
+        ClusterCommand::ReportNodePhase { node_id, phase } => {
+            state.node_phases.insert(node_id, phase);
+            ClusterResponse::Ok
+        }
+
+        ClusterCommand::Heartbeat {
+            node_id,
+            timestamp,
+            allocation_summary: _,
+        } => {
+            if let Some(node) = state.nodes.get_mut(&node_id) {
+                // Update the node's last known activity
+                node.joined_at = timestamp; // reuse field for last heartbeat
+            }
+            ClusterResponse::Ok
+        }
     }
 }

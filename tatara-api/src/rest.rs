@@ -10,9 +10,12 @@ use std::time::Duration;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
+use tatara_engine::catalog::registry::CatalogRegistry;
 use tatara_engine::client::executor::Executor;
 use tatara_engine::client::log_collector::LogCollector;
 use tatara_engine::cluster::store::ClusterStore;
+use tatara_engine::metrics::TataraMetrics;
+use tatara_core::catalog::{ServiceEntry, ServiceQuery};
 use tatara_core::cluster::types::NodeMeta;
 use tatara_core::domain::allocation::Allocation;
 use tatara_core::domain::event::EventKind;
@@ -26,6 +29,8 @@ pub struct AppState {
     pub cluster_store: Arc<ClusterStore>,
     pub executor: Arc<Executor>,
     pub log_collector: Arc<LogCollector>,
+    pub catalog_registry: Arc<CatalogRegistry>,
+    pub metrics: Arc<TataraMetrics>,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -86,6 +91,12 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/sources/{source_id}/resume",
             post(resume_source),
         )
+        // Catalog (consul-compatible subset)
+        .route("/v1/catalog/services", get(catalog_list_services))
+        .route("/v1/catalog/service/{name}", get(catalog_get_service))
+        .route("/v1/health/service/{name}", get(catalog_health_service))
+        // Metrics
+        .route("/metrics", get(prometheus_metrics))
         .with_state(state)
 }
 
@@ -604,4 +615,49 @@ struct EventQuery {
 #[derive(Deserialize)]
 struct EventStreamQuery {
     kind: Option<String>,
+}
+
+// ── Catalog ──
+
+async fn catalog_list_services(
+    State(state): State<AppState>,
+) -> Json<Vec<String>> {
+    Json(state.catalog_registry.list_services().await)
+}
+
+async fn catalog_get_service(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Json<Vec<ServiceEntry>> {
+    Json(state.catalog_registry.get_service(&name).await)
+}
+
+#[derive(Deserialize)]
+struct HealthQuery {
+    #[serde(default)]
+    passing: Option<bool>,
+}
+
+async fn catalog_health_service(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+    params: Query<HealthQuery>,
+) -> Json<Vec<ServiceEntry>> {
+    let query = ServiceQuery {
+        service: name,
+        healthy_only: params.passing.unwrap_or(false),
+        ..Default::default()
+    };
+    Json(state.catalog_registry.query(&query).await)
+}
+
+// ── Metrics ──
+
+async fn prometheus_metrics(
+    State(state): State<AppState>,
+) -> ([(axum::http::header::HeaderName, &'static str); 1], String) {
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/plain; version=0.0.4")],
+        state.metrics.render_prometheus(),
+    )
 }

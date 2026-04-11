@@ -1,3 +1,4 @@
+pub mod convergence;
 pub mod evaluation;
 pub mod health_probe;
 pub mod port_allocator;

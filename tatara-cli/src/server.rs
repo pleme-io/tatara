@@ -252,6 +252,44 @@ pub async fn run(config: ServerConfig) -> Result<()> {
         }
     });
 
+    // ── Subsystems ──
+    let port_allocator = Arc::new(
+        tatara_engine::domain::port_allocator::PortAllocator::new(
+            config.ports.range_start,
+            config.ports.range_end,
+        ),
+    );
+    let catalog_registry = Arc::new(
+        tatara_engine::catalog::registry::CatalogRegistry::new(),
+    );
+    let metrics = tatara_engine::metrics::TataraMetrics::new();
+    let volume_manager = Arc::new(
+        tatara_engine::domain::volume_manager::VolumeManager::new(
+            config.volumes.dir.clone(),
+        ),
+    );
+    let secret_resolver = Arc::new(
+        tatara_engine::secrets::SecretResolver::new(),
+    );
+    let nats_config = tatara_engine::nats::NatsConfig {
+        enabled: config.nats.enabled,
+        url: config.nats.url.clone(),
+        ..Default::default()
+    };
+    let nats_bus = Arc::new(
+        tatara_engine::nats::NatsEventBus::connect(nats_config).await,
+    );
+    let probe_executor = Arc::new(
+        tatara_engine::domain::health_probe::ProbeExecutor::new(),
+    );
+
+    info!(
+        nats = config.nats.enabled,
+        sui = config.sui.daemon_addr.is_some(),
+        port_range = %format!("{}-{}", config.ports.range_start, config.ports.range_end),
+        "subsystems initialized"
+    );
+
     // ── Executor (uses local file-backed store for task lifecycle) ──
     let alloc_dir = config.state.dir.join("alloc");
     let executor = Arc::new(Executor::new(
@@ -274,6 +312,8 @@ pub async fn run(config: ServerConfig) -> Result<()> {
         cluster_store: cluster_store.clone(),
         executor: executor.clone(),
         log_collector: log_collector.clone(),
+        catalog_registry: catalog_registry.clone(),
+        metrics: metrics.clone(),
     };
 
     let graphql_router = Router::new()

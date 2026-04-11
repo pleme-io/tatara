@@ -5,6 +5,10 @@ use std::collections::HashMap;
 
 use crate::domain::event::{Event, EventRing};
 use crate::domain::job::{DriverType, JobSpec, Resources};
+use crate::domain::lifecycle::{
+    AllocationPhase, DesiredAllocationState, DesiredPhase, NodePhase,
+    ObservedAllocationState,
+};
 use crate::domain::release::Release;
 use crate::domain::source::{Source, SourceStatus};
 
@@ -84,6 +88,24 @@ pub struct ClusterState {
     /// Source tracking (GitOps flake watchers).
     #[serde(default)]
     pub sources: HashMap<uuid::Uuid, Source>,
+
+    // ── Distributed state machine ──
+
+    /// Desired allocation states declared by the scheduler.
+    #[serde(default)]
+    pub desired_allocations: HashMap<uuid::Uuid, DesiredAllocationState>,
+
+    /// Observed allocation states reported by executors.
+    #[serde(default)]
+    pub observed_allocations: HashMap<uuid::Uuid, ObservedAllocationState>,
+
+    /// Scheduling generation counter for optimistic concurrency.
+    #[serde(default)]
+    pub scheduling_generation: u64,
+
+    /// Node lifecycle phases.
+    #[serde(default)]
+    pub node_phases: HashMap<NodeId, NodePhase>,
 }
 
 /// A snapshot of a job at a particular version.
@@ -164,6 +186,49 @@ pub enum ClusterCommand {
     DeleteSource {
         source_id: uuid::Uuid,
     },
+
+    // ── Distributed state machine ──
+
+    /// Scheduler proposes new allocations with generation check.
+    ProposeAllocations {
+        expected_generation: u64,
+        allocations: Vec<DesiredAllocationState>,
+        job_status_updates: Vec<(String, crate::domain::job::JobStatus)>,
+    },
+
+    /// Set a single desired allocation state.
+    SetDesiredAllocation(DesiredAllocationState),
+
+    /// Remove a desired allocation (job stopped/scaled down).
+    RemoveDesiredAllocation { alloc_id: uuid::Uuid },
+
+    /// Executor reports observed allocation phase.
+    ReportObservation {
+        node_id: NodeId,
+        alloc_id: uuid::Uuid,
+        phase: AllocationPhase,
+        observation_seq: u64,
+    },
+
+    /// Batch observation report (one per reconciler tick per node).
+    BatchObservations {
+        node_id: NodeId,
+        observations: Vec<(uuid::Uuid, AllocationPhase)>,
+        observation_seq: u64,
+    },
+
+    /// Node reports its lifecycle phase.
+    ReportNodePhase {
+        node_id: NodeId,
+        phase: NodePhase,
+    },
+
+    /// Periodic heartbeat with allocation summary.
+    Heartbeat {
+        node_id: NodeId,
+        timestamp: DateTime<Utc>,
+        allocation_summary: Vec<(uuid::Uuid, String)>,
+    },
 }
 
 /// Response from applying a command.
@@ -192,4 +257,7 @@ pub mod gossip_keys {
     pub const HTTP_ADDR: &str = "http_addr";
     pub const RAFT_ADDR: &str = "raft_addr";
     pub const RAFT_LEADER: &str = "raft:leader";
+    pub const HEARTBEAT_EPOCH: &str = "heartbeat:epoch";
+    pub const NODE_PHASE: &str = "node:phase";
+    pub const HEALTH_PREFIX: &str = "health";
 }

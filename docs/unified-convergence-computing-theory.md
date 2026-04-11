@@ -1164,7 +1164,358 @@ The Nix store is the correct convergence store because the invariants align:
 No new storage system is needed. No new query engine. No new distribution mechanism.
 The convergence store is the Nix store. Sui is the convergence computer's runtime.
 
-## 9. Implementation in Tatara
+## 9. Compliant Computing: The Third Theory
+
+### 9.1 The Composition of Three Theories
+
+The platform is built on three composing theories:
+
+| Theory | Concern | Question Answered |
+|--------|---------|------------------|
+| **Unified Infrastructure Theory** (substrate) | WHAT to compute | What workloads exist, on what substrates? |
+| **Unified Convergence Computing Theory** (tatara) | HOW to compute | How does each resource converge to desired state? |
+| **Compliant Computing Theory** (tameshi + kensa) | WHETHER to compute | Is this computation permitted by policy and law? |
+
+The first two theories establish what gets built and how it converges. The third
+theory adds a constraint: **not all convergence is permitted**. Some computations
+require compliance verification before, during, or after execution. The compliant
+computing theory makes this a static, plannable, attestable property of the
+convergence graph — not a post-hoc audit.
+
+### 9.2 Compliance as a Static DAG Property
+
+Because convergence DAGs are Nix derivations (section 5.3), and Nix derivations
+have statically known dependency closures, **compliance requirements are computable
+at plan time**:
+
+```
+tatara plan --compliance my-workload.nix
+
+Compliance Plan: my-workload
+├── Convergence Points: 14 across 5 substrates
+├── Compliance Controls Required:
+│   ├── NIST SC-7(5): Network boundary protection
+│   │   └── Applies to: Network.RouteConfig, Network.MeshJoin
+│   ├── NIST AC-6: Least privilege
+│   │   └── Applies to: Security.SecretResolve, Identity.RBACGate
+│   ├── NIST AU-2: Auditable events
+│   │   └── Applies to: ALL convergence points (attestation chain)
+│   ├── SOC 2 CC6.1: Logical and physical access controls
+│   │   └── Applies to: Compute.NodeSelect, Security.*
+│   ├── PCI DSS 3.4: Render PAN unreadable
+│   │   └── Applies to: Storage.VolMount (if handling cardholder data)
+│   └── FedRAMP AC-17: Remote access
+│       └── Applies to: Network.*, Compute.* (if in FedRAMP boundary)
+├── Verification Method:
+│   ├── Pre-execution (plan-time): 8 controls (static analysis of DAG structure)
+│   ├── At-boundary (per point): 4 controls (runtime attestation)
+│   └── Post-convergence: 2 controls (live verification via InSpec)
+└── Compliance Closure: 14 points × 6 frameworks = 84 control bindings
+    Cache hits: 31 (attestation unchanged from previous generation)
+    New verifications needed: 53
+```
+
+This is not hypothetical — the machinery already exists:
+
+- **Tameshi** computes three-pillar CertificationArtifacts (artifact + controls + intent)
+- **Kensa** runs compliance checks against 14 frameworks
+- **Sekiban** gates K8s deploys on attestation signatures
+- **Inshou** gates Nix rebuilds on attestation signatures
+- **Pangea-architectures** validates compliance on synthesis output (zero cloud cost)
+
+The compliant computing theory unifies these into the convergence graph.
+
+### 9.3 Type-Level Compliance
+
+Compliance controls attach to convergence point **types**, not individual instances.
+This means entire categories and classes of computing are gated by compliance
+requirements:
+
+```rust
+struct ComplianceBinding {
+    /// Which convergence point types this control applies to.
+    point_selector: PointSelector,
+    /// Which compliance framework and control.
+    control: ComplianceControl,
+    /// When this control is verified.
+    verification_phase: VerificationPhase,
+    /// The kensa runner that evaluates this control.
+    runner: ComplianceRunnerRef,
+}
+
+enum PointSelector {
+    /// All points on a specific substrate.
+    Substrate(SubstrateType),
+    /// All points of a specific type.
+    PointType(ConvergencePointType),
+    /// All points matching a substrate + type combination.
+    SubstrateAndType(SubstrateType, ConvergencePointType),
+    /// All points in a specific environment.
+    Environment(String),
+    /// All points handling data of a specific classification.
+    DataClassification(DataClassification),
+    /// All points (universal control).
+    All,
+}
+
+enum VerificationPhase {
+    /// Verified at plan time by static analysis of the DAG structure.
+    /// No execution needed. Zero cost.
+    PlanTime,
+    /// Verified at convergence boundary (prepare or verify phase).
+    /// Runs inline with convergence execution.
+    AtBoundary,
+    /// Verified after convergence by live verification (InSpec).
+    /// Runs against the converged state.
+    PostConvergence,
+}
+```
+
+Example bindings:
+
+```nix
+compliancePolicy = {
+  # ALL convergence points must maintain audit trail
+  auditTrail = {
+    selector = "all";
+    control = { framework = "nist-800-53"; id = "AU-2"; };
+    phase = "at-boundary";  # attestation chain satisfies this inherently
+  };
+
+  # All Security substrate points must enforce least privilege
+  leastPrivilege = {
+    selector = { substrate = "security"; };
+    control = { framework = "nist-800-53"; id = "AC-6"; };
+    phase = "plan-time";  # verify RBAC config in the derivation
+  };
+
+  # All Network Transform points must have boundary protection
+  networkBoundary = {
+    selector = { substrate = "network"; pointType = "transform"; };
+    control = { framework = "nist-800-53"; id = "SC-7"; };
+    phase = "post-convergence";  # InSpec verifies live network config
+  };
+
+  # All points handling PII must encrypt at rest
+  piiEncryption = {
+    selector = { dataClassification = "pii"; };
+    control = { framework = "pci-dss"; id = "3.4"; };
+    phase = "at-boundary";  # verify encryption before attestation
+  };
+
+  # Production environment requires FedRAMP controls
+  fedRampProduction = {
+    selector = { environment = "production"; };
+    control = { framework = "fedramp-moderate"; id = "all"; };
+    phase = "plan-time";  # all FedRAMP controls verified before execution
+  };
+};
+```
+
+### 9.4 Tameshi CertificationArtifact as Convergence Attestation
+
+Tameshi's three-pillar CertificationArtifact maps directly to convergence
+boundary attestation:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Tameshi CertificationArtifact    Convergence Boundary Attestation│
+│                                                                  │
+│ artifact_hash ─────────────────→ convergence_function_hash       │
+│   (hash of deployment artifact)   (hash of convergence function  │
+│                                    + its WASI binary)            │
+│                                                                  │
+│ control_hash ──────────────────→ compliance_verification_hash    │
+│   (hash of compliance results)    (kensa assessment results for  │
+│                                    all bound controls)           │
+│                                                                  │
+│ intent_hash ───────────────────→ desired_state_hash              │
+│   (hash of infrastructure code)   (hash of Nix-declared desired  │
+│                                    state)                        │
+│                                                                  │
+│ composed_root ─────────────────→ boundary_attestation            │
+│   (BLAKE3 Merkle of all three)    (BLAKE3 Merkle of all three)   │
+│                                                                  │
+│ Two-phase signature:             Two-phase convergence:          │
+│   Phase 1: untested root          Phase 1: converge first        │
+│   Phase 2: + compliance hash      Phase 2: + compliance verified │
+│   Master: combined signature      Final: combined attestation    │
+└──────────────────────────────────┘────────────────────────────────┘
+```
+
+This means every convergence point's attestation is a CertificationArtifact.
+The attestation chain is simultaneously:
+- A convergence proof (each point converged correctly)
+- A compliance proof (each point satisfied its bound controls)
+- An intent proof (each point did what was declared in Nix)
+
+All three are cryptographically bound. You cannot forge one without invalidating
+the others.
+
+### 9.5 Compliance Verification as Convergence DAGs
+
+Compliance verification itself is a convergence DAG. Each compliance check is a
+bounded convergence point that converges to "control satisfied" (distance = 0)
+or "control violated" (failed):
+
+```
+Compliance DAG for NIST 800-53:
+  AU-2.collect ──→ AU-2.verify ──→ AU-2.attest
+  AC-6.collect ──→ AC-6.verify ──→ AC-6.attest
+  SC-7.collect ──→ SC-7.verify ──→ SC-7.attest
+          ↓               ↓              ↓
+  FrameworkGate (Join: all controls must be attested)
+          ↓
+  ComplianceAttestation (feeds into CertificationArtifact.control_hash)
+```
+
+Because compliance DAGs are convergence DAGs, they get everything for free:
+- **Content-addressed** — same inputs → same compliance result → cache hit
+- **Dependency-tracked** — compliance closure is computable
+- **Distributed** — compliance checks run on any tatara node
+- **Attested** — compliance results are tameshi-attested store paths
+- **Generational** — compliance re-verification produces new generations
+
+### 9.6 The Compliance Closure
+
+Just as `nix-store --requisites` computes the dependency closure of a store path,
+the compliance closure computes every control that must be satisfied for a
+convergence DAG to be compliant:
+
+```
+tatara query --compliance-closure my-workload
+
+Compliance Closure: my-workload
+├── Framework: NIST 800-53 Rev 5
+│   ├── AU-2 (Auditable Events) — bound to: ALL points [at-boundary]
+│   ├── AC-6 (Least Privilege) — bound to: Security.* [plan-time]
+│   ├── SC-7 (Boundary Protection) — bound to: Network.* [post-convergence]
+│   ├── IA-5 (Authenticator Management) — bound to: Identity.* [at-boundary]
+│   └── CP-9 (Information System Backup) — bound to: Storage.* [at-boundary]
+├── Framework: SOC 2 Type II
+│   ├── CC6.1 (Logical Access) — bound to: Compute.*, Security.* [plan-time]
+│   └── CC7.2 (System Monitoring) — bound to: Observability.* [at-boundary]
+├── Framework: FedRAMP Moderate
+│   └── (inherits NIST 800-53 bindings for production environment)
+└── Total: 42 unique controls across 3 frameworks
+    Verified at plan-time: 18 (static, zero cost)
+    Verified at boundary: 16 (inline with convergence)
+    Verified post-convergence: 8 (live InSpec probes)
+```
+
+The compliance closure is computed at plan time, before any convergence begins.
+If a control cannot be satisfied (no runner configured, missing prerequisite),
+the plan fails before any resources are provisioned — just like a Nix build
+failing at evaluation time, not at build time.
+
+### 9.7 Gating as Convergence Boundaries
+
+The existing gating tools (sekiban, inshou) are convergence boundaries:
+
+| Tool | Convergence Boundary | Gate Type |
+|------|---------------------|-----------|
+| **Sekiban** | K8s admission webhook — a Gate convergence point that verifies CertificationArtifact before allowing K8s resource creation | At-boundary (kube driver) |
+| **Inshou** | Nix rebuild gate — a Gate convergence point that verifies store path attestation before allowing system profile switch | At-boundary (nix driver) |
+| **Kensa** | Compliance verification — a Join convergence point that merges all framework results into a single compliance hash | At-boundary (all drivers) |
+| **Tameshi** | Attestation composition — a Reduce convergence point that folds all layer hashes into a CertificationArtifact | At-boundary (all drivers) |
+| **Pangea RSpec** | Synthesis validation — a Transform convergence point that verifies infrastructure code against compliance controls at plan time | Plan-time (pre-execution) |
+| **InSpec profiles** | Live verification — Transform convergence points that verify running infrastructure against compliance controls | Post-convergence |
+
+These are not separate systems bolted onto the convergence engine. They ARE
+convergence points in the compliance substrate DAG. The compliance substrate
+runs in parallel with all other substrates and produces attestations that feed
+into the master CertificationArtifact.
+
+### 9.8 Tameshi Layer Types as Convergence Point Classifications
+
+Tameshi's 24 LayerType variants map to convergence point classifications:
+
+| LayerType | Convergence Point | Substrate |
+|-----------|------------------|-----------|
+| `Nix` | NixEval convergence point | Compute |
+| `Oci` | OCI driver start point | Compute |
+| `RenderedHelm` | K8s resource rendering | Compute |
+| `Kubernetes` | K8s state convergence | Compute |
+| `Tofu` | Terraform state convergence | Compute |
+| `FluxCD` | GitOps convergence | Compute |
+| `LiveAkeyless` | Secret resolution | Security |
+| `LiveAkeylessTarget` | Target-specific secrets | Security |
+| `PangeaSynthesis` | IaC synthesis verification | Regulatory (plan-time) |
+| `RSpecResult` | Compliance test results | Regulatory (plan-time) |
+| `InSpecResult` | Live compliance verification | Regulatory (post-convergence) |
+| Agent layers (10) | Agent convergence points | Compute (agent substrate) |
+
+Every convergence point produces a tameshi layer hash. The layer hashes compose
+into the CertificationArtifact. The CertificationArtifact IS the convergence
+boundary attestation. The chain is unbroken from Nix declaration through
+convergence execution through compliance verification to cryptographic proof.
+
+### 9.9 Zero-Cost Compliance Verification
+
+The pangea-architectures pattern — RSpec tests on synthesized Terraform JSON,
+zero cloud cost — extends to all convergence DAGs:
+
+1. **Plan-time verification** (zero cost): the convergence plan IS a Nix
+   derivation graph. Compliance controls bound with `phase = "plan-time"` are
+   evaluated on the plan, not the execution. This catches violations before
+   any resources are provisioned.
+
+2. **Cached compliance** (near-zero cost): because compliance verification
+   results are content-addressed store paths, identical inputs produce cache
+   hits. If the convergence function, desired state, and compliance runner
+   haven't changed, the compliance result from the previous generation is
+   reused. No re-verification needed.
+
+3. **Incremental compliance** (minimal cost): when inputs change, only the
+   affected compliance controls are re-evaluated. The compliance closure
+   identifies exactly which controls need re-verification — like incremental
+   Nix builds.
+
+The result: **compliance verification scales with changes, not with system size**.
+A system with 10,000 convergence points across 50 substrates does not run 10,000
+compliance checks on every tick. It runs compliance checks only on the points
+whose inputs have changed since the last attestation.
+
+### 9.10 Packaged Compliance
+
+Because compliance verification is convergence DAGs stored in the Nix store
+(via sui), compliance itself is **packageable**:
+
+```nix
+# A compliance package: a complete set of controls for a framework
+nist-800-53-moderate = builtins.compliancePackage {
+  framework = "nist-800-53";
+  baseline = "moderate";
+  controls = import ./frameworks/nist-800-53-moderate.nix;
+  runners = {
+    planTime = import ./runners/plan-time.nix;
+    atBoundary = import ./runners/boundary.nix;
+    postConvergence = import ./runners/inspec.nix;
+  };
+  bindings = import ./bindings/nist-800-53-moderate.nix;
+};
+
+# Apply a compliance package to a workload
+myWorkload = builtins.convergenceGraph {
+  substrates = { ... };
+  compliance = [ nist-800-53-moderate soc2-type2 pci-dss-4 ];
+};
+```
+
+Compliance packages are:
+- **Versioned** — `nist-800-53-moderate-v2` replaces `v1` with a new derivation
+- **Composable** — apply multiple packages to the same workload
+- **Cacheable** — a compliance package applied to the same convergence graph
+  produces the same attestation (content-addressed)
+- **Distributable** — push compliance packages to Attic, pull on any node
+- **Auditable** — the compliance package itself is a store path with a known hash
+
+An organization can package its entire compliance posture as a Nix expression,
+version it, distribute it, and apply it to any convergence graph. Compliance
+becomes infrastructure-as-code, verified at plan time, attested at execution
+time, and proven cryptographically after the fact.
+
+## 10. Implementation in Tatara (Current + Planned)
 
 ### Core Types (tatara-core/src/domain/convergence_state.rs)
 
@@ -1183,6 +1534,16 @@ The convergence store is the Nix store. Sui is the convergence computer's runtim
 - `EmissionTrigger` — condition + evaluation strategy for when to instantiate
 - `TriggerCondition` — the predicate that fires an emission
 - `InstantiationDecision` — Instantiate | Defer | Escalate (schema gap)
+
+### Planned Types — Compliant Computing (from section 9)
+
+- `ComplianceBinding` — links a control to convergence point types via PointSelector
+- `PointSelector` — Substrate | PointType | SubstrateAndType | Environment | DataClassification | All
+- `VerificationPhase` — PlanTime | AtBoundary | PostConvergence
+- `ComplianceControl` — framework + control ID (e.g., NIST AC-6, SOC2 CC6.1)
+- `ComplianceClosure` — all controls bound to a convergence DAG, computed at plan time
+- `CompliancePackage` — Nix expression packaging a complete compliance framework (versioned, composable)
+- `DataClassification` — PII | PHI | PCI | Public | Internal | Confidential | TopSecret
 
 ### Planned Types — DAG Algebra (from sections 5–7)
 
@@ -1213,9 +1574,9 @@ The convergence store is the Nix store. Sui is the convergence computer's runtim
 | `sui-compat` | Convergence derivation env keys (`substrate_type`, `point_type`, `desired_state`) | `Derivation.env: BTreeMap<String, String>` |
 | `sui` (API) | `/api/v1/convergence/*` endpoints | Axum router, GraphQL schema, gRPC service |
 
-## 10. Meta-Convergence: The System Optimizing Itself
+## 11. Meta-Convergence: The System Optimizing Itself (Future)
 
-### 10.1 Convergence on Convergence
+### 11.1 Convergence on Convergence
 
 The theory permits a natural but dangerous extension: **asymptotic convergence
 points that optimize the execution of other convergence DAGs**. This is
@@ -1237,7 +1598,7 @@ This is essentially a **JIT compiler for convergence** — an optimizer that wat
 the convergence engine run and restructures the computation while preserving
 correctness.
 
-### 10.2 Why This Requires Solid Primitives First
+### 11.2 Why This Requires Solid Primitives First
 
 Meta-convergence is theoretically valid — it's just another asymptotic point with
 an emission schema. But it is **unsafe without rock-solid foundational primitives**:
@@ -1265,7 +1626,7 @@ Until the type system, attestation chain, and DAG algebra are implemented and
 proven correct, meta-convergence should remain theoretical. The foundation must
 be unshakeable before we let the system modify its own structure.
 
-### 10.3 The Meta-Convergence Emission Schema
+### 11.3 The Meta-Convergence Emission Schema
 
 When the primitives are ready, meta-convergence is expressed like any other
 asymptotic point:
@@ -1302,7 +1663,7 @@ Each emitted bounded DAG is a specific, typed, testable optimization operation.
 The optimizer doesn't improvise — it applies known transformations from a catalog.
 Schema gaps signal that a new optimization type should be formally defined.
 
-## 11. Theoretical Frontiers
+## 12. Theoretical Frontiers
 
 The following frontiers represent the edges of the theory — areas where convergence
 computing either extends naturally, requires new primitives, or encounters fundamental
@@ -1313,7 +1674,7 @@ limits. Each frontier is classified:
 - **Open**: requires fundamental new work
 - **Limit**: a hard boundary the theory cannot cross
 
-### 11.1 Temporal Convergence (Extends)
+### 12.1 Temporal Convergence (Extends)
 
 **Problem**: A TLS certificate is valid for 30 more days. Right now, distance = 0.
 But we *know* it will diverge. The theory is currently reactive — observe divergence,
@@ -1617,7 +1978,7 @@ autonomous goal generation (an asymptotic point whose emission schema includes
 convergence engine is a tool, not an agent. It computes what it is told to
 compute, and it computes it well.
 
-## 12. Theory Summary
+## 13. Theory Summary
 
 The Unified Convergence Computing Theory establishes:
 
@@ -1637,8 +1998,14 @@ The Unified Convergence Computing Theory establishes:
 | 12 | Every substrate is its own convergence DAG; distance is a vector | §6 |
 | 13 | Full static analysis at plan time (closures, impact, diff, cache hits) | §7 |
 | 14 | The Nix store (via sui) IS the convergence store | §8 |
-| 15 | Meta-convergence (system optimizing itself) is valid but needs solid primitives | §10 |
-| 16 | The theory has known frontiers and deliberate limits | §11 |
+| 15 | Compliance is a static DAG property, verifiable at plan time | §9 |
+| 16 | Three theories compose: infrastructure (WHAT), convergence (HOW), compliance (WHETHER) | §9.1 |
+| 17 | Compliance controls bind to point types, not instances (type-level compliance) | §9.3 |
+| 18 | Tameshi CertificationArtifact IS convergence boundary attestation | §9.4 |
+| 19 | Compliance verification is itself convergence DAGs (cacheable, attestable) | §9.5 |
+| 20 | Compliance is packageable as Nix expressions (versioned, composable, distributable) | §9.10 |
+| 21 | Meta-convergence (system optimizing itself) is valid but needs solid primitives | §11 |
+| 22 | The theory has known frontiers and deliberate limits | §12 |
 
 ### Academic Foundations
 
@@ -1670,3 +2037,8 @@ The Unified Convergence Computing Theory establishes:
 | JIT compilation | Aycock 2003 | Meta-convergence as runtime DAG optimization |
 | Reflective systems | Smith 1984 (procedural reflection) | System reasoning about its own convergence topology |
 | Compensating transactions | Garcia-Molina & Salem 1987 | Failure recovery and degraded convergence |
+| NIST 800-53 | NIST 2020 (Rev 5) | Security and privacy control families |
+| OSCAL | NIST 2021 | Machine-readable compliance assessment language |
+| Merkle attestation | Certificate Transparency (RFC 9162) | Append-only compliance proof via domain-separated leaves |
+| Static compliance analysis | Terraform Sentinel / OPA | Policy-as-code evaluated at plan time |
+| Zero-cost testing | Pangea synthesis pattern | Compliance on derivation structure, not execution |

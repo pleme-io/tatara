@@ -1,4 +1,5 @@
 pub mod allocation;
+pub mod classification;
 pub mod compliance_binding;
 pub mod convergence_graph;
 pub mod convergence_state;

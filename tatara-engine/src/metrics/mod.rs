@@ -107,4 +107,43 @@ mod tests {
         assert!(output.contains("# TYPE tatara_jobs_total gauge"));
         assert!(output.contains("# TYPE tatara_reconcile_total counter"));
     }
+
+    #[test]
+    fn test_prometheus_format_validity() {
+        let metrics = TataraMetrics::default();
+        let output = metrics.render_prometheus();
+
+        // Every metric must have HELP and TYPE lines
+        for line in output.lines() {
+            if line.starts_with("# HELP") {
+                assert!(line.len() > 7, "HELP line too short: {}", line);
+            } else if line.starts_with("# TYPE") {
+                assert!(
+                    line.contains("gauge") || line.contains("counter"),
+                    "TYPE must be gauge or counter: {}",
+                    line
+                );
+            } else if !line.is_empty() {
+                // Metric line: name value
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                assert_eq!(parts.len(), 2, "metric line must be 'name value': {}", line);
+                assert!(
+                    parts[1].parse::<u64>().is_ok(),
+                    "metric value must be numeric: {}",
+                    line
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_inc_and_set() {
+        let metrics = TataraMetrics::default();
+        metrics.inc(&metrics.reconcile_total);
+        metrics.inc(&metrics.reconcile_total);
+        metrics.set(&metrics.nix_eval_duration_ms, 42);
+
+        assert_eq!(metrics.reconcile_total.load(Ordering::Relaxed), 2);
+        assert_eq!(metrics.nix_eval_duration_ms.load(Ordering::Relaxed), 42);
+    }
 }

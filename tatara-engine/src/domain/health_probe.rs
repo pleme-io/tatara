@@ -207,4 +207,22 @@ mod tests {
         let result = executor.probe_exec("false", 5).await;
         assert!(result.is_failing());
     }
+
+    #[test]
+    fn test_probe_result_warning() {
+        let result = ProbeResult::Warning {
+            message: "rate limited".to_string(),
+            latency_ms: 42,
+        };
+        assert!(!result.is_passing());
+        assert!(!result.is_failing()); // Warning is neither passing nor failing
+    }
+
+    #[test]
+    fn test_probe_state_default() {
+        let state = ProbeState::default();
+        assert_eq!(state.consecutive_failures, 0);
+        assert_eq!(state.consecutive_successes, 0);
+        assert!(state.last_result.is_none());
+    }
 }

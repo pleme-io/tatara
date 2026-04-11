@@ -151,4 +151,34 @@ mod tests {
         let sorted = topological_sort(&ids, &deps).unwrap();
         assert_eq!(sorted.len(), 3);
     }
+
+    #[test]
+    fn test_invalid_dependency() {
+        let ids = vec!["a".into(), "b".into()];
+        let mut deps = HashMap::new();
+        deps.insert("b".into(), vec!["nonexistent".into()]);
+
+        let result = topological_sort(&ids, &deps);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err[0].contains("unknown job"));
+    }
+
+    #[test]
+    fn test_self_loop() {
+        let ids = vec!["a".into()];
+        let mut deps = HashMap::new();
+        deps.insert("a".into(), vec!["a".into()]);
+
+        let result = topological_sort(&ids, &deps);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_single_node() {
+        let ids = vec!["only".into()];
+        let deps = HashMap::new();
+        let sorted = topological_sort(&ids, &deps).unwrap();
+        assert_eq!(sorted, vec!["only"]);
+    }
 }

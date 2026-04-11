@@ -8,6 +8,7 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use tatara_core::domain::allocation::{Allocation, AllocationState, TaskRunState};
+use crate::cluster::store::ClusterStore;
 use crate::domain::state_store::StateStore;
 use crate::drivers::{DriverRegistry, TaskHandle};
 
@@ -22,6 +23,9 @@ pub struct Executor {
     drivers: Arc<DriverRegistry>,
     alloc_dir: PathBuf,
     running: RwLock<HashMap<Uuid, Vec<RunningTask>>>,
+    /// Optional Raft-backed store for reporting observations to the cluster.
+    /// When set, state changes are reported through Raft for cluster-wide visibility.
+    cluster_store: Option<Arc<ClusterStore>>,
 }
 
 impl Executor {
@@ -31,6 +35,30 @@ impl Executor {
             drivers,
             alloc_dir,
             running: RwLock::new(HashMap::new()),
+            cluster_store: None,
+        }
+    }
+
+    /// Set the cluster store for Raft-backed observation reporting.
+    pub fn with_cluster_store(mut self, cluster_store: Arc<ClusterStore>) -> Self {
+        self.cluster_store = Some(cluster_store);
+        self
+    }
+
+    /// Report an allocation state change through Raft (if cluster store is wired).
+    async fn report_to_cluster(&self, alloc_id: Uuid, state: AllocationState) {
+        if let Some(ref cs) = self.cluster_store {
+            if let Err(e) = cs
+                .update_allocation_state(alloc_id, state.clone(), HashMap::new())
+                .await
+            {
+                warn!(
+                    alloc_id = %alloc_id,
+                    state = ?state,
+                    error = %e,
+                    "failed to report observation to cluster"
+                );
+            }
         }
     }
 
@@ -115,6 +143,9 @@ impl Executor {
             })
             .await?;
 
+        // Report to cluster for distributed visibility
+        self.report_to_cluster(alloc_id, AllocationState::Running).await;
+
         self.running.write().await.insert(alloc_id, tasks);
 
         Ok(())
@@ -150,6 +181,9 @@ impl Executor {
                 }
             })
             .await?;
+
+        // Report completion to cluster
+        self.report_to_cluster(*alloc_id, AllocationState::Complete).await;
 
         Ok(())
     }

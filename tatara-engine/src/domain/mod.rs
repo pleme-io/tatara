@@ -5,4 +5,5 @@ pub mod port_allocator;
 pub mod reconciler;
 pub mod scheduler;
 pub mod state_store;
+pub mod store_adapter;
 pub mod volume_manager;

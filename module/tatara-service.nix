@@ -46,6 +46,42 @@ in
         default = 30;
         description = "Seconds before marking a node as down";
       };
+
+      nats = {
+        enable = mkEnableOption "NATS event bus integration";
+        url = mkOption {
+          type = types.str;
+          default = "nats://127.0.0.1:4222";
+          description = "NATS server URL";
+        };
+      };
+
+      sui = {
+        daemonAddr = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Sui daemon address (e.g., 127.0.0.1:8080). null = disabled.";
+        };
+      };
+
+      ports = {
+        rangeStart = mkOption {
+          type = types.int;
+          default = 20000;
+          description = "Dynamic port allocation range start";
+        };
+        rangeEnd = mkOption {
+          type = types.int;
+          default = 32000;
+          description = "Dynamic port allocation range end";
+        };
+      };
+
+      volumeDir = mkOption {
+        type = types.str;
+        default = "~/.local/share/tatara/volumes";
+        description = "Directory for persistent volumes";
+      };
     };
 
     client = {
@@ -73,16 +109,27 @@ in
 
   config = let
     serverConfig = lib.generators.toTOML {} {
-      server = {
-        http_addr = cfg.server.httpAddr;
-        grpc_addr = cfg.server.grpcAddr;
-        log_level = cfg.server.logLevel;
-        state = { dir = cfg.server.stateDir; };
-        scheduler = {
-          eval_interval_secs = cfg.server.evalIntervalSecs;
-          heartbeat_grace_secs = cfg.server.heartbeatGraceSecs;
-        };
+      http_addr = cfg.server.httpAddr;
+      grpc_addr = cfg.server.grpcAddr;
+      log_level = cfg.server.logLevel;
+      state = { dir = cfg.server.stateDir; };
+      scheduler = {
+        eval_interval_secs = cfg.server.evalIntervalSecs;
+        heartbeat_grace_secs = cfg.server.heartbeatGraceSecs;
       };
+      nats = {
+        enabled = cfg.server.nats.enable;
+        url = cfg.server.nats.url;
+      };
+      ports = {
+        range_start = cfg.server.ports.rangeStart;
+        range_end = cfg.server.ports.rangeEnd;
+      };
+      volumes = {
+        dir = cfg.server.volumeDir;
+      };
+    } // lib.optionalAttrs (cfg.server.sui.daemonAddr != null) {
+      sui = { daemon_addr = cfg.server.sui.daemonAddr; };
     };
 
     clientConfig = lib.generators.toTOML {} {

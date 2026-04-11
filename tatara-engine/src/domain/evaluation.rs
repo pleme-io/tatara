@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tatara_core::domain::allocation::Allocation;
 use tatara_core::domain::job::{Constraint, Job, JobStatus, JobType, Resources};
 use tatara_core::domain::node::{Node, NodeStatus};
-use crate::domain::state_store::StateStore;
+use crate::domain::store_adapter::ClusterStoreAdapter;
 
 /// Scheduling strategy for task placement.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,12 +23,12 @@ impl Default for SchedulingStrategy {
 
 /// Evaluates pending jobs and creates allocation plans.
 pub struct Evaluator {
-    store: Arc<StateStore>,
+    store: Arc<ClusterStoreAdapter>,
     strategy: SchedulingStrategy,
 }
 
 impl Evaluator {
-    pub fn new(store: Arc<StateStore>) -> Self {
+    pub fn new(store: Arc<ClusterStoreAdapter>) -> Self {
         Self {
             store,
             strategy: SchedulingStrategy::default(),
@@ -59,9 +59,7 @@ impl Evaluator {
 
             if !new_allocations.is_empty() {
                 self.store
-                    .update_job(&job.id, |j| {
-                        j.status = JobStatus::Running;
-                    })
+                    .update_job_status(&job.id, JobStatus::Running)
                     .await?;
             }
         }

@@ -1,24 +1,33 @@
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
-use crate::domain::evaluation::Evaluator;
-use crate::domain::state_store::StateStore;
 use crate::client::executor::Executor;
+use crate::domain::evaluation::Evaluator;
+use crate::domain::store_adapter::ClusterStoreAdapter;
 
 /// Runs the scheduling loop: evaluates pending jobs and dispatches allocations.
+///
+/// The scheduler only proposes allocations when this node is the Raft leader.
+/// This prevents duplicate allocations across a multi-node cluster.
 pub struct Scheduler {
     evaluator: Evaluator,
     executor: Arc<Executor>,
+    store: Arc<ClusterStoreAdapter>,
     eval_interval: Duration,
 }
 
 impl Scheduler {
-    pub fn new(store: Arc<StateStore>, executor: Arc<Executor>, eval_interval_secs: u64) -> Self {
+    pub fn new(
+        store: Arc<ClusterStoreAdapter>,
+        executor: Arc<Executor>,
+        eval_interval_secs: u64,
+    ) -> Self {
         Self {
-            evaluator: Evaluator::new(store),
+            evaluator: Evaluator::new(store.clone()),
             executor,
+            store,
             eval_interval: Duration::from_secs(eval_interval_secs),
         }
     }
@@ -30,6 +39,12 @@ impl Scheduler {
 
         loop {
             interval.tick().await;
+
+            // Leader-affinity: only the Raft leader schedules new allocations.
+            if !self.store.is_leader().await {
+                debug!("Not leader, skipping scheduling tick");
+                continue;
+            }
 
             match self.evaluator.evaluate().await {
                 Ok(allocations) => {

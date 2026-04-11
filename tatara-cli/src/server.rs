@@ -290,13 +290,16 @@ pub async fn run(config: ServerConfig) -> Result<()> {
         "subsystems initialized"
     );
 
-    // ── Executor (uses local file-backed store for task lifecycle) ──
+    // ── Executor (local store for fast task tracking + Raft for cluster visibility) ──
     let alloc_dir = config.state.dir.join("alloc");
-    let executor = Arc::new(Executor::new(
-        local_store.clone(),
-        drivers.clone(),
-        alloc_dir.clone(),
-    ));
+    let executor = Arc::new(
+        Executor::new(
+            local_store.clone(),
+            drivers.clone(),
+            alloc_dir.clone(),
+        )
+        .with_cluster_store(cluster_store.clone()),
+    );
 
     let log_collector = Arc::new(LogCollector::new(alloc_dir));
 
@@ -346,9 +349,14 @@ pub async fn run(config: ServerConfig) -> Result<()> {
         .merge(p2p_router)
         .layer(TraceLayer::new_for_http());
 
-    // ── Scheduler loop ──
+    // ── Scheduler loop (reads from Raft, leader-affinity) ──
+    let cluster_store_adapter = Arc::new(
+        tatara_engine::domain::store_adapter::ClusterStoreAdapter::new(
+            cluster_store.clone(),
+        ),
+    );
     let scheduler = Scheduler::new(
-        local_store.clone(),
+        cluster_store_adapter.clone(),
         executor.clone(),
         config.scheduler.eval_interval_secs,
     );

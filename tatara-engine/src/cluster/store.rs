@@ -161,6 +161,17 @@ impl ClusterStore {
             .cloned()
     }
 
+    /// Get the full cluster state (for adapter/convergence reads).
+    pub async fn state(&self) -> tatara_core::cluster::types::ClusterState {
+        let data = self.state.read().await;
+        data.cluster_state.clone()
+    }
+
+    /// Check if this node is the Raft leader.
+    pub async fn is_leader(&self) -> bool {
+        self.raft.is_leader().await
+    }
+
     /// Linearizable read — confirms leadership first. Use for operations
     /// that absolutely need the latest state (rare).
     pub async fn get_job_linearizable(&self, id: &str) -> Result<Option<Job>> {

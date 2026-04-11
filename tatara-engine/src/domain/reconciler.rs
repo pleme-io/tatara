@@ -775,6 +775,7 @@ mod tests {
                     env: HashMap::new(),
                     resources: Resources::default(),
                     health_checks: vec![],
+                    volume_claims: vec![],
                 }],
                 restart_policy: RestartPolicy {
                     mode: restart_mode,
@@ -784,6 +785,9 @@ mod tests {
                 },
                 resources: Resources::default(),
                 network: None,
+                secrets: vec![],
+                volumes: vec![],
+                service_name: None,
             }],
             constraints: vec![],
             meta: HashMap::new(),

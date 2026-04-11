@@ -37,6 +37,9 @@ pub fn job_with_group(
             restart_policy: RestartPolicy::default(),
             resources: Resources { cpu_mhz, memory_mb },
             network: None,
+            secrets: vec![],
+            volumes: vec![],
+            service_name: None,
         }],
         constraints: vec![],
         meta: HashMap::new(),
@@ -67,6 +70,9 @@ pub fn job_spec_with_group(
             restart_policy: RestartPolicy::default(),
             resources: Resources { cpu_mhz, memory_mb },
             network: None,
+            secrets: vec![],
+            volumes: vec![],
+            service_name: None,
         }],
         constraints: vec![],
         meta: HashMap::new(),
@@ -88,6 +94,9 @@ pub fn batch_job_spec(id: &str, cpu_mhz: u64, memory_mb: u64) -> JobSpec {
             },
             resources: Resources { cpu_mhz, memory_mb },
             network: None,
+            secrets: vec![],
+            volumes: vec![],
+            service_name: None,
         }],
         constraints: vec![],
         meta: HashMap::new(),
@@ -122,6 +131,7 @@ pub fn forge_job_spec(name: &str, flake_ref: &str) -> JobSpec {
                     memory_mb: 256,
                 },
                 health_checks: vec![],
+                volume_claims: vec![],
             }],
             restart_policy: RestartPolicy::default(),
             resources: Resources {
@@ -129,6 +139,9 @@ pub fn forge_job_spec(name: &str, flake_ref: &str) -> JobSpec {
                 memory_mb: 256,
             },
             network: None,
+            secrets: vec![],
+            volumes: vec![],
+            service_name: None,
         }],
         constraints: vec![],
         meta: {
@@ -153,6 +166,7 @@ pub fn task(name: &str, cpu_mhz: u64, memory_mb: u64) -> Task {
         env: HashMap::new(),
         resources: Resources { cpu_mhz, memory_mb },
         health_checks: vec![],
+        volume_claims: vec![],
     }
 }
 

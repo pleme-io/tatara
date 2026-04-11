@@ -2,6 +2,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use super::secret::SecretRef;
+use super::volume::{VolumeClaim, VolumeSpec};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum JobType {
@@ -26,6 +29,7 @@ pub enum DriverType {
     Nix,
     NixBuild,
     Kasou,
+    Kube,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -64,6 +68,15 @@ pub struct TaskGroup {
     #[serde(default)]
     pub resources: Resources,
     pub network: Option<NetworkConfig>,
+    /// Secrets to inject into tasks at allocation time.
+    #[serde(default)]
+    pub secrets: Vec<SecretRef>,
+    /// Volumes to create for this task group.
+    #[serde(default)]
+    pub volumes: Vec<VolumeSpec>,
+    /// If set, register this group in the service catalog under this name.
+    #[serde(default)]
+    pub service_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +102,9 @@ pub struct Task {
     pub resources: Resources,
     #[serde(default)]
     pub health_checks: Vec<HealthCheck>,
+    /// Volume mount claims for this task.
+    #[serde(default)]
+    pub volume_claims: Vec<VolumeClaim>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

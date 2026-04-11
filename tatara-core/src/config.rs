@@ -23,6 +23,14 @@ pub struct ServerConfig {
     pub kindling: KindlingConfig,
     #[serde(default)]
     pub reconciler: ReconcilerConfig,
+    #[serde(default)]
+    pub nats: NatsConfig,
+    #[serde(default)]
+    pub sui: SuiConfig,
+    #[serde(default)]
+    pub ports: PortConfig,
+    #[serde(default)]
+    pub volumes: VolumeConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -225,6 +233,10 @@ impl Default for ServerConfig {
             p2p: P2pConfig::default(),
             kindling: KindlingConfig::default(),
             reconciler: ReconcilerConfig::default(),
+            nats: NatsConfig::default(),
+            sui: SuiConfig::default(),
+            ports: PortConfig::default(),
+            volumes: VolumeConfig::default(),
         }
     }
 }
@@ -414,4 +426,84 @@ fn default_kindling_addr() -> String {
 
 fn default_true() -> bool {
     true
+}
+
+// ── New subsystem configs ───────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NatsConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_nats_url")]
+    pub url: String,
+}
+
+impl Default for NatsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            url: default_nats_url(),
+        }
+    }
+}
+
+fn default_nats_url() -> String {
+    "nats://127.0.0.1:4222".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuiConfig {
+    #[serde(default)]
+    pub daemon_addr: Option<String>,
+}
+
+impl Default for SuiConfig {
+    fn default() -> Self {
+        Self { daemon_addr: None }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortConfig {
+    #[serde(default = "default_port_start")]
+    pub range_start: u16,
+    #[serde(default = "default_port_end")]
+    pub range_end: u16,
+}
+
+impl Default for PortConfig {
+    fn default() -> Self {
+        Self {
+            range_start: default_port_start(),
+            range_end: default_port_end(),
+        }
+    }
+}
+
+fn default_port_start() -> u16 {
+    20000
+}
+fn default_port_end() -> u16 {
+    32000
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VolumeConfig {
+    #[serde(default = "default_volume_dir")]
+    pub dir: PathBuf,
+}
+
+impl Default for VolumeConfig {
+    fn default() -> Self {
+        Self {
+            dir: default_volume_dir(),
+        }
+    }
+}
+
+fn default_volume_dir() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join("tatara")
+        .join("volumes")
 }

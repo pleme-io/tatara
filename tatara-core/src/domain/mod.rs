@@ -1,4 +1,5 @@
 pub mod allocation;
+pub mod convergence_state;
 pub mod dag;
 pub mod event;
 pub mod idempotency;

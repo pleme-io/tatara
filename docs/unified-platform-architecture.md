@@ -153,40 +153,40 @@ converges across the cluster through binary cache synchronization.
 
 ---
 
-## 2. The Five Classification Dimensions
+## 2. The Six Classification Dimensions
 
-Every convergence point is classified along five orthogonal axes. Together,
+Every convergence point is classified along six orthogonal axes. Together,
 these fully determine how the point is scheduled, coordinated, verified,
-and how long it lives.
+how long it lives, and whether intelligence participates.
 
 ```
                     ┌─────────────┐
                     │ Convergence │
                     │   Point     │
-                    └──┬──┬──┬──┬─┘
-                       │  │  │  │
-          ┌────────────┘  │  │  └────────────┐
-          ↓               ↓  ↓               ↓
-    ┌──────────┐   ┌─────────────┐   ┌────────────┐
-    │ Horizon  │   │  Structure  │   │ Substrate  │
-    │          │   │             │   │            │
-    │ Bounded  │   │ Transform   │   │ Financial  │
-    │ Asymptot │   │ Fork        │   │ Compute    │
-    │          │   │ Join        │   │ Network    │
-    └──────────┘   │ Gate        │   │ Storage    │
-                   │ Select      │   │ Security   │
-    ┌──────────┐   │ Broadcast   │   │ Identity   │
-    │ Coord.   │   │ Reduce      │   │ Observ.    │
-    │          │   │ Observe     │   │ Regulatory │
-    │ Monotone │   └─────────────┘   └────────────┘
-    │ Non-mono │
-    └──────────┘   ┌──────────────┐
-                   │    Trust     │
-                   │              │
-                   │ PlanTime     │
-                   │ AtBoundary   │
-                   │ PostConvg    │
-                   └──────────────┘
+                    └─┬──┬──┬──┬─┘
+                      │  │  │  │
+         ┌────────────┘  │  │  └────────────┐
+         ↓               ↓  ↓               ↓
+   ┌──────────┐   ┌─────────────┐   ┌────────────┐
+   │ Horizon  │   │  Structure  │   │ Substrate  │
+   │          │   │             │   │            │
+   │ Bounded  │   │ Transform   │   │ Financial  │
+   │ Asymptot │   │ Fork        │   │ Compute    │
+   │          │   │ Join        │   │ Network    │
+   └──────────┘   │ Gate        │   │ Storage    │
+                  │ Select      │   │ Security   │
+   ┌──────────┐   │ Broadcast   │   │ Identity   │
+   │ Coord.   │   │ Reduce      │   │ Observ.    │
+   │          │   │ Observe     │   │ Regulatory │
+   │ Monotone │   └─────────────┘   └────────────┘
+   │ Non-mono │
+   └──────────┘   ┌──────────────┐   ┌──────────────┐
+                  │    Trust     │   │ Intelligence │
+                  │              │   │              │
+                  │ PlanTime     │   │ Mechanical   │
+                  │ AtBoundary   │   │ AiAssisted   │
+                  │ PostConvg    │   │ Hybrid       │
+                  └──────────────┘   └──────────────┘
 ```
 
 ### Dimension 1: Horizon — How Long Does This Run?
@@ -269,6 +269,56 @@ enum VerificationPhase {
 Controls bind to point types, not instances. "All Security substrate points
 must satisfy NIST AC-6" is a type-level constraint verified at the phase
 specified by the binding.
+
+### Dimension 6: Intelligence — Who or What Drives Convergence?
+
+```rust
+enum ComputationMode {
+    /// Deterministic, no AI. A script, a function, a reconciler.
+    /// Fully automated, fully reproducible.
+    Mechanical,
+
+    /// An LLM participates through MCP or API interfaces.
+    /// Stochastic — outputs need stronger verification.
+    AiAssisted {
+        role: AiRole,
+        interface: AiInterface,
+    },
+
+    /// Mechanical execution with AI participating at specific
+    /// boundary phases. Most common production pattern.
+    Hybrid {
+        mechanical_phases: Vec<BoundaryPhase>,  // e.g., [Execute]
+        ai_phases: Vec<BoundaryPhase>,          // e.g., [Verify]
+    },
+}
+
+enum AiRole {
+    Observer,    // reads convergence state, produces analysis
+    Advisor,     // recommends actions, system/human decides
+    Actor,       // takes bounded actions within emission catalogs
+    Verifier,    // reviews convergence correctness, attests
+    Reporter,    // generates compliance/performance reports
+}
+
+enum AiInterface {
+    Mcp,         // Model Context Protocol — structured tool access
+    Rest,        // REST API — programmatic access
+    GraphQl,     // GraphQL — query-based access
+    Grpc,        // gRPC — high-performance streaming access
+}
+```
+
+This dimension determines whether a convergence point is driven by
+deterministic code, by an LLM, or by a mix of both. The six dimensions
+are fully orthogonal — any combination is valid:
+
+- Bounded + Transform + Compute + Monotone + AtBoundary + **Mechanical**
+  = a health check (deterministic, automated, no AI)
+- Asymptotic + Select + Financial + NonMonotone + PlanTime + **AiAssisted(Advisor)**
+  = an AI cost optimizer that recommends substrate migrations
+- Bounded + Gate + Regulatory + NonMonotone + AtBoundary + **Hybrid(Execute:Mechanical, Verify:AI)**
+  = a compliance gate where execution is mechanical but an LLM reviews the result
 
 ### Point Identity
 
@@ -1012,7 +1062,311 @@ system does or what it proves.
 
 ---
 
-## 12. Architecture Summary
+## 12. AI-Assisted Convergence Computing
+
+### 12.1 The Differentiation
+
+Every convergence point in the graph falls on a spectrum:
+
+```
+Mechanical ◄──────────────────────────────────────► AI-Assisted
+(deterministic)          (hybrid)              (LLM-driven)
+
+deploy container    AI reviews compliance     AI diagnoses oscillation
+rotate certificate  AI verifies attestation   AI recommends migration
+apply K8s manifest  mechanical + AI gate      AI writes convergence plan
+health check        AI-reviewed audit report  AI analyzes cost patterns
+```
+
+This is not a binary — it's a continuum. The boundary phases within a single
+convergence point can independently be mechanical or AI-assisted:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ Convergence Point: production-deploy                      │
+│                                                          │
+│ PREPARE:  Mechanical  (verify input attestations)        │
+│ EXECUTE:  Mechanical  (apply K8s manifest via SSA)       │
+│ VERIFY:   AI-Assisted (LLM reviews deployment health,   │
+│                        analyzes logs for anomalies)      │
+│ ATTEST:   Mechanical  (produce BLAKE3 attestation)       │
+│                                                          │
+│ Mode: Hybrid { mechanical: [Prepare, Execute, Attest],   │
+│                ai: [Verify] }                             │
+└──────────────────────────────────────────────────────────┘
+```
+
+### 12.2 The MCP Surface: AI's Interface to the Convergence Ether
+
+MCP (Model Context Protocol) is the AI-native interface to the convergence
+graph. It gives LLMs structured, typed, purpose-built tool access — not raw
+database queries, but curated operations that map directly to the theory's
+concepts.
+
+The MCP surface is organized into five categories:
+
+#### 12.2.1 Observe — Read Convergence State
+
+These tools give AI visibility into the convergence ether:
+
+| MCP Tool | Returns | Maps To |
+|----------|---------|---------|
+| `convergence_graph` | Full typed DAG across all substrates | §5, §6 ConvergenceGraph |
+| `convergence_distance` | Per-substrate distance vector | §6.3 MultiDimensionalDistance |
+| `convergence_rate` | Per-point and cluster-wide rates | §2.2 ConvergenceState.rate |
+| `convergence_plan` | Pre-execution plan for a workload | §7.1 ConvergencePlan |
+| `convergence_closure` | Forward/reverse/impact closure | §7.2 Closure queries |
+| `compliance_closure` | All bound controls for a DAG | §9.6 ComplianceClosure |
+| `attestation_history` | Generation chain for a point | §8.3.3 Generational store paths |
+| `substrate_status` | Per-substrate DAG health summary | §6.4 SubstrateDAG |
+| `emission_catalog` | Available bounded DAG templates | §1.6 EmissionSchema |
+| `cluster_health` | Bounded converged + asymptotic rates | §1.6 ClusterHealth |
+
+#### 12.2.2 Analyze — Reason About Convergence
+
+These tools enable AI to perform deeper analysis:
+
+| MCP Tool | Purpose | AI Role |
+|----------|---------|---------|
+| `diagnose_oscillation` | Explain why a point is oscillating, recommend damping | Advisor |
+| `identify_bottleneck` | Find slowest convergence path across substrates | Advisor |
+| `compliance_gap_analysis` | Identify unbound controls or schema gaps | Advisor |
+| `cost_opportunity` | Find cheaper substrate alternatives for running workloads | Advisor |
+| `blast_radius` | Show impact of a point failing or re-converging | Advisor |
+| `convergence_anomaly` | Detect unusual convergence patterns or rates | Observer |
+| `dependency_risk` | Identify fragile dependency chains in the DAG | Advisor |
+| `substrate_contention` | Find conflicting optimization directions between substrates | Advisor |
+
+#### 12.2.3 Influence — Take Bounded Actions
+
+These tools let AI affect convergence within strict safety bounds:
+
+| MCP Tool | Action | Constraints |
+|----------|--------|-------------|
+| `emit_bounded_dag` | Instantiate a bounded DAG from emission catalog | Must match existing template |
+| `adjust_substrate_priority` | Change priority ordering between substrates | Soft substrates only |
+| `defer_convergence` | Pause a convergence point temporarily | Bounded duration, logged |
+| `resume_convergence` | Unpause a deferred point | Must have been deferred |
+| `escalate_schema_gap` | Flag a pattern needing a new bounded template | Advisory only |
+| `recommend_dag_optimization` | Suggest restructuring to the optimizer | Advisory, optimizer decides |
+| `trigger_re_convergence` | Force a point to re-evaluate | Must be idempotent |
+
+**Hard safety boundaries for AI actors:**
+- Cannot modify desired state (declared in Nix by humans)
+- Cannot modify compliance bindings (declared in compliance packages)
+- Cannot change convergence horizons (bounded stays bounded)
+- Cannot bypass attestation boundaries
+- Cannot create new intent leaves (goals are human-specified)
+- Can only instantiate from known emission catalogs (no improvisation)
+- All actions are attested and auditable through the same BLAKE3 chain
+
+#### 12.2.4 Verify — AI-Assisted Verification
+
+These tools let AI participate in the trust layer:
+
+| MCP Tool | Purpose | Phase |
+|----------|---------|-------|
+| `verify_convergence_plan` | Review a plan before execution for risks | PlanTime |
+| `verify_attestation_chain` | Validate attestation integrity for a DAG | AtBoundary |
+| `verify_compliance_posture` | Review compliance bindings for completeness | PlanTime |
+| `verify_convergence_result` | Analyze convergence output for correctness | PostConvergence |
+| `verify_security_posture` | Review security substrate for vulnerabilities | PostConvergence |
+
+AI verification is **additive** — it adds a verification layer ON TOP of
+mechanical verification, never replaces it. The attestation chain always
+includes both mechanical and AI verification results.
+
+#### 12.2.5 Report — Compliance and Performance Reporting
+
+These tools let AI generate and maintain reports:
+
+| MCP Tool | Output | Audience |
+|----------|--------|----------|
+| `compliance_report` | Framework-specific report (NIST, SOC2, FedRAMP) | Auditors |
+| `convergence_health_report` | Overall system convergence status | Operations |
+| `cost_optimization_report` | Financial substrate analysis + recommendations | Finance |
+| `attestation_audit_trail` | Trace attestation chain for a specific operation | Compliance |
+| `incident_analysis` | Analyze a divergence event with root cause | Engineering |
+| `performance_trend` | Convergence rate trends over time by substrate | Management |
+
+### 12.3 How AI Mixes Across the Landscape
+
+AI-assisted and mechanical convergence mix freely across the entire
+convergence graph. The mixing follows patterns:
+
+#### Pattern 1: Mechanical Core, AI Edges
+
+The most common production pattern. Core convergence is mechanical
+(deterministic, fast, reproducible). AI participates at the edges —
+observing, analyzing, recommending, reporting:
+
+```
+                      AI (MCP)
+                    ┌─────────┐
+                    │ observe │
+                    │ analyze │
+                    │ report  │
+                    └────┬────┘
+                         │ reads
+                         ↓
+┌────────────────────────────────────────────────┐
+│        Mechanical Convergence Core              │
+│                                                │
+│  NixEval → Replicate → Schedule → Execute →    │
+│  HealthCheck → CatalogRegister                 │
+│  (all mechanical, deterministic)               │
+└────────────────────────────────────────────────┘
+                         │
+                         ↓ writes
+                    ┌─────────┐
+                    │ AI (MCP)│
+                    │ advise  │
+                    │ verify  │
+                    └─────────┘
+```
+
+#### Pattern 2: AI-in-the-Loop
+
+AI participates at specific boundary phases within the convergence DAG.
+Mechanical execution with AI verification gates:
+
+```
+Point A [PREPARE: mechanical] [EXECUTE: mechanical]
+  [VERIFY: AI analyzes result via MCP] [ATTEST: mechanical]
+    ↓
+Point B [PREPARE: AI reviews plan via MCP] [EXECUTE: mechanical]
+  [VERIFY: mechanical] [ATTEST: mechanical]
+```
+
+#### Pattern 3: AI-Driven Asymptotic Points
+
+Asymptotic optimization points where the convergence function IS an LLM.
+The AI continuously observes the convergence ether and emits bounded DAGs:
+
+```
+┌────────────────────────────────────────────────────┐
+│ Asymptotic Point: cost-optimizer                    │
+│ Mode: AiAssisted(Actor, Mcp)                        │
+│                                                    │
+│ LLM observes:                                      │
+│   - Financial substrate distance                    │
+│   - Spot market prices via absorption               │
+│   - Convergence rates across compute substrate      │
+│                                                    │
+│ LLM decides (within emission catalog):              │
+│   - emit_bounded_dag("substrate-migration", {...})  │
+│   - emit_bounded_dag("horizontal-scale", {...})     │
+│   - defer_convergence("expensive-node-drain")       │
+│                                                    │
+│ All emitted DAGs are mechanical (bounded, verified) │
+└────────────────────────────────────────────────────┘
+```
+
+#### Pattern 4: AI Compliance Officer
+
+An AI-assisted asymptotic point on the Regulatory substrate that continuously
+monitors compliance posture:
+
+```
+┌────────────────────────────────────────────────────┐
+│ Asymptotic Point: compliance-monitor                │
+│ Mode: AiAssisted(Verifier, Mcp)                     │
+│                                                    │
+│ LLM continuously:                                   │
+│   - compliance_closure() → reviews all bindings     │
+│   - compliance_gap_analysis() → finds gaps          │
+│   - verify_compliance_posture() → validates         │
+│   - compliance_report() → generates for auditors    │
+│                                                    │
+│ When gap found:                                     │
+│   - escalate_schema_gap("new-control-needed")       │
+│   - emit_bounded_dag("remediation", {...})          │
+│                                                    │
+│ Rate: healthy when compliance_gap_count decreasing  │
+└────────────────────────────────────────────────────┘
+```
+
+### 12.4 The Interface Hierarchy
+
+The convergence ether is accessible through four interfaces, each serving
+different consumers:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Convergence Ether                           │
+│          (convergence state across all substrates)           │
+│                                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │   MCP    │  │   REST   │  │ GraphQL  │  │   gRPC   │   │
+│  │          │  │          │  │          │  │          │   │
+│  │ AI/LLM  │  │ Programs │  │ UIs      │  │ Services │   │
+│  │ agents   │  │ scripts  │  │ dashbds  │  │ internal │   │
+│  │ Claude   │  │ curl     │  │ browsers │  │ tatara   │   │
+│  │ assistnts│  │ SDKs     │  │ Grafana  │  │ engine   │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+│                                                             │
+│  All four interfaces expose the SAME convergence state.     │
+│  MCP is structured for AI reasoning (tools + context).      │
+│  REST is structured for programmatic access (CRUD).         │
+│  GraphQL is structured for flexible queries (UI-driven).    │
+│  gRPC is structured for performance (streaming, internal).  │
+│                                                             │
+│  The interface does not change what's exposed — only HOW.   │
+│  The convergence graph, attestations, closures, compliance  │
+│  state, and distance vectors are the same through all four. │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 12.5 AI Safety Within the Convergence Model
+
+The convergence model provides natural safety boundaries for AI:
+
+1. **Attestation chain is unforgeable**: every AI action goes through
+   the same PREPARE → EXECUTE → VERIFY → ATTEST boundary. AI cannot
+   skip verification or forge attestations. Its actions are
+   cryptographically auditable.
+
+2. **Emission catalogs constrain AI actors**: an AI Actor can only
+   instantiate bounded DAGs from known templates. It cannot improvise
+   new convergence flows. The catalog is defined in Nix by humans.
+
+3. **Desired state is human-specified**: the Nix declarations that
+   define WHAT the system converges toward are written by humans. AI
+   influences HOW convergence proceeds, never WHAT it converges toward.
+
+4. **Mechanical attestation wraps AI output**: even when an AI drives
+   the EXECUTE phase, the ATTEST phase is always mechanical (BLAKE3
+   hash computation). AI outputs are hashed into the attestation chain,
+   not trusted blindly.
+
+5. **Stochastic outputs get stronger verification**: AI-assisted points
+   automatically receive additional verification. The theory recognizes
+   that LLM outputs are stochastic — the boundary attestation becomes
+   MORE important, not less.
+
+6. **All AI actions are convergence points**: there is no "AI side
+   channel." Every AI observation, analysis, action, and report is itself
+   a convergence point with distance, rate, boundary, and attestation.
+   AI is not outside the system — it is inside it, subject to the same
+   five invariants.
+
+### 12.6 Architectural Implications
+
+Adding the Intelligence dimension has concrete architectural consequences:
+
+| Concern | Implication |
+|---------|------------|
+| **MCP server** | Tatara exposes an MCP server implementing the 30+ tools described above. Built with kaname (pleme-io MCP scaffold library). |
+| **Tool registry** | Each MCP tool maps to a specific convergence operation. Tools are curated — no raw store access, no untyped queries. |
+| **AI attestation layer** | Tameshi LayerType gains AI-specific variants (AiVerification, AiRecommendation) to track AI's participation in the attestation chain. |
+| **Computation mode in store** | Sui convergence derivations carry `computation_mode` in their env, so the store knows which points involved AI. |
+| **Audit trail** | The heartbeat chain (tameshi) records AI decisions: which model, what it observed, what it recommended, what was enacted. |
+| **Rate limiting** | AI Actor operations are rate-limited per emission catalog to prevent runaway DAG emission. |
+| **Model versioning** | AI-assisted points record which model version drove convergence, for reproducibility and audit. |
+
+---
+
+## 13. Architecture Summary
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -1038,6 +1392,12 @@ system does or what it proves.
 │  │  Changes HOW, never WHAT. Advisory. Itself a leaf.     │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  AI Layer (MCP + REST + GraphQL + gRPC)                │  │
+│  │  Observes, analyzes, verifies, reports, acts within    │  │
+│  │  emission catalogs. Mechanical + AI mix at any point.  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
 │  Five Invariants:                                            │
 │    1. Every operation is a convergence point                 │
 │    2. Every point has a typed atomic boundary                │
@@ -1045,8 +1405,9 @@ system does or what it proves.
 │    4. Compliance binds to types, verified before execution   │
 │    5. Dependency closure is statically computable            │
 │                                                              │
-│  Five Classification Dimensions:                             │
-│    Horizon · Structure · Substrate · Coordination · Trust    │
+│  Six Classification Dimensions:                              │
+│    Horizon · Structure · Substrate · Coordination ·          │
+│    Trust · Intelligence                                      │
 │                                                              │
 │  Eight Guarantees:                                           │
 │    Liveness · Integrity · Compliance · Safety                │
@@ -1054,20 +1415,29 @@ system does or what it proves.
 │                                                              │
 │  Territory: everything expressible as (D, O, C, H)           │
 │  Absorption: every external system becomes convergence       │
+│  AI: mechanical + AI-assisted mix across entire landscape    │
 │  Expansion: new types, packages, renderers extend territory  │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-## 13. Theory Cross-References
+## 14. Theory Cross-References
 
 | Document | Location | Concerns |
 |----------|----------|----------|
 | Unified Infrastructure Theory | `substrate/docs/unified-infrastructure-theory.md` | Intent, archetypes, renderers, policies |
 | Unified Convergence Computing Theory | `tatara/docs/unified-convergence-computing-theory.md` | Convergence, DAGs, substrates, horizons, store, compliance, meta-convergence, frontiers |
-| Unified Platform Architecture | `tatara/docs/unified-platform-architecture.md` | (This document) Pipeline, invariants, duality, absorption, territory, optimizer, type hierarchy |
+| Unified Platform Architecture | `tatara/docs/unified-platform-architecture.md` | (This document) Pipeline, invariants, duality, absorption, AI-assisted computing, territory, optimizer, type hierarchy |
 
 The convergence computing theory document contains the full formal treatment
 (13 sections, 22 principles, 35+ academic references). This architecture
 document is the composition layer — how the theories, tools, and types fit
 together into one machine that maximizes the territory of reliable expression.
+
+AI-assisted convergence computing (section 12) establishes that intelligence
+is a classification dimension, not a bolt-on. Mechanical and AI-driven
+convergence mix at any point, at any boundary phase, across the entire
+landscape. The MCP surface provides 30+ curated tools mapping directly to
+convergence theory concepts. This creates a permanent architectural
+expression of AI assisting computing as it happens — a bedrock on which
+further formalization can build.

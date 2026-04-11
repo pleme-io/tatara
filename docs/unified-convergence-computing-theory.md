@@ -1213,6 +1213,433 @@ The convergence store is the Nix store. Sui is the convergence computer's runtim
 | `sui-compat` | Convergence derivation env keys (`substrate_type`, `point_type`, `desired_state`) | `Derivation.env: BTreeMap<String, String>` |
 | `sui` (API) | `/api/v1/convergence/*` endpoints | Axum router, GraphQL schema, gRPC service |
 
+## 10. Meta-Convergence: The System Optimizing Itself
+
+### 10.1 Convergence on Convergence
+
+The theory permits a natural but dangerous extension: **asymptotic convergence
+points that optimize the execution of other convergence DAGs**. This is
+convergence on the convergence topology itself — the system improving how it
+converges, not just what it converges toward.
+
+Examples:
+- An asymptotic point that observes DAG execution telemetry and **fuses** sequential
+  points that always run together into a single point (reducing boundary overhead)
+- A point that detects false dependencies and **parallelizes** points that were
+  sequenced unnecessarily
+- A point that identifies hot paths and **caches** intermediate attestations that
+  rarely change
+- A point that reorders DAG evaluation for better resource utilization
+- A point that detects recurring emission patterns from asymptotic points and
+  **pre-instantiates** bounded DAGs before their triggers fire
+
+This is essentially a **JIT compiler for convergence** — an optimizer that watches
+the convergence engine run and restructures the computation while preserving
+correctness.
+
+### 10.2 Why This Requires Solid Primitives First
+
+Meta-convergence is theoretically valid — it's just another asymptotic point with
+an emission schema. But it is **unsafe without rock-solid foundational primitives**:
+
+1. **Attestation chain preservation**: any DAG restructuring must preserve the
+   integrity of the attestation chain. If you fuse two points, the fused point
+   must produce an attestation that is verifiably equivalent to both originals.
+
+2. **Semantic equivalence**: you must prove that the optimized DAG produces the
+   same converged state as the original. This is the convergence analogue of
+   compiler correctness proofs.
+
+3. **Rollback safety**: if an optimization makes things worse (increased
+   convergence time, new oscillations), the system must be able to revert to
+   the unoptimized topology instantly.
+
+4. **Halting guarantees for bounded points**: meta-convergence must not transform
+   a bounded point into an asymptotic one (or vice versa). Horizon classification
+   must be preserved.
+
+5. **CALM classification preservation**: an optimization must not change a monotone
+   operation into a non-monotone one, or the coordination guarantees break.
+
+Until the type system, attestation chain, and DAG algebra are implemented and
+proven correct, meta-convergence should remain theoretical. The foundation must
+be unshakeable before we let the system modify its own structure.
+
+### 10.3 The Meta-Convergence Emission Schema
+
+When the primitives are ready, meta-convergence is expressed like any other
+asymptotic point:
+
+```nix
+dagOptimizer = builtins.convergencePoint {
+  type = "asymptotic";
+  substrate = "compute";        # it optimizes compute topology
+  direction = "minimize";       # minimize convergence time / resource usage
+  metric = "convergence_time_p99_ms";
+
+  emissionSchema = {
+    fusePoints = {
+      dagTemplate = ./meta/fuse-sequential.nix;
+      trigger = { condition = "sequential_points_always_coexecute"; samples = 100; };
+    };
+    parallelizePoints = {
+      dagTemplate = ./meta/parallelize-independent.nix;
+      trigger = { condition = "false_dependency_detected"; confidence = 0.99; };
+    };
+    cacheAttestation = {
+      dagTemplate = ./meta/cache-stable-attestation.nix;
+      trigger = { condition = "attestation_unchanged_across_generations"; generations = 10; };
+    };
+    preInstantiate = {
+      dagTemplate = ./meta/pre-instantiate-bounded.nix;
+      trigger = { condition = "emission_pattern_predictable"; confidence = 0.95; };
+    };
+  };
+};
+```
+
+Each emitted bounded DAG is a specific, typed, testable optimization operation.
+The optimizer doesn't improvise — it applies known transformations from a catalog.
+Schema gaps signal that a new optimization type should be formally defined.
+
+## 11. Theoretical Frontiers
+
+The following frontiers represent the edges of the theory — areas where convergence
+computing either extends naturally, requires new primitives, or encounters fundamental
+limits. Each frontier is classified:
+
+- **Covered**: the current theory handles this
+- **Extends**: the theory handles the concept but needs new types or mechanisms
+- **Open**: requires fundamental new work
+- **Limit**: a hard boundary the theory cannot cross
+
+### 11.1 Temporal Convergence (Extends)
+
+**Problem**: A TLS certificate is valid for 30 more days. Right now, distance = 0.
+But we *know* it will diverge. The theory is currently reactive — observe divergence,
+then converge. Should it be proactive?
+
+**Extension**: Time becomes a convergence dimension. Every convergence state carries
+a **time-to-divergence** (TTD) estimate. A cert with 30 days left has distance = 0
+but TTD = 30d. When TTD drops below a threshold, the system pre-emptively
+re-converges — not because the state IS diverged, but because it WILL BE.
+
+```rust
+struct ConvergenceState {
+    // ... existing fields ...
+    /// Estimated time until this point diverges (None = stable indefinitely).
+    time_to_divergence: Option<Duration>,
+    /// Threshold: re-converge proactively when TTD drops below this.
+    proactive_threshold: Option<Duration>,
+}
+```
+
+This is covered by the existing theory's asymptotic points — a cert-rotation
+optimizer is an asymptotic point that emits bounded cert-renewal DAGs before
+expiry. The extension is making TTD a first-class metric alongside distance
+and rate.
+
+### 11.2 Adversarial Convergence (Extends)
+
+**Problem**: An attacker actively pushes the system away from convergence. DDoS
+floods, supply chain compromises, infrastructure sabotage. The convergence
+function fights an intelligent adversary, not just entropy.
+
+**Extension**: Adversarial convergence requires:
+- **Threat modeling as a substrate**: a Security substrate DAG that models active
+  threats and adjusts convergence strategies (e.g., shift to hardened nodes when
+  under attack)
+- **Convergence under duress**: the system must distinguish between "diverged
+  because of normal entropy" and "diverged because under attack" — the response
+  is different (re-converge normally vs. activate defensive topology)
+- **Game-theoretic convergence**: the convergence function accounts for an
+  adversary's optimal strategy. This changes the CALM classification — adversarial
+  operations are inherently non-monotone (the adversary can retract progress)
+
+The theory handles this through substrate DAGs and CALM classification, but needs
+new trigger conditions in emission schemas: `under_attack`, `anomalous_divergence`,
+`attestation_chain_tampered`.
+
+### 11.3 Resource Contention Between Substrates (Extends)
+
+**Problem**: Minimizing cost (financial substrate) conflicts with maximizing
+performance (compute substrate). You can't optimize all dimensions simultaneously.
+Converging on one dimension may degrade another.
+
+**Extension**: **Pareto-optimal convergence**. The multi-dimensional distance
+vector (section 6.3) is subject to constraints:
+
+```rust
+struct SubstrateConstraints {
+    /// Priority ordering when substrates conflict.
+    priorities: Vec<SubstrateType>,
+    /// Hard constraints: these dimensions MUST be converged regardless of cost.
+    hard: Vec<SubstrateType>,     // e.g., Security, Regulatory
+    /// Soft constraints: optimize these within budget.
+    soft: Vec<SubstrateType>,     // e.g., Financial, Observability
+    /// Trade-off policy: how to resolve conflicts between soft constraints.
+    trade_off: TradeOffPolicy,    // e.g., WeightedSum, LexicographicOrder, Satisficing
+}
+```
+
+This is not a new mechanism — it's a policy layer over the existing substrate DAG
+system. The theory supports it; the implementation needs constraint solvers.
+
+### 11.4 Observation Limits (Limit)
+
+**Problem**: Convergence requires observation. Observation has latency (polling
+interval) and cost (API calls, compute, bandwidth). The system cannot converge
+faster than it can observe.
+
+**Hard limits**:
+- **Nyquist for convergence**: the observation rate must be ≥ 2× the rate of
+  change in the substrate. If spot prices change every 30s, you must poll at
+  least every 15s or you miss transitions.
+- **Observer effect**: probes consume resources. Health checks add latency.
+  Monitoring adds CPU load. Observation perturbs the system being observed.
+- **Stale reads**: in a distributed system, observations are always slightly
+  stale. The convergence function operates on past state, not current state.
+  Convergence is always chasing a moving target.
+
+The theory acknowledges these limits but does not solve them — they are
+fundamental. The practical mitigation is: design convergence functions that
+are tolerant of stale observations (already guaranteed by idempotency and
+CALM classification), and set observation intervals based on substrate
+volatility.
+
+### 11.5 Trust Boundary Federation (Extends)
+
+**Problem**: Convergence spans organizations, clouds, and regulatory domains.
+How does organization A verify organization B's attestation? How do convergence
+DAGs cross trust boundaries?
+
+**Extension**: **Federated convergence stores**. Each organization runs its own
+sui instance with its own attestation chain. Cross-boundary edges carry
+**federated attestations** — attestation hashes signed by the foreign
+organization's key, verified by the local organization's trust policy.
+
+```
+Org A convergence store ←──federated attestation──→ Org B convergence store
+     (sui instance A)                                    (sui instance B)
+```
+
+This composes with tameshi's existing multi-layer attestation — the federation
+layer is just another attestation layer in the Merkle tree. The theory supports
+it; the implementation needs cross-store attestation verification in sui.
+
+### 11.6 Human-in-the-Loop Convergence (Covered)
+
+**Problem**: Some convergence points require human decisions — approval gates,
+architecture reviews, compliance sign-offs. These are bounded points with
+unpredictable latency.
+
+**Status**: Already covered. A human approval is a bounded convergence point
+with `mechanism: Manual`. The DAG blocks at the Gate point until the human
+attests. The convergence engine tracks this point's `time_in_current_state`
+and can escalate if it exceeds a threshold. No new theory needed — humans
+are just slow convergence functions.
+
+### 11.7 Convergence Failure and Degradation (Extends)
+
+**Problem**: What if a point CAN'T converge? The hardware doesn't exist, the
+budget is exhausted, a regulatory prohibition blocks the operation. How does
+failure propagate through the DAG?
+
+**Extension**: **Failure semantics** for convergence points:
+
+```rust
+enum ConvergenceOutcome {
+    /// Converged successfully — distance = 0.
+    Converged,
+    /// Cannot converge — permanent failure.
+    Failed { reason: String, compensating: Option<CompensatingAction> },
+    /// Can partially converge — degraded operation.
+    Degraded { achieved: ConvergenceDistance, missing: Vec<String> },
+}
+```
+
+Failure propagation follows the DAG:
+- A failed point's downstream dependents are **blocked** (cannot prepare)
+- The system can invoke **compensating actions** (saga pattern, already in the
+  theory) to roll back upstream points
+- **Degraded convergence** allows the system to operate with partial convergence
+  on some substrates — e.g., running on a more expensive node because the cheap
+  one is unavailable, with cost_distance > 0 but all other dimensions converged
+
+### 11.8 Bootstrapping: What Converges the Convergence Engine? (Open)
+
+**Problem**: The convergence engine (tatara + sui) is itself a distributed system
+that must be running before it can converge anything. But deploying the convergence
+engine IS a convergence operation. Chicken and egg.
+
+**Status**: This is an open problem. Practical mitigations:
+- **Static bootstrap**: the first tatara node starts with a hard-coded DAG
+  (no dynamic convergence planning), then transitions to full convergence once
+  the engine is operational
+- **External bootstrap**: a simpler system (nix-darwin, systemd, cloud-init)
+  brings up the first node, then tatara takes over
+- **Self-hosting horizon**: eventually, tatara converges its own upgrades
+  (tatara-on-tatara), but this requires the meta-convergence primitives from
+  section 10 to be stable
+
+The theory does not claim self-bootstrap. It requires an external initial
+condition, just as the Knaster-Tarski theorem requires an initial application
+of the functional before the fixed point iteration begins.
+
+### 11.9 Emergent Behavior and Cascade Failure (Extends)
+
+**Problem**: Many convergence points interacting can produce behavior none of
+them individually express. A cost optimizer migrates a workload → the network
+substrate re-converges → DNS propagation causes a latency spike → the latency
+optimizer migrates the workload back → the cost optimizer fires again. Cascade.
+
+**Extension**: **Convergence circuit breakers**. The existing oscillation
+detection (section 2.3) handles single-point oscillation. Cross-point cascades
+need a graph-level detector:
+
+- Track **causal chains**: if point A's convergence triggers point B's divergence
+  triggers point A's divergence, that's a cycle in the causal graph (even though
+  the DAG itself is acyclic — the causality spans multiple DAG generations)
+- **Circuit breaker**: when a causal cycle is detected, freeze the lower-priority
+  substrate and allow the higher-priority one to stabilize
+- **Dampening across substrates**: apply control-theory damping not just per-point
+  but per-substrate-pair when cross-substrate oscillation is detected
+
+### 11.10 Scale Limits (Extends)
+
+**Problem**: At extreme scale (millions of convergence points across thousands
+of nodes), the convergence plan itself becomes a bottleneck. DAG evaluation,
+closure computation, and attestation verification have computational cost.
+
+**Extension**: **Sharded convergence graphs**. The convergence graph is partitioned
+by substrate and by scope (cluster, region, global). Each shard has its own sui
+instance. Cross-shard edges are federated (section 11.5). The parent DAG-of-DAGs
+coordinates shards without needing the full graph in memory.
+
+This is analogous to how Nix handles large package sets — nixpkgs doesn't evaluate
+everything at once; it lazily evaluates the closure of what you requested. Sui's
+lazy evaluation (thunks) already supports this pattern.
+
+### 11.11 Non-Determinism and Concurrent Observation (Covered)
+
+**Problem**: In a distributed system, two nodes may observe different states
+simultaneously. Network partitions, clock skew, and concurrent mutations mean
+observations are inherently non-deterministic.
+
+**Status**: Already covered by the CALM classification (section 1.2). Monotone
+operations converge regardless of observation order (eventual consistency via
+gossip). Non-monotone operations go through Raft (linearizable consensus).
+The theory doesn't require deterministic observations — it requires convergence
+functions that are idempotent and goal-seeking, which tolerate stale or
+partial observations by design.
+
+### 11.12 Convergence Velocity Constraints (Extends)
+
+**Problem**: Different substrates have hard limits on how fast state can change:
+
+| Substrate | Velocity Limit | Why |
+|-----------|---------------|-----|
+| DNS | Minutes (TTL) | Propagation through resolver caches |
+| TLS certificates | Minutes | CA issuance + ACME challenge |
+| Cloud provisioning | Minutes to hours | VM boot, image pull, network config |
+| Legal/compliance | Days to weeks | Human review, regulatory process |
+| Hardware procurement | Weeks to months | Supply chain, shipping |
+
+**Extension**: Each substrate DAG carries a **convergence bandwidth** — the
+maximum rate at which convergence can proceed. The convergence planner uses
+bandwidth constraints to compute realistic critical-path estimates. A DAG
+that includes a compliance approval gate cannot estimate sub-minute completion
+regardless of how fast the compute points converge.
+
+```rust
+struct SubstrateDAG {
+    // ... existing fields ...
+    /// Maximum convergence velocity for this substrate.
+    bandwidth: ConvergenceBandwidth,
+}
+
+enum ConvergenceBandwidth {
+    Instant,                    // local computation, in-memory
+    Seconds(u64),               // API calls, cache lookups
+    Minutes(u64),               // provisioning, cert issuance
+    Hours(u64),                 // large deployments, data migration
+    Days(u64),                  // compliance, procurement
+    Unbounded,                  // human decisions, external processes
+}
+```
+
+### 11.13 Information Loss and Convergence Archaeology (Extends)
+
+**Problem**: Generational store paths accumulate. GC destroys old generations.
+But six months from now, someone asks: "Why did the system migrate from node-a
+to node-b on March 15?" The attestation that explains this may have been GC'd.
+
+**Extension**: **Convergence archival**. Before GC, attestation summaries
+(point ID, generation, trigger, outcome, timestamp) are appended to an
+append-only log outside the store. The full attestation content is GC'd, but
+the summary chain persists indefinitely. This is the convergence equivalent of
+git reflog — the detailed objects may be pruned, but the decisions are recorded.
+
+### 11.14 External Systems That Don't Speak Convergence (Covered)
+
+**Problem**: AWS, GCP, third-party SaaS — they don't have convergence DAGs.
+How does the system converge state in systems that have no concept of convergence?
+
+**Status**: Already covered. This is exactly what the convergence function does —
+it takes an external system's observed state (via API polling) and drives it
+toward desired state (via API mutation). The external system doesn't need to
+understand convergence. The convergence point is the adapter. This is the
+level-triggered controller pattern (section 1, K8s controller pattern reference):
+compare desired vs. observed each tick, act on the diff. The external system
+is just a substrate.
+
+### 11.15 Convergence and Consciousness (Limit)
+
+**Problem**: If an asymptotic convergence point can observe its own execution,
+optimize its own topology (meta-convergence), and emit new convergence points
+in response to novel stimuli (schema gap → define new type), at what point does
+the convergence graph exhibit properties that resemble autonomous goal-seeking?
+
+**Status**: This is a philosophical limit, not a technical one. The theory models
+goal-seeking computation (convergence toward desired state), self-modification
+(meta-convergence), and adaptation (emission schemas evolving over time). But
+the goals are always externally specified (declared in Nix by a human). The
+system never invents its own goals — it converges toward goals it is given.
+
+The theory explicitly does NOT cross this boundary. Meta-convergence optimizes
+HOW the system converges, not WHAT it converges toward. Emission schemas define
+the catalog of possible actions, but a human defines the catalog. Schema gaps
+are escalated to humans, not resolved autonomously.
+
+This is a design choice, not a theoretical limitation. The theory could model
+autonomous goal generation (an asymptotic point whose emission schema includes
+"define new asymptotic points"), but we deliberately choose not to. The
+convergence engine is a tool, not an agent. It computes what it is told to
+compute, and it computes it well.
+
+## 12. Theory Summary
+
+The Unified Convergence Computing Theory establishes:
+
+| # | Principle | Section |
+|---|-----------|---------|
+| 1 | Convergence IS computation (fixed-point, CALM, CRDTs) | §1 |
+| 2 | Every computation has atomic verified boundaries (prepare→execute→verify→attest) | §1.3 |
+| 3 | Convergence points compose into typed DAGs, DAGs into DAGs-of-DAGs | §1.4–1.5, §5 |
+| 4 | Some points are bounded (terminate), others asymptotic (run forever) | §1.6 |
+| 5 | Bounded is preferred; asymptotic points are factories for bounded work | §1.6 |
+| 6 | Convergence distance, rate, and oscillation are the metrics | §2 |
+| 7 | Infrastructure theory says WHAT, convergence theory says HOW | §3 |
+| 8 | Cost optimization is continuous re-convergence on the financial substrate | §4 |
+| 9 | Convergence points are typed (Transform/Fork/Join/Gate/Select/...) | §5.1 |
+| 10 | DAGs have a closed algebra (sequence, parallel, fork, join, select, nest) | §5.2 |
+| 11 | Convergence DAGs ARE Nix derivations (content-addressed, cached, closures) | §5.3 |
+| 12 | Every substrate is its own convergence DAG; distance is a vector | §6 |
+| 13 | Full static analysis at plan time (closures, impact, diff, cache hits) | §7 |
+| 14 | The Nix store (via sui) IS the convergence store | §8 |
+| 15 | Meta-convergence (system optimizing itself) is valid but needs solid primitives | §10 |
+| 16 | The theory has known frontiers and deliberate limits | §11 |
+
 ### Academic Foundations
 
 | Concept | Source | Application |
@@ -1236,3 +1663,10 @@ The convergence store is the Nix store. Sui is the convergence computer's runtim
 | Asymptotic optimization | Online convex optimization (Zinkevich 2003) | Perpetual convergence points with no fixed point |
 | Anytime algorithms | Zilberstein 1996 | Improve solution quality with more time, no terminal state |
 | Gradient descent | Cauchy 1847 / modern ML | Direction-based optimization without fixed target |
+| Game theory | von Neumann & Morgenstern 1944 | Adversarial convergence against intelligent opponents |
+| Pareto optimality | Edgeworth 1881 / Pareto 1906 | Multi-substrate conflict resolution |
+| Circuit breakers | Nygard 2007 (Release It!) | Cross-substrate cascade failure prevention |
+| Nyquist-Shannon sampling | Shannon 1949 | Observation rate limits on convergence velocity |
+| JIT compilation | Aycock 2003 | Meta-convergence as runtime DAG optimization |
+| Reflective systems | Smith 1984 (procedural reflection) | System reasoning about its own convergence topology |
+| Compensating transactions | Garcia-Molina & Salem 1987 | Failure recovery and degraded convergence |

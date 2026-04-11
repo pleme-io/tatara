@@ -1,3 +1,4 @@
+pub mod attestation;
 pub mod convergence;
 pub mod convergence_planner;
 pub mod dag_executor;

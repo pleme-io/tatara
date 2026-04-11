@@ -1,6 +1,7 @@
 pub mod exec;
 #[cfg(target_os = "macos")]
 pub mod kasou;
+pub mod kube;
 pub mod nix;
 pub mod nix_build;
 pub mod oci;
@@ -83,6 +84,12 @@ impl DriverRegistry {
         let wasi_driver = wasi::WasiDriver;
         if wasi_driver.available().await {
             drivers.push(Box::new(wasi_driver));
+        }
+
+        // Kubernetes driver
+        let kube_driver = kube::KubeDriver::new();
+        if kube_driver.available().await {
+            drivers.push(Box::new(kube_driver));
         }
 
         Self { drivers }

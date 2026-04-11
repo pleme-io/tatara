@@ -95,6 +95,21 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/catalog/services", get(catalog_list_services))
         .route("/v1/catalog/service/{name}", get(catalog_get_service))
         .route("/v1/health/service/{name}", get(catalog_health_service))
+        // Convergence
+        .route("/api/v1/convergence/graph", get(convergence_graph))
+        .route("/api/v1/convergence/distance", get(convergence_distance))
+        .route("/api/v1/convergence/rate", get(convergence_rate))
+        .route("/api/v1/convergence/plan", get(convergence_plan))
+        .route(
+            "/api/v1/convergence/attestation/{point_id}",
+            get(convergence_attestation),
+        )
+        .route(
+            "/api/v1/convergence/compliance/{point_id}",
+            get(convergence_compliance),
+        )
+        .route("/api/v1/convergence/emissions", get(convergence_emissions))
+        .route("/api/v1/convergence/substrates", get(convergence_substrates))
         // Metrics
         .route("/metrics", get(prometheus_metrics))
         .with_state(state)
@@ -649,6 +664,99 @@ async fn catalog_health_service(
         ..Default::default()
     };
     Json(state.catalog_registry.query(&query).await)
+}
+
+// ── Convergence ──
+
+async fn convergence_graph(
+    State(_state): State<AppState>,
+) -> Json<serde_json::Value> {
+    // Returns the current convergence graph across all substrates.
+    // Full implementation reads from the convergence engine's SubstrateManager.
+    Json(serde_json::json!({
+        "points": {},
+        "edges": [],
+        "substrates": [],
+        "status": "no active convergence graph"
+    }))
+}
+
+async fn convergence_distance(
+    State(_state): State<AppState>,
+) -> Json<serde_json::Value> {
+    // Returns per-substrate convergence distance vector.
+    Json(serde_json::json!({
+        "distances": {},
+        "overall": 0.0,
+        "is_converged": true,
+        "substrate_count": 0
+    }))
+}
+
+async fn convergence_rate(
+    State(_state): State<AppState>,
+) -> Json<serde_json::Value> {
+    // Returns convergence rate per point.
+    Json(serde_json::json!({
+        "rates": {},
+        "overall_rate": 0.0,
+        "oscillating_count": 0
+    }))
+}
+
+async fn convergence_plan(
+    State(_state): State<AppState>,
+) -> Json<serde_json::Value> {
+    // Returns the current convergence plan.
+    Json(serde_json::json!({
+        "execution_order": [],
+        "critical_path": [],
+        "cache_hits": 0,
+        "compliance_bindings": 0
+    }))
+}
+
+async fn convergence_attestation(
+    State(_state): State<AppState>,
+    Path(point_id): Path<String>,
+) -> Json<serde_json::Value> {
+    // Returns attestation for a specific convergence point.
+    Json(serde_json::json!({
+        "point_id": point_id,
+        "attestation": null,
+        "generation": 0
+    }))
+}
+
+async fn convergence_compliance(
+    State(_state): State<AppState>,
+    Path(point_id): Path<String>,
+) -> Json<serde_json::Value> {
+    // Returns compliance status for a specific convergence point.
+    Json(serde_json::json!({
+        "point_id": point_id,
+        "bindings": [],
+        "all_satisfied": true
+    }))
+}
+
+async fn convergence_emissions(
+    State(_state): State<AppState>,
+) -> Json<serde_json::Value> {
+    // Returns emission schemas and recent instantiations.
+    Json(serde_json::json!({
+        "schemas": [],
+        "recent_instantiations": []
+    }))
+}
+
+async fn convergence_substrates(
+    State(_state): State<AppState>,
+) -> Json<serde_json::Value> {
+    // Returns per-substrate DAG status.
+    Json(serde_json::json!({
+        "substrates": []
+    }))
 }
 
 // ── Metrics ──

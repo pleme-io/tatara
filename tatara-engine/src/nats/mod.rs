@@ -23,9 +23,10 @@ pub struct NatsConfig {
     #[serde(default)]
     pub enabled: bool,
 
-    /// Whether to use JetStream for guaranteed delivery.
-    #[serde(default = "default_true")]
-    pub jetstream: bool,
+    /// Reserved for future JetStream support (not yet implemented).
+    /// Currently all NATS operations use core NATS publish/subscribe.
+    #[serde(default)]
+    pub _jetstream_reserved: bool,
 
     /// Subject prefix for all tatara NATS subjects.
     #[serde(default = "default_subject_prefix")]
@@ -47,7 +48,7 @@ impl Default for NatsConfig {
         Self {
             url: default_nats_url(),
             enabled: false,
-            jetstream: true,
+            _jetstream_reserved: false,
             subject_prefix: default_subject_prefix(),
         }
     }

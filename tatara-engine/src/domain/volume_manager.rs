@@ -52,11 +52,13 @@ impl VolumeManager {
                 host_path
             }
             VolumeSource::Nfs { server, path } => {
-                // NFS mount placeholder — would use `mount` syscall or `mount` command
-                let mount_point = self.volume_dir.join(format!("nfs-{}", spec.name));
-                tokio::fs::create_dir_all(&mount_point).await?;
-                info!(volume = %spec.name, server, path, "NFS volume mount point created (mount not implemented)");
-                mount_point
+                // NFS mount requires platform-specific `mount` syscall.
+                // Return error until implemented to prevent silent data loss.
+                anyhow::bail!(
+                    "NFS mounts not yet implemented (volume '{}', server '{}', path '{}'). \
+                     Use Local or HostPath volumes, or mount NFS externally and use HostPath.",
+                    spec.name, server, path
+                );
             }
         };
 

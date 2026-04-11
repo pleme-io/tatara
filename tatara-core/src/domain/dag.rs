@@ -48,8 +48,17 @@ pub fn topological_sort(
         adj.entry(id.as_str()).or_default();
     }
 
+    let job_set: HashSet<&str> = job_ids.iter().map(|s| s.as_str()).collect();
+
     for (job_id, deps) in dependencies {
         for dep in deps {
+            // Validate that dependencies reference existing jobs
+            if !job_set.contains(dep.as_str()) {
+                return Err(vec![format!(
+                    "job '{}' depends on unknown job '{}'",
+                    job_id, dep
+                )]);
+            }
             adj.entry(dep.as_str()).or_default().push(job_id.as_str());
             *in_degree.entry(job_id.as_str()).or_insert(0) += 1;
         }

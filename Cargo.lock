@@ -4182,6 +4182,7 @@ name = "tatara-engine"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "async-nats",
  "async-trait",
  "bincode",
  "blake3",
@@ -4205,6 +4206,7 @@ dependencies = [
  "serde_yaml",
  "sha2",
  "tatara-core",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",

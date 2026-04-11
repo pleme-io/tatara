@@ -224,8 +224,60 @@ impl Driver for OciDriver {
         let cli = self.cli_command().to_string();
 
         tokio::spawn(async move {
-            let _ = (tx, container_id, cli);
-            // Phase 3: implement container log streaming
+            use tokio::io::{AsyncBufReadExt, BufReader};
+
+            let mut child = match Command::new(&cli)
+                .args(["logs", "-f", "--timestamps", &container_id])
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+            {
+                Ok(child) => child,
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to spawn container log stream");
+                    return;
+                }
+            };
+
+            if let Some(stdout) = child.stdout.take() {
+                let tx_out = tx.clone();
+                let cid = container_id.clone();
+                tokio::spawn(async move {
+                    let mut lines = BufReader::new(stdout).lines();
+                    while let Ok(Some(line)) = lines.next_line().await {
+                        let entry = LogEntry {
+                            task_name: cid.clone(),
+                            message: line,
+                            stream: "stdout".to_string(),
+                            timestamp: chrono::Utc::now(),
+                        };
+                        if tx_out.send(entry).await.is_err() {
+                            break;
+                        }
+                    }
+                });
+            }
+
+            if let Some(stderr) = child.stderr.take() {
+                let tx_err = tx;
+                let cid = container_id;
+                tokio::spawn(async move {
+                    let mut lines = BufReader::new(stderr).lines();
+                    while let Ok(Some(line)) = lines.next_line().await {
+                        let entry = LogEntry {
+                            task_name: cid.clone(),
+                            message: line,
+                            stream: "stderr".to_string(),
+                            timestamp: chrono::Utc::now(),
+                        };
+                        if tx_err.send(entry).await.is_err() {
+                            break;
+                        }
+                    }
+                });
+            }
+
+            let _ = child.wait().await;
         });
 
         Ok(rx)

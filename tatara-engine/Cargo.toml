@@ -56,6 +56,9 @@ redb = "3.1"
 # Cluster: mDNS discovery
 mdns-sd = "0.18"
 
+# NATS event bus (optional — graceful degradation if not available)
+async-nats = "0.38"
+
 # Random
 rand = "0.9"
 
@@ -80,6 +83,9 @@ kasou = { git = "https://github.com/pleme-io/kasou" }
 tonic = { version = "0.12", features = ["transport"], optional = true }
 prost = { version = "0.13", optional = true }
 prost-types = { version = "0.13", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
 
 [build-dependencies]
 tonic-build = { version = "0.12", optional = true }

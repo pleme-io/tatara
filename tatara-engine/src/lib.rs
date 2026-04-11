@@ -1,8 +1,12 @@
+pub mod catalog;
 pub mod client;
 pub mod cluster;
 pub mod domain;
 pub mod drivers;
 pub mod grpc;
 pub mod kindling_bridge;
+pub mod metrics;
+pub mod nats;
 pub mod nix_eval;
 pub mod p2p;
+pub mod secrets;

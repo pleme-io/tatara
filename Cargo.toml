@@ -6,6 +6,7 @@ members = [
     "tatara-cli",
     "tatara-operator",
     "tatara-kube",
+    "tatara-net",
     "tatara-testing",
     "ro-cli",
 ]

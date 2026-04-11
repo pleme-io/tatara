@@ -30,6 +30,7 @@ pub enum DriverType {
     NixBuild,
     Kasou,
     Kube,
+    Wasi,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -166,6 +167,37 @@ pub enum TaskConfig {
         #[serde(default = "default_kasou_memory")]
         memory_mib: u64,
     },
+    /// WASI component — sandboxed, portable workload via wasmtime.
+    Wasi {
+        /// Path to .wasm component (can be Nix store path).
+        wasm_path: String,
+        /// WASI capabilities to grant.
+        #[serde(default)]
+        capabilities: WasiCapabilities,
+        /// Filesystem mounts (host_path → guest_path).
+        #[serde(default)]
+        mounts: std::collections::HashMap<String, String>,
+        /// Allowed network services.
+        #[serde(default)]
+        allowed_services: Vec<String>,
+    },
+}
+
+/// WASI capability grants for sandboxed workloads.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WasiCapabilities {
+    #[serde(default)]
+    pub filesystem: bool,
+    #[serde(default)]
+    pub network: bool,
+    #[serde(default)]
+    pub clocks: bool,
+    #[serde(default)]
+    pub random: bool,
+    #[serde(default)]
+    pub stdout: bool,
+    #[serde(default)]
+    pub stderr: bool,
 }
 
 fn default_kasou_cpus() -> u32 { 2 }

@@ -193,6 +193,8 @@ pub fn node_meta(
         joined_at: Utc::now(),
         version: "0.2.0".to_string(),
         eligible: true,
+            wireguard_pubkey: None,
+            tunnel_address: None,
     }
 }
 

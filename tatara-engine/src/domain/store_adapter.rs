@@ -127,6 +127,8 @@ mod tests {
             joined_at: Utc::now(),
             version: "0.2.0".to_string(),
             eligible: true,
+            wireguard_pubkey: None,
+            tunnel_address: None,
         };
 
         let node = node_meta_to_node(meta);

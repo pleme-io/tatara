@@ -182,6 +182,12 @@ pub struct AllocWarmProgress {
     pub secrets_resolved: bool,
     pub volumes_mounted: bool,
     pub task_progress: HashMap<String, TaskWarmProgress>,
+    /// Network identity assigned in the routing table.
+    #[serde(default)]
+    pub network_identity_assigned: bool,
+    /// Endpoint registered in the networking plane.
+    #[serde(default)]
+    pub endpoint_registered: bool,
 }
 
 impl Default for AllocWarmProgress {
@@ -190,6 +196,8 @@ impl Default for AllocWarmProgress {
             secrets_resolved: false,
             volumes_mounted: false,
             task_progress: HashMap::new(),
+            network_identity_assigned: false,
+            endpoint_registered: false,
         }
     }
 }
@@ -229,6 +237,12 @@ pub struct NodeWarmProgress {
     pub raft_joined: bool,
     pub gossip_converged: bool,
     pub drivers_ready: Vec<String>,
+    /// WireGuard mesh tunnel established.
+    #[serde(default)]
+    pub wireguard_tunnel_up: bool,
+    /// Number of mesh peers connected.
+    #[serde(default)]
+    pub mesh_peers_connected: u32,
 }
 
 impl Default for NodeWarmProgress {
@@ -237,6 +251,8 @@ impl Default for NodeWarmProgress {
             raft_joined: false,
             gossip_converged: false,
             drivers_ready: Vec::new(),
+            wireguard_tunnel_up: false,
+            mesh_peers_connected: 0,
         }
     }
 }
@@ -409,6 +425,8 @@ mod tests {
         let phase = AllocationPhase::Warming(AllocWarmProgress {
             secrets_resolved: true,
             volumes_mounted: false,
+            network_identity_assigned: true,
+            endpoint_registered: false,
             task_progress: HashMap::from([
                 ("web".to_string(), TaskWarmProgress {
                     fetch_progress: 0.75,

@@ -89,6 +89,7 @@ impl DriverRegistry {
             DriverType::NixBuild => "nix-build",
             DriverType::Kasou => "kasou",
             DriverType::Kube => "kube",
+            DriverType::Wasi => "wasi",
         };
         self.drivers.iter().find(|d| d.name() == name).map(|d| d.as_ref())
     }
@@ -103,6 +104,7 @@ impl DriverRegistry {
                 "nix-build" => Some(DriverType::NixBuild),
                 "kasou" => Some(DriverType::Kasou),
                 "kube" => Some(DriverType::Kube),
+                "wasi" => Some(DriverType::Wasi),
                 _ => None,
             })
             .collect()

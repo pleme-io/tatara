@@ -38,6 +38,12 @@ pub struct NodeMeta {
     /// Whether this node is eligible for scheduling.
     #[serde(default = "default_eligible")]
     pub eligible: bool,
+    /// WireGuard public key for mesh encryption.
+    #[serde(default)]
+    pub wireguard_pubkey: Option<String>,
+    /// WireGuard tunnel address within the mesh subnet.
+    #[serde(default)]
+    pub tunnel_address: Option<std::net::IpAddr>,
 }
 
 fn default_eligible() -> bool {

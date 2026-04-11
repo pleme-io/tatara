@@ -1,0 +1,49 @@
+[package]
+name = "tatara-net"
+description = "Cross-platform networking plane for tatara cluster fabric — eBPF + WASI + WireGuard"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[features]
+default = ["userspace"]
+ebpf = []          # Linux eBPF via aya (XDP/TC/cgroup)
+userspace = []     # macOS/fallback via tun-rs + smoltcp
+wireguard = []     # WireGuard mesh via mamorigami
+wasi = ["dep:wasmtime", "dep:wasmtime-wasi"]
+
+[dependencies]
+tatara-core = { path = "../tatara-core" }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+
+# Networking types
+ipnet = { version = "2", features = ["serde"] }
+
+# Time + IDs
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Logging
+tracing = "0.1"
+
+# Directories
+dirs = "6.0"
+
+# WASI runtime (optional)
+wasmtime = { version = "29", optional = true }
+wasmtime-wasi = { version = "29", optional = true }
+
+[lints.clippy]
+pedantic = "warn"

@@ -167,6 +167,8 @@ pub fn build_node_meta(
         joined_at: chrono::Utc::now(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         eligible: true,
+            wireguard_pubkey: None,
+            tunnel_address: None,
     }
 }
 

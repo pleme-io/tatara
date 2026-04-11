@@ -1700,7 +1700,7 @@ optimizer is an asymptotic point that emits bounded cert-renewal DAGs before
 expiry. The extension is making TTD a first-class metric alongside distance
 and rate.
 
-### 11.2 Adversarial Convergence (Extends)
+### 12.2 Adversarial Convergence (Extends)
 
 **Problem**: An attacker actively pushes the system away from convergence. DDoS
 floods, supply chain compromises, infrastructure sabotage. The convergence
@@ -1721,7 +1721,7 @@ The theory handles this through substrate DAGs and CALM classification, but need
 new trigger conditions in emission schemas: `under_attack`, `anomalous_divergence`,
 `attestation_chain_tampered`.
 
-### 11.3 Resource Contention Between Substrates (Extends)
+### 12.3 Resource Contention Between Substrates (Extends)
 
 **Problem**: Minimizing cost (financial substrate) conflicts with maximizing
 performance (compute substrate). You can't optimize all dimensions simultaneously.
@@ -1746,7 +1746,7 @@ struct SubstrateConstraints {
 This is not a new mechanism — it's a policy layer over the existing substrate DAG
 system. The theory supports it; the implementation needs constraint solvers.
 
-### 11.4 Observation Limits (Limit)
+### 12.4 Observation Limits (Limit)
 
 **Problem**: Convergence requires observation. Observation has latency (polling
 interval) and cost (API calls, compute, bandwidth). The system cannot converge
@@ -1768,7 +1768,7 @@ are tolerant of stale observations (already guaranteed by idempotency and
 CALM classification), and set observation intervals based on substrate
 volatility.
 
-### 11.5 Trust Boundary Federation (Extends)
+### 12.5 Trust Boundary Federation (Extends)
 
 **Problem**: Convergence spans organizations, clouds, and regulatory domains.
 How does organization A verify organization B's attestation? How do convergence
@@ -1788,7 +1788,7 @@ This composes with tameshi's existing multi-layer attestation — the federation
 layer is just another attestation layer in the Merkle tree. The theory supports
 it; the implementation needs cross-store attestation verification in sui.
 
-### 11.6 Human-in-the-Loop Convergence (Covered)
+### 12.6 Human-in-the-Loop Convergence (Covered)
 
 **Problem**: Some convergence points require human decisions — approval gates,
 architecture reviews, compliance sign-offs. These are bounded points with
@@ -1800,7 +1800,7 @@ attests. The convergence engine tracks this point's `time_in_current_state`
 and can escalate if it exceeds a threshold. No new theory needed — humans
 are just slow convergence functions.
 
-### 11.7 Convergence Failure and Degradation (Extends)
+### 12.7 Convergence Failure and Degradation (Extends)
 
 **Problem**: What if a point CAN'T converge? The hardware doesn't exist, the
 budget is exhausted, a regulatory prohibition blocks the operation. How does
@@ -1827,7 +1827,7 @@ Failure propagation follows the DAG:
   on some substrates — e.g., running on a more expensive node because the cheap
   one is unavailable, with cost_distance > 0 but all other dimensions converged
 
-### 11.8 Bootstrapping: What Converges the Convergence Engine? (Open)
+### 12.8 Bootstrapping: What Converges the Convergence Engine? (Open)
 
 **Problem**: The convergence engine (tatara + sui) is itself a distributed system
 that must be running before it can converge anything. But deploying the convergence
@@ -1847,7 +1847,7 @@ The theory does not claim self-bootstrap. It requires an external initial
 condition, just as the Knaster-Tarski theorem requires an initial application
 of the functional before the fixed point iteration begins.
 
-### 11.9 Emergent Behavior and Cascade Failure (Extends)
+### 12.9 Emergent Behavior and Cascade Failure (Extends)
 
 **Problem**: Many convergence points interacting can produce behavior none of
 them individually express. A cost optimizer migrates a workload → the network
@@ -1866,7 +1866,7 @@ need a graph-level detector:
 - **Dampening across substrates**: apply control-theory damping not just per-point
   but per-substrate-pair when cross-substrate oscillation is detected
 
-### 11.10 Scale Limits (Extends)
+### 12.10 Scale Limits (Extends)
 
 **Problem**: At extreme scale (millions of convergence points across thousands
 of nodes), the convergence plan itself becomes a bottleneck. DAG evaluation,
@@ -1881,7 +1881,7 @@ This is analogous to how Nix handles large package sets — nixpkgs doesn't eval
 everything at once; it lazily evaluates the closure of what you requested. Sui's
 lazy evaluation (thunks) already supports this pattern.
 
-### 11.11 Non-Determinism and Concurrent Observation (Covered)
+### 12.11 Non-Determinism and Concurrent Observation (Covered)
 
 **Problem**: In a distributed system, two nodes may observe different states
 simultaneously. Network partitions, clock skew, and concurrent mutations mean
@@ -1894,7 +1894,7 @@ The theory doesn't require deterministic observations — it requires convergenc
 functions that are idempotent and goal-seeking, which tolerate stale or
 partial observations by design.
 
-### 11.12 Convergence Velocity Constraints (Extends)
+### 12.12 Convergence Velocity Constraints (Extends)
 
 **Problem**: Different substrates have hard limits on how fast state can change:
 
@@ -1929,7 +1929,7 @@ enum ConvergenceBandwidth {
 }
 ```
 
-### 11.13 Information Loss and Convergence Archaeology (Extends)
+### 12.13 Information Loss and Convergence Archaeology (Extends)
 
 **Problem**: Generational store paths accumulate. GC destroys old generations.
 But six months from now, someone asks: "Why did the system migrate from node-a
@@ -1941,7 +1941,7 @@ append-only log outside the store. The full attestation content is GC'd, but
 the summary chain persists indefinitely. This is the convergence equivalent of
 git reflog — the detailed objects may be pruned, but the decisions are recorded.
 
-### 11.14 External Systems That Don't Speak Convergence (Covered)
+### 12.14 External Systems That Don't Speak Convergence (Covered)
 
 **Problem**: AWS, GCP, third-party SaaS — they don't have convergence DAGs.
 How does the system converge state in systems that have no concept of convergence?
@@ -1954,7 +1954,7 @@ level-triggered controller pattern (section 1, K8s controller pattern reference)
 compare desired vs. observed each tick, act on the diff. The external system
 is just a substrate.
 
-### 11.15 Convergence and Consciousness (Limit)
+### 12.15 Convergence and Consciousness (Limit)
 
 **Problem**: If an asymptotic convergence point can observe its own execution,
 optimize its own topology (meta-convergence), and emit new convergence points

@@ -1,8 +1,43 @@
-# Tatara (粋) — Nix-Native Distributed Workload Orchestrator
+# Tatara (粋) — Programmable Convergence Computer
 
-Distributed workload orchestrator with Raft consensus, gossip membership,
-and 7 execution drivers. Declared in Nix, compiled in Rust, sandboxed
-via WASI, enforced via eBPF. Part of the unified infrastructure theory.
+A distributed computing platform where **convergence IS computation**.
+Every system, cloud, bare-metal node, VM, or container becomes a substrate.
+Tatara lays down a convergence layer, and you program it with convergence
+DAGs that drive any system toward declared state. DAGs compose into
+DAGs-of-DAGs for multi-system coordination.
+
+Declared in Nix. Compiled in Rust. Sandboxed via WASI. Enforced via eBPF.
+Distributed via Raft consensus + gossip. Every node is identical.
+
+## The Convergence Computing Model
+
+**Convergence IS computation.** Every operation in tatara is a convergence
+point in a DAG. The system computes by driving each point from diverged
+(distance > 0) to converged (distance = 0). The computation terminates
+when all points report distance = 0.
+
+```
+Convergence DAG (the program):
+  NixEval ──→ RaftReplicate ──→ Schedule ──→ PortAlloc ──→ SecretResolve
+                                                              ↓
+  CatalogRegister ←── HealthCheck ←── Execute ←── VolumeMount
+```
+
+Each point converges independently. Raft coordinates non-monotone points
+(placement, deletion). Gossip handles monotone points (health, metrics).
+Every tatara node runs the same code — the DAG determines what each node
+works on. DAGs compose into DAGs-of-DAGs for multi-system orchestration.
+
+**CALM theorem applied**: monotone operations (health, metrics, logs) need
+NO coordination. Non-monotone operations (scheduling, deletion) go through
+Raft. This maximizes what can be distributed.
+
+### Key Types
+
+- `ConvergenceDistance`: Converged | Partial | Diverged | Unknown (0.0 to 1.0)
+- `ConvergenceState`: distance + rate + oscillation + damping per entity
+- `ConvergencePoint`: named step in the DAG with CALM classification
+- `ClusterConvergence`: cluster-wide summary (is_fully_converged())
 
 ## Architecture
 
@@ -10,7 +45,7 @@ via WASI, enforced via eBPF. Part of the unified infrastructure theory.
 User declares workload in Nix (tataraJobs / workload archetypes)
   → Raft replicates desired state to all nodes
   → Scheduler (leader-only) creates allocations
-  → Convergence engine drives desired → observed
+  → Convergence engine drives desired → observed (the convergence DAG)
   → Driver executes workload (exec/oci/nix/kasou/wasi/kube)
   → Health probes verify liveness
   → Service catalog registers healthy instances

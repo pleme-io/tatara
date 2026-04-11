@@ -22,6 +22,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 # Hashing (content-addressed data, spec hashes)
 sha2 = "0.10"
+blake3 = "1"
+hex = "0.4"
 
 # Directories
 dirs = "6.0"

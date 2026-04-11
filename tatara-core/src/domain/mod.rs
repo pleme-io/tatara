@@ -1,11 +1,16 @@
 pub mod allocation;
+pub mod compliance_binding;
+pub mod convergence_graph;
 pub mod convergence_state;
 pub mod dag;
+pub mod emission;
 pub mod event;
 pub mod idempotency;
 pub mod job;
 pub mod lifecycle;
+pub mod multi_distance;
 pub mod node;
+pub mod point_id;
 pub mod release;
 pub mod saga;
 pub mod secret;

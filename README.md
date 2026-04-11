@@ -1,51 +1,87 @@
-# tatara
+# Tatara (粋) — Programmable Convergence Computer
 
-Nix-native workload orchestrator.
+A distributed computing platform where **convergence IS computation**.
 
-## Overview
+Tatara implements two composing theories:
+- **Unified Infrastructure Theory**: Nix declares abstract intent, renderers translate to any backend
+- **Unified Convergence Computing Theory**: every operation is a convergence point in a verified DAG
 
-Tatara is a distributed workload orchestrator that evaluates Nix flake outputs to define and schedule jobs across a cluster of nodes. It uses Raft consensus (openraft) for leader election, gossip protocol (chitchat) for membership and state propagation, mDNS for bootstrap discovery, and a persistent log store (redb). It provides a CLI, a REST/GraphQL API server, and a TUI for cluster monitoring.
+Declare any system in Nix. Compute it into existence through verified convergence on any substrate. Prove every step cryptographically via tameshi attestation.
 
-## Usage
+## Quick Start
 
 ```bash
-# Build
-nix build
-
-# CLI commands
-tatara job list                    # List all jobs
-tatara job run <file> [--eval]     # Submit a job
-tatara job stop <id>               # Stop a job
-tatara node list                   # List cluster nodes
-tatara node drain <id>             # Drain a node
-tatara source add <name> <ref>     # Register a flake source
-tatara source sync <name>          # Force reconciliation
-tatara alloc list                  # List allocations
-tatara context set <endpoint>      # Set API endpoint
-
-# Run as server
-tatara server
+tatara server                              # Start single-node cluster
+tatara job run spec.json                   # Submit a workload
+tatara job list                            # Monitor convergence
+curl http://localhost:4646/metrics         # Prometheus metrics
+curl http://localhost:4646/v1/catalog/services  # Service discovery
 ```
 
-## Architecture
+## The Convergence Computing Model
 
-- **Cluster**: Raft consensus + gossip protocol + mDNS discovery
-- **Drivers**: Nix-native process execution
-- **Sources**: Git-based flake source reconciliation
-- **Forges**: Job spec generation patterns (via forgeworks)
-- **API**: REST + GraphQL + optional gRPC
-
-## Project Structure
+Every operation is a convergence point with four verified phases:
 
 ```
-src/
-  cli/       -- CLI commands (job, node, alloc, source, context, forge)
-  cluster/   -- Raft, gossip, p2p networking
-  domain/    -- Core domain types (jobs, allocations, nodes)
-  drivers/   -- Workload execution drivers
-  api/       -- REST and GraphQL server
-  nix_eval/  -- Nix flake evaluation
-  grpc/      -- Optional gRPC service
+PREPARE → EXECUTE → VERIFY → ATTEST ──hash──→ next point
+```
+
+Points compose into DAGs. DAGs compose into DAGs-of-DAGs. The system terminates when all points report distance = 0.
+
+```
+Convergence DAG:
+  NixEval → RaftReplicate → Schedule → PortAlloc → SecretResolve →
+    VolumeMount → DriverStart → HealthCheck → CatalogRegister
+```
+
+CALM theorem applied: monotone operations (health, metrics) need NO coordination. Non-monotone operations (scheduling, deletion) go through Raft.
+
+## 10 Workspace Crates
+
+| Crate | Purpose |
+|-------|---------|
+| `tatara-core` | Domain types, convergence state, lifecycle, DAG, saga, idempotency, traced events |
+| `tatara-engine` | Drivers, Raft, gossip, convergence engine, scheduler, health probes, catalog, metrics |
+| `tatara-api` | REST + GraphQL: jobs, allocations, nodes, catalog, health, metrics |
+| `tatara-cli` | CLI + `tatara server` |
+| `tatara-kube` | Nix-native K8s reconciler (Server-Side Apply, replaces FluxCD) |
+| `tatara-net` | Networking plane: NetworkPlane trait, eBPF types, WASI types, mesh |
+| `tatara-operator` | K8s operator: NixBuild/FlakeSource/FlakeOrg CRDs |
+| `tatara-testing` | Test fixtures |
+| `ro-cli` | Read-only CLI |
+
+## 7 Execution Drivers
+
+| Driver | Substrate | Platform |
+|--------|-----------|----------|
+| `exec` | Direct process | Unix |
+| `oci` | Docker/Podman/Apple Containers | All |
+| `nix` | Nix flake packages | All with Nix |
+| `nix_build` | Nix build + cache | All with Nix |
+| `kasou` | Apple Virtualization VMs | macOS |
+| `kube` | Kubernetes (Server-Side Apply) | All with kubeconfig |
+| `wasi` | wasmtime (WASI Preview 2) | All with wasmtime |
+
+## Convergence State Types
+
+- `ConvergenceDistance`: Converged | Partial | Diverged | Unknown (0.0 to 1.0)
+- `ConvergenceState`: distance + rate + oscillation + damping per entity
+- `ConvergencePoint`: step in DAG with CALM classification + atomic boundary
+- `ConvergenceBoundary`: preconditions + postconditions + attestation hash chain
+- `ClusterConvergence`: cluster-wide summary (is_fully_converged())
+
+## Documentation
+
+- [Unified Convergence Computing Theory](docs/unified-convergence-computing-theory.md)
+- [CLAUDE.md](CLAUDE.md) — architecture reference for AI assistants
+
+## Build & Test
+
+```bash
+cargo check          # Workspace check
+cargo test           # 117 tests
+cargo clippy         # Lint
+nix build            # Release build via substrate
 ```
 
 ## License

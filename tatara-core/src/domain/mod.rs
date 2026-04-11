@@ -2,6 +2,7 @@ pub mod allocation;
 pub mod dag;
 pub mod event;
 pub mod job;
+pub mod lifecycle;
 pub mod node;
 pub mod release;
 pub mod secret;

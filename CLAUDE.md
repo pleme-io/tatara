@@ -32,11 +32,28 @@ works on. DAGs compose into DAGs-of-DAGs for multi-system orchestration.
 NO coordination. Non-monotone operations (scheduling, deletion) go through
 Raft. This maximizes what can be distributed.
 
+### Atomic Convergence Boundaries
+
+Each convergence point has four verified phases:
+```
+Prepare → Execute → Verify → Attest ──hash──→ Next Point
+```
+- **Prepare**: verify input environment + previous point's attestation hash
+- **Execute**: drive toward target state (the convergence itself)
+- **Verify**: prove output is correct (postcondition checks)
+- **Gate**: produce attestation hash (tameshi BLAKE3), open gate for next point
+
+This creates provably secure computation — each step cryptographically
+bound to the previous. Audit the entire chain after the fact. Lays down
+on any substrate: cloud, K8s, bare-metal, WASI, pure tatara.
+
 ### Key Types
 
 - `ConvergenceDistance`: Converged | Partial | Diverged | Unknown (0.0 to 1.0)
 - `ConvergenceState`: distance + rate + oscillation + damping per entity
-- `ConvergencePoint`: named step in the DAG with CALM classification
+- `ConvergencePoint`: named step in the DAG with CALM classification + boundary
+- `ConvergenceBoundary`: preconditions + postconditions + attestation chain
+- `BoundaryPhase`: Pending → Preparing → Executing → Verifying → Attested | Failed
 - `ClusterConvergence`: cluster-wide summary (is_fully_converged())
 
 ## Architecture

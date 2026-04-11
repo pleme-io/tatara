@@ -1,13 +1,32 @@
 # Tatara (粋) — Programmable Convergence Computer
 
-A distributed computing platform where **convergence IS computation**.
-Every system, cloud, bare-metal node, VM, or container becomes a substrate.
-Tatara lays down a convergence layer, and you program it with convergence
-DAGs that drive any system toward declared state. DAGs compose into
-DAGs-of-DAGs for multi-system coordination.
+Two unified theories compose to form the platform:
 
-Declared in Nix. Compiled in Rust. Sandboxed via WASI. Enforced via eBPF.
-Distributed via Raft consensus + gossip. Every node is identical.
+**Unified Infrastructure Theory** (substrate): Nix declares abstract intent.
+Renderers translate to any backend. One declaration, infinite targets.
+
+**Unified Convergence Computing Theory** (tatara): Every rendered target
+becomes a convergence DAG. Each point has atomic verified boundaries.
+The computation IS the convergence. DAGs compose into DAGs-of-DAGs.
+
+```
+Nix Declaration (intent)           ← Unified Infrastructure Theory
+  ↓ archetype rendering
+Any Backend (K8s, tatara, WASI)    ← Rendered by substrate
+  ↓ convergence DAG
+Verified Atomic Checkpoints        ← Unified Convergence Computing Theory
+  ↓ distributed execution
+Identical Tatara Nodes             ← CALM-classified, Raft + gossip
+  ↓ cryptographic attestation
+Tameshi (BLAKE3 Merkle chain)      ← Immutable audit trail
+```
+
+The infrastructure theory says WHAT. The convergence theory says HOW.
+Together: declare any system in Nix, compute it into existence through
+verified convergence on any substrate, prove every step cryptographically.
+
+Compiled in Rust. Sandboxed via WASI. Enforced via eBPF.
+Every node is identical. Every operation is a convergence point.
 
 ## The Convergence Computing Model
 

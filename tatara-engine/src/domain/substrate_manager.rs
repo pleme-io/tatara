@@ -73,13 +73,12 @@ impl SubstrateManager {
                 continue;
             }
 
-            let total_distance: f64 = dag
+            let max_distance: f64 = dag
                 .points
                 .values()
                 .map(|p| p.state.distance.numeric())
-                .sum();
-            let avg = total_distance / dag.points.len() as f64;
-            distance.set(*substrate_type, avg);
+                .fold(0.0_f64, f64::max);
+            distance.set(*substrate_type, max_distance);
         }
 
         distance

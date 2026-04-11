@@ -183,7 +183,9 @@ impl ConvergenceGraph {
         self.edges.len()
     }
 
-    /// Compute forward closure (all transitive dependencies) for a point.
+    /// Compute forward closure: all points this point transitively depends on.
+    /// Walks backward along edges (from → to) to find all upstream dependencies.
+    /// Like `nix-store --query --requisites`.
     pub fn forward_closure(&self, point_id: &PointId) -> BTreeSet<PointId> {
         let mut adjacency: HashMap<PointId, Vec<PointId>> = HashMap::new();
         for edge in &self.edges {
@@ -209,7 +211,9 @@ impl ConvergenceGraph {
         visited
     }
 
-    /// Compute reverse closure (all transitive dependents) for a point.
+    /// Compute reverse closure: all points that transitively depend on this point.
+    /// Walks forward along edges (from → to) to find all downstream dependents.
+    /// Like `nix-store --query --referrers` (transitive).
     pub fn reverse_closure(&self, point_id: &PointId) -> BTreeSet<PointId> {
         let mut adjacency: HashMap<PointId, Vec<PointId>> = HashMap::new();
         for edge in &self.edges {

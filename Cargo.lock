@@ -4817,8 +4817,10 @@ name = "tatara-core"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "blake3",
  "chrono",
  "dirs 6.0.0",
+ "hex",
  "hostname",
  "openraft",
  "serde",
@@ -4891,6 +4893,17 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "tatara-mcp"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tatara-core",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

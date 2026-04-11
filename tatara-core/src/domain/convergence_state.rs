@@ -23,7 +23,6 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 // ── Convergence Distance ───────────────────────────────────────
 

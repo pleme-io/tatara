@@ -70,8 +70,8 @@ impl EmissionEvaluator {
     fn check_condition(condition: &TriggerCondition, state: &ConvergenceState) -> bool {
         match condition {
             TriggerCondition::Threshold { value, .. } => {
-                // Fire if current distance exceeds threshold
-                state.distance.numeric() > *value
+                // Fire if current distance meets or exceeds threshold
+                state.distance.numeric() >= *value
             }
             TriggerCondition::Event { .. } => {
                 // Event triggers are checked externally — always false in polling mode

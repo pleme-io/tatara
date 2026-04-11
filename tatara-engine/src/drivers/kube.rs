@@ -40,17 +40,19 @@ impl KubeDriver {
 
     /// Check if kubectl/kubeconfig is available.
     async fn check_kubeconfig(&self) -> bool {
-        let path = self
-            .kubeconfig
-            .as_deref()
-            .or_else(|| std::env::var("KUBECONFIG").ok().as_deref().map(|_| ""))
-            .unwrap_or("");
-
-        if !path.is_empty() {
+        // 1. Explicit kubeconfig path from constructor
+        if let Some(ref path) = self.kubeconfig {
             return tokio::fs::metadata(path).await.is_ok();
         }
 
-        // Check default locations
+        // 2. KUBECONFIG environment variable
+        if let Ok(env_path) = std::env::var("KUBECONFIG") {
+            if !env_path.is_empty() {
+                return tokio::fs::metadata(&env_path).await.is_ok();
+            }
+        }
+
+        // 3. Default location
         if let Some(home) = dirs::home_dir() {
             let default = home.join(".kube").join("config");
             return default.exists();

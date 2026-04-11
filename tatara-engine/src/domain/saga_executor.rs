@@ -8,7 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use tracing::{debug, error, info};
 
-use tatara_core::domain::saga::{SagaProgress, SagaResult};
+use tatara_core::domain::saga::SagaResult;
 
 /// A single step in a saga.
 #[async_trait]
@@ -36,11 +36,9 @@ impl SagaExecutor {
     /// Execute all steps in order. On failure, compensate in reverse.
     pub async fn run(&self) -> SagaResult {
         let mut completed: Vec<(usize, serde_json::Value)> = Vec::new();
-        let mut progress = SagaProgress::default();
 
         for (i, step) in self.steps.iter().enumerate() {
             debug!(step = step.name(), index = i, "saga: executing step");
-            progress.current_step = Some(step.name().to_string());
 
             match step.execute().await {
                 Ok(output) => {
@@ -84,8 +82,7 @@ impl SagaExecutor {
             }
         }
 
-        progress.current_step = None;
-        SagaResult::Completed {
+            SagaResult::Completed {
             steps_run: self.steps.len(),
         }
     }

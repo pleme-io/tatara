@@ -72,11 +72,44 @@ impl DagExecutor {
         let mut failed = 0usize;
         let mut degraded = 0usize;
 
+        // Track which points have failed — their downstream dependents are blocked.
+        let mut failed_points: std::collections::HashSet<PointId> =
+            std::collections::HashSet::new();
+
         for point_id in execution_order {
             let point = graph
                 .points
                 .get(point_id)
                 .ok_or_else(|| anyhow::anyhow!("point {point_id} not in graph"))?;
+
+            // Check if any upstream dependency failed — if so, skip this point.
+            let has_failed_upstream = graph
+                .edges
+                .iter()
+                .filter(|e| e.to == *point_id)
+                .any(|e| failed_points.contains(&e.from));
+
+            if has_failed_upstream {
+                warn!(
+                    point = %point.name,
+                    "skipping — upstream dependency failed"
+                );
+                failed_points.insert(*point_id);
+                let result = PointExecutionResult {
+                    point_id: *point_id,
+                    outcome: ConvergenceOutcome::Failed {
+                        reason: "upstream dependency failed".into(),
+                    },
+                    attestation: None,
+                    duration: Duration::milliseconds(0),
+                    phase: BoundaryPhase::Failed {
+                        reason: "blocked by upstream failure".into(),
+                    },
+                };
+                failed += 1;
+                outcomes.insert(*point_id, result);
+                continue;
+            }
 
             // Collect input attestations from upstream points
             let input_attestations: Vec<String> = graph
@@ -89,7 +122,6 @@ impl DagExecutor {
             let input_attestation = if input_attestations.is_empty() {
                 None
             } else {
-                // Combine multiple input attestations into one
                 let combined = input_attestations.join(":");
                 Some(combined)
             };
@@ -109,6 +141,7 @@ impl DagExecutor {
                         reason = %reason,
                         "convergence point failed — downstream points blocked"
                     );
+                    failed_points.insert(*point_id);
                     failed += 1;
                 }
                 ConvergenceOutcome::Degraded { .. } => degraded += 1,

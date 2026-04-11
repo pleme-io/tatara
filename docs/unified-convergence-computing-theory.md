@@ -932,7 +932,7 @@ convergence store. Sui (our pure-Rust Nix replacement) already provides:
 - Content-addressed store paths (`blake3(inputs + builder) → /nix/store/...`)
 - Dependency tracking (`input_derivations` in every derivation)
 - Closure queries (`--requisites`, `--referrers`)
-- Distributed caching (binary cache / Attic)
+- Distributed caching (binary cache / sui-cache)
 - Async `Store` trait with pluggable backends
 - Async `Builder` trait with pluggable execution strategies
 - Triple API server (REST, GraphQL, gRPC) for queries
@@ -1132,7 +1132,7 @@ These are exposed through sui's existing triple API:
 5. STORE    (sui store)
    Attestations are content-addressed store paths.
    sui tracks generations, computes closures, manages GC.
-   Attic distributes attestations across the cluster.
+   sui-cache distributes attestations across the cluster.
 
 6. QUERY    (sui API)
    Any node can query convergence state through sui's triple API.
@@ -1155,7 +1155,7 @@ The Nix store is the correct convergence store because the invariants align:
 | Content-addressed (no forgery) | Attestation integrity |
 | Dependency tracking | Convergence closures |
 | Garbage collection | Stale state cleanup |
-| Remote substitution (Attic) | Distributed convergence state |
+| Remote substitution (sui-cache) | Distributed convergence state |
 | Closure computation | Impact analysis |
 | Incremental builds | Incremental re-convergence |
 | Build reproducibility | Convergence determinism |
@@ -1507,7 +1507,7 @@ Compliance packages are:
 - **Composable** — apply multiple packages to the same workload
 - **Cacheable** — a compliance package applied to the same convergence graph
   produces the same attestation (content-addressed)
-- **Distributable** — push compliance packages to Attic, pull on any node
+- **Distributable** — push compliance packages to sui-cache, pull on any node
 - **Auditable** — the compliance package itself is a store path with a known hash
 
 An organization can package its entire compliance posture as a Nix expression,

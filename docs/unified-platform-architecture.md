@@ -50,7 +50,7 @@ Every operation flows through five layers. Each layer is convergence.
 │                    └───────┬───────┘                             │
 │                            ↓                                    │
 │                    ┌───────────────┐                             │
-│                    │    STORE      │  Sui store + Attic          │
+│                    │    STORE      │  Sui store + sui-cache          │
 │                    │ (Persistence) │  Content-addressed state    │
 │                    └───────────────┘                             │
 │                                                                 │
@@ -141,12 +141,12 @@ substrate, continuously.
 ### 1.5 STORE — The Persistence Layer
 
 **Theory**: Convergence Computing Theory (section 8)
-**Runtime**: Sui store + Attic binary cache
+**Runtime**: Sui store + sui-cache binary cache
 
 Every attestation is a content-addressed store path in the Nix store (via sui).
 Generational store paths form append-only Merkle chains. The store supports
 closure queries (forward, reverse, impact), garbage collection, and
-distributed replication via Attic.
+distributed replication via sui-cache.
 
 **What converges here**: local state → distributed state. The store itself
 converges across the cluster through binary cache synchronization.
@@ -373,7 +373,7 @@ Every boundary attestation is a store path in sui:
 ```
 
 This means: attestations are verifiable (recompute the hash), cacheable (same
-inputs → same hash → skip), distributable (Attic binary cache), and
+inputs → same hash → skip), distributable (sui-cache binary cache), and
 garbage-collectable (unreferenced generations are pruned).
 
 ### Invariant 4: Compliance Binds to Types and Is Verified Before or During Execution
@@ -613,7 +613,7 @@ For each convergence point in topological order:
   ↓
 Post-convergence: InSpec verifies live state
   ↓
-Attic distributes attestations across cluster
+sui-cache distributes attestations across cluster
   ↓
 Convergence store queryable via sui triple API
 ```
@@ -629,7 +629,7 @@ Sui and tatara are two halves of one machine:
 | **Input** | Nix expressions | Convergence derivations |
 | **Output** | Derivation graph + store paths | Attested convergence state |
 | **State** | Content-addressed store (immutable) | Live convergence state (mutable) |
-| **Distribution** | Attic binary cache | Raft + gossip |
+| **Distribution** | sui-cache binary cache | Raft + gossip |
 | **API** | REST + GraphQL + gRPC | REST + GraphQL + SSE |
 
 Together: sui computes the plan, tatara executes it, sui stores the results.

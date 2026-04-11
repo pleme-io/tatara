@@ -1,110 +1,108 @@
 # Tatara (粋) — Programmable Convergence Computer
 
-Two unified theories compose to form the platform:
+Three theories compose into one platform:
 
-**Unified Infrastructure Theory** (substrate): Nix declares abstract intent.
-Renderers translate to any backend. One declaration, infinite targets.
+- **Unified Infrastructure Theory** (substrate): WHAT — Nix declares intent
+- **Unified Convergence Computing Theory** (tatara): HOW — typed DAGs converge
+- **Compliant Computing Theory** (tameshi + kensa): WHETHER — compliance gates
 
-**Unified Convergence Computing Theory** (tatara): Every rendered target
-becomes a convergence DAG. Each point has atomic verified boundaries.
-The computation IS the convergence. DAGs compose into DAGs-of-DAGs.
+## Core Concepts
+
+**Convergence IS computation.** Every operation is a convergence point.
+Points compose into typed DAGs. DAGs compose into DAGs-of-DAGs.
+
+**Five-layer pipeline**: DECLARE (Nix + substrate) → PLAN (sui) → GATE
+(tameshi + kensa) → EXECUTE (tatara) → STORE (sui store + sui-cache)
+
+**Five invariants** (always true):
+1. Every operation is a convergence point
+2. Every point has typed atomic boundary (prepare → execute → verify → attest)
+3. Every attestation is a content-addressed store path (sui)
+4. Compliance binds to point types, verified before/during execution
+5. Dependency closure is statically computable at plan time
+
+**Six classification dimensions** (every point classified along all six):
+- **Horizon**: Bounded (terminates) | Asymptotic (runs forever)
+- **Structure**: Transform | Fork | Join | Gate | Select | Broadcast | Reduce | Observe
+- **Substrate**: Financial | Compute | Network | Storage | Security | Identity | Observability | Regulatory
+- **Coordination**: Monotone (gossip) | NonMonotone (Raft)
+- **Trust**: PlanTime | AtBoundary | PostConvergence
+- **Intelligence**: Mechanical | AiAssisted | Hybrid
+
+**Intent/Outcome duality**:
+- Intent leaves = asymptotic roots (the WHY, runs forever, produces outcomes)
+- Outcome leaves = bounded terminals (the WHAT, verified, converged = true)
+
+**Absorption principle**: every external system becomes convergence points
+(observe → type → converge → attest → comply → package)
+
+## Architecture
 
 ```
 Nix Declaration (intent)           ← Unified Infrastructure Theory
   ↓ archetype rendering
 Any Backend (K8s, tatara, WASI)    ← Rendered by substrate
+  ↓ sui evaluates
+Convergence Derivation Graph       ← Content-addressed, closures computable
+  ↓ compliance binding
+Type-Level Compliance Controls     ← Compliant Computing Theory
   ↓ convergence DAG
 Verified Atomic Checkpoints        ← Unified Convergence Computing Theory
   ↓ distributed execution
-Identical Tatara Nodes             ← CALM-classified, Raft + gossip
+Tatara Nodes (CALM-classified)     ← Raft (non-monotone) + gossip (monotone)
   ↓ cryptographic attestation
-Tameshi (BLAKE3 Merkle chain)      ← Immutable audit trail
-```
-
-The infrastructure theory says WHAT. The convergence theory says HOW.
-Together: declare any system in Nix, compute it into existence through
-verified convergence on any substrate, prove every step cryptographically.
-
-Compiled in Rust. Sandboxed via WASI. Enforced via eBPF.
-Every node is identical. Every operation is a convergence point.
-
-## The Convergence Computing Model
-
-**Convergence IS computation.** Every operation in tatara is a convergence
-point in a DAG. The system computes by driving each point from diverged
-(distance > 0) to converged (distance = 0). The computation terminates
-when all points report distance = 0.
-
-```
-Convergence DAG (the program):
-  NixEval ──→ RaftReplicate ──→ Schedule ──→ PortAlloc ──→ SecretResolve
-                                                              ↓
-  CatalogRegister ←── HealthCheck ←── Execute ←── VolumeMount
-```
-
-Each point converges independently. Raft coordinates non-monotone points
-(placement, deletion). Gossip handles monotone points (health, metrics).
-Every tatara node runs the same code — the DAG determines what each node
-works on. DAGs compose into DAGs-of-DAGs for multi-system orchestration.
-
-**CALM theorem applied**: monotone operations (health, metrics, logs) need
-NO coordination. Non-monotone operations (scheduling, deletion) go through
-Raft. This maximizes what can be distributed.
-
-### Atomic Convergence Boundaries
-
-Each convergence point has four verified phases:
-```
-Prepare → Execute → Verify → Attest ──hash──→ Next Point
-```
-- **Prepare**: verify input environment + previous point's attestation hash
-- **Execute**: drive toward target state (the convergence itself)
-- **Verify**: prove output is correct (postcondition checks)
-- **Gate**: produce attestation hash (tameshi BLAKE3), open gate for next point
-
-This creates provably secure computation — each step cryptographically
-bound to the previous. Audit the entire chain after the fact. Lays down
-on any substrate: cloud, K8s, bare-metal, WASI, pure tatara.
-
-### Key Types
-
-- `ConvergenceDistance`: Converged | Partial | Diverged | Unknown (0.0 to 1.0)
-- `ConvergenceState`: distance + rate + oscillation + damping per entity
-- `ConvergencePoint`: named step in the DAG with CALM classification + boundary
-- `ConvergenceBoundary`: preconditions + postconditions + attestation chain
-- `BoundaryPhase`: Pending → Preparing → Executing → Verifying → Attested | Failed
-- `ClusterConvergence`: cluster-wide summary (is_fully_converged())
-
-## Architecture
-
-```
-User declares workload in Nix (tataraJobs / workload archetypes)
-  → Raft replicates desired state to all nodes
-  → Scheduler (leader-only) creates allocations
-  → Convergence engine drives desired → observed (the convergence DAG)
-  → Driver executes workload (exec/oci/nix/kasou/wasi/kube)
-  → Health probes verify liveness
-  → Service catalog registers healthy instances
-  → Metrics + traced events for observability
+Tameshi CertificationArtifact      ← BLAKE3 Merkle: artifact + controls + intent
+  ↓ store
+Sui Store (content-addressed)      ← Generational store paths, sui-cache distribution
+  ↓ AI interface
+MCP + REST + GraphQL + gRPC        ← Mechanical + AI mix at any point
 ```
 
 ## Workspace Crates (10)
 
 | Crate | Purpose |
 |-------|---------|
-| `tatara-core` | Domain types: Job, Allocation, WorkloadPhase, ServiceEntry, secrets, volumes, DAG, saga, idempotency, traced events |
-| `tatara-engine` | Runtime: drivers, Raft cluster, gossip, reconciler, convergence engine, scheduler, executor, health probes, port allocator, catalog registry, volume manager, secret resolver, NATS event bus, metrics, Nix evaluator, sui client |
-| `tatara-api` | REST (Axum) + GraphQL (async-graphql): jobs, allocations, nodes, sources, releases, catalog, health, metrics |
-| `tatara-cli` | CLI: job/node/alloc/source/context/forge/event/release commands + `tatara server` |
-| `tatara-kube` | Nix-native K8s reconciler: Server-Side Apply, dependency ordering, pruning, health checks. Replaces FluxCD. |
-| `tatara-net` | Networking plane: NetworkPlane trait, eBPF types, WASI types, mesh peer info, flow observability, service routing |
+| `tatara-core` | Domain types: convergence state, WorkloadPhase, DAG, saga, idempotency, traced events |
+| `tatara-engine` | Runtime: 7 drivers, Raft, gossip, convergence engine, scheduler, health probes, catalog, metrics, sui client |
+| `tatara-api` | REST (Axum) + GraphQL (async-graphql): jobs, allocations, nodes, catalog, health, metrics |
+| `tatara-cli` | CLI + `tatara server` |
+| `tatara-kube` | Nix-native K8s reconciler: Server-Side Apply, dependency ordering, pruning |
+| `tatara-net` | Networking plane: NetworkPlane trait, eBPF types, WASI types, mesh, flow observability |
 | `tatara-operator` | K8s operator: NixBuild/FlakeSource/FlakeOrg CRDs, NATS JetStream bridge |
 | `tatara-testing` | Test fixtures and helpers |
 | `ro-cli` | Read-only CLI |
 
-## WorkloadPhase Lifecycle
+## Key Types (tatara-core/src/domain/convergence_state.rs)
 
-Every workload follows: **Initial → Warming → Executing → Contracting → Terminal**
+- `ConvergenceDistance`: Converged | Partial | Diverged | Unknown (0.0 to 1.0)
+- `ConvergenceState`: distance + rate + oscillation + damping per entity
+- `ConvergencePoint`: named step with CALM classification + typed boundary
+- `ConvergenceBoundary`: preconditions + postconditions + attestation chain
+- `BoundaryPhase`: Pending → Preparing → Executing → Verifying → Attested | Failed
+- `ClusterConvergence`: cluster-wide summary (is_fully_healthy + is_fully_converged)
+- `CalmClassification`: Monotone | NonMonotone
+- `ConvergenceMechanism`: Raft | Gossip | Local | Nats | FixedPoint | Feedback
+
+## Convergence Horizons
+
+- **Bounded**: has a fixed point, terminates at distance = 0
+- **Asymptotic**: runs forever, rate is the health signal (never converged, always improving)
+- **Bounded preferred**: maximize bounded points, asymptotic points emit bounded DAGs from emission schemas
+- **Emission schema**: catalog of bounded DAG templates an asymptotic point can instantiate
+
+## 7 Execution Drivers
+
+| Driver | Backend | Platform |
+|--------|---------|----------|
+| `exec` | Direct process (fork+exec) | Unix |
+| `oci` | Docker/Podman/Apple Containers | All |
+| `nix` | `nix run <flake_ref>` | All with Nix |
+| `nix_build` | `nix build` + sui-cache push | All with Nix |
+| `kasou` | Apple Virtualization.framework VMs | macOS |
+| `kube` | Kubernetes Server-Side Apply | All with kubeconfig |
+| `wasi` | wasmtime WASI Preview 2 | All with wasmtime |
+
+## WorkloadPhase Lifecycle
 
 ```rust
 enum WorkloadPhase<W, E, C, T> {
@@ -116,47 +114,23 @@ enum WorkloadPhase<W, E, C, T> {
 }
 ```
 
-Concrete types: `TaskPhase`, `AllocationPhase`, `NodePhase`.
-Valid transitions enforced by `is_valid_transition()`.
-
-## 7 Execution Drivers
-
-| Driver | Backend | Platform |
-|--------|---------|----------|
-| `exec` | Direct process (fork+exec) | Unix |
-| `oci` | Docker/Podman/Apple Containers | All |
-| `nix` | `nix run <flake_ref>` | All with Nix |
-| `nix_build` | `nix build` + Attic cache push | All with Nix |
-| `kasou` | Apple Virtualization.framework VMs | macOS |
-| `kube` | Kubernetes Server-Side Apply | All with kubeconfig |
-| `wasi` | wasmtime WASI Preview 2 | All with wasmtime |
-
 ## Distributed State Machine
 
-- **Raft** (openraft): linearizable writes for job placement, allocation lifecycle
+- **Raft** (openraft): linearizable writes for placement, allocation lifecycle
 - **Gossip** (chitchat): eventually-consistent metadata, failure detection
-- **Desired vs Observed**: CQRS split in ClusterState
-- **Generation counter**: optimistic concurrency for scheduling
-- **Leader-affinity**: only the leader schedules (prevents duplicates)
-- **Executor feedback**: reports observations through Raft
+- **CQRS**: desired vs observed split in ClusterState
+- **Leader-affinity**: only the leader schedules
 
-## Subsystems
+## The Tatara/Sui Split
 
-| Subsystem | Purpose |
-|-----------|---------|
-| **Convergence engine** | Compares desired vs observed, drives transitions |
-| **Service catalog** | Consul-like registry with health-aware queries |
-| **Health probes** | HTTP/TCP/Exec checks via ProbeExecutor |
-| **Port allocator** | Dynamic 20000-32000 range, conflict detection |
-| **Volume manager** | Local/HostPath/NFS lifecycle |
-| **Secret resolver** | Env + SOPS providers (Akeyless planned) |
-| **NATS event bus** | Events, logs, health, catalog changes (graceful no-op) |
-| **Prometheus metrics** | 22+ gauges/counters at `/metrics` |
-| **Sui client** | Build/eval/cache via sui-daemon REST |
-| **Idempotency store** | Dedup with TTL for Raft commands |
-| **Saga types** | Compensation logic for multi-step provisioning |
-| **Traced events** | Correlation IDs for workload lifecycle tracing |
-| **Store adapter** | ClusterStore→Evaluator bridge |
+| Concern | Sui | Tatara |
+|---------|-----|--------|
+| Role | Store + evaluator + planner | Engine + executor |
+| Input | Nix expressions | Convergence derivations |
+| Output | Derivation graph + store paths | Attested convergence state |
+| State | Content-addressed (immutable) | Live convergence (mutable) |
+| Distribution | sui-cache binary cache | Raft + gossip |
+| API | REST + GraphQL + gRPC | REST + GraphQL + SSE |
 
 ## REST API
 
@@ -168,23 +142,18 @@ Valid transitions enforced by `is_valid_transition()`.
 | `GET /api/v1/nodes` | List cluster nodes |
 | `GET /api/v1/events/stream` | SSE event stream |
 | `GET /v1/catalog/services` | List service names |
-| `GET /v1/catalog/service/{name}` | Service instances |
 | `GET /v1/health/service/{name}?passing=true` | Healthy instances |
 | `GET /metrics` | Prometheus text format |
 
 ## Nix Integration
 
 ```nix
-# Job definitions via flake outputs
-tataraJobs.<system>.<name> = { id, job_type, groups, constraints, meta };
-
 # HM module for macOS/Linux service
 services.tatara.server = {
   enable = true;
   httpAddr = "127.0.0.1:4646";
   nats.enable = true;
   sui.daemonAddr = "127.0.0.1:8080";
-  ports = { rangeStart = 20000; rangeEnd = 32000; };
 };
 
 # Declarative workloads
@@ -197,22 +166,19 @@ services.tatara.workloads.my-service = {
 };
 ```
 
-## Key Commands
+## Documentation
 
-```bash
-tatara server                    # Start single-node cluster
-tatara job list                  # List jobs
-tatara job run spec.json         # Submit job
-tatara node list                 # List cluster nodes
-tatara source add infra github:pleme-io/infra  # Add GitOps source
-tatara top                       # TUI dashboard
-```
+| Document | Sections | Lines |
+|----------|----------|-------|
+| [Unified Platform Architecture](docs/unified-platform-architecture.md) | 14 sections: pipeline, dimensions, invariants, envelope, territory, architecture, types, duality, absorption, optimizer, AI | ~1400 |
+| [Unified Convergence Computing Theory](docs/unified-convergence-computing-theory.md) | 13 sections: foundations, metrics, composition, cost, algebra, substrates, analysis, store, compliance, implementation, meta, frontiers, summary | ~2000 |
+| [Theory Realization Map](docs/theory-realization-map.md) | Technology → theory mapping for every pleme-io component | ~180 |
 
 ## Build
 
 ```bash
 cargo check          # Workspace check
-cargo test           # All tests (98 passing)
+cargo test           # All tests
 cargo build          # Debug build
 nix build            # Release via substrate
 ```

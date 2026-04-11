@@ -2,11 +2,18 @@
 
 A distributed computing platform where **convergence IS computation**.
 
-Tatara implements two composing theories:
-- **Unified Infrastructure Theory**: Nix declares abstract intent, renderers translate to any backend
-- **Unified Convergence Computing Theory**: every operation is a convergence point in a verified DAG
+Three theories compose into one platform:
 
-Declare any system in Nix. Compute it into existence through verified convergence on any substrate. Prove every step cryptographically via tameshi attestation.
+| Theory | Question | Implemented By |
+|--------|----------|---------------|
+| **Unified Infrastructure Theory** | WHAT to compute | Nix + substrate (archetypes, renderers) |
+| **Unified Convergence Computing Theory** | HOW to compute | Tatara (typed DAGs, boundaries, substrates) |
+| **Compliant Computing Theory** | WHETHER to compute | Tameshi + kensa (attestation, compliance) |
+
+Declare any system in Nix. Plan it as a typed convergence DAG. Gate it through
+compliance verification. Compute it into existence through verified convergence
+on any substrate. Prove every step cryptographically. Store attestations in the
+Nix store. Mix mechanical and AI-assisted convergence at any point.
 
 ## Quick Start
 
@@ -14,9 +21,20 @@ Declare any system in Nix. Compute it into existence through verified convergenc
 tatara server                              # Start single-node cluster
 tatara job run spec.json                   # Submit a workload
 tatara job list                            # Monitor convergence
+tatara top                                 # TUI dashboard
 curl http://localhost:4646/metrics         # Prometheus metrics
 curl http://localhost:4646/v1/catalog/services  # Service discovery
 ```
+
+## The Five-Layer Pipeline
+
+```
+DECLARE  →  PLAN  →  GATE  →  EXECUTE  →  STORE
+  Nix       sui     tameshi   tatara      sui store
+substrate  eval+vm  + kensa   engine      + sui-cache
+```
+
+Each layer is itself convergence. Each layer's output feeds the next.
 
 ## The Convergence Computing Model
 
@@ -26,60 +44,66 @@ Every operation is a convergence point with four verified phases:
 PREPARE → EXECUTE → VERIFY → ATTEST ──hash──→ next point
 ```
 
-Points compose into DAGs. DAGs compose into DAGs-of-DAGs. The system terminates when all points report distance = 0.
+Points are typed (Transform, Fork, Join, Gate, Select, Broadcast, Reduce, Observe)
+and classified along six dimensions:
 
-```
-Convergence DAG:
-  NixEval → RaftReplicate → Schedule → PortAlloc → SecretResolve →
-    VolumeMount → DriverStart → HealthCheck → CatalogRegister
-```
+| Dimension | Values |
+|-----------|--------|
+| **Horizon** | Bounded (terminates) or Asymptotic (runs forever) |
+| **Structure** | Transform, Fork, Join, Gate, Select, Broadcast, Reduce, Observe |
+| **Substrate** | Financial, Compute, Network, Storage, Security, Identity, Observability, Regulatory |
+| **Coordination** | Monotone (gossip, no coordination) or NonMonotone (Raft consensus) |
+| **Trust** | PlanTime, AtBoundary, PostConvergence |
+| **Intelligence** | Mechanical, AiAssisted (MCP/REST/GraphQL/gRPC), Hybrid |
 
-CALM theorem applied: monotone operations (health, metrics) need NO coordination. Non-monotone operations (scheduling, deletion) go through Raft.
+## Five Invariants
+
+1. Every operation is a convergence point
+2. Every point has a typed atomic boundary (prepare → execute → verify → attest)
+3. Every attestation is a content-addressed store path
+4. Compliance binds to types, verified before or during execution
+5. The dependency closure is statically computable at plan time
 
 ## 10 Workspace Crates
 
 | Crate | Purpose |
 |-------|---------|
-| `tatara-core` | Domain types, convergence state, lifecycle, DAG, saga, idempotency, traced events |
+| `tatara-core` | Domain types: convergence state, lifecycle, DAG, saga, idempotency, traced events |
 | `tatara-engine` | Drivers, Raft, gossip, convergence engine, scheduler, health probes, catalog, metrics |
-| `tatara-api` | REST + GraphQL: jobs, allocations, nodes, catalog, health, metrics |
+| `tatara-api` | REST (Axum) + GraphQL (async-graphql): jobs, allocations, nodes, catalog, health |
 | `tatara-cli` | CLI + `tatara server` |
-| `tatara-kube` | Nix-native K8s reconciler (Server-Side Apply, replaces FluxCD) |
+| `tatara-kube` | Nix-native K8s reconciler (Server-Side Apply) |
 | `tatara-net` | Networking plane: NetworkPlane trait, eBPF types, WASI types, mesh |
 | `tatara-operator` | K8s operator: NixBuild/FlakeSource/FlakeOrg CRDs |
-| `tatara-testing` | Test fixtures |
+| `tatara-testing` | Test fixtures and helpers |
 | `ro-cli` | Read-only CLI |
 
 ## 7 Execution Drivers
 
 | Driver | Substrate | Platform |
 |--------|-----------|----------|
-| `exec` | Direct process | Unix |
+| `exec` | Direct process (fork+exec) | Unix |
 | `oci` | Docker/Podman/Apple Containers | All |
 | `nix` | Nix flake packages | All with Nix |
-| `nix_build` | Nix build + cache | All with Nix |
+| `nix_build` | Nix build + Attic cache | All with Nix |
 | `kasou` | Apple Virtualization VMs | macOS |
 | `kube` | Kubernetes (Server-Side Apply) | All with kubeconfig |
 | `wasi` | wasmtime (WASI Preview 2) | All with wasmtime |
 
-## Convergence State Types
-
-- `ConvergenceDistance`: Converged | Partial | Diverged | Unknown (0.0 to 1.0)
-- `ConvergenceState`: distance + rate + oscillation + damping per entity
-- `ConvergencePoint`: step in DAG with CALM classification + atomic boundary
-- `ConvergenceBoundary`: preconditions + postconditions + attestation hash chain
-- `ClusterConvergence`: cluster-wide summary (is_fully_converged())
-
 ## Documentation
 
-- [Unified Convergence Computing Theory](docs/unified-convergence-computing-theory.md)
-- [CLAUDE.md](CLAUDE.md) — architecture reference for AI assistants
+| Document | What It Covers |
+|----------|---------------|
+| [Unified Platform Architecture](docs/unified-platform-architecture.md) | Master composition: pipeline, invariants, duality, absorption, AI, territory |
+| [Unified Convergence Computing Theory](docs/unified-convergence-computing-theory.md) | Formal treatment: 13 sections, 22 principles, 35+ academic references |
+| [Theory Realization Map](docs/theory-realization-map.md) | Every pleme-io technology mapped to its role in the theory |
+| [CLAUDE.md](CLAUDE.md) | Architecture reference for AI assistants and developers |
 
 ## Build & Test
 
 ```bash
 cargo check          # Workspace check
-cargo test           # 117 tests
+cargo test           # All tests
 cargo clippy         # Lint
 nix build            # Release build via substrate
 ```

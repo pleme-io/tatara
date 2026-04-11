@@ -142,7 +142,95 @@ Because the convergence DAG is substrate-independent:
 
 This means K8s → tatara, AWS → GCP, Docker → WASI, cloud → bare-metal are all the same operation: re-render + re-converge.
 
-## 4. Implementation in Tatara
+## 4. Continuous Cost-Optimal Convergence
+
+### 4.1 The Default Operating Mode
+
+The **default state** of a tatara cluster is to continuously optimize for cost while satisfying workload constraints. This is not an optional feature — it is the natural consequence of the convergence model.
+
+If migration is just re-convergence on a new substrate, then cost optimization is just **continuously re-converging on the cheapest substrate that satisfies constraints**. The system's resting state is always converging toward the lowest-cost configuration that meets all requirements.
+
+### 4.2 Workload Fluidity
+
+Because every tatara node is identical and the convergence DAG is substrate-independent:
+
+- **Workloads shift freely** between nodes based on cost signals
+- **No application disturbance** — convergence boundaries ensure atomic handoff (new instance attested before old deregistered)
+- **Continuous migration** — the system is always moving toward optimal placement, not just at deploy time
+- **Constraint satisfaction** — workloads specify requirements (CPU, memory, GPU, latency, compliance), the system finds the cheapest substrate that satisfies all of them
+
+### 4.3 Spot/Auction Integration
+
+Cloud providers offer heavily discounted compute through auctions and spot markets:
+- AWS Spot Instances (up to 90% discount)
+- GCP Preemptible VMs
+- Azure Spot VMs
+- Bare-metal auction markets
+
+Tatara natively integrates with these markets:
+
+1. **Receive notifications** — subscribe to spot price feeds and auction events
+2. **Evaluate constraints** — does this discounted node satisfy any running workload's requirements?
+3. **Bid/claim** — acquire the node if cost is lower than current placement
+4. **Converge** — re-converge the workload onto the new node (new convergence DAG, verified boundaries)
+5. **Drain old** — contract the old allocation after new is attested
+6. **Release** — return the old node to the pool
+
+The convergence boundary model makes this safe:
+- The new node's allocation must pass PREPARE (preconditions met)
+- Must pass EXECUTE (workload running)
+- Must pass VERIFY (health checks passing)
+- Must be ATTESTED (tameshi hash chained)
+- Only THEN does the old allocation begin CONTRACTING
+
+If any step fails, the old allocation remains active. Zero disruption.
+
+### 4.4 Hardware Auction for Workload Requirements
+
+Beyond receiving spot notifications, tatara can **actively auction for hardware**:
+
+1. Workload declares requirements: `{ cpu: "4", memory: "16Gi", gpu: "1", latency: "<10ms", compliance: ["soc2"] }`
+2. Tatara publishes a **resource request** to connected substrate providers
+3. Providers bid: "I can satisfy this for $X/hour on substrate Y"
+4. Tatara evaluates bids against current cost and selects the cheapest that satisfies all constraints
+5. If a cheaper bid arrives for a running workload, tatara initiates migration (re-convergence)
+6. The workload is always running on the cheapest available substrate
+
+This creates a **market-driven placement engine** where:
+- The workload never knows what hardware it's running on
+- The platform continuously shops for the best price
+- Migration is invisible to the application (atomic convergence boundaries)
+- The system's natural equilibrium is minimum cost
+
+### 4.5 Cost as a Convergence Metric
+
+Cost becomes a dimension of the convergence state:
+
+```
+ConvergenceDistance = f(
+  phase_distance,       # are all phases converged?
+  health_distance,      # are health checks passing?
+  cost_distance,        # is this the cheapest available substrate?
+)
+```
+
+The system is "fully converged" not just when the workload is running and healthy, but when it's running on the **optimal substrate for its constraints**. If a cheaper option becomes available, the system is "partially converged" on the cost dimension and begins migrating.
+
+### 4.6 Preemption Safety
+
+When a spot instance is reclaimed:
+1. The cloud provider sends a termination notice (typically 2 minutes)
+2. Tatara's convergence engine receives the signal
+3. A new convergence DAG is immediately started on alternative substrate
+4. The PREPARE phase of the new DAG runs in parallel with the CONTRACT phase of the old
+5. Traffic shifts when the new allocation is ATTESTED
+6. The old allocation completes TERMINAL before the spot instance dies
+
+The convergence boundary model guarantees this is safe — the attestation chain ensures no gap in service.
+
+## 5. Implementation in Tatara
+
+(Note: section numbers continue from section 4 above)
 
 ### Core Types (tatara-core/src/domain/convergence_state.rs)
 

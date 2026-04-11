@@ -4,6 +4,7 @@ pub mod kasou;
 pub mod nix;
 pub mod nix_build;
 pub mod oci;
+pub mod wasi;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -76,6 +77,12 @@ impl DriverRegistry {
             if kasou_driver.available().await {
                 drivers.push(Box::new(kasou_driver));
             }
+        }
+
+        // WASI driver (wasmtime)
+        let wasi_driver = wasi::WasiDriver;
+        if wasi_driver.available().await {
+            drivers.push(Box::new(wasi_driver));
         }
 
         Self { drivers }

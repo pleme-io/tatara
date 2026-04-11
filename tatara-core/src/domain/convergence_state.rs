@@ -197,15 +197,30 @@ impl ConvergenceState {
 
 // ── Convergence Point ──────────────────────────────────────────
 
-/// A convergence point represents a single step in the architectural
-/// computation pipeline. Each point has a name, input state, output state,
-/// and convergence requirements.
+/// A convergence point represents a single verified checkpoint in the
+/// architectural computation pipeline.
+///
+/// Each point has four phases:
+///   1. **Prepare**: Verify the input environment is correct before starting.
+///      Checks preconditions, validates attestation hashes from previous points.
+///   2. **Execute**: Drive toward the target state (the convergence itself).
+///   3. **Verify**: Prove the state is correct — not just "looks right" but
+///      cryptographically attested via tameshi BLAKE3 Merkle trees.
+///   4. **Gate**: Only allow the next point to begin when this one is verified.
+///      The attestation hash from this point feeds into the next point's
+///      preparation layer.
+///
+/// This creates **atomic convergence boundaries**:
+/// ```text
+/// Point A: [Prepare → Execute → Verify → Attest] ──hash──→
+/// Point B: [Prepare(verify hash) → Execute → Verify → Attest] ──hash──→ ...
+/// ```
+///
+/// You can't skip steps. You can't forge intermediate states.
+/// The entire chain is auditable after the fact.
 ///
 /// The sequence of convergence points IS the computation:
 ///   NixEval → RaftReplicate → Schedule → Warm → Execute → HealthCheck → CatalogRegister
-///
-/// Each point converges independently, but the overall system converges
-/// when ALL points are converged.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConvergencePoint {
     /// Name of this convergence point.
@@ -222,6 +237,114 @@ pub struct ConvergencePoint {
 
     /// Current state of convergence at this point.
     pub state: ConvergenceState,
+
+    /// The boundary — preparation, verification, and gating for this point.
+    pub boundary: ConvergenceBoundary,
+}
+
+/// The atomic convergence boundary around a convergence point.
+///
+/// Ensures each point is a verified checkpoint:
+/// - Preparation validates the input environment
+/// - Verification proves the output is correct
+/// - Attestation produces a hash for the next point
+/// - Gate prevents the next point from starting until verified
+///
+/// This is the foundation for **provably secure computation** —
+/// each step is cryptographically bound to the previous via tameshi.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConvergenceBoundary {
+    /// Preconditions that must be true before this point can begin.
+    /// Each precondition is a named check with a pass/fail status.
+    pub preconditions: Vec<BoundaryCheck>,
+
+    /// Postconditions that must be true after this point converges.
+    /// These are the verification checks.
+    pub postconditions: Vec<BoundaryCheck>,
+
+    /// Attestation hash from the previous convergence point.
+    /// This point's preparation phase verifies this hash.
+    pub input_attestation: Option<String>,
+
+    /// Attestation hash produced by this point after verification.
+    /// Feeds into the next point's input_attestation.
+    pub output_attestation: Option<String>,
+
+    /// Current phase of this boundary.
+    pub phase: BoundaryPhase,
+}
+
+/// A single check in a convergence boundary (pre or post condition).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoundaryCheck {
+    /// Name of the check.
+    pub name: String,
+    /// Human-readable description.
+    pub description: String,
+    /// Has this check passed?
+    pub passed: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+    /// When this check was last evaluated.
+    pub checked_at: Option<DateTime<Utc>>,
+}
+
+impl BoundaryCheck {
+    pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            passed: false,
+            error: None,
+            checked_at: None,
+        }
+    }
+
+    pub fn pass(&mut self) {
+        self.passed = true;
+        self.error = None;
+        self.checked_at = Some(Utc::now());
+    }
+
+    pub fn fail(&mut self, error: impl Into<String>) {
+        self.passed = false;
+        self.error = Some(error.into());
+        self.checked_at = Some(Utc::now());
+    }
+}
+
+/// The phase of a convergence boundary.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BoundaryPhase {
+    /// Not started — waiting for dependencies.
+    #[default]
+    Pending,
+    /// Running precondition checks.
+    Preparing,
+    /// Preconditions passed, convergence in progress.
+    Executing,
+    /// Convergence complete, running postcondition checks.
+    Verifying,
+    /// Postconditions passed, attestation hash produced.
+    /// The gate is open for the next point.
+    Attested,
+    /// A check failed — this point is blocked.
+    Failed { reason: String },
+}
+
+impl BoundaryPhase {
+    pub fn is_attested(&self) -> bool {
+        matches!(self, Self::Attested)
+    }
+
+    pub fn is_failed(&self) -> bool {
+        matches!(self, Self::Failed { .. })
+    }
+
+    pub fn is_gate_open(&self) -> bool {
+        self.is_attested()
+    }
 }
 
 /// The mechanism that drives convergence at a given point.
@@ -476,10 +599,12 @@ mod tests {
             monotone: false,
             mechanism: ConvergenceMechanism::Raft,
             state: ConvergenceState::new("scheduling"),
+            boundary: ConvergenceBoundary::default(),
         };
 
         assert!(!point.monotone); // scheduling requires coordination
         assert_eq!(point.mechanism, ConvergenceMechanism::Raft);
+        assert!(!point.boundary.phase.is_gate_open()); // gate closed by default
     }
 
     #[test]
@@ -491,5 +616,87 @@ mod tests {
             CalmClassification::NonMonotone,
             CalmClassification::NonMonotone
         );
+    }
+
+    // ── Boundary tests ────────────────────────────────────────
+
+    #[test]
+    fn test_boundary_check_pass_fail() {
+        let mut check = BoundaryCheck::new("secrets_resolved", "All secrets fetched");
+        assert!(!check.passed);
+
+        check.pass();
+        assert!(check.passed);
+        assert!(check.error.is_none());
+        assert!(check.checked_at.is_some());
+
+        check.fail("akeyless timeout");
+        assert!(!check.passed);
+        assert_eq!(check.error.as_deref(), Some("akeyless timeout"));
+    }
+
+    #[test]
+    fn test_boundary_phase_transitions() {
+        assert!(!BoundaryPhase::Pending.is_gate_open());
+        assert!(!BoundaryPhase::Preparing.is_gate_open());
+        assert!(!BoundaryPhase::Executing.is_gate_open());
+        assert!(!BoundaryPhase::Verifying.is_gate_open());
+        assert!(BoundaryPhase::Attested.is_gate_open());
+        assert!(BoundaryPhase::Attested.is_attested());
+        assert!(!BoundaryPhase::Failed {
+            reason: "test".into()
+        }
+        .is_gate_open());
+        assert!(BoundaryPhase::Failed {
+            reason: "test".into()
+        }
+        .is_failed());
+    }
+
+    #[test]
+    fn test_boundary_attestation_chain() {
+        // Simulate: Point A attests → hash feeds into Point B's preparation
+        let mut boundary_a = ConvergenceBoundary::default();
+        boundary_a.phase = BoundaryPhase::Attested;
+        boundary_a.output_attestation = Some("blake3:abc123".to_string());
+
+        let mut boundary_b = ConvergenceBoundary::default();
+        boundary_b.input_attestation = boundary_a.output_attestation.clone();
+
+        // Point B's preparation can verify A's hash
+        assert_eq!(
+            boundary_b.input_attestation.as_deref(),
+            Some("blake3:abc123")
+        );
+
+        // Gate: B can only start when A is attested
+        assert!(boundary_a.phase.is_gate_open());
+    }
+
+    #[test]
+    fn test_convergence_point_with_boundary() {
+        let point = ConvergencePoint {
+            name: "secret_resolve".into(),
+            description: "Fetch secrets from Akeyless".into(),
+            monotone: true, // read-only, cacheable
+            mechanism: ConvergenceMechanism::Local,
+            state: ConvergenceState::new("secret_resolve"),
+            boundary: ConvergenceBoundary {
+                preconditions: vec![
+                    BoundaryCheck::new("port_allocated", "Port must be allocated first"),
+                ],
+                postconditions: vec![
+                    BoundaryCheck::new("secrets_valid", "All secrets non-empty"),
+                    BoundaryCheck::new("secrets_attested", "Secret hashes match tameshi record"),
+                ],
+                input_attestation: Some("blake3:prev_point_hash".into()),
+                output_attestation: None, // set after verification
+                phase: BoundaryPhase::Pending,
+            },
+        };
+
+        assert!(!point.boundary.phase.is_gate_open());
+        assert_eq!(point.boundary.preconditions.len(), 1);
+        assert_eq!(point.boundary.postconditions.len(), 2);
     }
 }

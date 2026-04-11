@@ -9,4 +9,5 @@ pub mod release;
 pub mod saga;
 pub mod secret;
 pub mod source;
+pub mod traced_event;
 pub mod volume;

@@ -220,12 +220,12 @@ impl Supervisor for LinuxSupervisor {
             return Err(SupervisorError::Io(e));
         }
         self.live.remove(&r);
-        let exit_code = unsafe {
-            if libc::WIFEXITED(status) {
-                libc::WEXITSTATUS(status)
-            } else {
-                128 + libc::WTERMSIG(status)
-            }
+        // libc::WIFEXITED/WEXITSTATUS/WTERMSIG are const fns on modern libc
+        // and no longer require an unsafe block.
+        let exit_code = if libc::WIFEXITED(status) {
+            libc::WEXITSTATUS(status)
+        } else {
+            128 + libc::WTERMSIG(status)
         };
         Ok(Some((r, exit_code)))
     }

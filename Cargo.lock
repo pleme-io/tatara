@@ -5270,6 +5270,7 @@ dependencies = [
  "tatara-lisp",
  "tatara-lisp-derive",
  "tatara-nix",
+ "tatara-ui",
  "tempfile",
  "thiserror 2.0.18",
 ]

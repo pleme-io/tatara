@@ -38,6 +38,34 @@ pub enum VfkitDevice {
     VirtioRng,
 }
 
+/// JSON shape for native-arch Darwin guests (Apple Virtualization.framework
+/// macOS mode). Completely different top-level from the Linux path — Darwin
+/// boots via a bootloader descriptor pointing at an IPSW + auxiliary image,
+/// not a kernel + initrd pair.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct VfkitDarwinJson {
+    pub cpus: u32,
+    pub memory_mib: u32,
+    pub bootloader: VfkitDarwinBootloader,
+    pub devices: Vec<VfkitDevice>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct VfkitDarwinBootloader {
+    /// Always `"macos"` today; reserved for future Darwin variants.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// Filesystem path (or placeholder) to the Apple restore image (`.ipsw`).
+    /// Used on first boot to install macOS into the root disk.
+    pub restore_image: String,
+    /// 16-byte machine identifier, base64 (unique per guest, persisted).
+    pub machine_identifier: String,
+    /// Auxiliary storage image path — 64 MiB persistent boot state slot.
+    pub auxiliary_storage: String,
+}
+
 /// Emits a `VfkitJson` from a `VmSpec`. Resolves bridged paths *lazily*: a
 /// caller who realizes the kernel/rootfs derivations separately can fill in
 /// the resulting paths via `with_kernel_path` / `with_rootfs_path`.
@@ -45,6 +73,9 @@ pub struct VfkitEmitter {
     pub kernel_path: Option<String>,
     pub rootfs_path: Option<String>,
     pub initrd_path: Option<String>,
+    // Darwin-guest extras — ignored for Linux guests.
+    pub darwin_aux_path: Option<String>,
+    pub darwin_machine_identifier_b64: Option<String>,
 }
 
 impl Default for VfkitEmitter {
@@ -53,6 +84,8 @@ impl Default for VfkitEmitter {
             kernel_path: None,
             rootfs_path: None,
             initrd_path: None,
+            darwin_aux_path: None,
+            darwin_machine_identifier_b64: None,
         }
     }
 }
@@ -75,6 +108,79 @@ impl VfkitEmitter {
     pub fn with_initrd_path(mut self, p: impl Into<String>) -> Self {
         self.initrd_path = Some(p.into());
         self
+    }
+
+    pub fn with_darwin_aux_path(mut self, p: impl Into<String>) -> Self {
+        self.darwin_aux_path = Some(p.into());
+        self
+    }
+
+    pub fn with_darwin_machine_identifier(mut self, b64: impl Into<String>) -> Self {
+        self.darwin_machine_identifier_b64 = Some(b64.into());
+        self
+    }
+
+    /// Render the Darwin guest shape. Only meaningful when
+    /// `vm.hypervisor == Hypervisor::VfkitDarwin` and
+    /// `vm.kernel == GuestKernel::DarwinIpsw { .. }`.
+    pub fn synthesize_darwin(&self, vm: &VmSpec) -> VfkitDarwinJson {
+        let ipsw = match &vm.kernel {
+            GuestKernel::DarwinIpsw { ipsw_path } => ipsw_path.clone(),
+            _ => self
+                .kernel_path
+                .clone()
+                .unwrap_or_else(|| "<unset-ipsw>".into()),
+        };
+        let aux = self
+            .darwin_aux_path
+            .clone()
+            .unwrap_or_else(|| "<bundle>/aux.img".into());
+        let machine_id = self
+            .darwin_machine_identifier_b64
+            .clone()
+            .unwrap_or_else(|| "<bundle>/machine-id.b64".into());
+        let rootfs = self
+            .rootfs_path
+            .clone()
+            .unwrap_or_else(|| "<bundle>/disk.img".into());
+
+        let mut devs = vec![VfkitDevice::VirtioBlk { image: rootfs }];
+        if !matches!(vm.network.kind, NetworkKind::None) {
+            devs.push(VfkitDevice::VirtioNet {
+                mode: match vm.network.kind {
+                    NetworkKind::Nat => "nat".into(),
+                    NetworkKind::Bridge => "bridge".into(),
+                    NetworkKind::None => unreachable!(),
+                },
+                subnet: vm.network.subnet.clone(),
+            });
+        }
+        for s in &vm.shares {
+            devs.push(VfkitDevice::VirtioFs {
+                host: s.host.clone(),
+                guest: s.guest.clone(),
+                read_only: s.read_only,
+            });
+        }
+        devs.push(VfkitDevice::VirtioConsole);
+        devs.push(VfkitDevice::VirtioRng);
+
+        VfkitDarwinJson {
+            cpus: vm.cpus,
+            memory_mib: vm.memory_mib,
+            bootloader: VfkitDarwinBootloader {
+                kind: "macos".into(),
+                restore_image: ipsw,
+                machine_identifier: machine_id,
+                auxiliary_storage: aux,
+            },
+            devices: devs,
+        }
+    }
+
+    /// Pretty-printed JSON for the Darwin guest shape.
+    pub fn render_darwin(&self, vm: &VmSpec) -> String {
+        serde_json::to_string_pretty(&self.synthesize_darwin(vm)).unwrap_or_default()
     }
 
     fn kernel_placeholder(vm: &VmSpec) -> String {
@@ -170,30 +276,44 @@ impl Synthesizer for VfkitEmitter {
 }
 
 /// Multi-file emission for a full `defvm`: writes `vm.json` + `boot.sh`
-/// helper that drives vfkit with the right flags.
+/// helper that drives vfkit with the right flags. Auto-selects the Linux
+/// vs Darwin JSON shape based on `vm.hypervisor`.
 impl MultiSynthesizer for VfkitEmitter {
     type Input = VmSpec;
 
     fn generate_all(&self, vm: &VmSpec) -> Vec<Artifact> {
-        if !matches!(vm.hypervisor, Hypervisor::Vfkit) {
-            return vec![Artifact::new(
+        let prefix = format!("vm/{}", vm.name);
+        match vm.hypervisor {
+            Hypervisor::Vfkit => {
+                let json = Synthesizer::generate(self, vm);
+                let boot_sh = format!(
+                    "#!/bin/sh\n# tatara-vm boot helper for '{name}' (Linux guest)\nset -eu\nexec vfkit --config \"$(dirname \"$0\")/vm.json\" \"$@\"\n",
+                    name = vm.name,
+                );
+                vec![
+                    Artifact::new(format!("{prefix}/vm.json"), json),
+                    Artifact::new(format!("{prefix}/boot.sh"), boot_sh),
+                ]
+            }
+            Hypervisor::VfkitDarwin => {
+                let json = self.render_darwin(vm);
+                let boot_sh = format!(
+                    "#!/bin/sh\n# tatara-vm boot helper for '{name}' (native Darwin guest)\nset -eu\nexec vfkit --config \"$(dirname \"$0\")/vm-darwin.json\" \"$@\"\n",
+                    name = vm.name,
+                );
+                vec![
+                    Artifact::new(format!("{prefix}/vm-darwin.json"), json),
+                    Artifact::new(format!("{prefix}/boot.sh"), boot_sh),
+                ]
+            }
+            _ => vec![Artifact::new(
                 "ERROR.txt".to_string(),
                 format!(
-                    "VfkitEmitter can only render Hypervisor::Vfkit; got {:?}",
+                    "VfkitEmitter only renders Hypervisor::Vfkit / VfkitDarwin; got {:?}",
                     vm.hypervisor
                 ),
-            )];
+            )],
         }
-        let prefix = format!("vm/{}", vm.name);
-        let json = Synthesizer::generate(self, vm);
-        let boot_sh = format!(
-            "#!/bin/sh\n# tatara-vm boot helper for '{name}'\nset -eu\nexec vfkit --config \"$(dirname \"$0\")/vm.json\" \"$@\"\n",
-            name = vm.name,
-        );
-        vec![
-            Artifact::new(format!("{prefix}/vm.json"), json),
-            Artifact::new(format!("{prefix}/boot.sh"), boot_sh),
-        ]
     }
 }
 

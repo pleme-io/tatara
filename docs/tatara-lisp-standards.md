@@ -297,6 +297,57 @@ The spec drives (via forge-gen):
 Nothing downstream is hand-written. The generators are the source of
 truth, fed by the spec, fed by the Rust types.
 
+### 4.4 Runtime configuration — shikumi is mandatory
+
+Every configurable application uses **`shikumi`** for config loading.
+Shikumi supports four formats natively and auto-detects by extension:
+
+| Extension                 | Format          | Provider              |
+|---------------------------|-----------------|-----------------------|
+| `.yaml` / `.yml`          | YAML            | figment YAML          |
+| `.toml`                   | TOML            | figment TOML          |
+| `.lisp` / `.lsp` / `.el`  | **tatara-lisp** | `shikumi::LispProvider` |
+| `.nix`                    | **Nix**         | `shikumi::NixProvider`  |
+
+Users author their config in whatever format they prefer — the application
+doesn't care:
+
+```lisp
+;; ~/.config/escriba/escriba.lisp
+(defescriba
+  :tema              "nord"
+  :largura-tab       2
+  :numeros-linha     #t
+  :mostrar-statusline #t)
+```
+
+```nix
+# ~/.config/escriba/escriba.nix
+{
+  tema = "nord";
+  largura_tab = 2;
+  numeros_linha = true;
+  mostrar_statusline = true;
+}
+```
+
+```yaml
+# ~/.config/escriba/escriba.yaml
+tema: nord
+largura_tab: 2
+numeros_linha: true
+mostrar_statusline: true
+```
+
+All three deserialize into the same Rust struct. The Lisp provider
+converts `kebab-case` keywords to `snake_case` keys automatically — so
+authors write `:my-field` in Lisp and `my_field: T` in the Rust struct
+seamlessly.
+
+**Rule:** apps that hard-code a single config format violate the standard.
+Opt-in to shikumi's `ProviderChain::with_file()`; it dispatches by
+extension. New apps start with shikumi on day one.
+
 ---
 
 ## 5. Nix — every repo

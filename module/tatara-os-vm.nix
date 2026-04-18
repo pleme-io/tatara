@@ -45,6 +45,8 @@ let
     ${cfg.package}/bin/tatara-boot-gen \
       ${resolvedSystemFile} \
       ${vmRoot} \
+      ${lib.optionalString (cfg.initLinuxPackage != null)
+        "--init-path ${cfg.initLinuxPackage}/bin/tatara-init"} \
       ${lib.optionalString (!cfg.busybox) "--no-busybox"} \
       ${lib.optionalString (!cfg.verbose) "--quiet"}
     # Pre-realize the initrd — first build is slow, cached after that.
@@ -87,6 +89,22 @@ in
         $TATARA_OS_ROOT (default ~/.local/share/tatara-os).
       '';
       example = literalExpression "inputs.tatara.packages.\${pkgs.system}.vmctl";
+    };
+
+    initLinuxPackage = mkOption {
+      type = types.nullOr types.package;
+      default = null;
+      description = ''
+        Cross-built `tatara-init` binary for the guest. Must be the
+        aarch64-linux (or x86_64-linux, matching `cfg.system`) flake
+        output. When non-null, its `/bin/tatara-init` path is passed to
+        `tatara-boot-gen --init-path`, so the emitted `initrd.nix` bakes
+        a real PID-1 supervisor into the guest instead of the
+        `$${pkgs.hello}` placeholder. Cross-build requires an
+        aarch64-linux builder reachable from the host — e.g. the
+        pleme.pangea.builder fleet or a local libkrun-builder.
+      '';
+      example = literalExpression "inputs.tatara.packages.aarch64-linux.init";
     };
 
     hostname = mkOption {

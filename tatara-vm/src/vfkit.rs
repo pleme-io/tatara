@@ -31,9 +31,24 @@ pub struct VfkitJson {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "device", rename_all = "kebab-case")]
 pub enum VfkitDevice {
-    VirtioBlk { image: String },
-    VirtioNet { mode: String, subnet: Option<String> },
-    VirtioFs { host: String, guest: String, read_only: bool },
+    VirtioBlk {
+        image: String,
+    },
+    VirtioNet {
+        mode: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        subnet: Option<String>,
+        /// Stable MAC address (form `xx:xx:xx:xx:xx:xx`). Derived from the
+        /// guest hostname by default so `arp -a` can find the guest between
+        /// boots without racing DHCP.
+        #[serde(skip_serializing_if = "Option::is_none", rename = "mac-address")]
+        mac_address: Option<String>,
+    },
+    VirtioFs {
+        host: String,
+        guest: String,
+        read_only: bool,
+    },
     VirtioConsole,
     VirtioRng,
 }
@@ -153,6 +168,7 @@ impl VfkitEmitter {
                     NetworkKind::None => unreachable!(),
                 },
                 subnet: vm.network.subnet.clone(),
+                mac_address: Some(deterministic_mac(&vm.name)),
             });
         }
         for s in &vm.shares {
@@ -226,6 +242,7 @@ impl VfkitEmitter {
                     NetworkKind::None => unreachable!(),
                 },
                 subnet: vm.network.subnet.clone(),
+                mac_address: Some(deterministic_mac(&vm.name)),
             });
         }
         // Shared folders via virtiofs
@@ -241,6 +258,23 @@ impl VfkitEmitter {
         devs.push(VfkitDevice::VirtioRng);
         devs
     }
+}
+
+/// Derive a stable MAC address from the VM name via BLAKE3. First byte is
+/// masked `0x02` (locally-administered, unicast) to stay out of the IANA
+/// space; `arp -a` then shows the guest reliably across boots.
+fn deterministic_mac(name: &str) -> String {
+    let h = blake3::hash(name.as_bytes());
+    let b = h.as_bytes();
+    format!(
+        "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        (b[0] & 0xfe) | 0x02,
+        b[1],
+        b[2],
+        b[3],
+        b[4],
+        b[5],
+    )
 }
 
 impl Synthesizer for VfkitEmitter {

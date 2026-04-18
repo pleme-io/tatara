@@ -17045,6 +17045,10 @@ rec {
             packageId = "serde_json";
           }
           {
+            name = "tatara-eval";
+            packageId = "tatara-eval";
+          }
+          {
             name = "tatara-lisp";
             packageId = "tatara-lisp";
           }

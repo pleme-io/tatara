@@ -45,6 +45,27 @@ pub enum InitrdContent {
     StorePath(String),
 }
 
+/// One nixpkgs-attr closure to bake into the initrd. Each package's full
+/// runtime closure is copied into `root/nix/store/` and its `bin/*` entries
+/// (or the subset in `bin_names`, if non-empty) get symlinked into
+/// `/bin/` — so `/bin/htop`, `/bin/curl`, etc. just work inside the guest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuestPackage {
+    /// `pkgs.<attr_path>` — e.g. `"htop"`, `"curl"`, `"python3"`.
+    pub attr_path: String,
+    /// When empty, all `bin/*` entries are linked. Populate to whitelist.
+    pub bin_names: Vec<String>,
+}
+
+impl GuestPackage {
+    pub fn new(attr_path: impl Into<String>) -> Self {
+        Self {
+            attr_path: attr_path.into(),
+            bin_names: vec![],
+        }
+    }
+}
+
 /// The full recipe for a bootable initrd.
 pub struct LinuxRootfs {
     pub init_binary: String,
@@ -58,6 +79,9 @@ pub struct LinuxRootfs {
     /// and writes `/etc/ssh/{sshd_config, authorized_keys}`. The caller is
     /// responsible for adding the sshd service to `init_config`.
     pub sshd: Option<SshdSpec>,
+    /// Userspace packages to install in the guest. Each package's closure
+    /// is copied into `root/nix/store/`; bin entries land in `/bin/`.
+    pub packages: Vec<GuestPackage>,
     /// Name baked into the output derivation.
     pub name: String,
 }
@@ -70,6 +94,7 @@ impl Default for LinuxRootfs {
             extra_files: vec![],
             busybox: Some("busybox".into()),
             sshd: None,
+            packages: vec![],
             name: "tatara-rootfs".into(),
         }
     }
@@ -123,6 +148,25 @@ impl LinuxRootfs {
         self
     }
 
+    /// Add one userspace package. `bin_names` empty means "symlink every
+    /// `bin/*` entry into `/bin/`".
+    pub fn with_package(mut self, attr_path: impl Into<String>) -> Self {
+        self.packages.push(GuestPackage::new(attr_path));
+        self
+    }
+
+    /// Add many packages at once.
+    pub fn with_packages<I, S>(mut self, attrs: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        for a in attrs {
+            self.packages.push(GuestPackage::new(a));
+        }
+        self
+    }
+
     /// Produce the tatara `Derivation` whose realization is the initrd.cpio.gz.
     pub fn derivation(&self) -> Derivation {
         Derivation {
@@ -151,6 +195,51 @@ impl LinuxRootfs {
                  \x20 done\n"
             ),
             None => String::new(),
+        };
+
+        // Userspace packages — copy each package's closure into the initrd
+        // and symlink bin/* into /bin/.
+        let (pkg_prelude, pkg_block) = if self.packages.is_empty() {
+            (String::new(), String::new())
+        } else {
+            let mut prelude = String::from("  guestPackages = [\n");
+            for p in &self.packages {
+                prelude.push_str(&format!("    pkgs.{}\n", p.attr_path));
+            }
+            prelude.push_str("  ];\n");
+            prelude
+                .push_str("  guestClosure = pkgs.closureInfo { rootPaths = guestPackages; };\n");
+
+            let mut block = String::from(
+                "  # userspace packages: pull the full closure into root/nix/store\n\
+                 \x20 mkdir -p root/nix/store root/bin\n\
+                 \x20 while read -r store_path; do\n\
+                 \x20   cp -r \"$store_path\" root/nix/store/\n\
+                 \x20 done < ${guestClosure}/store-paths\n\
+                 \x20 # Symlink each package's bin/* into /bin (best-effort — skip\n\
+                 \x20 # packages with no bin/ dir).\n",
+            );
+            for p in &self.packages {
+                if p.bin_names.is_empty() {
+                    block.push_str(&format!(
+                        "  if [ -d ${{pkgs.{attr}}}/bin ]; then\n\
+                         \x20   for bin in ${{pkgs.{attr}}}/bin/*; do\n\
+                         \x20     [ -e \"$bin\" ] && ln -sf \"$bin\" root/bin/$(basename \"$bin\")\n\
+                         \x20   done\n\
+                         \x20 fi\n",
+                        attr = p.attr_path,
+                    ));
+                } else {
+                    for name in &p.bin_names {
+                        block.push_str(&format!(
+                            "  [ -e ${{pkgs.{attr}}}/bin/{name} ] && ln -sf ${{pkgs.{attr}}}/bin/{name} root/bin/{name}\n",
+                            attr = p.attr_path,
+                            name = name,
+                        ));
+                    }
+                }
+            }
+            (prelude, block)
         };
 
         // sshd integration: copy the openssh closure into root/nix/store,
@@ -264,7 +353,7 @@ impl LinuxRootfs {
         format!(
             r#"let
   pkgs = import <nixpkgs> {{}};
-{sshd_prelude}in
+{pkg_prelude}{sshd_prelude}in
 pkgs.runCommand "{name}" {{
   buildInputs = [ pkgs.cpio pkgs.gzip pkgs.coreutils pkgs.findutils ];
 }} ''
@@ -273,12 +362,15 @@ pkgs.runCommand "{name}" {{
   # tatara-init — the PID 1 supervisor
   cp {init_binary} root/bin/tatara-init
   chmod 0755 root/bin/tatara-init
+  # Linux looks for /init at initramfs root before honoring kernel cmdline
+  # `init=…`. Symlink both so either path works.
+  ln -sf /bin/tatara-init root/init
   ln -sf /bin/tatara-init root/sbin/init
   # init.lisp — the service manifest
   cat > root/etc/tatara/init.lisp <<'TATARA_INIT_LISP_EOF'
 {init_config_escaped}TATARA_INIT_LISP_EOF
   chmod 0644 root/etc/tatara/init.lisp
-{busybox_line}{sshd_block}{file_cmds}  # cpio + gzip into initrd
+{busybox_line}{pkg_block}{sshd_block}{file_cmds}  # cpio + gzip into initrd
   ( cd root && find . -print0 | cpio -o -0 --format=newc ) | gzip -9 > $out/initrd.cpio.gz
   # Emit the top-level filesystem tree too, for anyone who wants ext4 later.
   cp -r root $out/rootfs
@@ -287,6 +379,8 @@ pkgs.runCommand "{name}" {{
             init_binary = self.init_binary,
             init_config_escaped = init_config_escaped,
             busybox_line = busybox_line,
+            pkg_prelude = pkg_prelude,
+            pkg_block = pkg_block,
             sshd_block = sshd_block,
             sshd_prelude = sshd_prelude,
             file_cmds = file_cmds,

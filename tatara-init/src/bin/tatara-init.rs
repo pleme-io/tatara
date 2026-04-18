@@ -13,10 +13,25 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use tatara_eval::Interpreter;
 use tatara_init::{InitConfig, LinuxSupervisor, Pid};
 use tatara_lisp::{domain::TataraDomain, read};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // --eval <form>  — evaluate a single Lisp form via tatara-eval and
+    // exit. Used by services whose :body was declared in Lisp instead
+    // of as a shell exec. The supervisor rewrites such services to
+    // `/bin/tatara-init --eval '<form>'` in its fork+exec path.
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(idx) = args.iter().position(|a| a == "--eval") {
+        let form = args.get(idx + 1).ok_or("--eval needs a Lisp form")?;
+        let interp = Interpreter::new();
+        let value = interp.eval_source(form)?;
+        // Services don't usually have anyone to read stdout; still print
+        // the final value so `tatara-vmctl logs` shows what happened.
+        eprintln!("[tatara-init:eval] {value}");
+        return Ok(());
+    }
     let path = resolve_config_path();
     let source = std::fs::read_to_string(&path)
         .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
@@ -33,6 +48,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.name,
         cfg.services.len()
     );
+
+    // Essential filesystem mounts (procfs, sysfs, devtmpfs, tmpfs).
+    // Failures are logged but don't abort — a running guest may already
+    // have something on the mount point, or the kernel may lack a given
+    // filesystem type. Either is recoverable; missing /proc is not, but
+    // we'd see that via downstream service failures.
+    for result in tatara_init::mount_early_filesystems() {
+        match result {
+            Ok(m) => eprintln!("[tatara-init] mounted {} ({})", m.target, m.fstype),
+            Err(e) => eprintln!("[tatara-init] mount warn: {e}"),
+        }
+    }
 
     let mut sup = LinuxSupervisor::new();
     let by_name = tatara_init::supervisor::boot(&mut sup, &cfg)?;

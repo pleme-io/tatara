@@ -140,7 +140,9 @@ impl LinuxSupervisor {
 impl Supervisor for LinuxSupervisor {
     fn spawn(&mut self, svc: &Service) -> Result<Pid> {
         use std::ffi::CString;
-        let argv: Vec<String> = split_exec(&svc.exec);
+        // `resolved_exec()` honors the `body` (Lisp form) shortcut when
+        // present, rewriting the service to invoke `tatara-init --eval`.
+        let argv: Vec<String> = split_exec(&svc.resolved_exec());
         if argv.is_empty() {
             return Err(SupervisorError::Spawn {
                 name: svc.name.clone(),
@@ -358,6 +360,7 @@ mod tests {
         Service {
             name: name.into(),
             exec: exec.into(),
+            body: None,
             restart,
             env: vec![],
             workdir: None,

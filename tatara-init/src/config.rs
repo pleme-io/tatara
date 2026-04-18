@@ -24,7 +24,16 @@ impl Default for RestartPolicy {
 pub struct Service {
     pub name: String,
     /// Command line. Shell-unescaped; split on whitespace for argv.
+    /// Ignored when `body` is present (tatara-init synthesizes the exec
+    /// line to invoke its own `--eval` subcommand with the body form).
+    #[serde(default)]
     pub exec: String,
+    /// Tatara-lisp form evaluated by tatara-init's embedded interpreter.
+    /// When set, tatara-init's supervisor spawns `/bin/tatara-init --eval
+    /// '<form>'` as the service — no shell, no external binary, just our
+    /// own tatara-eval loop running in a forked child.
+    #[serde(default)]
+    pub body: Option<String>,
     /// How to react to exits.
     #[serde(default)]
     pub restart: RestartPolicy,
@@ -37,6 +46,23 @@ pub struct Service {
     /// Auto-start at boot? Default true.
     #[serde(default = "default_true")]
     pub enable: bool,
+}
+
+impl Service {
+    /// Resolve the command line that `LinuxSupervisor::spawn` should exec.
+    /// When `body` is set, this substitutes the real exec with a
+    /// `tatara-init --eval …` invocation of our own binary.
+    pub fn resolved_exec(&self) -> String {
+        match &self.body {
+            Some(form) => {
+                // Escape single quotes by closing + escaping + reopening,
+                // POSIX-shell-style.
+                let escaped = form.replace('\'', "'\\''");
+                format!("/bin/tatara-init --eval '{escaped}'")
+            }
+            None => self.exec.clone(),
+        }
+    }
 }
 
 fn default_true() -> bool {
@@ -115,11 +141,59 @@ mod tests {
         let svc = Service {
             name: "x".into(),
             exec: "/x".into(),
+            body: None,
             restart: Default::default(),
             env: vec![],
             workdir: None,
             enable: true,
         };
         assert!(matches!(svc.restart, RestartPolicy::OnFailure));
+    }
+
+    #[test]
+    fn resolved_exec_uses_body_when_present() {
+        let svc = Service {
+            name: "greet".into(),
+            exec: String::new(),
+            body: Some("(println 42)".into()),
+            restart: Default::default(),
+            env: vec![],
+            workdir: None,
+            enable: true,
+        };
+        assert_eq!(
+            svc.resolved_exec(),
+            "/bin/tatara-init --eval '(println 42)'"
+        );
+    }
+
+    #[test]
+    fn resolved_exec_falls_back_to_exec_when_body_absent() {
+        let svc = Service {
+            name: "x".into(),
+            exec: "/bin/x arg1 arg2".into(),
+            body: None,
+            restart: Default::default(),
+            env: vec![],
+            workdir: None,
+            enable: true,
+        };
+        assert_eq!(svc.resolved_exec(), "/bin/x arg1 arg2");
+    }
+
+    #[test]
+    fn resolved_exec_escapes_embedded_single_quotes() {
+        let svc = Service {
+            name: "quoted".into(),
+            exec: String::new(),
+            body: Some("(a 'b c)".into()),
+            restart: Default::default(),
+            env: vec![],
+            workdir: None,
+            enable: true,
+        };
+        // Single quotes in the body must get escaped so the outer shell
+        // single-quoted string terminates correctly.
+        assert!(svc.resolved_exec().contains("'\\''"));
     }
 }

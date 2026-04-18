@@ -40,5 +40,5 @@ pub use config::{
     GuestKernel, GuestRootfs, Hypervisor, NetworkSpec, NetworkKind, ShareSpec, VmSpec,
 };
 pub use darwin_rootfs::DarwinRootfs;
-pub use rootfs::{InitrdContent, InitrdFile, LinuxRootfs};
+pub use rootfs::{GuestPackage, InitrdContent, InitrdFile, LinuxRootfs};
 pub use vfkit::{VfkitEmitter, VfkitJson};

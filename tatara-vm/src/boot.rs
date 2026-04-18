@@ -84,6 +84,11 @@ pub fn compose(
     if let Some(sshd) = &sys.sshd {
         rootfs = rootfs.with_sshd(sshd.clone());
     }
+    // Userspace packages — each SystemConfig.packages entry is a nixpkgs
+    // attr_path. Closure is baked into the initrd; bin/* lands in /bin/.
+    if !sys.packages.is_empty() {
+        rootfs = rootfs.with_packages(sys.packages.iter().cloned());
+    }
     let initrd = rootfs.derivation();
 
     // 3. VmSpec — default or user-provided, but always pointed at our

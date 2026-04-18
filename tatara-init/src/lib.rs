@@ -30,7 +30,9 @@
 //! ```
 
 pub mod config;
+pub mod mounts;
 pub mod supervisor;
 
 pub use config::{InitConfig, RestartPolicy, Service};
+pub use mounts::{mount_early_filesystems, EarlyMount, EarlyMountError};
 pub use supervisor::{LinuxSupervisor, MockSupervisor, Pid, Supervisor, SupervisorError};

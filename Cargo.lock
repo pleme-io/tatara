@@ -5044,6 +5044,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "tatara-eval",
  "tatara-lisp",
  "tatara-lisp-derive",
  "tempfile",

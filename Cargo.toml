@@ -15,6 +15,7 @@ members = [
     "tatara-os",          # NixOS-equivalent — SystemConfig + activation synth + module fixpoint
     "tatara-init",        # tatara IS PID 1 — typed service supervisor, drop-in for systemd
     "tatara-vm",          # Typed VM definitions — Darwin-hosted Linux guests via vfkit/qemu/kasou
+    "tatara-ui",          # Nord-themed CLI UX — typed palette/sigils/UiEvent stream with BLAKE3 run hashes
     "tatara-reconciler",  # FluxCD-adjacent controller — replaces tatara-kube
     # ── existing surfaces ──────────────────────────────────────────────
     "tatara-api",

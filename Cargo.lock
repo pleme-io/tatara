@@ -3274,6 +3274,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "owo-colors"
+version = "4.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d211803b9b6b570f68772237e415a029d5a50c65d382910b879fb19d3271f94d"
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5285,15 +5291,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "tatara-ui"
+version = "0.2.0"
+dependencies = [
+ "blake3",
+ "hex",
+ "libc",
+ "owo-colors",
+ "serde",
+ "serde_json",
+ "tatara-lisp",
+ "tatara-lisp-derive",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "tatara-vm"
 version = "0.2.0"
 dependencies = [
+ "blake3",
  "serde",
  "serde_json",
  "tatara-lisp",
  "tatara-lisp-derive",
  "tatara-nix",
  "tatara-os",
+ "tatara-ui",
  "thiserror 2.0.18",
 ]
 

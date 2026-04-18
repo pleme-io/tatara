@@ -175,14 +175,18 @@ in
 
     # Drop authorized_keys + a launcher into the VM root at activation
     # time. The launcher is what a launchd agent (future) will exec.
-    home.activation.tataraOsVm = hmHelpers.mkActivationScript {
-      after = [ "writeBoundary" ];
-      text = activationScript + lib.optionalString (cfg.sshAuthorizedKeys != []) ''
+    # Uses home-manager's native DAG API (`lib.hm.dag.entryAfter`) —
+    # `writeBoundary` is HM's own marker that guarantees home files are
+    # written before our hook runs.
+    home.activation.tataraOsVm = lib.hm.dag.entryAfter [ "writeBoundary" ] (
+      activationScript
+      + lib.optionalString (cfg.sshAuthorizedKeys != []) ''
         ${pkgs.coreutils}/bin/mkdir -p ${vmRoot}
         ${pkgs.coreutils}/bin/cat > ${vmRoot}/authorized_keys <<'TATARA_AUTH_KEYS_EOF'
         ${lib.concatStringsSep "\n" cfg.sshAuthorizedKeys}
         TATARA_AUTH_KEYS_EOF
-      '' + ''
+      ''
+      + ''
         # Write a tiny boot launcher the user can invoke directly, or that
         # a launchd agent can exec. Lives at $vmRoot/launch.sh.
         ${pkgs.coreutils}/bin/cat > ${vmRoot}/launch.sh <<'TATARA_LAUNCH_EOF'
@@ -198,7 +202,7 @@ in
         exec ${pkgs.vfkit}/bin/vfkit --config "$VM_ROOT/vm-resolved.json"
         TATARA_LAUNCH_EOF
         ${pkgs.coreutils}/bin/chmod +x ${vmRoot}/launch.sh
-      '';
-    };
+      ''
+    );
   };
 }

@@ -26,6 +26,7 @@
 //!   5. Guest is running — tatara is init, userspace, everything.
 
 use tatara_nix::derivation::{Derivation, Outputs, Source};
+use tatara_os::SshdSpec;
 
 /// One file that should land in the initrd.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +52,12 @@ pub struct LinuxRootfs {
     pub extra_files: Vec<InitrdFile>,
     /// Bridge the busybox binary into the guest. Default: `busybox` from nixpkgs.
     pub busybox: Option<String>,
+    /// Optional sshd setup. When `Some`, the emitted `runCommand` pulls the
+    /// full `pkgs.openssh` closure into `root/nix/store/`, symlinks
+    /// `/bin/sshd` + `/bin/ssh-keygen`, generates a host key at build time,
+    /// and writes `/etc/ssh/{sshd_config, authorized_keys}`. The caller is
+    /// responsible for adding the sshd service to `init_config`.
+    pub sshd: Option<SshdSpec>,
     /// Name baked into the output derivation.
     pub name: String,
 }
@@ -62,6 +69,7 @@ impl Default for LinuxRootfs {
             init_config: String::new(),
             extra_files: vec![],
             busybox: Some("busybox".into()),
+            sshd: None,
             name: "tatara-rootfs".into(),
         }
     }
@@ -108,6 +116,13 @@ impl LinuxRootfs {
         self
     }
 
+    /// Bake openssh + sshd_config + authorized_keys + a generated ed25519
+    /// host key into the initrd.
+    pub fn with_sshd(mut self, spec: SshdSpec) -> Self {
+        self.sshd = Some(spec);
+        self
+    }
+
     /// Produce the tatara `Derivation` whose realization is the initrd.cpio.gz.
     pub fn derivation(&self) -> Derivation {
         Derivation {
@@ -136,6 +151,64 @@ impl LinuxRootfs {
                  \x20 done\n"
             ),
             None => String::new(),
+        };
+
+        // sshd integration: copy the openssh closure into root/nix/store,
+        // symlink bin entries, write sshd_config + authorized_keys, and
+        // generate an ed25519 host key at build time.
+        let (sshd_prelude, sshd_block) = match &self.sshd {
+            Some(s) => {
+                let auth_keys = s.authorized_keys.join("\n");
+                let permit_root = if s.permit_root { "yes" } else { "no" };
+                let pass_auth = if s.password_authentication {
+                    "yes"
+                } else {
+                    "no"
+                };
+                let cfg = format!(
+                    "Port {port}\n\
+                     HostKey /etc/ssh/ssh_host_ed25519_key\n\
+                     PermitRootLogin {permit_root}\n\
+                     PasswordAuthentication {pass_auth}\n\
+                     PubkeyAuthentication yes\n\
+                     AuthorizedKeysFile /etc/ssh/authorized_keys\n\
+                     StrictModes no\n\
+                     UsePAM no\n\
+                     Subsystem sftp internal-sftp\n",
+                    port = s.port,
+                    permit_root = permit_root,
+                    pass_auth = pass_auth,
+                );
+                // ── prelude injected before runCommand's args attrs ─────
+                let prelude = "  openssh = pkgs.openssh;\n\
+                               \x20 opensshClosure = pkgs.closureInfo { rootPaths = [ pkgs.openssh ]; };\n";
+                // ── build-time commands (run inside runCommand) ─────────
+                let block = format!(
+                    "  # openssh: bring the closure into root/nix/store\n\
+                     \x20 mkdir -p root/nix/store root/bin root/etc/ssh root/var/empty\n\
+                     \x20 while read -r store_path; do\n\
+                     \x20   cp -r \"$store_path\" root/nix/store/\n\
+                     \x20 done < ${{opensshClosure}}/store-paths\n\
+                     \x20 ln -sf ${{openssh}}/bin/sshd root/bin/sshd\n\
+                     \x20 ln -sf ${{openssh}}/bin/ssh-keygen root/bin/ssh-keygen\n\
+                     \x20 cat > root/etc/ssh/sshd_config <<'TATARA_SSHD_CFG_EOF'\n\
+                     {cfg}TATARA_SSHD_CFG_EOF\n\
+                     \x20 cat > root/etc/ssh/authorized_keys <<'TATARA_AUTH_KEYS_EOF'\n\
+                     {auth_keys}\n\
+                     TATARA_AUTH_KEYS_EOF\n\
+                     \x20 chmod 0600 root/etc/ssh/authorized_keys\n\
+                     \x20 # Deterministic(-ish) host key: generate at build.\n\
+                     \x20 ${{openssh}}/bin/ssh-keygen -t ed25519 -N '' \\\n\
+                     \x20   -f root/etc/ssh/ssh_host_ed25519_key \\\n\
+                     \x20   -C \"tatara-os-{name}\"\n\
+                     \x20 chmod 0600 root/etc/ssh/ssh_host_ed25519_key\n",
+                    cfg = cfg,
+                    auth_keys = auth_keys,
+                    name = self.name,
+                );
+                (prelude, block)
+            }
+            None => ("", String::new()),
         };
 
         let mut file_cmds = String::new();
@@ -189,7 +262,9 @@ impl LinuxRootfs {
         };
 
         format!(
-            r#"let pkgs = import <nixpkgs> {{}}; in
+            r#"let
+  pkgs = import <nixpkgs> {{}};
+{sshd_prelude}in
 pkgs.runCommand "{name}" {{
   buildInputs = [ pkgs.cpio pkgs.gzip pkgs.coreutils pkgs.findutils ];
 }} ''
@@ -203,7 +278,7 @@ pkgs.runCommand "{name}" {{
   cat > root/etc/tatara/init.lisp <<'TATARA_INIT_LISP_EOF'
 {init_config_escaped}TATARA_INIT_LISP_EOF
   chmod 0644 root/etc/tatara/init.lisp
-{busybox_line}{file_cmds}  # cpio + gzip into initrd
+{busybox_line}{sshd_block}{file_cmds}  # cpio + gzip into initrd
   ( cd root && find . -print0 | cpio -o -0 --format=newc ) | gzip -9 > $out/initrd.cpio.gz
   # Emit the top-level filesystem tree too, for anyone who wants ext4 later.
   cp -r root $out/rootfs
@@ -212,6 +287,8 @@ pkgs.runCommand "{name}" {{
             init_binary = self.init_binary,
             init_config_escaped = init_config_escaped,
             busybox_line = busybox_line,
+            sshd_block = sshd_block,
+            sshd_prelude = sshd_prelude,
             file_cmds = file_cmds,
         )
     }

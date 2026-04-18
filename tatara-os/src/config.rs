@@ -150,6 +150,42 @@ pub struct EtcFile {
 
 // ── root ────────────────────────────────────────────────────────────────
 
+/// SSH server configuration. When `Some`, the initrd builder bridges
+/// `openssh` from nixpkgs, bakes `/etc/ssh/{sshd_config, authorized_keys,
+/// ssh_host_ed25519_key}`, and the auto-generated `(definit …)` form gets
+/// an `sshd` service supervised by `tatara-init`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshdSpec {
+    /// TCP port sshd listens on.
+    #[serde(default = "default_ssh_port")]
+    pub port: u16,
+    /// Public keys permitted to authenticate.
+    #[serde(default)]
+    pub authorized_keys: Vec<String>,
+    /// Permit root login? Default false (key-only logins as a named user).
+    #[serde(default)]
+    pub permit_root: bool,
+    /// Password auth on/off. Default false.
+    #[serde(default)]
+    pub password_authentication: bool,
+}
+
+fn default_ssh_port() -> u16 {
+    22
+}
+
+impl Default for SshdSpec {
+    fn default() -> Self {
+        Self {
+            port: 22,
+            authorized_keys: vec![],
+            permit_root: false,
+            password_authentication: false,
+        }
+    }
+}
+
 /// The whole operating system as one typed value.
 ///
 /// ```lisp
@@ -187,6 +223,10 @@ pub struct SystemConfig {
     /// Named package references that must be installed systemwide.
     #[serde(default)]
     pub packages: Vec<String>,
+    /// Optional SSH daemon — when set, openssh is bridged into the initrd
+    /// and supervised by tatara-init.
+    #[serde(default)]
+    pub sshd: Option<SshdSpec>,
 }
 
 fn default_system() -> String {

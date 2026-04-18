@@ -59,6 +59,6 @@ pub use activation::ActivationScript;
 pub use closure::{SystemClosure, SystemClosureError};
 pub use config::{
     BootloaderKind, BootloaderSpec, EnvSpec, FilesystemSpec, InitSystem, KernelSpec, ServiceSpec,
-    SystemConfig, UserSpec,
+    SshdSpec, SystemConfig, UserSpec,
 };
 pub use synth::SystemSynthesizer;

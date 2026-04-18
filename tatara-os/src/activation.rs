@@ -183,6 +183,7 @@ mod tests {
             filesystems: vec![],
             environment: EnvSpec::default(),
             packages: vec![],
+            sshd: None,
         }
     }
 

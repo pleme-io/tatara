@@ -80,6 +80,19 @@
       repo = "pleme-io/tatara-init";
     };
 
+    # tatara-boot-gen — Lisp-file → bootable-artifact-tree generator. Darwin
+    # host side (runs as part of `services.tatara-os-vm` activation), so
+    # aarch64-darwin is the practical target but we build for all four to
+    # stay consistent with the substrate convention.
+    bootGenOutputs = (import "${substrate}/lib/rust-workspace-release-flake.nix" {
+      inherit nixpkgs crate2nix flake-utils devenv;
+    }) {
+      toolName = "tatara-boot-gen";
+      packageName = "tatara-vm";
+      src = self;
+      repo = "pleme-io/tatara-boot-gen";
+    };
+
     # ── CI-replacement surface ─────────────────────────────────────────
     # `cargo run --bin tatara-check` runs the typed workspace coherence suite
     # driven by checks.lisp (CRD drift, YAML parse, Process round-trip, etc.).
@@ -126,6 +139,9 @@
           })
           // (let it = initOutputs.packages.${system} or {}; in {
             init = it.tatara-init or it.default or null;
+          })
+          // (let bg = bootGenOutputs.packages.${system} or {}; in {
+            boot-gen = bg.tatara-boot-gen or bg.default or null;
           })
         );
 

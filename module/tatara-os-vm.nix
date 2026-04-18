@@ -69,7 +69,7 @@ in
     package = mkOption {
       type = types.package;
       description = "The tatara-vm flake output exposing `tatara-boot-gen`. Override when pinning.";
-      example = literalExpression "inputs.tatara.packages.\${pkgs.system}.default";
+      example = literalExpression "inputs.tatara.packages.\${pkgs.system}.boot-gen";
     };
 
     hostname = mkOption {

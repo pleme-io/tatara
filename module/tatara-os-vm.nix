@@ -6,12 +6,6 @@ let
   inherit (lib) mkEnableOption mkOption types mkIf literalExpression;
   isDarwin = pkgs.stdenv.isDarwin;
 
-  # The tatara-boot-gen binary — built from the workspace this HM module
-  # ships with. Consumers override `package` to point at their pinned build.
-  defaultBootGen = pkgs.writeShellScriptBin "tatara-boot-gen" ''
-    exec ${cfg.package}/bin/tatara-boot-gen "$@"
-  '';
-
   # Root directory for everything this VM owns.
   vmRoot = "${config.home.homeDirectory}/.local/share/tatara-os/${cfg.hostname}";
 
@@ -48,7 +42,7 @@ let
   # we point launchd / systemd-user at.
   activationScript = ''
     ${pkgs.coreutils}/bin/mkdir -p ${vmRoot}
-    ${defaultBootGen}/bin/tatara-boot-gen \
+    ${cfg.package}/bin/tatara-boot-gen \
       ${resolvedSystemFile} \
       ${vmRoot} \
       ${lib.optionalString (!cfg.busybox) "--no-busybox"} \
@@ -167,10 +161,9 @@ in
   };
 
   config = mkIf cfg.enable {
-    home.packages = with pkgs; [
-      defaultBootGen
+    home.packages = [
       cfg.package
-      vfkit
+      pkgs.vfkit
     ];
 
     # Drop authorized_keys + a launcher into the VM root at activation

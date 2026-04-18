@@ -68,6 +68,18 @@
       env = [];
     };
 
+    # tatara-init — PID 1 for tatara-os Linux guests. 4-target release build
+    # per substrate convention so every guest arch (aarch64-linux,
+    # x86_64-linux) gets a matching init binary.
+    initOutputs = (import "${substrate}/lib/rust-workspace-release-flake.nix" {
+      inherit nixpkgs crate2nix flake-utils devenv;
+    }) {
+      toolName = "tatara-init";
+      packageName = "tatara-init";
+      src = self;
+      repo = "pleme-io/tatara-init";
+    };
+
     # ── CI-replacement surface ─────────────────────────────────────────
     # `cargo run --bin tatara-check` runs the typed workspace coherence suite
     # driven by checks.lisp (CRD drift, YAML parse, Process round-trip, etc.).
@@ -99,6 +111,7 @@
       # Operator + reconciler outputs — access via:
       #   tatara.packages.${system}.operator-image-amd64
       #   tatara.packages.${system}.reconciler-image-amd64
+      #   tatara.packages.${system}.init             ← tatara-init (PID 1)
       packages = nixpkgs.lib.genAttrs
         [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ]
         (system:
@@ -110,6 +123,9 @@
           // (let rc = reconcilerOutputs.packages.${system} or {}; in {
             reconciler-image-amd64 = rc.dockerImage-amd64 or null;
             reconciler = rc.tatara-reconciler or rc.default or null;
+          })
+          // (let it = initOutputs.packages.${system} or {}; in {
+            init = it.tatara-init or it.default or null;
           })
         );
 

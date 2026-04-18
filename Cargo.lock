@@ -5032,6 +5032,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tatara-init"
+version = "0.2.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "tatara-lisp",
+ "tatara-lisp-derive",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "tatara-kube"
 version = "0.2.0"
 dependencies = [
@@ -5269,6 +5282,19 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "uuid",
+]
+
+[[package]]
+name = "tatara-vm"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tatara-lisp",
+ "tatara-lisp-derive",
+ "tatara-nix",
+ "tatara-os",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

@@ -66,6 +66,10 @@ impl Default for BootloaderSpec {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InitSystem {
+    /// tatara-init as PID 1 — the default. No systemd, no dbus, no cgroup
+    /// choreography. Services declared in `services` are handed to the
+    /// tatara-init supervisor at boot.
+    Tatara,
     Systemd,
     S6,
     OpenRC,
@@ -73,7 +77,7 @@ pub enum InitSystem {
 
 impl Default for InitSystem {
     fn default() -> Self {
-        Self::Systemd
+        Self::Tatara
     }
 }
 
@@ -205,7 +209,8 @@ mod tests {
         let s = SystemConfig::compile_from_sexp(&forms[0]).unwrap();
         assert_eq!(s.hostname, "plex");
         assert_eq!(s.system, "x86_64-linux");
-        assert!(matches!(s.init, InitSystem::Systemd));
+        // Default init is Tatara — no systemd, tatara is PID 1.
+        assert!(matches!(s.init, InitSystem::Tatara));
         assert!(matches!(s.bootloader.kind, BootloaderKind::SystemdBoot));
     }
 

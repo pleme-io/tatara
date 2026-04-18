@@ -1,0 +1,17 @@
+[package]
+name = "tatara-vm"
+description = "Typed VM definitions — Darwin-hosted Linux guests for tatara-os, authored in tatara-lisp, emitted as vfkit/qemu config"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-lisp = { path = "../tatara-lisp" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+tatara-nix = { path = "../tatara-nix" }
+tatara-os = { path = "../tatara-os" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"

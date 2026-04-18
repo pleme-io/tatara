@@ -54,7 +54,10 @@ fn lisp_roundtrip_to_realized_activation_script() {
     let script = std::fs::read_to_string(art.path.join("activate")).unwrap();
     assert!(script.starts_with("#!/bin/sh"));
     assert!(script.contains("echo 'plex-test' > /etc/hostname"));
-    assert!(script.contains("systemctl enable --now 'demo.service'"));
+    // Default init is tatara-init — activation signals the running
+    // supervisor with SIGHUP, no systemctl.
+    assert!(script.contains("tatara-init — PID 1"));
+    assert!(script.contains("kill -HUP"));
 }
 
 #[test]

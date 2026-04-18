@@ -95,6 +95,18 @@ impl ActivationScript {
         // 5. services
         if !cfg.services.is_empty() {
             match cfg.init {
+                InitSystem::Tatara => {
+                    // tatara-init reads /etc/tatara/init.lisp at boot; its
+                    // reload-on-SIGHUP behavior re-applies the service set
+                    // without a full activation. Nothing to do here beyond
+                    // signalling it.
+                    s.push_str(
+                        "# services (tatara-init — PID 1)\n\
+                         if [ -r /run/tatara-init.pid ]; then\n\
+                         \x20   kill -HUP \"$(cat /run/tatara-init.pid)\" || true\n\
+                         fi\n",
+                    );
+                }
                 InitSystem::Systemd => {
                     s.push_str("# services (systemd)\nsystemctl daemon-reload\n");
                     for svc in &cfg.services {

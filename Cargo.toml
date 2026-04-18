@@ -13,6 +13,8 @@ members = [
     "tatara-eval",        # Optimized in-memory Lisp interpreter (Sexp → Value, produces typed Derivations)
     "tatara-pkgs",        # Package set abstraction + nixpkgs bridge + tend-driven tatara-lisp mirror
     "tatara-os",          # NixOS-equivalent — SystemConfig + activation synth + module fixpoint
+    "tatara-init",        # tatara IS PID 1 — typed service supervisor, drop-in for systemd
+    "tatara-vm",          # Typed VM definitions — Darwin-hosted Linux guests via vfkit/qemu/kasou
     "tatara-reconciler",  # FluxCD-adjacent controller — replaces tatara-kube
     # ── existing surfaces ──────────────────────────────────────────────
     "tatara-api",

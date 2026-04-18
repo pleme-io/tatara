@@ -24,9 +24,11 @@ pub mod builtins;
 pub mod env;
 pub mod error;
 pub mod interpreter;
+pub mod system;
 pub mod value;
 
 pub use env::Env;
 pub use error::{EvalError, Result};
 pub use interpreter::Interpreter;
+pub use system::system_builtin_table;
 pub use value::{Arity, Builtin, Lambda, Thunk, ThunkState, Value};

@@ -47,6 +47,23 @@ impl Interpreter {
         }
     }
 
+    /// Interpreter with both pure builtins AND system-effects built in
+    /// (println/sleep/exit/env/read-file/write-file/shell). Call this
+    /// from host-side embedders like `tatara-init --eval`; leave sealed
+    /// terreiros using `new()` so they stay I/O-free.
+    pub fn new_with_system() -> Self {
+        let mut env = Env::new();
+        for (name, value) in builtin_table() {
+            env = env.extend(name, value);
+        }
+        for (name, value) in crate::system::system_builtin_table() {
+            env = env.extend(name, value);
+        }
+        Self {
+            root: std::sync::RwLock::new(env),
+        }
+    }
+
     /// Evaluate a single source string. Returns the value of the last form.
     pub fn eval_source(&self, src: &str) -> Result<Value> {
         let forms = read(src)?;

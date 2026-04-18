@@ -17011,6 +17011,12 @@ rec {
             packageId = "thiserror 2.0.18";
           }
         ];
+        devDependencies = [
+          {
+            name = "tempfile";
+            packageId = "tempfile";
+          }
+        ];
 
       };
       "tatara-init" = rec {

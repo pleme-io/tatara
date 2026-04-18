@@ -16,3 +16,6 @@ bumpalo = { version = "3", features = ["collections"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

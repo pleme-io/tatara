@@ -25,7 +25,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
     if let Some(idx) = args.iter().position(|a| a == "--eval") {
         let form = args.get(idx + 1).ok_or("--eval needs a Lisp form")?;
-        let interp = Interpreter::new();
+        // Host-side: system builtins (println/sleep/exit/shell/…) on.
+        // This path is how `:body` service definitions actually run.
+        let interp = Interpreter::new_with_system();
         let value = interp.eval_source(form)?;
         // Services don't usually have anyone to read stdout; still print
         // the final value so `tatara-vmctl logs` shows what happened.

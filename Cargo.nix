@@ -17877,6 +17877,13 @@ rec {
         crateName = "tatara-terreiro";
         version = "0.2.0";
         edition = "2021";
+        crateBin = [
+          {
+            name = "tatara-terreiro";
+            path = "src/bin/tatara-terreiro.rs";
+            requiredFeatures = [ ];
+          }
+        ];
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-terreiro; };
         libName = "tatara_terreiro";
         authors = [
@@ -17920,6 +17927,10 @@ rec {
           {
             name = "tatara-nix";
             packageId = "tatara-nix";
+          }
+          {
+            name = "tatara-ui";
+            packageId = "tatara-ui";
           }
           {
             name = "thiserror";

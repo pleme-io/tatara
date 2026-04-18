@@ -1,0 +1,15 @@
+[package]
+name = "tatara-lisp-derive"
+description = "#[derive(TataraDomain)] — auto-generate a Lisp compiler from a Rust struct's fields"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"

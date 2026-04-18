@@ -1,0 +1,39 @@
+[package]
+name = "tatara-process"
+description = "Process CRD — K8s clusters, workloads, migrations, tests as Unix processes in the tatara convergence lattice"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-core = { path = "../tatara-core" }
+# Lisp surface — `#[derive(TataraDomain)]` + `compile_source` live here now.
+tatara-lisp = { path = "../tatara-lisp" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+
+# K8s + CRD derive
+kube = { version = "0.99", features = ["runtime", "derive", "client"] }
+k8s-openapi = { version = "0.24", features = ["latest"] }
+schemars = { version = "0.8", features = ["chrono"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Hashing for content-addressable identity
+blake3 = "1"
+hex = "0.4"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Errors + logging
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+
+[[bin]]
+name = "tatara-lispc"
+path = "src/bin/tatara-lispc.rs"

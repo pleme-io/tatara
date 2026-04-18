@@ -2,10 +2,20 @@
 members = [
     "tatara-core",
     "tatara-engine",
+    # ── K8s-as-processes surface (v1alpha1) ─────────────────────────────
+    "tatara-process",     # Process/ProcessTable CRDs — unified K8s-as-Unix-process wire format
+    "tatara-lattice",     # Lattice algebra over Classification — replaces qualities_match
+    "tatara-lisp",        # Homoiconic S-expression surface
+    "tatara-lisp-derive", # `#[derive(TataraDomain)]` — proc-macro for auto-generating Lisp compilers
+    "tatara-domains",     # Reference typed domains (MonitorSpec, NotifySpec) authored as Lisp
+    "tatara-nix",         # Nix's academic essence re-expressed in Rust+Lisp — Derivation, Module, Overlay, Flake
+    "tatara-terreiro",    # Arena-enclosed, sealable, serializable Lisp virtual environments (Brazilian × pleme naming)
+    "tatara-reconciler",  # FluxCD-adjacent controller — replaces tatara-kube
+    # ── existing surfaces ──────────────────────────────────────────────
     "tatara-api",
     "tatara-cli",
-    "tatara-operator",
-    "tatara-kube",
+    "tatara-operator",    # DEPRECATED — NixBuild semantics absorbed into Process (Intent::Nix)
+    "tatara-kube",        # DEPRECATED — replaced by tatara-reconciler (FluxCD-aware)
     "tatara-mcp",
     "tatara-net",
     "tatara-testing",

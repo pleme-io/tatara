@@ -1,0 +1,16 @@
+[package]
+name = "tatara-lattice"
+description = "Lattice algebra over tatara classification — meet/join/leq, replaces qualities_match"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-core = { path = "../tatara-core" }
+tatara-process = { path = "../tatara-process" }
+serde = { version = "1", features = ["derive"] }
+schemars = { version = "0.8", features = ["chrono"] }
+
+[dev-dependencies]
+proptest = "1"

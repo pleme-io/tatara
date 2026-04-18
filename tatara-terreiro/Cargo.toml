@@ -1,0 +1,25 @@
+[package]
+name = "tatara-terreiro"
+description = "Arena-enclosed Lisp virtual environments — bumpalo-backed, sealable, serializable compilers you can author in Lisp and deploy as typed artifacts"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-lisp = { path = "../tatara-lisp" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+
+# Arena allocation — the terreiro's namesake. One Bump per sealed environment.
+bumpalo = { version = "3", features = ["collections"] }
+
+# Canonical identity for sealed snapshots (BLAKE3 of the spec + registered
+# domains + preloaded macro library).
+blake3 = "1"
+hex = "0.4"
+
+# Serialization for snapshots on disk.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+thiserror = "2"

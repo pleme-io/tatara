@@ -1,0 +1,173 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: processtables.tatara.pleme.io
+spec:
+  group: tatara.pleme.io
+  names:
+    categories: []
+    kind: ProcessTable
+    plural: processtables
+    shortNames:
+    - pt
+    singular: processtable
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.processCount
+      name: Procs
+      type: integer
+    - jsonPath: .status.readyCount
+      name: Ready
+      type: integer
+    - jsonPath: .spec.nextSequence
+      name: NextPID
+      type: integer
+    - jsonPath: .spec.maxDepth
+      name: Depth
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for ProcessTableSpec via `CustomResource`
+        properties:
+          spec:
+            description: |-
+              ProcessTable — the cluster-wide `/proc` equivalent.
+
+              One per cluster (singleton by convention, name `"proc"`). Aggregates every `Process` status and hands out PIDs.
+            properties:
+              dnsDomain:
+                description: DNS domain (e.g., `quero.lol`).
+                nullable: true
+                type: string
+              dnsZoneId:
+                description: DNS zone id (e.g., Route53 zone id).
+                nullable: true
+                type: string
+              maxChildren:
+                default: 0
+                description: Max concurrent direct children (0 = unlimited).
+                format: uint32
+                minimum: 0.0
+                type: integer
+              maxDepth:
+                default: 0
+                description: Max recursion depth from this node (0 = unlimited).
+                format: uint32
+                minimum: 0.0
+                type: integer
+              nextSequence:
+                default: 1
+                description: Next hierarchical sequence number to hand out at this level.
+                format: uint32
+                minimum: 0.0
+                type: integer
+              orphanReapingEnabled:
+                default: true
+                description: When true, PID 1 adopts and terminates orphaned Processes.
+                type: boolean
+              parentPid:
+                description: PID path of this cluster's parent (None at the root).
+                nullable: true
+                type: string
+              sigtermTimeoutSeconds:
+                default: 480
+                description: Grace window before escalating SIGTERM → SIGKILL (seconds).
+                format: uint32
+                minimum: 0.0
+                type: integer
+              zombieTimeoutSeconds:
+                default: 600
+                description: After this long in Zombie, force-reap.
+                format: uint32
+                minimum: 0.0
+                type: integer
+            type: object
+          status:
+            nullable: true
+            properties:
+              lastReconciled:
+                format: date-time
+                nullable: true
+                type: string
+              processCount:
+                format: uint32
+                minimum: 0.0
+                type: integer
+              processes:
+                default: []
+                items:
+                  description: One row of `/proc`.
+                  properties:
+                    attestationRoot:
+                      nullable: true
+                      type: string
+                    contentHash:
+                      nullable: true
+                      type: string
+                    lastUpdated:
+                      format: date-time
+                      nullable: true
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    parentPid:
+                      nullable: true
+                      type: string
+                    phase:
+                      description: |-
+                        The Unix-authentic phase a Process is in.
+
+                        Canonical transitions: ```text Pending → Forking → Execing → Running → Attested ↘ Failed Attested → Reconverging → Execing          (SIGHUP, no zombie) Running  → Exiting      → Zombie → Reaped  (SIGTERM path) Running  → Failed       → Zombie → Reaped  (non-zero exit) ```
+                      enum:
+                      - Pending
+                      - Forking
+                      - Execing
+                      - Running
+                      - Attested
+                      - Reconverging
+                      - Exiting
+                      - Failed
+                      - Zombie
+                      - Reaped
+                      type: string
+                    pid:
+                      type: string
+                    pointType:
+                      description: Serialized `ConvergencePointType` (e.g., `"Gate"`).
+                      type: string
+                    substrate:
+                      description: Serialized `SubstrateType` (e.g., `"Observability"`).
+                      type: string
+                  required:
+                  - name
+                  - namespace
+                  - phase
+                  - pid
+                  - pointType
+                  - substrate
+                  type: object
+                type: array
+              readyCount:
+                format: uint32
+                minimum: 0.0
+                type: integer
+            required:
+            - processCount
+            - readyCount
+            type: object
+        required:
+        - spec
+        title: ProcessTable
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+

@@ -1,0 +1,25 @@
+[package]
+name = "tatara-lisp"
+description = "Homoiconic S-expression reader + macroexpander → ProcessSpec — Lisp surface for tatara Processes"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+# Expansion-cache key hashing: BLAKE3 over canonical serde_json of args.
+blake3 = "1"
+
+# Feature-gated interop with iac-forge's canonical SExpr (for BLAKE3
+# attestation + render cache reuse). Turn on with `--features iac-forge`.
+iac-forge = { git = "https://github.com/pleme-io/iac-forge", optional = true }
+
+[features]
+default = []
+iac-forge = ["dep:iac-forge"]
+
+# NOTE: tatara-lispc binary moved to tatara-process (it's ProcessSpec-specific).

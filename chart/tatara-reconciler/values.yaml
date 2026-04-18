@@ -1,0 +1,87 @@
+# Default values for tatara-reconciler.
+
+image:
+  repository: ghcr.io/pleme-io/tatara-reconciler
+  tag: ""  # defaults to `.Chart.AppVersion`
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Namespace(s) the controller watches. Empty string = all namespaces.
+watchNamespace: ""
+
+# Namespace the controller runs in (used for health server + ProcessTable singleton lookups).
+controllerNamespace: tatara-system
+
+# Name of the cluster-scoped ProcessTable singleton.
+processTableName: proc
+
+# How often the reconciler heartbeats an Attested Process.
+heartbeatSeconds: 30
+
+# Log level — trace|debug|info|warn|error.
+logLevel: info
+
+# Deployment replicas — single-leader controller, so set 1 unless you've
+# wired leader election (future work).
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+# Container security context — non-root, read-only root filesystem.
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+# Pod security context.
+podSecurityContext:
+  fsGroup: 65532
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+
+podAnnotations: {}
+podLabels: {}
+
+serviceAccount:
+  create: true
+  # If left blank, the name is derived from the release.
+  name: ""
+  annotations: {}
+
+# Enable CRD management by this chart. Helm installs CRDs from `./crds` on
+# first install; subsequent upgrades do NOT update CRDs (Helm limitation —
+# use `kubectl apply -f crds/` for upgrades).
+crds:
+  install: true
+
+# RBAC — permissions the controller needs to emit FluxCD CRs and manage Processes.
+rbac:
+  create: true
+
+# Extra arguments passed to the controller binary (in addition to the standard
+# flags derived from other values).
+extraArgs: []
+
+# Additional env vars (e.g. for Rust backtrace).
+extraEnv:
+  - name: RUST_BACKTRACE
+    value: "1"

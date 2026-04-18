@@ -1,0 +1,25 @@
+apiVersion: v2
+name: tatara-reconciler
+description: |
+  The unified FluxCD-adjacent Kubernetes controller — reconciles `Process`
+  CRDs as Unix processes in the tatara convergence lattice. Emits
+  Kustomization / HelmRelease CRs with owner references; composes three-pillar
+  BLAKE3 attestation chains on every convergence cycle.
+type: application
+version: 0.2.0
+appVersion: "0.2.0"
+keywords:
+  - kubernetes
+  - fluxcd
+  - convergence
+  - attestation
+  - tatara
+home: https://github.com/pleme-io/tatara
+sources:
+  - https://github.com/pleme-io/tatara
+maintainers:
+  - name: Pleme Engineering
+    email: engineering@pleme.io
+icon: https://avatars.githubusercontent.com/u/166876234
+annotations:
+  category: Infrastructure

@@ -1,0 +1,62 @@
+---
+# The observability stack as a single tatara Process — what kubectl sees.
+apiVersion: tatara.pleme.io/v1alpha1
+kind: Process
+metadata:
+  name: observability-stack
+  namespace: seph
+  labels:
+    tatara.pleme.io/point-type: Gate
+    tatara.pleme.io/substrate: Observability
+spec:
+  identity:
+    parent: seph.1
+    # nameOverride omitted → content-addressable 26-char BLAKE3 → base32
+  classification:
+    pointType: Gate
+    substrate: Observability
+    horizon:
+      kind: Bounded
+    calm: Monotone
+    dataClassification: Internal
+  intent:
+    nix:
+      flakeRef: "github:pleme-io/k8s?dir=shared/infrastructure"
+      attribute: "observability"
+      atticCache: main
+  boundary:
+    preconditions:
+      - kind: ProcessPhase
+        params:
+          processRef: akeyless-injection
+          phase: Attested
+    postconditions:
+      - kind: KustomizationHealthy
+        params:
+          name: observability-stack
+          namespace: flux-system
+      - kind: HelmReleaseReleased
+        params:
+          name: kube-prometheus-stack
+          namespace: observability
+      - kind: PromQL
+        params:
+          query: "up{job='prometheus'} == 1"
+    timeout: 15m
+  compliance:
+    baseline: fedramp-moderate
+    bindings:
+      - framework: nist-800-53
+        controlId: SC-7
+        phase: AtBoundary
+        description: Boundary protection
+      - framework: cis-k8s-v1.8
+        controlId: "5.1.1"
+        phase: PostConvergence
+  dependsOn:
+    - name: akeyless-injection
+      mustReach: Attested
+  signals:
+    sigtermGraceSeconds: 480
+    sigkillForce: true
+    sighupStrategy: Reconverge

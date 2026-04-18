@@ -1,0 +1,710 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: processes.tatara.pleme.io
+spec:
+  group: tatara.pleme.io
+  names:
+    categories: []
+    kind: Process
+    plural: processes
+    shortNames:
+    - proc
+    singular: process
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.pid
+      name: PID
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.classification.pointType
+      name: Type
+      type: string
+    - jsonPath: .spec.classification.substrate
+      name: Substrate
+      type: string
+    - jsonPath: .status.attestation.generation
+      name: Gen
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for ProcessSpec via `CustomResource`
+        properties:
+          spec:
+            description: |-
+              Process — one element of the tatara convergence lattice, reconciled as a Unix process.
+
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: Process metadata: name: observability-stack namespace: seph spec: identity: parent: seph.1 classification: pointType: Gate substrate: Observability intent: nix: flakeRef: github:pleme-io/k8s?dir=shared/infrastructure attribute: observability compliance: baseline: fedramp-moderate bindings: - framework: nist-800-53 controlId: SC-7 phase: AtBoundary dependsOn: - name: akeyless-injection ```
+            properties:
+              boundary:
+                default:
+                  postconditions: []
+                  preconditions: []
+                description: Boundary predicates (preconditions / postconditions).
+                properties:
+                  postconditions:
+                    default: []
+                    items:
+                      description: A single boundary predicate.
+                      properties:
+                        kind:
+                          enum:
+                          - ProcessPhase
+                          - KustomizationHealthy
+                          - HelmReleaseReleased
+                          - PromQL
+                          - Cel
+                          - NixEval
+                          type: string
+                        params:
+                          description: Kind-specific payload (free-form JSON).
+                      required:
+                      - kind
+                      type: object
+                    type: array
+                  preconditions:
+                    default: []
+                    items:
+                      description: A single boundary predicate.
+                      properties:
+                        kind:
+                          enum:
+                          - ProcessPhase
+                          - KustomizationHealthy
+                          - HelmReleaseReleased
+                          - PromQL
+                          - Cel
+                          - NixEval
+                          type: string
+                        params:
+                          description: Kind-specific payload (free-form JSON).
+                      required:
+                      - kind
+                      type: object
+                    type: array
+                  timeout:
+                    description: Max time before VERIFY fails — parsed as a `go`-style duration. Empty = controller default (15m).
+                    nullable: true
+                    type: string
+                type: object
+              classification:
+                description: Lattice position (6 dimensions).
+                properties:
+                  calm:
+                    default: Monotone
+                    description: CALM theorem classification — determines whether coordination is required.
+                    enum:
+                    - Monotone
+                    - NonMonotone
+                    type: string
+                  dataClassification:
+                    default: Internal
+                    description: Data sensitivity, drives compliance baseline selection.
+                    enum:
+                    - Public
+                    - Internal
+                    - Confidential
+                    - Pii
+                    - Phi
+                    - Pci
+                    type: string
+                  horizon:
+                    default:
+                      kind: Bounded
+                    description: How long the point runs. Flattened struct-of-optionals so the OpenAPI schema carries a single `kind` discriminator without per-variant merge.
+                    properties:
+                      direction:
+                        description: Whether to minimize or maximize the metric (Asymptotic only).
+                        enum:
+                        - Minimize
+                        - Maximize
+                        nullable: true
+                        type: string
+                      healthyRateThreshold:
+                        description: Rate threshold considered healthy (Asymptotic only).
+                        format: double
+                        nullable: true
+                        type: number
+                      kind:
+                        default: Bounded
+                        enum:
+                        - Bounded
+                        - Asymptotic
+                        type: string
+                      metric:
+                        description: Metric being optimized (Asymptotic only).
+                        nullable: true
+                        type: string
+                    type: object
+                  pointType:
+                    description: Structural type — how data flows through the point.
+                    enum:
+                    - Transform
+                    - Fork
+                    - Join
+                    - Gate
+                    - Select
+                    - Broadcast
+                    - Reduce
+                    - Observe
+                    type: string
+                  substrate:
+                    description: Operational substrate.
+                    enum:
+                    - Financial
+                    - Compute
+                    - Network
+                    - Storage
+                    - Security
+                    - Identity
+                    - Observability
+                    - Regulatory
+                    type: string
+                required:
+                - pointType
+                - substrate
+                type: object
+              compliance:
+                default:
+                  autoRemediate: false
+                  bindings: []
+                description: Compliance bindings + baseline.
+                properties:
+                  autoRemediate:
+                    default: false
+                    description: Allow the reconciler to invoke remediation hooks on violations.
+                    type: boolean
+                  baseline:
+                    description: Canonical baseline (e.g., `fedramp-moderate`, `cis-k8s-v1.8`, `soc2`, `pci-dss`). Semantically the `meet` of all `bindings`.
+                    nullable: true
+                    type: string
+                  bindings:
+                    default: []
+                    description: Individual control bindings.
+                    items:
+                      properties:
+                        controlId:
+                          description: Control id within the framework (e.g., `SC-7`, `5.1.1`).
+                          type: string
+                        description:
+                          description: Optional human description.
+                          nullable: true
+                          type: string
+                        framework:
+                          description: 'Framework name: `nist-800-53`, `cis-k8s-v1.8`, `fedramp-moderate`, `soc2`, `pci-dss`.'
+                          type: string
+                        phase:
+                          default: AtBoundary
+                          description: When the binding is verified.
+                          enum:
+                          - PlanTime
+                          - AtBoundary
+                          - PostConvergence
+                          type: string
+                      required:
+                      - controlId
+                      - framework
+                      type: object
+                    type: array
+                type: object
+              dependsOn:
+                default: []
+                description: Lattice dependencies — must reach phase before we proceed.
+                items:
+                  description: Dependency edge — constrains this Process to wait for another to reach a phase.
+                  properties:
+                    mustReach:
+                      default: Attested
+                      description: Minimum phase the target must reach before we proceed past Forking.
+                      enum:
+                      - Running
+                      - Attested
+                      type: string
+                    name:
+                      description: Target Process `metadata.name`.
+                      type: string
+                    namespace:
+                      description: Target Process namespace. Defaults to this Process's namespace.
+                      nullable: true
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              identity:
+                default: {}
+                description: Identity (parent, name override).
+                properties:
+                  nameOverride:
+                    description: Human name override — if set, used verbatim instead of the content hash.
+                    nullable: true
+                    type: string
+                  parent:
+                    description: Parent PID path (None for init/PID 1).
+                    nullable: true
+                    type: string
+                type: object
+              intent:
+                description: Where rendered artifacts come from. Exactly one variant must be set.
+                properties:
+                  container:
+                    description: Container intent — direct Deployment/StatefulSet/etc, no Helm.
+                    nullable: true
+                    properties:
+                      args:
+                        default: []
+                        items:
+                          type: string
+                        type: array
+                      command:
+                        default: []
+                        items:
+                          type: string
+                        type: array
+                      env:
+                        additionalProperties:
+                          type: string
+                        default: {}
+                        type: object
+                      image:
+                        type: string
+                      replicas:
+                        format: int32
+                        nullable: true
+                        type: integer
+                      workloadKind:
+                        default: Deployment
+                        enum:
+                        - Deployment
+                        - StatefulSet
+                        - DaemonSet
+                        - Job
+                        - CronJob
+                        type: string
+                    required:
+                    - image
+                    type: object
+                  flux:
+                    description: FluxCD passthrough intent — reuse an existing GitRepository.
+                    nullable: true
+                    properties:
+                      decryptSops:
+                        default: true
+                        description: SOPS decryption — defaults to true to match pleme-io conventions.
+                        type: boolean
+                      gitRepository:
+                        description: Name of an existing `GitRepository` (typically in `flux-system`).
+                        type: string
+                      gitRepositoryNamespace:
+                        description: Optional namespace of the GitRepository CR (defaults to `flux-system`).
+                        nullable: true
+                        type: string
+                      helmChart:
+                        description: If set, additionally emit a HelmRelease for this chart.
+                        nullable: true
+                        type: string
+                      helmValues:
+                        additionalProperties: true
+                        nullable: true
+                        type: object
+                      path:
+                        description: Path inside the repository that the Kustomization will apply.
+                        type: string
+                      targetNamespace:
+                        description: Optional target namespace for the emitted Kustomization.
+                        nullable: true
+                        type: string
+                    required:
+                    - gitRepository
+                    - path
+                    type: object
+                  lisp:
+                    description: Lisp-sourced intent — tatara-lisp reader + macroexpander produces resources.
+                    nullable: true
+                    properties:
+                      bindings:
+                        additionalProperties: true
+                        default: {}
+                        description: Symbols injected into the reader env (e.g., `cluster`, `region`).
+                        type: object
+                      reader:
+                        default: tatara-lisp
+                        description: Reader dialect / version tag.
+                        type: string
+                      source:
+                        description: Raw S-expression source, OR `include:<path>` / `configmap:<name>/<key>` pointer.
+                        type: string
+                      version:
+                        default: v1
+                        description: Macro form version.
+                        type: string
+                    required:
+                    - source
+                    type: object
+                  nix:
+                    description: Nix-sourced intent — tatara-engine's nix_eval driver produces resources.
+                    nullable: true
+                    properties:
+                      atticCache:
+                        description: Attic cache to push the resulting store path into.
+                        nullable: true
+                        type: string
+                      attribute:
+                        description: Attribute path within the flake (e.g., `observability`).
+                        type: string
+                      delegateToNixBuild:
+                        default: false
+                        description: Delegate the actual build to a sibling NixBuild CRD (bridges to tatara-operator NATS bare-metal builder path).
+                        type: boolean
+                      extraArgs:
+                        default: []
+                        description: Additional `nix build` arguments (e.g., `["--impure"]`).
+                        items:
+                          type: string
+                        type: array
+                      flakeRef:
+                        description: Flake reference, e.g., `github:pleme-io/k8s?dir=shared/infrastructure`.
+                        type: string
+                      system:
+                        description: Target system. Defaults to the controller host's system.
+                        nullable: true
+                        type: string
+                    required:
+                    - attribute
+                    - flakeRef
+                    type: object
+                type: object
+              signals:
+                default:
+                  sighupStrategy: Reconverge
+                  sigkillForce: true
+                  sigtermGraceSeconds: 480
+                  startSuspended: false
+                description: Signal policy (grace, SIGHUP strategy, start-suspended).
+                properties:
+                  sighupStrategy:
+                    default: Reconverge
+                    description: How SIGHUP is handled.
+                    enum:
+                    - Reconverge
+                    - Restart
+                    - Noop
+                    type: string
+                  sigkillForce:
+                    default: true
+                    description: 'Permit force-reap via SIGKILL (default: allow).'
+                    type: boolean
+                  sigtermGraceSeconds:
+                    default: 480
+                    description: Grace before escalating SIGTERM → SIGKILL.
+                    format: uint32
+                    minimum: 0.0
+                    type: integer
+                  startSuspended:
+                    default: false
+                    description: Start suspended — requires SIGCONT to transition past Forking.
+                    type: boolean
+                type: object
+              suspended:
+                default: false
+                description: Soft-suspend marker — reconciler treats as SIGSTOP. Same effect as delivering SIGSTOP, but persistent across restarts.
+                type: boolean
+            required:
+            - classification
+            - intent
+            type: object
+          status:
+            description: Process status — every field optional until the reconciler writes it.
+            nullable: true
+            properties:
+              attestation:
+                description: Three-pillar attestation (written at end of every successful cycle).
+                nullable: true
+                properties:
+                  artifactHash:
+                    description: '`BLAKE3(rendered resources ++ their applied-status digests)`.'
+                    type: string
+                  attestedAt:
+                    description: When the attestation was computed.
+                    format: date-time
+                    type: string
+                  composedRoot:
+                    description: '`BLAKE3` of the three pillars + previous root.'
+                    type: string
+                  controlHash:
+                    description: '`BLAKE3(compliance-verification proof)` — absent iff no compliance bindings.'
+                    nullable: true
+                    type: string
+                  generation:
+                    description: Monotonic generation counter — starts at 0, increments each cycle.
+                    format: uint64
+                    minimum: 0.0
+                    type: integer
+                  intentHash:
+                    description: '`BLAKE3(canonical-spec ++ nix-store-path? ++ lisp-AST?)`.'
+                    type: string
+                  previousRoot:
+                    description: The prior `composed_root` in the chain. `None` for generation 0.
+                    nullable: true
+                    type: string
+                required:
+                - artifactHash
+                - attestedAt
+                - composedRoot
+                - generation
+                - intentHash
+                type: object
+              boundary:
+                default:
+                  postconditions: []
+                  preconditions: []
+                description: Boundary verification state.
+                properties:
+                  deadline:
+                    description: Absolute deadline for VERIFY (derived from `spec.boundary.timeout`).
+                    format: date-time
+                    nullable: true
+                    type: string
+                  postconditions:
+                    default: []
+                    items:
+                      description: A boundary condition paired with its current satisfaction state.
+                      properties:
+                        kind:
+                          enum:
+                          - ProcessPhase
+                          - KustomizationHealthy
+                          - HelmReleaseReleased
+                          - PromQL
+                          - Cel
+                          - NixEval
+                          type: string
+                        lastCheck:
+                          format: date-time
+                          nullable: true
+                          type: string
+                        message:
+                          nullable: true
+                          type: string
+                        params:
+                          description: Kind-specific payload (free-form JSON).
+                        satisfied:
+                          type: boolean
+                      required:
+                      - kind
+                      - satisfied
+                      type: object
+                    type: array
+                  preconditions:
+                    default: []
+                    items:
+                      description: A boundary condition paired with its current satisfaction state.
+                      properties:
+                        kind:
+                          enum:
+                          - ProcessPhase
+                          - KustomizationHealthy
+                          - HelmReleaseReleased
+                          - PromQL
+                          - Cel
+                          - NixEval
+                          type: string
+                        lastCheck:
+                          format: date-time
+                          nullable: true
+                          type: string
+                        message:
+                          nullable: true
+                          type: string
+                        params:
+                          description: Kind-specific payload (free-form JSON).
+                        satisfied:
+                          type: boolean
+                      required:
+                      - kind
+                      - satisfied
+                      type: object
+                    type: array
+                type: object
+              children:
+                default: []
+                description: Direct children's PID paths.
+                items:
+                  type: string
+                type: array
+              compliance:
+                default:
+                  satisfied: 0
+                  total: 0
+                  violated: 0
+                  violations: []
+                description: Compliance summary at the latest attestation.
+                properties:
+                  baseline:
+                    nullable: true
+                    type: string
+                  satisfied:
+                    format: uint32
+                    minimum: 0.0
+                    type: integer
+                  total:
+                    format: uint32
+                    minimum: 0.0
+                    type: integer
+                  violated:
+                    format: uint32
+                    minimum: 0.0
+                    type: integer
+                  violations:
+                    default: []
+                    items:
+                      type: string
+                    type: array
+                required:
+                - satisfied
+                - total
+                - violated
+                type: object
+              conditions:
+                default: []
+                description: Standard K8s Conditions.
+                items:
+                  description: Standard K8s Condition (shape of `metav1.Condition`).
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      nullable: true
+                      type: string
+                    reason:
+                      nullable: true
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - status
+                  - type
+                  type: object
+                type: array
+              exitCode:
+                description: Exit code (only set on Failed / Reaped).
+                format: int32
+                nullable: true
+                type: integer
+              fluxResources:
+                default: []
+                description: FluxCD resources currently owned by this Process.
+                items:
+                  description: Reference to a FluxCD resource emitted as part of this Process.
+                  properties:
+                    apiVersion:
+                      type: string
+                    kind:
+                      type: string
+                    lastCheck:
+                      format: date-time
+                      nullable: true
+                      type: string
+                    message:
+                      nullable: true
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    ready:
+                      default: false
+                      type: boolean
+                  required:
+                  - apiVersion
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
+              identity:
+                description: Resolved identity (name + content hash).
+                nullable: true
+                properties:
+                  content_hash:
+                    description: Canonical-JSON BLAKE3 hash, 26-char base32. Always computed, even when overridden.
+                    type: string
+                  name:
+                    description: The name used in the PID path (e.g., `"seph"` or `"a3f7x9kp2bfhmnqr5tvwxyzabc"`).
+                    type: string
+                  name_override:
+                    description: True when `name` came from `spec.identity.nameOverride`.
+                    type: boolean
+                required:
+                - content_hash
+                - name
+                - name_override
+                type: object
+              message:
+                description: Human-readable last status message.
+                nullable: true
+                type: string
+              parent:
+                description: Parent PID path (mirror of `spec.identity.parent`, resolved at fork).
+                nullable: true
+                type: string
+              phase:
+                default: Pending
+                description: Current phase.
+                enum:
+                - Pending
+                - Forking
+                - Execing
+                - Running
+                - Attested
+                - Reconverging
+                - Exiting
+                - Failed
+                - Zombie
+                - Reaped
+                type: string
+              phaseSince:
+                description: When the process entered the current phase.
+                format: date-time
+                nullable: true
+                type: string
+              pid:
+                description: Hierarchical PID path — e.g., `"seph.1.7"`.
+                nullable: true
+                type: string
+              signalQueue:
+                default: []
+                description: Pending signals (delivered, not yet handled).
+                items:
+                  description: The first-class signals the controller honors.
+                  enum:
+                  - SIGHUP
+                  - SIGTERM
+                  - SIGKILL
+                  - SIGUSR1
+                  - SIGUSR2
+                  - SIGSTOP
+                  - SIGCONT
+                  type: string
+                type: array
+            type: object
+        required:
+        - spec
+        title: Process
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+

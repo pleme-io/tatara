@@ -1,0 +1,23 @@
+[package]
+name = "tatara-nix"
+description = "Nix's academic essence, re-expressed in Rust + Lisp. Derivation, StorePath, Module, Overlay, Flake — all typed, all Lisp-authorable via #[derive(TataraDomain)], all attestable via BLAKE3."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-lisp = { path = "../tatara-lisp" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+tatara-lattice = { path = "../tatara-lattice" }
+
+# Canonical hashing for StorePath + attestation
+blake3 = "1"
+hex = "0.4"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Errors
+thiserror = "2"

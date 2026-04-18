@@ -54,6 +54,37 @@
         "NATS_URL=nats://nats.nats.svc:4222"
       ];
     };
+
+    # Reconciler Docker image (tatara-reconciler — the FluxCD-adjacent K8s
+    # controller that reconciles Process CRDs as Unix processes).
+    reconcilerOutputs = (import "${substrate}/lib/rust-tool-image-flake.nix" {
+      inherit nixpkgs crate2nix flake-utils forge devenv;
+    }) {
+      toolName = "tatara-reconciler";
+      packageName = "tatara-reconciler";
+      src = self;
+      repo = "pleme-io/tatara-reconciler";
+      architectures = [ "amd64" ];
+      env = [];
+    };
+
+    # ── CI-replacement surface ─────────────────────────────────────────
+    # `cargo run --bin tatara-check` runs the typed workspace coherence suite
+    # driven by checks.lisp (CRD drift, YAML parse, Process round-trip, etc.).
+    # `nix flake check` runs the pure-sandbox derivations below (helm lint
+    # — the only check that genuinely needs the helm binary).
+
+    helmLintCheck = system: let
+      pkgs = nixpkgs.legacyPackages.${system};
+    in pkgs.runCommand "tatara-reconciler-helm-lint" {
+      nativeBuildInputs = [ pkgs.kubernetes-helm ];
+      src = ./chart/tatara-reconciler;
+    } ''
+      cp -r $src ./chart
+      chmod -R u+w ./chart
+      helm lint ./chart
+      touch $out
+    '';
   in
     # Merge tool + operator outputs. Operator packages/apps are namespaced
     # under "operator-*" to avoid colliding with the CLI tool.
@@ -65,7 +96,9 @@
 
       lib = import ./nix/lib/forge.nix { lib = nixpkgs.lib; };
 
-      # Operator outputs — access via tatara.packages.${system}.operator-*
+      # Operator + reconciler outputs — access via:
+      #   tatara.packages.${system}.operator-image-amd64
+      #   tatara.packages.${system}.reconciler-image-amd64
       packages = nixpkgs.lib.genAttrs
         [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ]
         (system:
@@ -74,9 +107,13 @@
             operator-image-amd64 = op.dockerImage-amd64 or null;
             operator = op.tatara-operator or op.default or null;
           })
+          // (let rc = reconcilerOutputs.packages.${system} or {}; in {
+            reconciler-image-amd64 = rc.dockerImage-amd64 or null;
+            reconciler = rc.tatara-reconciler or rc.default or null;
+          })
         );
 
-      # Operator release app
+      # Operator + reconciler release apps + workspace check.
       apps = nixpkgs.lib.genAttrs
         [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ]
         (system:
@@ -86,7 +123,20 @@
               type = "app";
               program = "echo 'operator release not available on ${system}'";
             };
+            release-reconciler = (reconcilerOutputs.apps.${system} or {}).release or {
+              type = "app";
+              program = "echo 'reconciler release not available on ${system}'";
+            };
           }
         );
+
+      # Pure sandboxed checks — `nix flake check` runs these.
+      # Everything that needs cargo lives in `cargo run --bin tatara-check`
+      # (driven by checks.lisp at the workspace root).
+      checks = nixpkgs.lib.genAttrs
+        [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ]
+        (system: {
+          helm-lint = helmLintCheck system;
+        });
     };
 }

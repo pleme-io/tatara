@@ -1,0 +1,15 @@
+[package]
+name = "tatara-domains"
+description = "Typed domains authored as Lisp via #[derive(TataraDomain)] — reference examples + registry seed"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-lisp = { path = "../tatara-lisp" }
+serde = { version = "1", features = ["derive"] }
+# The `#[derive(TataraDomain)]`-generated code for non-basic types (enums,
+# nested structs, Vec<Nested>) calls `::serde_json::from_value`, so users
+# of the derive need serde_json on their direct dep list.
+serde_json = "1"

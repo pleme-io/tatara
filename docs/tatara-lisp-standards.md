@@ -348,6 +348,59 @@ seamlessly.
 Opt-in to shikumi's `ProviderChain::with_file()`; it dispatches by
 extension. New apps start with shikumi on day one.
 
+### 4.5 Terminal UIs — `ratatui` is canonical
+
+Every terminal-facing pleme-io application uses **`ratatui`** + **`crossterm`**
+as its TUI stack. No `cursive`, no `tui-rs` (the abandoned fork parent), no
+hand-rolled ANSI escapes. Nord-palette via `irodori::NORD` for styling.
+
+| Layer           | Library         | Reason                                                      |
+|-----------------|-----------------|-------------------------------------------------------------|
+| Widget / draw  | `ratatui` 0.29  | Active, mature immediate-mode library                       |
+| Backend (I/O)  | `crossterm` 0.28| Cross-platform, no ncurses, no feature-gates for Windows    |
+| Theming         | `irodori::NORD` | Shared Nord palette — matches blackmatter + escriba + arnes |
+| Config          | `shikumi`       | Lisp / yaml / nix authoring of layout + keymap + theme      |
+
+Reference implementations:
+
+- **`arnes`** — `github.com/pleme-io/arnes` — agent harness binary (Rust +
+  tatara-lisp Claude-Code-equivalent). Conversation pane + status line +
+  input box. Nord-themed. `defarnes` + `defmcp-server` via shikumi.
+- **`escriba`** — third render backend via `escriba-tui` (GPU is primary
+  through madori; ratatui is the same editor rendered to terminals that
+  can't do GPU).
+
+**Rule:** if an application has a TUI, it uses ratatui + crossterm + irodori
++ shikumi. Non-negotiable.
+
+### 4.6 Agent harnessing — `arnes` is the ecosystem-native agent
+
+Every pleme-io developer loop that wants an LLM in the driver's seat uses
+**`arnes`** — Rust / tatara-lisp agent harness built on:
+
+- **shikumi** for config (`defarnes` + `defmcp-server` in Lisp / yaml / nix)
+- **anvil-compatible MCP registry** — anvil's `mcpServers` JSON shape
+  loads directly into `arnes-mcp-client::McpRegistry::from_anvil_json`
+- **Anthropic Messages API** via `arnes-anthropic`
+- **ratatui** TUI via `arnes-tui`
+- **deep escriba integration** — escriba exposes an MCP server so arnes
+  can drive the editor as a tool server
+
+Seven crates, hard seams:
+
+```
+arnes-core        — Conversation, Message, ContentBlock, Tool, Usage
+arnes-anthropic   — Anthropic client (env + base-url override)
+arnes-mcp-client  — McpRegistry, ServerSpec, anvil JSON loader
+arnes-config      — defarnes + defmcp-server TataraDomains via shikumi
+arnes-loop        — ToolDispatcher trait + run_turn() agentic loop
+arnes-tui         — ratatui UI: conversation + status + input
+arnes             — tokio::main binary: --message / TUI / --dump-{config,mcp}
+```
+
+**Rule:** new agent-driven tooling in pleme-io extends arnes or reuses its
+crates. Do not fork Claude-Code-equivalents from scratch.
+
 ---
 
 ## 5. Nix — every repo

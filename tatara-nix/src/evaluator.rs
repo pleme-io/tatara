@@ -169,6 +169,7 @@ mod tests {
             outputs: Default::default(),
             env: vec![],
             sandbox: Default::default(),
+            bridge: None,
         }
     }
 

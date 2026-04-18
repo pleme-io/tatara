@@ -461,6 +461,21 @@ fn attrs_to_derivation(m: &BTreeMap<String, Value>) -> Result<Derivation> {
         None => Sandbox::default(),
     };
 
+    let bridge = match m.get("bridge") {
+        Some(Value::Attrs(b)) => Some(bridge_from_attrs(b)?),
+        Some(Value::Str(attr)) => Some(tatara_nix::derivation::BridgeTarget {
+            attr_path: attr.clone(),
+            pkg_set: None,
+        }),
+        Some(v) => {
+            return Err(EvalError::Type {
+                expected: "attrs | string (for bridge)".into(),
+                found: v.type_name().into(),
+            })
+        }
+        None => None,
+    };
+
     Ok(Derivation {
         name,
         version,
@@ -470,6 +485,20 @@ fn attrs_to_derivation(m: &BTreeMap<String, Value>) -> Result<Derivation> {
         outputs,
         env,
         sandbox,
+        bridge,
+    })
+}
+
+fn bridge_from_attrs(
+    m: &BTreeMap<String, Value>,
+) -> Result<tatara_nix::derivation::BridgeTarget> {
+    Ok(tatara_nix::derivation::BridgeTarget {
+        attr_path: require_str(m, "attr-path")
+            .or_else(|_| require_str(m, "attrPath"))?
+            .to_string(),
+        pkg_set: optional_str(m, "pkg-set")
+            .or_else(|| optional_str(m, "pkgSet"))
+            .map(str::to_string),
     })
 }
 

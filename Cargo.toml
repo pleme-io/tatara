@@ -11,6 +11,8 @@ members = [
     "tatara-nix",         # Nix's academic essence re-expressed in Rust+Lisp — Derivation, Module, Overlay, Flake
     "tatara-terreiro",    # Arena-enclosed, sealable, serializable Lisp virtual environments (Brazilian × pleme naming)
     "tatara-eval",        # Optimized in-memory Lisp interpreter (Sexp → Value, produces typed Derivations)
+    "tatara-pkgs",        # Package set abstraction + nixpkgs bridge + tend-driven tatara-lisp mirror
+    "tatara-os",          # NixOS-equivalent — SystemConfig + activation synth + module fixpoint
     "tatara-reconciler",  # FluxCD-adjacent controller — replaces tatara-kube
     # ── existing surfaces ──────────────────────────────────────────────
     "tatara-api",

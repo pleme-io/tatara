@@ -13,7 +13,7 @@ use crate::store::{StoreHash, StorePath};
 
 /// A reference to another derivation, either by name (to be resolved) or by a
 /// concrete store path.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InputRef {
     pub name: String,
@@ -28,7 +28,7 @@ pub struct InputRef {
 /// Where the source comes from — the only part of a derivation that reaches
 /// outside the typed world. Hashed into StoreHash so changes to source =
 /// changes to output.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum Source {
     /// Inline literal — e.g., a small text file.
@@ -107,11 +107,42 @@ fn default_primary() -> String {
 }
 
 /// One environment variable key → value binding.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvVar {
     pub name: String,
     pub value: String,
+}
+
+/// Bridge target — short-circuit a derivation to an attribute in an existing
+/// Nix expression universe (nixpkgs by default). When `bridge` is set, the
+/// realizer delegates the entire build to that Nix expression; our own
+/// `source` / `builder` / `inputs` are ignored. Lets a tatara-lisp `Derivation`
+/// stand in for any package in nixpkgs without re-authoring its build.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeTarget {
+    /// Dotted attribute path, e.g., `"hello"`, `"python3Packages.requests"`,
+    /// `"linuxPackages.kernel"`.
+    pub attr_path: String,
+    /// Nix expression that evaluates to the attribute root. Default: `"import <nixpkgs> {}"`.
+    #[serde(default)]
+    pub pkg_set: Option<String>,
+}
+
+impl BridgeTarget {
+    pub fn nixpkgs(attr_path: impl Into<String>) -> Self {
+        Self {
+            attr_path: attr_path.into(),
+            pkg_set: None,
+        }
+    }
+
+    pub fn resolved_pkg_set(&self) -> &str {
+        self.pkg_set
+            .as_deref()
+            .unwrap_or("import <nixpkgs> {}")
+    }
 }
 
 /// A Derivation — the canonical unit of build.
@@ -128,7 +159,7 @@ pub struct EnvVar {
 ///   :outputs    (:primary "out" :extra ("doc"))
 ///   :env        ((:name "CFLAGS" :value "-O2")))
 /// ```
-#[derive(DeriveTataraDomain, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(DeriveTataraDomain, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[tatara(keyword = "defderivation")]
 pub struct Derivation {
@@ -148,6 +179,10 @@ pub struct Derivation {
     /// Build sandbox controls — what the builder can see.
     #[serde(default)]
     pub sandbox: Sandbox,
+    /// When set, the realizer short-circuits the build to this attribute in
+    /// an existing Nix expression universe (default: nixpkgs).
+    #[serde(default)]
+    pub bridge: Option<BridgeTarget>,
 }
 
 /// Hermeticity controls. Nix guarantees these implicitly; we name them.
@@ -260,6 +295,26 @@ mod tests {
             outputs: Outputs::default(),
             env: vec![],
             sandbox: Sandbox::default(),
+            bridge: None,
         }
+    }
+
+    #[test]
+    fn bridge_defaults_to_nixpkgs() {
+        let b = BridgeTarget::nixpkgs("hello");
+        assert_eq!(b.attr_path, "hello");
+        assert_eq!(b.resolved_pkg_set(), "import <nixpkgs> {}");
+    }
+
+    #[test]
+    fn bridge_respects_custom_pkg_set() {
+        let b = BridgeTarget {
+            attr_path: "myPkg".into(),
+            pkg_set: Some("import ./flake/release.nix { system = \"x86_64-linux\"; }".into()),
+        };
+        assert_eq!(
+            b.resolved_pkg_set(),
+            "import ./flake/release.nix { system = \"x86_64-linux\"; }"
+        );
     }
 }

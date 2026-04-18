@@ -1,0 +1,19 @@
+[package]
+name = "tatara-pkgs"
+description = "Package set abstraction + nixpkgs bridge + tend-driven tatara-lisp mirror — the tatara equivalent of nixpkgs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-lisp = { path = "../tatara-lisp" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+tatara-nix = { path = "../tatara-nix" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

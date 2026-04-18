@@ -1,0 +1,22 @@
+[package]
+name = "tatara-os"
+description = "NixOS-equivalent — typed SystemConfig deriving TataraDomain, activation synthesizer, Linux-kernel + bootloader + services + users + filesystems, composed via tatara-nix module fixpoint"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-lisp = { path = "../tatara-lisp" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+tatara-nix = { path = "../tatara-nix" }
+tatara-pkgs = { path = "../tatara-pkgs" }
+
+blake3 = "1"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

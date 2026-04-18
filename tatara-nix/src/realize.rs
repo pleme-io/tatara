@@ -135,6 +135,13 @@ impl InProcessRealizer {
 
 impl Realizer for InProcessRealizer {
     fn realize(&self, d: &Derivation) -> Result<RealizedArtifact> {
+        // Bridged derivations can't be built hermetically — we have no way to
+        // evaluate Nix attribute references. Delegate transparently to a Nix
+        // invocation, so the caller doesn't care which realizer they picked.
+        if let Some(bridge) = &d.bridge {
+            let expr = format!("({}).{}", bridge.resolved_pkg_set(), bridge.attr_path);
+            return realize_bridged(d, &expr);
+        }
         std::fs::create_dir_all(&self.store_dir)?;
         let out_path = self.output_path_for(d);
         let store_path = d.store_path();
@@ -254,6 +261,48 @@ impl Realizer for InProcessRealizer {
             cached: false,
         })
     }
+}
+
+/// Shared bridge realization — shells out to `nix build --impure --expr`.
+/// Used by both realizers when a Derivation carries a `BridgeTarget`.
+fn realize_bridged(d: &Derivation, expr: &str) -> Result<RealizedArtifact> {
+    let mut cmd = Command::new("nix");
+    cmd.arg("build")
+        .arg("--impure")
+        .arg("--no-link")
+        .arg("--print-out-paths")
+        .arg("--expr")
+        .arg(expr);
+    let out = cmd.output()?;
+    if !out.status.success() {
+        return Err(RealizeError::Nix(format!(
+            "`nix build` bridge for {} exited with {}:\nexpr: {expr}\nstderr:\n{}",
+            d.name,
+            out.status,
+            String::from_utf8_lossy(&out.stderr),
+        )));
+    }
+    let first_line = String::from_utf8(out.stdout)?
+        .trim()
+        .lines()
+        .next()
+        .unwrap_or("")
+        .to_string();
+    if first_line.is_empty() {
+        return Err(RealizeError::Nix(
+            "`nix build` returned no output path".into(),
+        ));
+    }
+    let pbuf = PathBuf::from(&first_line);
+    let mut outputs = BTreeMap::new();
+    outputs.insert("primary".to_string(), pbuf.clone());
+    Ok(RealizedArtifact {
+        store_path: d.store_path(),
+        path: pbuf,
+        outputs,
+        log: vec![format!("[bridge] {expr}")],
+        cached: false,
+    })
 }
 
 fn materialize_source(src: &Source, work: &Path) -> Result<PathBuf> {
@@ -388,7 +437,20 @@ impl NixStoreRealizer {
     /// Convert a tatara `Derivation` into a minimal Nix expression string.
     /// Keeps the same build contract (phases, env, source, outputs) but drops
     /// the contract onto Nix's own derivation primitive.
+    ///
+    /// When the derivation carries a `BridgeTarget`, we short-circuit to the
+    /// named attribute in the target package universe (nixpkgs by default).
     pub fn to_nix_expr(&self, d: &Derivation) -> Result<String> {
+        if let Some(bridge) = &d.bridge {
+            // Bridge path: `(import <nixpkgs> {}).${attr_path}`. `attr_path`
+            // may be dotted (`"python3Packages.requests"`), which Nix handles
+            // natively as successive attribute lookups.
+            return Ok(format!(
+                "({}).{}",
+                bridge.resolved_pkg_set(),
+                bridge.attr_path
+            ));
+        }
         // Source: materialize Inline into a builtins.toFile; pass Path through.
         let src_expr = match &d.source {
             Source::Inline { content } => {
@@ -543,7 +605,7 @@ fn nix_identifier(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::derivation::{BuilderPhase, BuilderPhases};
+    use crate::derivation::{BridgeTarget, BuilderPhase, BuilderPhases};
     use tempfile::TempDir;
 
     fn mk_hello(src: &str) -> Derivation {
@@ -566,6 +628,7 @@ mod tests {
             outputs: Default::default(),
             env: vec![],
             sandbox: Default::default(),
+            bridge: None,
         }
     }
 
@@ -614,6 +677,34 @@ mod tests {
     }
 
     #[test]
+    fn bridge_short_circuits_to_attr_path() {
+        let r = NixStoreRealizer::new();
+        let d = Derivation {
+            name: "hello".into(),
+            bridge: Some(BridgeTarget::nixpkgs("hello")),
+            ..mk_hello("ignored")
+        };
+        let expr = r.to_nix_expr(&d).unwrap();
+        assert_eq!(expr, "(import <nixpkgs> {}).hello");
+    }
+
+    #[test]
+    fn bridge_respects_custom_pkg_set_in_expr() {
+        let r = NixStoreRealizer::new();
+        let d = Derivation {
+            name: "custom".into(),
+            bridge: Some(BridgeTarget {
+                attr_path: "python3Packages.requests".into(),
+                pkg_set: Some("(builtins.getFlake \"github:NixOS/nixpkgs/release-23.11\").legacyPackages.x86_64-linux".into()),
+            }),
+            ..mk_hello("ignored")
+        };
+        let expr = r.to_nix_expr(&d).unwrap();
+        assert!(expr.starts_with("((builtins.getFlake "));
+        assert!(expr.ends_with(".python3Packages.requests"));
+    }
+
+    #[test]
     fn nix_expr_default_pulls_stdenv_from_nixpkgs() {
         let r = NixStoreRealizer::new();
         let d = mk_hello("payload\n");
@@ -648,6 +739,7 @@ mod tests {
             outputs: Default::default(),
             env: vec![],
             sandbox: Default::default(),
+            bridge: None,
         };
         let r = NixStoreRealizer::new();
         let art = r.realize(&d).expect("nix build should succeed");

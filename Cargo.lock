@@ -5159,6 +5159,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "tatara-os"
+version = "0.2.0"
+dependencies = [
+ "blake3",
+ "hex",
+ "serde",
+ "serde_json",
+ "tatara-lisp",
+ "tatara-lisp-derive",
+ "tatara-nix",
+ "tatara-pkgs",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "tatara-pkgs"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tatara-lisp",
+ "tatara-lisp-derive",
+ "tatara-nix",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "tatara-process"
 version = "0.2.0"
 dependencies = [

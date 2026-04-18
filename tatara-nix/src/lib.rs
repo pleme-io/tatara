@@ -48,8 +48,11 @@ pub mod overlay_compose;
 pub mod realize;
 pub mod resolver;
 pub mod store;
+pub mod synth;
 
-pub use derivation::{BuilderPhase, BuilderPhases, Derivation, EnvVar, InputRef, Outputs, Source};
+pub use derivation::{
+    BridgeTarget, BuilderPhase, BuilderPhases, Derivation, EnvVar, InputRef, Outputs, Source,
+};
 pub use evaluator::{DryRun, EvaluationResult, Evaluator, Plan};
 pub use flake::{Flake, FlakeInput, FlakeOutputs};
 pub use module::{Module, ModuleImport, ModuleOption, MkExpr, OptionType};
@@ -58,6 +61,7 @@ pub use overlay_compose::{apply, apply_chain, compose, ComposeError, PackageSet}
 pub use realize::{InProcessRealizer, NixStoreRealizer, RealizeError, RealizedArtifact, Realizer};
 pub use resolver::{resolve_module, resolve_modules, Priority, ResolveError};
 pub use store::{StoreHash, StorePath};
+pub use synth::{Artifact, MultiSynthesizer, Synthesizer};
 
 /// Register every tatara-nix domain with the global Lisp dispatcher.
 /// Call once at binary startup to make `(defderivation …)`, `(defmodule …)`,

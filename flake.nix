@@ -93,6 +93,18 @@
       repo = "pleme-io/tatara-boot-gen";
     };
 
+    # tatara-terreiro — CLI for sealed Lisp virtual environments.
+    # Sub-commands: new / id / seal / load / compile / eval / realize.
+    # Nord-themed stderr via tatara-ui; pipeable stdout.
+    terreiroOutputs = (import "${substrate}/lib/rust-workspace-release-flake.nix" {
+      inherit nixpkgs crate2nix flake-utils devenv;
+    }) {
+      toolName = "tatara-terreiro";
+      packageName = "tatara-terreiro";
+      src = self;
+      repo = "pleme-io/tatara-terreiro";
+    };
+
     # ── CI-replacement surface ─────────────────────────────────────────
     # `cargo run --bin tatara-check` runs the typed workspace coherence suite
     # driven by checks.lisp (CRD drift, YAML parse, Process round-trip, etc.).
@@ -142,6 +154,9 @@
           })
           // (let bg = bootGenOutputs.packages.${system} or {}; in {
             boot-gen = bg.tatara-boot-gen or bg.default or null;
+          })
+          // (let tr = terreiroOutputs.packages.${system} or {}; in {
+            terreiro = tr.tatara-terreiro or tr.default or null;
           })
         );
 

@@ -66,6 +66,17 @@ in
       example = literalExpression "inputs.tatara.packages.\${pkgs.system}.boot-gen";
     };
 
+    terreiroPackage = mkOption {
+      type = types.nullOr types.package;
+      default = null;
+      description = ''
+        Optional `tatara-terreiro` CLI package. When non-null, installed
+        into the HM user profile alongside tatara-boot-gen. Commands:
+        new / id / seal / load / compile / eval / realize.
+      '';
+      example = literalExpression "inputs.tatara.packages.\${pkgs.system}.terreiro";
+    };
+
     hostname = mkOption {
       type = types.str;
       default = "plex";
@@ -164,7 +175,7 @@ in
     home.packages = [
       cfg.package
       pkgs.vfkit
-    ];
+    ] ++ lib.optional (cfg.terreiroPackage != null) cfg.terreiroPackage;
 
     # Drop authorized_keys + a launcher into the VM root at activation
     # time. The launcher is what a launchd agent (future) will exec.

@@ -131,7 +131,7 @@ mod tests {
             env: vec![],
             sandbox: Default::default(),
             bridge: None,
-        }
+            nix_expr: None,        }
     }
 
     fn base() -> PackageSet {

@@ -190,6 +190,7 @@ fn bridge_derivation(name: String, bridge: BridgeTarget) -> Derivation {
         env: vec![],
         sandbox: Default::default(),
         bridge: Some(bridge),
+        nix_expr: None,
     }
 }
 
@@ -211,7 +212,7 @@ fn hermetic_derivation(name: String, version: Option<String>, install_cmd: &str)
         env: vec![],
         sandbox: Default::default(),
         bridge: None,
-    }
+        nix_expr: None,    }
 }
 
 fn sanitize(s: &str) -> String {

@@ -183,6 +183,13 @@ pub struct Derivation {
     /// an existing Nix expression universe (default: nixpkgs).
     #[serde(default)]
     pub bridge: Option<BridgeTarget>,
+    /// Escape hatch: when set, the realizer treats this string as the full
+    /// Nix expression to build and ignores every other build-shape field.
+    /// Intended for composing `stdenv.mkDerivation { … }` / `runCommand`
+    /// recipes emitted by higher-level builders (e.g. `tatara-vm::rootfs`).
+    /// Ignored by `InProcessRealizer` — needs a live `/nix/store`.
+    #[serde(default)]
+    pub nix_expr: Option<String>,
 }
 
 /// Hermeticity controls. Nix guarantees these implicitly; we name them.
@@ -296,6 +303,7 @@ mod tests {
             env: vec![],
             sandbox: Sandbox::default(),
             bridge: None,
+            nix_expr: None,
         }
     }
 

@@ -486,6 +486,7 @@ fn attrs_to_derivation(m: &BTreeMap<String, Value>) -> Result<Derivation> {
         env,
         sandbox,
         bridge,
+        nix_expr: None,
     })
 }
 

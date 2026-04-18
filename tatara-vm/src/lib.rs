@@ -29,10 +29,14 @@
 //!   :cmdline  ("console=hvc0" "init=/bin/tatara-init"))
 //! ```
 
+pub mod boot;
 pub mod config;
+pub mod rootfs;
 pub mod vfkit;
 
+pub use boot::{compose, BootManifest};
 pub use config::{
     GuestKernel, GuestRootfs, Hypervisor, NetworkSpec, NetworkKind, ShareSpec, VmSpec,
 };
+pub use rootfs::{InitrdContent, InitrdFile, LinuxRootfs};
 pub use vfkit::{VfkitEmitter, VfkitJson};

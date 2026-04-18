@@ -66,6 +66,7 @@ impl NixpkgsBridge {
                 attr_path: attr,
                 pkg_set: self.pkg_set.clone(),
             }),
+            nix_expr: None,
         }
     }
 }

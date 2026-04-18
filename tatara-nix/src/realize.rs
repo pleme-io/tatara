@@ -135,9 +135,12 @@ impl InProcessRealizer {
 
 impl Realizer for InProcessRealizer {
     fn realize(&self, d: &Derivation) -> Result<RealizedArtifact> {
-        // Bridged derivations can't be built hermetically — we have no way to
-        // evaluate Nix attribute references. Delegate transparently to a Nix
-        // invocation, so the caller doesn't care which realizer they picked.
+        // `nix_expr` is a full Nix expression we just hand off to nix build.
+        // `bridge` is the attr-path short-circuit. Neither can be built
+        // hermetically — both route through the shared `realize_bridged`.
+        if let Some(expr) = &d.nix_expr {
+            return realize_bridged(d, expr);
+        }
         if let Some(bridge) = &d.bridge {
             let expr = format!("({}).{}", bridge.resolved_pkg_set(), bridge.attr_path);
             return realize_bridged(d, &expr);
@@ -441,6 +444,12 @@ impl NixStoreRealizer {
     /// When the derivation carries a `BridgeTarget`, we short-circuit to the
     /// named attribute in the target package universe (nixpkgs by default).
     pub fn to_nix_expr(&self, d: &Derivation) -> Result<String> {
+        if let Some(expr) = &d.nix_expr {
+            // Escape hatch: caller has handcrafted a full Nix expression
+            // (typically a `stdenv.mkDerivation { … }` emitted by a higher-
+            // level builder such as `tatara-vm::rootfs`). Ship it verbatim.
+            return Ok(expr.clone());
+        }
         if let Some(bridge) = &d.bridge {
             // Bridge path: `(import <nixpkgs> {}).${attr_path}`. `attr_path`
             // may be dotted (`"python3Packages.requests"`), which Nix handles
@@ -629,7 +638,7 @@ mod tests {
             env: vec![],
             sandbox: Default::default(),
             bridge: None,
-        }
+            nix_expr: None,        }
     }
 
     #[test]
@@ -740,7 +749,7 @@ mod tests {
             env: vec![],
             sandbox: Default::default(),
             bridge: None,
-        };
+            nix_expr: None,        };
         let r = NixStoreRealizer::new();
         let art = r.realize(&d).expect("nix build should succeed");
         assert!(art.path.starts_with("/nix/store"));

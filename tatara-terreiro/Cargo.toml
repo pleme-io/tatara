@@ -9,6 +9,8 @@ license.workspace = true
 [dependencies]
 tatara-lisp = { path = "../tatara-lisp" }
 tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+tatara-eval = { path = "../tatara-eval" }
+tatara-nix = { path = "../tatara-nix" }
 
 # Arena allocation — the terreiro's namesake. One Bump per sealed environment.
 bumpalo = { version = "3", features = ["collections"] }
@@ -23,3 +25,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

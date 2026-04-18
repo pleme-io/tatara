@@ -45,6 +45,7 @@ pub mod flake;
 pub mod module;
 pub mod overlay;
 pub mod overlay_compose;
+pub mod realize;
 pub mod resolver;
 pub mod store;
 
@@ -54,6 +55,7 @@ pub use flake::{Flake, FlakeInput, FlakeOutputs};
 pub use module::{Module, ModuleImport, ModuleOption, MkExpr, OptionType};
 pub use overlay::{Overlay, OverlayTarget};
 pub use overlay_compose::{apply, apply_chain, compose, ComposeError, PackageSet};
+pub use realize::{InProcessRealizer, NixStoreRealizer, RealizeError, RealizedArtifact, Realizer};
 pub use resolver::{resolve_module, resolve_modules, Priority, ResolveError};
 pub use store::{StoreHash, StorePath};
 

@@ -53,9 +53,13 @@ use bumpalo::Bump;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use tatara_eval::{EvalError, Interpreter, Value};
 use tatara_lisp::{
     compiler_spec::{realize_in_memory, CompilerSpec, RealizedCompiler},
     LispError, Sexp,
+};
+use tatara_nix::realize::{
+    InProcessRealizer, NixStoreRealizer, RealizeError, RealizedArtifact, Realizer,
 };
 
 /// Content-addressable identity for a sealed terreiro.
@@ -84,6 +88,10 @@ impl std::fmt::Display for TerreiroId {
 pub enum TerreiroError {
     #[error("lisp: {0}")]
     Lisp(#[from] LispError),
+    #[error("eval: {0}")]
+    Eval(#[from] EvalError),
+    #[error("realize: {0}")]
+    Realize(#[from] RealizeError),
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
     #[error("serde: {0}")]
@@ -94,9 +102,42 @@ pub enum TerreiroError {
     NotSealed,
     #[error("no CompilerSpec found in source")]
     NoSpec,
+    #[error("no interpreter attached to this terreiro — call with_interpreter()")]
+    NoInterpreter,
+    #[error("no realizer attached to this terreiro — call with_realizer()")]
+    NoRealizer,
+    #[error("evaluated to {0}, not a derivation — cannot realize")]
+    NotADerivation(String),
 }
 
 type Result<T> = std::result::Result<T, TerreiroError>;
+
+/// Two realizer flavors the terreiro knows how to host. Avoids trait-object
+/// bounds and keeps snapshot semantics local.
+pub enum TerreiroRealizer {
+    /// Self-contained hermetic builder (default store = `$TATARA_STORE_DIR`
+    /// or `$XDG_DATA_HOME/tatara/store`).
+    InProcess(InProcessRealizer),
+    /// Bind to a running Nix on disk — emits `(derivation { … })` Nix
+    /// expressions and lets `/nix/store` own the build + cache.
+    NixStore(NixStoreRealizer),
+}
+
+impl TerreiroRealizer {
+    fn realize(&self, d: &tatara_nix::Derivation) -> std::result::Result<RealizedArtifact, RealizeError> {
+        match self {
+            Self::InProcess(r) => r.realize(d),
+            Self::NixStore(r) => r.realize(d),
+        }
+    }
+
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::InProcess(_) => "in-process",
+            Self::NixStore(_) => "nix-store",
+        }
+    }
+}
 
 /// A bounded, sealable Lisp virtual environment.
 pub struct Terreiro {
@@ -108,6 +149,11 @@ pub struct Terreiro {
     /// Currently used for caller-owned scratch space via `arena_scratch`; future
     /// work moves the bytecode op arrays + cache entries into this arena.
     arena: Arc<Bump>,
+    /// Optional evaluator — present when the terreiro hosts a full Lisp
+    /// runtime (not just macroexpansion).
+    interpreter: Option<Arc<Interpreter>>,
+    /// Optional realizer — turns `Derivation` values into on-disk store paths.
+    realizer: Option<Arc<TerreiroRealizer>>,
     sealed: bool,
     /// Stable identity once sealed. `None` while mutable.
     id: Option<TerreiroId>,
@@ -121,9 +167,78 @@ impl Terreiro {
             compiler,
             spec,
             arena: Arc::new(Bump::new()),
+            interpreter: None,
+            realizer: None,
             sealed: false,
             id: None,
         })
+    }
+
+    /// Attach a fresh tatara-eval Interpreter. Lets the terreiro evaluate Lisp
+    /// to `Value`, including typed `Derivation` values.
+    pub fn with_interpreter(mut self) -> Self {
+        self.interpreter = Some(Arc::new(Interpreter::new()));
+        self
+    }
+
+    /// Attach an in-process hermetic realizer (no Nix dependency).
+    pub fn with_in_process_realizer(mut self, store_dir: impl Into<std::path::PathBuf>) -> Self {
+        self.realizer = Some(Arc::new(TerreiroRealizer::InProcess(
+            InProcessRealizer::new(store_dir),
+        )));
+        self
+    }
+
+    /// Attach a realizer that hands builds off to a running Nix on disk.
+    pub fn with_nix_store_realizer(mut self) -> Self {
+        self.realizer = Some(Arc::new(TerreiroRealizer::NixStore(
+            NixStoreRealizer::new(),
+        )));
+        self
+    }
+
+    /// Attach a realizer pointing at the platform-default tatara store
+    /// (`$TATARA_STORE_DIR` or XDG data dir).
+    pub fn with_default_store(mut self) -> Self {
+        self.realizer = Some(Arc::new(TerreiroRealizer::InProcess(
+            InProcessRealizer::default_store(),
+        )));
+        self
+    }
+
+    /// Is an interpreter wired up?
+    pub fn has_interpreter(&self) -> bool {
+        self.interpreter.is_some()
+    }
+
+    /// Is a realizer wired up? Which flavor?
+    pub fn realizer_kind(&self) -> Option<&'static str> {
+        self.realizer.as_ref().map(|r| r.kind())
+    }
+
+    /// Evaluate Lisp source end-to-end: macroexpand through `self.compiler`,
+    /// then `self.interpreter.eval_forms`. Returns the value of the last form.
+    pub fn eval(&self, src: &str) -> Result<Value> {
+        let interp = self
+            .interpreter
+            .as_ref()
+            .ok_or(TerreiroError::NoInterpreter)?;
+        let forms = self.compiler.compile(src)?;
+        Ok(interp.eval_forms(&forms)?)
+    }
+
+    /// Evaluate Lisp source, then realize the resulting `Derivation` to a
+    /// concrete artifact on disk. Errors if the final value is not a
+    /// derivation.
+    pub fn realize(&self, src: &str) -> Result<RealizedArtifact> {
+        let realizer = self.realizer.as_ref().ok_or(TerreiroError::NoRealizer)?;
+        let value = self.eval(src)?;
+        let interp = self.interpreter.as_ref().expect("eval() proved present");
+        let forced = interp.force(value)?;
+        match forced {
+            Value::Derivation(d) => Ok(realizer.realize(&d)?),
+            other => Err(TerreiroError::NotADerivation(other.type_name().into())),
+        }
     }
 
     /// Parse Lisp source containing exactly one `(defcompiler …)` form and
@@ -378,5 +493,150 @@ mod tests {
         let mut t = Terreiro::from_spec(basic_spec()).unwrap();
         let id = t.seal().clone();
         assert!(format!("{id}").starts_with("terreiro:"));
+    }
+
+    // ── end-to-end: Lisp → eval → realize → on-disk artifact ─────────
+
+    fn eval_spec() -> CompilerSpec {
+        CompilerSpec {
+            name: "eval-capable".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: Some("terreiro w/ interpreter + realizer".into()),
+        }
+    }
+
+    #[test]
+    fn terreiro_evaluates_lisp_arithmetic() {
+        let t = Terreiro::from_spec(eval_spec()).unwrap().with_interpreter();
+        assert!(t.has_interpreter());
+        let v = t.eval("(+ 1 2 3)").unwrap();
+        assert!(matches!(v, Value::Int(6)));
+    }
+
+    #[test]
+    fn terreiro_builds_derivation_value() {
+        let t = Terreiro::from_spec(eval_spec()).unwrap().with_interpreter();
+        let v = t
+            .eval(r#"(derivation (attrs "name" "widget" "version" "1.0"))"#)
+            .unwrap();
+        match v {
+            Value::Derivation(d) => {
+                assert_eq!(d.name, "widget");
+                assert_eq!(d.version.as_deref(), Some("1.0"));
+            }
+            other => panic!("expected Derivation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn terreiro_realizes_lisp_to_disk() {
+        let store = tempfile::tempdir().unwrap();
+        let t = Terreiro::from_spec(eval_spec())
+            .unwrap()
+            .with_interpreter()
+            .with_in_process_realizer(store.path());
+        assert_eq!(t.realizer_kind(), Some("in-process"));
+
+        let src = r#"
+            (derivation
+              (attrs
+                "name"    "greeting"
+                "version" "1.0"
+                "source"  (attrs "kind" "Inline" "content" "hello from lisp\n")
+                "builder" (attrs
+                            "phases"   (list "Install")
+                            "commands" (attrs
+                                         "Install" (list "cat \"$src\" > \"$out_file\"")))))
+        "#;
+        let art = t.realize(src).unwrap();
+        assert!(!art.cached);
+        assert!(art.path.exists());
+        let got = std::fs::read_to_string(&art.path).unwrap();
+        assert_eq!(got, "hello from lisp\n");
+    }
+
+    #[test]
+    fn terreiro_realize_errors_when_not_derivation() {
+        let store = tempfile::tempdir().unwrap();
+        let t = Terreiro::from_spec(eval_spec())
+            .unwrap()
+            .with_interpreter()
+            .with_in_process_realizer(store.path());
+        let err = t.realize("42").unwrap_err();
+        assert!(matches!(err, TerreiroError::NotADerivation(_)));
+    }
+
+    #[test]
+    fn terreiro_errors_without_interpreter() {
+        let t = Terreiro::from_spec(eval_spec()).unwrap();
+        let err = t.eval("(+ 1 2)").unwrap_err();
+        assert!(matches!(err, TerreiroError::NoInterpreter));
+    }
+
+    #[test]
+    fn terreiro_errors_without_realizer() {
+        let t = Terreiro::from_spec(eval_spec()).unwrap().with_interpreter();
+        let err = t
+            .realize(r#"(derivation (attrs "name" "x"))"#)
+            .unwrap_err();
+        assert!(matches!(err, TerreiroError::NoRealizer));
+    }
+
+    #[test]
+    fn terreiro_with_lisp_let_binding_and_realize() {
+        let store = tempfile::tempdir().unwrap();
+        let t = Terreiro::from_spec(eval_spec())
+            .unwrap()
+            .with_interpreter()
+            .with_in_process_realizer(store.path());
+
+        // Compose a derivation using a let binding — proves the full
+        // authoring surface (let/lambda/arithmetic) + realization chain work.
+        let src = r#"
+            (let ((greeting "hello ")
+                  (target   "terreiro\n"))
+              (derivation
+                (attrs
+                  "name"    "composed"
+                  "version" "2.0"
+                  "source"  (attrs "kind"    "Inline"
+                                   "content" (string-append greeting target))
+                  "builder" (attrs
+                              "phases"   (list "Install")
+                              "commands" (attrs
+                                           "Install" (list "cat \"$src\" > \"$out_file\""))))))
+        "#;
+        let art = t.realize(src).unwrap();
+        let got = std::fs::read_to_string(&art.path).unwrap();
+        assert_eq!(got, "hello terreiro\n");
+
+        // Second realization is a cache hit — same content-addressed path.
+        let art2 = t.realize(src).unwrap();
+        assert_eq!(art.store_path, art2.store_path);
+        assert!(art2.cached);
+    }
+
+    #[test]
+    fn sealed_terreiro_still_realizes() {
+        let store = tempfile::tempdir().unwrap();
+        let mut t = Terreiro::from_spec(eval_spec())
+            .unwrap()
+            .with_interpreter()
+            .with_in_process_realizer(store.path());
+        t.seal();
+        let src = r#"
+            (derivation
+              (attrs
+                "name"    "sealed-greet"
+                "source"  (attrs "kind" "Inline" "content" "from sealed\n")
+                "builder" (attrs
+                            "phases"   (list "Install")
+                            "commands" (attrs "Install" (list "cat \"$src\" > \"$out_file\""))) ))
+        "#;
+        let art = t.realize(src).unwrap();
+        assert_eq!(std::fs::read_to_string(&art.path).unwrap(), "from sealed\n");
     }
 }

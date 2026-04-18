@@ -5020,6 +5020,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tatara-eval"
+version = "0.2.0"
+dependencies = [
+ "bumpalo",
+ "serde",
+ "serde_json",
+ "tatara-lisp",
+ "tatara-nix",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "tatara-kube"
 version = "0.2.0"
 dependencies = [
@@ -5116,6 +5128,7 @@ dependencies = [
  "tatara-lattice",
  "tatara-lisp",
  "tatara-lisp-derive",
+ "tempfile",
  "thiserror 2.0.18",
 ]
 
@@ -5205,8 +5218,11 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
+ "tatara-eval",
  "tatara-lisp",
  "tatara-lisp-derive",
+ "tatara-nix",
+ "tempfile",
  "thiserror 2.0.18",
 ]
 

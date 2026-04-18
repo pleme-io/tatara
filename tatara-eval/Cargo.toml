@@ -1,0 +1,18 @@
+[package]
+name = "tatara-eval"
+description = "Optimized in-memory Lisp interpreter for tatara — evaluates Sexp to Value, produces typed Derivations, composes with tatara-nix realizers"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tatara-lisp = { path = "../tatara-lisp" }
+tatara-nix = { path = "../tatara-nix" }
+
+# Arena allocation — one Bump per evaluation frame when caller opts in.
+bumpalo = { version = "3", features = ["collections"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"

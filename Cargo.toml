@@ -10,6 +10,7 @@ members = [
     "tatara-domains",     # Reference typed domains (MonitorSpec, NotifySpec) authored as Lisp
     "tatara-nix",         # Nix's academic essence re-expressed in Rust+Lisp — Derivation, Module, Overlay, Flake
     "tatara-terreiro",    # Arena-enclosed, sealable, serializable Lisp virtual environments (Brazilian × pleme naming)
+    "tatara-eval",        # Optimized in-memory Lisp interpreter (Sexp → Value, produces typed Derivations)
     "tatara-reconciler",  # FluxCD-adjacent controller — replaces tatara-kube
     # ── existing surfaces ──────────────────────────────────────────────
     "tatara-api",

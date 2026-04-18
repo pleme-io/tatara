@@ -77,6 +77,18 @@ in
       example = literalExpression "inputs.tatara.packages.\${pkgs.system}.terreiro";
     };
 
+    vmctlPackage = mkOption {
+      type = types.nullOr types.package;
+      default = null;
+      description = ''
+        Optional `tatara-vmctl` control-plane CLI. When non-null, installed
+        into the HM user profile. Commands: list / status / build / up /
+        down / destroy / logs / ip / ssh — operates on VMs declared under
+        $TATARA_OS_ROOT (default ~/.local/share/tatara-os).
+      '';
+      example = literalExpression "inputs.tatara.packages.\${pkgs.system}.vmctl";
+    };
+
     hostname = mkOption {
       type = types.str;
       default = "plex";
@@ -175,7 +187,9 @@ in
     home.packages = [
       cfg.package
       pkgs.vfkit
-    ] ++ lib.optional (cfg.terreiroPackage != null) cfg.terreiroPackage;
+    ]
+    ++ lib.optional (cfg.terreiroPackage != null) cfg.terreiroPackage
+    ++ lib.optional (cfg.vmctlPackage != null) cfg.vmctlPackage;
 
     # Drop authorized_keys + a launcher into the VM root at activation
     # time. The launcher is what a launchd agent (future) will exec.

@@ -21,3 +21,10 @@ blake3 = "1"
 [[bin]]
 name = "tatara-boot-gen"
 path = "src/bin/tatara-boot-gen.rs"
+
+[[bin]]
+name = "tatara-vmctl"
+path = "src/bin/tatara-vmctl.rs"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

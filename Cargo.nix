@@ -18065,6 +18065,11 @@ rec {
             path = "src/bin/tatara-boot-gen.rs";
             requiredFeatures = [ ];
           }
+          {
+            name = "tatara-vmctl";
+            path = "src/bin/tatara-vmctl.rs";
+            requiredFeatures = [ ];
+          }
         ];
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-vm; };
         libName = "tatara_vm";
@@ -18075,6 +18080,11 @@ rec {
           {
             name = "blake3";
             packageId = "blake3";
+          }
+          {
+            name = "libc";
+            packageId = "libc";
+            target = { target, features }: (target."unix" or false);
           }
           {
             name = "serde";

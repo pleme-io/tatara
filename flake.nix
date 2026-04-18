@@ -105,6 +105,19 @@
       repo = "pleme-io/tatara-terreiro";
     };
 
+    # tatara-vmctl — control plane for tatara-os guests.
+    # Sub-commands: list / status / build / up / down / destroy / logs / ip / ssh.
+    # Shares the tatara-vm crate with tatara-boot-gen; this output targets
+    # the vmctl binary specifically so it ships as a standalone package.
+    vmctlOutputs = (import "${substrate}/lib/rust-workspace-release-flake.nix" {
+      inherit nixpkgs crate2nix flake-utils devenv;
+    }) {
+      toolName = "tatara-vmctl";
+      packageName = "tatara-vm";
+      src = self;
+      repo = "pleme-io/tatara-vmctl";
+    };
+
     # ── CI-replacement surface ─────────────────────────────────────────
     # `cargo run --bin tatara-check` runs the typed workspace coherence suite
     # driven by checks.lisp (CRD drift, YAML parse, Process round-trip, etc.).
@@ -157,6 +170,9 @@
           })
           // (let tr = terreiroOutputs.packages.${system} or {}; in {
             terreiro = tr.tatara-terreiro or tr.default or null;
+          })
+          // (let vc = vmctlOutputs.packages.${system} or {}; in {
+            vmctl = vc.tatara-vmctl or vc.default or null;
           })
         );
 

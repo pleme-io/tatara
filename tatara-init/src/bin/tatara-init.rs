@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use tatara_init::{InitConfig, LinuxSupervisor, Pid, Supervisor};
+use tatara_init::{InitConfig, LinuxSupervisor, Pid};
 use tatara_lisp::{domain::TataraDomain, read};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

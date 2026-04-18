@@ -7,10 +7,12 @@
 //! on-disk artifacts that `vfkit --config vm.json` can boot.
 
 use tatara_nix::derivation::{BridgeTarget, Derivation, Outputs, Source};
+use tatara_nix::synth::{Artifact, MultiSynthesizer};
 use tatara_os::SystemConfig;
 
 use crate::config::{GuestKernel, GuestRootfs, Hypervisor, VmSpec};
 use crate::rootfs::{InitrdFile, LinuxRootfs};
+use crate::vfkit::VfkitEmitter;
 
 /// The full set of on-disk-buildable artifacts for one VM boot.
 pub struct BootManifest {
@@ -139,6 +141,193 @@ fn sanitize(s: &str) -> String {
         .collect()
 }
 
+// ── BootSynthesizer — one SystemConfig, full artifact tree ────────────────
+
+/// Multi-file emitter for a full boot artifact set.
+///
+/// Input: one tatara-os `SystemConfig` (typically parsed from `(defsystem …)`).
+/// Output: every file a user needs to reach `vfkit --config vm.json`:
+///
+///   - `vm.json` / `boot.sh` — the VmSpec rendered for vfkit
+///   - `kernel.nix` / `initrd.nix` — standalone Nix expressions that
+///     `nix build -f kernel.nix` (etc.) realize into `/nix/store` paths
+///   - `init.lisp` — the supervisor config baked into the initrd
+///   - `system.json` — the typed config, re-serialized for audit
+///   - `README.md` — the boot instructions, keyed to the guest spec
+pub struct BootSynthesizer {
+    /// Path we presume tatara-init will live at inside the guest. Used only
+    /// when the init binary hasn't been realized yet — real deployments
+    /// substitute a `/nix/store/...-tatara-init/bin/tatara-init` path.
+    pub init_binary_path: String,
+    /// VmSpec overrides (cpus, memory, shares). If None, defaults by hostname.
+    pub vm_override: Option<VmSpec>,
+    /// Output prefix for all emitted files. Artifact paths are relative.
+    pub out_prefix: String,
+    /// Include busybox + applets in the initrd. Default true (matches
+    /// LinuxRootfs default); set false when building on a non-Linux host
+    /// without a linux-builder (e.g. naive Darwin-only dev flow).
+    pub busybox: bool,
+}
+
+impl Default for BootSynthesizer {
+    fn default() -> Self {
+        Self {
+            init_binary_path: "${pkgs.hello}/bin/hello".into(),
+            vm_override: None,
+            out_prefix: "boot".into(),
+            busybox: true,
+        }
+    }
+}
+
+impl BootSynthesizer {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_init_binary_path(mut self, p: impl Into<String>) -> Self {
+        self.init_binary_path = p.into();
+        self
+    }
+
+    pub fn with_out_prefix(mut self, p: impl Into<String>) -> Self {
+        self.out_prefix = p.into();
+        self
+    }
+
+    pub fn with_vm_override(mut self, vm: VmSpec) -> Self {
+        self.vm_override = Some(vm);
+        self
+    }
+
+    pub fn with_busybox(mut self, on: bool) -> Self {
+        self.busybox = on;
+        self
+    }
+}
+
+impl MultiSynthesizer for BootSynthesizer {
+    type Input = SystemConfig;
+
+    fn generate_all(&self, cfg: &SystemConfig) -> Vec<Artifact> {
+        let mut bm = compose(
+            cfg,
+            self.init_binary_path.clone(),
+            self.vm_override.clone(),
+        );
+        // Honor the BootSynthesizer busybox flag by regenerating the initrd
+        // without busybox if asked.
+        if !self.busybox {
+            let mut rootfs = crate::rootfs::LinuxRootfs::new(
+                self.init_binary_path.clone(),
+                synthesize_init_config(cfg),
+            )
+            .with_name(format!("initrd-{}", sanitize(&cfg.hostname)))
+            .without_busybox();
+            rootfs = rootfs.with_file("/etc/hostname", format!("{}\n", cfg.hostname));
+            for f in &cfg.environment.etc_files {
+                let path = if f.path.starts_with('/') {
+                    f.path.clone()
+                } else {
+                    format!("/etc/{}", f.path)
+                };
+                rootfs.extra_files.push(crate::rootfs::InitrdFile {
+                    path,
+                    content: crate::rootfs::InitrdContent::Inline(f.content.clone()),
+                    mode: 0o644,
+                });
+            }
+            bm.initrd = rootfs.derivation();
+            bm.vm.rootfs = crate::config::GuestRootfs::Image {
+                derivation: bm.initrd.clone(),
+            };
+            bm.vm.initrd = Some(bm.initrd.clone());
+        }
+        let prefix = &self.out_prefix;
+
+        // vm.json + boot.sh come from the vfkit emitter. Path placeholders
+        // here — real deployments realize bm.kernel and bm.initrd and pass
+        // the resulting store paths back through VfkitEmitter::with_*_path.
+        let vfkit = VfkitEmitter::new();
+        let mut arts = vfkit.generate_all(&bm.vm);
+        // Rewrite the vfkit paths from `vm/<name>/…` to our prefix.
+        for a in &mut arts {
+            if let Some(suffix) = a.path.strip_prefix(&format!("vm/{}/", bm.vm.name)) {
+                a.path = format!("{prefix}/{suffix}");
+            }
+        }
+
+        // kernel.nix + initrd.nix — standalone buildable Nix expressions.
+        let kernel_expr = match &bm.kernel.bridge {
+            Some(b) => format!("# kernel for {}\n({}).{}\n", cfg.hostname, b.resolved_pkg_set(), b.attr_path),
+            None => "# (custom kernel — no bridge)\n".into(),
+        };
+        let initrd_expr = bm
+            .initrd
+            .nix_expr
+            .clone()
+            .unwrap_or_else(|| "# (initrd has no nix_expr — unexpected)\n".into());
+
+        arts.push(Artifact::new(format!("{prefix}/kernel.nix"), kernel_expr));
+        arts.push(Artifact::new(format!("{prefix}/initrd.nix"), initrd_expr));
+
+        // init.lisp — extracted from the initrd expression for auditability.
+        arts.push(Artifact::new(
+            format!("{prefix}/init.lisp"),
+            synthesize_init_config(cfg),
+        ));
+
+        // system.json — canonical typed view of the system.
+        if let Ok(json) = serde_json::to_string_pretty(cfg) {
+            arts.push(Artifact::new(format!("{prefix}/system.json"), json));
+        }
+
+        // README.md — human-friendly boot instructions.
+        arts.push(Artifact::new(
+            format!("{prefix}/README.md"),
+            render_readme(cfg, &bm),
+        ));
+
+        arts
+    }
+}
+
+fn render_readme(cfg: &SystemConfig, bm: &BootManifest) -> String {
+    format!(
+        "# tatara-os boot artifact — `{hostname}`\n\n\
+         Generated from a `(defsystem …)` Lisp form via `tatara-vm::BootSynthesizer`.\n\n\
+         ## Files\n\n\
+         - `system.json`  — the typed `SystemConfig`\n\
+         - `init.lisp`    — the tatara-init supervisor config (baked into the initrd)\n\
+         - `kernel.nix`   — `nix build -f kernel.nix` → a Linux kernel derivation\n\
+         - `initrd.nix`   — `nix build -f initrd.nix` → `{initrd_name}/initrd.cpio.gz`\n\
+         - `vm.json`      — vfkit config with placeholders for the realized paths\n\
+         - `boot.sh`      — helper that runs `vfkit --config vm.json`\n\n\
+         ## To boot\n\n\
+         ```sh\n\
+         KERNEL=$(nix build -f kernel.nix --no-link --print-out-paths)/bzImage\n\
+         INITRD=$(nix build -f initrd.nix --no-link --print-out-paths)/initrd.cpio.gz\n\
+         # Substitute paths into vm.json (jq recommended) and run:\n\
+         ./boot.sh\n\
+         ```\n\n\
+         ## Spec\n\n\
+         - Host: `{hostname}` on `{system}`\n\
+         - Init system: `{init:?}` (tatara-init is PID 1 by default)\n\
+         - Services: {n_services}\n\
+         - Kernel: `{kernel_name}`\n\
+         - Initrd: `{initrd_name}`\n\
+         - vfkit CPUs: {cpus}, memory: {mem_mib} MiB\n",
+        hostname = cfg.hostname,
+        system = cfg.system,
+        init = cfg.init,
+        n_services = cfg.services.len(),
+        kernel_name = bm.kernel.name,
+        initrd_name = bm.initrd.name,
+        cpus = bm.vm.cpus,
+        mem_mib = bm.vm.memory_mib,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,6 +402,58 @@ mod tests {
         let expr = bm.initrd.nix_expr.unwrap();
         assert!(expr.contains("root/etc/hostname"));
         assert!(expr.contains("plex"));
+    }
+
+    // ── BootSynthesizer ────────────────────────────────────────────────
+
+    #[test]
+    fn synthesizer_emits_full_artifact_tree() {
+        let s = BootSynthesizer::new().with_out_prefix("out");
+        let arts = s.generate_all(&sys());
+        let paths: Vec<&str> = arts.iter().map(|a| a.path.as_str()).collect();
+        for expected in [
+            "out/vm.json",
+            "out/boot.sh",
+            "out/kernel.nix",
+            "out/initrd.nix",
+            "out/init.lisp",
+            "out/system.json",
+            "out/README.md",
+        ] {
+            assert!(
+                paths.contains(&expected),
+                "missing artifact: {expected}\n got: {paths:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn synthesizer_kernel_nix_is_buildable_expression() {
+        let s = BootSynthesizer::new();
+        let arts = s.generate_all(&sys());
+        let kernel = arts.iter().find(|a| a.path.ends_with("kernel.nix")).unwrap();
+        assert!(kernel.content.contains("import <nixpkgs>"));
+        assert!(kernel.content.contains(".linuxPackages.kernel"));
+    }
+
+    #[test]
+    fn synthesizer_initrd_nix_is_buildable_expression() {
+        let s = BootSynthesizer::new();
+        let arts = s.generate_all(&sys());
+        let initrd = arts.iter().find(|a| a.path.ends_with("initrd.nix")).unwrap();
+        assert!(initrd.content.contains("runCommand"));
+        assert!(initrd.content.contains("initrd.cpio.gz"));
+        assert!(initrd.content.contains("tatara-init"));
+    }
+
+    #[test]
+    fn synthesizer_readme_is_populated_from_spec() {
+        let s = BootSynthesizer::new();
+        let arts = s.generate_all(&sys());
+        let readme = arts.iter().find(|a| a.path.ends_with("README.md")).unwrap();
+        assert!(readme.content.contains("plex"));
+        assert!(readme.content.contains("aarch64-linux"));
+        assert!(readme.content.contains("Services: 2"));
     }
 
     #[test]

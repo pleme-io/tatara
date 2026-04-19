@@ -72,11 +72,7 @@ pub async fn evaluate(
     process: &Process,
     condition: &Condition,
 ) -> Result<Satisfaction> {
-    let default_ns = process
-        .metadata
-        .namespace
-        .as_deref()
-        .unwrap_or("default");
+    let default_ns = process.metadata.namespace.as_deref().unwrap_or("default");
     match condition.kind {
         ConditionKind::ProcessPhase => {
             evaluate_process_phase(client, default_ns, &condition.params).await
@@ -227,11 +223,7 @@ pub struct UnmetDependency {
 /// Check every `spec.dependsOn` entry against live cluster state.
 /// Returns the list of unmet dependencies (empty = proceed).
 pub async fn check_depends_on(client: Client, process: &Process) -> Result<Vec<UnmetDependency>> {
-    let default_ns = process
-        .metadata
-        .namespace
-        .as_deref()
-        .unwrap_or("default");
+    let default_ns = process.metadata.namespace.as_deref().unwrap_or("default");
     let mut unmet = Vec::new();
 
     for dep in &process.spec.depends_on {
@@ -248,10 +240,7 @@ pub async fn check_depends_on(client: Client, process: &Process) -> Result<Vec<U
                         namespace: ns.to_string(),
                         required,
                         actual,
-                        message: format!(
-                            "{}/{} is {actual_phase}; need {required}",
-                            ns, dep.name
-                        ),
+                        message: format!("{}/{} is {actual_phase}; need {required}", ns, dep.name),
                     });
                 }
             }
@@ -302,7 +291,10 @@ mod tests {
 
     #[test]
     fn running_does_not_satisfy_attested() {
-        assert!(!phase_reached(ProcessPhase::Running, ProcessPhase::Attested));
+        assert!(!phase_reached(
+            ProcessPhase::Running,
+            ProcessPhase::Attested
+        ));
         assert!(!phase_reached(ProcessPhase::Pending, ProcessPhase::Running));
     }
 
@@ -324,7 +316,10 @@ mod tests {
         assert!(Satisfaction::Satisfied.is_satisfied());
         assert!(!Satisfaction::Unsatisfied("x".into()).is_satisfied());
         assert!(!Satisfaction::Unknown("y".into()).is_satisfied());
-        assert_eq!(Satisfaction::Unsatisfied("why".into()).message(), Some("why"));
+        assert_eq!(
+            Satisfaction::Unsatisfied("why".into()).message(),
+            Some("why")
+        );
         assert_eq!(Satisfaction::Satisfied.message(), None);
     }
 }

@@ -41,10 +41,18 @@ pub enum OptionType {
     Float,
     Path,
     Package,
-    ListOf { item: Box<OptionType> },
-    AttrsOf { value: Box<OptionType> },
-    Enum { choices: Vec<String> },
-    Submodule { options: Vec<ModuleOption> },
+    ListOf {
+        item: Box<OptionType>,
+    },
+    AttrsOf {
+        value: Box<OptionType>,
+    },
+    Enum {
+        choices: Vec<String>,
+    },
+    Submodule {
+        options: Vec<ModuleOption>,
+    },
     /// Escape hatch: anything serde can deserialize.
     Any,
 }

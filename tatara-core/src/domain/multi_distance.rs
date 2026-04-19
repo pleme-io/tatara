@@ -35,10 +35,7 @@ impl MultiDimensionalDistance {
     /// Overall distance = max component (the worst substrate).
     /// The system is only converged when ALL substrates are at zero.
     pub fn overall(&self) -> f64 {
-        self.distances
-            .values()
-            .copied()
-            .fold(0.0_f64, f64::max)
+        self.distances.values().copied().fold(0.0_f64, f64::max)
     }
 
     /// The substrate with the worst (highest) distance.
@@ -51,8 +48,7 @@ impl MultiDimensionalDistance {
 
     /// Is the system fully converged across all substrates?
     pub fn is_converged(&self) -> bool {
-        !self.distances.is_empty()
-            && self.distances.values().all(|d| *d == 0.0)
+        !self.distances.is_empty() && self.distances.values().all(|d| *d == 0.0)
     }
 
     /// Number of substrates tracked.

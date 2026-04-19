@@ -58,15 +58,11 @@ pub async fn converge_tick(
     let my_node = format!("{}", ctx.local_node_id);
 
     // Only process allocations assigned to this node
-    let my_desired: Vec<&DesiredAllocationState> = desired
-        .iter()
-        .filter(|d| d.node_id == my_node)
-        .collect();
+    let my_desired: Vec<&DesiredAllocationState> =
+        desired.iter().filter(|d| d.node_id == my_node).collect();
 
     for desired_alloc in &my_desired {
-        let obs_phase = observed
-            .get(&desired_alloc.alloc_id)
-            .map(|o| &o.phase);
+        let obs_phase = observed.get(&desired_alloc.alloc_id).map(|o| &o.phase);
 
         match (&desired_alloc.desired_phase, obs_phase) {
             // Want Active, not started → begin warming
@@ -203,11 +199,14 @@ mod tests {
         let desired = vec![make_desired(id, DesiredPhase::Active)];
         let observed = HashMap::from([(
             id,
-            make_observed(id, AllocationPhase::Executing(AllocExecuteDetail {
-                registered_in_catalog: true,
-                health: HealthStatus::Passing,
-                task_states: HashMap::new(),
-            })),
+            make_observed(
+                id,
+                AllocationPhase::Executing(AllocExecuteDetail {
+                    registered_in_catalog: true,
+                    health: HealthStatus::Passing,
+                    task_states: HashMap::new(),
+                }),
+            ),
         )]);
 
         let result = converge_tick(&ctx, &desired, &observed).await;
@@ -220,15 +219,20 @@ mod tests {
         let id = uuid::Uuid::new_v4();
         let desired = vec![make_desired(
             id,
-            DesiredPhase::Stopped { reason: ContractReason::Stopped },
+            DesiredPhase::Stopped {
+                reason: ContractReason::Stopped,
+            },
         )];
         let observed = HashMap::from([(
             id,
-            make_observed(id, AllocationPhase::Executing(AllocExecuteDetail {
-                registered_in_catalog: true,
-                health: HealthStatus::Passing,
-                task_states: HashMap::new(),
-            })),
+            make_observed(
+                id,
+                AllocationPhase::Executing(AllocExecuteDetail {
+                    registered_in_catalog: true,
+                    health: HealthStatus::Passing,
+                    task_states: HashMap::new(),
+                }),
+            ),
         )]);
 
         let result = converge_tick(&ctx, &desired, &observed).await;
@@ -243,11 +247,14 @@ mod tests {
         let desired = vec![]; // nothing desired
         let observed = HashMap::from([(
             orphan_id,
-            make_observed(orphan_id, AllocationPhase::Executing(AllocExecuteDetail {
-                registered_in_catalog: false,
-                health: HealthStatus::Unknown,
-                task_states: HashMap::new(),
-            })),
+            make_observed(
+                orphan_id,
+                AllocationPhase::Executing(AllocExecuteDetail {
+                    registered_in_catalog: false,
+                    health: HealthStatus::Unknown,
+                    task_states: HashMap::new(),
+                }),
+            ),
         )]);
 
         let result = converge_tick(&ctx, &desired, &observed).await;

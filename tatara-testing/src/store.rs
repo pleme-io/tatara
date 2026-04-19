@@ -76,11 +76,7 @@ impl InMemoryStore {
 
     pub async fn get_job_history(&self, job_id: &str) -> Vec<JobVersionEntry> {
         let state = self.state.read().await;
-        state
-            .job_history
-            .get(job_id)
-            .cloned()
-            .unwrap_or_default()
+        state.job_history.get(job_id).cloned().unwrap_or_default()
     }
 
     pub async fn list_events(
@@ -89,7 +85,12 @@ impl InMemoryStore {
         since: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Vec<Event> {
         let state = self.state.read().await;
-        state.events.query(kind, since).into_iter().cloned().collect()
+        state
+            .events
+            .query(kind, since)
+            .into_iter()
+            .cloned()
+            .collect()
     }
 
     pub async fn list_releases(&self) -> Vec<Release> {
@@ -255,9 +256,7 @@ impl InMemoryStore {
         let entry = history
             .iter()
             .find(|e| e.version == version)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Version {} not found for job {}", version, job_id)
-            })?
+            .ok_or_else(|| anyhow::anyhow!("Version {} not found for job {}", version, job_id))?
             .clone();
 
         let job = state
@@ -351,8 +350,8 @@ impl Default for InMemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tatara_core::domain::job::{JobType, Resources, Task, TaskConfig, TaskGroup};
     use crate::fixtures;
+    use tatara_core::domain::job::{JobType, Resources, Task, TaskConfig, TaskGroup};
 
     #[tokio::test]
     async fn test_put_and_get_job() {
@@ -389,7 +388,9 @@ mod tests {
 
         store.put_job(job).await.unwrap();
 
-        let events = store.list_events(Some(&EventKind::JobSubmitted), None).await;
+        let events = store
+            .list_events(Some(&EventKind::JobSubmitted), None)
+            .await;
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].payload["job_id"], "event-job");
     }

@@ -57,13 +57,9 @@ impl ConvergencePlanner {
                 .points
                 .iter()
                 .filter(|(id, point)| {
-                    binding.selector.matches(
-                        &point.point_type,
-                        &point.substrate,
-                        id,
-                        None,
-                        None,
-                    )
+                    binding
+                        .selector
+                        .matches(&point.point_type, &point.substrate, id, None, None)
                 })
                 .map(|(id, _)| *id)
                 .collect();
@@ -103,10 +99,7 @@ impl ConvergencePlanner {
     }
 
     /// Compute the critical path (longest sequential chain).
-    fn compute_critical_path(
-        graph: &ConvergenceGraph,
-        topo_order: &[PointId],
-    ) -> Vec<PointId> {
+    fn compute_critical_path(graph: &ConvergenceGraph, topo_order: &[PointId]) -> Vec<PointId> {
         if topo_order.is_empty() {
             return Vec::new();
         }
@@ -132,10 +125,7 @@ impl ConvergencePlanner {
         }
 
         // Find the node with maximum distance
-        let (&end, _) = dist
-            .iter()
-            .max_by_key(|(_, (d, _))| *d)
-            .unwrap();
+        let (&end, _) = dist.iter().max_by_key(|(_, (d, _))| *d).unwrap();
 
         // Trace back the path
         let mut path = vec![end];
@@ -223,11 +213,21 @@ mod tests {
         assert_eq!(plan.compliance.resolved.len(), 2);
 
         // AC-6 should only match the Security point
-        let ac6 = plan.compliance.resolved.iter().find(|r| r.control.control_id == "AC-6").unwrap();
+        let ac6 = plan
+            .compliance
+            .resolved
+            .iter()
+            .find(|r| r.control.control_id == "AC-6")
+            .unwrap();
         assert_eq!(ac6.point_ids.len(), 1);
 
         // AU-2 should match both points (All selector)
-        let au2 = plan.compliance.resolved.iter().find(|r| r.control.control_id == "AU-2").unwrap();
+        let au2 = plan
+            .compliance
+            .resolved
+            .iter()
+            .find(|r| r.control.control_id == "AU-2")
+            .unwrap();
         assert_eq!(au2.point_ids.len(), 2);
     }
 
@@ -240,8 +240,16 @@ mod tests {
         graph.add_point(a, pa);
         graph.add_point(b, pb);
         graph.add_point(c, pc);
-        graph.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Data });
-        graph.add_edge(TypedEdge { from: b, to: c, edge_type: EdgeType::Data });
+        graph.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Data,
+        });
+        graph.add_edge(TypedEdge {
+            from: b,
+            to: c,
+            edge_type: EdgeType::Data,
+        });
 
         let plan = ConvergencePlanner::plan(&graph, &[]).unwrap();
         assert_eq!(plan.critical_path.len(), 3);
@@ -258,10 +266,26 @@ mod tests {
         graph.add_point(b, pb);
         graph.add_point(c, pc);
         graph.add_point(d, pd);
-        graph.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Data });
-        graph.add_edge(TypedEdge { from: a, to: c, edge_type: EdgeType::Data });
-        graph.add_edge(TypedEdge { from: b, to: d, edge_type: EdgeType::Data });
-        graph.add_edge(TypedEdge { from: c, to: d, edge_type: EdgeType::Data });
+        graph.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Data,
+        });
+        graph.add_edge(TypedEdge {
+            from: a,
+            to: c,
+            edge_type: EdgeType::Data,
+        });
+        graph.add_edge(TypedEdge {
+            from: b,
+            to: d,
+            edge_type: EdgeType::Data,
+        });
+        graph.add_edge(TypedEdge {
+            from: c,
+            to: d,
+            edge_type: EdgeType::Data,
+        });
 
         let plan = ConvergencePlanner::plan(&graph, &[]).unwrap();
         // Critical path should be length 3 (root → left/right → join)
@@ -289,8 +313,16 @@ mod tests {
         let (b, pb) = make_point("b", SubstrateType::Compute);
         graph.add_point(a, pa);
         graph.add_point(b, pb);
-        graph.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Data });
-        graph.add_edge(TypedEdge { from: b, to: a, edge_type: EdgeType::Data });
+        graph.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Data,
+        });
+        graph.add_edge(TypedEdge {
+            from: b,
+            to: a,
+            edge_type: EdgeType::Data,
+        });
 
         assert!(ConvergencePlanner::plan(&graph, &[]).is_err());
     }

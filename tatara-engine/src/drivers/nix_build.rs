@@ -93,7 +93,9 @@ impl Driver for NixBuildDriver {
             match output {
                 Ok(out) if out.status.success() => {
                     // Read store path from stdout log
-                    if let Ok(stdout) = tokio::fs::read_to_string(log_dir_clone.join("stdout.log")).await {
+                    if let Ok(stdout) =
+                        tokio::fs::read_to_string(log_dir_clone.join("stdout.log")).await
+                    {
                         let store_path = stdout.trim();
                         info!(store_path = %store_path, "nix build complete");
 

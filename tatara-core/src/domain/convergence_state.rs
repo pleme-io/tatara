@@ -67,9 +67,14 @@ impl ConvergenceDistance {
     pub fn numeric(&self) -> f64 {
         match self {
             Self::Converged => 0.0,
-            Self::Partial { matching, total, .. } => {
-                if *total == 0 { 0.0 }
-                else { 1.0 - (*matching as f64 / *total as f64) }
+            Self::Partial {
+                matching, total, ..
+            } => {
+                if *total == 0 {
+                    0.0
+                } else {
+                    1.0 - (*matching as f64 / *total as f64)
+                }
             }
             Self::Diverged { .. } => 1.0,
             Self::Unknown => 1.0,
@@ -251,7 +256,6 @@ pub struct ConvergencePoint {
     pub boundary: ConvergenceBoundary,
 
     // ── Classification dimensions (added by theory) ──
-
     /// Structural type — how data flows through this point.
     pub point_type: ConvergencePointType,
 
@@ -680,9 +684,10 @@ mod tests {
             substrate: SubstrateType::Security,
             computation_mode: ComputationMode::Mechanical,
             boundary: ConvergenceBoundary {
-                preconditions: vec![
-                    BoundaryCheck::new("port_allocated", "Port must be allocated first"),
-                ],
+                preconditions: vec![BoundaryCheck::new(
+                    "port_allocated",
+                    "Port must be allocated first",
+                )],
                 postconditions: vec![
                     BoundaryCheck::new("secrets_valid", "All secrets non-empty"),
                     BoundaryCheck::new("secrets_attested", "Secret hashes match tameshi record"),

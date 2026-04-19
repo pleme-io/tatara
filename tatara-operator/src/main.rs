@@ -21,7 +21,9 @@ use tatara_operator::crds::nix_build::NixBuild;
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .json()
         .init();
 
@@ -31,7 +33,8 @@ async fn main() -> Result<()> {
     let kube_client = Client::try_default().await?;
 
     // NATS client
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://nats.nats.svc:4222".to_string());
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://nats.nats.svc:4222".to_string());
     let nats_client = async_nats::connect(&nats_url).await?;
     let jetstream = jetstream::new(nats_client.clone());
 

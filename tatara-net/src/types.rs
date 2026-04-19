@@ -305,7 +305,10 @@ mod tests {
             egress: vec![PolicySelector::Any],
             rules: vec![PolicyRule {
                 protocol: Protocol::Tcp,
-                ports: vec![PortRange { start: 8080, end: 8080 }],
+                ports: vec![PortRange {
+                    start: 8080,
+                    end: 8080,
+                }],
                 action: PolicyAction::Allow,
             }],
             l7_rules: vec![],

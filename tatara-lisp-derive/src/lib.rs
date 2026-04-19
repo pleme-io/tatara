@@ -49,7 +49,8 @@ use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, LitStr, Meta,
 pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident.clone();
-    let keyword = extract_keyword(&input.attrs).unwrap_or_else(|| default_keyword(&name.to_string()));
+    let keyword =
+        extract_keyword(&input.attrs).unwrap_or_else(|| default_keyword(&name.to_string()));
 
     let fields = match &input.data {
         Data::Struct(s) => match &s.fields {
@@ -78,7 +79,9 @@ pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {
         match extractor_for(&field.ty, &kebab, has_default) {
             Ok(extract) => field_inits.push(quote! { #ident: #extract }),
             Err(err) => {
-                return syn::Error::new_spanned(&field.ty, err).to_compile_error().into();
+                return syn::Error::new_spanned(&field.ty, err)
+                    .to_compile_error()
+                    .into();
             }
         }
     }
@@ -150,7 +153,9 @@ fn has_serde_default(field: &syn::Field) -> bool {
         if !attr.path().is_ident("serde") {
             continue;
         }
-        let Meta::List(list) = &attr.meta else { continue };
+        let Meta::List(list) = &attr.meta else {
+            continue;
+        };
         let tokens = list.tokens.to_string();
         if tokens.contains("default") {
             return true;

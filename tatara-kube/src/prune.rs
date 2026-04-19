@@ -1,6 +1,8 @@
 use crate::error::KubeError;
 use crate::ordering;
-use crate::resource::{ResourceIdentity, LABEL_CLUSTER, LABEL_GENERATION, LABEL_MANAGED_BY, LABEL_MANAGED_BY_VALUE};
+use crate::resource::{
+    ResourceIdentity, LABEL_CLUSTER, LABEL_GENERATION, LABEL_MANAGED_BY, LABEL_MANAGED_BY_VALUE,
+};
 use kube::{
     api::{Api, ApiResource, DeleteParams, DynamicObject, ListParams},
     discovery::{self, Scope},

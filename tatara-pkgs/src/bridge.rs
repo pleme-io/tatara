@@ -131,6 +131,9 @@ mod tests {
         let b = NixpkgsBridge::new();
         let d = b.derivation("python3Packages.requests");
         assert_eq!(d.name, "python3Packages.requests");
-        assert_eq!(d.bridge.as_ref().unwrap().attr_path, "python3Packages.requests");
+        assert_eq!(
+            d.bridge.as_ref().unwrap().attr_path,
+            "python3Packages.requests"
+        );
     }
 }

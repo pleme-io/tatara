@@ -7,16 +7,16 @@
 
 use std::net::SocketAddr;
 
+use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::post;
-use axum::Router;
 use chrono::Utc;
 use hmac::{Hmac, Mac};
-use kube::api::{Api, Patch, PatchParams};
 use kube::Client;
+use kube::api::{Api, Patch, PatchParams};
 use sha2::Sha256;
 use tracing::{info, warn};
 
@@ -29,10 +29,7 @@ struct WebhookState {
     kube_client: Client,
 }
 
-pub async fn start_webhook_server(
-    addr: SocketAddr,
-    kube_client: Client,
-) -> anyhow::Result<()> {
+pub async fn start_webhook_server(addr: SocketAddr, kube_client: Client) -> anyhow::Result<()> {
     let state = WebhookState { kube_client };
 
     let app = Router::new()

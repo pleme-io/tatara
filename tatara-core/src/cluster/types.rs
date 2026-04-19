@@ -6,8 +6,7 @@ use std::collections::HashMap;
 use crate::domain::event::{Event, EventRing};
 use crate::domain::job::{DriverType, JobSpec, Resources};
 use crate::domain::lifecycle::{
-    AllocationPhase, DesiredAllocationState, DesiredPhase, NodePhase,
-    ObservedAllocationState,
+    AllocationPhase, DesiredAllocationState, DesiredPhase, NodePhase, ObservedAllocationState,
 };
 use crate::domain::release::Release;
 use crate::domain::source::{Source, SourceStatus};
@@ -96,7 +95,6 @@ pub struct ClusterState {
     pub sources: HashMap<uuid::Uuid, Source>,
 
     // ── Distributed state machine ──
-
     /// Desired allocation states declared by the scheduler.
     #[serde(default)]
     pub desired_allocations: HashMap<uuid::Uuid, DesiredAllocationState>,
@@ -194,7 +192,6 @@ pub enum ClusterCommand {
     },
 
     // ── Distributed state machine ──
-
     /// Scheduler proposes new allocations with generation check.
     ProposeAllocations {
         expected_generation: u64,
@@ -206,7 +203,9 @@ pub enum ClusterCommand {
     SetDesiredAllocation(DesiredAllocationState),
 
     /// Remove a desired allocation (job stopped/scaled down).
-    RemoveDesiredAllocation { alloc_id: uuid::Uuid },
+    RemoveDesiredAllocation {
+        alloc_id: uuid::Uuid,
+    },
 
     /// Executor reports observed allocation phase.
     ReportObservation {

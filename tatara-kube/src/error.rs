@@ -5,7 +5,10 @@ pub enum KubeError {
     NixEvalFailed { flake_ref: String, reason: String },
 
     #[error("nix eval timeout for '{flake_ref}' after {timeout_secs}s")]
-    NixEvalTimeout { flake_ref: String, timeout_secs: u64 },
+    NixEvalTimeout {
+        flake_ref: String,
+        timeout_secs: u64,
+    },
 
     #[error("flake metadata fetch failed for '{flake_ref}': {reason}")]
     MetadataFetchFailed { flake_ref: String, reason: String },

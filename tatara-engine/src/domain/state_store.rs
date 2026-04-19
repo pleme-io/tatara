@@ -177,8 +177,7 @@ impl StateStore {
     }
 
     async fn persist(&self, state: &StateSnapshot) -> Result<()> {
-        let data = serde_json::to_string_pretty(state)
-            .context("Failed to serialize state")?;
+        let data = serde_json::to_string_pretty(state).context("Failed to serialize state")?;
 
         let tmp = self.dir.join("state.json.tmp");
         let target = self.dir.join("state.json");

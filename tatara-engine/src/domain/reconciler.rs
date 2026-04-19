@@ -5,14 +5,14 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 
 use crate::client::executor::Executor;
-use tatara_core::config::ReconcilerConfig;
 use crate::nix_eval::evaluator::NixEvaluator;
+use tatara_core::config::ReconcilerConfig;
 
+use crate::domain::state_store::StateStore;
 use tatara_core::domain::allocation::{Allocation, AllocationState, TaskRunState};
 use tatara_core::domain::job::{Job, JobStatus, JobType, RestartMode};
 use tatara_core::domain::node::{Node, NodeStatus};
 use tatara_core::domain::source::{Source, SourceError, SourceStatus};
-use crate::domain::state_store::StateStore;
 
 /// Continuously converges actual state toward desired state.
 ///
@@ -29,11 +29,7 @@ pub struct Reconciler {
 }
 
 impl Reconciler {
-    pub fn new(
-        store: Arc<StateStore>,
-        executor: Arc<Executor>,
-        config: ReconcilerConfig,
-    ) -> Self {
+    pub fn new(store: Arc<StateStore>, executor: Arc<Executor>, config: ReconcilerConfig) -> Self {
         Self {
             store,
             executor,
@@ -51,9 +47,8 @@ impl Reconciler {
             "Reconciler started"
         );
 
-        let mut interval = tokio::time::interval(Duration::from_secs(
-            self.config.reconcile_interval_secs,
-        ));
+        let mut interval =
+            tokio::time::interval(Duration::from_secs(self.config.reconcile_interval_secs));
 
         loop {
             interval.tick().await;
@@ -83,7 +78,8 @@ impl Reconciler {
             self.reconcile_health(job, &job_allocs).await?;
 
             // Pass 2: Node liveness — mark Lost if node disappeared
-            self.reconcile_node_liveness(job, &job_allocs, &node_ids).await?;
+            self.reconcile_node_liveness(job, &job_allocs, &node_ids)
+                .await?;
 
             // Pass 3: Count — ensure desired replica count
             // Re-fetch allocations since passes 1 and 2 may have changed state
@@ -114,11 +110,7 @@ impl Reconciler {
     /// For each Running allocation, check per-task health. Dead tasks are
     /// restarted according to the group's RestartPolicy, or the allocation
     /// is marked Failed when restarts are exhausted.
-    async fn reconcile_health(
-        &self,
-        job: &Job,
-        allocations: &[Allocation],
-    ) -> Result<()> {
+    async fn reconcile_health(&self, job: &Job, allocations: &[Allocation]) -> Result<()> {
         let task_health = self.executor.check_task_health_detailed().await;
 
         for alloc in allocations {
@@ -286,10 +278,7 @@ impl Reconciler {
                 .iter()
                 .filter(|a| {
                     a.group_name == group.name
-                        && matches!(
-                            a.state,
-                            AllocationState::Running | AllocationState::Pending
-                        )
+                        && matches!(a.state, AllocationState::Running | AllocationState::Pending)
                 })
                 .count() as u32;
 
@@ -306,18 +295,14 @@ impl Reconciler {
 
                 for _ in 0..deficit {
                     // Simple round-robin: pick the node with fewest allocations for this job
-                    let node = ready_nodes
-                        .iter()
-                        .min_by_key(|n| {
-                            allocations
-                                .iter()
-                                .filter(|a| {
-                                    a.node_id == n.id
-                                        && !a.is_terminal()
-                                        && a.group_name == group.name
-                                })
-                                .count()
-                        });
+                    let node = ready_nodes.iter().min_by_key(|n| {
+                        allocations
+                            .iter()
+                            .filter(|a| {
+                                a.node_id == n.id && !a.is_terminal() && a.group_name == group.name
+                            })
+                            .count()
+                    });
 
                     let Some(node) = node else {
                         warn!(
@@ -469,10 +454,7 @@ impl Reconciler {
             .iter()
             .filter(|a| {
                 a.job_version < new_version
-                    && matches!(
-                        a.state,
-                        AllocationState::Running | AllocationState::Pending
-                    )
+                    && matches!(a.state, AllocationState::Running | AllocationState::Pending)
             })
             .collect();
 
@@ -484,7 +466,11 @@ impl Reconciler {
 
         // Create new allocations for each old one being replaced
         for old_alloc in &old_allocs {
-            let group = match new_spec.groups.iter().find(|g| g.name == old_alloc.group_name) {
+            let group = match new_spec
+                .groups
+                .iter()
+                .find(|g| g.name == old_alloc.group_name)
+            {
                 Some(g) => g,
                 None => continue,
             };
@@ -504,13 +490,9 @@ impl Reconciler {
 
             let task_names: Vec<String> = group.tasks.iter().map(|t| t.name.clone()).collect();
 
-            let new_alloc = Allocation::new(
-                job.id.clone(),
-                group.name.clone(),
-                node_id,
-                task_names,
-            )
-            .with_job_version(new_version);
+            let new_alloc =
+                Allocation::new(job.id.clone(), group.name.clone(), node_id, task_names)
+                    .with_job_version(new_version);
 
             self.store.put_allocation(new_alloc.clone()).await?;
 
@@ -558,7 +540,10 @@ impl Reconciler {
 
             if let Err(e) = self.reconcile_single_source(source).await {
                 match &e {
-                    SourceError::Timeout { flake_ref, timeout_secs } => {
+                    SourceError::Timeout {
+                        flake_ref,
+                        timeout_secs,
+                    } => {
                         warn!(
                             source = %source.name,
                             flake_ref = %flake_ref,
@@ -589,7 +574,11 @@ impl Reconciler {
                             "Source validation failed"
                         );
                     }
-                    SourceError::JobOperationFailed { source_name, job_name, reason } => {
+                    SourceError::JobOperationFailed {
+                        source_name,
+                        job_name,
+                        reason,
+                    } => {
                         warn!(
                             source = %source_name,
                             job = %job_name,
@@ -661,13 +650,14 @@ impl Reconciler {
                 None => {
                     // New job — create it
                     let job = spec.clone().into_job();
-                    self.store.put_job(job).await.map_err(|e| {
-                        SourceError::JobOperationFailed {
+                    self.store
+                        .put_job(job)
+                        .await
+                        .map_err(|e| SourceError::JobOperationFailed {
                             source_name: source.name.clone(),
                             job_name: job_name.clone(),
                             reason: format!("failed to create job: {}", e),
-                        }
-                    })?;
+                        })?;
                     new_managed.insert(job_name.clone(), spec_hash);
                     info!(
                         source = %source.name,
@@ -743,9 +733,9 @@ impl Reconciler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tatara_core::domain::job::*;
     use std::collections::HashMap;
     use std::path::PathBuf;
+    use tatara_core::domain::job::*;
     use uuid::Uuid;
 
     async fn make_store() -> (Arc<StateStore>, PathBuf) {
@@ -852,10 +842,7 @@ mod tests {
             .iter()
             .filter(|a| {
                 a.group_name == "web"
-                    && matches!(
-                        a.state,
-                        AllocationState::Running | AllocationState::Pending
-                    )
+                    && matches!(a.state, AllocationState::Running | AllocationState::Pending)
             })
             .count() as u32;
 
@@ -881,10 +868,7 @@ mod tests {
             .iter()
             .filter(|a| {
                 a.group_name == "web"
-                    && matches!(
-                        a.state,
-                        AllocationState::Running | AllocationState::Pending
-                    )
+                    && matches!(a.state, AllocationState::Running | AllocationState::Pending)
             })
             .count() as u32;
 

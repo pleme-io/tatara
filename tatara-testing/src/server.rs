@@ -127,17 +127,9 @@ impl TestServer {
 
     /// Send a GET request to the test server.
     pub async fn get(&self, uri: &str) -> TestResponse {
-        let request = Request::builder()
-            .uri(uri)
-            .body(Body::empty())
-            .unwrap();
+        let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
 
-        let response = self
-            .router
-            .clone()
-            .oneshot(request)
-            .await
-            .unwrap();
+        let response = self.router.clone().oneshot(request).await.unwrap();
 
         TestResponse::from_response(response).await
     }
@@ -153,12 +145,7 @@ impl TestServer {
             .body(Body::from(body_bytes))
             .unwrap();
 
-        let response = self
-            .router
-            .clone()
-            .oneshot(request)
-            .await
-            .unwrap();
+        let response = self.router.clone().oneshot(request).await.unwrap();
 
         TestResponse::from_response(response).await
     }
@@ -200,7 +187,8 @@ impl TestResponse {
     /// Assert the response status matches.
     pub fn assert_status(&self, expected: StatusCode) {
         assert_eq!(
-            self.status, expected,
+            self.status,
+            expected,
             "Expected {}, got {}. Body: {}",
             expected,
             self.status,
@@ -401,10 +389,7 @@ async fn list_events(
     State(state): State<TestState>,
     params: Query<EventQuery>,
 ) -> Json<Vec<tatara_core::domain::event::Event>> {
-    let kind = params
-        .kind
-        .as_deref()
-        .and_then(EventKind::from_str_opt);
+    let kind = params.kind.as_deref().and_then(EventKind::from_str_opt);
 
     let since = params
         .since

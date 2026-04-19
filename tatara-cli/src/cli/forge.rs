@@ -69,8 +69,8 @@ pub async fn validate(path: &str, output: OutputFormat) -> Result<()> {
 
     match meta_result {
         Ok(out) if out.status.success() => {
-            let meta: serde_json::Value = serde_json::from_slice(&out.stdout)
-                .unwrap_or(serde_json::Value::Null);
+            let meta: serde_json::Value =
+                serde_json::from_slice(&out.stdout).unwrap_or(serde_json::Value::Null);
             if meta.get("name").is_none() {
                 errors.push("tataraMeta missing 'name' field".to_string());
             }
@@ -81,7 +81,10 @@ pub async fn validate(path: &str, output: OutputFormat) -> Result<()> {
         }
         Ok(out) => {
             let stderr = String::from_utf8_lossy(&out.stderr);
-            errors.push(format!("tataraMeta eval failed: {}", stderr.lines().next().unwrap_or("")));
+            errors.push(format!(
+                "tataraMeta eval failed: {}",
+                stderr.lines().next().unwrap_or("")
+            ));
         }
         Err(e) => {
             errors.push(format!("Failed to run nix eval: {}", e));
@@ -89,8 +92,12 @@ pub async fn validate(path: &str, output: OutputFormat) -> Result<()> {
     }
 
     // Check tataraJobs
-    let system = std::env::consts::ARCH.replace("aarch64", "aarch64").replace("x86_64", "x86_64");
-    let os = std::env::consts::OS.replace("macos", "darwin").replace("linux", "linux");
+    let system = std::env::consts::ARCH
+        .replace("aarch64", "aarch64")
+        .replace("x86_64", "x86_64");
+    let os = std::env::consts::OS
+        .replace("macos", "darwin")
+        .replace("linux", "linux");
     let nix_system = format!("{}-{}", system, os);
 
     let jobs_result = tokio::process::Command::new("nix")
@@ -104,8 +111,8 @@ pub async fn validate(path: &str, output: OutputFormat) -> Result<()> {
 
     match jobs_result {
         Ok(out) if out.status.success() => {
-            let jobs: serde_json::Value = serde_json::from_slice(&out.stdout)
-                .unwrap_or(serde_json::Value::Null);
+            let jobs: serde_json::Value =
+                serde_json::from_slice(&out.stdout).unwrap_or(serde_json::Value::Null);
             if let Some(obj) = jobs.as_object() {
                 println!("  tataraJobs.{}: OK ({} jobs)", nix_system, obj.len());
                 for (name, _spec) in obj {
@@ -188,8 +195,14 @@ pub async fn inspect(flake_ref: &str, output: OutputFormat) -> Result<()> {
             println!("{}", render_value(&result, output)?);
         }
         _ => {
-            println!("Forge: {}", meta.get("name").and_then(|n| n.as_str()).unwrap_or("?"));
-            println!("Version: {}", meta.get("version").and_then(|v| v.as_str()).unwrap_or("?"));
+            println!(
+                "Forge: {}",
+                meta.get("name").and_then(|n| n.as_str()).unwrap_or("?")
+            );
+            println!(
+                "Version: {}",
+                meta.get("version").and_then(|v| v.as_str()).unwrap_or("?")
+            );
             if let Some(desc) = meta.get("description").and_then(|d| d.as_str()) {
                 println!("Description: {}", desc);
             }
@@ -203,7 +216,8 @@ pub async fn inspect(flake_ref: &str, output: OutputFormat) -> Result<()> {
                     println!("    Type:   {}", spec["job_type"].as_str().unwrap_or("?"));
                     if let Some(groups) = spec["groups"].as_array() {
                         for group in groups {
-                            let task_count = group["tasks"].as_array().map(|t| t.len()).unwrap_or(0);
+                            let task_count =
+                                group["tasks"].as_array().map(|t| t.len()).unwrap_or(0);
                             println!(
                                 "    Group '{}': {} tasks, {} replicas",
                                 group["name"].as_str().unwrap_or("?"),

@@ -20,9 +20,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use tatara_terreiro::{Terreiro, TerreiroError};
-use tatara_ui::{
-    ArtifactState, EventStream, LogLevel, Renderer, ShortHash, ThemeSpec, UiEvent,
-};
+use tatara_ui::{ArtifactState, EventStream, LogLevel, Renderer, ShortHash, ThemeSpec, UiEvent};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
@@ -105,7 +103,12 @@ fn load_terreiro(path: &Path) -> Result<Terreiro, TerreiroError> {
     Terreiro::from_spec_lisp(&src)
 }
 
-fn banner(r: &Renderer, s: &mut EventStream, w: &mut impl Write, title: &str) -> std::io::Result<()> {
+fn banner(
+    r: &Renderer,
+    s: &mut EventStream,
+    w: &mut impl Write,
+    title: &str,
+) -> std::io::Result<()> {
     let e = UiEvent::Banner {
         title: title.into(),
         subtitle: None,
@@ -196,7 +199,11 @@ fn cmd_load(
         w,
         UiEvent::Log {
             level: LogLevel::Success,
-            message: format!("loaded terreiro:{}  ({} macros)", id.short(), t.macro_count()),
+            message: format!(
+                "loaded terreiro:{}  ({} macros)",
+                id.short(),
+                t.macro_count()
+            ),
         },
     )?;
     println!("{}", id.full());

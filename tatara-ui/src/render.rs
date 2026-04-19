@@ -8,7 +8,7 @@ use std::io::Write;
 use owo_colors::{OwoColorize, Style};
 
 use crate::event::{ArtifactState, Cell, EventStream, LogLevel, UiEvent};
-use crate::palette::{Role, RoleMap, Rgb};
+use crate::palette::{Rgb, Role, RoleMap};
 use crate::sigil::Sigil;
 
 /// Auto-detect whether to emit ANSI escapes.
@@ -126,12 +126,7 @@ impl Renderer {
         Ok(())
     }
 
-    fn log(
-        &self,
-        level: LogLevel,
-        message: &str,
-        w: &mut impl Write,
-    ) -> std::io::Result<()> {
+    fn log(&self, level: LogLevel, message: &str, w: &mut impl Write) -> std::io::Result<()> {
         let sigil = match level {
             LogLevel::Success => Sigil::Check,
             LogLevel::Error => Sigil::Cross,
@@ -157,10 +152,7 @@ impl Renderer {
         let diamond = self.colored_glyph(Sigil::Diamond, Role::Info);
         let hash_s = self.text(&format!("blake3:{hash}"), Role::Dim);
         let state_chunk = self.state_chunk(state);
-        writeln!(
-            w,
-            "  {snow} {name_s:<28} {diamond} {hash_s}  {state_chunk}"
-        )
+        writeln!(w, "  {snow} {name_s:<28} {diamond} {hash_s}  {state_chunk}")
     }
 
     fn state_chunk(&self, state: &ArtifactState) -> String {
@@ -205,10 +197,13 @@ impl Renderer {
         let diamond = self.colored_glyph(Sigil::Diamond, Role::Info);
         let hash = self.text(&format!("blake3:{root_hash}"), Role::Dim);
         writeln!(w, "{tri} {label}  {diamond} {hash}")?;
-        let summary = format!(
-            "  {total} total · {built} built · {cached} cached · {failed} failed",
-        );
-        let role = if failed > 0 { Role::Error } else { Role::Success };
+        let summary =
+            format!("  {total} total · {built} built · {cached} cached · {failed} failed",);
+        let role = if failed > 0 {
+            Role::Error
+        } else {
+            Role::Success
+        };
         writeln!(w, "{}", self.text(&summary, role))?;
         Ok(())
     }
@@ -248,10 +243,7 @@ impl Renderer {
     }
 
     fn dim_elapsed(&self, ms: u64) -> String {
-        self.text(
-            &format!("{:.1}s", ms as f64 / 1000.0),
-            Role::Dim,
-        )
+        self.text(&format!("{:.1}s", ms as f64 / 1000.0), Role::Dim)
     }
 }
 
@@ -358,7 +350,10 @@ mod tests {
             )
             .unwrap();
             let s = String::from_utf8(out).unwrap();
-            assert!(s.contains(expected_glyph), "{level:?} should use {expected_glyph}");
+            assert!(
+                s.contains(expected_glyph),
+                "{level:?} should use {expected_glyph}"
+            );
         }
     }
 }

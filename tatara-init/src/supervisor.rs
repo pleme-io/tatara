@@ -153,15 +153,15 @@ impl Supervisor for LinuxSupervisor {
             .iter()
             .map(|s| CString::new(s.as_str()).unwrap_or_default())
             .collect();
-        let cwd_c = svc
-            .workdir
-            .as_deref()
-            .and_then(|c| CString::new(c).ok());
+        let cwd_c = svc.workdir.as_deref().and_then(|c| CString::new(c).ok());
         let env_c: Vec<(CString, CString)> = svc
             .env
             .iter()
             .filter_map(|(k, v)| {
-                Some((CString::new(k.as_str()).ok()?, CString::new(v.as_str()).ok()?))
+                Some((
+                    CString::new(k.as_str()).ok()?,
+                    CString::new(v.as_str()).ok()?,
+                ))
             })
             .collect();
 
@@ -394,10 +394,8 @@ mod tests {
             ..Default::default()
         };
         let by_name = boot(&mut sup, &cfg).unwrap();
-        let mut tracking: HashMap<Pid, String> = by_name
-            .iter()
-            .map(|(n, p)| (*p, n.clone()))
-            .collect();
+        let mut tracking: HashMap<Pid, String> =
+            by_name.iter().map(|(n, p)| (*p, n.clone())).collect();
         sup.queue_exit(tracking.keys().next().copied().unwrap(), 0);
         let events = run_once(&mut sup, &cfg, &mut tracking).unwrap();
         assert_eq!(events.len(), 1);
@@ -413,10 +411,8 @@ mod tests {
             ..Default::default()
         };
         let by_name = boot(&mut sup, &cfg).unwrap();
-        let mut tracking: HashMap<Pid, String> = by_name
-            .iter()
-            .map(|(n, p)| (*p, n.clone()))
-            .collect();
+        let mut tracking: HashMap<Pid, String> =
+            by_name.iter().map(|(n, p)| (*p, n.clone())).collect();
         let pid = *tracking.keys().next().unwrap();
         sup.queue_exit(pid, 0);
         let ev = run_once(&mut sup, &cfg, &mut tracking).unwrap();
@@ -433,10 +429,8 @@ mod tests {
             ..Default::default()
         };
         let by_name = boot(&mut sup, &cfg).unwrap();
-        let mut tracking: HashMap<Pid, String> = by_name
-            .iter()
-            .map(|(n, p)| (*p, n.clone()))
-            .collect();
+        let mut tracking: HashMap<Pid, String> =
+            by_name.iter().map(|(n, p)| (*p, n.clone())).collect();
         sup.queue_exit(*tracking.keys().next().unwrap(), 1);
         let ev = run_once(&mut sup, &cfg, &mut tracking).unwrap();
         assert_eq!(ev.len(), 1);

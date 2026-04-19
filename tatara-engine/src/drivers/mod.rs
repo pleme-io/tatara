@@ -105,7 +105,10 @@ impl DriverRegistry {
             DriverType::Kube => "kube",
             DriverType::Wasi => "wasi",
         };
-        self.drivers.iter().find(|d| d.name() == name).map(|d| d.as_ref())
+        self.drivers
+            .iter()
+            .find(|d| d.name() == name)
+            .map(|d| d.as_ref())
     }
 
     pub fn available_drivers(&self) -> Vec<DriverType> {

@@ -155,12 +155,10 @@ fn write_file_(args: &[Value]) -> Result<Value> {
             expected: "string or path (write-file first arg)".into(),
             found: args[0].type_name().into(),
         })?;
-    let content = args[1]
-        .coerce_to_string()
-        .ok_or_else(|| EvalError::Type {
-            expected: "string-coercible".into(),
-            found: args[1].type_name().into(),
-        })?;
+    let content = args[1].coerce_to_string().ok_or_else(|| EvalError::Type {
+        expected: "string-coercible".into(),
+        found: args[1].type_name().into(),
+    })?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }

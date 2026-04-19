@@ -17,13 +17,7 @@ pub fn job(id: &str) -> Job {
 }
 
 /// Create a job with a specific task group configuration.
-pub fn job_with_group(
-    id: &str,
-    group_name: &str,
-    count: u32,
-    cpu_mhz: u64,
-    memory_mb: u64,
-) -> Job {
+pub fn job_with_group(id: &str, group_name: &str, count: u32, cpu_mhz: u64, memory_mb: u64) -> Job {
     Job {
         id: id.to_string(),
         version: 1,
@@ -171,12 +165,7 @@ pub fn task(name: &str, cpu_mhz: u64, memory_mb: u64) -> Task {
 }
 
 /// Create a node metadata entry.
-pub fn node_meta(
-    node_id: u64,
-    hostname: &str,
-    cpu_mhz: u64,
-    memory_mb: u64,
-) -> NodeMeta {
+pub fn node_meta(node_id: u64, hostname: &str, cpu_mhz: u64, memory_mb: u64) -> NodeMeta {
     NodeMeta {
         node_id,
         hostname: hostname.to_string(),
@@ -193,8 +182,8 @@ pub fn node_meta(
         joined_at: Utc::now(),
         version: "0.2.0".to_string(),
         eligible: true,
-            wireguard_pubkey: None,
-            tunnel_address: None,
+        wireguard_pubkey: None,
+        tunnel_address: None,
     }
 }
 

@@ -9,9 +9,9 @@ use crate::client::executor::Executor;
 #[cfg(feature = "grpc")]
 use crate::client::log_collector::LogCollector;
 #[cfg(feature = "grpc")]
-use tatara_core::domain::job::JobSpec;
-#[cfg(feature = "grpc")]
 use crate::domain::state_store::StateStore;
+#[cfg(feature = "grpc")]
+use tatara_core::domain::job::JobSpec;
 
 #[cfg(feature = "grpc")]
 use super::proto::tatara_api_server::TataraApi;
@@ -33,13 +33,15 @@ impl TataraApi for TataraApiService {
         request: Request<SubmitJobRequest>,
     ) -> Result<Response<SubmitJobResponse>, Status> {
         let req = request.into_inner();
-        let proto_spec = req.spec.ok_or_else(|| Status::invalid_argument("Missing job spec"))?;
+        let proto_spec = req
+            .spec
+            .ok_or_else(|| Status::invalid_argument("Missing job spec"))?;
 
         // Convert proto spec to domain spec
-        let json = serde_json::to_string(&proto_spec)
-            .map_err(|e| Status::internal(e.to_string()))?;
-        let spec: JobSpec = serde_json::from_str(&json)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let json =
+            serde_json::to_string(&proto_spec).map_err(|e| Status::internal(e.to_string()))?;
+        let spec: JobSpec =
+            serde_json::from_str(&json).map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         let job = spec.into_job();
         let job_id = job.id.clone();
@@ -137,8 +139,7 @@ impl TataraApi for TataraApiService {
             .await
             .ok_or_else(|| Status::not_found("Allocation not found"))?;
 
-        let json =
-            serde_json::to_string(&alloc).map_err(|e| Status::internal(e.to_string()))?;
+        let json = serde_json::to_string(&alloc).map_err(|e| Status::internal(e.to_string()))?;
         let proto: AllocationProto =
             serde_json::from_str(&json).map_err(|e| Status::internal(e.to_string()))?;
 
@@ -189,8 +190,7 @@ impl TataraApi for TataraApiService {
         Ok(Response::new(ListNodesResponse { nodes: proto_nodes }))
     }
 
-    type StreamLogsStream =
-        tokio_stream::wrappers::ReceiverStream<Result<LogEntry, Status>>;
+    type StreamLogsStream = tokio_stream::wrappers::ReceiverStream<Result<LogEntry, Status>>;
 
     async fn stream_logs(
         &self,

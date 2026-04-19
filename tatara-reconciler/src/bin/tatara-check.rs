@@ -48,10 +48,7 @@ fn main() -> ExitCode {
     let src = match fs::read_to_string(&checks_path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!(
-                "tatara-check: read {}: {e}",
-                checks_path.display()
-            );
+            eprintln!("tatara-check: read {}: {e}", checks_path.display());
             return ExitCode::from(2);
         }
     };
@@ -241,10 +238,18 @@ fn check_yaml_parses(args: &[Sexp], root: &Path, report: &mut Report) {
 }
 
 fn check_yaml_parses_as(args: &[Sexp], root: &Path, report: &mut Report) {
-    let kind = args.first().and_then(Sexp::as_symbol).unwrap_or("<missing>");
+    let kind = args
+        .first()
+        .and_then(Sexp::as_symbol)
+        .unwrap_or("<missing>");
     let rel = match args.get(1).and_then(Sexp::as_string) {
         Some(s) => s,
-        None => return report.fail("yaml-parses-as", "expected (yaml-parses-as <Kind> \"path\")"),
+        None => {
+            return report.fail(
+                "yaml-parses-as",
+                "expected (yaml-parses-as <Kind> \"path\")",
+            )
+        }
     };
     let path = root.join(rel);
     let label = format!("YAML parses as {kind}: {rel}");
@@ -279,7 +284,13 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
     let kw = parse_kwargs(&args[1..]);
     let min_defs = kw
         .iter()
-        .find_map(|(k, v)| if k == "min-definitions" { v.as_int() } else { None })
+        .find_map(|(k, v)| {
+            if k == "min-definitions" {
+                v.as_int()
+            } else {
+                None
+            }
+        })
         .unwrap_or(1) as usize;
     let requires: Vec<String> = kw
         .iter()
@@ -330,12 +341,19 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
             return report.fail(label, format!("definition missing required: {req}"));
         }
     }
-    report.pass(format!("{label} ({} defs, {} checks)", defs.len(), requires.len()));
+    report.pass(format!(
+        "{label} ({} defs, {} checks)",
+        defs.len(),
+        requires.len()
+    ));
 }
 
 fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
     let Some(rel) = args.first().and_then(Sexp::as_string) else {
-        return report.fail("file-contains", "expected (file-contains \"path\" :strings (...))");
+        return report.fail(
+            "file-contains",
+            "expected (file-contains \"path\" :strings (...))",
+        );
     };
     let path = root.join(rel);
     let label = format!("File contains: {rel}");
@@ -363,7 +381,10 @@ fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
         Ok(s) => s,
         Err(e) => return report.fail(label, format!("read: {e}")),
     };
-    let missing: Vec<&String> = strings.iter().filter(|s| !src.contains(s.as_str())).collect();
+    let missing: Vec<&String> = strings
+        .iter()
+        .filter(|s| !src.contains(s.as_str()))
+        .collect();
     if missing.is_empty() {
         report.pass(format!("{label} ({} substrings)", strings.len()));
     } else {

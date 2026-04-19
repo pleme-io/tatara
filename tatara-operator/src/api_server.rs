@@ -16,12 +16,12 @@
 
 use std::net::SocketAddr;
 
+use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Json};
 use axum::routing::{get, post};
-use axum::Router;
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use kube::api::{Api, ListParams, ObjectMeta, Patch, PatchParams, PostParams};
@@ -101,10 +101,7 @@ pub struct CacheInfo {
 
 // ── Server ───────────────────────────────────────────────────────────────
 
-pub async fn start_api_server(
-    addr: SocketAddr,
-    kube_client: Client,
-) -> anyhow::Result<()> {
+pub async fn start_api_server(addr: SocketAddr, kube_client: Client) -> anyhow::Result<()> {
     let api_token = std::env::var("RO_API_TOKEN").ok();
     let cache_endpoint = std::env::var("RO_CACHE_ENDPOINT")
         .unwrap_or_else(|_| "http://attic.nix-cache.svc:80".to_string());
@@ -214,8 +211,7 @@ async fn submit_build(
         ..Default::default()
     };
 
-    let builds_api: Api<NixBuild> =
-        Api::namespaced(state.kube_client.clone(), "tatara-system");
+    let builds_api: Api<NixBuild> = Api::namespaced(state.kube_client.clone(), "tatara-system");
 
     builds_api
         .create(&PostParams::default(), &build)
@@ -242,11 +238,13 @@ async fn get_build(
     check_auth(&headers, &state.api_token)?;
 
     // Search for NixBuild CR by build-id label
-    let builds_api: Api<NixBuild> =
-        Api::namespaced(state.kube_client.clone(), "tatara-system");
+    let builds_api: Api<NixBuild> = Api::namespaced(state.kube_client.clone(), "tatara-system");
 
     let lp = ListParams::default().labels(&format!("tatara.pleme.io/build-id={id}"));
-    let builds = builds_api.list(&lp).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let builds = builds_api
+        .list(&lp)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let build = builds.items.first().ok_or(StatusCode::NOT_FOUND)?;
     let status = build.status.as_ref();

@@ -97,7 +97,13 @@ mod tests {
         let kinds: Vec<&str> = resources.iter().map(|r| r.identity.kind.as_str()).collect();
         assert_eq!(
             kinds,
-            vec!["Namespace", "ServiceAccount", "ConfigMap", "Service", "Deployment"]
+            vec![
+                "Namespace",
+                "ServiceAccount",
+                "ConfigMap",
+                "Service",
+                "Deployment"
+            ]
         );
     }
 }

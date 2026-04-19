@@ -90,8 +90,19 @@ async fn run_loop(
             frame.render_widget(title, chunks[0]);
 
             // Node table
-            let node_header = Row::new(vec!["ID", "HOSTNAME", "CPU (MHz)", "MEM (MB)", "ALLOCS", "STATUS"])
-                .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+            let node_header = Row::new(vec![
+                "ID",
+                "HOSTNAME",
+                "CPU (MHz)",
+                "MEM (MB)",
+                "ALLOCS",
+                "STATUS",
+            ])
+            .style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            );
 
             let node_rows: Vec<Row> = filtered_nodes
                 .iter()
@@ -123,12 +134,7 @@ async fn run_loop(
                                 .unwrap_or(0)
                                 .to_string(),
                         ),
-                        Cell::from(
-                            n["allocations_running"]
-                                .as_u64()
-                                .unwrap_or(0)
-                                .to_string(),
-                        ),
+                        Cell::from(n["allocations_running"].as_u64().unwrap_or(0).to_string()),
                         Cell::from(Span::styled(status.to_string(), status_style)),
                     ])
                 })
@@ -151,8 +157,11 @@ async fn run_loop(
             frame.render_widget(node_table, chunks[1]);
 
             // Job summary
-            let job_header = Row::new(vec!["ID", "TYPE", "STATUS", "GROUPS", "VERSION"])
-                .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+            let job_header = Row::new(vec!["ID", "TYPE", "STATUS", "GROUPS", "VERSION"]).style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            );
 
             let job_rows: Vec<Row> = jobs
                 .iter()
@@ -218,28 +227,19 @@ async fn run_loop(
     }
 }
 
-async fn fetch_nodes(
-    client: &reqwest::Client,
-    server: &str,
-) -> Result<Vec<serde_json::Value>> {
+async fn fetch_nodes(client: &reqwest::Client, server: &str) -> Result<Vec<serde_json::Value>> {
     let url = format!("http://{}/api/v1/nodes", server);
     let resp = client.get(&url).send().await?;
     Ok(resp.json().await?)
 }
 
-async fn fetch_jobs(
-    client: &reqwest::Client,
-    server: &str,
-) -> Result<Vec<serde_json::Value>> {
+async fn fetch_jobs(client: &reqwest::Client, server: &str) -> Result<Vec<serde_json::Value>> {
     let url = format!("http://{}/api/v1/jobs", server);
     let resp = client.get(&url).send().await?;
     Ok(resp.json().await?)
 }
 
-async fn fetch_allocs(
-    client: &reqwest::Client,
-    server: &str,
-) -> Result<Vec<serde_json::Value>> {
+async fn fetch_allocs(client: &reqwest::Client, server: &str) -> Result<Vec<serde_json::Value>> {
     let url = format!("http://{}/api/v1/allocations", server);
     let resp = client.get(&url).send().await?;
     Ok(resp.json().await?)

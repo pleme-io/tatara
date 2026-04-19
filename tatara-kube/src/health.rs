@@ -115,9 +115,7 @@ fn check_deployment_health(status: Option<&serde_json::Value>) -> Result<HealthS
     }
 }
 
-fn check_statefulset_health(
-    status: Option<&serde_json::Value>,
-) -> Result<HealthStatus, KubeError> {
+fn check_statefulset_health(status: Option<&serde_json::Value>) -> Result<HealthStatus, KubeError> {
     let Some(status) = status else {
         return Ok(HealthStatus::Progressing);
     };
@@ -189,9 +187,7 @@ fn check_crd_health(status: Option<&serde_json::Value>) -> Result<HealthStatus, 
     check_generic_conditions(status)
 }
 
-fn check_generic_conditions(
-    status: Option<&serde_json::Value>,
-) -> Result<HealthStatus, KubeError> {
+fn check_generic_conditions(status: Option<&serde_json::Value>) -> Result<HealthStatus, KubeError> {
     let Some(status) = status else {
         return Ok(HealthStatus::Healthy);
     };

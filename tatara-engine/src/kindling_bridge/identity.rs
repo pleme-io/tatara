@@ -155,20 +155,14 @@ pub fn build_node_meta(
         arch: std::env::consts::ARCH.to_string(),
         roles,
         drivers,
-        total_resources: Resources {
-            cpu_mhz,
-            memory_mb,
-        },
-        available_resources: Resources {
-            cpu_mhz,
-            memory_mb,
-        },
+        total_resources: Resources { cpu_mhz, memory_mb },
+        available_resources: Resources { cpu_mhz, memory_mb },
         allocations_running: 0,
         joined_at: chrono::Utc::now(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         eligible: true,
-            wireguard_pubkey: None,
-            tunnel_address: None,
+        wireguard_pubkey: None,
+        tunnel_address: None,
     }
 }
 

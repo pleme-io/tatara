@@ -41,7 +41,8 @@ pub fn register(tools: &mut Vec<McpToolDef>) {
     });
     tools.push(McpToolDef {
         name: "escalate_schema_gap".into(),
-        description: "Flag a pattern that needs a new bounded DAG template in the emission catalog".into(),
+        description: "Flag a pattern that needs a new bounded DAG template in the emission catalog"
+            .into(),
         category: ToolCategory::Influence,
         input_schema: json!({ "type": "object", "properties": {
             "description": { "type": "string", "description": "What pattern was encountered" },

@@ -163,9 +163,11 @@ fn push(
     value: Value,
     order: Option<Placement>,
 ) {
-    out.entry(path.to_string())
-        .or_default()
-        .push(Contribution { priority, value, order });
+    out.entry(path.to_string()).or_default().push(Contribution {
+        priority,
+        value,
+        order,
+    });
 }
 
 /// Combine same-priority contributions at a path into one `Value`.
@@ -294,7 +296,9 @@ fn insert_nested(root: &mut Value, parts: &[&str], value: Value) {
         return;
     }
     let head = parts[0];
-    let entry = obj.entry(head.to_string()).or_insert_with(|| Value::Object(JMap::new()));
+    let entry = obj
+        .entry(head.to_string())
+        .or_insert_with(|| Value::Object(JMap::new()));
     insert_nested(entry, &parts[1..], value);
 }
 
@@ -367,7 +371,9 @@ fn validate(path: &str, value: &Value, ty: &OptionType) -> ResolveResult<()> {
         OptionType::Package => expect(path, value, "package (object)", Value::is_object),
         OptionType::Any => Ok(()),
         OptionType::ListOf { item } => {
-            let arr = value.as_array().ok_or_else(|| type_err(path, "list", value))?;
+            let arr = value
+                .as_array()
+                .ok_or_else(|| type_err(path, "list", value))?;
             for (i, entry) in arr.iter().enumerate() {
                 validate(&format!("{path}[{i}]"), entry, item)?;
             }
@@ -460,7 +466,10 @@ mod tests {
     fn simple_set_resolves_to_nested_object() {
         let module = m("demo", vec![set("services.nginx.enable", json!(true))]);
         let resolved = resolve_module(&module).unwrap();
-        assert_eq!(resolved, json!({ "services": { "nginx": { "enable": true }}}));
+        assert_eq!(
+            resolved,
+            json!({ "services": { "nginx": { "enable": true }}})
+        );
     }
 
     #[test]
@@ -548,7 +557,10 @@ mod tests {
             }],
         );
         let resolved = resolve_modules(&[a, b, c]).unwrap();
-        assert_eq!(resolved, json!({ "path": ["/bin", "/usr/bin", "/opt/bin"] }));
+        assert_eq!(
+            resolved,
+            json!({ "path": ["/bin", "/usr/bin", "/opt/bin"] })
+        );
     }
 
     #[test]
@@ -561,8 +573,14 @@ mod tests {
 
     #[test]
     fn objects_deep_merge_at_same_priority() {
-        let a = m("a", vec![set("services", json!({ "nginx": { "enable": true }}))]);
-        let b = m("b", vec![set("services", json!({ "nginx": { "port": 80 }}))]);
+        let a = m(
+            "a",
+            vec![set("services", json!({ "nginx": { "enable": true }}))],
+        );
+        let b = m(
+            "b",
+            vec![set("services", json!({ "nginx": { "port": 80 }}))],
+        );
         let resolved = resolve_modules(&[a, b]).unwrap();
         assert_eq!(
             resolved,

@@ -32,7 +32,13 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
         }
         _ => {
             let mut table = build_table(&[
-                "ID", "NAME", "FLAKE REF", "STATUS", "REV", "JOBS", "LAST RECONCILED",
+                "ID",
+                "NAME",
+                "FLAKE REF",
+                "STATUS",
+                "REV",
+                "JOBS",
+                "LAST RECONCILED",
             ]);
             for src in &sources {
                 let id_str = src["id"].as_str().unwrap_or("?");
@@ -127,7 +133,10 @@ pub async fn add(
     let kind_value = match kind {
         "git-flake" | "git_flake" => "git_flake",
         "flake-output" | "flake_output" => "flake_output",
-        _ => bail!("Invalid source kind: {}. Use 'git-flake' or 'flake-output'", kind),
+        _ => bail!(
+            "Invalid source kind: {}. Use 'git-flake' or 'flake-output'",
+            kind
+        ),
     };
 
     let body = serde_json::json!({
@@ -164,11 +173,7 @@ pub async fn add(
     Ok(())
 }
 
-pub async fn delete(
-    name_or_id: &str,
-    endpoint: Option<&str>,
-    output: OutputFormat,
-) -> Result<()> {
+pub async fn delete(name_or_id: &str, endpoint: Option<&str>, output: OutputFormat) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
     let client = reqwest::Client::new();
 
@@ -201,11 +206,7 @@ pub async fn delete(
     Ok(())
 }
 
-pub async fn sync(
-    name_or_id: &str,
-    endpoint: Option<&str>,
-    output: OutputFormat,
-) -> Result<()> {
+pub async fn sync(name_or_id: &str, endpoint: Option<&str>, output: OutputFormat) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
     let client = reqwest::Client::new();
 
@@ -236,11 +237,7 @@ pub async fn sync(
     Ok(())
 }
 
-pub async fn suspend(
-    name_or_id: &str,
-    endpoint: Option<&str>,
-    output: OutputFormat,
-) -> Result<()> {
+pub async fn suspend(name_or_id: &str, endpoint: Option<&str>, output: OutputFormat) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
     let client = reqwest::Client::new();
 
@@ -271,11 +268,7 @@ pub async fn suspend(
     Ok(())
 }
 
-pub async fn resume(
-    name_or_id: &str,
-    endpoint: Option<&str>,
-    output: OutputFormat,
-) -> Result<()> {
+pub async fn resume(name_or_id: &str, endpoint: Option<&str>, output: OutputFormat) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
     let client = reqwest::Client::new();
 

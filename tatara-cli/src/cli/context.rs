@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::output::{build_table, status_cell, OutputFormat, render_value};
+use super::output::{build_table, render_value, status_cell, OutputFormat};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ContextConfig {
@@ -61,13 +61,7 @@ pub fn active_endpoint(endpoint_override: Option<&str>) -> String {
         }
         // If only one context exists, use it
         if config.contexts.len() == 1 {
-            return config
-                .contexts
-                .values()
-                .next()
-                .unwrap()
-                .endpoint
-                .clone();
+            return config.contexts.values().next().unwrap().endpoint.clone();
         }
     }
     "http://127.0.0.1:4646".to_string()

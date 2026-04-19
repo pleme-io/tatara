@@ -75,11 +75,7 @@ pub enum EventLevel {
 
 impl TracedEvent {
     /// Create a new traced event.
-    pub fn new(
-        correlation_id: Uuid,
-        category: EventCategory,
-        action: impl Into<String>,
-    ) -> Self {
+    pub fn new(correlation_id: Uuid, category: EventCategory, action: impl Into<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
             timestamp: Utc::now(),
@@ -131,10 +127,14 @@ impl TracedEvent {
         from_phase: &str,
         to_phase: &str,
     ) -> Self {
-        Self::new(correlation_id, EventCategory::Allocation, "phase_transition")
-            .field("alloc_id", alloc_id.to_string())
-            .field("from_phase", from_phase)
-            .field("to_phase", to_phase)
+        Self::new(
+            correlation_id,
+            EventCategory::Allocation,
+            "phase_transition",
+        )
+        .field("alloc_id", alloc_id.to_string())
+        .field("from_phase", from_phase)
+        .field("to_phase", to_phase)
     }
 
     /// Convenience: create a scheduling decision event.
@@ -144,10 +144,14 @@ impl TracedEvent {
         node_id: u64,
         driver: &str,
     ) -> Self {
-        Self::new(correlation_id, EventCategory::Scheduling, "allocation_placed")
-            .field("job_id", job_id)
-            .field("node_id", serde_json::Value::Number(node_id.into()))
-            .field("driver", driver)
+        Self::new(
+            correlation_id,
+            EventCategory::Scheduling,
+            "allocation_placed",
+        )
+        .field("job_id", job_id)
+        .field("node_id", serde_json::Value::Number(node_id.into()))
+        .field("driver", driver)
     }
 
     /// Convenience: create a health check event.

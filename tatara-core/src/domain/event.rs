@@ -167,16 +167,11 @@ impl EventRing {
     }
 
     /// List events filtered by kind and/or since timestamp.
-    pub fn query(
-        &self,
-        kind: Option<&EventKind>,
-        since: Option<DateTime<Utc>>,
-    ) -> Vec<&Event> {
+    pub fn query(&self, kind: Option<&EventKind>, since: Option<DateTime<Utc>>) -> Vec<&Event> {
         self.events
             .iter()
             .filter(|e| {
-                kind.map_or(true, |k| &e.kind == k)
-                    && since.map_or(true, |s| e.timestamp >= s)
+                kind.map_or(true, |k| &e.kind == k) && since.map_or(true, |s| e.timestamp >= s)
             })
             .collect()
     }

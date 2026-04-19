@@ -186,7 +186,11 @@ mod tests {
     #[test]
     fn sighup_reconverge_on_running() {
         assert_eq!(
-            apply(ProcessPhase::Running, ProcessSignal::Sighup, SighupStrategy::Reconverge),
+            apply(
+                ProcessPhase::Running,
+                ProcessSignal::Sighup,
+                SighupStrategy::Reconverge
+            ),
             SignalEffect::TransitionTo(ProcessPhase::Reconverging)
         );
     }
@@ -194,7 +198,11 @@ mod tests {
     #[test]
     fn sigterm_on_attested_begins_exit() {
         assert_eq!(
-            apply(ProcessPhase::Attested, ProcessSignal::Sigterm, SighupStrategy::Noop),
+            apply(
+                ProcessPhase::Attested,
+                ProcessSignal::Sigterm,
+                SighupStrategy::Noop
+            ),
             SignalEffect::TransitionTo(ProcessPhase::Exiting)
         );
     }
@@ -202,7 +210,11 @@ mod tests {
     #[test]
     fn sigkill_on_zombie_reaps() {
         assert_eq!(
-            apply(ProcessPhase::Zombie, ProcessSignal::Sigkill, SighupStrategy::Noop),
+            apply(
+                ProcessPhase::Zombie,
+                ProcessSignal::Sigkill,
+                SighupStrategy::Noop
+            ),
             SignalEffect::TransitionTo(ProcessPhase::Reaped)
         );
     }
@@ -210,11 +222,19 @@ mod tests {
     #[test]
     fn sigusr1_only_when_running() {
         assert_eq!(
-            apply(ProcessPhase::Pending, ProcessSignal::Sigusr1, SighupStrategy::Noop),
+            apply(
+                ProcessPhase::Pending,
+                ProcessSignal::Sigusr1,
+                SighupStrategy::Noop
+            ),
             SignalEffect::Noop
         );
         assert_eq!(
-            apply(ProcessPhase::Attested, ProcessSignal::Sigusr1, SighupStrategy::Noop),
+            apply(
+                ProcessPhase::Attested,
+                ProcessSignal::Sigusr1,
+                SighupStrategy::Noop
+            ),
             SignalEffect::ForceAttest
         );
     }

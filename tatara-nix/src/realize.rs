@@ -65,10 +65,7 @@ pub struct RealizedArtifact {
 impl RealizedArtifact {
     pub fn as_evaluation_result(&self) -> EvaluationResult {
         let mut outputs = BTreeMap::new();
-        outputs.insert(
-            "out".to_string(),
-            self.store_path.clone(),
-        );
+        outputs.insert("out".to_string(), self.store_path.clone());
         EvaluationResult {
             store_path: self.store_path.clone(),
             outputs,
@@ -322,9 +319,7 @@ fn materialize_source(src: &Source, work: &Path) -> Result<PathBuf> {
     }
 }
 
-fn default_phases(
-    commands: &std::collections::BTreeMap<String, Vec<String>>,
-) -> Vec<BuilderPhase> {
+fn default_phases(commands: &std::collections::BTreeMap<String, Vec<String>>) -> Vec<BuilderPhase> {
     // If the user named specific phases in `commands` but gave no `phases`
     // list, respect the names.
     let mut out = Vec::new();
@@ -463,15 +458,10 @@ impl NixStoreRealizer {
         // Source: materialize Inline into a builtins.toFile; pass Path through.
         let src_expr = match &d.source {
             Source::Inline { content } => {
-                format!(
-                    "builtins.toFile \"src\" {}",
-                    nix_string(content)
-                )
+                format!("builtins.toFile \"src\" {}", nix_string(content))
             }
             Source::Path { path } => format!("{}", path), // unquoted path literal
-            other => {
-                return Err(RealizeError::UnsupportedSource(format!("{other:?}")))
-            }
+            other => return Err(RealizeError::UnsupportedSource(format!("{other:?}"))),
         };
         // Build a shell script from the phase commands.
         let phases = if d.builder.phases.is_empty() {
@@ -518,8 +508,7 @@ impl NixStoreRealizer {
             (
                 "let pkgs = import <nixpkgs> {}; in\n".to_string(),
                 "\"${pkgs.bash}/bin/sh\"".to_string(),
-                "    PATH = \"${pkgs.coreutils}/bin:${pkgs.bash}/bin\";\n"
-                    .to_string(),
+                "    PATH = \"${pkgs.coreutils}/bin:${pkgs.bash}/bin\";\n".to_string(),
             )
         } else {
             (String::new(), "\"/bin/sh\"".to_string(), String::new())
@@ -638,7 +627,8 @@ mod tests {
             env: vec![],
             sandbox: Default::default(),
             bridge: None,
-            nix_expr: None,        }
+            nix_expr: None,
+        }
     }
 
     #[test]
@@ -648,7 +638,11 @@ mod tests {
         let d = mk_hello("hello world\n");
         let art = r.realize(&d).unwrap();
         assert!(!art.cached);
-        assert!(art.path.exists(), "output file should exist: {:?}", art.path);
+        assert!(
+            art.path.exists(),
+            "output file should exist: {:?}",
+            art.path
+        );
         let contents = std::fs::read_to_string(&art.path).unwrap();
         assert_eq!(contents, "hello world\n");
     }
@@ -749,7 +743,8 @@ mod tests {
             env: vec![],
             sandbox: Default::default(),
             bridge: None,
-            nix_expr: None,        };
+            nix_expr: None,
+        };
         let r = NixStoreRealizer::new();
         let art = r.realize(&d).expect("nix build should succeed");
         assert!(art.path.starts_with("/nix/store"));
@@ -762,9 +757,14 @@ mod tests {
         let saved = std::env::var_os("TATARA_STORE_DIR");
         // SAFETY: test accessed in-proc only, env is process-global; tests run
         // with --test-threads settable by caller. We restore after.
-        unsafe { std::env::set_var("TATARA_STORE_DIR", "/tmp/tatara-test-override"); }
+        unsafe {
+            std::env::set_var("TATARA_STORE_DIR", "/tmp/tatara-test-override");
+        }
         let r = InProcessRealizer::default_store();
-        assert_eq!(r.store_dir(), std::path::Path::new("/tmp/tatara-test-override"));
+        assert_eq!(
+            r.store_dir(),
+            std::path::Path::new("/tmp/tatara-test-override")
+        );
         match saved {
             Some(v) => unsafe { std::env::set_var("TATARA_STORE_DIR", v) },
             None => unsafe { std::env::remove_var("TATARA_STORE_DIR") },

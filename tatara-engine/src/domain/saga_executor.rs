@@ -63,11 +63,7 @@ impl SagaExecutor {
                                 error = %comp_err,
                                 "saga: compensation failed"
                             );
-                            compensation_errors.push(format!(
-                                "{}: {}",
-                                comp_step.name(),
-                                comp_err
-                            ));
+                            compensation_errors.push(format!("{}: {}", comp_step.name(), comp_err));
                         }
                     }
 
@@ -82,7 +78,7 @@ impl SagaExecutor {
             }
         }
 
-            SagaResult::Completed {
+        SagaResult::Completed {
             steps_run: self.steps.len(),
         }
     }
@@ -108,10 +104,7 @@ mod tests {
             Ok(serde_json::json!({"step": self.name}))
         }
         async fn compensate(&self, _output: &serde_json::Value) -> Result<()> {
-            self.log
-                .lock()
-                .unwrap()
-                .push(format!("comp:{}", self.name));
+            self.log.lock().unwrap().push(format!("comp:{}", self.name));
             Ok(())
         }
     }
@@ -131,10 +124,7 @@ mod tests {
             Err(anyhow::anyhow!("step failed"))
         }
         async fn compensate(&self, _output: &serde_json::Value) -> Result<()> {
-            self.log
-                .lock()
-                .unwrap()
-                .push(format!("comp:{}", self.name));
+            self.log.lock().unwrap().push(format!("comp:{}", self.name));
             Ok(())
         }
     }
@@ -143,9 +133,18 @@ mod tests {
     async fn test_all_success() {
         let log = Arc::new(Mutex::new(Vec::new()));
         let executor = SagaExecutor::new(vec![
-            Box::new(SuccessStep { name: "a".into(), log: log.clone() }),
-            Box::new(SuccessStep { name: "b".into(), log: log.clone() }),
-            Box::new(SuccessStep { name: "c".into(), log: log.clone() }),
+            Box::new(SuccessStep {
+                name: "a".into(),
+                log: log.clone(),
+            }),
+            Box::new(SuccessStep {
+                name: "b".into(),
+                log: log.clone(),
+            }),
+            Box::new(SuccessStep {
+                name: "c".into(),
+                log: log.clone(),
+            }),
         ]);
 
         let result = executor.run().await;
@@ -157,9 +156,18 @@ mod tests {
     async fn test_fail_at_step_2_compensates_step_1() {
         let log = Arc::new(Mutex::new(Vec::new()));
         let executor = SagaExecutor::new(vec![
-            Box::new(SuccessStep { name: "a".into(), log: log.clone() }),
-            Box::new(FailStep { name: "b".into(), log: log.clone() }),
-            Box::new(SuccessStep { name: "c".into(), log: log.clone() }),
+            Box::new(SuccessStep {
+                name: "a".into(),
+                log: log.clone(),
+            }),
+            Box::new(FailStep {
+                name: "b".into(),
+                log: log.clone(),
+            }),
+            Box::new(SuccessStep {
+                name: "c".into(),
+                log: log.clone(),
+            }),
         ]);
 
         let result = executor.run().await;
@@ -183,9 +191,10 @@ mod tests {
     #[tokio::test]
     async fn test_single_step_success() {
         let log = Arc::new(Mutex::new(Vec::new()));
-        let executor = SagaExecutor::new(vec![
-            Box::new(SuccessStep { name: "only".into(), log: log.clone() }),
-        ]);
+        let executor = SagaExecutor::new(vec![Box::new(SuccessStep {
+            name: "only".into(),
+            log: log.clone(),
+        })]);
 
         let result = executor.run().await;
         assert!(matches!(result, SagaResult::Completed { steps_run: 1 }));
@@ -195,12 +204,24 @@ mod tests {
     async fn test_first_step_fails_no_compensation() {
         let log = Arc::new(Mutex::new(Vec::new()));
         let executor = SagaExecutor::new(vec![
-            Box::new(FailStep { name: "first".into(), log: log.clone() }),
-            Box::new(SuccessStep { name: "second".into(), log: log.clone() }),
+            Box::new(FailStep {
+                name: "first".into(),
+                log: log.clone(),
+            }),
+            Box::new(SuccessStep {
+                name: "second".into(),
+                log: log.clone(),
+            }),
         ]);
 
         let result = executor.run().await;
-        assert!(matches!(result, SagaResult::Compensated { steps_completed: 0, .. }));
+        assert!(matches!(
+            result,
+            SagaResult::Compensated {
+                steps_completed: 0,
+                ..
+            }
+        ));
         // No compensation needed — nothing completed before failure
         let events = log.lock().unwrap().clone();
         assert!(!events.contains(&"comp:first".to_string()));

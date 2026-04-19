@@ -33,9 +33,7 @@ pub async fn eval_cluster_resources(
 
     let output = tokio::time::timeout(
         Duration::from_secs(timeout_secs),
-        Command::new("nix")
-            .args(["eval", "--json", &attr])
-            .output(),
+        Command::new("nix").args(["eval", "--json", &attr]).output(),
     )
     .await
     .map_err(|_| KubeError::NixEvalTimeout {

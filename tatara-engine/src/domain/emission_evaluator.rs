@@ -36,10 +36,7 @@ impl EmissionEvaluator {
                 // For now, always allow if limit > 0
                 if limit == 0 {
                     return Some(InstantiationDecision::Defer {
-                        reason: format!(
-                            "concurrency limit reached for {}",
-                            trigger.template_name
-                        ),
+                        reason: format!("concurrency limit reached for {}", trigger.template_name),
                     });
                 }
 
@@ -127,10 +124,7 @@ mod tests {
                     },
                 },
             ],
-            concurrency_limits: HashMap::from([
-                ("migration".into(), 2),
-                ("scaling".into(), 1),
-            ]),
+            concurrency_limits: HashMap::from([("migration".into(), 2), ("scaling".into(), 1)]),
         }
     }
 
@@ -188,7 +182,10 @@ mod tests {
 
         let decisions = EmissionEvaluator::evaluate_triggers(&schema, &state);
         assert_eq!(decisions.len(), 1);
-        assert!(matches!(&decisions[0], InstantiationDecision::Escalate { .. }));
+        assert!(matches!(
+            &decisions[0],
+            InstantiationDecision::Escalate { .. }
+        ));
     }
 
     #[test]

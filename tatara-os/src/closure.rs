@@ -88,7 +88,10 @@ impl SystemClosure {
             for u in &cfg.users {
                 let uid = u.uid.unwrap_or(1000);
                 let gid = u.gid.unwrap_or(uid);
-                let home = u.home.clone().unwrap_or_else(|| format!("/home/{}", u.name));
+                let home = u
+                    .home
+                    .clone()
+                    .unwrap_or_else(|| format!("/home/{}", u.name));
                 let shell = u.shell.clone().unwrap_or_else(|| "/bin/sh".into());
                 etc_script.push_str(&format!(
                     "echo '{n}:x:{uid}:{gid}::{home}:{shell}' >> $out/passwd\n",
@@ -212,7 +215,8 @@ fn hermetic_derivation(name: String, version: Option<String>, install_cmd: &str)
         env: vec![],
         sandbox: Default::default(),
         bridge: None,
-        nix_expr: None,    }
+        nix_expr: None,
+    }
 }
 
 fn sanitize(s: &str) -> String {
@@ -274,7 +278,10 @@ mod tests {
         let closure = SystemClosure::from_config(&basic_cfg(), &pkgs).unwrap();
         assert_eq!(closure.hostname, "plex");
         assert!(closure.kernel.bridge.is_some());
-        assert_eq!(closure.kernel.bridge.unwrap().attr_path, "linuxPackages.kernel");
+        assert_eq!(
+            closure.kernel.bridge.unwrap().attr_path,
+            "linuxPackages.kernel"
+        );
         assert_eq!(closure.services.len(), 1);
         assert!(closure.services.contains_key("nginx"));
     }

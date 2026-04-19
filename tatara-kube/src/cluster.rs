@@ -11,9 +11,7 @@ pub struct ClusterManager {
 
 impl ClusterManager {
     /// Build K8s clients for all configured clusters.
-    pub async fn from_config(
-        clusters: &HashMap<String, ClusterTarget>,
-    ) -> Result<Self, KubeError> {
+    pub async fn from_config(clusters: &HashMap<String, ClusterTarget>) -> Result<Self, KubeError> {
         let mut clients = HashMap::new();
 
         for (name, target) in clusters {
@@ -23,13 +21,12 @@ impl ClusterManager {
 
             let client = match (&target.kubeconfig, &target.context) {
                 (Some(path), ctx) => {
-                    let kubeconfig =
-                        kube::config::Kubeconfig::read_from(path).map_err(|e| {
-                            KubeError::ClusterUnreachable {
-                                name: name.clone(),
-                                reason: e.to_string(),
-                            }
-                        })?;
+                    let kubeconfig = kube::config::Kubeconfig::read_from(path).map_err(|e| {
+                        KubeError::ClusterUnreachable {
+                            name: name.clone(),
+                            reason: e.to_string(),
+                        }
+                    })?;
                     let config = kube::Config::from_custom_kubeconfig(
                         kubeconfig,
                         &kube::config::KubeConfigOptions {
@@ -75,12 +72,12 @@ impl ClusterManager {
 
     /// Build a single client from default kubeconfig.
     pub async fn default_client() -> Result<Self, KubeError> {
-        let client = Client::try_default().await.map_err(|e| {
-            KubeError::ClusterUnreachable {
+        let client = Client::try_default()
+            .await
+            .map_err(|e| KubeError::ClusterUnreachable {
                 name: "default".to_string(),
                 reason: e.to_string(),
-            }
-        })?;
+            })?;
         let mut clients = HashMap::new();
         clients.insert("default".to_string(), client);
         Ok(Self { clients })

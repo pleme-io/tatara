@@ -217,10 +217,7 @@ impl Driver for OciDriver {
 
     async fn logs(&self, handle: &TaskHandle) -> Result<mpsc::Receiver<LogEntry>> {
         let (tx, rx) = mpsc::channel(256);
-        let container_id = handle
-            .container_id
-            .clone()
-            .unwrap_or_default();
+        let container_id = handle.container_id.clone().unwrap_or_default();
         let cli = self.cli_command().to_string();
 
         tokio::spawn(async move {

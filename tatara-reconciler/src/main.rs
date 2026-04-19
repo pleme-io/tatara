@@ -26,7 +26,11 @@ struct Cli {
     #[arg(long, env = "TATARA_WATCH_NAMESPACE", default_value = "")]
     watch_namespace: String,
     /// Namespace the controller runs in.
-    #[arg(long, env = "TATARA_CONTROLLER_NAMESPACE", default_value = "tatara-system")]
+    #[arg(
+        long,
+        env = "TATARA_CONTROLLER_NAMESPACE",
+        default_value = "tatara-system"
+    )]
     controller_namespace: String,
     /// Health + metrics bind address.
     #[arg(long, env = "TATARA_HEALTH_ADDR", default_value = "0.0.0.0:8080")]
@@ -39,7 +43,9 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .json()
         .init();
 

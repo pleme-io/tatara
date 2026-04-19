@@ -55,10 +55,9 @@ pub fn load_cached() -> Result<Option<CachedConfig>> {
     if !path.exists() {
         return Ok(None);
     }
-    let content = fs::read_to_string(&path)
-        .context("Failed to read cached config")?;
-    let cached: CachedConfig = serde_json::from_str(&content)
-        .context("Failed to parse cached config")?;
+    let content = fs::read_to_string(&path).context("Failed to read cached config")?;
+    let cached: CachedConfig =
+        serde_json::from_str(&content).context("Failed to parse cached config")?;
     Ok(Some(cached))
 }
 
@@ -66,8 +65,7 @@ pub fn load_cached() -> Result<Option<CachedConfig>> {
 pub fn save_cached(config: &PlatformConfig, api_endpoint: &str) -> Result<()> {
     let path = cache_path()?;
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .context("Failed to create config directory")?;
+        fs::create_dir_all(parent).context("Failed to create config directory")?;
     }
 
     let cached = CachedConfig {
@@ -76,10 +74,8 @@ pub fn save_cached(config: &PlatformConfig, api_endpoint: &str) -> Result<()> {
         api_endpoint: api_endpoint.to_string(),
     };
 
-    let content = serde_json::to_string_pretty(&cached)
-        .context("Failed to serialize config")?;
-    fs::write(&path, content)
-        .context("Failed to write cached config")?;
+    let content = serde_json::to_string_pretty(&cached).context("Failed to serialize config")?;
+    fs::write(&path, content).context("Failed to write cached config")?;
 
     Ok(())
 }
@@ -145,8 +141,7 @@ pub fn apply_nix_config(config: &PlatformConfig) -> Result<ConfigApplyResult> {
     };
 
     // Write ro.conf
-    fs::write(&ro_conf, &content)
-        .context("Failed to write ro.conf")?;
+    fs::write(&ro_conf, &content).context("Failed to write ro.conf")?;
 
     // Ensure nix.conf includes ro.conf
     let include_added = ensure_nix_conf_include(&nix_conf, &ro_conf)?;

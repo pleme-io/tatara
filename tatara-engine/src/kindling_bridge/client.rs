@@ -231,11 +231,7 @@ impl KindlingClient {
             .with_context(|| format!("Failed to reach kindling daemon at {}", url))?;
 
         if !resp.status().is_success() {
-            anyhow::bail!(
-                "Kindling API {} returned {}",
-                path,
-                resp.status()
-            );
+            anyhow::bail!("Kindling API {} returned {}", path, resp.status());
         }
 
         resp.json()
@@ -255,11 +251,7 @@ impl KindlingClient {
             .with_context(|| format!("Failed to reach kindling daemon at {}", url))?;
 
         if !resp.status().is_success() {
-            anyhow::bail!(
-                "Kindling API {} returned {}",
-                path,
-                resp.status()
-            );
+            anyhow::bail!("Kindling API {} returned {}", path, resp.status());
         }
 
         resp.json()
@@ -274,7 +266,10 @@ pub async fn probe_kindling(addr: &str) -> Option<KindlingClient> {
     let client = KindlingClient::new(addr);
 
     if !client.is_healthy().await {
-        warn!(addr = addr, "Kindling daemon not reachable — running without it");
+        warn!(
+            addr = addr,
+            "Kindling daemon not reachable — running without it"
+        );
         return None;
     }
 

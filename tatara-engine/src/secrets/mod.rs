@@ -45,10 +45,7 @@ impl SecretResolver {
     }
 
     /// Resolve all secret refs, returning env vars to inject and files to write.
-    pub async fn resolve(
-        &self,
-        refs: &[SecretRef],
-    ) -> Result<ResolvedSecrets> {
+    pub async fn resolve(&self, refs: &[SecretRef]) -> Result<ResolvedSecrets> {
         let mut env_vars = std::collections::HashMap::new();
         let mut files = Vec::new();
 
@@ -77,7 +74,11 @@ impl SecretResolver {
             }
         }
 
-        info!(env_count = env_vars.len(), file_count = files.len(), "secrets resolved");
+        info!(
+            env_count = env_vars.len(),
+            file_count = files.len(),
+            "secrets resolved"
+        );
         Ok(ResolvedSecrets { env_vars, files })
     }
 }

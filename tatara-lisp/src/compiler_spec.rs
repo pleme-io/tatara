@@ -172,7 +172,10 @@ mod tests {
         assert_eq!(spec.name, "my-fast-lisp");
         assert_eq!(spec.dialect, "standard");
         assert_eq!(spec.macros.len(), 1);
-        assert_eq!(spec.domains, vec!["defmonitor".to_string(), "defalertpolicy".into()]);
+        assert_eq!(
+            spec.domains,
+            vec!["defmonitor".to_string(), "defalertpolicy".into()]
+        );
     }
 
     #[test]
@@ -234,10 +237,7 @@ mod tests {
 
     #[test]
     fn realize_to_disk_and_load_round_trips() {
-        let tmp = std::env::temp_dir().join(format!(
-            "tatara-compiler-{}.json",
-            std::process::id()
-        ));
+        let tmp = std::env::temp_dir().join(format!("tatara-compiler-{}.json", std::process::id()));
         let spec = CompilerSpec {
             name: "disk-test".into(),
             dialect: "standard".into(),

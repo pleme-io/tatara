@@ -2,18 +2,17 @@ use async_graphql::*;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use tatara_engine::client::executor::Executor;
-use tatara_engine::client::log_collector::LogCollector;
-use tatara_engine::cluster::store::ClusterStore;
 use tatara_core::cluster::types::NodeMeta as DomainNodeMeta;
 use tatara_core::domain::allocation::{
     Allocation as DomainAllocation, AllocationState as DomainAllocState,
     TaskRunState as DomainTaskRunState, TaskState as DomainTaskState,
 };
 use tatara_core::domain::job::{
-    Job as DomainJob, JobSpec, JobStatus as DomainJobStatus,
-    JobType as DomainJobType,
+    Job as DomainJob, JobSpec, JobStatus as DomainJobStatus, JobType as DomainJobType,
 };
+use tatara_engine::client::executor::Executor;
+use tatara_engine::client::log_collector::LogCollector;
+use tatara_engine::cluster::store::ClusterStore;
 use tatara_engine::drivers::LogEntry as DomainLogEntry;
 
 pub type TataraSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
@@ -288,8 +287,8 @@ impl QueryRoot {
 impl MutationRoot {
     async fn submit_job(&self, ctx: &Context<'_>, spec: String) -> Result<GqlJob> {
         let store = ctx.data::<Arc<ClusterStore>>()?;
-        let job_spec: JobSpec =
-            serde_json::from_str(&spec).map_err(|e| Error::new(format!("Invalid job spec: {}", e)))?;
+        let job_spec: JobSpec = serde_json::from_str(&spec)
+            .map_err(|e| Error::new(format!("Invalid job spec: {}", e)))?;
         let job = job_spec.into_job();
         let result = store
             .put_job(job)

@@ -81,7 +81,9 @@ fn type_err(key: &str, expected: &str) -> LispError {
 }
 
 pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
-    required(kw, key)?.as_string().ok_or_else(|| type_err(key, "string"))
+    required(kw, key)?
+        .as_string()
+        .ok_or_else(|| type_err(key, "string"))
 }
 
 pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<&'a str>> {
@@ -96,8 +98,12 @@ pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Opti
 
 pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
     let v = kw.get(key).copied();
-    let Some(v) = v else { return Ok(vec![]); };
-    let list = v.as_list().ok_or_else(|| type_err(key, "list of strings"))?;
+    let Some(v) = v else {
+        return Ok(vec![]);
+    };
+    let list = v
+        .as_list()
+        .ok_or_else(|| type_err(key, "list of strings"))?;
     list.iter()
         .map(|s| {
             s.as_string()
@@ -108,7 +114,9 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
 }
 
 pub fn extract_int(kw: &Kwargs<'_>, key: &str) -> Result<i64> {
-    required(kw, key)?.as_int().ok_or_else(|| type_err(key, "int"))
+    required(kw, key)?
+        .as_int()
+        .ok_or_else(|| type_err(key, "int"))
 }
 
 pub fn extract_optional_int(kw: &Kwargs<'_>, key: &str) -> Result<Option<i64>> {
@@ -127,12 +135,17 @@ pub fn extract_float(kw: &Kwargs<'_>, key: &str) -> Result<f64> {
 pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>> {
     match kw.get(key) {
         None => Ok(None),
-        Some(v) => v.as_float().map(Some).ok_or_else(|| type_err(key, "number")),
+        Some(v) => v
+            .as_float()
+            .map(Some)
+            .ok_or_else(|| type_err(key, "number")),
     }
 }
 
 pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
-    required(kw, key)?.as_bool().ok_or_else(|| type_err(key, "bool"))
+    required(kw, key)?
+        .as_bool()
+        .ok_or_else(|| type_err(key, "bool"))
 }
 
 pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>> {

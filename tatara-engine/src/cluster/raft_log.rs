@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use openraft::anyerror::AnyError;
 use openraft::storage::RaftLogStorage;
-use openraft::{Entry, LogId, LogState, OptionalSend, RaftLogReader, StorageError, StorageIOError, Vote};
+use openraft::{
+    Entry, LogId, LogState, OptionalSend, RaftLogReader, StorageError, StorageIOError, Vote,
+};
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use tokio::sync::Mutex;
 
@@ -76,7 +78,9 @@ impl RaftLogReader<TypeConfig> for LogStore {
         range: RB,
     ) -> Result<Vec<Entry<TypeConfig>>, StorageError<NodeId>> {
         let read_txn = self.db.begin_read().map_err(|e| io_read_logs(&e))?;
-        let table = read_txn.open_table(LOG_TABLE).map_err(|e| io_read_logs(&e))?;
+        let table = read_txn
+            .open_table(LOG_TABLE)
+            .map_err(|e| io_read_logs(&e))?;
 
         let mut entries = Vec::new();
         let iter = table.range(range).map_err(|e| io_read_logs(&e))?;

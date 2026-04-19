@@ -71,10 +71,7 @@ impl<'a> MultiSynthesizer for SystemSynthesizer<'a> {
         for d in closure.all_derivations() {
             manifest.push_str(&format!("{} {}\n", d.store_path(), d.name));
         }
-        arts.push(Artifact::new(
-            format!("{prefix}/manifest.txt"),
-            manifest,
-        ));
+        arts.push(Artifact::new(format!("{prefix}/manifest.txt"), manifest));
 
         arts
     }
@@ -119,7 +116,10 @@ mod tests {
         let pkgs = NixpkgsBridge::new();
         let s = SystemSynthesizer::new(&pkgs);
         let arts = s.generate_all(&cfg());
-        let act = arts.iter().find(|a| a.path.ends_with("/activate.sh")).unwrap();
+        let act = arts
+            .iter()
+            .find(|a| a.path.ends_with("/activate.sh"))
+            .unwrap();
         assert!(act.content.contains("echo 'plex' > /etc/hostname"));
     }
 
@@ -136,8 +136,15 @@ mod tests {
         }];
         let s = SystemSynthesizer::new(&pkgs);
         let arts = s.generate_all(&c);
-        let manifest = arts.iter().find(|a| a.path.ends_with("/manifest.txt")).unwrap();
-        let nginx_rows = manifest.content.lines().filter(|l| l.contains("unit-nginx")).count();
+        let manifest = arts
+            .iter()
+            .find(|a| a.path.ends_with("/manifest.txt"))
+            .unwrap();
+        let nginx_rows = manifest
+            .content
+            .lines()
+            .filter(|l| l.contains("unit-nginx"))
+            .count();
         assert_eq!(nginx_rows, 1);
     }
 

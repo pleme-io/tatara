@@ -41,10 +41,10 @@ impl Driver for ExecDriver {
         let stdout_path = log_dir.join("stdout.log");
         let stderr_path = log_dir.join("stderr.log");
 
-        let stdout_file = std::fs::File::create(&stdout_path)
-            .context("Failed to create stdout log")?;
-        let stderr_file = std::fs::File::create(&stderr_path)
-            .context("Failed to create stderr log")?;
+        let stdout_file =
+            std::fs::File::create(&stdout_path).context("Failed to create stdout log")?;
+        let stderr_file =
+            std::fs::File::create(&stderr_path).context("Failed to create stderr log")?;
 
         let mut cmd = Command::new(&command);
         cmd.args(&args)

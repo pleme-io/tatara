@@ -35,10 +35,9 @@ async fn main() -> anyhow::Result<()> {
             NodeCmd::Status { node_id } => {
                 cli::node::status(node_id.as_deref(), output, endpoint).await
             }
-            NodeCmd::Drain {
-                node_id,
-                deadline,
-            } => cli::node::drain(&node_id, deadline, endpoint, output).await,
+            NodeCmd::Drain { node_id, deadline } => {
+                cli::node::drain(&node_id, deadline, endpoint, output).await
+            }
             NodeCmd::Eligibility {
                 node_id,
                 enable,
@@ -95,9 +94,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         // ── Top ──
-        Commands::Top { node, refresh } => {
-            cli::top::run(node.as_deref(), refresh, endpoint).await
-        }
+        Commands::Top { node, refresh } => cli::top::run(node.as_deref(), refresh, endpoint).await,
 
         // ── Context ──
         Commands::Context { command } => match command {
@@ -111,9 +108,7 @@ async fn main() -> anyhow::Result<()> {
             EventCmd::List { kind, since } => {
                 cli::event::list(kind.as_deref(), since.as_deref(), output, endpoint).await
             }
-            EventCmd::Stream { kind } => {
-                cli::event::stream(kind.as_deref(), endpoint).await
-            }
+            EventCmd::Stream { kind } => cli::event::stream(kind.as_deref(), endpoint).await,
         },
 
         // ── Release ──
@@ -140,9 +135,7 @@ async fn main() -> anyhow::Result<()> {
         // ── Source ──
         Commands::Source { command } => match command {
             SourceCmd::List => cli::source::list(output, endpoint).await,
-            SourceCmd::Get { name_or_id } => {
-                cli::source::get(&name_or_id, output, endpoint).await
-            }
+            SourceCmd::Get { name_or_id } => cli::source::get(&name_or_id, output, endpoint).await,
             SourceCmd::Add {
                 name,
                 flake_ref,
@@ -167,13 +160,9 @@ async fn main() -> anyhow::Result<()> {
             job_file,
             eval,
             server,
-        } => {
-            cli::job::run_job(&job_file, eval, Some(&format!("http://{}", server)), output).await
-        }
+        } => cli::job::run_job(&job_file, eval, Some(&format!("http://{}", server)), output).await,
         Commands::Status { job_id, server } => match job_id {
-            Some(id) => {
-                cli::job::get(&id, output, Some(&format!("http://{}", server))).await
-            }
+            Some(id) => cli::job::get(&id, output, Some(&format!("http://{}", server))).await,
             None => cli::job::list(output, Some(&format!("http://{}", server))).await,
         },
         Commands::Stop { job_id, server } => {

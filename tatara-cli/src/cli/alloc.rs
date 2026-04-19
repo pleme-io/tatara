@@ -30,8 +30,7 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
             println!("{}", render_value(&allocs, output)?);
         }
         _ => {
-            let mut table =
-                build_table(&["ID", "JOB", "GROUP", "NODE", "STATE", "CREATED"]);
+            let mut table = build_table(&["ID", "JOB", "GROUP", "NODE", "STATE", "CREATED"]);
             for alloc in &allocs {
                 let id_str = alloc["id"].as_str().unwrap_or("?");
                 let short_id = id_str.get(..8).unwrap_or(id_str);
@@ -82,10 +81,7 @@ pub async fn get(alloc_id: &str, output: OutputFormat, endpoint: Option<&str>) -
             println!("  Group:   {}", alloc["group_name"].as_str().unwrap_or("?"));
             println!("  Node:    {}", alloc["node_id"].as_str().unwrap_or("?"));
             println!("  State:   {}", alloc["state"].as_str().unwrap_or("?"));
-            println!(
-                "  Created: {}",
-                alloc["created_at"].as_str().unwrap_or("?")
-            );
+            println!("  Created: {}", alloc["created_at"].as_str().unwrap_or("?"));
 
             if let Some(tasks) = alloc["task_states"].as_object() {
                 if !tasks.is_empty() {
@@ -108,10 +104,7 @@ pub async fn get(alloc_id: &str, output: OutputFormat, endpoint: Option<&str>) -
                                     .unwrap_or_else(|| "-".to_string()),
                             ),
                             comfy_table::Cell::new(
-                                state["restarts"]
-                                    .as_u64()
-                                    .unwrap_or(0)
-                                    .to_string(),
+                                state["restarts"].as_u64().unwrap_or(0).to_string(),
                             ),
                         ]);
                     }

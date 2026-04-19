@@ -7,10 +7,10 @@ use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use tatara_core::domain::allocation::{Allocation, AllocationState, TaskRunState};
 use crate::cluster::store::ClusterStore;
 use crate::domain::state_store::StateStore;
 use crate::drivers::{DriverRegistry, TaskHandle};
+use tatara_core::domain::allocation::{Allocation, AllocationState, TaskRunState};
 
 struct RunningTask {
     handle: TaskHandle,
@@ -144,7 +144,8 @@ impl Executor {
             .await?;
 
         // Report to cluster for distributed visibility
-        self.report_to_cluster(alloc_id, AllocationState::Running).await;
+        self.report_to_cluster(alloc_id, AllocationState::Running)
+            .await;
 
         self.running.write().await.insert(alloc_id, tasks);
 
@@ -183,7 +184,8 @@ impl Executor {
             .await?;
 
         // Report completion to cluster
-        self.report_to_cluster(*alloc_id, AllocationState::Complete).await;
+        self.report_to_cluster(*alloc_id, AllocationState::Complete)
+            .await;
 
         Ok(())
     }
@@ -227,9 +229,7 @@ impl Executor {
     }
 
     /// Check health of all running allocations, returning per-task status.
-    pub async fn check_task_health_detailed(
-        &self,
-    ) -> HashMap<Uuid, Vec<(String, TaskRunState)>> {
+    pub async fn check_task_health_detailed(&self) -> HashMap<Uuid, Vec<(String, TaskRunState)>> {
         let running = self.running.read().await;
         let mut result: HashMap<Uuid, Vec<(String, TaskRunState)>> = HashMap::new();
 
@@ -255,11 +255,7 @@ impl Executor {
     }
 
     /// Restart a single task within a running allocation.
-    pub async fn restart_task(
-        &self,
-        alloc_id: &Uuid,
-        task_name: &str,
-    ) -> Result<()> {
+    pub async fn restart_task(&self, alloc_id: &Uuid, task_name: &str) -> Result<()> {
         let alloc = self
             .store
             .get_allocation(alloc_id)

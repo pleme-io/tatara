@@ -24,7 +24,11 @@ pub type PackageSet = BTreeMap<String, Derivation>;
 ///     where the left-hand side prevails)
 pub fn apply(overlay: &Overlay, base: &PackageSet) -> PackageSet {
     let mut out = base.clone();
-    for Replacement { upstream_name, with } in &overlay.replaces {
+    for Replacement {
+        upstream_name,
+        with,
+    } in &overlay.replaces
+    {
         out.insert(upstream_name.clone(), with.clone());
     }
     for add in &overlay.adds {
@@ -81,7 +85,11 @@ pub fn compose(overlays: &[Overlay]) -> Result<Overlay, ComposeError> {
         for add in &o.adds {
             adds.insert(add.name.clone(), add.clone());
         }
-        for Replacement { upstream_name, with } in &o.replaces {
+        for Replacement {
+            upstream_name,
+            with,
+        } in &o.replaces
+        {
             replaces.insert(upstream_name.clone(), with.clone());
         }
     }
@@ -98,7 +106,10 @@ pub fn compose(overlays: &[Overlay]) -> Result<Overlay, ComposeError> {
         adds: adds.into_values().collect(),
         replaces: replaces
             .into_iter()
-            .map(|(upstream_name, with)| Replacement { upstream_name, with })
+            .map(|(upstream_name, with)| Replacement {
+                upstream_name,
+                with,
+            })
             .collect(),
         description: Some(format!("composition of {} overlays", overlays.len())),
     })
@@ -106,7 +117,9 @@ pub fn compose(overlays: &[Overlay]) -> Result<Overlay, ComposeError> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ComposeError {
-    #[error("cannot compose overlays with different targets: {first:?} vs {other:?} (in {overlay:?})")]
+    #[error(
+        "cannot compose overlays with different targets: {first:?} vs {other:?} (in {overlay:?})"
+    )]
     TargetMismatch {
         first: OverlayTarget,
         other: OverlayTarget,
@@ -131,7 +144,8 @@ mod tests {
             env: vec![],
             sandbox: Default::default(),
             bridge: None,
-            nix_expr: None,        }
+            nix_expr: None,
+        }
     }
 
     fn base() -> PackageSet {

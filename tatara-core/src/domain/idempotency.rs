@@ -79,10 +79,7 @@ impl IdempotencyStore {
     /// Number of active (non-expired) entries.
     pub fn len(&self) -> usize {
         let now = Utc::now();
-        self.entries
-            .values()
-            .filter(|e| e.expires_at > now)
-            .count()
+        self.entries.values().filter(|e| e.expires_at > now).count()
     }
 
     pub fn is_empty(&self) -> bool {

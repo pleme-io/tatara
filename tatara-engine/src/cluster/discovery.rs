@@ -67,10 +67,7 @@ impl MdnsAnnouncer {
 
 /// Discovers tatara peers on the local network via mDNS.
 /// Returns a list of gossip addresses (ip:port).
-pub async fn discover_peers(
-    cluster_id: &str,
-    timeout: Duration,
-) -> Result<Vec<String>> {
+pub async fn discover_peers(cluster_id: &str, timeout: Duration) -> Result<Vec<String>> {
     let daemon = ServiceDaemon::new()
         .map_err(|e| anyhow::anyhow!("Failed to create mDNS browser: {}", e))?;
 
@@ -89,18 +86,19 @@ pub async fn discover_peers(
             break;
         }
 
-        match tokio::time::timeout(remaining, tokio::task::spawn_blocking({
-            let receiver = receiver.clone();
-            move || receiver.recv_timeout(Duration::from_millis(500))
-        }))
+        match tokio::time::timeout(
+            remaining,
+            tokio::task::spawn_blocking({
+                let receiver = receiver.clone();
+                move || receiver.recv_timeout(Duration::from_millis(500))
+            }),
+        )
         .await
         {
             Ok(Ok(Ok(ServiceEvent::ServiceResolved(info)))) => {
                 // Check cluster ID matches
                 let props = info.get_properties();
-                let svc_cluster = props
-                    .get_property_val_str("cluster")
-                    .unwrap_or("");
+                let svc_cluster = props.get_property_val_str("cluster").unwrap_or("");
 
                 if svc_cluster != cluster_id {
                     debug!(
@@ -119,7 +117,7 @@ pub async fn discover_peers(
                     }
                 }
             }
-            Ok(Ok(Ok(_))) => {} // Other events
+            Ok(Ok(Ok(_))) => {}  // Other events
             Ok(Ok(Err(_))) => {} // Timeout on recv
             Ok(Err(_)) | Err(_) => break,
         }

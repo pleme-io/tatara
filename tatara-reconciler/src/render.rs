@@ -105,8 +105,8 @@ fn render_lisp(_name: &str, _ns: &str, l: &LispIntent) -> Result<(Vec<Value>, Ve
     // Parse the Lisp source — an AST-form intent_hash input even if
     // macroexpansion has not yet landed.
     let forms = tatara_lisp::read(&l.source)?;
-    let ast_bytes =
-        serde_json::to_vec(&forms.iter().map(|f| f.to_string()).collect::<Vec<_>>()).unwrap_or_default();
+    let ast_bytes = serde_json::to_vec(&forms.iter().map(|f| f.to_string()).collect::<Vec<_>>())
+        .unwrap_or_default();
     // TODO: macroexpand `(defpoint ...)` forms → compile to ProcessSpec or resources.
     Ok((vec![], ast_bytes))
 }

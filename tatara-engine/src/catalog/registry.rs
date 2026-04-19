@@ -80,11 +80,8 @@ impl CatalogRegistry {
         services
             .get(&q.service)
             .map(|instances| {
-                let mut results: Vec<ServiceEntry> = instances
-                    .iter()
-                    .filter(|e| e.matches(q))
-                    .cloned()
-                    .collect();
+                let mut results: Vec<ServiceEntry> =
+                    instances.iter().filter(|e| e.matches(q)).cloned().collect();
                 // Sort by health (passing first), then by node proximity if `near` is set
                 if let Some(near) = &q.near {
                     results.sort_by(|a, b| {

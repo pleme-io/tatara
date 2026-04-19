@@ -74,10 +74,7 @@ impl KubeReconciler {
         .await?;
         let eval_ms = eval_start.elapsed().as_millis() as u64;
 
-        info!(
-            count = raw_resources.len(),
-            eval_ms, "nix eval completed"
-        );
+        info!(count = raw_resources.len(), eval_ms, "nix eval completed");
 
         // 3. Parse into ManagedResources
         let mut resources: Vec<ManagedResource> = raw_resources
@@ -162,8 +159,7 @@ impl KubeReconciler {
         }
 
         // 9. Update state
-        self.last_rev
-            .insert(cluster_name.to_string(), current_rev);
+        self.last_rev.insert(cluster_name.to_string(), current_rev);
         self.last_generation
             .insert(cluster_name.to_string(), generation_hash);
 
@@ -196,9 +192,7 @@ fn inject_management_labels(
     generation_hash: &str,
     content_hash: &str,
 ) {
-    let metadata = manifest
-        .get_mut("metadata")
-        .and_then(|m| m.as_object_mut());
+    let metadata = manifest.get_mut("metadata").and_then(|m| m.as_object_mut());
 
     if let Some(metadata) = metadata {
         // Labels

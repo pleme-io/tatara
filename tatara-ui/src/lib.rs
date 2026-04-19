@@ -37,7 +37,7 @@ pub mod sigil;
 pub mod theme;
 
 pub use event::{ArtifactState, Cell, EventStream, LogLevel, ShortHash, UiEvent};
-pub use palette::{Role, RoleMap, Rgb, NORD};
+pub use palette::{Rgb, Role, RoleMap, NORD};
 pub use render::{should_color, Renderer};
 pub use sigil::Sigil;
 pub use theme::{SemanticOverrides, ThemeId, ThemeRegistry, ThemeSpec};

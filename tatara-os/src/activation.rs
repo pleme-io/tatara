@@ -110,7 +110,11 @@ impl ActivationScript {
                 InitSystem::Systemd => {
                     s.push_str("# services (systemd)\nsystemctl daemon-reload\n");
                     for svc in &cfg.services {
-                        let verb = if svc.enable { "enable --now" } else { "disable" };
+                        let verb = if svc.enable {
+                            "enable --now"
+                        } else {
+                            "disable"
+                        };
                         s.push_str(&format!(
                             "systemctl {verb} '{}.service' || true\n",
                             shell_single_quote(&svc.name)
@@ -169,7 +173,7 @@ fn shell_path_component(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{EtcFile, EnvSpec, ServiceSpec, UserSpec};
+    use crate::config::{EnvSpec, EtcFile, ServiceSpec, UserSpec};
 
     fn cfg(hostname: &str) -> SystemConfig {
         SystemConfig {
@@ -260,7 +264,9 @@ mod tests {
             }],
         };
         let s = ActivationScript::render(&c);
-        assert!(s.content.contains("install -D -m 0644 /run/current-system/etc/hosts /etc/hosts"));
+        assert!(s
+            .content
+            .contains("install -D -m 0644 /run/current-system/etc/hosts /etc/hosts"));
     }
 
     #[test]

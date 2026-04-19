@@ -15,9 +15,7 @@ use chrono::Duration;
 use tracing::{debug, error, info, warn};
 
 use tatara_core::domain::convergence_graph::ConvergenceGraph;
-use tatara_core::domain::convergence_state::{
-    BoundaryPhase, ConvergenceOutcome, ConvergencePoint,
-};
+use tatara_core::domain::convergence_state::{BoundaryPhase, ConvergenceOutcome, ConvergencePoint};
 use tatara_core::domain::point_id::PointId;
 
 /// Result of executing a single convergence point through its boundary.
@@ -265,11 +263,7 @@ impl DagExecutor {
         );
 
         PointExecutionResult {
-            point_id: PointId::compute(
-                point.name.as_bytes(),
-                &[],
-                point.description.as_bytes(),
-            ),
+            point_id: PointId::compute(point.name.as_bytes(), &[], point.description.as_bytes()),
             outcome: ConvergenceOutcome::Converged,
             attestation: Some(attestation),
             duration: Duration::milliseconds(start.elapsed().as_millis() as i64),
@@ -466,10 +460,26 @@ mod tests {
         graph.add_point(b, pb);
         graph.add_point(c, pc);
         graph.add_point(d, pd);
-        graph.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Data });
-        graph.add_edge(TypedEdge { from: a, to: c, edge_type: EdgeType::Data });
-        graph.add_edge(TypedEdge { from: b, to: d, edge_type: EdgeType::Data });
-        graph.add_edge(TypedEdge { from: c, to: d, edge_type: EdgeType::Data });
+        graph.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Data,
+        });
+        graph.add_edge(TypedEdge {
+            from: a,
+            to: c,
+            edge_type: EdgeType::Data,
+        });
+        graph.add_edge(TypedEdge {
+            from: b,
+            to: d,
+            edge_type: EdgeType::Data,
+        });
+        graph.add_edge(TypedEdge {
+            from: c,
+            to: d,
+            edge_type: EdgeType::Data,
+        });
 
         let order = graph.topological_order().unwrap();
         let result = DagExecutor::execute_graph(&graph, &order).await.unwrap();

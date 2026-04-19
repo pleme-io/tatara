@@ -161,10 +161,7 @@ impl NatsEventBus {
         let Some(client) = &self.client else {
             return Ok(());
         };
-        let subject = format!(
-            "{}.health.{}",
-            self.config.subject_prefix, service_name
-        );
+        let subject = format!("{}.health.{}", self.config.subject_prefix, service_name);
         let payload = serde_json::json!({
             "service_id": service_id,
             "healthy": healthy,
@@ -178,11 +175,7 @@ impl NatsEventBus {
     }
 
     /// Publish a catalog change (service registered/deregistered).
-    pub async fn publish_catalog_change(
-        &self,
-        action: &str,
-        entry: &ServiceEntry,
-    ) -> Result<()> {
+    pub async fn publish_catalog_change(&self, action: &str, entry: &ServiceEntry) -> Result<()> {
         let Some(client) = &self.client else {
             return Ok(());
         };
@@ -216,10 +209,7 @@ impl NatsEventBus {
     }
 
     /// Subscribe to logs for a specific allocation.
-    pub async fn subscribe_logs(
-        &self,
-        alloc_id: &str,
-    ) -> Result<Option<async_nats::Subscriber>> {
+    pub async fn subscribe_logs(&self, alloc_id: &str) -> Result<Option<async_nats::Subscriber>> {
         let Some(client) = &self.client else {
             return Ok(None);
         };

@@ -96,9 +96,13 @@ fn tokenize(src: &str) -> Result<Vec<Token>> {
                 let mut s = String::new();
                 while let Some(&(_, ch)) = chars.peek() {
                     if ch.is_whitespace()
-                        || ch == '(' || ch == ')'
-                        || ch == '\'' || ch == '`' || ch == ','
-                        || ch == '"' || ch == ';'
+                        || ch == '('
+                        || ch == ')'
+                        || ch == '\''
+                        || ch == '`'
+                        || ch == ','
+                        || ch == '"'
+                        || ch == ';'
                     {
                         break;
                     }

@@ -39,7 +39,10 @@ pub enum ReconcileError {
 /// State machine:
 ///   Pending → Queued (publish to NATS) → Building → Pushing → Complete
 ///   Any → Failed (on error)
-pub async fn reconcile(build: Arc<NixBuild>, ctx: Arc<NixBuildContext>) -> Result<Action, ReconcileError> {
+pub async fn reconcile(
+    build: Arc<NixBuild>,
+    ctx: Arc<NixBuildContext>,
+) -> Result<Action, ReconcileError> {
     let name = build.name_any();
     let namespace = build.namespace().unwrap_or_default();
     let api: Api<NixBuild> = Api::namespaced(ctx.kube_client.clone(), &namespace);
@@ -83,8 +86,12 @@ pub async fn reconcile(build: Arc<NixBuild>, ctx: Arc<NixBuildContext>) -> Resul
             };
 
             let patch = json!({ "status": status });
-            api.patch_status(&name, &PatchParams::apply("tatara-operator"), &Patch::Merge(&patch))
-                .await?;
+            api.patch_status(
+                &name,
+                &PatchParams::apply("tatara-operator"),
+                &Patch::Merge(&patch),
+            )
+            .await?;
 
             Ok(Action::requeue(Duration::from_secs(10)))
         }
@@ -93,14 +100,16 @@ pub async fn reconcile(build: Arc<NixBuild>, ctx: Arc<NixBuildContext>) -> Resul
             Ok(Action::requeue(Duration::from_secs(15)))
         }
 
-        NixBuildPhase::Complete | NixBuildPhase::Failed => {
-            Ok(Action::await_change())
-        }
+        NixBuildPhase::Complete | NixBuildPhase::Failed => Ok(Action::await_change()),
     }
 }
 
 /// Error handler for failed reconciliations.
-pub fn error_policy(build: Arc<NixBuild>, err: &ReconcileError, _ctx: Arc<NixBuildContext>) -> Action {
+pub fn error_policy(
+    build: Arc<NixBuild>,
+    err: &ReconcileError,
+    _ctx: Arc<NixBuildContext>,
+) -> Action {
     let name = build.name_any();
     warn!(name = %name, error = %err, "Reconciliation failed, retrying");
     Action::requeue(Duration::from_secs(30))
@@ -157,7 +166,11 @@ pub async fn start_completion_subscriber(ctx: Arc<NixBuildContext>) -> Result<()
 
             let patch = json!({ "status": status });
             if let Err(e) = api
-                .patch_status(name, &PatchParams::apply("tatara-operator"), &Patch::Merge(&patch))
+                .patch_status(
+                    name,
+                    &PatchParams::apply("tatara-operator"),
+                    &Patch::Merge(&patch),
+                )
                 .await
             {
                 warn!(name = %name, error = %e, "Failed to update NixBuild status");

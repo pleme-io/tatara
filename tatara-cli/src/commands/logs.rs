@@ -8,7 +8,10 @@ pub async fn run(
 ) -> Result<()> {
     let client = reqwest::Client::new();
 
-    let mut url = format!("http://{}/api/v1/allocations/{}/logs", server_addr, alloc_id);
+    let mut url = format!(
+        "http://{}/api/v1/allocations/{}/logs",
+        server_addr, alloc_id
+    );
     if let Some(task) = task_name {
         url.push_str(&format!("?task={}", task));
     }

@@ -125,11 +125,7 @@ impl SuiClient {
     }
 
     /// Push a store path to the binary cache via sui-daemon.
-    pub async fn push_to_cache(
-        &self,
-        store_path: &str,
-        cache_name: Option<&str>,
-    ) -> Result<()> {
+    pub async fn push_to_cache(&self, store_path: &str, cache_name: Option<&str>) -> Result<()> {
         let url = format!("{}/api/v1/cache/push", self.base_url);
         info!(store_path, "pushing to sui-cache");
 

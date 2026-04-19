@@ -55,7 +55,7 @@ pub use derivation::{
 };
 pub use evaluator::{DryRun, EvaluationResult, Evaluator, Plan};
 pub use flake::{Flake, FlakeInput, FlakeOutputs};
-pub use module::{Module, ModuleImport, ModuleOption, MkExpr, OptionType};
+pub use module::{MkExpr, Module, ModuleImport, ModuleOption, OptionType};
 pub use overlay::{Overlay, OverlayTarget};
 pub use overlay_compose::{apply, apply_chain, compose, ComposeError, PackageSet};
 pub use realize::{InProcessRealizer, NixStoreRealizer, RealizeError, RealizedArtifact, Realizer};

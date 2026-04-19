@@ -14,9 +14,9 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::info;
 
+use crate::drivers::{Driver, LogEntry, TaskHandle};
 use tatara_core::domain::allocation::TaskRunState;
 use tatara_core::domain::job::{DriverType, Task, TaskConfig};
-use crate::drivers::{Driver, LogEntry, TaskHandle};
 
 /// Driver that provisions VMs via kasou (Apple Virtualization.framework).
 pub struct KasouDriver {
@@ -68,13 +68,12 @@ impl Driver for KasouDriver {
             });
         }
 
-        let mac = mac_address.clone()
-            .or_else(|| {
-                let seed = hostname::get()
-                    .map(|h| h.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                Some(kasou::MacAddress::deterministic(&seed, &task.name).to_string())
-            });
+        let mac = mac_address.clone().or_else(|| {
+            let seed = hostname::get()
+                .map(|h| h.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            Some(kasou::MacAddress::deterministic(&seed, &task.name).to_string())
+        });
 
         let serial_log = alloc_dir.join(format!("{}-console.log", task.name));
 
@@ -88,9 +87,7 @@ impl Driver for KasouDriver {
                 cmdline: cmdline.clone(),
             },
             disks: disk_configs,
-            network: kasou::NetworkConfig {
-                mac_address: mac,
-            },
+            network: kasou::NetworkConfig { mac_address: mac },
             serial: Some(kasou::SerialConfig {
                 log_path: serial_log,
             }),
@@ -104,8 +101,7 @@ impl Driver for KasouDriver {
             "starting VM via kasou"
         );
 
-        let handle = kasou::VmHandle::create(vm_config)
-            .context("creating VM via kasou")?;
+        let handle = kasou::VmHandle::create(vm_config).context("creating VM via kasou")?;
 
         handle.start().context("starting VM via kasou")?;
 
@@ -119,19 +115,19 @@ impl Driver for KasouDriver {
 
         Ok(TaskHandle {
             driver: DriverType::Kasou,
-            pid: None, // in-process VM, no separate PID
+            pid: None,                             // in-process VM, no separate PID
             container_id: Some(task.name.clone()), // task name for stop/status lookup
             started_at: Utc::now(),
         })
     }
 
     async fn stop(&self, handle: &TaskHandle, timeout: Duration) -> Result<()> {
-        let task_name = handle.container_id.as_deref()
+        let task_name = handle
+            .container_id
+            .as_deref()
             .context("TaskHandle missing task name (container_id)")?;
 
-        let vm_handle = {
-            self.handles.lock().unwrap().remove(task_name)
-        };
+        let vm_handle = { self.handles.lock().unwrap().remove(task_name) };
 
         let key = task_name.to_string();
 
@@ -162,7 +158,9 @@ impl Driver for KasouDriver {
     }
 
     async fn status(&self, handle: &TaskHandle) -> Result<TaskRunState> {
-        let task_name = handle.container_id.as_deref()
+        let task_name = handle
+            .container_id
+            .as_deref()
             .context("TaskHandle missing task name (container_id)")?;
 
         let handles = self.handles.lock().unwrap();

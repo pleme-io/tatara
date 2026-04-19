@@ -36,7 +36,11 @@ fn lisp_roundtrip_to_realized_etc_in_process() {
 
     // The derivation writes hostname into $out/hostname.
     let hostname_file = art.path.join("hostname");
-    assert!(hostname_file.exists(), "expected {}", hostname_file.display());
+    assert!(
+        hostname_file.exists(),
+        "expected {}",
+        hostname_file.display()
+    );
     let content = std::fs::read_to_string(&hostname_file).unwrap();
     assert_eq!(content.trim(), "plex-test");
 }
@@ -75,7 +79,10 @@ fn synthesizer_emits_full_artifact_set() {
     assert!(paths.contains(&"out/manifest.txt"));
 
     // The manifest embeds a row for each closure derivation.
-    let manifest = arts.iter().find(|a| a.path.ends_with("/manifest.txt")).unwrap();
+    let manifest = arts
+        .iter()
+        .find(|a| a.path.ends_with("/manifest.txt"))
+        .unwrap();
     // kernel + etc + activation + 1 service + profile = 5 rows (+ header)
     let rows = manifest
         .content

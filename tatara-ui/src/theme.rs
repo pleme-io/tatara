@@ -62,7 +62,9 @@ impl ThemeSpec {
     pub fn nord_arctic() -> Self {
         Self {
             name: "nord-arctic".into(),
-            description: Some("the canonical tatara look — Nord palette, Aurora semantic roles".into()),
+            description: Some(
+                "the canonical tatara look — Nord palette, Aurora semantic roles".into(),
+            ),
             extends: None,
             semantic: SemanticOverrides {
                 primary: Some(NORD.nord8.as_hex()),
@@ -81,13 +83,48 @@ impl ThemeSpec {
     pub fn to_role_map(&self) -> RoleMap {
         let d = RoleMap::default();
         RoleMap {
-            primary: self.semantic.primary.as_deref().and_then(parse_hex).unwrap_or(d.primary),
-            accent: self.semantic.accent.as_deref().and_then(parse_hex).unwrap_or(d.accent),
-            info: self.semantic.info.as_deref().and_then(parse_hex).unwrap_or(d.info),
-            success: self.semantic.success.as_deref().and_then(parse_hex).unwrap_or(d.success),
-            warn: self.semantic.warn.as_deref().and_then(parse_hex).unwrap_or(d.warn),
-            error: self.semantic.error.as_deref().and_then(parse_hex).unwrap_or(d.error),
-            dim: self.semantic.dim.as_deref().and_then(parse_hex).unwrap_or(d.dim),
+            primary: self
+                .semantic
+                .primary
+                .as_deref()
+                .and_then(parse_hex)
+                .unwrap_or(d.primary),
+            accent: self
+                .semantic
+                .accent
+                .as_deref()
+                .and_then(parse_hex)
+                .unwrap_or(d.accent),
+            info: self
+                .semantic
+                .info
+                .as_deref()
+                .and_then(parse_hex)
+                .unwrap_or(d.info),
+            success: self
+                .semantic
+                .success
+                .as_deref()
+                .and_then(parse_hex)
+                .unwrap_or(d.success),
+            warn: self
+                .semantic
+                .warn
+                .as_deref()
+                .and_then(parse_hex)
+                .unwrap_or(d.warn),
+            error: self
+                .semantic
+                .error
+                .as_deref()
+                .and_then(parse_hex)
+                .unwrap_or(d.error),
+            dim: self
+                .semantic
+                .dim
+                .as_deref()
+                .and_then(parse_hex)
+                .unwrap_or(d.dim),
         }
     }
 
@@ -164,13 +201,41 @@ impl ThemeRegistry {
         };
         let overrides = spec.to_role_map();
         Some(RoleMap {
-            primary: spec.semantic.primary.as_ref().map_or(base.primary, |_| overrides.primary),
-            accent: spec.semantic.accent.as_ref().map_or(base.accent, |_| overrides.accent),
-            info: spec.semantic.info.as_ref().map_or(base.info, |_| overrides.info),
-            success: spec.semantic.success.as_ref().map_or(base.success, |_| overrides.success),
-            warn: spec.semantic.warn.as_ref().map_or(base.warn, |_| overrides.warn),
-            error: spec.semantic.error.as_ref().map_or(base.error, |_| overrides.error),
-            dim: spec.semantic.dim.as_ref().map_or(base.dim, |_| overrides.dim),
+            primary: spec
+                .semantic
+                .primary
+                .as_ref()
+                .map_or(base.primary, |_| overrides.primary),
+            accent: spec
+                .semantic
+                .accent
+                .as_ref()
+                .map_or(base.accent, |_| overrides.accent),
+            info: spec
+                .semantic
+                .info
+                .as_ref()
+                .map_or(base.info, |_| overrides.info),
+            success: spec
+                .semantic
+                .success
+                .as_ref()
+                .map_or(base.success, |_| overrides.success),
+            warn: spec
+                .semantic
+                .warn
+                .as_ref()
+                .map_or(base.warn, |_| overrides.warn),
+            error: spec
+                .semantic
+                .error
+                .as_ref()
+                .map_or(base.error, |_| overrides.error),
+            dim: spec
+                .semantic
+                .dim
+                .as_ref()
+                .map_or(base.dim, |_| overrides.dim),
         })
     }
 }

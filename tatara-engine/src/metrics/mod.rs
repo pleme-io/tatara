@@ -45,29 +45,124 @@ impl TataraMetrics {
         let mut out = String::with_capacity(2048);
 
         // Gauges
-        prom_gauge(&mut out, "tatara_jobs_total", "Total number of jobs", self.jobs_total.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_jobs_pending", "Jobs in pending state", self.jobs_pending.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_jobs_running", "Jobs in running state", self.jobs_running.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_allocations_total", "Total allocations", self.allocations_total.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_allocations_running", "Running allocations", self.allocations_running.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_allocations_failed", "Failed allocations", self.allocations_failed.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_nodes_total", "Total cluster nodes", self.nodes_total.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_nodes_ready", "Ready nodes", self.nodes_ready.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_services_registered", "Registered service instances", self.services_registered.load(Ordering::Relaxed));
+        prom_gauge(
+            &mut out,
+            "tatara_jobs_total",
+            "Total number of jobs",
+            self.jobs_total.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_jobs_pending",
+            "Jobs in pending state",
+            self.jobs_pending.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_jobs_running",
+            "Jobs in running state",
+            self.jobs_running.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_allocations_total",
+            "Total allocations",
+            self.allocations_total.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_allocations_running",
+            "Running allocations",
+            self.allocations_running.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_allocations_failed",
+            "Failed allocations",
+            self.allocations_failed.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_nodes_total",
+            "Total cluster nodes",
+            self.nodes_total.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_nodes_ready",
+            "Ready nodes",
+            self.nodes_ready.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_services_registered",
+            "Registered service instances",
+            self.services_registered.load(Ordering::Relaxed),
+        );
 
         // Counters
-        prom_counter(&mut out, "tatara_reconcile_total", "Total reconciliation ticks", self.reconcile_total.load(Ordering::Relaxed));
-        prom_counter(&mut out, "tatara_reconcile_errors_total", "Reconciliation errors", self.reconcile_errors.load(Ordering::Relaxed));
-        prom_counter(&mut out, "tatara_scheduler_evals_total", "Scheduler evaluation cycles", self.scheduler_evals.load(Ordering::Relaxed));
-        prom_counter(&mut out, "tatara_health_probes_total", "Health probes executed", self.health_probes_executed.load(Ordering::Relaxed));
-        prom_counter(&mut out, "tatara_health_probes_failed_total", "Health probes failed", self.health_probes_failed.load(Ordering::Relaxed));
-        prom_counter(&mut out, "tatara_secrets_fetched_total", "Secrets fetched", self.secrets_fetched.load(Ordering::Relaxed));
-        prom_counter(&mut out, "tatara_ports_allocated_total", "Ports allocated", self.ports_allocated.load(Ordering::Relaxed));
+        prom_counter(
+            &mut out,
+            "tatara_reconcile_total",
+            "Total reconciliation ticks",
+            self.reconcile_total.load(Ordering::Relaxed),
+        );
+        prom_counter(
+            &mut out,
+            "tatara_reconcile_errors_total",
+            "Reconciliation errors",
+            self.reconcile_errors.load(Ordering::Relaxed),
+        );
+        prom_counter(
+            &mut out,
+            "tatara_scheduler_evals_total",
+            "Scheduler evaluation cycles",
+            self.scheduler_evals.load(Ordering::Relaxed),
+        );
+        prom_counter(
+            &mut out,
+            "tatara_health_probes_total",
+            "Health probes executed",
+            self.health_probes_executed.load(Ordering::Relaxed),
+        );
+        prom_counter(
+            &mut out,
+            "tatara_health_probes_failed_total",
+            "Health probes failed",
+            self.health_probes_failed.load(Ordering::Relaxed),
+        );
+        prom_counter(
+            &mut out,
+            "tatara_secrets_fetched_total",
+            "Secrets fetched",
+            self.secrets_fetched.load(Ordering::Relaxed),
+        );
+        prom_counter(
+            &mut out,
+            "tatara_ports_allocated_total",
+            "Ports allocated",
+            self.ports_allocated.load(Ordering::Relaxed),
+        );
 
         // Timing gauges (last observed value)
-        prom_gauge(&mut out, "tatara_reconcile_duration_ms", "Last reconcile duration in ms", self.reconcile_duration_ms.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_scheduler_eval_duration_ms", "Last scheduler eval duration in ms", self.scheduler_eval_duration_ms.load(Ordering::Relaxed));
-        prom_gauge(&mut out, "tatara_nix_eval_duration_ms", "Last nix eval duration in ms", self.nix_eval_duration_ms.load(Ordering::Relaxed));
+        prom_gauge(
+            &mut out,
+            "tatara_reconcile_duration_ms",
+            "Last reconcile duration in ms",
+            self.reconcile_duration_ms.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_scheduler_eval_duration_ms",
+            "Last scheduler eval duration in ms",
+            self.scheduler_eval_duration_ms.load(Ordering::Relaxed),
+        );
+        prom_gauge(
+            &mut out,
+            "tatara_nix_eval_duration_ms",
+            "Last nix eval duration in ms",
+            self.nix_eval_duration_ms.load(Ordering::Relaxed),
+        );
 
         out
     }
@@ -82,11 +177,15 @@ impl TataraMetrics {
 }
 
 fn prom_gauge(out: &mut String, name: &str, help: &str, value: u64) {
-    out.push_str(&format!("# HELP {name} {help}\n# TYPE {name} gauge\n{name} {value}\n"));
+    out.push_str(&format!(
+        "# HELP {name} {help}\n# TYPE {name} gauge\n{name} {value}\n"
+    ));
 }
 
 fn prom_counter(out: &mut String, name: &str, help: &str, value: u64) {
-    out.push_str(&format!("# HELP {name} {help}\n# TYPE {name} counter\n{name} {value}\n"));
+    out.push_str(&format!(
+        "# HELP {name} {help}\n# TYPE {name} counter\n{name} {value}\n"
+    ));
 }
 
 #[cfg(test)]

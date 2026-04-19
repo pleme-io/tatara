@@ -12,16 +12,16 @@ use tracing::{info, warn};
 
 use tatara_api::graphql::{self, TataraSchema};
 use tatara_api::rest;
+use tatara_core::cluster::roles;
+use tatara_core::cluster::types::NodeMeta;
+use tatara_core::config::ServerConfig;
 use tatara_engine::client::executor::Executor;
 use tatara_engine::client::log_collector::LogCollector;
 use tatara_engine::cluster::gossip::GossipCluster;
 use tatara_engine::cluster::membership::MembershipReconciler;
 use tatara_engine::cluster::raft_node::RaftCluster;
 use tatara_engine::cluster::raft_sm::TypeConfig;
-use tatara_core::cluster::roles;
 use tatara_engine::cluster::store::ClusterStore;
-use tatara_core::cluster::types::NodeMeta;
-use tatara_core::config::ServerConfig;
 use tatara_engine::domain::reconciler::Reconciler;
 use tatara_engine::domain::scheduler::Scheduler;
 use tatara_engine::domain::state_store::StateStore;
@@ -41,7 +41,11 @@ pub async fn run(config: ServerConfig) -> Result<()> {
     info!("tatara server starting");
 
     // ── Kindling identity (from file) ──
-    let identity_path = config.kindling.identity_path.as_deref().map(std::path::Path::new);
+    let identity_path = config
+        .kindling
+        .identity_path
+        .as_deref()
+        .map(std::path::Path::new);
     let kindling_id = identity::load_identity(identity_path)?;
 
     // ── Kindling daemon API client ──
@@ -129,8 +133,8 @@ pub async fn run(config: ServerConfig) -> Result<()> {
                 joined_at: chrono::Utc::now(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 eligible: true,
-            wireguard_pubkey: None,
-            tunnel_address: None,
+                wireguard_pubkey: None,
+                tunnel_address: None,
             }
         }
     };
@@ -235,10 +239,16 @@ pub async fn run(config: ServerConfig) -> Result<()> {
 
     // ── Publish kindling report to P2P ──
     if config.kindling.publish_reports {
-        let report_path = config.kindling.report_path.as_deref().map(std::path::Path::new);
+        let report_path = config
+            .kindling
+            .report_path
+            .as_deref()
+            .map(std::path::Path::new);
         if let Ok(Some(report)) = tatara_engine::kindling_bridge::report::load_report(report_path) {
-            if let Err(e) =
-                tatara_engine::kindling_bridge::report::publish_report(&transfer, &report, &hostname).await
+            if let Err(e) = tatara_engine::kindling_bridge::report::publish_report(
+                &transfer, &report, &hostname,
+            )
+            .await
             {
                 warn!(error = %e, "Failed to publish kindling report to P2P");
             }
@@ -255,35 +265,23 @@ pub async fn run(config: ServerConfig) -> Result<()> {
     });
 
     // ── Subsystems ──
-    let port_allocator = Arc::new(
-        tatara_engine::domain::port_allocator::PortAllocator::new(
-            config.ports.range_start,
-            config.ports.range_end,
-        ),
-    );
-    let catalog_registry = Arc::new(
-        tatara_engine::catalog::registry::CatalogRegistry::new(),
-    );
+    let port_allocator = Arc::new(tatara_engine::domain::port_allocator::PortAllocator::new(
+        config.ports.range_start,
+        config.ports.range_end,
+    ));
+    let catalog_registry = Arc::new(tatara_engine::catalog::registry::CatalogRegistry::new());
     let metrics = tatara_engine::metrics::TataraMetrics::new();
-    let volume_manager = Arc::new(
-        tatara_engine::domain::volume_manager::VolumeManager::new(
-            config.volumes.dir.clone(),
-        ),
-    );
-    let secret_resolver = Arc::new(
-        tatara_engine::secrets::SecretResolver::new(),
-    );
+    let volume_manager = Arc::new(tatara_engine::domain::volume_manager::VolumeManager::new(
+        config.volumes.dir.clone(),
+    ));
+    let secret_resolver = Arc::new(tatara_engine::secrets::SecretResolver::new());
     let nats_config = tatara_engine::nats::NatsConfig {
         enabled: config.nats.enabled,
         url: config.nats.url.clone(),
         ..Default::default()
     };
-    let nats_bus = Arc::new(
-        tatara_engine::nats::NatsEventBus::connect(nats_config).await,
-    );
-    let probe_executor = Arc::new(
-        tatara_engine::domain::health_probe::ProbeExecutor::new(),
-    );
+    let nats_bus = Arc::new(tatara_engine::nats::NatsEventBus::connect(nats_config).await);
+    let probe_executor = Arc::new(tatara_engine::domain::health_probe::ProbeExecutor::new());
 
     info!(
         nats = config.nats.enabled,
@@ -295,12 +293,8 @@ pub async fn run(config: ServerConfig) -> Result<()> {
     // ── Executor (local store for fast task tracking + Raft for cluster visibility) ──
     let alloc_dir = config.state.dir.join("alloc");
     let executor = Arc::new(
-        Executor::new(
-            local_store.clone(),
-            drivers.clone(),
-            alloc_dir.clone(),
-        )
-        .with_cluster_store(cluster_store.clone()),
+        Executor::new(local_store.clone(), drivers.clone(), alloc_dir.clone())
+            .with_cluster_store(cluster_store.clone()),
     );
 
     let log_collector = Arc::new(LogCollector::new(alloc_dir));
@@ -326,9 +320,7 @@ pub async fn run(config: ServerConfig) -> Result<()> {
         .with_state(schema);
 
     // ── Raft HTTP endpoints ──
-    let raft_state = RaftEndpointState {
-        raft: raft.clone(),
-    };
+    let raft_state = RaftEndpointState { raft: raft.clone() };
     let raft_router = Router::new()
         .route("/raft/append", post(raft_append))
         .route("/raft/snapshot", post(raft_install_snapshot))
@@ -353,9 +345,7 @@ pub async fn run(config: ServerConfig) -> Result<()> {
 
     // ── Scheduler loop (reads from Raft, leader-affinity) ──
     let cluster_store_adapter = Arc::new(
-        tatara_engine::domain::store_adapter::ClusterStoreAdapter::new(
-            cluster_store.clone(),
-        ),
+        tatara_engine::domain::store_adapter::ClusterStoreAdapter::new(cluster_store.clone()),
     );
     let scheduler = Scheduler::new(
         cluster_store_adapter.clone(),
@@ -383,8 +373,7 @@ pub async fn run(config: ServerConfig) -> Result<()> {
     // ── mDNS announcement ──
     let _mdns_announcer = if config.cluster.mdns_discovery {
         // Determine local IP for mDNS
-        let ip = local_ip()
-            .unwrap_or_else(|| std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+        let ip = local_ip().unwrap_or_else(|| std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
         let http_port: u16 = config
             .http_addr
             .split(':')

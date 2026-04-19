@@ -30,7 +30,14 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
         }
         _ => {
             let wide = matches!(output, OutputFormat::Wide);
-            let mut headers = vec!["ID", "HOSTNAME", "STATUS", "CPU (MHz)", "MEM (MB)", "ALLOCS"];
+            let mut headers = vec![
+                "ID",
+                "HOSTNAME",
+                "STATUS",
+                "CPU (MHz)",
+                "MEM (MB)",
+                "ALLOCS",
+            ];
             if wide {
                 headers.extend(&["DRIVERS", "OS", "ARCH", "ELIGIBLE", "JOINED"]);
             }
@@ -48,9 +55,7 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
                         node["node_id"]
                             .as_u64()
                             .map(|id| id.to_string())
-                            .unwrap_or_else(|| {
-                                node["id"].as_str().unwrap_or("?").to_string()
-                            }),
+                            .unwrap_or_else(|| node["id"].as_str().unwrap_or("?").to_string()),
                     ),
                     comfy_table::Cell::new(node["hostname"].as_str().unwrap_or("?")),
                     status_cell(status),
@@ -86,12 +91,8 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
                             })
                             .unwrap_or_default(),
                     ));
-                    row.push(comfy_table::Cell::new(
-                        node["os"].as_str().unwrap_or("?"),
-                    ));
-                    row.push(comfy_table::Cell::new(
-                        node["arch"].as_str().unwrap_or("?"),
-                    ));
+                    row.push(comfy_table::Cell::new(node["os"].as_str().unwrap_or("?")));
+                    row.push(comfy_table::Cell::new(node["arch"].as_str().unwrap_or("?")));
                     row.push(comfy_table::Cell::new(
                         node["eligible"]
                             .as_bool()
@@ -110,7 +111,11 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-pub async fn status(node_id: Option<&str>, output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
+pub async fn status(
+    node_id: Option<&str>,
+    output: OutputFormat,
+    endpoint: Option<&str>,
+) -> Result<()> {
     // If a specific node ID is provided, show details for that node
     // Otherwise, same as list
     match node_id {

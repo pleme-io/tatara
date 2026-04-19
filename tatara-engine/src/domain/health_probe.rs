@@ -122,11 +122,8 @@ impl ProbeExecutor {
         let addr = format!("127.0.0.1:{port}");
         let start = std::time::Instant::now();
 
-        match tokio::time::timeout(
-            Duration::from_secs(timeout_secs),
-            TcpStream::connect(&addr),
-        )
-        .await
+        match tokio::time::timeout(Duration::from_secs(timeout_secs), TcpStream::connect(&addr))
+            .await
         {
             Ok(Ok(_)) => {
                 let latency_ms = start.elapsed().as_millis() as u64;

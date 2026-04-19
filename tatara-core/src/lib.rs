@@ -18,8 +18,8 @@ pub mod prelude {
 
     // ── Core convergence types ──
     pub use crate::domain::convergence_state::{
-        BoundaryCheck, BoundaryPhase, ClusterConvergence, ConvergenceBoundary,
-        ConvergenceDistance, ConvergencePoint, ConvergenceState,
+        BoundaryCheck, BoundaryPhase, ClusterConvergence, ConvergenceBoundary, ConvergenceDistance,
+        ConvergencePoint, ConvergenceState,
     };
 
     // ── Content-addressed identity ──
@@ -32,8 +32,8 @@ pub mod prelude {
 
     // ── Compliance ──
     pub use crate::domain::compliance_binding::{
-        ComplianceBinding, ComplianceClosure, ComplianceControl, DataClassification,
-        PointSelector, ResolvedControl, VerificationPhase,
+        ComplianceBinding, ComplianceClosure, ComplianceControl, DataClassification, PointSelector,
+        ResolvedControl, VerificationPhase,
     };
 
     // ── Emission (asymptotic → bounded) ──

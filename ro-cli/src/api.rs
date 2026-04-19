@@ -95,7 +95,8 @@ impl RoClient {
 
     /// GET /config — discover platform configuration
     pub async fn get_config(&self) -> Result<PlatformConfig> {
-        let resp = self.http
+        let resp = self
+            .http
             .get(format!("{}/config", self.base_url))
             .send()
             .await
@@ -109,7 +110,8 @@ impl RoClient {
 
     /// POST /api/v1/builds — submit a build request
     pub async fn submit_build(&self, request: &BuildRequest) -> Result<BuildResponse> {
-        let resp = self.http
+        let resp = self
+            .http
             .post(format!("{}/api/v1/builds", self.base_url))
             .json(request)
             .send()
@@ -124,7 +126,8 @@ impl RoClient {
 
     /// GET /api/v1/builds/{id} — get build status
     pub async fn get_build(&self, build_id: &str) -> Result<BuildStatus> {
-        let resp = self.http
+        let resp = self
+            .http
             .get(format!("{}/api/v1/builds/{}", self.base_url, build_id))
             .send()
             .await
@@ -138,7 +141,8 @@ impl RoClient {
 
     /// GET /api/v1/builds/{id}/logs — stream build logs (SSE)
     pub async fn stream_logs(&self, build_id: &str) -> Result<reqwest::Response> {
-        let resp = self.http
+        let resp = self
+            .http
             .get(format!("{}/api/v1/builds/{}/logs", self.base_url, build_id))
             .send()
             .await
@@ -152,7 +156,8 @@ impl RoClient {
 
     /// GET /api/v1/sources — list FlakeSource status
     pub async fn list_sources(&self) -> Result<Vec<SourceStatus>> {
-        let resp = self.http
+        let resp = self
+            .http
             .get(format!("{}/api/v1/sources", self.base_url))
             .send()
             .await
@@ -164,7 +169,8 @@ impl RoClient {
 
     /// GET /api/v1/cache — get cache info
     pub async fn cache_info(&self) -> Result<CacheInfo> {
-        let resp = self.http
+        let resp = self
+            .http
             .get(format!("{}/api/v1/cache", self.base_url))
             .send()
             .await
@@ -180,7 +186,8 @@ impl RoClient {
 
     /// GET /health — check API health
     pub async fn health(&self) -> Result<bool> {
-        let resp = self.http
+        let resp = self
+            .http
             .get(format!("{}/health", self.base_url))
             .send()
             .await;

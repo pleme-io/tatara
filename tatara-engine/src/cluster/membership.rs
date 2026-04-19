@@ -90,11 +90,7 @@ impl MembershipReconciler {
                         addr = %meta.raft_addr,
                         "Adding new voter to Raft cluster"
                     );
-                    if let Err(e) = self
-                        .raft
-                        .add_voter(meta.node_id, &meta.raft_addr)
-                        .await
-                    {
+                    if let Err(e) = self.raft.add_voter(meta.node_id, &meta.raft_addr).await {
                         warn!(
                             node_id = meta.node_id,
                             error = %e,

@@ -30,10 +30,7 @@ pub trait Evaluator {
 
     /// Evaluate many derivations. Default impl just maps `evaluate`; backends
     /// may override to exploit shared build state (cache, DAG scheduling).
-    fn evaluate_many(
-        &self,
-        derivs: &[Derivation],
-    ) -> Result<Vec<EvaluationResult>, Self::Error> {
+    fn evaluate_many(&self, derivs: &[Derivation]) -> Result<Vec<EvaluationResult>, Self::Error> {
         derivs.iter().map(|d| self.evaluate(d)).collect()
     }
 
@@ -84,11 +81,8 @@ impl Evaluator for DryRun {
             // (primary_hash, output_name) — deterministic and independent of
             // the evaluator backend.
             let extra_hash = StoreHash::of(&(&primary.hash.0, extra));
-            let extra_path = StorePath::new(
-                extra_hash,
-                format!("{}-{extra}", d.name),
-                d.version.clone(),
-            );
+            let extra_path =
+                StorePath::new(extra_hash, format!("{}-{extra}", d.name), d.version.clone());
             outputs.insert(extra.clone(), extra_path);
         }
         Ok(EvaluationResult {
@@ -170,7 +164,8 @@ mod tests {
             env: vec![],
             sandbox: Default::default(),
             bridge: None,
-            nix_expr: None,        }
+            nix_expr: None,
+        }
     }
 
     #[test]
@@ -209,7 +204,11 @@ mod tests {
             pinned: None,
         });
         d.builder = BuilderPhases {
-            phases: vec![BuilderPhase::Unpack, BuilderPhase::Build, BuilderPhase::Install],
+            phases: vec![
+                BuilderPhase::Unpack,
+                BuilderPhase::Build,
+                BuilderPhase::Install,
+            ],
             commands: Default::default(),
         };
         let r = DryRun.evaluate(&d).unwrap();
@@ -250,7 +249,9 @@ mod tests {
         let a = mk("a", None);
         let b = mk("b", None);
         let c = mk("c", None);
-        let results = DryRun.evaluate_many(&[a.clone(), b.clone(), c.clone()]).unwrap();
+        let results = DryRun
+            .evaluate_many(&[a.clone(), b.clone(), c.clone()])
+            .unwrap();
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].store_path, a.store_path());
         assert_eq!(results[1].store_path, b.store_path());
@@ -263,7 +264,10 @@ mod tests {
         let a = DryRun;
         let b = DryRun;
         let d = mk("hello", Some("2.12.1"));
-        assert_eq!(a.evaluate(&d).unwrap().store_path, b.evaluate(&d).unwrap().store_path);
+        assert_eq!(
+            a.evaluate(&d).unwrap().store_path,
+            b.evaluate(&d).unwrap().store_path
+        );
     }
 
     #[test]

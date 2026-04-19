@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use colored::Colorize;
-use comfy_table::{presets::UTF8_FULL, Table};
+use comfy_table::{Table, presets::UTF8_FULL};
 
 use crate::api::{BuildResponse, BuildStatus, CacheInfo, PlatformConfig, RoClient, SourceStatus};
 use crate::nix_config::{CachedConfig, ConfigApplyResult};
@@ -56,20 +56,14 @@ pub async fn wait_for_build(client: &RoClient, build_id: &str) -> Result<()> {
 
         match status.phase.as_str() {
             "Complete" => {
-                println!(
-                    "\n{} Build complete!",
-                    "✓".green().bold()
-                );
+                println!("\n{} Build complete!", "✓".green().bold());
                 if let Some(path) = &status.store_path {
                     println!("Store path: {}", path);
                 }
                 return Ok(());
             }
             "Failed" => {
-                println!(
-                    "\n{} Build failed",
-                    "✗".red().bold()
-                );
+                println!("\n{} Build failed", "✗".red().bold());
                 if let Some(err) = &status.error {
                     println!("Error: {}", err);
                 }
@@ -165,7 +159,10 @@ pub fn print_init_result(result: &ConfigApplyResult) {
         println!("  {}", k.dimmed());
     }
     println!("\nNix is now configured to use the ro binary cache.");
-    println!("Run {} to refresh config from the platform.", "ro refresh".bold());
+    println!(
+        "Run {} to refresh config from the platform.",
+        "ro refresh".bold()
+    );
 }
 
 pub fn print_configure_result(result: &ConfigApplyResult) {

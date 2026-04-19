@@ -124,7 +124,10 @@ pub enum TerreiroRealizer {
 }
 
 impl TerreiroRealizer {
-    fn realize(&self, d: &tatara_nix::Derivation) -> std::result::Result<RealizedArtifact, RealizeError> {
+    fn realize(
+        &self,
+        d: &tatara_nix::Derivation,
+    ) -> std::result::Result<RealizedArtifact, RealizeError> {
         match self {
             Self::InProcess(r) => r.realize(d),
             Self::NixStore(r) => r.realize(d),
@@ -191,9 +194,9 @@ impl Terreiro {
 
     /// Attach a realizer that hands builds off to a running Nix on disk.
     pub fn with_nix_store_realizer(mut self) -> Self {
-        self.realizer = Some(Arc::new(TerreiroRealizer::NixStore(
-            NixStoreRealizer::new(),
-        )));
+        self.realizer = Some(Arc::new(
+            TerreiroRealizer::NixStore(NixStoreRealizer::new()),
+        ));
         self
     }
 
@@ -439,10 +442,7 @@ mod tests {
 
     #[test]
     fn disk_round_trip() {
-        let tmp = std::env::temp_dir().join(format!(
-            "tatara-terreiro-{}.json",
-            std::process::id()
-        ));
+        let tmp = std::env::temp_dir().join(format!("tatara-terreiro-{}.json", std::process::id()));
         let mut t = Terreiro::from_spec(basic_spec()).unwrap();
         let id = t.seal().clone();
         t.write_to(&tmp).unwrap();
@@ -579,9 +579,7 @@ mod tests {
     #[test]
     fn terreiro_errors_without_realizer() {
         let t = Terreiro::from_spec(eval_spec()).unwrap().with_interpreter();
-        let err = t
-            .realize(r#"(derivation (attrs "name" "x"))"#)
-            .unwrap_err();
+        let err = t.realize(r#"(derivation (attrs "name" "x"))"#).unwrap_err();
         assert!(matches!(err, TerreiroError::NoRealizer));
     }
 

@@ -132,7 +132,10 @@ mod tests {
         assert_eq!(m.name, "prom-up");
         assert_eq!(m.threshold, 0.99);
         assert_eq!(m.window_seconds, Some(300));
-        assert_eq!(m.tags, vec!["prod".to_string(), "observability".to_string()]);
+        assert_eq!(
+            m.tags,
+            vec!["prod".to_string(), "observability".to_string()]
+        );
         assert_eq!(m.enabled, Some(true));
     }
 
@@ -219,10 +222,12 @@ mod tests {
         let m1 = rewrite_typed(m0, |sexp| {
             let mut items = match sexp {
                 Sexp::List(xs) => xs,
-                other => return Err(tatara_lisp::LispError::Compile {
-                    form: "rewrite".into(),
-                    message: format!("expected kwargs list, got {other}"),
-                }),
+                other => {
+                    return Err(tatara_lisp::LispError::Compile {
+                        form: "rewrite".into(),
+                        message: format!("expected kwargs list, got {other}"),
+                    })
+                }
             };
             // Walk keyword/value pairs; bump :threshold.
             let mut i = 0;

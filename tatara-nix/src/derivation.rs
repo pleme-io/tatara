@@ -139,9 +139,7 @@ impl BridgeTarget {
     }
 
     pub fn resolved_pkg_set(&self) -> &str {
-        self.pkg_set
-            .as_deref()
-            .unwrap_or("import <nixpkgs> {}")
+        self.pkg_set.as_deref().unwrap_or("import <nixpkgs> {}")
     }
 }
 
@@ -211,11 +209,7 @@ impl Derivation {
     /// Compute the content-addressed store path of this derivation.
     /// Deterministic — identical Rust value → identical path.
     pub fn store_path(&self) -> StorePath {
-        StorePath::new(
-            StoreHash::of(self),
-            self.name.clone(),
-            self.version.clone(),
-        )
+        StorePath::new(StoreHash::of(self), self.name.clone(), self.version.clone())
     }
 }
 

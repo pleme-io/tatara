@@ -303,10 +303,7 @@ fn attr_(args: &[Value]) -> Result<Value> {
         }
     };
     match &args[1] {
-        Value::Attrs(m) => m
-            .get(&name)
-            .cloned()
-            .ok_or(EvalError::MissingAttr(name)),
+        Value::Attrs(m) => m.get(&name).cloned().ok_or(EvalError::MissingAttr(name)),
         v => Err(EvalError::Type {
             expected: "attrs".into(),
             found: v.type_name().into(),
@@ -490,9 +487,7 @@ fn attrs_to_derivation(m: &BTreeMap<String, Value>) -> Result<Derivation> {
     })
 }
 
-fn bridge_from_attrs(
-    m: &BTreeMap<String, Value>,
-) -> Result<tatara_nix::derivation::BridgeTarget> {
+fn bridge_from_attrs(m: &BTreeMap<String, Value>) -> Result<tatara_nix::derivation::BridgeTarget> {
     Ok(tatara_nix::derivation::BridgeTarget {
         attr_path: require_str(m, "attr-path")
             .or_else(|_| require_str(m, "attrPath"))?
@@ -626,10 +621,7 @@ fn outputs_from_attrs(m: &BTreeMap<String, Value>) -> Outputs {
             .map(str::to_string)
             .unwrap_or_else(|| "out".into()),
         extra: match m.get("extra") {
-            Some(Value::List(xs)) => xs
-                .iter()
-                .filter_map(Value::coerce_to_string)
-                .collect(),
+            Some(Value::List(xs)) => xs.iter().filter_map(Value::coerce_to_string).collect(),
             _ => vec![],
         },
     }
@@ -652,17 +644,11 @@ fn sandbox_from_attrs(m: &BTreeMap<String, Value>) -> Sandbox {
     Sandbox {
         allow_network: optional_bool(m, "allow-network").unwrap_or(false),
         extra_paths: match m.get("extra-paths") {
-            Some(Value::List(xs)) => xs
-                .iter()
-                .filter_map(Value::coerce_to_string)
-                .collect(),
+            Some(Value::List(xs)) => xs.iter().filter_map(Value::coerce_to_string).collect(),
             _ => vec![],
         },
         impure_env: match m.get("impure-env") {
-            Some(Value::List(xs)) => xs
-                .iter()
-                .filter_map(Value::coerce_to_string)
-                .collect(),
+            Some(Value::List(xs)) => xs.iter().filter_map(Value::coerce_to_string).collect(),
             _ => vec![],
         },
     }

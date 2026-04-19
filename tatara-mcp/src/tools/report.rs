@@ -23,13 +23,15 @@ pub fn register(tools: &mut Vec<McpToolDef>) {
     });
     tools.push(McpToolDef {
         name: "cost_optimization_report".into(),
-        description: "Generate financial substrate analysis with cost reduction recommendations".into(),
+        description: "Generate financial substrate analysis with cost reduction recommendations"
+            .into(),
         category: ToolCategory::Report,
         input_schema: json!({ "type": "object", "properties": {} }),
     });
     tools.push(McpToolDef {
         name: "attestation_audit_trail".into(),
-        description: "Trace the full attestation chain for a specific operation or time range".into(),
+        description: "Trace the full attestation chain for a specific operation or time range"
+            .into(),
         category: ToolCategory::Report,
         input_schema: json!({ "type": "object", "properties": {
             "point_id": { "type": "string", "description": "Starting point for audit" },
@@ -38,7 +40,8 @@ pub fn register(tools: &mut Vec<McpToolDef>) {
     });
     tools.push(McpToolDef {
         name: "incident_analysis".into(),
-        description: "Analyze a divergence event — root cause, affected points, recovery timeline".into(),
+        description: "Analyze a divergence event — root cause, affected points, recovery timeline"
+            .into(),
         category: ToolCategory::Report,
         input_schema: json!({ "type": "object", "properties": {
             "point_id": { "type": "string", "description": "The point that diverged" },

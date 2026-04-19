@@ -1,12 +1,17 @@
 use openraft::anyerror::AnyError;
 use openraft::storage::RaftStateMachine;
-use openraft::{Entry, EntryPayload, LogId, OptionalSend, RaftSnapshotBuilder, Snapshot, SnapshotMeta, StorageError, StorageIOError, StoredMembership};
+use openraft::{
+    Entry, EntryPayload, LogId, OptionalSend, RaftSnapshotBuilder, Snapshot, SnapshotMeta,
+    StorageError, StorageIOError, StoredMembership,
+};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use tatara_core::cluster::types::{ClusterCommand, ClusterResponse, ClusterState, JobVersionEntry, NodeId};
+use tatara_core::cluster::types::{
+    ClusterCommand, ClusterResponse, ClusterState, JobVersionEntry, NodeId,
+};
 use tatara_core::domain::event::{Event, EventKind};
 use tatara_core::domain::job::{JobSpec, JobStatus};
 use tatara_core::domain::source::SourceStatus;
@@ -94,10 +99,7 @@ impl RaftStateMachine<TypeConfig> for StateMachine {
         Ok((data.last_applied_log, data.last_membership.clone()))
     }
 
-    async fn apply<I>(
-        &mut self,
-        entries: I,
-    ) -> Result<Vec<ClusterResponse>, StorageError<NodeId>>
+    async fn apply<I>(&mut self, entries: I) -> Result<Vec<ClusterResponse>, StorageError<NodeId>>
     where
         I: IntoIterator<Item = Entry<TypeConfig>> + OptionalSend,
     {
@@ -327,11 +329,7 @@ fn apply_command(state: &mut ClusterState, cmd: ClusterCommand) -> ClusterRespon
             ClusterResponse::Ok
         }
         ClusterCommand::AdvertiseChunk { hash, node_id } => {
-            state
-                .data_index
-                .entry(hash)
-                .or_default()
-                .push(node_id);
+            state.data_index.entry(hash).or_default().push(node_id);
             ClusterResponse::Ok
         }
         ClusterCommand::RemoveChunkAdvertisement { hash, node_id } => {
@@ -345,7 +343,6 @@ fn apply_command(state: &mut ClusterState, cmd: ClusterCommand) -> ClusterRespon
         }
 
         // ── New commands ──
-
         ClusterCommand::EmitEvent(event) => {
             state.events.push(event);
             ClusterResponse::Ok
@@ -353,8 +350,7 @@ fn apply_command(state: &mut ClusterState, cmd: ClusterCommand) -> ClusterRespon
 
         ClusterCommand::RollbackJob { job_id, version } => {
             let history = state.job_history.get(&job_id);
-            let target = history
-                .and_then(|h| h.iter().find(|e| e.version == version));
+            let target = history.and_then(|h| h.iter().find(|e| e.version == version));
 
             match target {
                 Some(entry) => {
@@ -427,7 +423,6 @@ fn apply_command(state: &mut ClusterState, cmd: ClusterCommand) -> ClusterRespon
         }
 
         // ── Sources ──
-
         ClusterCommand::PutSource(source) => {
             let source_clone = source.clone();
             state.events.push(Event::new(
@@ -505,7 +500,6 @@ fn apply_command(state: &mut ClusterState, cmd: ClusterCommand) -> ClusterRespon
         }
 
         // ── Distributed state machine commands ──
-
         ClusterCommand::ProposeAllocations {
             expected_generation,
             allocations,

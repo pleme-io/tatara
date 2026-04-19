@@ -23,11 +23,7 @@ pub struct RaftCluster {
 
 impl RaftCluster {
     /// Initialize a new Raft node.
-    pub async fn start(
-        node_id: NodeId,
-        _raft_addr: &str,
-        data_dir: &PathBuf,
-    ) -> Result<Self> {
+    pub async fn start(node_id: NodeId, _raft_addr: &str, data_dir: &PathBuf) -> Result<Self> {
         let config = Config {
             heartbeat_interval: 500,
             election_timeout_min: 1500,
@@ -38,8 +34,7 @@ impl RaftCluster {
         let config = Arc::new(config.validate().context("Invalid Raft config")?);
 
         let log_path = data_dir.join("raft.redb");
-        let log_store = LogStore::new(&log_path)
-            .context("Failed to open Raft log store")?;
+        let log_store = LogStore::new(&log_path).context("Failed to open Raft log store")?;
 
         let state_machine = StateMachine::new();
         let sm_data = state_machine.state();
@@ -75,7 +70,10 @@ impl RaftCluster {
             .await
             .map_err(|e| anyhow::anyhow!("Raft bootstrap failed: {}", e))?;
 
-        info!(node_id = self.node_id, "Bootstrapped single-node Raft cluster");
+        info!(
+            node_id = self.node_id,
+            "Bootstrapped single-node Raft cluster"
+        );
         Ok(())
     }
 
@@ -101,7 +99,11 @@ impl RaftCluster {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to change membership: {}", e))?;
 
-        info!(node_id = node_id, addr = addr, "Added voter to Raft cluster");
+        info!(
+            node_id = node_id,
+            addr = addr,
+            "Added voter to Raft cluster"
+        );
         Ok(())
     }
 
@@ -166,11 +168,7 @@ impl RaftCluster {
     /// Get current Raft membership.
     async fn current_members(&self) -> Result<std::collections::BTreeSet<NodeId>> {
         let metrics = self.raft.metrics().borrow().clone();
-        Ok(metrics
-            .membership_config
-            .membership()
-            .voter_ids()
-            .collect())
+        Ok(metrics.membership_config.membership().voter_ids().collect())
     }
 
     pub fn node_id(&self) -> NodeId {

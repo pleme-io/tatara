@@ -114,8 +114,7 @@ pub async fn stream(kind: Option<&str>, endpoint: Option<&str>) -> Result<()> {
                     if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
                         let kind_str = event["kind"].as_str().unwrap_or("?");
                         let ts = event["timestamp"].as_str().unwrap_or("?");
-                        let payload = serde_json::to_string(&event["payload"])
-                            .unwrap_or_default();
+                        let payload = serde_json::to_string(&event["payload"]).unwrap_or_default();
                         println!("[{}] {} {}", ts, kind_str, payload);
                     }
                 }

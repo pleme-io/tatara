@@ -95,10 +95,7 @@ pub async fn helm_template(
     parse_yaml_documents(&output.stdout, chart)
 }
 
-fn parse_yaml_documents(
-    data: &[u8],
-    chart: &str,
-) -> Result<Vec<serde_json::Value>, KubeError> {
+fn parse_yaml_documents(data: &[u8], chart: &str) -> Result<Vec<serde_json::Value>, KubeError> {
     let text = String::from_utf8_lossy(data);
     let mut resources = Vec::new();
 

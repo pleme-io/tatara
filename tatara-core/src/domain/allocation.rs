@@ -46,7 +46,12 @@ pub struct TaskState {
 }
 
 impl Allocation {
-    pub fn new(job_id: String, group_name: String, node_id: String, task_names: Vec<String>) -> Self {
+    pub fn new(
+        job_id: String,
+        group_name: String,
+        node_id: String,
+        task_names: Vec<String>,
+    ) -> Self {
         let task_states = task_names
             .into_iter()
             .map(|name| (name, TaskState::new()))

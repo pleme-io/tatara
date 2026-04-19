@@ -93,19 +93,13 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
     }
 
     // 2. Allocate PID if we don't already have one.
-    let already_allocated = p
-        .status
-        .as_ref()
-        .and_then(|s| s.pid.clone())
-        .is_some();
+    let already_allocated = p.status.as_ref().and_then(|s| s.pid.clone()).is_some();
     if !already_allocated {
         let identity = p
             .status
             .as_ref()
             .and_then(|s| s.identity.clone())
-            .unwrap_or_else(|| {
-                derive_identity(&p.spec, p.spec.identity.name_override.as_deref())
-            });
+            .unwrap_or_else(|| derive_identity(&p.spec, p.spec.identity.name_override.as_deref()));
 
         let pt_api: Api<ProcessTable> = Api::all(ctx.kube.clone());
         let pt = patch::ensure_process_table(&pt_api, &ctx.config.process_table_name)
@@ -123,13 +117,9 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
         .await
         .map_err(|e| anyhow!("bump nextSequence: {e}"))?;
 
-        patch::patch_process_status(
-            &api,
-            &name,
-            json!({ "pid": new_pid, "parent": parent_pid }),
-        )
-        .await
-        .map_err(|e| anyhow!("patch pid: {e}"))?;
+        patch::patch_process_status(&api, &name, json!({ "pid": new_pid, "parent": parent_pid }))
+            .await
+            .map_err(|e| anyhow!("patch pid: {e}"))?;
 
         info!(
             namespace = %ns,
@@ -257,10 +247,15 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     let mut updated: Vec<FluxResourceRef> = Vec::with_capacity(refs.len());
     let mut all_ready = true;
     for r in &refs {
-        let obj =
-            ssapply::fetch(ctx.kube.clone(), &r.namespace, &r.api_version, &r.kind, &r.name)
-                .await
-                .map_err(|e| anyhow!("fetch {}/{}: {e}", r.kind, r.name))?;
+        let obj = ssapply::fetch(
+            ctx.kube.clone(),
+            &r.namespace,
+            &r.api_version,
+            &r.kind,
+            &r.name,
+        )
+        .await
+        .map_err(|e| anyhow!("fetch {}/{}: {e}", r.kind, r.name))?;
 
         let (ready, message) = match obj.as_ref().map(ssapply::ready_condition) {
             Some(ssapply::ReadyState::Ready) => (true, None),
@@ -368,10 +363,15 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
 
     let mut drift = false;
     for r in &refs {
-        let obj =
-            ssapply::fetch(ctx.kube.clone(), &r.namespace, &r.api_version, &r.kind, &r.name)
-                .await
-                .map_err(|e| anyhow!("fetch {}/{}: {e}", r.kind, r.name))?;
+        let obj = ssapply::fetch(
+            ctx.kube.clone(),
+            &r.namespace,
+            &r.api_version,
+            &r.kind,
+            &r.name,
+        )
+        .await
+        .map_err(|e| anyhow!("fetch {}/{}: {e}", r.kind, r.name))?;
         if !matches!(
             obj.as_ref().map(ssapply::ready_condition),
             Some(ssapply::ReadyState::Ready)

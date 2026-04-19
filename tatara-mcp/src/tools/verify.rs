@@ -12,7 +12,8 @@ pub fn register(tools: &mut Vec<McpToolDef>) {
     });
     tools.push(McpToolDef {
         name: "verify_attestation_chain".into(),
-        description: "Validate cryptographic attestation chain integrity for a convergence DAG".into(),
+        description: "Validate cryptographic attestation chain integrity for a convergence DAG"
+            .into(),
         category: ToolCategory::Verify,
         input_schema: json!({ "type": "object", "properties": {
             "point_id": { "type": "string", "description": "Starting point for chain verification" }
@@ -20,7 +21,8 @@ pub fn register(tools: &mut Vec<McpToolDef>) {
     });
     tools.push(McpToolDef {
         name: "verify_compliance_posture".into(),
-        description: "Check that all compliance bindings are satisfied across the convergence graph".into(),
+        description:
+            "Check that all compliance bindings are satisfied across the convergence graph".into(),
         category: ToolCategory::Verify,
         input_schema: json!({ "type": "object", "properties": {
             "framework": { "type": "string", "description": "Filter by compliance framework" }
@@ -28,13 +30,15 @@ pub fn register(tools: &mut Vec<McpToolDef>) {
     });
     tools.push(McpToolDef {
         name: "verify_graph_well_typed".into(),
-        description: "Validate that all typed edges connect compatible convergence point types".into(),
+        description: "Validate that all typed edges connect compatible convergence point types"
+            .into(),
         category: ToolCategory::Verify,
         input_schema: json!({ "type": "object", "properties": {} }),
     });
     tools.push(McpToolDef {
         name: "verify_security_posture".into(),
-        description: "Review security substrate convergence for vulnerabilities or misconfigurations".into(),
+        description:
+            "Review security substrate convergence for vulnerabilities or misconfigurations".into(),
         category: ToolCategory::Verify,
         input_schema: json!({ "type": "object", "properties": {} }),
     });

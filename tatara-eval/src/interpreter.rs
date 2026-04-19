@@ -154,9 +154,9 @@ impl Interpreter {
                 Atom::Keyword(k) => Value::Keyword(k.clone()),
                 Atom::Symbol(name) => Value::Symbol(name.clone()),
             },
-            Sexp::List(xs) => Value::List(Arc::new(
-                xs.iter().map(|x| self.sexp_to_value(x)).collect(),
-            )),
+            Sexp::List(xs) => {
+                Value::List(Arc::new(xs.iter().map(|x| self.sexp_to_value(x)).collect()))
+            }
             other => Value::Quoted(Arc::new(other.clone())),
         }
     }
@@ -188,9 +188,7 @@ impl Interpreter {
                 Ok(Value::List(Arc::new(out)))
             }
             Sexp::Atom(_) | Sexp::Nil => Ok(self.sexp_to_value(inner)),
-            Sexp::Quote(x) | Sexp::Quasiquote(x) => {
-                Ok(Value::Quoted(Arc::new((**x).clone())))
-            }
+            Sexp::Quote(x) | Sexp::Quasiquote(x) => Ok(Value::Quoted(Arc::new((**x).clone()))),
             Sexp::UnquoteSplice(_) => Err(EvalError::Malformed {
                 form: "quasiquote".into(),
                 reason: "bare ,@ outside of list".into(),
@@ -386,8 +384,10 @@ impl Interpreter {
     pub fn apply(&self, f: &Value, args: &[Value]) -> Result<Value> {
         // Force any thunk arguments before use? Nix is lazy; we stay strict at
         // call boundaries for now but force on use. Force here for ergonomics.
-        let forced_args: Vec<Value> =
-            args.iter().map(|v| self.force(v.clone())).collect::<Result<_>>()?;
+        let forced_args: Vec<Value> = args
+            .iter()
+            .map(|v| self.force(v.clone()))
+            .collect::<Result<_>>()?;
 
         match self.force(f.clone())? {
             Value::Builtin(b) => {
@@ -519,7 +519,10 @@ mod tests {
     fn arithmetic() {
         let i = Interpreter::new();
         assert!(matches!(i.eval_source("(+ 1 2 3)").unwrap(), Value::Int(6)));
-        assert!(matches!(i.eval_source("(* 2 3 4)").unwrap(), Value::Int(24)));
+        assert!(matches!(
+            i.eval_source("(* 2 3 4)").unwrap(),
+            Value::Int(24)
+        ));
         assert!(matches!(i.eval_source("(- 10 3)").unwrap(), Value::Int(7)));
         assert!(matches!(i.eval_source("(- 5)").unwrap(), Value::Int(-5)));
     }
@@ -543,9 +546,7 @@ mod tests {
     #[test]
     fn lambda_and_apply() {
         let i = Interpreter::new();
-        let v = i
-            .eval_source("((lambda (x y) (+ x y)) 3 4)")
-            .unwrap();
+        let v = i.eval_source("((lambda (x y) (+ x y)) 3 4)").unwrap();
         assert!(matches!(v, Value::Int(7)));
     }
 

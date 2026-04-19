@@ -14,9 +14,7 @@ pub enum KernelSpec {
     /// A named package from a `tatara-pkgs::PackageSet` resolved at synth time.
     Package { name: String },
     /// The raw tatara `Derivation` — for a fully-custom kernel.
-    Custom {
-        derivation: tatara_nix::Derivation,
-    },
+    Custom { derivation: tatara_nix::Derivation },
 }
 
 impl Default for KernelSpec {

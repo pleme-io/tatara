@@ -23,7 +23,10 @@ pub enum LispError {
     #[error("compile error in {form}: {message}")]
     Compile { form: String, message: String },
     #[error("unknown {category}: {value}")]
-    Unknown { category: &'static str, value: String },
+    Unknown {
+        category: &'static str,
+        value: String,
+    },
     #[error("missing required field: {0}")]
     Missing(&'static str),
     #[error("odd number of keyword arguments")]

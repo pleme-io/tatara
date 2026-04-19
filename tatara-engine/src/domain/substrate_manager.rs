@@ -113,10 +113,7 @@ impl Default for SubstrateManager {
 mod tests {
     use super::*;
 
-    fn make_substrate_dag(
-        substrate: SubstrateType,
-        point_names: &[&str],
-    ) -> SubstrateDAG {
+    fn make_substrate_dag(substrate: SubstrateType, point_names: &[&str]) -> SubstrateDAG {
         let mut points = BTreeMap::new();
         let mut ids = Vec::new();
 
@@ -173,18 +170,12 @@ mod tests {
     #[test]
     fn test_multi_substrate_composition() {
         let mut mgr = SubstrateManager::new();
-        mgr.add_substrate(make_substrate_dag(
-            SubstrateType::Compute,
-            &["cpu", "mem"],
-        ));
+        mgr.add_substrate(make_substrate_dag(SubstrateType::Compute, &["cpu", "mem"]));
         mgr.add_substrate(make_substrate_dag(
             SubstrateType::Network,
             &["dns", "route"],
         ));
-        mgr.add_substrate(make_substrate_dag(
-            SubstrateType::Security,
-            &["secret"],
-        ));
+        mgr.add_substrate(make_substrate_dag(SubstrateType::Security, &["secret"]));
 
         assert_eq!(mgr.substrate_count(), 3);
         let graph = mgr.compose_graph();
@@ -194,14 +185,8 @@ mod tests {
     #[test]
     fn test_convergence_per_substrate() {
         let mut mgr = SubstrateManager::new();
-        mgr.add_substrate(make_substrate_dag(
-            SubstrateType::Compute,
-            &["a"],
-        ));
-        mgr.add_substrate(make_substrate_dag(
-            SubstrateType::Network,
-            &["b"],
-        ));
+        mgr.add_substrate(make_substrate_dag(SubstrateType::Compute, &["a"]));
+        mgr.add_substrate(make_substrate_dag(SubstrateType::Network, &["b"]));
 
         let dist = mgr.convergence_per_substrate();
         // Default ConvergenceState has Unknown distance (1.0)

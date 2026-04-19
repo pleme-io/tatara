@@ -145,7 +145,10 @@ pub async fn run(
     }
 
     if !settled {
-        println!("\n  Deployment still in progress. Use 'tatara job get {}' to check.", job_id);
+        println!(
+            "\n  Deployment still in progress. Use 'tatara job get {}' to check.",
+            job_id
+        );
     }
 
     Ok(())
@@ -187,10 +190,7 @@ async fn resolve_flake_ref(flake_ref: &str) -> Result<serde_json::Value> {
     Ok(spec)
 }
 
-fn apply_overrides(
-    spec: &mut serde_json::Value,
-    overrides: &[(String, String)],
-) -> Result<()> {
+fn apply_overrides(spec: &mut serde_json::Value, overrides: &[(String, String)]) -> Result<()> {
     for (key, value) in overrides {
         // Support dotted paths: "groups.0.count" -> spec["groups"][0]["count"]
         let parts: Vec<&str> = key.split('.').collect();

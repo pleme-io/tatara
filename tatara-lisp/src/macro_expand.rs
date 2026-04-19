@@ -142,7 +142,8 @@ impl Expander {
         for form in forms {
             if let Some(def) = macro_def_from(&form)? {
                 if self.compile_templates {
-                    self.templates.insert(def.name.clone(), compile_template(&def)?);
+                    self.templates
+                        .insert(def.name.clone(), compile_template(&def)?);
                 }
                 self.macros.insert(def.name.clone(), def);
                 continue;
@@ -343,10 +344,13 @@ fn apply_compiled(
     for param in params {
         match param {
             Param::Required(name) => {
-                let arg = args.get(cursor).cloned().ok_or_else(|| LispError::Compile {
-                    form: format!("call to {macro_name}"),
-                    message: format!("missing required arg: {name}"),
-                })?;
+                let arg = args
+                    .get(cursor)
+                    .cloned()
+                    .ok_or_else(|| LispError::Compile {
+                        form: format!("call to {macro_name}"),
+                        message: format!("missing required arg: {name}"),
+                    })?;
                 args_by_index.push(arg);
                 cursor += 1;
             }
@@ -375,12 +379,10 @@ fn apply_compiled(
                 stack.last_mut().unwrap().push(v);
             }
             TemplateOp::Splice(idx) => {
-                let v = args_by_index
-                    .get(*idx)
-                    .ok_or_else(|| LispError::Compile {
-                        form: macro_name.into(),
-                        message: format!("compiled template referenced bad splice index {idx}"),
-                    })?;
+                let v = args_by_index.get(*idx).ok_or_else(|| LispError::Compile {
+                    form: macro_name.into(),
+                    message: format!("compiled template referenced bad splice index {idx}"),
+                })?;
                 match v {
                     Sexp::List(items) => stack.last_mut().unwrap().extend(items.iter().cloned()),
                     Sexp::Nil => {}
@@ -421,8 +423,12 @@ fn args_cache_key(macro_name: &str, args: &[Sexp]) -> Option<CacheKey> {
 }
 
 fn macro_def_from(form: &Sexp) -> Result<Option<MacroDef>> {
-    let Some(list) = form.as_list() else { return Ok(None) };
-    let Some(head) = list.first().and_then(|s| s.as_symbol()) else { return Ok(None) };
+    let Some(list) = form.as_list() else {
+        return Ok(None);
+    };
+    let Some(head) = list.first().and_then(|s| s.as_symbol()) else {
+        return Ok(None);
+    };
     if !matches!(head, "defmacro" | "defpoint-template" | "defcheck") {
         return Ok(None);
     }
@@ -457,13 +463,13 @@ fn parse_params(list: &[Sexp]) -> Result<Vec<Param>> {
             message: "expected symbol".into(),
         })?;
         if s == "&rest" {
-            let name = list
-                .get(i + 1)
-                .and_then(|x| x.as_symbol())
-                .ok_or_else(|| LispError::Compile {
-                    form: "defmacro params".into(),
-                    message: "&rest needs a name".into(),
-                })?;
+            let name =
+                list.get(i + 1)
+                    .and_then(|x| x.as_symbol())
+                    .ok_or_else(|| LispError::Compile {
+                        form: "defmacro params".into(),
+                        message: "&rest needs a name".into(),
+                    })?;
             out.push(Param::Rest(name.to_string()));
             return Ok(out);
         }
@@ -506,10 +512,13 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
                 form: "unquote".into(),
                 message: "only bound symbols may appear after `,` (no evaluator)".into(),
             })?;
-            bindings.get(sym).cloned().ok_or_else(|| LispError::Compile {
-                form: format!(",{sym}"),
-                message: "unbound".into(),
-            })
+            bindings
+                .get(sym)
+                .cloned()
+                .ok_or_else(|| LispError::Compile {
+                    form: format!(",{sym}"),
+                    message: "unbound".into(),
+                })
         }
         Sexp::UnquoteSplice(_) => Err(LispError::Compile {
             form: "unquote-splice".into(),
@@ -572,8 +581,7 @@ mod tests {
     #[test]
     fn rest_param_splices_with_at() {
         let mut e = Expander::new();
-        let forms =
-            read("(defmacro call (f &rest args) `(,f ,@args)) (call foo a b c)").unwrap();
+        let forms = read("(defmacro call (f &rest args) `(,f ,@args)) (call foo a b c)").unwrap();
         let out = e.expand_program(forms).unwrap();
         assert_eq!(out[0], parse("(foo a b c)"));
     }
@@ -614,7 +622,10 @@ mod tests {
         )
         .unwrap();
         let out = e.expand_program(forms).unwrap();
-        assert_eq!(out[0], parse("(defpoint grafana :class (Gate Observability))"));
+        assert_eq!(
+            out[0],
+            parse("(defpoint grafana :class (Gate Observability))")
+        );
     }
 
     #[test]
@@ -810,7 +821,9 @@ mod tests {
     #[test]
     fn clear_cache_empties_memo() {
         let mut e = Expander::new();
-        let out = e.expand_program(read("(defmacro id (x) `,x) (id 1) (id 2)").unwrap()).unwrap();
+        let out = e
+            .expand_program(read("(defmacro id (x) `,x) (id 1) (id 2)").unwrap())
+            .unwrap();
         assert_eq!(out.len(), 2);
         assert_eq!(e.cache_size(), 2);
         e.clear_cache();

@@ -119,9 +119,7 @@ pub async fn get(job_id: &str, output: OutputFormat, endpoint: Option<&str>) -> 
                             comfy_table::Cell::new(
                                 alloc["id"].as_str().unwrap_or("?").get(..8).unwrap_or("?"),
                             ),
-                            comfy_table::Cell::new(
-                                alloc["group_name"].as_str().unwrap_or("?"),
-                            ),
+                            comfy_table::Cell::new(alloc["group_name"].as_str().unwrap_or("?")),
                             status_cell(alloc["state"].as_str().unwrap_or("?")),
                             comfy_table::Cell::new(alloc["node_id"].as_str().unwrap_or("?")),
                             comfy_table::Cell::new(human_duration_since(
@@ -182,10 +180,7 @@ pub async fn run_job(
                 println!("{}", render_value(&job, output)?);
             }
             _ => {
-                println!(
-                    "Job submitted: {}",
-                    job["id"].as_str().unwrap_or("unknown")
-                );
+                println!("Job submitted: {}", job["id"].as_str().unwrap_or("unknown"));
                 println!("Status: {}", job["status"]);
             }
         }
@@ -216,10 +211,7 @@ pub async fn stop(job_id: &str, endpoint: Option<&str>, output: OutputFormat) ->
                 println!("{}", render_value(&job, output)?);
             }
             _ => {
-                println!(
-                    "Job stopped: {}",
-                    job["id"].as_str().unwrap_or(job_id)
-                );
+                println!("Job stopped: {}", job["id"].as_str().unwrap_or(job_id));
                 println!("Status: {}", job["status"].as_str().unwrap_or("dead"));
             }
         }
@@ -266,9 +258,7 @@ pub async fn history(job_id: &str, output: OutputFormat, endpoint: Option<&str>)
             let mut table = build_table(&["VERSION", "STATUS", "GROUPS", "SUBMITTED"]);
             for entry in &history {
                 table.add_row(vec![
-                    comfy_table::Cell::new(
-                        entry["version"].as_u64().unwrap_or(0).to_string(),
-                    ),
+                    comfy_table::Cell::new(entry["version"].as_u64().unwrap_or(0).to_string()),
                     status_cell(entry["status"].as_str().unwrap_or("?")),
                     comfy_table::Cell::new(
                         entry["groups"]
@@ -287,12 +277,7 @@ pub async fn history(job_id: &str, output: OutputFormat, endpoint: Option<&str>)
     Ok(())
 }
 
-pub async fn diff(
-    job_id: &str,
-    v1: u64,
-    v2: u64,
-    endpoint: Option<&str>,
-) -> Result<()> {
+pub async fn diff(job_id: &str, v1: u64, v2: u64, endpoint: Option<&str>) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
     let client = reqwest::Client::new();
     let url = format!("http://{}/api/v1/jobs/{}/history", server, job_id);

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use chitchat::{
-    spawn_chitchat, ChitchatConfig, ChitchatHandle, ChitchatId, FailureDetectorConfig,
-    NodeState, transport::UdpTransport,
+    spawn_chitchat, transport::UdpTransport, ChitchatConfig, ChitchatHandle, ChitchatId,
+    FailureDetectorConfig, NodeState,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;

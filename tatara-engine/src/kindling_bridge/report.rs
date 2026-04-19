@@ -16,9 +16,7 @@ pub struct KindlingReport {
 
 /// Read kindling's cached report from disk.
 pub fn load_report(path: Option<&Path>) -> Result<Option<KindlingReport>> {
-    let report_path = path
-        .map(PathBuf::from)
-        .unwrap_or_else(default_report_path);
+    let report_path = path.map(PathBuf::from).unwrap_or_else(default_report_path);
 
     if !report_path.exists() {
         debug!(path = %report_path.display(), "Kindling report not found");
@@ -50,9 +48,7 @@ pub async fn publish_report(
     let data = serde_json::to_vec(report)?;
     let label = format!("kindling-report:{}", hostname);
 
-    transfer
-        .publish(&data, "node_report", &label)
-        .await?;
+    transfer.publish(&data, "node_report", &label).await?;
 
     info!(
         hostname = hostname,

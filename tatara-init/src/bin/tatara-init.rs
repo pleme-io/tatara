@@ -65,14 +65,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut sup = LinuxSupervisor::new();
     let by_name = tatara_init::supervisor::boot(&mut sup, &cfg)?;
-    let mut tracking: HashMap<Pid, String> =
-        by_name.into_iter().map(|(n, p)| (p, n)).collect();
+    let mut tracking: HashMap<Pid, String> = by_name.into_iter().map(|(n, p)| (p, n)).collect();
 
     // Main loop: poll reap + honor signals. A production init would use
     // signalfd/kqueue; polling is portable and sufficient for v0.
     loop {
-        let events =
-            tatara_init::supervisor::run_once(&mut sup, &cfg, &mut tracking)?;
+        let events = tatara_init::supervisor::run_once(&mut sup, &cfg, &mut tracking)?;
         for ev in events {
             eprintln!(
                 "[tatara-init] reaped {} (pid={}) status={}{}",

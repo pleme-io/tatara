@@ -107,8 +107,12 @@ pub enum HealthStatus {
     #[default]
     Unknown,
     Passing,
-    Warning { message: String },
-    Critical { message: String },
+    Warning {
+        message: String,
+    },
+    Critical {
+        message: String,
+    },
 }
 
 /// Desired phase for an allocation (what the scheduler wants).
@@ -168,12 +172,8 @@ pub struct TaskTerminalDetail {
 }
 
 /// Concrete task lifecycle phase.
-pub type TaskPhase = WorkloadPhase<
-    TaskWarmProgress,
-    TaskExecuteDetail,
-    TaskContractDetail,
-    TaskTerminalDetail,
->;
+pub type TaskPhase =
+    WorkloadPhase<TaskWarmProgress, TaskExecuteDetail, TaskContractDetail, TaskTerminalDetail>;
 
 // ── Allocation-Level Detail Types ──────────────────────────────
 
@@ -223,12 +223,8 @@ pub struct AllocTerminalDetail {
 }
 
 /// Concrete allocation lifecycle phase.
-pub type AllocationPhase = WorkloadPhase<
-    AllocWarmProgress,
-    AllocExecuteDetail,
-    AllocContractDetail,
-    AllocTerminalDetail,
->;
+pub type AllocationPhase =
+    WorkloadPhase<AllocWarmProgress, AllocExecuteDetail, AllocContractDetail, AllocTerminalDetail>;
 
 // ── Node-Level Detail Types ────────────────────────────────────
 
@@ -277,12 +273,8 @@ pub struct NodeTerminalDetail {
 }
 
 /// Concrete node lifecycle phase.
-pub type NodePhase = WorkloadPhase<
-    NodeWarmProgress,
-    NodeExecuteDetail,
-    NodeContractDetail,
-    NodeTerminalDetail,
->;
+pub type NodePhase =
+    WorkloadPhase<NodeWarmProgress, NodeExecuteDetail, NodeContractDetail, NodeTerminalDetail>;
 
 // ── Desired/Observed State (for Raft replication) ──────────────
 
@@ -427,15 +419,16 @@ mod tests {
             volumes_mounted: false,
             network_identity_assigned: true,
             endpoint_registered: false,
-            task_progress: HashMap::from([
-                ("web".to_string(), TaskWarmProgress {
+            task_progress: HashMap::from([(
+                "web".to_string(),
+                TaskWarmProgress {
                     fetch_progress: 0.75,
                     deps_resolved: true,
                     port_allocated: true,
                     warmup_checks_passed: 2,
                     warmup_checks_required: 3,
-                }),
-            ]),
+                },
+            )]),
         });
 
         let json = serde_json::to_string(&phase).unwrap();

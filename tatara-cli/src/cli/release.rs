@@ -31,9 +31,8 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
             println!("{}", render_value(&releases, output)?);
         }
         _ => {
-            let mut table = build_table(&[
-                "ID", "NAME", "FLAKE REF", "VERSION", "STATUS", "CREATED",
-            ]);
+            let mut table =
+                build_table(&["ID", "NAME", "FLAKE REF", "VERSION", "STATUS", "CREATED"]);
             for rel in &releases {
                 let id_str = rel["id"].as_str().unwrap_or("?");
                 let short_id = id_str.get(..8).unwrap_or(id_str);
@@ -41,9 +40,7 @@ pub async fn list(output: OutputFormat, endpoint: Option<&str>) -> Result<()> {
                     comfy_table::Cell::new(short_id),
                     comfy_table::Cell::new(rel["name"].as_str().unwrap_or("?")),
                     comfy_table::Cell::new(rel["flake_ref"].as_str().unwrap_or("?")),
-                    comfy_table::Cell::new(
-                        rel["version"].as_u64().unwrap_or(0).to_string(),
-                    ),
+                    comfy_table::Cell::new(rel["version"].as_u64().unwrap_or(0).to_string()),
                     status_cell(rel["status"].as_str().unwrap_or("?")),
                     comfy_table::Cell::new(human_duration_since(
                         rel["created_at"].as_str().unwrap_or(""),
@@ -102,11 +99,7 @@ pub async fn get(release_id: &str, output: OutputFormat, endpoint: Option<&str>)
     Ok(())
 }
 
-pub async fn promote(
-    release_id: &str,
-    endpoint: Option<&str>,
-    output: OutputFormat,
-) -> Result<()> {
+pub async fn promote(release_id: &str, endpoint: Option<&str>, output: OutputFormat) -> Result<()> {
     let server = endpoint_to_server(&active_endpoint(endpoint));
     let client = reqwest::Client::new();
     let url = format!("http://{}/api/v1/releases/{}/promote", server, release_id);

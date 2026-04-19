@@ -66,16 +66,17 @@ pub async fn reconcile(
                     "lastError": format!("{e}"),
                 }
             });
-            api.patch_status(&name, &PatchParams::apply("tatara-operator"), &Patch::Merge(&status))
-                .await?;
+            api.patch_status(
+                &name,
+                &PatchParams::apply("tatara-operator"),
+                &Patch::Merge(&status),
+            )
+            .await?;
             return Ok(Action::requeue(parse_interval(&source.spec.poll_interval)));
         }
     };
 
-    let last_commit = source
-        .status
-        .as_ref()
-        .and_then(|s| s.last_commit.clone());
+    let last_commit = source.status.as_ref().and_then(|s| s.last_commit.clone());
 
     let is_new = last_commit.as_deref() != Some(&latest_commit);
     let is_first = last_commit.is_none() && source.spec.build_on_create;
@@ -137,9 +138,7 @@ pub async fn reconcile(
                 }
                 Err(kube::Error::Api(err)) if err.code == 409 => {
                     // Already exists — delete and recreate for the new commit
-                    let _ = builds_api
-                        .delete(&build_name, &Default::default())
-                        .await;
+                    let _ = builds_api.delete(&build_name, &Default::default()).await;
                     builds_api.create(&PostParams::default(), &build).await?;
                     info!(build = %build_name, "Replaced existing NixBuild CR");
                 }
@@ -289,9 +288,7 @@ async fn get_latest_commit(
     branch: &str,
     token: Option<&str>,
 ) -> Result<String, String> {
-    let url = format!(
-        "https://api.github.com/repos/{owner}/{repo}/commits/{branch}"
-    );
+    let url = format!("https://api.github.com/repos/{owner}/{repo}/commits/{branch}");
 
     let mut req = client
         .get(&url)

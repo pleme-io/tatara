@@ -166,7 +166,10 @@ impl ConvergenceGraph {
     }
 
     /// Filter points by substrate type.
-    pub fn points_by_substrate(&self, substrate: &SubstrateType) -> Vec<(&PointId, &ConvergencePoint)> {
+    pub fn points_by_substrate(
+        &self,
+        substrate: &SubstrateType,
+    ) -> Vec<(&PointId, &ConvergencePoint)> {
         self.points
             .iter()
             .filter(|(_, p)| &p.substrate == substrate)
@@ -328,8 +331,16 @@ mod tests {
         g.add_point(a, pa);
         g.add_point(b, pb);
         g.add_point(c, pc);
-        g.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Attestation });
-        g.add_edge(TypedEdge { from: b, to: c, edge_type: EdgeType::Attestation });
+        g.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Attestation,
+        });
+        g.add_edge(TypedEdge {
+            from: b,
+            to: c,
+            edge_type: EdgeType::Attestation,
+        });
 
         let order = g.topological_order().unwrap();
         assert_eq!(order.len(), 3);
@@ -347,10 +358,21 @@ mod tests {
         let (b, pb) = make_point("b", SubstrateType::Compute);
         g.add_point(a, pa);
         g.add_point(b, pb);
-        g.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Data });
-        g.add_edge(TypedEdge { from: b, to: a, edge_type: EdgeType::Data });
+        g.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Data,
+        });
+        g.add_edge(TypedEdge {
+            from: b,
+            to: a,
+            edge_type: EdgeType::Data,
+        });
 
-        assert!(matches!(g.topological_order(), Err(GraphError::CycleDetected)));
+        assert!(matches!(
+            g.topological_order(),
+            Err(GraphError::CycleDetected)
+        ));
     }
 
     #[test]
@@ -359,7 +381,11 @@ mod tests {
         let (a, pa) = make_point("a", SubstrateType::Compute);
         let missing = PointId::compute(b"missing", &[], b"state");
         g.add_point(a, pa);
-        g.add_edge(TypedEdge { from: a, to: missing, edge_type: EdgeType::Data });
+        g.add_edge(TypedEdge {
+            from: a,
+            to: missing,
+            edge_type: EdgeType::Data,
+        });
 
         assert!(matches!(g.validate(), Err(GraphError::MissingPoint(_))));
     }
@@ -388,8 +414,16 @@ mod tests {
         g.add_point(a, pa);
         g.add_point(b, pb);
         g.add_point(c, pc);
-        g.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Data });
-        g.add_edge(TypedEdge { from: b, to: c, edge_type: EdgeType::Data });
+        g.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Data,
+        });
+        g.add_edge(TypedEdge {
+            from: b,
+            to: c,
+            edge_type: EdgeType::Data,
+        });
 
         let closure = g.forward_closure(&c);
         assert!(closure.contains(&a));
@@ -406,8 +440,16 @@ mod tests {
         g.add_point(a, pa);
         g.add_point(b, pb);
         g.add_point(c, pc);
-        g.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Data });
-        g.add_edge(TypedEdge { from: b, to: c, edge_type: EdgeType::Data });
+        g.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Data,
+        });
+        g.add_edge(TypedEdge {
+            from: b,
+            to: c,
+            edge_type: EdgeType::Data,
+        });
 
         let closure = g.reverse_closure(&a);
         assert!(closure.contains(&b));
@@ -426,10 +468,26 @@ mod tests {
         g.add_point(b, pb);
         g.add_point(c, pc);
         g.add_point(d, pd);
-        g.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Data });
-        g.add_edge(TypedEdge { from: a, to: c, edge_type: EdgeType::Data });
-        g.add_edge(TypedEdge { from: b, to: d, edge_type: EdgeType::Data });
-        g.add_edge(TypedEdge { from: c, to: d, edge_type: EdgeType::Data });
+        g.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Data,
+        });
+        g.add_edge(TypedEdge {
+            from: a,
+            to: c,
+            edge_type: EdgeType::Data,
+        });
+        g.add_edge(TypedEdge {
+            from: b,
+            to: d,
+            edge_type: EdgeType::Data,
+        });
+        g.add_edge(TypedEdge {
+            from: c,
+            to: d,
+            edge_type: EdgeType::Data,
+        });
 
         let order = g.topological_order().unwrap();
         assert_eq!(order.len(), 4);
@@ -445,7 +503,11 @@ mod tests {
         let (b, pb) = make_point("b", SubstrateType::Network);
         g.add_point(a, pa);
         g.add_point(b, pb);
-        g.add_edge(TypedEdge { from: a, to: b, edge_type: EdgeType::Control });
+        g.add_edge(TypedEdge {
+            from: a,
+            to: b,
+            edge_type: EdgeType::Control,
+        });
 
         let json = serde_json::to_string(&g).unwrap();
         let parsed: ConvergenceGraph = serde_json::from_str(&json).unwrap();

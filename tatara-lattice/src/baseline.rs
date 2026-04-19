@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::Lattice;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum Baseline {
     #[default]
@@ -84,7 +86,10 @@ mod tests {
 
     #[test]
     fn parse_aliases() {
-        assert_eq!(Baseline::parse("fedramp-moderate"), Some(Baseline::FedrampModerate));
+        assert_eq!(
+            Baseline::parse("fedramp-moderate"),
+            Some(Baseline::FedrampModerate)
+        );
         assert_eq!(Baseline::parse("CIS-L2"), Some(Baseline::CisL2));
         assert_eq!(Baseline::parse("none"), Some(Baseline::None));
         assert_eq!(Baseline::parse(""), Some(Baseline::None));

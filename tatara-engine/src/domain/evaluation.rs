@@ -1,10 +1,10 @@
 use anyhow::Result;
 use std::sync::Arc;
 
+use crate::domain::store_adapter::ClusterStoreAdapter;
 use tatara_core::domain::allocation::Allocation;
 use tatara_core::domain::job::{Constraint, Job, JobStatus, JobType, Resources};
 use tatara_core::domain::node::{Node, NodeStatus};
-use crate::domain::store_adapter::ClusterStoreAdapter;
 
 /// Scheduling strategy for task placement.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -129,8 +129,7 @@ impl Evaluator {
                     }
                 };
 
-                let task_names: Vec<String> =
-                    group.tasks.iter().map(|t| t.name.clone()).collect();
+                let task_names: Vec<String> = group.tasks.iter().map(|t| t.name.clone()).collect();
 
                 let alloc = Allocation::new(
                     job.id.clone(),
@@ -228,12 +227,18 @@ fn constraint_matches(node: &Node, constraint: &Constraint) -> bool {
     let attr_value = match constraint.attribute.as_str() {
         // Built-in attributes
         "os" | "${attr.os}" => Some(node.attributes.get("os").map(|s| s.as_str()).unwrap_or("")),
-        "arch" | "${attr.arch}" => {
-            Some(node.attributes.get("arch").map(|s| s.as_str()).unwrap_or(""))
-        }
-        "hostname" | "${attr.hostname}" => {
-            Some(node.attributes.get("hostname").map(|s| s.as_str()).unwrap_or(""))
-        }
+        "arch" | "${attr.arch}" => Some(
+            node.attributes
+                .get("arch")
+                .map(|s| s.as_str())
+                .unwrap_or(""),
+        ),
+        "hostname" | "${attr.hostname}" => Some(
+            node.attributes
+                .get("hostname")
+                .map(|s| s.as_str())
+                .unwrap_or(""),
+        ),
         // Generic attribute lookup
         attr => {
             let key = attr
@@ -252,38 +257,30 @@ fn constraint_matches(node: &Node, constraint: &Constraint) -> bool {
     match constraint.operator.as_str() {
         "=" | "==" => attr_value == constraint.value,
         "!=" => attr_value != constraint.value,
-        ">" => {
-            attr_value
-                .parse::<f64>()
-                .ok()
-                .zip(constraint.value.parse::<f64>().ok())
-                .map(|(a, b)| a > b)
-                .unwrap_or(false)
-        }
-        "<" => {
-            attr_value
-                .parse::<f64>()
-                .ok()
-                .zip(constraint.value.parse::<f64>().ok())
-                .map(|(a, b)| a < b)
-                .unwrap_or(false)
-        }
-        ">=" => {
-            attr_value
-                .parse::<f64>()
-                .ok()
-                .zip(constraint.value.parse::<f64>().ok())
-                .map(|(a, b)| a >= b)
-                .unwrap_or(false)
-        }
-        "<=" => {
-            attr_value
-                .parse::<f64>()
-                .ok()
-                .zip(constraint.value.parse::<f64>().ok())
-                .map(|(a, b)| a <= b)
-                .unwrap_or(false)
-        }
+        ">" => attr_value
+            .parse::<f64>()
+            .ok()
+            .zip(constraint.value.parse::<f64>().ok())
+            .map(|(a, b)| a > b)
+            .unwrap_or(false),
+        "<" => attr_value
+            .parse::<f64>()
+            .ok()
+            .zip(constraint.value.parse::<f64>().ok())
+            .map(|(a, b)| a < b)
+            .unwrap_or(false),
+        ">=" => attr_value
+            .parse::<f64>()
+            .ok()
+            .zip(constraint.value.parse::<f64>().ok())
+            .map(|(a, b)| a >= b)
+            .unwrap_or(false),
+        "<=" => attr_value
+            .parse::<f64>()
+            .ok()
+            .zip(constraint.value.parse::<f64>().ok())
+            .map(|(a, b)| a <= b)
+            .unwrap_or(false),
         "regexp" | "~" => regex_match(attr_value, &constraint.value),
         "set_contains" => attr_value.split(',').any(|v| v.trim() == constraint.value),
         _ => {
@@ -486,7 +483,12 @@ mod tests {
             value: "linux".to_string(),
         }];
 
-        let result = pick_node(&candidates, &required, &constraints, SchedulingStrategy::BinPack);
+        let result = pick_node(
+            &candidates,
+            &required,
+            &constraints,
+            SchedulingStrategy::BinPack,
+        );
         assert!(result.is_some());
         assert_eq!(result.unwrap().0.id, "linux-box");
     }

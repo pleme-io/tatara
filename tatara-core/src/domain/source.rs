@@ -85,24 +85,15 @@ pub struct FlakeMetadata {
 pub enum SourceError {
     /// Failed to fetch flake metadata (network, auth, invalid ref).
     #[error("metadata fetch failed for '{flake_ref}': {reason}")]
-    MetadataFetchFailed {
-        flake_ref: String,
-        reason: String,
-    },
+    MetadataFetchFailed { flake_ref: String, reason: String },
 
     /// Failed to evaluate tataraJobs from the flake.
     #[error("eval failed for '{flake_ref}': {reason}")]
-    EvalFailed {
-        flake_ref: String,
-        reason: String,
-    },
+    EvalFailed { flake_ref: String, reason: String },
 
     /// Source validation failed (missing outputs, bad structure).
     #[error("validation failed for source '{name}': {errors:?}")]
-    ValidationFailed {
-        name: String,
-        errors: Vec<String>,
-    },
+    ValidationFailed { name: String, errors: Vec<String> },
 
     /// Failed to apply a job change (create/update/delete).
     #[error("job operation failed for '{job_name}' in source '{source_name}': {reason}")]

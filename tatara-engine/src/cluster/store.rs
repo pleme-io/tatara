@@ -325,11 +325,7 @@ impl ClusterStore {
     }
 
     /// Rollback a job to a previous version.
-    pub async fn rollback_job(
-        &self,
-        job_id: &str,
-        version: u64,
-    ) -> Result<WriteResult<Job>> {
+    pub async fn rollback_job(&self, job_id: &str, version: u64) -> Result<WriteResult<Job>> {
         let resp = self
             .raft
             .write(ClusterCommand::RollbackJob {
@@ -358,10 +354,7 @@ impl ClusterStore {
 
     /// Create a release.
     pub async fn put_release(&self, release: Release) -> Result<WriteResult<Release>> {
-        let resp = self
-            .raft
-            .write(ClusterCommand::PutRelease(release))
-            .await?;
+        let resp = self.raft.write(ClusterCommand::PutRelease(release)).await?;
 
         let release = match resp {
             ClusterResponse::Release(r) => r,
@@ -389,10 +382,7 @@ impl ClusterStore {
     ) -> Result<WriteResult<Release>> {
         let resp = self
             .raft
-            .write(ClusterCommand::UpdateReleaseStatus {
-                release_id,
-                status,
-            })
+            .write(ClusterCommand::UpdateReleaseStatus { release_id, status })
             .await?;
 
         let release = match resp {
@@ -427,11 +417,7 @@ impl ClusterStore {
     }
 
     /// Set node scheduling eligibility.
-    pub async fn set_node_eligibility(
-        &self,
-        node_id: NodeId,
-        eligible: bool,
-    ) -> Result<()> {
+    pub async fn set_node_eligibility(&self, node_id: NodeId, eligible: bool) -> Result<()> {
         let resp = self
             .raft
             .write(ClusterCommand::SetNodeEligibility { node_id, eligible })
@@ -445,10 +431,7 @@ impl ClusterStore {
 
     /// Create a source.
     pub async fn put_source(&self, source: Source) -> Result<WriteResult<Source>> {
-        let resp = self
-            .raft
-            .write(ClusterCommand::PutSource(source))
-            .await?;
+        let resp = self.raft.write(ClusterCommand::PutSource(source)).await?;
 
         let source = match resp {
             ClusterResponse::Source(s) => s,
@@ -524,10 +507,7 @@ impl ClusterStore {
     /// Get the current commit index from Raft metrics.
     async fn current_commit_index(&self) -> u64 {
         let metrics = self.raft.raft.metrics().borrow().clone();
-        metrics
-            .last_applied
-            .map(|l| l.index)
-            .unwrap_or(0)
+        metrics.last_applied.map(|l| l.index).unwrap_or(0)
     }
 
     /// Wait until all nodes in the cluster have applied up to `target_index`.
@@ -574,10 +554,7 @@ impl ClusterStore {
         match replication {
             Some(ref rep) => {
                 let total = rep.len() + 1; // +1 for the leader itself
-                let leader_applied = metrics
-                    .last_applied
-                    .map(|l| l.index)
-                    .unwrap_or(0);
+                let leader_applied = metrics.last_applied.map(|l| l.index).unwrap_or(0);
 
                 let mut propagated = if leader_applied >= target_index {
                     1 // Leader has applied

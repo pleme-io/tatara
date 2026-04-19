@@ -200,8 +200,12 @@ pub struct WasiCapabilities {
     pub stderr: bool,
 }
 
-fn default_kasou_cpus() -> u32 { 2 }
-fn default_kasou_memory() -> u64 { 2048 }
+fn default_kasou_cpus() -> u32 {
+    2
+}
+fn default_kasou_memory() -> u64 {
+    2048
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Resources {

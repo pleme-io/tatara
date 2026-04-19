@@ -75,8 +75,9 @@ impl RoConfig {
 
         match discovery.discover() {
             Ok(path) => {
-                let store = ConfigStore::<Self>::load(&path, "RO_")
-                    .map_err(|e| anyhow::anyhow!("Failed to load config from {}: {}", path.display(), e))?;
+                let store = ConfigStore::<Self>::load(&path, "RO_").map_err(|e| {
+                    anyhow::anyhow!("Failed to load config from {}: {}", path.display(), e)
+                })?;
                 // Guard<Arc<T>> → clone the inner T
                 let guard = store.get();
                 Ok((**guard).clone())

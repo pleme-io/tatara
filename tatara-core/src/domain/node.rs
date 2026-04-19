@@ -52,14 +52,8 @@ impl Node {
             address: "127.0.0.1:4647".to_string(),
             status: NodeStatus::Ready,
             eligible: true,
-            total_resources: Resources {
-                cpu_mhz,
-                memory_mb,
-            },
-            available_resources: Resources {
-                cpu_mhz,
-                memory_mb,
-            },
+            total_resources: Resources { cpu_mhz, memory_mb },
+            available_resources: Resources { cpu_mhz, memory_mb },
             attributes,
             drivers: vec![DriverType::Exec],
             last_heartbeat: Utc::now(),

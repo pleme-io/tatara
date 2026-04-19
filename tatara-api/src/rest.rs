@@ -10,11 +10,6 @@ use std::time::Duration;
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
-use tatara_engine::catalog::registry::CatalogRegistry;
-use tatara_engine::client::executor::Executor;
-use tatara_engine::client::log_collector::LogCollector;
-use tatara_engine::cluster::store::ClusterStore;
-use tatara_engine::metrics::TataraMetrics;
 use tatara_core::catalog::{ServiceEntry, ServiceQuery};
 use tatara_core::cluster::types::NodeMeta;
 use tatara_core::domain::allocation::Allocation;
@@ -22,7 +17,12 @@ use tatara_core::domain::event::EventKind;
 use tatara_core::domain::job::{Job, JobSpec, JobStatus};
 use tatara_core::domain::release::{CreateReleaseRequest, Release, ReleaseStatus};
 use tatara_core::domain::source::{CreateSourceRequest, Source, SourceStatus};
+use tatara_engine::catalog::registry::CatalogRegistry;
+use tatara_engine::client::executor::Executor;
+use tatara_engine::client::log_collector::LogCollector;
+use tatara_engine::cluster::store::ClusterStore;
 use tatara_engine::drivers::LogEntry;
+use tatara_engine::metrics::TataraMetrics;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -79,18 +79,9 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/sources/{source_id}",
             get(get_source).delete(delete_source),
         )
-        .route(
-            "/api/v1/sources/{source_id}/sync",
-            post(sync_source),
-        )
-        .route(
-            "/api/v1/sources/{source_id}/suspend",
-            post(suspend_source),
-        )
-        .route(
-            "/api/v1/sources/{source_id}/resume",
-            post(resume_source),
-        )
+        .route("/api/v1/sources/{source_id}/sync", post(sync_source))
+        .route("/api/v1/sources/{source_id}/suspend", post(suspend_source))
+        .route("/api/v1/sources/{source_id}/resume", post(resume_source))
         // Catalog (consul-compatible subset)
         .route("/v1/catalog/services", get(catalog_list_services))
         .route("/v1/catalog/service/{name}", get(catalog_get_service))
@@ -109,7 +100,10 @@ pub fn router(state: AppState) -> Router {
             get(convergence_compliance),
         )
         .route("/api/v1/convergence/emissions", get(convergence_emissions))
-        .route("/api/v1/convergence/substrates", get(convergence_substrates))
+        .route(
+            "/api/v1/convergence/substrates",
+            get(convergence_substrates),
+        )
         // Metrics
         .route("/metrics", get(prometheus_metrics))
         .with_state(state)
@@ -337,10 +331,7 @@ async fn list_events(
     State(state): State<AppState>,
     params: Query<EventQuery>,
 ) -> Json<Vec<tatara_core::domain::event::Event>> {
-    let kind = params
-        .kind
-        .as_deref()
-        .and_then(EventKind::from_str_opt);
+    let kind = params.kind.as_deref().and_then(EventKind::from_str_opt);
 
     let since = params
         .since
@@ -355,10 +346,7 @@ async fn stream_events(
     State(state): State<AppState>,
     params: Query<EventStreamQuery>,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<SseEvent, Infallible>>> {
-    let kind_filter = params
-        .kind
-        .as_deref()
-        .and_then(EventKind::from_str_opt);
+    let kind_filter = params.kind.as_deref().and_then(EventKind::from_str_opt);
 
     let store = state.cluster_store.clone();
 
@@ -634,9 +622,7 @@ struct EventStreamQuery {
 
 // ── Catalog ──
 
-async fn catalog_list_services(
-    State(state): State<AppState>,
-) -> Json<Vec<String>> {
+async fn catalog_list_services(State(state): State<AppState>) -> Json<Vec<String>> {
     Json(state.catalog_registry.list_services().await)
 }
 
@@ -668,9 +654,7 @@ async fn catalog_health_service(
 
 // ── Convergence ──
 
-async fn convergence_graph(
-    State(_state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn convergence_graph(State(_state): State<AppState>) -> Json<serde_json::Value> {
     // Returns the current convergence graph across all substrates.
     // Full implementation reads from the convergence engine's SubstrateManager.
     Json(serde_json::json!({
@@ -681,9 +665,7 @@ async fn convergence_graph(
     }))
 }
 
-async fn convergence_distance(
-    State(_state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn convergence_distance(State(_state): State<AppState>) -> Json<serde_json::Value> {
     // Returns per-substrate convergence distance vector.
     Json(serde_json::json!({
         "distances": {},
@@ -693,9 +675,7 @@ async fn convergence_distance(
     }))
 }
 
-async fn convergence_rate(
-    State(_state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn convergence_rate(State(_state): State<AppState>) -> Json<serde_json::Value> {
     // Returns convergence rate per point.
     Json(serde_json::json!({
         "rates": {},
@@ -704,9 +684,7 @@ async fn convergence_rate(
     }))
 }
 
-async fn convergence_plan(
-    State(_state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn convergence_plan(State(_state): State<AppState>) -> Json<serde_json::Value> {
     // Returns the current convergence plan.
     Json(serde_json::json!({
         "execution_order": [],
@@ -740,9 +718,7 @@ async fn convergence_compliance(
     }))
 }
 
-async fn convergence_emissions(
-    State(_state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn convergence_emissions(State(_state): State<AppState>) -> Json<serde_json::Value> {
     // Returns emission schemas and recent instantiations.
     Json(serde_json::json!({
         "schemas": [],
@@ -750,9 +726,7 @@ async fn convergence_emissions(
     }))
 }
 
-async fn convergence_substrates(
-    State(_state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn convergence_substrates(State(_state): State<AppState>) -> Json<serde_json::Value> {
     // Returns per-substrate DAG status.
     Json(serde_json::json!({
         "substrates": []
@@ -765,7 +739,10 @@ async fn prometheus_metrics(
     State(state): State<AppState>,
 ) -> ([(axum::http::header::HeaderName, &'static str); 1], String) {
     (
-        [(axum::http::header::CONTENT_TYPE, "text/plain; version=0.0.4")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4",
+        )],
         state.metrics.render_prometheus(),
     )
 }

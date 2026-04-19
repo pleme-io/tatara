@@ -136,9 +136,9 @@ pub fn ready_condition_value(data: &Value) -> ReadyState {
         }
         return match c.get("status").and_then(|v| v.as_str()) {
             Some("True") => ReadyState::Ready,
-            Some("False") => ReadyState::NotReady(
-                c.get("message").and_then(|v| v.as_str()).map(String::from),
-            ),
+            Some("False") => {
+                ReadyState::NotReady(c.get("message").and_then(|v| v.as_str()).map(String::from))
+            }
             _ => ReadyState::Unknown,
         };
     }

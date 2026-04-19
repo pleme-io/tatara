@@ -16,11 +16,7 @@ impl LogCollector {
     }
 
     /// Read existing logs for an allocation's task.
-    pub async fn read_logs(
-        &self,
-        alloc_id: &str,
-        task_name: &str,
-    ) -> Result<Vec<LogEntry>> {
+    pub async fn read_logs(&self, alloc_id: &str, task_name: &str) -> Result<Vec<LogEntry>> {
         let task_dir = self.alloc_dir.join(alloc_id).join(task_name);
         let mut entries = Vec::new();
 

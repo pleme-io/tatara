@@ -109,8 +109,10 @@ async fn main() -> Result<()> {
                 let stats = reconciler
                     .reconcile_cluster(client, cluster_name, nix_attr)
                     .await?;
-                info!("reconcile complete: applied={} pruned={} errors={} duration={}ms",
-                    stats.applied, stats.pruned, stats.errors, stats.duration_ms);
+                info!(
+                    "reconcile complete: applied={} pruned={} errors={} duration={}ms",
+                    stats.applied, stats.pruned, stats.errors, stats.duration_ms
+                );
             } else {
                 loop {
                     match reconciler

@@ -49,28 +49,27 @@ pub async fn reconcile(
     info!(org = %org.spec.org, "Scanning GitHub org");
 
     // List repos in the org
-    let repos = match list_org_repos(
-        &ctx.http_client,
-        &org.spec.org,
-        ctx.github_token.as_deref(),
-    )
-    .await
-    {
-        Ok(repos) => repos,
-        Err(e) => {
-            warn!(org = %org.spec.org, error = %e, "Failed to list org repos");
-            let status = json!({
-                "status": {
-                    "lastScanned": Utc::now().to_rfc3339(),
-                    "lastError": format!("{e}"),
-                }
-            });
-            org_api
-                .patch_status(&name, &PatchParams::apply("tatara-operator"), &Patch::Merge(&status))
-                .await?;
-            return Ok(Action::requeue(Duration::from_secs(120)));
-        }
-    };
+    let repos =
+        match list_org_repos(&ctx.http_client, &org.spec.org, ctx.github_token.as_deref()).await {
+            Ok(repos) => repos,
+            Err(e) => {
+                warn!(org = %org.spec.org, error = %e, "Failed to list org repos");
+                let status = json!({
+                    "status": {
+                        "lastScanned": Utc::now().to_rfc3339(),
+                        "lastError": format!("{e}"),
+                    }
+                });
+                org_api
+                    .patch_status(
+                        &name,
+                        &PatchParams::apply("tatara-operator"),
+                        &Patch::Merge(&status),
+                    )
+                    .await?;
+                return Ok(Action::requeue(Duration::from_secs(120)));
+            }
+        };
 
     // Filter repos
     let filtered: Vec<_> = repos
@@ -138,7 +137,10 @@ pub async fn reconcile(
 
         let fs_spec = FlakeSourceSpec {
             repo: format!("github:{}/{}", org.spec.org, repo.name),
-            branch: repo.default_branch.clone().unwrap_or_else(|| org.spec.default_branch.clone()),
+            branch: repo
+                .default_branch
+                .clone()
+                .unwrap_or_else(|| org.spec.default_branch.clone()),
             poll_interval: org.spec.default_source_poll_interval.clone(),
             webhook_secret_ref: None,
             outputs,
@@ -159,7 +161,10 @@ pub async fn reconcile(
                 labels: Some(
                     [
                         ("tatara.pleme.io/flake-org".to_string(), name.clone()),
-                        ("tatara.pleme.io/managed-by".to_string(), "flake-org".to_string()),
+                        (
+                            "tatara.pleme.io/managed-by".to_string(),
+                            "flake-org".to_string(),
+                        ),
                     ]
                     .into(),
                 ),
@@ -210,7 +215,11 @@ pub async fn reconcile(
         }
     });
     org_api
-        .patch_status(&name, &PatchParams::apply("tatara-operator"), &Patch::Merge(&status))
+        .patch_status(
+            &name,
+            &PatchParams::apply("tatara-operator"),
+            &Patch::Merge(&status),
+        )
         .await?;
 
     info!(
@@ -221,7 +230,9 @@ pub async fn reconcile(
         "Org scan complete"
     );
 
-    Ok(Action::requeue(utils::parse_interval(&org.spec.poll_interval)))
+    Ok(Action::requeue(utils::parse_interval(
+        &org.spec.poll_interval,
+    )))
 }
 
 pub fn error_policy(
@@ -251,9 +262,8 @@ async fn list_org_repos(
     let mut page = 1u32;
 
     loop {
-        let url = format!(
-            "https://api.github.com/orgs/{org}/repos?per_page=100&page={page}&type=all"
-        );
+        let url =
+            format!("https://api.github.com/orgs/{org}/repos?per_page=100&page={page}&type=all");
 
         let mut req = client
             .get(&url)

@@ -36,23 +36,13 @@ pub enum UiEvent {
         subtitle: Option<String>,
     },
     /// Section divider. `⟡ <title>` with an underline of dim glyphs.
-    Section {
-        title: String,
-    },
+    Section { title: String },
     /// Tagged log line. `level` picks the sigil + color.
-    Log {
-        level: LogLevel,
-        message: String,
-    },
+    Log { level: LogLevel, message: String },
     /// Phase start — begins a timed scope. `(realize/begin …)` in the stream.
-    PhaseBegin {
-        phase: String,
-    },
+    PhaseBegin { phase: String },
     /// Phase finish. `elapsed_ms` is what we paint next to the sigil.
-    PhaseEnd {
-        phase: String,
-        elapsed_ms: u64,
-    },
+    PhaseEnd { phase: String, elapsed_ms: u64 },
     /// An artifact line — `❄ name  [blake3:xxxxxxx]  <state>`.
     Artifact {
         name: String,
@@ -68,9 +58,7 @@ pub enum UiEvent {
         failed: usize,
     },
     /// Free-form key/value table row — for `tatara cache show` and friends.
-    Row {
-        cells: Vec<Cell>,
-    },
+    Row { cells: Vec<Cell> },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,9 +160,7 @@ mod tests {
 
     #[test]
     fn short_hash_is_seven_chars() {
-        let sh = ShortHash::from_blake3_hex(
-            "cxx3i50lvlprhlqclm1mxmnp77bawjbx-fake-ignored",
-        );
+        let sh = ShortHash::from_blake3_hex("cxx3i50lvlprhlqclm1mxmnp77bawjbx-fake-ignored");
         assert_eq!(sh.0.len(), 7);
         assert_eq!(sh.to_string(), "cxx3i50");
     }
@@ -182,10 +168,7 @@ mod tests {
     #[test]
     fn artifact_state_labels() {
         assert_eq!(ArtifactState::Cached.label(), "cached");
-        assert_eq!(
-            ArtifactState::Built { elapsed_ms: 100 }.label(),
-            "built"
-        );
+        assert_eq!(ArtifactState::Built { elapsed_ms: 100 }.label(), "built");
     }
 
     #[test]

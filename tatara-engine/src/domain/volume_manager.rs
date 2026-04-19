@@ -39,7 +39,9 @@ impl VolumeManager {
                 let vol_path = self.volume_dir.join(&spec.name);
                 tokio::fs::create_dir_all(&vol_path)
                     .await
-                    .with_context(|| format!("failed to create volume dir: {}", vol_path.display()))?;
+                    .with_context(|| {
+                        format!("failed to create volume dir: {}", vol_path.display())
+                    })?;
                 info!(volume = %spec.name, path = %vol_path.display(), "created local volume");
                 vol_path
             }
@@ -57,7 +59,9 @@ impl VolumeManager {
                 anyhow::bail!(
                     "NFS mounts not yet implemented (volume '{}', server '{}', path '{}'). \
                      Use Local or HostPath volumes, or mount NFS externally and use HostPath.",
-                    spec.name, server, path
+                    spec.name,
+                    server,
+                    path
                 );
             }
         };
@@ -78,10 +82,7 @@ impl VolumeManager {
 
     /// Resolve volume claims against created volumes.
     /// Returns a map of mount_path -> host_path for the driver.
-    pub async fn resolve_mounts(
-        &self,
-        claims: &[VolumeClaim],
-    ) -> Result<HashMap<String, String>> {
+    pub async fn resolve_mounts(&self, claims: &[VolumeClaim]) -> Result<HashMap<String, String>> {
         let active = self.active.read().await;
         let mut mounts = HashMap::new();
 

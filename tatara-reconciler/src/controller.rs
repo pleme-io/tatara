@@ -52,11 +52,8 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
     if current_phase.is_alive() {
         match signals::ingest(&process, &ctx).await {
             Ok(Some(signal)) => {
-                let effect = signals::apply(
-                    current_phase,
-                    signal,
-                    process.spec.signals.sighup_strategy,
-                );
+                let effect =
+                    signals::apply(current_phase, signal, process.spec.signals.sighup_strategy);
                 info!(
                     namespace = ns,
                     name,

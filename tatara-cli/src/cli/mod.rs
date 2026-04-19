@@ -131,7 +131,6 @@ pub enum Commands {
     },
 
     // ── Backwards-compatible aliases ──
-
     /// Submit a job (alias for `job run`)
     #[command(hide = true)]
     Run {

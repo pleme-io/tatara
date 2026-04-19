@@ -55,11 +55,7 @@ impl NixpkgsMirror {
     }
 
     /// Render one package to a single tatara-lisp artifact.
-    pub fn render_one(
-        &self,
-        name: &str,
-        pkg_set_expr: Option<&str>,
-    ) -> Artifact {
+    pub fn render_one(&self, name: &str, pkg_set_expr: Option<&str>) -> Artifact {
         let path = format!("{}/{}.tl", self.out_prefix, name_to_file(name));
         let pkg_set_line = match pkg_set_expr {
             Some(expr) => format!(
@@ -81,10 +77,7 @@ fn nix_string_literal(s: &str) -> String {
     // Plain strings: "..." with embedded quotes escaped. Multi-line or
     // quote-heavy exprs get the Lisp string; that's the only quoting surface
     // tatara-lisp reader handles today.
-    format!(
-        "\"{}\"",
-        s.replace('\\', "\\\\").replace('"', "\\\"")
-    )
+    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 fn name_to_file(name: &str) -> String {

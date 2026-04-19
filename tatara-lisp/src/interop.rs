@@ -43,9 +43,6 @@ mod iac_forge_impl {
     }
 
     fn tagged(tag: &str, inner: &Sexp) -> SExpr {
-        SExpr::List(vec![
-            SExpr::Symbol(tag.to_string()),
-            inner.as_ref().into(),
-        ])
+        SExpr::List(vec![SExpr::Symbol(tag.to_string()), inner.as_ref().into()])
     }
 }

@@ -117,38 +117,22 @@ mod tests {
 
     #[test]
     fn test_verify_attestation() {
-        let att = ConvergenceAttestation::produce(
-            b"artifact",
-            Some(b"controls"),
-            b"intent",
-            0,
-            None,
-        );
+        let att =
+            ConvergenceAttestation::produce(b"artifact", Some(b"controls"), b"intent", 0, None);
         assert!(att.verify());
     }
 
     #[test]
     fn test_tampered_attestation_fails_verify() {
-        let mut att = ConvergenceAttestation::produce(
-            b"artifact",
-            Some(b"controls"),
-            b"intent",
-            0,
-            None,
-        );
+        let mut att =
+            ConvergenceAttestation::produce(b"artifact", Some(b"controls"), b"intent", 0, None);
         att.artifact_hash = "blake3:tampered".into();
         assert!(!att.verify());
     }
 
     #[test]
     fn test_generational_chain() {
-        let gen0 = ConvergenceAttestation::produce(
-            b"v1",
-            None,
-            b"intent",
-            0,
-            None,
-        );
+        let gen0 = ConvergenceAttestation::produce(b"v1", None, b"intent", 0, None);
         let gen1 = ConvergenceAttestation::produce(
             b"v2",
             None,
@@ -157,19 +141,16 @@ mod tests {
             Some(gen0.composed_root.clone()),
         );
         assert!(gen1.verify());
-        assert_eq!(gen1.previous_root.as_deref(), Some(gen0.composed_root.as_str()));
+        assert_eq!(
+            gen1.previous_root.as_deref(),
+            Some(gen0.composed_root.as_str())
+        );
         assert_ne!(gen0.composed_root, gen1.composed_root);
     }
 
     #[test]
     fn test_no_compliance() {
-        let att = ConvergenceAttestation::produce(
-            b"artifact",
-            None,
-            b"intent",
-            0,
-            None,
-        );
+        let att = ConvergenceAttestation::produce(b"artifact", None, b"intent", 0, None);
         assert!(att.control_hash.is_none());
         assert!(att.verify());
     }

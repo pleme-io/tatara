@@ -26,7 +26,8 @@ pub fn register(tools: &mut Vec<McpToolDef>) {
     });
     tools.push(McpToolDef {
         name: "convergence_plan".into(),
-        description: "Get the current convergence plan (execution order, critical path, cache hits)".into(),
+        description:
+            "Get the current convergence plan (execution order, critical path, cache hits)".into(),
         category: ToolCategory::Observe,
         input_schema: json!({ "type": "object", "properties": {} }),
     });
@@ -55,7 +56,8 @@ pub fn register(tools: &mut Vec<McpToolDef>) {
     });
     tools.push(McpToolDef {
         name: "cluster_health".into(),
-        description: "Get cluster-wide convergence health (bounded converged + asymptotic rates)".into(),
+        description: "Get cluster-wide convergence health (bounded converged + asymptotic rates)"
+            .into(),
         category: ToolCategory::Observe,
         input_schema: json!({ "type": "object", "properties": {} }),
     });

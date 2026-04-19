@@ -22,7 +22,10 @@ pub async fn run(job_id: Option<&str>, server_addr: &str) -> Result<()> {
                     "  Submitted: {}",
                     job["submitted_at"].as_str().unwrap_or("?")
                 );
-                println!("  Groups:    {}", job["groups"].as_array().map(|g| g.len()).unwrap_or(0));
+                println!(
+                    "  Groups:    {}",
+                    job["groups"].as_array().map(|g| g.len()).unwrap_or(0)
+                );
 
                 if let Some(allocs) = detail["allocations"].as_array() {
                     println!("\n  Allocations:");
@@ -56,7 +59,10 @@ pub async fn run(job_id: Option<&str>, server_addr: &str) -> Result<()> {
                 if jobs.is_empty() {
                     println!("No jobs.");
                 } else {
-                    println!("{:<20} {:<10} {:<10} {:<8}", "ID", "TYPE", "STATUS", "GROUPS");
+                    println!(
+                        "{:<20} {:<10} {:<10} {:<8}",
+                        "ID", "TYPE", "STATUS", "GROUPS"
+                    );
                     for job in &jobs {
                         println!(
                             "{:<20} {:<10} {:<10} {:<8}",

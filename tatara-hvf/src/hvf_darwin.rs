@@ -17,7 +17,8 @@
 #![cfg(all(target_arch = "aarch64", target_os = "macos"))]
 
 use applevisor::prelude::{
-    GicDisabled, MemPerms, Memory, Reg, Vcpu, VirtualMachine, VirtualMachineInstance,
+    ExitReason, GicDisabled, MemPerms, Memory, Reg, SysReg, Vcpu, VirtualMachine,
+    VirtualMachineInstance,
 };
 
 use crate::{GuestRegion, HvfError, Permissions};
@@ -142,6 +143,42 @@ impl HvfEngine {
     pub fn vcpu_run(&self, vcpu_idx: usize) -> Result<(), HvfError> {
         let vcpu = self.vcpu(vcpu_idx)?;
         vcpu.run().map_err(|e| map_error(e, HvfError::VCpuRun))
+    }
+
+    /// Read a system register (SCTLR_EL1, CPACR_EL1, SP_EL1, etc.).
+    ///
+    /// # Errors
+    /// Returns `HvfError::Register` on access failure.
+    pub fn vcpu_read_sys_reg(&self, vcpu_idx: usize, reg: SysReg) -> Result<u64, HvfError> {
+        let vcpu = self.vcpu(vcpu_idx)?;
+        vcpu.get_sys_reg(reg)
+            .map_err(|e| HvfError::Register(format!("{e:?}")))
+    }
+
+    /// Write a system register. Used to set up the vCPU's initial
+    /// architectural state (PSTATE via CPSR, SCTLR_EL1, SP_EL1, etc.)
+    /// before the first `vcpu_run`.
+    ///
+    /// # Errors
+    /// Returns `HvfError::Register` on access failure.
+    pub fn vcpu_write_sys_reg(
+        &self,
+        vcpu_idx: usize,
+        reg: SysReg,
+        value: u64,
+    ) -> Result<(), HvfError> {
+        let vcpu = self.vcpu(vcpu_idx)?;
+        vcpu.set_sys_reg(reg, value)
+            .map_err(|e| HvfError::Register(format!("{e:?}")))
+    }
+
+    /// Inspect why the vCPU last exited.
+    ///
+    /// # Errors
+    /// Returns `HvfError::Register` when the index is out of range.
+    pub fn vcpu_exit_reason(&self, vcpu_idx: usize) -> Result<ExitReason, HvfError> {
+        let vcpu = self.vcpu(vcpu_idx)?;
+        Ok(vcpu.get_exit_info().reason)
     }
 
     #[must_use]

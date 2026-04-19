@@ -21,6 +21,15 @@
 
 #![forbid(unsafe_code)]
 
+pub mod engine;
+
+#[cfg(feature = "runtime-wasmtime")]
+pub mod wasmtime_impl;
+
+pub use engine::{
+    engine_for, WasmBoot, WasmEngine, WasmEngineError, WasmHandle, WasmModuleSource,
+};
+
 use serde::{Deserialize, Serialize};
 
 /// Which WASM runtime hosts this guest.

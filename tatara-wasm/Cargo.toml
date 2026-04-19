@@ -15,7 +15,7 @@ path = "src/lib.rs"
 default = ["runtime-wasmtime"]
 
 # Runtime backends — each pluggable, each can coexist at consumer choice.
-runtime-wasmtime = []  # Bytecode Alliance, Rust-native, WASI p2.   H.3
+runtime-wasmtime = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:wat"]
 runtime-wasmedge = []  # CNCF, C++, K8s-adjacent.                   H.4
 runtime-wasmer   = []  # Rust-native, rich embedding targets.       H.4
 runtime-wasmi    = []  # Pure Rust interpreter, no-std friendly.    H.4
@@ -28,10 +28,11 @@ wasi-clocks = []  # Clocks (baseline p2 — enabled by default per runtime).
 wasi-sockets = [] # Raw socket imports.
 
 [dependencies]
-# Runtime crates live behind their feature flags — commented here until
-# H.3/H.4 turn them on.
-# wasmtime      = { version = "25", optional = true }
-# wasmtime-wasi = { version = "25", optional = true }
+wasmtime      = { version = "25", optional = true }
+wasmtime-wasi = { version = "25", optional = true }
+wat           = { version = "1", optional = true }
+
+# Commented until later phases enable them.
 # wasmedge-sdk  = { version = "0.13", optional = true }
 # wasmer        = { version = "5", optional = true }
 # wasmer-wasi   = { version = "5", optional = true }

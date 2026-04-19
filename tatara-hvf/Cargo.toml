@@ -10,14 +10,13 @@ license     .workspace = true
 name = "tatara_hvf"
 path = "src/lib.rs"
 
-[dependencies]
-# Phase H.2 additions — kept commented while this crate is a stub so
-# the workspace builds cleanly today.
-# libc            = "0.2"
-# objc2           = "0.5"
-# applevisor-sys  = "0.1"   # raw Hypervisor.framework FFI
-# virtio-bindings = "0.2"
-# vm-memory       = "0.14"
-# thiserror       = "1"
+# Binding only links on aarch64-darwin — Hypervisor.framework is
+# Apple Silicon only. Other targets compile the crate (types,
+# feature-gated structure) but stub the real FFI.
+[target.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.dependencies]
+applevisor = "1.0"
 
-serde = { version = "1", features = ["derive"] }
+[dependencies]
+serde     = { version = "1", features = ["derive"] }
+thiserror = "1"
+tracing   = "0.1"

@@ -1,51 +1,132 @@
 //! `tatara-hvf` — Apple Hypervisor.framework backend for tatara guests.
 //!
-//! This is the **bare-metal** VM engine: direct `hv_vm_*` / `hv_vcpu_*`
-//! calls against Hypervisor.framework, own virtio-blk / virtio-net /
-//! virtio-9p backends, raw vCPU loop with MMIO callbacks. Target of
-//! Phase H.2 per `docs/declarative-guests.md`.
+//! The **bare-metal** VM engine. Direct `hv_vm_*` / `hv_vcpu_*` calls
+//! via the `applevisor` safe-wrapper crate, own virtio device backends
+//! (landing H.2.2), raw vCPU loop with MMIO callbacks.
 //!
-//! # Status
+//! # Layering
 //!
-//! **Phase H.1 stub.** This crate reserves the workspace slot and
-//! documents the shape. No `hv_*` calls yet — the build-time deps
-//! (applevisor-sys / objc2 / virtio-bindings / vm-memory) are commented
-//! out in `Cargo.toml` and uncommented in H.2.
-//!
-//! # Relationship to kasou
-//!
-//! `kasou` is the Virtualization.framework (VZ) backend. It's the
-//! fallback. `tatara-hvf` is the primary — used when the operator
-//! wants full vCPU + MMIO control, pluggable virtio device backends,
-//! no extra process overhead.
-//!
-//! # The GuestEngine trait
-//!
-//! `tatara-hvf` will implement `GuestEngine` from
-//! `tatara_vm::engine`. See `docs/declarative-guests.md` §4.
-//!
-//! ```ignore
-//! impl GuestEngine for HvfEngine {
-//!     type Handle = HvfVm;
-//!     fn boot(&self, spec: &GuestSpec, artifacts: &GuestArtifacts) -> Result<HvfVm> { … }
-//!     fn shutdown(&self, h: &HvfVm, grace: Duration) -> Result<()> { … }
-//!     fn pause(&self, h: &HvfVm) -> Result<()> { … }
-//!     fn resume(&self, h: &HvfVm) -> Result<()> { … }
-//!     fn status(&self, h: &HvfVm) -> GuestStatus { … }
-//! }
+//! ```text
+//!   tatara-hvf (this crate)
+//!       │  uses
+//!       ▼
+//!   applevisor (safe wrapper — Quarkslab)
+//!       │  links
+//!       ▼
+//!   Hypervisor.framework  (aarch64-darwin only)
 //! ```
+//!
+//! # Cargo / build
+//!
+//! The `applevisor` dep is target-gated to `aarch64-darwin`. On any
+//! other target, the crate compiles but `HvfEngine::new()` returns
+//! `HvfError::UnsupportedPlatform`. This keeps `cargo check
+//! --workspace` clean on Linux CI while the real engine is only
+//! exercised on M-series Macs.
+//!
+//! # Entitlements
+//!
+//! Running any HVF binary requires the `com.apple.security.hypervisor`
+//! entitlement. For `cargo test`, either codesign the test binary
+//! with an entitlements plist or run tests as root. Currently:
+//!
+//! ```bash
+//! codesign --entitlements entitlements.plist --sign - \
+//!   target/debug/deps/tatara_hvf-*
+//! ```
+//!
+//! A follow-up CI helper crate will encapsulate this; for now the
+//! `vm_create_is_supported` test is `#[ignore]` by default so `cargo
+//! test` doesn't fail when entitlements aren't set.
 
-#![forbid(unsafe_code)] // Unsafe FFI lands in H.2 behind a narrow, audited boundary.
+#![forbid(unsafe_code)]
 
-/// Phase H.1 placeholder. Replaced in H.2.
-pub const CRATE_STATUS: &str = "phase-h1-stub";
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+pub mod hvf_darwin;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+pub use hvf_darwin::HvfEngine;
 
-    #[test]
-    fn stub_marker_present() {
-        assert_eq!(CRATE_STATUS, "phase-h1-stub");
+#[cfg(not(all(target_arch = "aarch64", target_os = "macos")))]
+pub mod stub;
+
+#[cfg(not(all(target_arch = "aarch64", target_os = "macos")))]
+pub use stub::HvfEngine;
+
+use thiserror::Error;
+
+/// Errors from the HVF backend.
+#[derive(Debug, Error)]
+pub enum HvfError {
+    #[error("HVF is only available on aarch64-darwin; this target cannot run the real backend")]
+    UnsupportedPlatform,
+
+    #[error("hv_vm_create failed: {0}")]
+    VmCreate(String),
+
+    #[error("memory map failed: {0}")]
+    MemoryMap(String),
+
+    #[error("vcpu create failed: {0}")]
+    VCpuCreate(String),
+
+    #[error("vcpu run failed: {0}")]
+    VCpuRun(String),
+
+    #[error("register access failed: {0}")]
+    Register(String),
+
+    #[error("entitlement missing — requires com.apple.security.hypervisor")]
+    MissingEntitlement,
+
+    #[error("applevisor: {0}")]
+    Applevisor(String),
+}
+
+/// A guest memory region mapped into the VM's physical address space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRegion {
+    pub guest_phys_addr: u64,
+    pub size_bytes: usize,
+    pub permissions: Permissions,
+}
+
+/// Page permissions for a mapped region.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Permissions {
+    pub read: bool,
+    pub write: bool,
+    pub execute: bool,
+}
+
+impl Permissions {
+    #[must_use]
+    pub const fn rwx() -> Self {
+        Self {
+            read: true,
+            write: true,
+            execute: true,
+        }
+    }
+
+    #[must_use]
+    pub const fn rx() -> Self {
+        Self {
+            read: true,
+            write: false,
+            execute: true,
+        }
+    }
+
+    #[must_use]
+    pub const fn rw() -> Self {
+        Self {
+            read: true,
+            write: true,
+            execute: false,
+        }
     }
 }
+
+/// Phase marker.
+pub const CRATE_STATUS: &str = "phase-h2.1";

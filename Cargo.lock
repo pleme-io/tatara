@@ -161,6 +161,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "applevisor"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "139a0fe60afd3e8c3a42fc0265caf4eb04b84a8b760623f7a6229174c18e4e36"
+dependencies = [
+ "applevisor-sys",
+]
+
+[[package]]
+name = "applevisor-sys"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14ae37676989768c5b21414857b782a5e513d93129cda34854f5f78c423a63be"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "ar_archive_writer"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5919,7 +5937,10 @@ dependencies = [
 name = "tatara-hvf"
 version = "0.2.0"
 dependencies = [
+ "applevisor",
  "serde",
+ "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]

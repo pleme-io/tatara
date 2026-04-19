@@ -126,7 +126,13 @@ pub fn engine_for(runtime: WasmRuntime) -> Result<Box<dyn WasmEngine>, WasmEngin
         #[cfg(feature = "runtime-wasmtime")]
         WasmRuntime::Wasmtime => Ok(Box::new(crate::wasmtime_impl::WasmtimeEngine::default())),
 
-        // Other runtimes land in H.4.
+        #[cfg(feature = "runtime-wasmer")]
+        WasmRuntime::Wasmer => Ok(Box::new(crate::wasmer_impl::WasmerEngine::default())),
+
+        #[cfg(feature = "runtime-wasmi")]
+        WasmRuntime::Wasmi => Ok(Box::new(crate::wasmi_impl::WasmiEngine::default())),
+
+        // WasmEdge + WAMR land in H.4 follow-up (C/C++ SDK linking).
         other => Err(WasmEngineError::RuntimeNotCompiled(other)),
     }
 }

@@ -26,6 +26,12 @@ pub mod engine;
 #[cfg(feature = "runtime-wasmtime")]
 pub mod wasmtime_impl;
 
+#[cfg(feature = "runtime-wasmer")]
+pub mod wasmer_impl;
+
+#[cfg(feature = "runtime-wasmi")]
+pub mod wasmi_impl;
+
 pub use engine::{
     engine_for, WasmBoot, WasmEngine, WasmEngineError, WasmHandle, WasmModuleSource,
 };

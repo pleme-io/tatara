@@ -16,10 +16,13 @@ default = ["runtime-wasmtime"]
 
 # Runtime backends — each pluggable, each can coexist at consumer choice.
 runtime-wasmtime = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:wat"]
-runtime-wasmedge = []  # CNCF, C++, K8s-adjacent.                   H.4
-runtime-wasmer   = []  # Rust-native, rich embedding targets.       H.4
-runtime-wasmi    = []  # Pure Rust interpreter, no-std friendly.    H.4
-runtime-wamr     = []  # WebAssembly Micro Runtime, AOT-capable.    H.4
+runtime-wasmer   = ["dep:wasmer", "dep:wat"]
+runtime-wasmi    = ["dep:wasmi", "dep:wat"]
+runtime-wamr     = []       # H.4 follow-up — needs C build harness.
+runtime-wasmedge = []       # H.4 follow-up — needs C++ SDK.
+
+# "All Rust-native" — convenient feature for the CI smoke matrix.
+all-rust-runtimes = ["runtime-wasmtime", "runtime-wasmer", "runtime-wasmi"]
 
 # Optional WASI feature gates — runtime support varies.
 wasi-nn    = []   # Neural network interface.
@@ -30,14 +33,9 @@ wasi-sockets = [] # Raw socket imports.
 [dependencies]
 wasmtime      = { version = "25", optional = true }
 wasmtime-wasi = { version = "25", optional = true }
+wasmer        = { version = "5", optional = true, default-features = false, features = ["cranelift", "sys"] }
+wasmi         = { version = "0.40", optional = true }
 wat           = { version = "1", optional = true }
-
-# Commented until later phases enable them.
-# wasmedge-sdk  = { version = "0.13", optional = true }
-# wasmer        = { version = "5", optional = true }
-# wasmer-wasi   = { version = "5", optional = true }
-# wasmi         = { version = "0.32", optional = true }
-# wamr-rust-sdk = { version = "0.5", optional = true }
 
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"

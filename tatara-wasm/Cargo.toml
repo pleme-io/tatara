@@ -1,0 +1,43 @@
+[package]
+name        = "tatara-wasm"
+description = "Multi-runtime WASI/WASM host for tatara — one crate, feature-gated runtimes (wasmtime, WasmEdge, Wasmer, wasmi, WAMR). Phase H.3 + H.4."
+version     .workspace = true
+edition     .workspace = true
+authors     .workspace = true
+license     .workspace = true
+
+[lib]
+name = "tatara_wasm"
+path = "src/lib.rs"
+
+[features]
+# Default: the reference WASI Preview 2 implementation.
+default = ["runtime-wasmtime"]
+
+# Runtime backends — each pluggable, each can coexist at consumer choice.
+runtime-wasmtime = []  # Bytecode Alliance, Rust-native, WASI p2.   H.3
+runtime-wasmedge = []  # CNCF, C++, K8s-adjacent.                   H.4
+runtime-wasmer   = []  # Rust-native, rich embedding targets.       H.4
+runtime-wasmi    = []  # Pure Rust interpreter, no-std friendly.    H.4
+runtime-wamr     = []  # WebAssembly Micro Runtime, AOT-capable.    H.4
+
+# Optional WASI feature gates — runtime support varies.
+wasi-nn    = []   # Neural network interface.
+wasi-http  = []   # HTTP imports.
+wasi-clocks = []  # Clocks (baseline p2 — enabled by default per runtime).
+wasi-sockets = [] # Raw socket imports.
+
+[dependencies]
+# Runtime crates live behind their feature flags — commented here until
+# H.3/H.4 turn them on.
+# wasmtime      = { version = "25", optional = true }
+# wasmtime-wasi = { version = "25", optional = true }
+# wasmedge-sdk  = { version = "0.13", optional = true }
+# wasmer        = { version = "5", optional = true }
+# wasmer-wasi   = { version = "5", optional = true }
+# wasmi         = { version = "0.32", optional = true }
+# wamr-rust-sdk = { version = "0.5", optional = true }
+
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror  = "1"

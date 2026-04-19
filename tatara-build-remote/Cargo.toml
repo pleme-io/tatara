@@ -1,0 +1,22 @@
+[package]
+name        = "tatara-build-remote"
+description = "Layered Nix build transport — Attic cache → ssh-ng remote → local fallback. Defaults target quero.lol. Phase H.5."
+version     .workspace = true
+edition     .workspace = true
+authors     .workspace = true
+license     .workspace = true
+
+[lib]
+name = "tatara_build_remote"
+path = "src/lib.rs"
+
+[dependencies]
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror  = "1"
+
+# Phase H.5 additions — commented until implementation lands.
+# attic-client    = { version = "0.1" }     # or vendored subset
+# ssh2            = "0.9"                    # for ssh-ng transport
+# tokio           = { version = "1", features = ["rt-multi-thread", "macros", "process"] }
+# url             = "2"

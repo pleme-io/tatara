@@ -103,8 +103,14 @@ mod tests {
 
     #[test]
     fn short_form_accepted() {
-        assert_eq!(ProcessSignal::from_str("HUP").unwrap(), ProcessSignal::Sighup);
-        assert_eq!(ProcessSignal::from_str("term").unwrap(), ProcessSignal::Sigterm);
+        assert_eq!(
+            ProcessSignal::from_str("HUP").unwrap(),
+            ProcessSignal::Sighup
+        );
+        assert_eq!(
+            ProcessSignal::from_str("term").unwrap(),
+            ProcessSignal::Sigterm
+        );
     }
 
     #[test]

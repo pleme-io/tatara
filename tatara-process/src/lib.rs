@@ -27,7 +27,9 @@ pub mod prelude {
     pub use crate::compliance::{ComplianceBinding, ComplianceSpec, VerificationPhase};
     pub use crate::crd::{Process, ProcessSpec, ProcessStatus};
     pub use crate::identity::{content_hash, derive_identity, format_process_address, Identity};
-    pub use crate::intent::{ContainerIntent, FluxIntent, Intent, LispIntent, NixIntent, WorkloadKind};
+    pub use crate::intent::{
+        ContainerIntent, FluxIntent, Intent, LispIntent, NixIntent, WorkloadKind,
+    };
     pub use crate::phase::ProcessPhase;
     pub use crate::signal::{ProcessSignal, SighupStrategy};
     pub use crate::spec::{DependsOn, IdentitySpec, MustReachPhase, SignalPolicy};
@@ -118,7 +120,10 @@ mod compile_tests {
 
         // classification (enums deserialized via symbol → string)
         assert_eq!(d.spec.classification.point_type, ConvergencePointType::Gate);
-        assert_eq!(d.spec.classification.substrate, SubstrateType::Observability);
+        assert_eq!(
+            d.spec.classification.substrate,
+            SubstrateType::Observability
+        );
 
         // intent (tagged-union with one of four options)
         let nix = d.spec.intent.nix.as_ref().expect("nix intent");
@@ -131,9 +136,15 @@ mod compile_tests {
         assert_eq!(d.spec.boundary.timeout.as_deref(), Some("15m"));
 
         // compliance (Vec<binding with enum phase>)
-        assert_eq!(d.spec.compliance.baseline.as_deref(), Some("fedramp-moderate"));
+        assert_eq!(
+            d.spec.compliance.baseline.as_deref(),
+            Some("fedramp-moderate")
+        );
         assert_eq!(d.spec.compliance.bindings.len(), 1);
-        assert_eq!(d.spec.compliance.bindings[0].phase, VerificationPhase::AtBoundary);
+        assert_eq!(
+            d.spec.compliance.bindings[0].phase,
+            VerificationPhase::AtBoundary
+        );
 
         // depends_on (Vec<struct with enum>)
         assert_eq!(d.spec.depends_on.len(), 1);

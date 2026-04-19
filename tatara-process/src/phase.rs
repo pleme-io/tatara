@@ -120,8 +120,21 @@ mod tests {
     #[test]
     fn reaped_is_sink() {
         assert!(Reaped.is_terminal());
-        for next in [Pending, Forking, Execing, Running, Attested, Reconverging, Exiting, Failed, Zombie] {
-            assert!(!Reaped.can_transition_to(next), "Reaped → {next:?} should be illegal");
+        for next in [
+            Pending,
+            Forking,
+            Execing,
+            Running,
+            Attested,
+            Reconverging,
+            Exiting,
+            Failed,
+            Zombie,
+        ] {
+            assert!(
+                !Reaped.can_transition_to(next),
+                "Reaped → {next:?} should be illegal"
+            );
         }
     }
 

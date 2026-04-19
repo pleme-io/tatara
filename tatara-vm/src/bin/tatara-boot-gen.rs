@@ -20,9 +20,7 @@ use std::time::Instant;
 use tatara_lisp::{domain::TataraDomain, read, Sexp};
 use tatara_nix::MultiSynthesizer;
 use tatara_os::SystemConfig;
-use tatara_ui::{
-    ArtifactState, EventStream, LogLevel, Renderer, ShortHash, ThemeSpec, UiEvent,
-};
+use tatara_ui::{ArtifactState, EventStream, LogLevel, Renderer, ShortHash, ThemeSpec, UiEvent};
 use tatara_vm::{boot::BootSynthesizer, VmSpec};
 
 struct Opts {
@@ -106,17 +104,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── banner ──────────────────────────────────────────────────────
     if !opts.quiet {
-        emit(&renderer, &mut stream, &mut stderr, UiEvent::Banner {
-            title: "tatara-boot-gen".into(),
-            subtitle: Some(format!("{}", opts.in_path.display())),
-        })?;
+        emit(
+            &renderer,
+            &mut stream,
+            &mut stderr,
+            UiEvent::Banner {
+                title: "tatara-boot-gen".into(),
+                subtitle: Some(format!("{}", opts.in_path.display())),
+            },
+        )?;
     }
 
     // ── parse (defsystem …) + optional (defvm …) ───────────────────
     if !opts.quiet {
-        emit(&renderer, &mut stream, &mut stderr, UiEvent::Section {
-            title: "parse".into(),
-        })?;
+        emit(
+            &renderer,
+            &mut stream,
+            &mut stderr,
+            UiEvent::Section {
+                title: "parse".into(),
+            },
+        )?;
     }
     let src = std::fs::read_to_string(&opts.in_path)?;
     let forms = read(&src)?;
@@ -133,30 +141,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let system = system.ok_or("no (defsystem …) form found in input")?;
 
     if !opts.quiet {
-        emit(&renderer, &mut stream, &mut stderr, UiEvent::Log {
-            level: LogLevel::Success,
-            message: format!(
-                "parsed {} form(s) → system:{} vm:{}",
-                forms.len(),
-                system.hostname,
-                vm.as_ref().map(|v| v.name.as_str()).unwrap_or("default"),
-            ),
-        })?;
+        emit(
+            &renderer,
+            &mut stream,
+            &mut stderr,
+            UiEvent::Log {
+                level: LogLevel::Success,
+                message: format!(
+                    "parsed {} form(s) → system:{} vm:{}",
+                    forms.len(),
+                    system.hostname,
+                    vm.as_ref().map(|v| v.name.as_str()).unwrap_or("default"),
+                ),
+            },
+        )?;
     }
 
     // ── synthesize ──────────────────────────────────────────────────
     if !opts.quiet {
-        emit(&renderer, &mut stream, &mut stderr, UiEvent::Section {
-            title: "synthesize".into(),
-        })?;
+        emit(
+            &renderer,
+            &mut stream,
+            &mut stderr,
+            UiEvent::Section {
+                title: "synthesize".into(),
+            },
+        )?;
     }
     let synth = {
         let mut s = BootSynthesizer::new()
             .with_out_prefix(".")
             .with_busybox(opts.busybox)
-            .with_init_binary_path(opts.init_path.clone().unwrap_or_else(|| {
-                "${pkgs.hello}/bin/hello".into()
-            }));
+            .with_init_binary_path(
+                opts.init_path
+                    .clone()
+                    .unwrap_or_else(|| "${pkgs.hello}/bin/hello".into()),
+            );
         if let Some(v) = vm {
             s = s.with_vm_override(v);
         }
@@ -166,17 +186,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let arts = synth.generate_all(&system);
     let synth_ms = t0.elapsed().as_millis() as u64;
     if !opts.quiet {
-        emit(&renderer, &mut stream, &mut stderr, UiEvent::Log {
-            level: LogLevel::Info,
-            message: format!("synthesized {} artifact(s)", arts.len()),
-        })?;
+        emit(
+            &renderer,
+            &mut stream,
+            &mut stderr,
+            UiEvent::Log {
+                level: LogLevel::Info,
+                message: format!("synthesized {} artifact(s)", arts.len()),
+            },
+        )?;
     }
 
     // ── write artifacts, painting a line per file with cache state ──
     if !opts.quiet {
-        emit(&renderer, &mut stream, &mut stderr, UiEvent::Section {
-            title: "emit".into(),
-        })?;
+        emit(
+            &renderer,
+            &mut stream,
+            &mut stderr,
+            UiEvent::Section {
+                title: "emit".into(),
+            },
+        )?;
     }
     std::fs::create_dir_all(&opts.out_dir)?;
     let mut built = 0usize;
@@ -192,7 +222,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let hash_full = blake3::hash(a.content.as_bytes()).to_hex();
         let short = ShortHash::from_blake3_hex(hash_full.as_str());
         let start = Instant::now();
-        let existed = dst.exists() && std::fs::read(&dst).ok().is_some_and(|b| b == a.content.as_bytes());
+        let existed = dst.exists()
+            && std::fs::read(&dst)
+                .ok()
+                .is_some_and(|b| b == a.content.as_bytes());
         let state = if existed {
             cached += 1;
             ArtifactState::Cached
@@ -216,11 +249,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         if !opts.quiet {
-            emit(&renderer, &mut stream, &mut stderr, UiEvent::Artifact {
-                name: display_name(&a.path),
-                hash: short,
-                state,
-            })?;
+            emit(
+                &renderer,
+                &mut stream,
+                &mut stderr,
+                UiEvent::Artifact {
+                    name: display_name(&a.path),
+                    hash: short,
+                    state,
+                },
+            )?;
         }
     }
 
@@ -255,12 +293,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn emit(
-    r: &Renderer,
-    s: &mut EventStream,
-    w: &mut impl Write,
-    e: UiEvent,
-) -> std::io::Result<()> {
+fn emit(r: &Renderer, s: &mut EventStream, w: &mut impl Write, e: UiEvent) -> std::io::Result<()> {
     r.render_one(&e, w)?;
     s.push(e);
     Ok(())

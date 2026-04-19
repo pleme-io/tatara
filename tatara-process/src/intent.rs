@@ -6,6 +6,11 @@
 //!   - `flux`:      pass through an existing `GitRepository`
 //!   - `lisp`:      tatara-lisp reader + macroexpander → resources
 //!   - `container`: emit Deployment/StatefulSet/etc directly (no Helm)
+//!   - `guest`:     tatara-hospedeiro supervises a Linux VM or WASM
+//!                  component. See `tatara/docs/declarative-guests.md`.
+//!                  The GuestSpec itself is type-erased here (JSON value)
+//!                  so tatara-process stays decoupled from tatara-vm;
+//!                  hospedeiro re-parses the value as GuestSpec on boot.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -23,6 +28,8 @@ pub struct Intent {
     pub lisp: Option<LispIntent>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub container: Option<ContainerIntent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guest: Option<GuestIntent>,
 }
 
 /// Enum view over the populated variant — convenience for the reconciler.
@@ -32,11 +39,12 @@ pub enum IntentVariant<'a> {
     Flux(&'a FluxIntent),
     Lisp(&'a LispIntent),
     Container(&'a ContainerIntent),
+    Guest(&'a GuestIntent),
 }
 
 #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum IntentError {
-    #[error("intent has no variant set (one of nix/flux/lisp/container required)")]
+    #[error("intent has no variant set (one of nix/flux/lisp/container/guest required)")]
     Empty,
     #[error("intent has multiple variants set; exactly one required")]
     Ambiguous,
@@ -50,6 +58,7 @@ impl Intent {
             self.flux.is_some(),
             self.lisp.is_some(),
             self.container.is_some(),
+            self.guest.is_some(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -64,6 +73,8 @@ impl Intent {
                 IntentVariant::Lisp(l)
             } else if let Some(c) = &self.container {
                 IntentVariant::Container(c)
+            } else if let Some(g) = &self.guest {
+                IntentVariant::Guest(g)
             } else {
                 unreachable!()
             }),
@@ -175,6 +186,32 @@ pub enum WorkloadKind {
     CronJob,
 }
 
+/// Guest intent — the Process is a Linux VM or WASM component supervised
+/// by `tatara-hospedeiro`. See `tatara/docs/declarative-guests.md`.
+///
+/// The actual `GuestSpec` is stored as a serde JSON value to keep
+/// `tatara-process` decoupled from `tatara-vm`. Hospedeiro re-parses
+/// the value as the concrete `tatara_vm::GuestSpec` at boot time; a
+/// round-trip test on the tatara-vm side guarantees the shape.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GuestIntent {
+    /// The (defguest …) spec as JSON. Shape matches `tatara_vm::GuestSpec`.
+    pub spec: serde_json::Value,
+
+    /// Where to write per-guest state on the host (logs, socket, PID file).
+    /// Defaults to `~/.local/state/tatara/guests/<name>/`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_dir: Option<String>,
+
+    /// Whether hospedeiro is allowed to pull guest artifacts from a remote
+    /// transport (Attic, ssh-ng) if not already present locally. The
+    /// default is taken from the GuestSpec's `buildOn` field; setting
+    /// this explicitly overrides at the intent layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_remote_build: Option<bool>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -220,6 +257,54 @@ mod tests {
                 decrypt_sops: true,
                 helm_chart: None,
                 helm_values: None,
+            }),
+            ..Intent::default()
+        };
+        assert_eq!(i.variant().unwrap_err(), IntentError::Ambiguous);
+    }
+
+    #[test]
+    fn guest_intent_selects_its_variant() {
+        let i = Intent {
+            guest: Some(GuestIntent {
+                spec: serde_json::json!({
+                    "name": "fast-fn",
+                    "kind": { "kind": "wasm", "runtime": "wasmtime",
+                              "wasiPreview": "p2",
+                              "component": { "kind": "flake",
+                                             "value": {"url":"github:x/y","attr":"wasi"} },
+                              "features": { "simd": true } },
+                    "cmdline": []
+                }),
+                state_dir: None,
+                allow_remote_build: Some(true),
+            }),
+            ..Intent::default()
+        };
+        match i.variant().unwrap() {
+            IntentVariant::Guest(g) => {
+                assert_eq!(g.spec["name"], "fast-fn");
+                assert_eq!(g.allow_remote_build, Some(true));
+            }
+            other => panic!("expected Guest, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn guest_plus_nix_is_ambiguous() {
+        let i = Intent {
+            nix: Some(NixIntent {
+                flake_ref: "github:a/b".into(),
+                attribute: "x".into(),
+                system: None,
+                attic_cache: None,
+                extra_args: vec![],
+                delegate_to_nix_build: false,
+            }),
+            guest: Some(GuestIntent {
+                spec: serde_json::json!({"name": "x"}),
+                state_dir: None,
+                allow_remote_build: None,
             }),
             ..Intent::default()
         };

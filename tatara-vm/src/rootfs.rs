@@ -207,8 +207,7 @@ impl LinuxRootfs {
                 prelude.push_str(&format!("    pkgs.{}\n", p.attr_path));
             }
             prelude.push_str("  ];\n");
-            prelude
-                .push_str("  guestClosure = pkgs.closureInfo { rootPaths = guestPackages; };\n");
+            prelude.push_str("  guestClosure = pkgs.closureInfo { rootPaths = guestPackages; };\n");
 
             let mut block = String::from(
                 "  # userspace packages: pull the full closure into root/nix/store\n\
@@ -308,10 +307,7 @@ impl LinuxRootfs {
                 _ => "".to_string(),
             };
             if !dir.is_empty() {
-                file_cmds.push_str(&format!(
-                    "  mkdir -p root{}\n",
-                    nix_path_escape(&dir)
-                ));
+                file_cmds.push_str(&format!("  mkdir -p root{}\n", nix_path_escape(&dir)));
             }
             match &f.content {
                 InitrdContent::Inline(body) => {
@@ -328,10 +324,7 @@ impl LinuxRootfs {
                     ));
                 }
                 InitrdContent::StorePath(sp) => {
-                    file_cmds.push_str(&format!(
-                        "  cp {sp} root{}\n",
-                        nix_path_escape(&f.path)
-                    ));
+                    file_cmds.push_str(&format!("  cp {sp} root{}\n", nix_path_escape(&f.path)));
                 }
             }
             let mode = f.mode;
@@ -455,8 +448,10 @@ mod tests {
 
     #[test]
     fn store_path_files_get_cp_commands() {
-        let r = LinuxRootfs::new("/nix/store/x/bin/tatara-init", "")
-            .with_file_from_store("/etc/ssl/certs/ca-cert.pem", "/nix/store/y-ca-bundle/cert.pem");
+        let r = LinuxRootfs::new("/nix/store/x/bin/tatara-init", "").with_file_from_store(
+            "/etc/ssl/certs/ca-cert.pem",
+            "/nix/store/y-ca-bundle/cert.pem",
+        );
         let expr = r.derivation().nix_expr.unwrap();
         assert!(expr.contains("cp /nix/store/y-ca-bundle/cert.pem root/etc/ssl/certs/ca-cert.pem"));
     }
@@ -475,8 +470,7 @@ mod tests {
 
     #[test]
     fn custom_name_propagates_to_derivation() {
-        let r = LinuxRootfs::new("/nix/store/x/bin/tatara-init", "")
-            .with_name("plex-guest-initrd");
+        let r = LinuxRootfs::new("/nix/store/x/bin/tatara-init", "").with_name("plex-guest-initrd");
         let d = r.derivation();
         assert_eq!(d.name, "plex-guest-initrd");
         let expr = d.nix_expr.unwrap();

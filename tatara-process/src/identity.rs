@@ -111,7 +111,10 @@ mod tests {
     #[test]
     fn alphabet_excludes_ambiguous() {
         // Crockford base32 excludes i/l/o/u to eliminate visual collisions.
-        let h = content_hash(&Dummy { a: u32::MAX, b: "qwertyuiopasdfghjklzxcvbnm" });
+        let h = content_hash(&Dummy {
+            a: u32::MAX,
+            b: "qwertyuiopasdfghjklzxcvbnm",
+        });
         for c in h.chars() {
             assert!(!matches!(c, 'i' | 'l' | 'o' | 'u'), "saw {c}");
         }

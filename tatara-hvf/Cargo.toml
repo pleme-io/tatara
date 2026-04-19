@@ -1,0 +1,23 @@
+[package]
+name        = "tatara-hvf"
+description = "Apple Hypervisor.framework backend for tatara — bare-metal VM engine with own virtio device models. Phase H.2."
+version     .workspace = true
+edition     .workspace = true
+authors     .workspace = true
+license     .workspace = true
+
+[lib]
+name = "tatara_hvf"
+path = "src/lib.rs"
+
+[dependencies]
+# Phase H.2 additions — kept commented while this crate is a stub so
+# the workspace builds cleanly today.
+# libc            = "0.2"
+# objc2           = "0.5"
+# applevisor-sys  = "0.1"   # raw Hypervisor.framework FFI
+# virtio-bindings = "0.2"
+# vm-memory       = "0.14"
+# thiserror       = "1"
+
+serde = { version = "1", features = ["derive"] }

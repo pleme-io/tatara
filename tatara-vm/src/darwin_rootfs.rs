@@ -172,8 +172,8 @@ mod tests {
 
     #[test]
     fn pinned_machine_identifier_is_written_literally() {
-        let r = DarwinRootfs::new("/x.ipsw")
-            .with_machine_identifier_b64("YWJjMTIzNDU2Nzg5MGFiYw==");
+        let r =
+            DarwinRootfs::new("/x.ipsw").with_machine_identifier_b64("YWJjMTIzNDU2Nzg5MGFiYw==");
         let expr = r.derivation().nix_expr.unwrap();
         assert!(expr.contains("printf %s 'YWJjMTIzNDU2Nzg5MGFiYw=='"));
         assert!(!expr.contains("/dev/urandom"));
@@ -184,6 +184,9 @@ mod tests {
         let r = DarwinRootfs::new("/x.ipsw").with_name("plex-darwin-guest");
         let d = r.derivation();
         assert_eq!(d.name, "plex-darwin-guest");
-        assert!(d.nix_expr.unwrap().contains(r#"runCommand "plex-darwin-guest""#));
+        assert!(d
+            .nix_expr
+            .unwrap()
+            .contains(r#"runCommand "plex-darwin-guest""#));
     }
 }

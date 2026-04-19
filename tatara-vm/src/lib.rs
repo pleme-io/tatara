@@ -32,13 +32,15 @@
 pub mod boot;
 pub mod config;
 pub mod darwin_rootfs;
+pub mod guest;
 pub mod rootfs;
 pub mod vfkit;
 
 pub use boot::{compose, BootManifest};
 pub use config::{
-    GuestKernel, GuestRootfs, Hypervisor, NetworkSpec, NetworkKind, ShareSpec, VmSpec,
+    GuestKernel, GuestRootfs, Hypervisor, NetworkKind, NetworkSpec, ShareSpec, VmSpec,
 };
 pub use darwin_rootfs::DarwinRootfs;
+pub use guest::{GuestKind, GuestSpec, ResourceLimits, WasmSpec};
 pub use rootfs::{GuestPackage, InitrdContent, InitrdFile, LinuxRootfs};
 pub use vfkit::{VfkitEmitter, VfkitJson};

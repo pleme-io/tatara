@@ -36,7 +36,9 @@ pub enum ConvergencePointType {
 }
 
 /// Operational substrate.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
 #[serde(rename_all = "PascalCase")]
 pub enum SubstrateType {
     Financial,
@@ -82,7 +84,11 @@ impl Horizon {
         Self::default()
     }
 
-    pub fn asymptotic(metric: impl Into<String>, direction: OptimizationDirection, threshold: f64) -> Self {
+    pub fn asymptotic(
+        metric: impl Into<String>,
+        direction: OptimizationDirection,
+        threshold: f64,
+    ) -> Self {
         Self {
             kind: HorizonKind::Asymptotic,
             metric: Some(metric.into()),
@@ -109,7 +115,20 @@ pub enum CalmClassification {
 }
 
 /// Data sensitivity, drives compliance baseline selection.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    Default,
+)]
 #[serde(rename_all = "PascalCase")]
 pub enum DataClassification {
     Public,
@@ -202,7 +221,10 @@ impl From<Horizon> for core::ConvergenceHorizon {
             HorizonKind::Bounded => Self::Bounded,
             HorizonKind::Asymptotic => Self::Asymptotic {
                 metric: v.metric.unwrap_or_default(),
-                direction: v.direction.unwrap_or(OptimizationDirection::Minimize).into(),
+                direction: v
+                    .direction
+                    .unwrap_or(OptimizationDirection::Minimize)
+                    .into(),
                 healthy_rate_threshold: v.healthy_rate_threshold.unwrap_or_default(),
             },
         }

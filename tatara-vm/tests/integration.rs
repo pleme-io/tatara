@@ -16,10 +16,7 @@ fn sample_init_config() -> &'static str {
 fn rootfs_derivation_embeds_init_config() {
     // `hello` stands in for tatara-init in this hermetic test — we only
     // assert the emitted expression shape, not that it builds.
-    let r = LinuxRootfs::new(
-        "${pkgs.hello}/bin/hello",
-        sample_init_config(),
-    );
+    let r = LinuxRootfs::new("${pkgs.hello}/bin/hello", sample_init_config());
     let d = r.derivation();
     let expr = d.nix_expr.unwrap();
     assert!(expr.contains(":name \"plex-boot\""));
@@ -53,16 +50,15 @@ fn rootfs_realizes_through_live_nix_store() {
     // an initrd.cpio.gz + rootfs/ tree. Skips busybox so this runs on a
     // Darwin host (busybox is Linux-only; real guest builds target
     // aarch64-linux through linux-builder or on a Linux host).
-    let r = LinuxRootfs::new(
-        "${pkgs.hello}/bin/hello",
-        sample_init_config(),
-    )
-    .without_busybox()
-    .with_name("tatara-rootfs-test");
+    let r = LinuxRootfs::new("${pkgs.hello}/bin/hello", sample_init_config())
+        .without_busybox()
+        .with_name("tatara-rootfs-test");
     let d = r.derivation();
 
     let realizer = NixStoreRealizer::new();
-    let art = realizer.realize(&d).expect("nix build of initrd should succeed");
+    let art = realizer
+        .realize(&d)
+        .expect("nix build of initrd should succeed");
     assert!(art.path.starts_with("/nix/store"));
     assert!(
         art.path.join("initrd.cpio.gz").exists(),

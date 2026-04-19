@@ -49,8 +49,12 @@ impl ProcessAttestation {
         previous_root: Option<String>,
         generation: u64,
     ) -> Self {
-        let composed_root =
-            Self::composed_hex(&artifact_hash, control_hash.as_deref(), &intent_hash, previous_root.as_deref());
+        let composed_root = Self::composed_hex(
+            &artifact_hash,
+            control_hash.as_deref(),
+            &intent_hash,
+            previous_root.as_deref(),
+        );
         Self {
             artifact_hash,
             control_hash,
@@ -63,7 +67,11 @@ impl ProcessAttestation {
     }
 
     /// Convenience for the initial attestation (generation 0, no previous root).
-    pub fn initial(artifact_hash: String, control_hash: Option<String>, intent_hash: String) -> Self {
+    pub fn initial(
+        artifact_hash: String,
+        control_hash: Option<String>,
+        intent_hash: String,
+    ) -> Self {
         Self::compose(artifact_hash, control_hash, intent_hash, None, 0)
     }
 

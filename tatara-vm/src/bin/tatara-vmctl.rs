@@ -103,7 +103,10 @@ fn discover_vms() -> Vec<(String, PathBuf)> {
 fn vm_dir(name: &str) -> Result<PathBuf, String> {
     let d = tatara_os_root().join(name);
     if !d.join("system.json").exists() {
-        return Err(format!("no such VM: {name} (expected {}/system.json)", d.display()));
+        return Err(format!(
+            "no such VM: {name} (expected {}/system.json)",
+            d.display()
+        ));
     }
     Ok(d)
 }
@@ -224,7 +227,9 @@ impl Ctx {
         self.stream.push(e);
     }
     fn section(&mut self, title: &str) {
-        let e = UiEvent::Section { title: title.into() };
+        let e = UiEvent::Section {
+            title: title.into(),
+        };
         let _ = self.renderer.render_one(&e, &mut std::io::stderr());
         self.stream.push(e);
     }
@@ -311,13 +316,17 @@ fn cmd_status(ctx: &mut Ctx, name: &str) -> ExitCode {
     ctx.info(format!(
         "state: {}  pid: {}  started: {}",
         if alive { "running" } else { "stopped" },
-        st.pid
-            .map(|p| p.to_string())
-            .unwrap_or_else(|| "-".into()),
+        st.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into()),
         st.started_at.clone().unwrap_or_else(|| "-".into()),
     ));
     // Artifact presence.
-    for f in ["system.json", "vm.json", "initrd.nix", "kernel.nix", "launch.sh"] {
+    for f in [
+        "system.json",
+        "vm.json",
+        "initrd.nix",
+        "kernel.nix",
+        "launch.sh",
+    ] {
         let present = dir.join(f).exists();
         let sigil = if present { "✓" } else { "✗" };
         let role = if present { Role::Success } else { Role::Warn };
@@ -378,7 +387,10 @@ fn cmd_build(ctx: &mut Ctx, name: &str) -> ExitCode {
             Ok(o) => {
                 ctx.error(format!(
                     "nix build failed for {f}: {}",
-                    String::from_utf8_lossy(&o.stderr).lines().next().unwrap_or("")
+                    String::from_utf8_lossy(&o.stderr)
+                        .lines()
+                        .next()
+                        .unwrap_or("")
                 ));
                 return ExitCode::FAILURE;
             }
@@ -426,10 +438,14 @@ fn cmd_up(ctx: &mut Ctx, name: &str) -> ExitCode {
     #[cfg(unix)]
     use std::os::unix::process::CommandExt;
     let mut cmd = Command::new(&launcher);
-    cmd.stdout(Stdio::from(log_file.try_clone().unwrap_or_else(|_| log_file.try_clone().unwrap())))
-        .stderr(Stdio::from(log_file))
-        .stdin(Stdio::null())
-        .current_dir(&dir);
+    cmd.stdout(Stdio::from(
+        log_file
+            .try_clone()
+            .unwrap_or_else(|_| log_file.try_clone().unwrap()),
+    ))
+    .stderr(Stdio::from(log_file))
+    .stdin(Stdio::null())
+    .current_dir(&dir);
     #[cfg(unix)]
     unsafe {
         cmd.pre_exec(|| {
@@ -449,7 +465,10 @@ fn cmd_up(ctx: &mut Ctx, name: &str) -> ExitCode {
     st.pid = Some(pid);
     st.started_at = Some(iso_now());
     let _ = st.save(&dir);
-    ctx.success(format!("launched vfkit pid {pid}; console → {}", log.display()));
+    ctx.success(format!(
+        "launched vfkit pid {pid}; console → {}",
+        log.display()
+    ));
     // Don't wait on child — we want it backgrounded.
     std::mem::forget(child);
     ExitCode::SUCCESS
@@ -563,8 +582,10 @@ fn cmd_ssh(ctx: &mut Ctx, name: &str, user: &str, extra: &[String]) -> ExitCode 
     };
     let target = format!("{user}@{ip}");
     let mut cmd = Command::new("ssh");
-    cmd.arg("-o").arg("StrictHostKeyChecking=no")
-        .arg("-o").arg("UserKnownHostsFile=/dev/null")
+    cmd.arg("-o")
+        .arg("StrictHostKeyChecking=no")
+        .arg("-o")
+        .arg("UserKnownHostsFile=/dev/null")
         .arg(target);
     for e in extra {
         cmd.arg(e);

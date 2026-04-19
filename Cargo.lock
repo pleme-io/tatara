@@ -4921,6 +4921,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tatara-build-remote"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "tatara-cli"
 version = "0.2.0"
 dependencies = [
@@ -5036,6 +5045,25 @@ dependencies = [
  "tatara-nix",
  "tempfile",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "tatara-hospedeiro"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tatara-build-remote",
+ "tatara-hvf",
+ "tatara-wasm",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "tatara-hvf"
+version = "0.2.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -5316,12 +5344,23 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "tatara-build-remote",
  "tatara-lisp",
  "tatara-lisp-derive",
  "tatara-nix",
  "tatara-os",
  "tatara-ui",
+ "tatara-wasm",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "tatara-wasm"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

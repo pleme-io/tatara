@@ -32,9 +32,7 @@ pub enum GuestKernel {
     /// Pull the kernel derivation from nixpkgs (or another pkg-set).
     Bridge { attr_path: String },
     /// Raw tatara Derivation for a fully-custom kernel build.
-    Custom {
-        derivation: tatara_nix::Derivation,
-    },
+    Custom { derivation: tatara_nix::Derivation },
     /// Darwin guest boot assets (IPSW + RestoreImage). Only meaningful with
     /// `Hypervisor::VfkitDarwin` / `Hypervisor::Kasou` on an Apple-Silicon
     /// host. The IPSW path is passed through to Virtualization.framework's
@@ -57,9 +55,7 @@ pub enum GuestRootfs {
     /// emit time against a provided SystemConfig registry).
     System { name: String },
     /// Pre-built rootfs image as a tatara Derivation (ext4 image in $out/rootfs.img).
-    Image {
-        derivation: tatara_nix::Derivation,
-    },
+    Image { derivation: tatara_nix::Derivation },
     /// Bridge to a nixpkgs attribute producing a disk image (e.g., `nixos-generators.qcow`).
     Bridge { attr_path: String },
 }

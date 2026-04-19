@@ -18,10 +18,11 @@
 //!
 //! # Status
 //!
-//! **Phase H.1 stub.** The `BuildTransport` trait + `BuildRef` enum
-//! live here now so `tatara-vm::GuestSpec` can reference them. Real
-//! `AtticTransport`, `SshRemoteTransport`, and `LocalTransport` impls
-//! land in H.5.
+//! **Phase H.5 landed.** `AtticTransport`, `SshRemoteTransport`, and
+//! `LocalTransport` all ship in `transports.rs`.
+//! `BuildTransportChain::to_layered()` composes them into a priority-
+//! ordered `LayeredTransport` driven by `(defguest …)`'s `:build-on`
+//! keyword.
 //!
 //! # Why layered, not single-target
 //!
@@ -32,6 +33,10 @@
 //! the cid node's `pangea-builder.nix` — no new auth plumbing.
 
 #![forbid(unsafe_code)]
+
+pub mod transports;
+
+pub use transports::{AtticTransport, LocalTransport, SshRemoteTransport};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -76,6 +81,24 @@ impl BuildTransportChain {
             remote: Some("ssh://builder.quero.lol".into()),
             local: true,
         }
+    }
+
+    /// Resolve this declarative chain into a concrete `LayeredTransport`
+    /// that can actually `fetch()` a `BuildRef`. The order is always
+    /// Attic → ssh-ng → local; missing transports are skipped.
+    #[must_use]
+    pub fn to_layered(&self) -> LayeredTransport {
+        let mut transports: Vec<Box<dyn BuildTransport + Send + Sync>> = Vec::new();
+        if let Some(cache) = &self.attic {
+            transports.push(Box::new(AtticTransport::new(cache.clone())));
+        }
+        if let Some(ssh) = &self.remote {
+            transports.push(Box::new(SshRemoteTransport::new(ssh.clone())));
+        }
+        if self.local {
+            transports.push(Box::new(LocalTransport::default()));
+        }
+        LayeredTransport { transports }
     }
 
     /// Local only — no remote anything.
@@ -146,8 +169,8 @@ pub enum BuildError {
     NotConfigured(String),
 }
 
-/// Phase H.1 placeholder.
-pub const CRATE_STATUS: &str = "phase-h1-stub";
+/// Phase marker. Bumped by each phase that lands a change.
+pub const CRATE_STATUS: &str = "phase-h5";
 
 #[cfg(test)]
 mod tests {
@@ -185,5 +208,37 @@ mod tests {
         assert!(c.attic.is_none());
         assert!(c.remote.is_none());
         assert!(c.local);
+    }
+
+    #[test]
+    fn quero_lol_to_layered_builds_three_transports() {
+        let chain = BuildTransportChain::quero_lol();
+        let layered = chain.to_layered();
+        assert_eq!(layered.transports.len(), 3);
+    }
+
+    #[test]
+    fn remote_only_to_layered_has_one_transport() {
+        let chain = BuildTransportChain::remote_only("ssh://foo.example");
+        let layered = chain.to_layered();
+        assert_eq!(layered.transports.len(), 1);
+    }
+
+    #[test]
+    fn local_only_to_layered_has_one_transport() {
+        let chain = BuildTransportChain::local_only();
+        let layered = chain.to_layered();
+        assert_eq!(layered.transports.len(), 1);
+    }
+
+    #[test]
+    fn empty_chain_to_layered_has_no_transports() {
+        let chain = BuildTransportChain {
+            attic: None,
+            remote: None,
+            local: false,
+        };
+        let layered = chain.to_layered();
+        assert!(layered.transports.is_empty());
     }
 }

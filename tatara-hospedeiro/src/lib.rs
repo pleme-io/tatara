@@ -16,11 +16,15 @@
 //!
 //! # Status
 //!
-//! **Phase H.1 stub.** The orchestrator trait + GuestStatus enum live
-//! here; real supervisor + MCP wiring lands in H.6 after HVF (H.2),
-//! wasmtime (H.3), multi-runtime (H.4), and remote build (H.5) ship.
+//! **Phase H.6 landed.** `GuestSupervisor` runs WASM guests end-to-end
+//! through `BuildTransportChain` → `WasmEngine` dispatch. VM dispatch
+//! stub pending H.2 (HVF). MCP wiring is a cheap follow-on.
 
 #![forbid(unsafe_code)]
+
+pub mod supervisor;
+
+pub use supervisor::{GuestRecord, GuestSupervisor, SupervisorError};
 
 use serde::{Deserialize, Serialize};
 

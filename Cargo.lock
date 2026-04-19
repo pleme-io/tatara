@@ -5907,8 +5907,12 @@ dependencies = [
  "serde_json",
  "tatara-build-remote",
  "tatara-hvf",
+ "tatara-vm",
  "tatara-wasm",
+ "tempfile",
  "thiserror 1.0.69",
+ "tracing",
+ "wat",
 ]
 
 [[package]]

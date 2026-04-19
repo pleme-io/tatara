@@ -34,6 +34,9 @@ serde_yaml = "0.9"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 
+# Drain coordinator (shared SIGTERM/SIGINT handler across pleme-io daemons)
+tsunagu = { git = "https://github.com/pleme-io/tsunagu" }
+
 # HTTP server (for server.rs composition root)
 axum = { version = "0.8", features = ["json"] }
 async-stream = "0.3"

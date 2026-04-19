@@ -5832,6 +5832,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "tsunagu",
  "uuid",
 ]
 
@@ -6768,6 +6769,19 @@ checksum = "9fe58ebd5edd976e0fe0f8a14d2a04b7c81ef153ea9a54eebc42e67c2c23b4e5"
 dependencies = [
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tsunagu"
+version = "0.1.0"
+source = "git+https://github.com/pleme-io/tsunagu#abc9944a8b0fc46db7d0f50e0fde9a4aeed8afb5"
+dependencies = [
+ "dirs 6.0.0",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

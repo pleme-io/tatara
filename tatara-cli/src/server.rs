@@ -529,27 +529,10 @@ async fn p2p_serve_manifest(
 // ── Utilities ──
 
 async fn shutdown_signal() {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("Failed to install SIGTERM handler")
-            .recv()
-            .await;
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => info!("Received Ctrl+C"),
-        _ = terminate => info!("Received SIGTERM"),
-    }
+    // Drain coordinator via tsunagu — shared SIGTERM/SIGINT handler across
+    // the pleme-io daemon fleet.
+    tsunagu::ShutdownController::install().token().wait().await;
+    info!("drain signal received");
 }
 
 /// Best-effort detection of a non-loopback local IP address.

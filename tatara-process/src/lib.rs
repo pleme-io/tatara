@@ -28,7 +28,8 @@ pub mod prelude {
     pub use crate::crd::{Process, ProcessSpec, ProcessStatus};
     pub use crate::identity::{content_hash, derive_identity, format_process_address, Identity};
     pub use crate::intent::{
-        ContainerIntent, FluxIntent, Intent, LispIntent, NixIntent, WorkloadKind,
+        ContainerIntent, FluxIntent, GuestIntent, Intent, IntentVariant, LispIntent, NixIntent,
+        WorkloadKind,
     };
     pub use crate::phase::ProcessPhase;
     pub use crate::signal::{ProcessSignal, SighupStrategy};

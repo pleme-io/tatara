@@ -22,8 +22,10 @@
 
 #![forbid(unsafe_code)]
 
+pub mod reconcile;
 pub mod supervisor;
 
+pub use reconcile::{guest_status_to_process_phase, reconcile_intent, ReconcileError};
 pub use supervisor::{GuestRecord, GuestSupervisor, SupervisorError};
 
 use serde::{Deserialize, Serialize};

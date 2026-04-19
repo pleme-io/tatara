@@ -15,6 +15,7 @@ tatara-build-remote = { path = "../tatara-build-remote" }
 tatara-wasm         = { path = "../tatara-wasm" }
 tatara-hvf          = { path = "../tatara-hvf" }
 tatara-vm           = { path = "../tatara-vm" }
+tatara-process      = { path = "../tatara-process" }
 
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"

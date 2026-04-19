@@ -5925,6 +5925,7 @@ dependencies = [
  "serde_json",
  "tatara-build-remote",
  "tatara-hvf",
+ "tatara-process",
  "tatara-vm",
  "tatara-wasm",
  "tempfile",

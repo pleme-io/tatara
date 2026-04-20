@@ -273,4 +273,185 @@ mod tests {
         // Meet of distinct substrates climbs to top (Regulatory).
         assert_eq!(s.meet(&t), SubstrateType::Regulatory);
     }
+
+    // ── satisfies() ────────────────────────────────────────────────────
+
+    fn bounded_classification(data: DataClassification) -> Classification {
+        Classification {
+            point_type: ConvergencePointType::Gate,
+            substrate: SubstrateType::Observability,
+            horizon: Horizon::bounded(),
+            calm: CalmClassification::Monotone,
+            data_classification: data,
+        }
+    }
+
+    #[test]
+    fn satisfies_is_true_when_cluster_is_as_refined_as_requirement() {
+        // cluster.leq(requirement) ⇔ cluster is at least as refined.
+        // Public (bottom) cluster satisfies Public-or-higher requirements.
+        let cluster = bounded_classification(DataClassification::Public);
+        let requirement_public = bounded_classification(DataClassification::Public);
+        let requirement_internal = bounded_classification(DataClassification::Internal);
+        assert!(satisfies(&cluster, &requirement_public));
+        assert!(satisfies(&cluster, &requirement_internal));
+    }
+
+    #[test]
+    fn satisfies_is_false_when_cluster_is_less_refined_than_requirement() {
+        // A Confidential cluster does NOT satisfy a Public requirement —
+        // relaxing a class is a lattice "up" move, not "down".
+        // (The naming is counter-intuitive; the inequality direction is
+        // what the code actually enforces.)
+        let cluster = bounded_classification(DataClassification::Confidential);
+        let requirement = bounded_classification(DataClassification::Public);
+        assert!(!satisfies(&cluster, &requirement));
+    }
+
+    #[test]
+    fn satisfies_equal_always_true() {
+        // x.leq(x) is reflexive — a cluster always satisfies its own
+        // classification requirements.
+        let c = bounded_classification(DataClassification::Pii);
+        assert!(satisfies(&c, &c));
+    }
+
+    // ── DataClassification — total-order lattice laws ──────────────────
+
+    use proptest::prelude::*;
+
+    fn any_data_class() -> impl Strategy<Value = DataClassification> {
+        prop_oneof![
+            Just(DataClassification::Public),
+            Just(DataClassification::Internal),
+            Just(DataClassification::Confidential),
+            Just(DataClassification::Pii),
+            Just(DataClassification::Phi),
+            Just(DataClassification::Pci),
+        ]
+    }
+
+    fn any_calm() -> impl Strategy<Value = CalmClassification> {
+        prop_oneof![
+            Just(CalmClassification::Monotone),
+            Just(CalmClassification::NonMonotone),
+        ]
+    }
+
+    proptest! {
+        // Docstring at the top of this module claims "Laws (proven by
+        // proptest in tests)" — up to now that was aspirational. These
+        // property tests make the claim real for the two axes whose
+        // lattice laws are well-founded (total order + 2-element).
+        //
+        // Deliberately excludes SubstrateType and the Horizon
+        // Asymptotic-Asymptotic case, whose `meet` / `leq` semantics
+        // are intentionally not lattice-law-abiding (see inline doc
+        // comments on those impls — they encode domain-specific
+        // "antichain with distinguished top" semantics, not a pure
+        // lattice).
+
+        #[test]
+        fn data_class_idempotent(a in any_data_class()) {
+            prop_assert_eq!(a.meet(&a), a);
+            prop_assert_eq!(a.join(&a), a);
+        }
+
+        #[test]
+        fn data_class_commutative(a in any_data_class(), b in any_data_class()) {
+            prop_assert_eq!(a.meet(&b), b.meet(&a));
+            prop_assert_eq!(a.join(&b), b.join(&a));
+        }
+
+        #[test]
+        fn data_class_associative(
+            a in any_data_class(),
+            b in any_data_class(),
+            c in any_data_class(),
+        ) {
+            prop_assert_eq!(a.meet(&b).meet(&c), a.meet(&b.meet(&c)));
+            prop_assert_eq!(a.join(&b).join(&c), a.join(&b.join(&c)));
+        }
+
+        #[test]
+        fn data_class_absorption(a in any_data_class(), b in any_data_class()) {
+            // a ⊓ (a ⊔ b) = a
+            prop_assert_eq!(a.meet(&a.join(&b)), a);
+            // a ⊔ (a ⊓ b) = a
+            prop_assert_eq!(a.join(&a.meet(&b)), a);
+        }
+
+        #[test]
+        fn data_class_leq_agrees_with_meet(a in any_data_class(), b in any_data_class()) {
+            // a ≤ b ⇔ a ⊓ b = a. The backbone lattice identity that
+            // the top-of-file docstring promises.
+            prop_assert_eq!(a.leq(&b), a.meet(&b) == a);
+        }
+
+        #[test]
+        fn data_class_leq_agrees_with_join(a in any_data_class(), b in any_data_class()) {
+            // a ≤ b ⇔ a ⊔ b = b (dual form).
+            prop_assert_eq!(a.leq(&b), a.join(&b) == b);
+        }
+
+        #[test]
+        fn data_class_bottom_is_universal_min(a in any_data_class()) {
+            // ⊥ ≤ x for every x. Public is bottom.
+            prop_assert!(DataClassification::bottom().leq(&a));
+        }
+
+        #[test]
+        fn data_class_top_is_universal_max(a in any_data_class()) {
+            // x ≤ ⊤ for every x. Pci is top.
+            prop_assert!(a.leq(&DataClassification::top()));
+        }
+
+        // ── CalmClassification — 2-element boolean lattice ─────────
+
+        #[test]
+        fn calm_idempotent(a in any_calm()) {
+            prop_assert_eq!(a.meet(&a), a);
+            prop_assert_eq!(a.join(&a), a);
+        }
+
+        #[test]
+        fn calm_commutative(a in any_calm(), b in any_calm()) {
+            prop_assert_eq!(a.meet(&b), b.meet(&a));
+            prop_assert_eq!(a.join(&b), b.join(&a));
+        }
+
+        #[test]
+        fn calm_associative(a in any_calm(), b in any_calm(), c in any_calm()) {
+            prop_assert_eq!(a.meet(&b).meet(&c), a.meet(&b.meet(&c)));
+            prop_assert_eq!(a.join(&b).join(&c), a.join(&b.join(&c)));
+        }
+
+        #[test]
+        fn calm_absorption(a in any_calm(), b in any_calm()) {
+            prop_assert_eq!(a.meet(&a.join(&b)), a);
+            prop_assert_eq!(a.join(&a.meet(&b)), a);
+        }
+
+        #[test]
+        fn calm_leq_agrees_with_meet(a in any_calm(), b in any_calm()) {
+            prop_assert_eq!(a.leq(&b), a.meet(&b) == a);
+        }
+
+        #[test]
+        fn calm_leq_agrees_with_join(a in any_calm(), b in any_calm()) {
+            prop_assert_eq!(a.leq(&b), a.join(&b) == b);
+        }
+
+        #[test]
+        fn calm_bottom_is_monotone(a in any_calm()) {
+            prop_assert!(CalmClassification::bottom().leq(&a));
+            prop_assert_eq!(CalmClassification::bottom(), CalmClassification::Monotone);
+        }
+
+        #[test]
+        fn calm_top_is_nonmonotone(a in any_calm()) {
+            prop_assert!(a.leq(&CalmClassification::top()));
+            prop_assert_eq!(CalmClassification::top(), CalmClassification::NonMonotone);
+        }
+    }
 }

@@ -38,6 +38,10 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
         IntentVariant::Nix(n) => render_nix(&owner_name, &owner_ns, n),
         IntentVariant::Lisp(l) => render_lisp(&owner_name, &owner_ns, l)?,
         IntentVariant::Container(_) => (vec![], vec![]),
+        // Guest intents (HVF / VZ / WASM) are owned by tatara-hospedeiro —
+        // the reconciler emits no K8s resources for them. Intent bytes
+        // still feed the three-pillar attestation chain.
+        IntentVariant::Guest(g) => (vec![], serde_json::to_vec(g).unwrap_or_default()),
     };
 
     let artifact_bytes = canonical_bytes(&resources);

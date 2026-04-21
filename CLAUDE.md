@@ -1,5 +1,14 @@
 # Tatara (粋) — Programmable Convergence Computer
 
+<!-- Blackmatter alignment: pillars 1, 6, 10 -->
+<!-- See ~/code/github/pleme-io/BLACKMATTER.md for pillar definitions. -->
+
+## Blackmatter pillars upheld
+
+- **Pillar 1** (Rust + tatara-lisp + WASM/WASI): Tatara IS the Lisp half of Pillar 1 — the fluid runtime + macro composition + `#[derive(TataraDomain)]` boundary other repos plug into.
+- **Pillar 6** (Typescape): `TataraDomain` registry gives every new typed domain a deterministic BLAKE3 identity + workspace-wide coherence check.
+- **Pillar 10** (Proofs): Tatara's coherence checker is itself a proof — every registered domain's dispatch is verified at compile time.
+
 > ## ★ The primary architectural pattern: **Rust + Lisp**
 >
 > Every new typed domain in pleme-io should follow the Rust + Lisp pattern.

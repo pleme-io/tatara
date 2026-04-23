@@ -3,91 +3,41 @@
 <!-- Blackmatter alignment: pillars 1, 6, 10 -->
 <!-- See ~/code/github/pleme-io/BLACKMATTER.md for pillar definitions. -->
 
+## Theory (canonical elsewhere)
+
+The theoretical frame lives in
+[`pleme-io/theory/THEORY.md`](../theory/THEORY.md):
+
+- **§II.1** — the Rust + Lisp pattern, five invariants, six-line
+  contract. Tatara IS the Lisp half; `#[derive(TataraDomain)]` is the
+  boundary other repos plug into.
+- **§II.2** — the Four Lisps. tatara-lisp is the strictest reference.
+- **§III** — the typescape. Tatara's registry gives every new typed
+  domain a deterministic BLAKE3 identity + workspace-wide coherence
+  check.
+- **§IV** — convergence (lattice and process), controllers, the
+  eight-phase loop, Unix-process-cluster model, seven questions.
+- **§V.3** — three-pillar attestation (`artifact_hash ⊕ control_hash ⊕
+  intent_hash → BLAKE3 Merkle`). Tatara writes `ProcessAttestation`
+  using this exact shape.
+
+**Canonical cookbook:** [`docs/rust-lisp.md`](docs/rust-lisp.md) — the
+manifesto + anti-patterns for the pattern.
+
 ## Blackmatter pillars upheld
 
-- **Pillar 1** (Rust + tatara-lisp + WASM/WASI): Tatara IS the Lisp half of Pillar 1 — the fluid runtime + macro composition + `#[derive(TataraDomain)]` boundary other repos plug into.
-- **Pillar 6** (Typescape): `TataraDomain` registry gives every new typed domain a deterministic BLAKE3 identity + workspace-wide coherence check.
-- **Pillar 10** (Proofs): Tatara's coherence checker is itself a proof — every registered domain's dispatch is verified at compile time.
+- **Pillar 1** (Rust + tatara-lisp + WASM/WASI): Tatara IS the Lisp
+  half of Pillar 1.
+- **Pillar 6** (Typescape): `TataraDomain` registry gives every new
+  typed domain a deterministic BLAKE3 identity + workspace-wide
+  coherence check.
+- **Pillar 10** (Proofs): The coherence checker is itself a proof —
+  every registered domain's dispatch is verified at compile time.
 
-> ## ★ The primary architectural pattern: **Rust + Lisp**
->
-> Every new typed domain in pleme-io should follow the Rust + Lisp pattern.
-> Rust owns types, invariants, memory safety. Lisp owns authoring,
-> composition, runtime IR rewriting. The boundary is one proc macro —
-> `#[derive(TataraDomain)]`. Six lines of ceremony per domain buys Lisp
-> authoring, macro composition, registry dispatch, and BLAKE3 attestation.
->
-> **Canonical reference:** [`docs/rust-lisp.md`](docs/rust-lisp.md) — the
-> manifesto + cookbook + anti-patterns. Read it before adding a new domain
-> anywhere in pleme-io.
->
-> **Measured performance**: three-layer expander (substitute / bytecode /
-> bytecode+cache) — 1.40× speedup on cache-friendly workloads. All layers
-> optional, orthogonal, proven-equivalent by test.
-
-
-
-Three theories compose into one platform:
-
-- **Unified Infrastructure Theory** (substrate): WHAT — Nix declares intent
-- **Unified Convergence Computing Theory** (tatara): HOW — typed DAGs converge
-- **Compliant Computing Theory** (tameshi + kensa): WHETHER — compliance gates
-
-## Core Concepts
-
-**Convergence IS computation.** Every operation is a convergence point.
-Points compose into typed DAGs. DAGs compose into DAGs-of-DAGs.
-
-**Five-layer pipeline**: DECLARE (Nix + substrate) → PLAN (sui) → GATE
-(tameshi + kensa) → EXECUTE (tatara) → STORE (sui store + sui-cache)
-
-**Five invariants** (always true):
-1. Every operation is a convergence point
-2. Every point has typed atomic boundary (prepare → execute → verify → attest)
-3. Every attestation is a content-addressed store path (sui)
-4. Compliance binds to point types, verified before/during execution
-5. Dependency closure is statically computable at plan time
-
-**Six classification dimensions** (every point classified along all six):
-- **Horizon**: Bounded (terminates) | Asymptotic (runs forever)
-- **Structure**: Transform | Fork | Join | Gate | Select | Broadcast | Reduce | Observe
-- **Substrate**: Financial | Compute | Network | Storage | Security | Identity | Observability | Regulatory
-- **Coordination**: Monotone (gossip) | NonMonotone (Raft)
-- **Trust**: PlanTime | AtBoundary | PostConvergence
-- **Intelligence**: Mechanical | AiAssisted | Hybrid
-
-**Intent/Outcome duality**:
-- Intent leaves = asymptotic roots (the WHY, runs forever, produces outcomes)
-- Outcome leaves = bounded terminals (the WHAT, verified, converged = true)
-
-**Absorption principle**: every external system becomes convergence points
-(observe → type → converge → attest → comply → package)
-
-## Architecture
-
-```
-Nix Declaration (intent)           ← Unified Infrastructure Theory
-  ↓ archetype rendering
-Any Backend (K8s, tatara, WASI)    ← Rendered by substrate
-  ↓ sui evaluates
-Convergence Derivation Graph       ← Content-addressed, closures computable
-  ↓ compliance binding
-Type-Level Compliance Controls     ← Compliant Computing Theory
-  ↓ convergence DAG
-Verified Atomic Checkpoints        ← Unified Convergence Computing Theory
-  ↓ distributed execution
-Tatara Nodes (CALM-classified)     ← Raft (non-monotone) + gossip (monotone)
-  ↓ cryptographic attestation
-Tameshi CertificationArtifact      ← BLAKE3 Merkle: artifact + controls + intent
-  ↓ store
-Sui Store (content-addressed)      ← Generational store paths, sui-cache distribution
-  ↓ AI interface
-MCP + REST + GraphQL + gRPC        ← Mechanical + AI mix at any point
-```
-
-## Workspace Crates (14+)
+## Workspace crates (14+)
 
 ### Core runtime (pre-existing)
+
 | Crate | Purpose |
 |-------|---------|
 | `tatara-core` | Domain types: convergence state, WorkloadPhase, DAG, saga, idempotency, traced events |
@@ -95,6 +45,7 @@ MCP + REST + GraphQL + gRPC        ← Mechanical + AI mix at any point
 | `tatara-net` | Networking plane: NetworkPlane trait, eBPF types, WASI types, mesh, flow observability |
 
 ### K8s-as-processes surface (v1alpha1 — Apr 2026)
+
 | Crate | Purpose |
 |-------|---------|
 | `tatara-process` | **Process + ProcessTable CRDs** — K8s-as-Unix-processes wire format (`tatara.pleme.io/v1alpha1`). `ProcessSpec` derives `TataraDomain` so `(defpoint …)` in Lisp is a first-class authoring surface. Houses `compile_source` + `tatara-lispc` binary. Absorbs `ConvergenceProcess`, `ConvergenceService`, `NixBuild`. |
@@ -105,6 +56,7 @@ MCP + REST + GraphQL + gRPC        ← Mechanical + AI mix at any point
 | `tatara-reconciler` | **FluxCD-adjacent K8s controller.** 10-phase Unix lifecycle. Owner-ref-emitted Kustomizations. Signal annotation ingestion. Finalizer-guarded termination. Three-pillar BLAKE3 attestation chain. `tatara-check` binary runs `checks.lisp`. Replaces `tatara-kube`. |
 
 ### Operational surfaces
+
 | Crate | Purpose |
 |-------|---------|
 | `tatara-api` | REST (Axum) + GraphQL (async-graphql): jobs, allocations, nodes, catalog, health, metrics |
@@ -114,17 +66,20 @@ MCP + REST + GraphQL + gRPC        ← Mechanical + AI mix at any point
 | `ro-cli` | Read-only CLI |
 
 ### Deprecated
+
 | Crate | Replaced by |
 |-------|-------------|
 | `tatara-kube` | `tatara-reconciler` (FluxCD-adjacent, not bypassing) — see `tatara-kube/DEPRECATED.md` |
 | `tatara-operator` | `Intent::Nix` field in `Process` (NixBuild semantics absorbed) — see `tatara-operator/DEPRECATED.md` |
 
-## K8s-as-Processes Model (v1alpha1)
+## K8s-as-Processes model (v1alpha1 — repo specifics)
 
-Every reconciled object is a **Unix process** in the tatara convergence lattice.
-Clusters, HelmReleases, DB migrations, compliance checks, tests — a single
-`Process` CRD expresses all of them. The reconciler's state machine literally
-implements Unix semantics:
+For the _why_ (Unix process model applied to clusters, hierarchical
+PIDs, fork/exec/wait/kill semantics, inception isolation, self-hosting),
+see [`theory/THEORY.md` §IV.4](../theory/THEORY.md). This section
+documents what is specific to `tatara-reconciler`.
+
+### State machine
 
 ```
 Pending → Forking → Execing → Running → Attested
@@ -139,24 +94,26 @@ A single `Process` carries:
 
 1. **Identity** — hierarchical PID in a cluster-scoped `ProcessTable` (`/proc`).
    Content-addressable BLAKE3 (128-bit, 26-char base32) — ported from
-   convergence-controller/src/identity.rs.
+   `convergence-controller/src/identity.rs`.
 2. **Classification** — 6-axis lattice position (re-exports from `tatara-core`).
 3. **Intent** — one of `nix` / `flux` / `lisp` / `container`. The RENDER phase
    dispatches on the variant.
 4. **Boundary** — `preconditions` gate Running; `postconditions` gate Attested.
    `ConditionKind`: `ProcessPhase`, `KustomizationHealthy`, `HelmReleaseReleased`,
    `PromQL`, `Cel`, `NixEval`.
-5. **Compliance bindings** — verified at `PlanTime` | `AtBoundary` | `PostConvergence`.
-6. **Signals** — `SIGHUP | SIGTERM | SIGKILL | SIGUSR1 | SIGUSR2 | SIGSTOP | SIGCONT`
-   delivered via `tatara.pleme.io/signal` annotation.
+5. **Compliance bindings** — verified at `PlanTime` | `AtBoundary` |
+   `PostConvergence`.
+6. **Signals** — `SIGHUP | SIGTERM | SIGKILL | SIGUSR1 | SIGUSR2 | SIGSTOP |
+   SIGCONT` delivered via `tatara.pleme.io/signal` annotation.
 
 ### FluxCD is `exec(2)`
 
-`tatara-reconciler` does **not** replace source-controller / kustomize-controller /
-helm-controller. It *emits* Flux CRs (annotated with process metadata) and watches
-their status as part of the VERIFY phase. A cluster running tatara-reconciler
-looks like a cluster running FluxCD *plus* the `Process` CRD with three-pillar
-attestation annotations on every owned resource.
+`tatara-reconciler` does **not** replace source-controller /
+kustomize-controller / helm-controller. It *emits* Flux CRs (annotated
+with process metadata) and watches their status as part of the VERIFY
+phase. A cluster running tatara-reconciler looks like a cluster running
+FluxCD *plus* the `Process` CRD with three-pillar attestation
+annotations on every owned resource.
 
 ### Four rendering surfaces, one type
 
@@ -167,12 +124,13 @@ Rust builder    ──┼──►  ProcessSpec  ──►  tatara-reconciler
 S-expr (lisp)   ──┘
 ```
 
-Each surface produces the same `ProcessSpec`. The S-expr form is homoiconic —
-macros can compose proven Process templates into new Processes.
+Each surface produces the same `ProcessSpec`. The S-expr form is
+homoiconic — macros can compose proven Process templates into new
+Processes. All four surfaces are projections of the same typescape
+slice (see [`theory/THEORY.md` §II.2](../theory/THEORY.md) for the
+Four-Lisps framing).
 
-### Three-pillar attestation (BLAKE3 Merkle)
-
-Every convergence cycle writes a `ProcessAttestation`:
+### Three-pillar attestation (repo-specific composition)
 
 ```
 composed_root = BLAKE3(
@@ -184,14 +142,16 @@ composed_root = BLAKE3(
 )
 ```
 
-`previous_root` chains each generation; `sekiban` + `kensa` consume the composed
-root as the audit-trail anchor.
+`previous_root` chains each generation; `sekiban` + `kensa` consume the
+composed root as the audit-trail anchor. Canonical three-pillar form
+defined in [`theory/THEORY.md` §V.3](../theory/THEORY.md).
 
-## Homoiconic Lisp Surface — the authoring / rewriting layer
+## Homoiconic Lisp surface — the authoring / rewriting layer
 
-**`#[derive(TataraDomain)]`** is the one-liner that unlocks a Lisp authoring
-surface for any `serde::Deserialize` struct. Applied to `ProcessSpec` itself
-(and to MonitorSpec / NotifySpec / AlertPolicySpec in tatara-domains).
+**`#[derive(TataraDomain)]`** is the one-liner that unlocks a Lisp
+authoring surface for any `serde::Deserialize` struct. Applied to
+`ProcessSpec` itself (and to MonitorSpec / NotifySpec / AlertPolicySpec
+in tatara-domains).
 
 ```rust
 #[derive(CustomResource, DeriveTataraDomain, Clone, Debug, Deserialize, Serialize, JsonSchema)]
@@ -201,6 +161,7 @@ pub struct ProcessSpec { ... }
 ```
 
 Then:
+
 ```lisp
 (defpoint observability-stack
   :identity       (:parent "seph.1")
@@ -213,35 +174,27 @@ Compiles to typed `NamedDefinition<ProcessSpec>` via
 `tatara_process::compile_source`. The `tatara-lispc` binary pipes
 Lisp → Process YAML → kubectl.
 
-### The Rust-bordered, Lisp-mutable, self-optimizing model
-
-Three invariants proven by working code:
-
-1. **Typed entry** — `T::compile_from_sexp(sexp)` is the only way to produce a
-   `T` from Lisp. Any ill-typed input errors before the `T` exists.
-2. **Rewriting freedom inside** — `rewrite_typed(t, f)` lets `f` mutate the
-   Sexp IR arbitrarily. No mid-rewrite type checks needed.
-3. **Typed exit** — re-entering `compile_from_args` on the rewritten Sexp
-   guarantees the output is a well-typed `T`, or the rewrite is rejected.
-
-Combined: any Lisp-level optimization policy can run full-speed without risking
-type invariants. Rust's type system is the floor; Lisp's rewriting is free
-within it.
+The five invariants of the pattern (typed entry, free middle, typed
+exit, deterministic identity, composition preserves proofs) are
+canonical in [`theory/THEORY.md` §II.1](../theory/THEORY.md). Tatara
+is the reference implementation.
 
 ### `checks.lisp` — workspace coherence, Lisp-driven
 
-`cargo run --bin tatara-check -p tatara-reconciler` reads `checks.lisp` at
-workspace root and dispatches each form through a typed Rust executor:
+`cargo run --bin tatara-check -p tatara-reconciler` reads `checks.lisp`
+at workspace root and dispatches each form through a typed Rust
+executor:
 
 - **Built-in primitives**: `crd-in-sync`, `yaml-parses`, `yaml-parses-as`,
   `lisp-compiles`, `file-contains`
 - **User-defined macros**: `(defcheck name (params) `(do …primitive-calls))`
 - **Registry fallthrough**: any `(defX …)` form whose keyword matches a
-  registered `TataraDomain` is compiled typed — no built-in handler needed
+  registered `TataraDomain` is compiled typed — no built-in handler
+  needed
 
-11 runtime checks pass, including compiling `observability-stack.lisp` to
-`ProcessSpec` via the derive + registry + `defalertpolicy` / `defmonitor` /
-`defnotify` via the registry fallthrough. Zero shell.
+11 runtime checks pass, including compiling `observability-stack.lisp`
+to `ProcessSpec` via the derive + registry + `defalertpolicy` /
+`defmonitor` / `defnotify` via the registry fallthrough. Zero shell.
 
 ### Reuse boundary with iac-forge
 
@@ -253,10 +206,11 @@ Three S-expression layers, non-overlapping:
 | Typed | `ProcessSpec`, etc. | Exhaustive sum types, compile-time proof |
 | Canonical | `iac_forge::sexpr::SExpr` | BLAKE3 attestation + render cache |
 
-`tatara-lisp --features iac-forge` provides `From<Sexp> for iac_forge::SExpr`
-so tatara plugs into the existing attestation pipeline.
+`tatara-lisp --features iac-forge` provides `From<Sexp> for
+iac_forge::SExpr` so tatara plugs into the existing attestation
+pipeline.
 
-## Key Types (tatara-core/src/domain/convergence_state.rs)
+## Key types (`tatara-core/src/domain/convergence_state.rs`)
 
 - `ConvergenceDistance`: Converged | Partial | Diverged | Unknown (0.0 to 1.0)
 - `ConvergenceState`: distance + rate + oscillation + damping per entity
@@ -267,14 +221,13 @@ so tatara plugs into the existing attestation pipeline.
 - `CalmClassification`: Monotone | NonMonotone
 - `ConvergenceMechanism`: Raft | Gossip | Local | Nats | FixedPoint | Feedback
 
-## Convergence Horizons
+## Measured performance
 
-- **Bounded**: has a fixed point, terminates at distance = 0
-- **Asymptotic**: runs forever, rate is the health signal (never converged, always improving)
-- **Bounded preferred**: maximize bounded points, asymptotic points emit bounded DAGs from emission schemas
-- **Emission schema**: catalog of bounded DAG templates an asymptotic point can instantiate
+Three-layer expander (substitute / bytecode / bytecode+cache) — 1.40×
+speedup on cache-friendly workloads. All layers optional, orthogonal,
+proven-equivalent by test.
 
-## 7 Execution Drivers
+## 7 execution drivers
 
 | Driver | Backend | Platform |
 |--------|---------|----------|
@@ -286,7 +239,7 @@ so tatara plugs into the existing attestation pipeline.
 | `kube` | Kubernetes Server-Side Apply | All with kubeconfig |
 | `wasi` | wasmtime WASI Preview 2 | All with wasmtime |
 
-## WorkloadPhase Lifecycle
+## WorkloadPhase lifecycle
 
 ```rust
 enum WorkloadPhase<W, E, C, T> {
@@ -298,14 +251,14 @@ enum WorkloadPhase<W, E, C, T> {
 }
 ```
 
-## Distributed State Machine
+## Distributed state machine
 
 - **Raft** (openraft): linearizable writes for placement, allocation lifecycle
 - **Gossip** (chitchat): eventually-consistent metadata, failure detection
 - **CQRS**: desired vs observed split in ClusterState
 - **Leader-affinity**: only the leader schedules
 
-## The Tatara/Sui Split
+## The Tatara/Sui split
 
 | Concern | Sui | Tatara |
 |---------|-----|--------|
@@ -315,6 +268,8 @@ enum WorkloadPhase<W, E, C, T> {
 | State | Content-addressed (immutable) | Live convergence (mutable) |
 | Distribution | sui-cache binary cache | Raft + gossip |
 | API | REST + GraphQL + gRPC | REST + GraphQL + SSE |
+
+For the duality, see [`theory/THEORY.md` §VIII.5](../theory/THEORY.md).
 
 ## REST API
 
@@ -329,7 +284,7 @@ enum WorkloadPhase<W, E, C, T> {
 | `GET /v1/health/service/{name}?passing=true` | Healthy instances |
 | `GET /metrics` | Prometheus text format |
 
-## Nix Integration
+## Nix integration
 
 ```nix
 # HM module for macOS/Linux service
@@ -354,6 +309,7 @@ services.tatara.workloads.my-service = {
 
 | Document | Sections | Lines |
 |----------|----------|-------|
+| [rust-lisp.md](docs/rust-lisp.md) | The manifesto + cookbook + anti-patterns for the Rust+Lisp pattern | ~625 |
 | [Unified Platform Architecture](docs/unified-platform-architecture.md) | 14 sections: pipeline, dimensions, invariants, envelope, territory, architecture, types, duality, absorption, optimizer, AI | ~1400 |
 | [Unified Convergence Computing Theory](docs/unified-convergence-computing-theory.md) | 13 sections: foundations, metrics, composition, cost, algebra, substrates, analysis, store, compliance, implementation, meta, frontiers, summary | ~2000 |
 | [Theory Realization Map](docs/theory-realization-map.md) | Technology → theory mapping for every pleme-io component | ~180 |

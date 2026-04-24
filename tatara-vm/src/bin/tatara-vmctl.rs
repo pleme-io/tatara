@@ -555,8 +555,17 @@ fn cmd_up(ctx: &mut Ctx, name: &str) -> ExitCode {
                 vfkit_args.push(format!("virtio-net,nat,mac={mac}"));
             }
             "virtio-console" => {
+                // virtio-serial,stdio fails with "operation not supported
+                // by device" when vfkit is run detached (no TTY) — Apple
+                // Virtualization rejects stdio mode without a terminal.
+                // Route the guest console to a log file in the VM's dir
+                // instead — survives across boots, viewable with `tail -f`.
+                let console_log = dir.join("guest-console.log");
                 vfkit_args.push("--device".into());
-                vfkit_args.push("virtio-serial,stdio".into());
+                vfkit_args.push(format!(
+                    "virtio-serial,logFilePath={}",
+                    console_log.display()
+                ));
             }
             "virtio-rng" => {
                 // vfkit 0.6.1 + Apple Virtualization rejects virtio-rng on

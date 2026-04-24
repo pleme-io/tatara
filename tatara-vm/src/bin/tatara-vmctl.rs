@@ -559,8 +559,10 @@ fn cmd_up(ctx: &mut Ctx, name: &str) -> ExitCode {
                 vfkit_args.push("virtio-serial,stdio".into());
             }
             "virtio-rng" => {
-                vfkit_args.push("--device".into());
-                vfkit_args.push("virtio-rng".into());
+                // vfkit 0.6.1 + Apple Virtualization rejects virtio-rng on
+                // some configurations with "operation not supported by
+                // device" — skip until we figure out the right invocation.
+                ctx.warn("vm.json: skipping virtio-rng (unsupported by current vfkit/AppleVirt)");
             }
             other => {
                 ctx.warn(format!("vm.json: unknown device kind '{other}', skipping"));

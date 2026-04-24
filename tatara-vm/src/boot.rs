@@ -279,7 +279,22 @@ impl MultiSynthesizer for BootSynthesizer {
         }
 
         // kernel.nix + initrd.nix — standalone buildable Nix expressions.
+        // The kernel reference (e.g. `linuxPackages.kernel`) is meaningful only
+        // on Linux platforms — `aarch64-linux`, `x86_64-linux`. When the boot
+        // artifacts are emitted on Darwin (typical for Apple-Silicon hosts
+        // using vfkit), we MUST pass `system = "${cfg.system}"` to the
+        // nixpkgs import so eval picks the Linux variant of the package set.
+        // Without this, `nix build -f kernel.nix` on Darwin trips the
+        // `meta.platforms` assertion ("not in […linux platforms]") and
+        // `launch.sh` exits before the VM ever starts.
+        //
+        // We only override when the bridge target has no explicit pkg_set —
+        // if the user supplied one, we trust them.
         let kernel_expr = match &bm.kernel.bridge {
+            Some(b) if b.pkg_set.is_none() => format!(
+                "# kernel for {}\n(import <nixpkgs> {{ system = \"{}\"; }}).{}\n",
+                cfg.hostname, cfg.system, b.attr_path
+            ),
             Some(b) => format!(
                 "# kernel for {}\n({}).{}\n",
                 cfg.hostname,

@@ -78,6 +78,62 @@ struct VmJsonPeek {
     devices: Vec<serde_json::Value>,
 }
 
+/// Full shape of `vm.json` for `up` — translated to vfkit CLI flags
+/// in cmd_up. Replaces the old launch.sh + jq pipeline with typed
+/// Rust deserialization.
+#[derive(Debug, Deserialize)]
+struct VmJson {
+    cpus: u32,
+    #[serde(rename = "memory-mib")]
+    memory_mib: u32,
+    cmdline: String,
+    #[serde(default)]
+    devices: Vec<VmJsonDevice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct VmJsonDevice {
+    device: String,
+    #[serde(rename = "mac-address", default)]
+    mac_address: Option<String>,
+}
+
+/// Resolve a `nix build -f <path>` to its store path.
+fn nix_build_path(path: &Path) -> Option<PathBuf> {
+    let out = Command::new("nix")
+        .args([
+            "build",
+            "-f",
+            path.to_str()?,
+            "--no-link",
+            "--print-out-paths",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(s))
+    }
+}
+
+/// Find the kernel image inside a built kernel store path. nixpkgs's
+/// linuxPackages.kernel emits `Image` for aarch64, `bzImage` for x86,
+/// occasionally `Image.gz`. Return the first one that exists.
+fn locate_kernel_image(kernel_dir: &Path) -> Option<PathBuf> {
+    for name in ["Image", "bzImage", "Image.gz", "vmlinuz"] {
+        let p = kernel_dir.join(name);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
 fn discover_vms() -> Vec<(String, PathBuf)> {
     let root = tatara_os_root();
     let mut out = Vec::new();
@@ -416,33 +472,120 @@ fn cmd_up(ctx: &mut Ctx, name: &str) -> ExitCode {
             return ExitCode::SUCCESS;
         }
     }
-    // Delegate the actual nix-build + jq splice + vfkit exec to launch.sh.
-    let launcher = dir.join("launch.sh");
-    if !launcher.exists() {
-        ctx.error("launch.sh missing (re-run home-manager activation?)");
-        return ExitCode::FAILURE;
+
+    // Resolve kernel + initrd via nix build. The .nix files are emitted
+    // by tatara-boot-gen at activation time; they're standalone Nix
+    // expressions referencing nixpkgs (with system pinned to cfg.system).
+    let kernel_dir = match nix_build_path(&dir.join("kernel.nix")) {
+        Some(p) => p,
+        None => {
+            ctx.error("nix build kernel.nix failed");
+            return ExitCode::FAILURE;
+        }
+    };
+    let initrd_dir = match nix_build_path(&dir.join("initrd.nix")) {
+        Some(p) => p,
+        None => {
+            ctx.error("nix build initrd.nix failed");
+            return ExitCode::FAILURE;
+        }
+    };
+    let kernel_path = match locate_kernel_image(&kernel_dir) {
+        Some(p) => p,
+        None => {
+            ctx.error(format!(
+                "no kernel image found in {} (looked for Image/bzImage/Image.gz/vmlinuz)",
+                kernel_dir.display()
+            ));
+            return ExitCode::FAILURE;
+        }
+    };
+    let initrd_path = initrd_dir.join("initrd.cpio.gz");
+
+    // Read vm.json into a typed struct (replaces the old launch.sh's
+    // jq splice + `vfkit --config` pattern, which crc-org/vfkit doesn't
+    // support — vfkit takes individual --bootloader / --device flags).
+    let vm_json: VmJson = match std::fs::read_to_string(dir.join("vm.json"))
+        .map_err(|e| e.to_string())
+        .and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
+    {
+        Ok(v) => v,
+        Err(e) => {
+            ctx.error(format!("vm.json: {e}"));
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Translate vm.json → vfkit CLI flags.
+    let bootloader = format!(
+        "linux,kernel={},initrd={},cmdline=\"{}\"",
+        kernel_path.display(),
+        initrd_path.display(),
+        vm_json.cmdline
+    );
+    let mut vfkit_args: Vec<String> = vec![
+        "--cpus".into(),
+        vm_json.cpus.to_string(),
+        "--memory".into(),
+        vm_json.memory_mib.to_string(),
+        "--bootloader".into(),
+        bootloader,
+    ];
+    for d in &vm_json.devices {
+        match d.device.as_str() {
+            "virtio-blk" => {
+                vfkit_args.push("--device".into());
+                vfkit_args.push(format!("virtio-blk,path={}", initrd_path.display()));
+            }
+            "virtio-net" => {
+                vfkit_args.push("--device".into());
+                let mac = d.mac_address.as_deref().unwrap_or("");
+                vfkit_args.push(format!("virtio-net,nat,mac={mac}"));
+            }
+            "virtio-console" => {
+                vfkit_args.push("--device".into());
+                vfkit_args.push("virtio-serial,stdio".into());
+            }
+            "virtio-rng" => {
+                vfkit_args.push("--device".into());
+                vfkit_args.push("virtio-rng".into());
+            }
+            other => {
+                ctx.warn(format!("vm.json: unknown device kind '{other}', skipping"));
+            }
+        }
     }
+
+    // Spawn vfkit detached, stdio → console.log.
     let log = dir.join("console.log");
-    let log_file = std::fs::OpenOptions::new()
+    let log_file = match std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&log);
-    let log_file = match log_file {
+        .open(&log)
+    {
         Ok(f) => f,
         Err(e) => {
             ctx.error(format!("opening console.log: {e}"));
             return ExitCode::FAILURE;
         }
     };
-    // Spawn detached: separate session, redirect stdio to the log.
+
+    // vfkit binary discovery — TATARA_VMCTL_VFKIT env var wins; otherwise
+    // search PATH (default behaviour). When invoked from a launchd agent
+    // the agent's plist must include vfkit on PATH or set the env var.
+    let vfkit_bin =
+        std::env::var("TATARA_VMCTL_VFKIT").unwrap_or_else(|_| "vfkit".to_string());
+
     #[cfg(unix)]
     use std::os::unix::process::CommandExt;
-    let mut cmd = Command::new(&launcher);
-    cmd.stdout(Stdio::from(
-        log_file
-            .try_clone()
-            .unwrap_or_else(|_| log_file.try_clone().unwrap()),
-    ))
+    let mut cmd = Command::new(&vfkit_bin);
+    cmd.args(&vfkit_args);
+    cmd.stdout(Stdio::from(log_file.try_clone().unwrap_or_else(|_| {
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&log)
+            .expect("re-open console.log")
+    })))
     .stderr(Stdio::from(log_file))
     .stdin(Stdio::null())
     .current_dir(&dir);
@@ -457,7 +600,7 @@ fn cmd_up(ctx: &mut Ctx, name: &str) -> ExitCode {
     let child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            ctx.error(format!("spawn failed: {e}"));
+            ctx.error(format!("vfkit spawn failed ({vfkit_bin}): {e}"));
             return ExitCode::FAILURE;
         }
     };

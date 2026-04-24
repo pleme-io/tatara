@@ -516,9 +516,14 @@ fn cmd_up(ctx: &mut Ctx, name: &str) -> ExitCode {
         }
     };
 
-    // Translate vm.json → vfkit CLI flags.
+    // Translate vm.json → vfkit CLI flags. vfkit's --bootloader parses
+    // as comma-separated key=value pairs; the value is everything after
+    // the first '=' until the next ','. So embedded spaces and '=' in
+    // cmdline are fine as long as the cmdline contains no commas.
+    // Don't add literal quotes around the cmdline — vfkit doesn't strip
+    // them, they'd end up in the kernel's actual command line.
     let bootloader = format!(
-        "linux,kernel={},initrd={},cmdline=\"{}\"",
+        "linux,kernel={},initrd={},cmdline={}",
         kernel_path.display(),
         initrd_path.display(),
         vm_json.cmdline
@@ -534,8 +539,15 @@ fn cmd_up(ctx: &mut Ctx, name: &str) -> ExitCode {
     for d in &vm_json.devices {
         match d.device.as_str() {
             "virtio-blk" => {
-                vfkit_args.push("--device".into());
-                vfkit_args.push(format!("virtio-blk,path={}", initrd_path.display()));
+                // tatara-boot-gen currently emits a virtio-blk entry for
+                // every system, pointing at `<image:.../rootfs.img>` — but
+                // initrd-rooted systems (busybox / kernel-+-tatara-init)
+                // don't have a separate disk; the kernel loads the initrd
+                // via --initrd and mounts it as initramfs. Passing the
+                // cpio.gz to virtio-blk trips vfkit's "Invalid disk image"
+                // error. Skip until upstream tatara-vm splits initrd-rooted
+                // vs disk-rooted systems in vm.json emission.
+                ctx.warn("vm.json: skipping virtio-blk (initrd-rooted system; kernel already loads initrd)");
             }
             "virtio-net" => {
                 vfkit_args.push("--device".into());

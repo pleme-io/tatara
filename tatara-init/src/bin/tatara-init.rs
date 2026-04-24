@@ -63,6 +63,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Extra mounts declared via `(definit :mounts (…))` — typically the
+    // virtio-fs /nix/store share that lets services exec host-store
+    // binaries without baking their closure into the initrd.
+    for m in &cfg.mounts {
+        match tatara_init::mount_extra(&m.source, &m.target, &m.fstype, m.options.as_deref()) {
+            Ok(()) => eprintln!(
+                "[tatara-init] mounted {} ({} from {})",
+                m.target, m.fstype, m.source
+            ),
+            Err(e) => eprintln!("[tatara-init] mount warn: {e}"),
+        }
+    }
+
     let mut sup = LinuxSupervisor::new();
     let by_name = tatara_init::supervisor::boot(&mut sup, &cfg)?;
     let mut tracking: HashMap<Pid, String> = by_name.into_iter().map(|(n, p)| (p, n)).collect();

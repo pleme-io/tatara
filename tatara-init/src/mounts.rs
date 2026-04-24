@@ -74,6 +74,74 @@ pub fn mount_early_filesystems() -> Vec<Result<EarlyMount, EarlyMountError>> {
         .collect()
 }
 
+/// Mount an extra filesystem declared via `(definit :mounts (…))`. Unlike
+/// CANONICAL_MOUNTS the fields here are owned strings (the lisp form is
+/// dynamic), so we take `&str` values and build C strings on the spot.
+///
+/// Typical use: virtiofs shares from the host.
+///
+/// ```no_run
+/// # use tatara_init::mounts::mount_extra;
+/// mount_extra("nixstore", "/nix/store", "virtiofs", Some("ro"));
+/// ```
+pub fn mount_extra(
+    source: &str,
+    target: &str,
+    fstype: &str,
+    options: Option<&str>,
+) -> Result<(), EarlyMountError> {
+    mount_extra_impl(source, target, fstype, options)
+}
+
+#[cfg(target_os = "linux")]
+fn mount_extra_impl(
+    source: &str,
+    target: &str,
+    fstype: &str,
+    options: Option<&str>,
+) -> Result<(), EarlyMountError> {
+    use std::ffi::CString;
+    let src = CString::new(source).map_err(|e| err(target, e))?;
+    let tgt = CString::new(target).map_err(|e| err(target, e))?;
+    let fst = CString::new(fstype).map_err(|e| err(target, e))?;
+    let opts_raw = options.unwrap_or("");
+    let opts = CString::new(opts_raw).map_err(|e| err(target, e))?;
+    // mount(2) flags come encoded in the options string — we pass 0 to
+    // `flags` and let virtiofs/ext4/etc. consume `data` as the options
+    // string. Keeps the lisp surface simple (one string).
+    let _ = std::fs::create_dir_all(target);
+    let r = unsafe {
+        libc::mount(
+            src.as_ptr(),
+            tgt.as_ptr(),
+            fst.as_ptr(),
+            0,
+            opts.as_ptr() as *const libc::c_void,
+        )
+    };
+    if r == 0 {
+        return Ok(());
+    }
+    let e = std::io::Error::last_os_error();
+    if e.raw_os_error() == Some(libc::EBUSY) {
+        return Ok(());
+    }
+    Err(EarlyMountError::Mount {
+        target: target.into(),
+        reason: e.to_string(),
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn mount_extra_impl(
+    _source: &str,
+    _target: &str,
+    _fstype: &str,
+    _options: Option<&str>,
+) -> Result<(), EarlyMountError> {
+    Ok(())
+}
+
 #[cfg(target_os = "linux")]
 fn mount_one(m: &EarlyMount) -> Result<(), EarlyMountError> {
     use std::ffi::CString;

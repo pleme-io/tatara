@@ -69,6 +69,24 @@ fn default_true() -> bool {
     true
 }
 
+/// One declarative mount beyond the canonical /proc /sys /dev /run /tmp set.
+/// Typical use: virtio-fs shares from the host (e.g. /nix/store mounted in
+/// the guest readonly so services can exec binaries by absolute store path
+/// without bloating the initrd with the closure).
+#[derive(DeriveTataraDomain, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[tatara(keyword = "defmount")]
+pub struct MountSpec {
+    /// For virtiofs: the mount tag. For block devices: /dev path.
+    pub source: String,
+    /// Mount point inside the guest. Created if missing.
+    pub target: String,
+    /// Filesystem type (`virtiofs`, `ext4`, `tmpfs`, …).
+    pub fstype: String,
+    /// Comma-separated mount options (`ro`, `nosuid`, …). Optional.
+    #[serde(default)]
+    pub options: Option<String>,
+}
+
 /// The single root document. Parses from `(definit …)` forms.
 #[derive(DeriveTataraDomain, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[tatara(keyword = "definit")]
@@ -79,6 +97,10 @@ pub struct InitConfig {
     /// Services to supervise. Starts in declaration order; stops in reverse.
     #[serde(default)]
     pub services: Vec<Service>,
+    /// Mounts to set up after CANONICAL_MOUNTS, before services start.
+    /// Mount failures are logged but don't abort boot.
+    #[serde(default)]
+    pub mounts: Vec<MountSpec>,
     /// Reap orphaned children (the canonical PID-1 duty). Default on.
     #[serde(default = "default_true")]
     pub reap_zombies: bool,
@@ -96,6 +118,7 @@ impl Default for InitConfig {
         Self {
             name: default_name(),
             services: vec![],
+            mounts: vec![],
             reap_zombies: true,
             reload_on_sighup: true,
         }

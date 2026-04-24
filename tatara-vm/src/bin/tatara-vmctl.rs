@@ -96,6 +96,29 @@ struct VmJsonDevice {
     device: String,
     #[serde(rename = "mac-address", default)]
     mac_address: Option<String>,
+    #[serde(default)]
+    host: Option<String>,
+    #[serde(default)]
+    guest: Option<String>,
+}
+
+/// Mirror tatara_vm::boot::mount_tag_for_guest_path so the vfkit CLI tag
+/// matches what `synthesize_init_config` puts in init.lisp's :mounts.
+fn mount_tag_for_guest_path(guest: &str) -> String {
+    let mut out = String::new();
+    for c in guest.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else {
+            out.push('_');
+        }
+    }
+    let trimmed: String = out.chars().skip_while(|c| *c == '_').collect();
+    if trimmed.is_empty() {
+        "share".into()
+    } else {
+        trimmed
+    }
 }
 
 /// Resolve a `nix build -f <path>` to its store path.
@@ -572,6 +595,28 @@ fn cmd_up(ctx: &mut Ctx, name: &str) -> ExitCode {
                 // some configurations with "operation not supported by
                 // device" — skip until we figure out the right invocation.
                 ctx.warn("vm.json: skipping virtio-rng (unsupported by current vfkit/AppleVirt)");
+            }
+            "virtio-fs" => {
+                // virtio-fs share — map host directory to a guest mountTag.
+                // Tag is derived from the guest path so the init.lisp side
+                // can mount by tag without coordination.
+                let host = match &d.host {
+                    Some(h) => h.clone(),
+                    None => {
+                        ctx.warn("vm.json: virtio-fs missing 'host' field, skipping");
+                        continue;
+                    }
+                };
+                let guest = match &d.guest {
+                    Some(g) => g.clone(),
+                    None => {
+                        ctx.warn("vm.json: virtio-fs missing 'guest' field, skipping");
+                        continue;
+                    }
+                };
+                let tag = mount_tag_for_guest_path(&guest);
+                vfkit_args.push("--device".into());
+                vfkit_args.push(format!("virtio-fs,sharedDir={host},mountTag={tag}"));
             }
             other => {
                 ctx.warn(format!("vm.json: unknown device kind '{other}', skipping"));

@@ -772,7 +772,7 @@ mod tests {
         // expansions — macros that expand into calls to other macros).
         let cache_size = byte_cache.cache_size();
         assert!(
-            cache_size >= 10 && cache_size <= 50,
+            (10..=50).contains(&cache_size),
             "expected ~10 unique cache entries, got {cache_size}"
         );
 

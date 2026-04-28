@@ -287,7 +287,7 @@ pub fn json_to_sexp(v: &JValue) -> Sexp {
 
 fn is_kwargs_list(items: &[Sexp]) -> bool {
     !items.is_empty()
-        && items.len() % 2 == 0
+        && items.len().is_multiple_of(2)
         && items.iter().step_by(2).all(|s| s.as_keyword().is_some())
 }
 

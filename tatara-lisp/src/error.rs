@@ -8,12 +8,12 @@ pub enum LispError {
     UnexpectedChar(char, usize),
     #[error("unterminated string literal at position {0}")]
     UnterminatedString(usize),
-    #[error("unmatched closing paren at position {0}")]
-    UnmatchedParen(usize),
-    #[error("unmatched opening paren")]
-    UnmatchedOpenParen,
-    #[error("unexpected end of input")]
-    Eof,
+    #[error("unmatched closing paren at position {pos}")]
+    UnmatchedParen { pos: usize },
+    #[error("unmatched opening paren at position {pos}")]
+    UnmatchedOpenParen { pos: usize },
+    #[error("unexpected end of input at position {pos}")]
+    Eof { pos: usize },
     #[error("invalid number literal {0:?}")]
     InvalidNumber(String),
     #[error("unknown symbol: {0}")]

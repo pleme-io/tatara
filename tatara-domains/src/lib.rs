@@ -215,10 +215,7 @@ mod tests {
     fn monitor_rejects_missing_required_name() {
         // `name` is required (no #[serde(default)]). Omitting it must
         // produce an error, not a default-filled MonitorSpec.
-        let forms = read(
-            r#"(defmonitor :query "up{job='x'}" :threshold 0.5)"#,
-        )
-        .unwrap();
+        let forms = read(r#"(defmonitor :query "up{job='x'}" :threshold 0.5)"#).unwrap();
         let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
         assert!(
             format!("{err:?}").to_lowercase().contains("name")
@@ -230,10 +227,7 @@ mod tests {
 
     #[test]
     fn monitor_rejects_missing_required_query() {
-        let forms = read(
-            r#"(defmonitor :name "x" :threshold 0.5)"#,
-        )
-        .unwrap();
+        let forms = read(r#"(defmonitor :name "x" :threshold 0.5)"#).unwrap();
         assert!(MonitorSpec::compile_from_sexp(&forms[0]).is_err());
     }
 
@@ -254,11 +248,39 @@ mod tests {
         // Severity has variants Info / Warning / Critical / Page. "Fatal"
         // isn't one — the serde-Deserialize fallthrough in the derive
         // must reject it.
+        let forms = read(r#"(defalertpolicy :name "x" :monitor-ref "m" :severity Fatal)"#).unwrap();
+        assert!(AlertPolicySpec::compile_from_sexp(&forms[0]).is_err());
+    }
+
+    #[test]
+    fn monitor_rejects_typoed_keyword() {
+        // Typed-entry invariant (THEORY.md §II.1.1) — a misspelled keyword
+        // (`:tthreshold` instead of `:threshold`) must error, not parse
+        // silently with `threshold` defaulted/missing.
+        let forms =
+            read(r#"(defmonitor :name "x" :query "q" :threshold 0.5 :tthreshold 0.99)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("tthreshold"), "must name the typo: {msg}");
+        assert!(
+            msg.contains("unknown keyword"),
+            "must label the failure: {msg}"
+        );
+    }
+
+    #[test]
+    fn alert_policy_rejects_typoed_keyword() {
+        // Same strictness applies to every derive site, including ones with
+        // enum + nested-Vec fields.
         let forms = read(
-            r#"(defalertpolicy :name "x" :monitor-ref "m" :severity Fatal)"#,
+            r#"(defalertpolicy :name "x" :monitor-ref "m" :severity Info :wrong-field "oops")"#,
         )
         .unwrap();
-        assert!(AlertPolicySpec::compile_from_sexp(&forms[0]).is_err());
+        let err = AlertPolicySpec::compile_from_sexp(&forms[0]).unwrap_err();
+        assert!(
+            format!("{err}").contains("wrong-field"),
+            "must name the offending keyword, got: {err}"
+        );
     }
 
     #[test]
@@ -267,10 +289,7 @@ mod tests {
         // strings for unit variants, so both `Critical` and "Critical"
         // work. What it MUST reject is non-string/non-symbol payloads
         // like integers, which can't identify a variant.
-        let forms = read(
-            r#"(defalertpolicy :name "x" :monitor-ref "m" :severity 42)"#,
-        )
-        .unwrap();
+        let forms = read(r#"(defalertpolicy :name "x" :monitor-ref "m" :severity 42)"#).unwrap();
         assert!(AlertPolicySpec::compile_from_sexp(&forms[0]).is_err());
     }
 
@@ -283,10 +302,7 @@ mod tests {
         // derive refactor that starts inserting Some("") or vec![""]
         // (a plausible regression in deserialization fallback)
         // surfaces here.
-        let forms = read(
-            r#"(defmonitor :name "x" :query "y" :threshold 0.1)"#,
-        )
-        .unwrap();
+        let forms = read(r#"(defmonitor :name "x" :query "y" :threshold 0.1)"#).unwrap();
         let m = MonitorSpec::compile_from_sexp(&forms[0]).unwrap();
         assert_eq!(m.name, "x");
         assert_eq!(m.query, "y");
@@ -299,10 +315,7 @@ mod tests {
     fn monitor_explicit_empty_tags_list_parses() {
         // `:tags ()` must parse to an empty Vec, not error out on the
         // empty list.
-        let forms = read(
-            r#"(defmonitor :name "x" :query "y" :threshold 0.5 :tags ())"#,
-        )
-        .unwrap();
+        let forms = read(r#"(defmonitor :name "x" :query "y" :threshold 0.5 :tags ())"#).unwrap();
         let m = MonitorSpec::compile_from_sexp(&forms[0]).unwrap();
         assert!(m.tags.is_empty());
     }

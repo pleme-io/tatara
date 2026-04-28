@@ -66,6 +66,32 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
     Ok(kw)
 }
 
+/// Reject any keyword in `kw` that isn't in `allowed`. Closes the typed-entry
+/// hole where typos like `:tthreshold 0.99` would otherwise parse silently
+/// with the field unset. Emitted by `#[derive(TataraDomain)]` after
+/// `parse_kwargs` so every derived domain rejects unknown kwargs by default.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — "Ill-typed input
+/// errors before the value exists").
+pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
+    for key in kw.keys() {
+        if !allowed.contains(&key.as_str()) {
+            let mut sorted: Vec<&&str> = allowed.iter().collect();
+            sorted.sort();
+            let allowed_list = sorted
+                .iter()
+                .map(|s| format!(":{s}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(LispError::Compile {
+                form: format!(":{key}"),
+                message: format!("unknown keyword (allowed: {allowed_list})"),
+            });
+        }
+    }
+    Ok(())
+}
+
 pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
     kw.get(key).copied().ok_or_else(|| LispError::Compile {
         form: format!(":{key}"),
@@ -430,6 +456,66 @@ mod tests {
         let forms = read(r#"(not-a-monitor :name "x")"#).unwrap();
         let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
         assert!(format!("{err}").contains("expected (defmonitor"));
+    }
+
+    #[test]
+    fn derive_rejects_unknown_keyword() {
+        // Typed-entry invariant (THEORY.md §II.1.1) — a typo'd keyword
+        // must surface as an error before the value exists, not parse
+        // silently with the field unset.
+        let forms =
+            read(r#"(defmonitor :name "x" :query "q" :threshold 0.5 :tthreshold 0.99)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("tthreshold"),
+            "error must name the offending keyword, got: {msg}"
+        );
+        assert!(
+            msg.contains("unknown keyword"),
+            "error must label the failure mode, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn derive_unknown_keyword_lists_allowed_set() {
+        // The error message includes the allowed-keyword set so the
+        // operator can fix the typo without consulting the source.
+        let forms = read(r#"(defmonitor :name "x" :ttreshold 0.99)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains(":threshold"),
+            "expected :threshold listed: {msg}"
+        );
+        assert!(msg.contains(":query"), "expected :query listed: {msg}");
+        assert!(msg.contains(":name"), "expected :name listed: {msg}");
+    }
+
+    #[test]
+    fn reject_unknown_kwargs_helper_passes_when_all_known() {
+        let forms = read(r#"(defmonitor :name "x" :query "q" :threshold 0.5)"#).unwrap();
+        let args = forms[0].as_list().unwrap();
+        let kw = parse_kwargs(&args[1..]).unwrap();
+        let allowed: &[&str] = &[
+            "name",
+            "query",
+            "threshold",
+            "window-seconds",
+            "tags",
+            "enabled",
+        ];
+        assert!(reject_unknown_kwargs(&kw, allowed).is_ok());
+    }
+
+    #[test]
+    fn reject_unknown_kwargs_helper_errors_on_extra() {
+        let forms = read(r#"(defmonitor :name "x" :ghost "boo")"#).unwrap();
+        let args = forms[0].as_list().unwrap();
+        let kw = parse_kwargs(&args[1..]).unwrap();
+        let allowed: &[&str] = &["name"];
+        let err = reject_unknown_kwargs(&kw, allowed).unwrap_err();
+        assert!(format!("{err}").contains("ghost"));
     }
 
     #[test]

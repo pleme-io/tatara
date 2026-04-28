@@ -72,6 +72,7 @@ pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {
     };
 
     let mut field_inits: Vec<TokenStream2> = Vec::with_capacity(fields.len());
+    let mut allowed_keys: Vec<String> = Vec::with_capacity(fields.len());
     for field in fields {
         let ident = field.ident.as_ref().expect("named field");
         let kebab = snake_to_kebab(&ident.to_string());
@@ -84,7 +85,10 @@ pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {
                     .into();
             }
         }
+        allowed_keys.push(kebab);
     }
+
+    let allowed_lits = allowed_keys.iter().map(|k| quote! { #k });
 
     let expanded = quote! {
         impl ::tatara_lisp::domain::TataraDomain for #name {
@@ -93,7 +97,11 @@ pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {
             fn compile_from_args(
                 args: &[::tatara_lisp::Sexp],
             ) -> ::tatara_lisp::Result<Self> {
+                const __TATARA_ALLOWED_KEYWORDS: &[&::core::primitive::str] = &[
+                    #(#allowed_lits),*
+                ];
                 let kw = ::tatara_lisp::domain::parse_kwargs(args)?;
+                ::tatara_lisp::domain::reject_unknown_kwargs(&kw, __TATARA_ALLOWED_KEYWORDS)?;
                 Ok(Self {
                     #(#field_inits),*
                 })

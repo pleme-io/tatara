@@ -32,13 +32,24 @@
     forge,
     devenv,
   }: let
-    # CLI tool release (tatara binary — 4-target GitHub releases)
-    toolOutputs = (import "${substrate}/lib/rust-tool-release-flake.nix" {
+    # CLI tool release (tatara binary — 4-target GitHub releases).
+    # Workspace-builder because tatara is a pure Cargo workspace: the
+    # `tatara` binary lives in the `tatara-cli` member crate. `module = {…}`
+    # auto-emits the substrate trio (programs.tatara.{enable, package} for
+    # HM + nixosModules.default + darwinModules.default); the trio's HM
+    # module is then composed with tatara's existing service modules
+    # (services.tatara.server, services.tatara-os-vm, blackmatter.components.ro)
+    # below in the `homeManagerModules.default` override.
+    toolOutputs = (import "${substrate}/lib/rust-workspace-release-flake.nix" {
       inherit nixpkgs crate2nix flake-utils devenv;
     }) {
       toolName = "tatara";
+      packageName = "tatara-cli";
       src = self;
       repo = "pleme-io/tatara";
+      module = {
+        description = "tatara — Nix-native workload orchestrator";
+      };
     };
 
     # Operator Docker image (tatara-operator — K8s deployment via substrate)
@@ -140,8 +151,18 @@
     # under "operator-*" to avoid colliding with the CLI tool.
     toolOutputs
     // {
-      homeManagerModules.default = import ./module {
-        hmHelpers = import "${substrate}/lib/hm-service-helpers.nix" { lib = nixpkgs.lib; };
+      # Compose substrate's auto-emitted trio HM module
+      # (programs.tatara.{enable, package}) with tatara's existing
+      # custom HM modules (services.tatara.server, services.tatara-os-vm,
+      # blackmatter.components.ro). The trio drives package install
+      # everywhere; the custom modules carry the rich service options.
+      homeManagerModules.default = { config, lib, pkgs, ... }: {
+        imports = [
+          toolOutputs.homeManagerModules.default
+          (import ./module {
+            hmHelpers = import "${substrate}/lib/hm-service-helpers.nix" { lib = nixpkgs.lib; };
+          })
+        ];
       };
 
       lib = import ./nix/lib/forge.nix { lib = nixpkgs.lib; };

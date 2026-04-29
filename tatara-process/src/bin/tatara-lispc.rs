@@ -28,7 +28,10 @@ fn main() -> ExitCode {
     let defs = match tatara_process::compile_source(&source) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("compile {path}: {e}");
+            eprintln!(
+                "{}",
+                tatara_lisp::format_diagnostic(&source, &e, Some(path))
+            );
             return ExitCode::from(1);
         }
     };

@@ -27,6 +27,7 @@ extern crate self as tatara_lisp;
 pub mod ast;
 pub mod compile;
 pub mod compiler_spec;
+pub mod diagnostic;
 pub mod domain;
 pub mod env;
 pub mod error;
@@ -46,6 +47,7 @@ pub use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
 pub use ast::{Atom, Sexp};
 pub use compile::{compile_named, compile_named_from_forms, compile_typed, NamedDefinition};
+pub use diagnostic::{format_diagnostic, line_col, LineCol};
 pub use env::Env;
 pub use error::{LispError, Result};
 pub use macro_expand::{Expander, MacroDef, Param};

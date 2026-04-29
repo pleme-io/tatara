@@ -313,7 +313,9 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
     };
     let defs = match tatara_process::compile_source(&src) {
         Ok(d) => d,
-        Err(e) => return report.fail(label, format!("{e}")),
+        Err(e) => {
+            return report.fail(label, tatara_lisp::format_diagnostic(&src, &e, Some(rel)));
+        }
     };
     if defs.len() < min_defs {
         return report.fail(

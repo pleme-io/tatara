@@ -216,45 +216,19 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         },
         // Fall-through: anything with `serde::Deserialize` works via the
         // sexp_to_json bridge. Unlocks enums, nested structs, Vec<Struct>.
+        // The boilerplate that used to live here (sexp_to_json +
+        // serde_json::from_value + LispError::Compile shaping, repeated
+        // three times) lives behind these helpers in
+        // `tatara_lisp::domain` so hand-written impls share the same
+        // error path and future diagnostic upgrades land in one place.
         Kind::Deserialize => quote! {
-            {
-                let sexp = ::tatara_lisp::domain::required(&kw, #key)?;
-                let json = ::tatara_lisp::domain::sexp_to_json(sexp);
-                ::serde_json::from_value(json).map_err(|e| ::tatara_lisp::LispError::Compile {
-                    form: #key.to_string(),
-                    message: format!("deserialize: {e}"),
-                })?
-            }
+            ::tatara_lisp::domain::extract_via_serde(&kw, #key)?
         },
         Kind::OptionalDeserialize => quote! {
-            match kw.get(#key) {
-                None => None,
-                Some(sexp) => {
-                    let json = ::tatara_lisp::domain::sexp_to_json(sexp);
-                    Some(::serde_json::from_value(json).map_err(|e| ::tatara_lisp::LispError::Compile {
-                        form: #key.to_string(),
-                        message: format!("deserialize: {e}"),
-                    })?)
-                }
-            }
+            ::tatara_lisp::domain::extract_optional_via_serde(&kw, #key)?
         },
         Kind::VecDeserialize => quote! {
-            match kw.get(#key) {
-                None => ::std::vec::Vec::new(),
-                Some(sexp) => {
-                    let list = sexp.as_list().ok_or_else(|| ::tatara_lisp::LispError::Compile {
-                        form: #key.to_string(),
-                        message: "expected list".into(),
-                    })?;
-                    list.iter().map(|item| {
-                        let json = ::tatara_lisp::domain::sexp_to_json(item);
-                        ::serde_json::from_value(json).map_err(|e| ::tatara_lisp::LispError::Compile {
-                            form: #key.to_string(),
-                            message: format!("deserialize: {e}"),
-                        })
-                    }).collect::<::tatara_lisp::Result<::std::vec::Vec<_>>>()?
-                }
-            }
+            ::tatara_lisp::domain::extract_vec_via_serde(&kw, #key)?
         },
     };
     // Respect `#[serde(default)]` — wrap extractor with a missing-key short-circuit.

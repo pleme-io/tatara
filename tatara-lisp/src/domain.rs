@@ -11,6 +11,8 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
+use serde::de::DeserializeOwned;
+
 use crate::ast::Sexp;
 use crate::error::{LispError, Result};
 
@@ -179,6 +181,76 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
         None => Ok(None),
         Some(v) => v.as_bool().map(Some).ok_or_else(|| type_err(key, "bool")),
     }
+}
+
+// ── Universal serde-Deserialize fallthrough (enums, nested structs, …) ──
+//
+// `#[derive(TataraDomain)]` covers `String` / numeric / `bool` / their
+// `Option` and `Vec<String>` shapes with the typed extractors above. Any
+// field type outside that closed set falls through to these helpers, which
+// project the kwarg `Sexp` to canonical JSON via `sexp_to_json` and feed
+// it to `serde_json::from_value` — works for any `serde::Deserialize`.
+//
+// The shape used to live inline in three `quote!` blocks in the derive
+// macro (`Kind::Deserialize`, `Kind::OptionalDeserialize`,
+// `Kind::VecDeserialize`). Lifting them here means:
+//   - Hand-written `TataraDomain` impls share the same error path.
+//   - Future diagnostic upgrades (attaching a source position once `Sexp`
+//     carries spans, richer field-path traces) happen in ONE function,
+//     not three macro-emitted copies.
+//   - The `:<key> deserialize: …` message is a single named primitive in
+//     the substrate — `tatara-check` / LSP / REPL render it uniformly.
+//
+// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+// generator must lean on the library, not duplicate the library inline).
+
+fn deserialize_err(key: &str, err: &serde_json::Error) -> LispError {
+    LispError::Compile {
+        form: format!(":{key}"),
+        message: format!("deserialize: {err}"),
+    }
+}
+
+/// Required field — feeds the kwarg's canonical-JSON projection to
+/// `serde_json::from_value::<T>`. Errors carry `:key` so authoring tools
+/// can point at the offending kwarg.
+pub fn extract_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
+    let sexp = required(kw, key)?;
+    let json = sexp_to_json(sexp);
+    serde_json::from_value(json).map_err(|e| deserialize_err(key, &e))
+}
+
+/// Optional field — `None` if the kwarg is absent; `Some(T)` after a
+/// successful `serde_json::from_value::<T>`.
+pub fn extract_optional_via_serde<T: DeserializeOwned>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<Option<T>> {
+    let Some(sexp) = kw.get(key).copied() else {
+        return Ok(None);
+    };
+    let json = sexp_to_json(sexp);
+    serde_json::from_value(json)
+        .map(Some)
+        .map_err(|e| deserialize_err(key, &e))
+}
+
+/// `Vec<T>` field — empty vec if the kwarg is absent; otherwise the kwarg
+/// must be a `Sexp::List` and each item is deserialized independently.
+pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Result<Vec<T>> {
+    let Some(sexp) = kw.get(key).copied() else {
+        return Ok(Vec::new());
+    };
+    let list = sexp.as_list().ok_or_else(|| LispError::Compile {
+        form: format!(":{key}"),
+        message: "expected list".into(),
+    })?;
+    list.iter()
+        .map(|item| {
+            let json = sexp_to_json(item);
+            serde_json::from_value(json).map_err(|e| deserialize_err(key, &e))
+        })
+        .collect()
 }
 
 // ── Domain registry (runtime-registered, callable by keyword) ───────
@@ -388,7 +460,7 @@ where
 mod tests {
     use super::*;
     use crate::reader::read;
-    use serde::Serialize;
+    use serde::{Deserialize, Serialize};
     use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
     /// Example domain authorable as Lisp — proves derive macro, trait, and
@@ -530,5 +602,182 @@ mod tests {
         assert_eq!(json["name"], "prom");
         assert_eq!(json["query"], "q");
         assert_eq!(json["threshold"], 0.5);
+    }
+
+    // ── extract_via_serde / extract_optional_via_serde / extract_vec_via_serde ──
+    //
+    // These helpers used to live as three inline `quote!` blocks in
+    // tatara-lisp-derive. Pinning their behavior here means a hand-written
+    // `TataraDomain` impl can rely on the same contract the derive uses,
+    // and a regression that re-inlines the boilerplate fails-loudly here
+    // before it fans out.
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    enum Severity {
+        Info,
+        Warning,
+        Critical,
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct EscalationStep {
+        notify_ref: String,
+        wait_minutes: Option<i64>,
+    }
+
+    fn kwargs_of(src: &str) -> Vec<Sexp> {
+        // `(_ :k v :k v …)` — strip the head, return the kwargs slice.
+        let forms = read(src).unwrap();
+        let list = forms[0].as_list().unwrap();
+        list[1..].to_vec()
+    }
+
+    #[test]
+    fn extract_via_serde_parses_enum_from_symbol() {
+        // `:level Critical` — bare symbol → enum discriminant via the
+        // sexp_to_json bridge → serde Deserialize.
+        let args = kwargs_of("(_ :level Critical)");
+        let kw = parse_kwargs(&args).unwrap();
+        let s: Severity = extract_via_serde(&kw, "level").unwrap();
+        assert_eq!(s, Severity::Critical);
+    }
+
+    #[test]
+    fn extract_via_serde_parses_nested_struct_from_kwargs_list() {
+        let args = kwargs_of(r#"(_ :step (:notify-ref "oncall" :wait-minutes 5))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let s: EscalationStep = extract_via_serde(&kw, "step").unwrap();
+        assert_eq!(
+            s,
+            EscalationStep {
+                notify_ref: "oncall".into(),
+                wait_minutes: Some(5),
+            }
+        );
+    }
+
+    #[test]
+    fn extract_via_serde_missing_required_errors() {
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_via_serde::<Severity>(&kw, "level").unwrap_err();
+        let msg = format!("{err}");
+        // The `required` helper supplies the missing-kwarg message — same
+        // path the typed extractors use, so authoring tools render
+        // missing kwargs uniformly across both fallthroughs.
+        assert!(
+            msg.contains(":level"),
+            "missing-kwarg error must name the kwarg, got: {msg}"
+        );
+        assert!(
+            msg.contains("required"),
+            "expected 'required' in missing-kwarg error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn extract_via_serde_deserialize_failure_labels_keyword() {
+        // `:level NotASeverity` — well-formed Sexp, ill-formed enum.
+        // The error must point at `:level` so the operator can fix the
+        // typo without inspecting the source twice.
+        let args = kwargs_of("(_ :level NotASeverity)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_via_serde::<Severity>(&kw, "level").unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains(":level"),
+            "deserialize error must name the kwarg, got: {msg}"
+        );
+        assert!(
+            msg.contains("deserialize:"),
+            "expected 'deserialize:' label, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn extract_optional_via_serde_returns_none_when_absent() {
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let s: Option<Severity> = extract_optional_via_serde(&kw, "level").unwrap();
+        assert!(s.is_none());
+    }
+
+    #[test]
+    fn extract_optional_via_serde_returns_some_when_present() {
+        let args = kwargs_of("(_ :level Warning)");
+        let kw = parse_kwargs(&args).unwrap();
+        let s: Option<Severity> = extract_optional_via_serde(&kw, "level").unwrap();
+        assert_eq!(s, Some(Severity::Warning));
+    }
+
+    #[test]
+    fn extract_vec_via_serde_returns_empty_when_absent() {
+        // Absent-kwarg → empty `Vec` — same semantics `Vec<String>` gets
+        // through `extract_string_list`. Authoring surfaces can rely on
+        // "no entry == empty list" without a `#[serde(default)]` dance.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let v: Vec<EscalationStep> = extract_vec_via_serde(&kw, "steps").unwrap();
+        assert!(v.is_empty());
+    }
+
+    #[test]
+    fn extract_vec_via_serde_collects_nested_structs() {
+        let args = kwargs_of(
+            r#"(_ :steps (
+                  (:notify-ref "a" :wait-minutes 0)
+                  (:notify-ref "b" :wait-minutes 5)
+                  (:notify-ref "c")))"#,
+        );
+        let kw = parse_kwargs(&args).unwrap();
+        let v: Vec<EscalationStep> = extract_vec_via_serde(&kw, "steps").unwrap();
+        assert_eq!(
+            v,
+            vec![
+                EscalationStep {
+                    notify_ref: "a".into(),
+                    wait_minutes: Some(0),
+                },
+                EscalationStep {
+                    notify_ref: "b".into(),
+                    wait_minutes: Some(5),
+                },
+                EscalationStep {
+                    notify_ref: "c".into(),
+                    wait_minutes: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn extract_vec_via_serde_rejects_non_list_kwarg() {
+        // `:steps "scalar"` — a list-typed kwarg given a scalar must fail
+        // with the kwarg name in the form, so the operator sees what to
+        // change.
+        let args = kwargs_of(r#"(_ :steps "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains(":steps"), "got: {msg}");
+        assert!(msg.contains("expected list"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_vec_via_serde_item_failure_labels_keyword() {
+        // First item is well-formed; second item has a typo'd field.
+        // The error must still point at `:steps`, even though the
+        // failure is inside an item.
+        let args = kwargs_of(
+            r#"(_ :steps (
+                  (:notify-ref "ok")
+                  (:notify-ref 7)))"#,
+        );
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains(":steps"), "got: {msg}");
+        assert!(msg.contains("deserialize:"), "got: {msg}");
     }
 }

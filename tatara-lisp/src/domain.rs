@@ -51,6 +51,14 @@ pub trait TataraDomain: Sized {
 
 pub type Kwargs<'a> = HashMap<String, &'a Sexp>;
 
+/// Parse `:k v :k v …` into a kwargs map. Rejects duplicate keywords so the
+/// typed-entry gate fires on `(defX :name "a" :name "b")` instead of silently
+/// keeping the last value — same posture `reject_unknown_kwargs` takes for
+/// typo'd kwargs. A duplicate is ill-typed input: the author either meant
+/// distinct keys (typo) or a list (`:tags ("a" "b")`).
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 — "Typed entry. Ill-typed input
+/// errors before the value exists."
 pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
     let mut kw = HashMap::new();
     let mut i = 0;
@@ -59,7 +67,12 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
             form: "kwargs".into(),
             message: format!("expected keyword at position {i}"),
         })?;
-        kw.insert(key.to_string(), &args[i + 1]);
+        if kw.insert(key.to_string(), &args[i + 1]).is_some() {
+            return Err(LispError::Compile {
+                form: format!(":{key}"),
+                message: "duplicate keyword".into(),
+            });
+        }
         i += 2;
     }
     if i < args.len() {
@@ -216,7 +229,7 @@ fn deserialize_err(key: &str, err: &serde_json::Error) -> LispError {
 /// can point at the offending kwarg.
 pub fn extract_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
     let sexp = required(kw, key)?;
-    let json = sexp_to_json(sexp);
+    let json = sexp_to_json(sexp)?;
     serde_json::from_value(json).map_err(|e| deserialize_err(key, &e))
 }
 
@@ -229,7 +242,7 @@ pub fn extract_optional_via_serde<T: DeserializeOwned>(
     let Some(sexp) = kw.get(key).copied() else {
         return Ok(None);
     };
-    let json = sexp_to_json(sexp);
+    let json = sexp_to_json(sexp)?;
     serde_json::from_value(json)
         .map(Some)
         .map_err(|e| deserialize_err(key, &e))
@@ -247,7 +260,7 @@ pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) ->
     })?;
     list.iter()
         .map(|item| {
-            let json = sexp_to_json(item);
+            let json = sexp_to_json(item)?;
             serde_json::from_value(json).map_err(|e| deserialize_err(key, &e))
         })
         .collect()
@@ -320,8 +333,14 @@ use serde_json::Value as JValue;
 ///   - Lists that look like `:k v :k v …` → `Value::Object`
 ///   - Other lists → `Value::Array`
 ///   - Quote/Quasiquote/Unquote/UnquoteSplice → convert the inner (strips quote)
-pub fn sexp_to_json(s: &Sexp) -> JValue {
-    match s {
+///
+/// Fails on a duplicate keyword inside any nested kwargs-list (e.g.
+/// `(:notify-ref "a" :notify-ref "b")`) — same typed-entry posture
+/// `parse_kwargs` takes at the top level. The round-trip path
+/// (`json_to_sexp` → `sexp_to_json`) is unaffected because
+/// `serde_json::Map` is unique-keyed by construction.
+pub fn sexp_to_json(s: &Sexp) -> Result<JValue> {
+    Ok(match s {
         Sexp::Nil => JValue::Null,
         Sexp::Atom(Atom::Symbol(s)) => JValue::String(s.clone()),
         Sexp::Atom(Atom::Keyword(s)) => JValue::String(format!(":{s}")),
@@ -337,7 +356,13 @@ pub fn sexp_to_json(s: &Sexp) -> JValue {
                 let mut i = 0;
                 while i + 1 < items.len() {
                     if let Some(k) = items[i].as_keyword() {
-                        map.insert(kebab_to_camel(k), sexp_to_json(&items[i + 1]));
+                        let value = sexp_to_json(&items[i + 1])?;
+                        if map.insert(kebab_to_camel(k), value).is_some() {
+                            return Err(LispError::Compile {
+                                form: format!(":{k}"),
+                                message: "duplicate keyword".into(),
+                            });
+                        }
                         i += 2;
                     } else {
                         break;
@@ -345,14 +370,14 @@ pub fn sexp_to_json(s: &Sexp) -> JValue {
                 }
                 JValue::Object(map)
             } else {
-                JValue::Array(items.iter().map(sexp_to_json).collect())
+                JValue::Array(items.iter().map(sexp_to_json).collect::<Result<Vec<_>>>()?)
             }
         }
         Sexp::Quote(inner)
         | Sexp::Quasiquote(inner)
         | Sexp::Unquote(inner)
-        | Sexp::UnquoteSplice(inner) => sexp_to_json(inner),
-    }
+        | Sexp::UnquoteSplice(inner) => sexp_to_json(inner)?,
+    })
 }
 
 /// Convert serde_json back to Sexp — inverse of `sexp_to_json`.
@@ -779,5 +804,121 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains(":steps"), "got: {msg}");
         assert!(msg.contains("deserialize:"), "got: {msg}");
+    }
+
+    // ── Duplicate-keyword rejection (typed-entry hardening) ─────────────
+    //
+    // A typo like `:name "x" :name "y"` used to silently overwrite — the
+    // last value wins, the operator gets no signal. Same bug class
+    // `reject_unknown_kwargs` (commit 2750f39) closed for typo'd kwargs;
+    // this closes the dual hole for duplicate kwargs at every nesting
+    // level (top-level args, nested struct kwargs, vec item kwargs).
+    //
+    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry —
+    // "Ill-typed input errors before the value exists").
+
+    #[test]
+    fn parse_kwargs_rejects_duplicate_top_level_keyword() {
+        let args = kwargs_of(r#"(_ :name "x" :name "y")"#);
+        let err = parse_kwargs(&args).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains(":name"),
+            "error must name the keyword, got: {msg}"
+        );
+        assert!(
+            msg.contains("duplicate keyword"),
+            "expected 'duplicate keyword' label, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_accepts_distinct_keywords() {
+        // Negative-control: pre-existing flow is preserved.
+        let args = kwargs_of(r#"(_ :name "x" :query "q" :threshold 0.5)"#);
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(kw.len(), 3);
+    }
+
+    #[test]
+    fn extract_via_serde_rejects_duplicate_in_nested_struct() {
+        // `:step (:notify-ref "a" :notify-ref "b")` — the duplicate fires
+        // during the `sexp_to_json` projection, before serde sees a value.
+        let args = kwargs_of(r#"(_ :step (:notify-ref "a" :notify-ref "b"))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_via_serde::<EscalationStep>(&kw, "step").unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains(":notify-ref"),
+            "duplicate-in-nested error must name the inner kwarg, got: {msg}"
+        );
+        assert!(
+            msg.contains("duplicate keyword"),
+            "expected 'duplicate keyword' label, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn extract_vec_via_serde_rejects_duplicate_in_item() {
+        // `:steps ((:notify-ref "a" :notify-ref "b"))` — the duplicate is
+        // inside one vec item. Authors get the same diagnostic shape
+        // whether the duplicate is at the top level, in a nested struct,
+        // or inside a vec item.
+        let args = kwargs_of(r#"(_ :steps ((:notify-ref "a" :notify-ref "b")))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains(":notify-ref"), "got: {msg}");
+        assert!(msg.contains("duplicate keyword"), "got: {msg}");
+    }
+
+    #[test]
+    fn derive_rejects_duplicate_top_level_kwarg() {
+        // End-to-end through `#[derive(TataraDomain)]` — silent overwrite
+        // is exactly the bug class the typed-entry gate exists to prevent,
+        // and every derived domain inherits the rejection by sharing
+        // `parse_kwargs`.
+        let forms = read(r#"(defmonitor :name "x" :name "y" :query "q" :threshold 0.5)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains(":name"), "got: {msg}");
+        assert!(msg.contains("duplicate"), "got: {msg}");
+    }
+
+    #[test]
+    fn json_to_sexp_round_trip_does_not_trip_duplicate_check() {
+        // The round-trip path used by `rewrite_typed`: a typed value
+        // → `serde_json::Value` (unique-keyed) → `Sexp` via `json_to_sexp`
+        // → top-level kwargs slice → `parse_kwargs`. The duplicate-check
+        // gate must NOT false-positive on this canonical input.
+        let original = MonitorSpec {
+            name: "x".into(),
+            query: "q".into(),
+            threshold: 0.5,
+            window_seconds: None,
+            tags: vec![],
+            enabled: None,
+        };
+        let json = serde_json::to_value(&original).unwrap();
+        let sexp = json_to_sexp(&json);
+        let args = sexp.as_list().expect("object → kwargs list").to_vec();
+        let _kw = parse_kwargs(&args).expect("round-trip kwargs are unique by construction");
+    }
+
+    #[test]
+    fn sexp_to_json_round_trip_array_unaffected_by_duplicate_check() {
+        // Arrays-of-objects round-trip: each object is unique-keyed by
+        // virtue of being authored as a `serde_json::Map`. The strict
+        // duplicate check must not false-positive on this shape.
+        let json = serde_json::json!([
+            { "notifyRef": "a", "waitMinutes": 0 },
+            { "notifyRef": "b", "waitMinutes": 5 },
+        ]);
+        let sexp = json_to_sexp(&json);
+        let back = sexp_to_json(&sexp).expect("round-trip array must not trip duplicate check");
+        // The array is preserved (object key order is stable inside each
+        // element because `json_to_sexp` writes kwargs in iteration order
+        // and `sexp_to_json` reads them back in the same order).
+        assert_eq!(back, json);
     }
 }

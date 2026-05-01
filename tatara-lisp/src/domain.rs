@@ -57,8 +57,18 @@ pub type Kwargs<'a> = HashMap<String, &'a Sexp>;
 /// typo'd kwargs. A duplicate is ill-typed input: the author either meant
 /// distinct keys (typo) or a list (`:tags ("a" "b")`).
 ///
+/// Odd-length kwargs lists fail with `LispError::OddKwargs { dangling }`,
+/// where `dangling` is the offending element's `Sexp::Display` projection
+/// — `:query` for a keyword whose value got lost, or the literal form of a
+/// stray non-keyword. Naming the dangling element keeps the diagnostic
+/// structurally complete instead of merely flagging "odd number"; authoring
+/// surfaces (REPL, LSP, `tatara-check`) render the mismatch without
+/// re-reading the source.
+///
 /// Theory anchor: THEORY.md §II.1 invariant 1 — "Typed entry. Ill-typed input
-/// errors before the value exists."
+/// errors before the value exists." THEORY.md §V.1 — "knowable platform"
+/// requires the diagnostic to name what was passed, not only what was
+/// expected.
 pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
     let mut kw = HashMap::new();
     let mut i = 0;
@@ -76,7 +86,9 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
         i += 2;
     }
     if i < args.len() {
-        return Err(LispError::OddKwargs);
+        return Err(LispError::OddKwargs {
+            dangling: args[i].to_string(),
+        });
     }
     Ok(kw)
 }
@@ -1114,5 +1126,125 @@ mod tests {
         assert!(msg.contains(":threshold"), "got: {msg}");
         assert!(msg.contains("expected number"), "got: {msg}");
         assert!(msg.contains("got string"), "got: {msg}");
+    }
+
+    // ── Odd-kwargs dangling-element naming ─────────────────────────────
+    //
+    // `(defX :name "x" :query)` used to surface as the bare "odd number of
+    // keyword arguments" message — operator could not tell whether
+    // `:query`'s value got lost or whether the form was malformed. The
+    // structural fix names the dangling element via `Sexp::Display`:
+    //   - keyword case (`:query` with no value) → `:query`
+    //   - non-keyword case (stray `5` at tail)  → `5`
+    // Both halves of the failure are now structurally complete: the gate
+    // names the failure mode AND the offending element. Pinning each case
+    // here keeps `tatara-check` / LSP / REPL renderings safe across
+    // versions, and means a future run that gives `Sexp` source spans
+    // attaches a position to the same single primitive (`OddKwargs`)
+    // mechanically.
+    //
+    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry); §V.1
+    // (knowable platform — diagnostic names both expected and actual).
+
+    #[test]
+    fn parse_kwargs_names_dangling_keyword() {
+        // `:name "x" :query` — `:query` has no value. The error variant
+        // carries the dangling kwarg's display, so the author sees which
+        // keyword lost its value.
+        let args = kwargs_of(r#"(_ :name "x" :query)"#);
+        let err = parse_kwargs(&args).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            matches!(err, LispError::OddKwargs { ref dangling } if dangling == ":query"),
+            "expected OddKwargs {{ dangling: \":query\" }}, got {err:?}"
+        );
+        assert!(
+            msg.contains(":query"),
+            "error must name the dangling keyword, got: {msg}"
+        );
+        assert!(
+            msg.contains("dangling"),
+            "expected 'dangling' in the message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_names_dangling_non_keyword_scalar() {
+        // `:name "x" :query "q" 5` — a stray scalar at the tail. The
+        // dangling element's `Sexp::Display` is `5`; the diagnostic must
+        // name it so the author knows what to delete (or which kwarg key
+        // to add in front of it).
+        let args = kwargs_of(r#"(_ :name "x" :query "q" 5)"#);
+        let err = parse_kwargs(&args).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            matches!(err, LispError::OddKwargs { ref dangling } if dangling == "5"),
+            "expected OddKwargs {{ dangling: \"5\" }}, got {err:?}"
+        );
+        assert!(
+            msg.contains('5'),
+            "error must name the dangling scalar, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_names_dangling_string_scalar() {
+        // `:name "x" "stray"` — a stray string at the tail. The Sexp
+        // Display projects strings through `{:?}`, so the diagnostic
+        // contains the quoted form `"stray"` — preserves the typed shape.
+        let args = kwargs_of(r#"(_ :name "x" "stray")"#);
+        let err = parse_kwargs(&args).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            matches!(err, LispError::OddKwargs { ref dangling } if dangling == "\"stray\""),
+            "expected OddKwargs {{ dangling: \"\\\"stray\\\"\" }}, got {err:?}"
+        );
+        assert!(
+            msg.contains("stray"),
+            "error must name the dangling string, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_single_dangling_keyword() {
+        // `(_ :only)` — a single dangling keyword with nothing else. The
+        // gate must name it the same way as the multi-kwarg case;
+        // structural completeness should not depend on list length.
+        let args = kwargs_of("(_ :only)");
+        let err = parse_kwargs(&args).unwrap_err();
+        assert!(
+            matches!(err, LispError::OddKwargs { ref dangling } if dangling == ":only"),
+            "expected OddKwargs {{ dangling: \":only\" }}, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn derive_odd_kwargs_end_to_end_names_dangling_keyword() {
+        // End-to-end through `#[derive(TataraDomain)]`. A truncated
+        // authoring form `(defmonitor :name "x" :query)` used to surface
+        // as a bare "odd number" message; now every derived domain
+        // inherits the named-dangling-element diagnostic for free
+        // because they all funnel through `parse_kwargs`.
+        let forms = read(r#"(defmonitor :name "x" :query)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains(":query"),
+            "derived odd-kwargs error must name the dangling kwarg, got: {msg}"
+        );
+        assert!(
+            msg.contains("dangling"),
+            "expected 'dangling' label end-to-end, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_well_formed_input_is_unaffected() {
+        // Negative-control: even-length kwargs lists with no duplicates
+        // and no unknowns continue to parse identically. The dangling-
+        // element gate must NOT false-positive on canonical input.
+        let args = kwargs_of(r#"(_ :name "x" :query "q" :threshold 0.5)"#);
+        let kw = parse_kwargs(&args).expect("well-formed kwargs must parse");
+        assert_eq!(kw.len(), 3);
     }
 }

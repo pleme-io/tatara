@@ -29,8 +29,16 @@ pub enum LispError {
     },
     #[error("missing required field: {0}")]
     Missing(&'static str),
-    #[error("odd number of keyword arguments")]
-    OddKwargs,
+    /// A kwargs list of odd length: the last element has no partner. The
+    /// `dangling` field holds the offending element's `Sexp::Display`
+    /// projection — `:query` for a keyword whose value got lost, or the
+    /// literal form of a stray non-keyword. Naming both halves of the
+    /// failure (the failure mode AND the offending element) is the
+    /// typed-entry gate's structural-completeness floor (THEORY.md §V.1):
+    /// without it the operator must re-read the source to find what
+    /// actually misfired.
+    #[error("odd keyword arguments: dangling element `{dangling}`")]
+    OddKwargs { dangling: String },
 }
 
 impl LispError {
@@ -54,7 +62,7 @@ impl LispError {
             | Self::Compile { .. }
             | Self::Unknown { .. }
             | Self::Missing(_)
-            | Self::OddKwargs => None,
+            | Self::OddKwargs { .. } => None,
         }
     }
 }
@@ -74,7 +82,13 @@ mod tests {
 
     #[test]
     fn position_is_none_for_non_positional_variants() {
-        assert_eq!(LispError::OddKwargs.position(), None);
+        assert_eq!(
+            LispError::OddKwargs {
+                dangling: ":query".into()
+            }
+            .position(),
+            None
+        );
         assert_eq!(LispError::Missing("name").position(), None);
         assert_eq!(LispError::InvalidNumber("nan".into()).position(), None);
         assert_eq!(LispError::UnknownSymbol("foo".into()).position(), None);

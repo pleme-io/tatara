@@ -13,7 +13,7 @@ use std::sync::{Mutex, OnceLock};
 
 use serde::de::DeserializeOwned;
 
-use crate::ast::Sexp;
+use crate::ast::{Atom, Sexp};
 use crate::error::{LispError, Result};
 
 /// A Rust type compilable from a Lisp form.
@@ -114,17 +114,47 @@ pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
     })
 }
 
-fn type_err(key: &str, expected: &str) -> LispError {
+/// Stable, human-readable name of a `Sexp`'s outermost shape. Used by the
+/// typed extractors to render `expected X, got Y` diagnostics so a
+/// type-mismatched kwarg names both sides of the failure, not just the
+/// expected side. Names are part of the public surface — `tatara-check`,
+/// the LSP, and the REPL are expected to match on them — so they don't
+/// drift across versions.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform. An error that names
+/// only the expected side leaves the operator to guess what was passed;
+/// naming both is the floor of constructive diagnostics. When a future
+/// run gives `Sexp` source spans, this helper is the single site that
+/// learns to thread `got Y at <pos>`; today's call sites pick up the
+/// span automatically.
+#[must_use]
+pub fn sexp_type_name(s: &Sexp) -> &'static str {
+    match s {
+        Sexp::Nil => "nil",
+        Sexp::Atom(Atom::Symbol(_)) => "symbol",
+        Sexp::Atom(Atom::Keyword(_)) => "keyword",
+        Sexp::Atom(Atom::Str(_)) => "string",
+        Sexp::Atom(Atom::Int(_)) => "int",
+        Sexp::Atom(Atom::Float(_)) => "float",
+        Sexp::Atom(Atom::Bool(_)) => "bool",
+        Sexp::List(_) => "list",
+        Sexp::Quote(_) => "quote",
+        Sexp::Quasiquote(_) => "quasiquote",
+        Sexp::Unquote(_) => "unquote",
+        Sexp::UnquoteSplice(_) => "unquote-splice",
+    }
+}
+
+fn type_err(key: &str, expected: &str, got: &Sexp) -> LispError {
     LispError::Compile {
         form: format!(":{key}"),
-        message: format!("expected {expected}"),
+        message: format!("expected {expected}, got {}", sexp_type_name(got)),
     }
 }
 
 pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
-    required(kw, key)?
-        .as_string()
-        .ok_or_else(|| type_err(key, "string"))
+    let v = required(kw, key)?;
+    v.as_string().ok_or_else(|| type_err(key, "string", v))
 }
 
 pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<&'a str>> {
@@ -132,45 +162,42 @@ pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Opti
         None => Ok(None),
         Some(v) => match v.as_string() {
             Some(s) => Ok(Some(s)),
-            None => Err(type_err(key, "string")),
+            None => Err(type_err(key, "string", v)),
         },
     }
 }
 
 pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
-    let v = kw.get(key).copied();
-    let Some(v) = v else {
+    let Some(v) = kw.get(key).copied() else {
         return Ok(vec![]);
     };
     let list = v
         .as_list()
-        .ok_or_else(|| type_err(key, "list of strings"))?;
+        .ok_or_else(|| type_err(key, "list of strings", v))?;
     list.iter()
         .map(|s| {
             s.as_string()
                 .map(String::from)
-                .ok_or_else(|| type_err(key, "list of strings"))
+                .ok_or_else(|| type_err(key, "list of strings", s))
         })
         .collect()
 }
 
 pub fn extract_int(kw: &Kwargs<'_>, key: &str) -> Result<i64> {
-    required(kw, key)?
-        .as_int()
-        .ok_or_else(|| type_err(key, "int"))
+    let v = required(kw, key)?;
+    v.as_int().ok_or_else(|| type_err(key, "int", v))
 }
 
 pub fn extract_optional_int(kw: &Kwargs<'_>, key: &str) -> Result<Option<i64>> {
     match kw.get(key) {
         None => Ok(None),
-        Some(v) => v.as_int().map(Some).ok_or_else(|| type_err(key, "int")),
+        Some(v) => v.as_int().map(Some).ok_or_else(|| type_err(key, "int", v)),
     }
 }
 
 pub fn extract_float(kw: &Kwargs<'_>, key: &str) -> Result<f64> {
-    required(kw, key)?
-        .as_float()
-        .ok_or_else(|| type_err(key, "number"))
+    let v = required(kw, key)?;
+    v.as_float().ok_or_else(|| type_err(key, "number", v))
 }
 
 pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>> {
@@ -179,20 +206,22 @@ pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>>
         Some(v) => v
             .as_float()
             .map(Some)
-            .ok_or_else(|| type_err(key, "number")),
+            .ok_or_else(|| type_err(key, "number", v)),
     }
 }
 
 pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
-    required(kw, key)?
-        .as_bool()
-        .ok_or_else(|| type_err(key, "bool"))
+    let v = required(kw, key)?;
+    v.as_bool().ok_or_else(|| type_err(key, "bool", v))
 }
 
 pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>> {
     match kw.get(key) {
         None => Ok(None),
-        Some(v) => v.as_bool().map(Some).ok_or_else(|| type_err(key, "bool")),
+        Some(v) => v
+            .as_bool()
+            .map(Some)
+            .ok_or_else(|| type_err(key, "bool", v)),
     }
 }
 
@@ -256,7 +285,7 @@ pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) ->
     };
     let list = sexp.as_list().ok_or_else(|| LispError::Compile {
         form: format!(":{key}"),
-        message: "expected list".into(),
+        message: format!("expected list, got {}", sexp_type_name(sexp)),
     })?;
     list.iter()
         .map(|item| {
@@ -321,7 +350,6 @@ pub fn registered_keywords() -> Vec<&'static str> {
 // field type implementing `Deserialize`. Handles enums (via symbol→string),
 // nested structs (via kwargs→object), and `Vec<T>` of either.
 
-use crate::ast::Atom;
 use serde_json::Value as JValue;
 
 /// Convert a Sexp to its canonical JSON form.
@@ -920,5 +948,171 @@ mod tests {
         // element because `json_to_sexp` writes kwargs in iteration order
         // and `sexp_to_json` reads them back in the same order).
         assert_eq!(back, json);
+    }
+
+    // ── Type-mismatch diagnostics name both expected and got ───────────
+    //
+    // Every typed extractor's `expected X` message used to leave the operator
+    // to inspect the source to discover what kind of value was actually
+    // passed. The `expected X, got Y` shape closes that gap: the diagnostic
+    // is structurally complete so an authoring surface (REPL, LSP,
+    // tatara-check) can render the mismatch without re-reading the input.
+    //
+    // `sexp_type_name` is the named primitive doing the projection; pinning
+    // its outputs here keeps downstream tooling that matches on the names
+    // (e.g., "expected string, got int" → squiggly under the int) safe
+    // across versions.
+
+    #[test]
+    fn sexp_type_name_covers_every_variant() {
+        assert_eq!(sexp_type_name(&Sexp::Nil), "nil");
+        assert_eq!(sexp_type_name(&Sexp::symbol("foo")), "symbol");
+        assert_eq!(sexp_type_name(&Sexp::keyword("k")), "keyword");
+        assert_eq!(sexp_type_name(&Sexp::string("s")), "string");
+        assert_eq!(sexp_type_name(&Sexp::int(7)), "int");
+        assert_eq!(sexp_type_name(&Sexp::float(7.5)), "float");
+        assert_eq!(sexp_type_name(&Sexp::boolean(true)), "bool");
+        assert_eq!(sexp_type_name(&Sexp::List(vec![])), "list");
+        assert_eq!(sexp_type_name(&Sexp::Quote(Box::new(Sexp::Nil))), "quote");
+        assert_eq!(
+            sexp_type_name(&Sexp::Quasiquote(Box::new(Sexp::Nil))),
+            "quasiquote"
+        );
+        assert_eq!(
+            sexp_type_name(&Sexp::Unquote(Box::new(Sexp::Nil))),
+            "unquote"
+        );
+        assert_eq!(
+            sexp_type_name(&Sexp::UnquoteSplice(Box::new(Sexp::Nil))),
+            "unquote-splice"
+        );
+    }
+
+    fn type_err_message(err: LispError) -> String {
+        format!("{err}")
+    }
+
+    #[test]
+    fn extract_string_type_err_names_got_int() {
+        let args = kwargs_of("(_ :name 42)");
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_string(&kw, "name").unwrap_err());
+        assert!(msg.contains("expected string"), "got: {msg}");
+        assert!(msg.contains("got int"), "got: {msg}");
+        assert!(msg.contains(":name"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_optional_string_type_err_names_got_bool() {
+        let args = kwargs_of("(_ :name #t)");
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_optional_string(&kw, "name").unwrap_err());
+        assert!(msg.contains("expected string"), "got: {msg}");
+        assert!(msg.contains("got bool"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_int_type_err_names_got_string() {
+        let args = kwargs_of(r#"(_ :n "seven")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_int(&kw, "n").unwrap_err());
+        assert!(msg.contains("expected int"), "got: {msg}");
+        assert!(msg.contains("got string"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_float_type_err_names_got_bool() {
+        let args = kwargs_of("(_ :ratio #f)");
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_float(&kw, "ratio").unwrap_err());
+        assert!(msg.contains("expected number"), "got: {msg}");
+        assert!(msg.contains("got bool"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_bool_type_err_names_got_int() {
+        let args = kwargs_of("(_ :enabled 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_bool(&kw, "enabled").unwrap_err());
+        assert!(msg.contains("expected bool"), "got: {msg}");
+        assert!(msg.contains("got int"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_string_list_type_err_on_scalar_names_got_string() {
+        // `:tags "scalar"` — list-typed kwarg given a scalar. The error
+        // names the actual shape so the operator sees the mismatch
+        // structurally.
+        let args = kwargs_of(r#"(_ :tags "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_string_list(&kw, "tags").unwrap_err());
+        assert!(msg.contains("expected list of strings"), "got: {msg}");
+        assert!(msg.contains("got string"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_string_list_type_err_on_non_string_item_names_got_int() {
+        // `:tags ("ok" 7)` — outer is a list, inner item isn't a string.
+        // The error must name the item's actual type, not just say
+        // "list of strings" again.
+        let args = kwargs_of(r#"(_ :tags ("ok" 7))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_string_list(&kw, "tags").unwrap_err());
+        assert!(msg.contains("expected list of strings"), "got: {msg}");
+        assert!(msg.contains("got int"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_optional_int_type_err_names_got_string() {
+        let args = kwargs_of(r#"(_ :n "seven")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_optional_int(&kw, "n").unwrap_err());
+        assert!(msg.contains("expected int"), "got: {msg}");
+        assert!(msg.contains("got string"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_optional_float_type_err_names_got_string() {
+        let args = kwargs_of(r#"(_ :ratio "half")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_optional_float(&kw, "ratio").unwrap_err());
+        assert!(msg.contains("expected number"), "got: {msg}");
+        assert!(msg.contains("got string"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_optional_bool_type_err_names_got_int() {
+        let args = kwargs_of("(_ :enabled 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_optional_bool(&kw, "enabled").unwrap_err());
+        assert!(msg.contains("expected bool"), "got: {msg}");
+        assert!(msg.contains("got int"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_vec_via_serde_non_list_kwarg_names_got_string() {
+        // `:steps "scalar"` — the vec-fallthrough's "expected list" used
+        // to be a bare label; now it also reports the actual outer shape.
+        let args = kwargs_of(r#"(_ :steps "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let msg =
+            type_err_message(extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err());
+        assert!(msg.contains("expected list"), "got: {msg}");
+        assert!(msg.contains("got string"), "got: {msg}");
+    }
+
+    #[test]
+    fn derive_type_err_end_to_end_names_got_string_for_threshold() {
+        // End-to-end through `#[derive(TataraDomain)]`. A misspelled-as-
+        // string `:threshold "tight"` used to surface as "expected
+        // number" with no signal what was actually passed; now the
+        // diagnostic carries `got string` so authoring surfaces have
+        // structural info to render without re-reading the source.
+        let forms = read(r#"(defmonitor :name "x" :query "q" :threshold "tight")"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains(":threshold"), "got: {msg}");
+        assert!(msg.contains("expected number"), "got: {msg}");
+        assert!(msg.contains("got string"), "got: {msg}");
     }
 }

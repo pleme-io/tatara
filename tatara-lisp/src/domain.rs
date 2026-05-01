@@ -79,7 +79,7 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
         })?;
         if kw.insert(key.to_string(), &args[i + 1]).is_some() {
             return Err(LispError::Compile {
-                form: format!(":{key}"),
+                form: kwarg_form(key),
                 message: "duplicate keyword".into(),
             });
         }
@@ -111,7 +111,7 @@ pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
                 .collect::<Vec<_>>()
                 .join(", ");
             return Err(LispError::Compile {
-                form: format!(":{key}"),
+                form: kwarg_form(key),
                 message: format!("unknown keyword (allowed: {allowed_list})"),
             });
         }
@@ -121,9 +121,51 @@ pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
 
 pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
     kw.get(key).copied().ok_or_else(|| LispError::Compile {
-        form: format!(":{key}"),
+        form: kwarg_form(key),
         message: "required but not provided".into(),
     })
+}
+
+/// Canonical `form:` label for a kwarg-level `LispError::Compile`. Every
+/// typed-entry diagnostic that names a kwarg (`required`, `type_err`,
+/// `deserialize_err`, the duplicate-keyword paths in `parse_kwargs` and
+/// `sexp_to_json`, the unknown-keyword path in `reject_unknown_kwargs`,
+/// the non-list path in `extract_vec_via_serde`) routes through this one
+/// helper, so authoring surfaces (REPL, LSP, `tatara-check`) bind to a
+/// single named primitive rather than seven inline `format!(":{key}")`
+/// copies.
+///
+/// Theory anchor: THEORY.md §VI.1 — "Generation over composition.
+/// Three-times rule: when a pattern repeats three times, extract an
+/// archetype/backend/synthesizer and generate from it." Seven inline
+/// copies in one module is the textbook signal.
+#[must_use]
+pub fn kwarg_form(key: &str) -> String {
+    format!(":{key}")
+}
+
+/// Canonical `form:` label for a failure inside the Nth item of a
+/// list-typed kwarg — `:steps[1]` when the second item of `:steps` fails
+/// to deserialize, `:tags[2]` when the third tag isn't a string. The
+/// substrate names the item-path so the operator sees both *which kwarg*
+/// and *which element* misfired without re-counting from the source.
+///
+/// Frontier inspiration: JSON Pointer (`/steps/1`) and jq path
+/// expressions — lossless paths through value projections so downstream
+/// tooling (LSP underlines, structural rewrites) bind to the path
+/// instead of parsing the diagnostic message. Translation through
+/// pleme-io primitives: the surface syntax authors already write
+/// (`:<key>` + `[idx]`), no new error variant, no new IR layer. When a
+/// future run gives `Sexp` source spans, the indexed form gains a
+/// position the same way `kwarg_form` will — one helper, every consumer
+/// inherits.
+///
+/// Theory anchor: THEORY.md §V.1 — "Knowable platform … Render
+/// Anywhere." A diagnostic that names the kwarg but loses the item index
+/// is structurally incomplete; the path completes it.
+#[must_use]
+pub fn kwarg_item_form(key: &str, idx: usize) -> String {
+    format!(":{key}[{idx}]")
 }
 
 /// Stable, human-readable name of a `Sexp`'s outermost shape. Used by the
@@ -159,7 +201,7 @@ pub fn sexp_type_name(s: &Sexp) -> &'static str {
 
 fn type_err(key: &str, expected: &str, got: &Sexp) -> LispError {
     LispError::Compile {
-        form: format!(":{key}"),
+        form: kwarg_form(key),
         message: format!("expected {expected}, got {}", sexp_type_name(got)),
     }
 }
@@ -187,10 +229,14 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
         .as_list()
         .ok_or_else(|| type_err(key, "list of strings", v))?;
     list.iter()
-        .map(|s| {
+        .enumerate()
+        .map(|(idx, s)| {
             s.as_string()
                 .map(String::from)
-                .ok_or_else(|| type_err(key, "list of strings", s))
+                .ok_or_else(|| LispError::Compile {
+                    form: kwarg_item_form(key, idx),
+                    message: format!("expected string, got {}", sexp_type_name(s)),
+                })
         })
         .collect()
 }
@@ -260,7 +306,17 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
 
 fn deserialize_err(key: &str, err: &serde_json::Error) -> LispError {
     LispError::Compile {
-        form: format!(":{key}"),
+        form: kwarg_form(key),
+        message: format!("deserialize: {err}"),
+    }
+}
+
+/// Item-indexed serde failure inside a `Vec<T>` kwarg. Pairs with
+/// `kwarg_item_form` so the diagnostic names both the outer kwarg and the
+/// failing item index — `:steps[1]` — instead of dropping the index.
+fn deserialize_item_err(key: &str, idx: usize, err: &serde_json::Error) -> LispError {
+    LispError::Compile {
+        form: kwarg_item_form(key, idx),
         message: format!("deserialize: {err}"),
     }
 }
@@ -296,13 +352,14 @@ pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) ->
         return Ok(Vec::new());
     };
     let list = sexp.as_list().ok_or_else(|| LispError::Compile {
-        form: format!(":{key}"),
+        form: kwarg_form(key),
         message: format!("expected list, got {}", sexp_type_name(sexp)),
     })?;
     list.iter()
-        .map(|item| {
+        .enumerate()
+        .map(|(idx, item)| {
             let json = sexp_to_json(item)?;
-            serde_json::from_value(json).map_err(|e| deserialize_err(key, &e))
+            serde_json::from_value(json).map_err(|e| deserialize_item_err(key, idx, &e))
         })
         .collect()
 }
@@ -399,7 +456,7 @@ pub fn sexp_to_json(s: &Sexp) -> Result<JValue> {
                         let value = sexp_to_json(&items[i + 1])?;
                         if map.insert(kebab_to_camel(k), value).is_some() {
                             return Err(LispError::Compile {
-                                form: format!(":{k}"),
+                                form: kwarg_form(k),
                                 message: "duplicate keyword".into(),
                             });
                         }
@@ -1063,14 +1120,20 @@ mod tests {
     }
 
     #[test]
-    fn extract_string_list_type_err_on_non_string_item_names_got_int() {
-        // `:tags ("ok" 7)` — outer is a list, inner item isn't a string.
-        // The error must name the item's actual type, not just say
-        // "list of strings" again.
+    fn extract_string_list_type_err_on_non_string_item_names_index_and_got_int() {
+        // `:tags ("ok" 7)` — outer is a list, the second item isn't a
+        // string. Diagnostic names BOTH the item path (`:tags[1]`) and the
+        // narrower per-item expectation (`expected string`, not the outer
+        // `expected list of strings`) so authors see structurally where
+        // the failure is, not just which kwarg.
         let args = kwargs_of(r#"(_ :tags ("ok" 7))"#);
         let kw = parse_kwargs(&args).unwrap();
         let msg = type_err_message(extract_string_list(&kw, "tags").unwrap_err());
-        assert!(msg.contains("expected list of strings"), "got: {msg}");
+        assert!(
+            msg.contains(":tags[1]"),
+            "expected indexed item path, got: {msg}"
+        );
+        assert!(msg.contains("expected string"), "got: {msg}");
         assert!(msg.contains("got int"), "got: {msg}");
     }
 
@@ -1236,6 +1299,143 @@ mod tests {
             msg.contains("dangling"),
             "expected 'dangling' label end-to-end, got: {msg}"
         );
+    }
+
+    // ── Indexed-item form labels for list-typed kwargs ─────────────────
+    //
+    // `kwarg_form` and `kwarg_item_form` are the two named primitives
+    // that build the `form:` field of every typed-entry diagnostic. The
+    // base helper consolidates seven inline `format!(":{key}")` copies
+    // (parse_kwargs duplicate, reject_unknown_kwargs, required, type_err,
+    // deserialize_err, sexp_to_json's nested-duplicate, the non-list
+    // path in extract_vec_via_serde) into one site; the indexed helper
+    // adds the structural slot for *which item* failed.
+    //
+    // Pinning the canonical shapes here keeps downstream tooling
+    // (`tatara-check`, LSP, REPL) safe across versions, and means a
+    // future run that gives `Sexp` source spans threads `pos` through
+    // ONE primitive instead of every macro emit. Frontier inspiration:
+    // JSON Pointer (`/steps/1`), jq paths.
+
+    #[test]
+    fn kwarg_form_renders_canonical_shape() {
+        assert_eq!(kwarg_form("threshold"), ":threshold");
+        assert_eq!(kwarg_form("notify-ref"), ":notify-ref");
+        // No transformation of the key — the surface name is what the
+        // author sees in the source. `kebab_to_camel` happens elsewhere.
+        assert_eq!(kwarg_form(""), ":");
+    }
+
+    #[test]
+    fn kwarg_item_form_renders_canonical_indexed_shape() {
+        assert_eq!(kwarg_item_form("tags", 0), ":tags[0]");
+        assert_eq!(kwarg_item_form("steps", 1), ":steps[1]");
+        assert_eq!(kwarg_item_form("steps", 17), ":steps[17]");
+    }
+
+    #[test]
+    fn extract_string_list_outer_failure_keeps_unindexed_form() {
+        // Negative-control: the outer-shape failure (`:tags "scalar"`)
+        // is at the kwarg level, not the item level — its form must NOT
+        // pick up an `[idx]` suffix, and the message keeps the wider
+        // `expected list of strings`.
+        let args = kwargs_of(r#"(_ :tags "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_string_list(&kw, "tags").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains(":tags"), "got: {msg}");
+        assert!(
+            !msg.contains(":tags["),
+            "outer failure must not gain an item index, got: {msg}"
+        );
+        assert!(msg.contains("expected list of strings"), "got: {msg}");
+        assert!(msg.contains("got string"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_string_list_indexes_each_failing_item() {
+        // The first non-string item wins (collect short-circuits on the
+        // first Err). Pin the index math: a failure at position 2 must
+        // surface as `:tags[2]`, not `:tags[0]` or `:tags[1]`.
+        let args = kwargs_of(r#"(_ :tags ("ok" "also-ok" 7))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = format!("{}", extract_string_list(&kw, "tags").unwrap_err());
+        assert!(msg.contains(":tags[2]"), "got: {msg}");
+        assert!(msg.contains("expected string"), "got: {msg}");
+        assert!(msg.contains("got int"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_vec_via_serde_indexes_failing_item() {
+        // Second item has a non-string `:notify-ref`. The serde error
+        // must surface under `:steps[1]` so the operator goes straight
+        // to the bad item — previously the index was lost and the
+        // diagnostic only named `:steps`.
+        let args = kwargs_of(
+            r#"(_ :steps (
+                  (:notify-ref "ok")
+                  (:notify-ref 7)))"#,
+        );
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains(":steps[1]"), "got: {msg}");
+        assert!(msg.contains("deserialize:"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_vec_via_serde_outer_failure_keeps_unindexed_form() {
+        // Negative-control: the outer kwarg-isn't-a-list failure stays
+        // at `:steps` (no `[N]`). The wider `expected list` message is
+        // preserved.
+        let args = kwargs_of(r#"(_ :steps "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = format!(
+            "{}",
+            extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err()
+        );
+        assert!(msg.contains(":steps"), "got: {msg}");
+        assert!(
+            !msg.contains(":steps["),
+            "outer failure must not gain an item index, got: {msg}"
+        );
+        assert!(msg.contains("expected list"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_vec_via_serde_propagates_inner_duplicate_with_inner_form() {
+        // Inner `(:notify-ref "a" :notify-ref "b")` fails inside
+        // `sexp_to_json` BEFORE `serde_json::from_value` runs — that
+        // path's error already carries its own `form: ":notify-ref"`,
+        // and the item-level wrapper must not clobber it with
+        // `:steps[0]`. Pin the propagation: the operator sees the
+        // duplicated inner kwarg, not just the item index.
+        let args = kwargs_of(r#"(_ :steps ((:notify-ref "a" :notify-ref "b")))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = format!(
+            "{}",
+            extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err()
+        );
+        assert!(msg.contains(":notify-ref"), "got: {msg}");
+        assert!(msg.contains("duplicate keyword"), "got: {msg}");
+    }
+
+    #[test]
+    fn derive_indexed_item_failure_e2e_via_monitor_tags() {
+        // End-to-end through `#[derive(TataraDomain)]` on `MonitorSpec`:
+        // `:tags ("prod" 7)` must surface as `:tags[1]` so every
+        // derived domain inherits the indexed-item diagnostic by
+        // sharing `extract_string_list` — no per-derive macro change.
+        let forms =
+            read(r#"(defmonitor :name "x" :query "q" :threshold 0.5 :tags ("prod" 7))"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains(":tags[1]"),
+            "derived item-failure error must name the index, got: {msg}"
+        );
+        assert!(msg.contains("expected string"), "got: {msg}");
+        assert!(msg.contains("got int"), "got: {msg}");
     }
 
     #[test]

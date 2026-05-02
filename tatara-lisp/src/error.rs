@@ -43,6 +43,25 @@ pub enum LispError {
         expected: &'static str,
         got: &'static str,
     },
+    /// Structural head-mismatch — the `(head ...)` of a top-level form
+    /// didn't match `T::KEYWORD`. Both sides are first-class fields, not
+    /// embedded substrings of `message`. Rendered as `"compile error in
+    /// {keyword}: expected ({keyword} ...), got ({got} ...)"` so the
+    /// user-facing string matches the legacy `Compile`-shaped diagnostic
+    /// byte-for-byte; the gain is structural — authoring tools (REPL,
+    /// LSP, `tatara-check`) pattern-match on the variant and bind
+    /// directly to `keyword` / `got` instead of substring-parsing the
+    /// rendered message.
+    ///
+    /// `keyword` is `&'static str` because it always comes from
+    /// `T::KEYWORD`, a compile-time literal; `got` is `String` because
+    /// it is an arbitrary symbol from the source. When a future run
+    /// gives `Sexp` source spans, `pos: Option<usize>` lands here in
+    /// ONE place and every head-mismatch site picks up positional
+    /// rendering via `crate::diagnostic::format_diagnostic`
+    /// mechanically.
+    #[error("compile error in {keyword}: expected ({keyword} ...), got ({got} ...)")]
+    HeadMismatch { keyword: &'static str, got: String },
     #[error("unknown {category}: {value}")]
     Unknown {
         category: &'static str,
@@ -82,6 +101,7 @@ impl LispError {
             | Self::Type { .. }
             | Self::Compile { .. }
             | Self::TypeMismatch { .. }
+            | Self::HeadMismatch { .. }
             | Self::Unknown { .. }
             | Self::Missing(_)
             | Self::OddKwargs { .. } => None,
@@ -135,6 +155,14 @@ mod tests {
                 form: ":x".into(),
                 expected: "string",
                 got: "int",
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::HeadMismatch {
+                keyword: "defmonitor",
+                got: "not-a-monitor".into(),
             }
             .position(),
             None

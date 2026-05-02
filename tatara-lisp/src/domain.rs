@@ -26,25 +26,74 @@ pub trait TataraDomain: Sized {
 
     /// Parse a complete form; validates the head symbol matches `KEYWORD`.
     fn compile_from_sexp(form: &Sexp) -> Result<Self> {
-        let list = form.as_list().ok_or_else(|| LispError::Compile {
-            form: Self::KEYWORD.to_string(),
-            message: "expected list form".into(),
-        })?;
+        let list = form
+            .as_list()
+            .ok_or_else(|| not_a_list_form_err(Self::KEYWORD))?;
         let head = list
             .first()
             .and_then(|s| s.as_symbol())
-            .ok_or_else(|| LispError::Compile {
-                form: Self::KEYWORD.to_string(),
-                message: "missing head symbol".into(),
-            })?;
+            .ok_or_else(|| missing_head_err(Self::KEYWORD))?;
         if head != Self::KEYWORD {
-            return Err(LispError::Compile {
-                form: Self::KEYWORD.to_string(),
-                message: format!("expected ({} ...), got ({} ...)", Self::KEYWORD, head),
-            });
+            return Err(head_mismatch(Self::KEYWORD, head.to_string()));
         }
         Self::compile_from_args(&list[1..])
     }
+}
+
+// ── compile_from_sexp diagnostics — the form-shape gate primitives ─
+//
+// `compile_from_sexp` (the trait default) gates every `TataraDomain`
+// invocation that takes a complete `(KEYWORD …)` form: ProcessSpec,
+// MonitorSpec, AlertPolicySpec, every hand-written impl. Three failure
+// modes — not a list, missing head symbol, wrong head — used to be
+// inline `LispError::Compile { form: KEYWORD.to_string(), message: …}`
+// triples in the trait default. The three-times-rule signal
+// (THEORY.md §VI.1) calls for one named primitive per shape; these
+// are them.
+//
+// `head_mismatch` returns the dedicated `LispError::HeadMismatch`
+// variant — the `got` symbol is structurally exposed, not embedded
+// in a free-form message string. The other two are unstructured
+// `Compile` errors because they carry no runtime data beyond the
+// already-static `KEYWORD`.
+
+/// `T::compile_from_sexp` was passed something that isn't a list.
+/// One named primitive every TataraDomain impl shares.
+#[must_use]
+pub fn not_a_list_form_err(keyword: &'static str) -> LispError {
+    LispError::Compile {
+        form: keyword.to_string(),
+        message: "expected list form".into(),
+    }
+}
+
+/// `T::compile_from_sexp` was passed `()` or a list whose first
+/// element isn't a symbol — there's nothing to dispatch on.
+#[must_use]
+pub fn missing_head_err(keyword: &'static str) -> LispError {
+    LispError::Compile {
+        form: keyword.to_string(),
+        message: "missing head symbol".into(),
+    }
+}
+
+/// Structural head-mismatch builder. Returns the dedicated
+/// `LispError::HeadMismatch` variant so authoring surfaces (REPL, LSP,
+/// `tatara-check`) bind to first-class `keyword`/`got` fields instead
+/// of substring-parsing the rendered message. Display matches the
+/// legacy `Compile`-shaped diagnostic byte-for-byte, so existing
+/// `format!("{err}").contains("expected ({KEYWORD}")` assertions pass
+/// unchanged.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform. A diagnostic
+/// whose `got` is embedded in a free-form message is structurally
+/// incomplete; an authoring surface that wants to render
+/// "did-you-mean" suggestions on the offending head must re-parse
+/// the message. After this lift the slot exists in the variant's
+/// data shape itself.
+#[must_use]
+pub fn head_mismatch(keyword: &'static str, got: String) -> LispError {
+    LispError::HeadMismatch { keyword, got }
 }
 
 // ── kwarg parsing + typed extractors used by the derive macro ──────
@@ -1649,5 +1698,119 @@ mod tests {
             ),
             "expected derived TypeMismatch, got {err:?}"
         );
+    }
+
+    // ── compile_from_sexp form-shape primitives ───────────────────────
+
+    #[test]
+    fn head_mismatch_emits_structural_variant() {
+        let err = head_mismatch("defmonitor", "not-a-monitor".into());
+        assert!(
+            matches!(
+                err,
+                LispError::HeadMismatch {
+                    keyword: "defmonitor",
+                    ref got,
+                } if got == "not-a-monitor"
+            ),
+            "expected HeadMismatch variant, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn head_mismatch_display_matches_legacy_compile_shape() {
+        // Legacy shape (before this lift):
+        //   "compile error in defmonitor: expected (defmonitor ...), got (X ...)"
+        // The structural variant must render byte-for-byte the same so
+        // existing consumer assertions (e.g. `tatara-check`, the
+        // `derive_errors_on_wrong_head` test) pass unchanged.
+        let err = head_mismatch("defmonitor", "not-a-monitor".into());
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: expected (defmonitor ...), got (not-a-monitor ...)"
+        );
+    }
+
+    #[test]
+    fn not_a_list_form_err_is_compile_with_keyword_form() {
+        let err = not_a_list_form_err("defmonitor");
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor");
+                assert_eq!(message, "expected list form");
+            }
+            other => panic!("expected Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn missing_head_err_is_compile_with_keyword_form() {
+        let err = missing_head_err("defmonitor");
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor");
+                assert_eq!(message, "missing head symbol");
+            }
+            other => panic!("expected Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compile_from_sexp_emits_head_mismatch_for_wrong_head() {
+        // End-to-end through the trait default: a `(not-a-monitor …)`
+        // form fed to `MonitorSpec::compile_from_sexp` surfaces the
+        // structural HeadMismatch — every derived domain (and every
+        // hand-written impl that uses the trait default) inherits.
+        let forms = read(r#"(not-a-monitor :name "x")"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::HeadMismatch {
+                    keyword: "defmonitor",
+                    ref got,
+                } if got == "not-a-monitor"
+            ),
+            "expected HeadMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn compile_from_sexp_emits_compile_for_non_list_form() {
+        // A bare atom (no parens) produces the not-a-list diagnostic.
+        let err = MonitorSpec::compile_from_sexp(&Sexp::int(7)).unwrap_err();
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor");
+                assert_eq!(message, "expected list form");
+            }
+            other => panic!("expected Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compile_from_sexp_emits_compile_for_missing_head() {
+        // `()` is a list whose first element doesn't exist — head can't
+        // be projected to a symbol. The diagnostic names the failure
+        // mode without inventing a "got X" that isn't there.
+        let err = MonitorSpec::compile_from_sexp(&Sexp::List(vec![])).unwrap_err();
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor");
+                assert_eq!(message, "missing head symbol");
+            }
+            other => panic!("expected Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn head_mismatch_position_is_none_today() {
+        // Negative-control: until `Sexp` carries spans, `position()`
+        // returns `None` — `format_diagnostic` falls through to
+        // single-line rendering. A future run that adds
+        // `pos: Option<usize>` to `HeadMismatch` does so deliberately
+        // with a fail-before/pass-after delta.
+        let err = head_mismatch("defmonitor", "not-a-monitor".into());
+        assert_eq!(err.position(), None);
     }
 }

@@ -199,11 +199,42 @@ pub fn sexp_type_name(s: &Sexp) -> &'static str {
     }
 }
 
-fn type_err(key: &str, expected: &str, got: &Sexp) -> LispError {
-    LispError::Compile {
-        form: kwarg_form(key),
-        message: format!("expected {expected}, got {}", sexp_type_name(got)),
+/// Structural type-mismatch builder. Pairs a path-shaped `form` (typically
+/// `kwarg_form(_)` or `kwarg_item_form(_, _)`) with the static `expected`
+/// label and the `got` projection of the offending `Sexp` through
+/// `sexp_type_name`. Returns the dedicated `LispError::TypeMismatch`
+/// variant so authoring surfaces (REPL, LSP, `tatara-check`) bind to
+/// first-class `expected`/`got` fields instead of substring-parsing the
+/// rendered message.
+///
+/// Three inline `format!("expected {X}, got {}", sexp_type_name(_))`
+/// copies in this module (`type_err`, `extract_string_list` per-item,
+/// `extract_vec_via_serde` non-list) used to assemble the same shape by
+/// hand; the three-times rule (THEORY.md §VI.1) calls for one named
+/// primitive. This is it. Future runs that thread `pos: Option<usize>`
+/// from `Sexp` spans add ONE field to the variant; every type-mismatch
+/// site inherits positional rendering with no consumer changes.
+#[must_use]
+pub fn type_mismatch(form: String, expected: &'static str, got: &Sexp) -> LispError {
+    LispError::TypeMismatch {
+        form,
+        expected,
+        got: sexp_type_name(got),
     }
+}
+
+fn type_err(key: &str, expected: &'static str, got: &Sexp) -> LispError {
+    type_mismatch(kwarg_form(key), expected, got)
+}
+
+/// Item-indexed sibling of `type_err` — pairs `kwarg_item_form` with
+/// `type_mismatch` so a per-item failure inside a list-typed kwarg names
+/// `:<key>[<idx>]` plus the structural `expected`/`got` shape. Used by
+/// `extract_string_list`'s per-item path; future per-item type-mismatch
+/// sites (e.g. typed enums-of-strings, typed numeric vecs) bind here
+/// rather than re-inlining the shape.
+fn type_err_at(key: &str, idx: usize, expected: &'static str, got: &Sexp) -> LispError {
+    type_mismatch(kwarg_item_form(key, idx), expected, got)
 }
 
 pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
@@ -233,10 +264,7 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
         .map(|(idx, s)| {
             s.as_string()
                 .map(String::from)
-                .ok_or_else(|| LispError::Compile {
-                    form: kwarg_item_form(key, idx),
-                    message: format!("expected string, got {}", sexp_type_name(s)),
-                })
+                .ok_or_else(|| type_err_at(key, idx, "string", s))
         })
         .collect()
 }
@@ -351,10 +379,7 @@ pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) ->
     let Some(sexp) = kw.get(key).copied() else {
         return Ok(Vec::new());
     };
-    let list = sexp.as_list().ok_or_else(|| LispError::Compile {
-        form: kwarg_form(key),
-        message: format!("expected list, got {}", sexp_type_name(sexp)),
-    })?;
+    let list = sexp.as_list().ok_or_else(|| type_err(key, "list", sexp))?;
     list.iter()
         .enumerate()
         .map(|(idx, item)| {
@@ -1446,5 +1471,183 @@ mod tests {
         let args = kwargs_of(r#"(_ :name "x" :query "q" :threshold 0.5)"#);
         let kw = parse_kwargs(&args).expect("well-formed kwargs must parse");
         assert_eq!(kw.len(), 3);
+    }
+
+    // ── Structural TypeMismatch variant ────────────────────────────────
+    //
+    // The three "expected X, got Y" sites in this module — `type_err`,
+    // `extract_string_list` per-item, `extract_vec_via_serde` non-list —
+    // used to assemble the message inline via three near-identical
+    // `format!("expected {expected}, got {}", sexp_type_name(_))` copies.
+    // Three copies is the THEORY.md §VI.1 three-times-rule signal.
+    //
+    // `LispError::TypeMismatch { form, expected, got }` collapses the
+    // shape into one structural variant: `form` is the path slot
+    // (`kwarg_form` or `kwarg_item_form`), `expected` is the static
+    // expectation, `got` is the static `sexp_type_name` projection.
+    // Authoring tools (REPL, LSP, `tatara-check`) bind to the variant
+    // directly instead of substring-parsing a rendered message; rendered
+    // text matches the legacy `Compile`-shaped diagnostic byte-for-byte,
+    // so existing `msg.contains("expected …")` assertions pass.
+    //
+    // Pinning the variant identity here keeps the structural binding
+    // safe across versions, and means a future run that gives `Sexp`
+    // source spans threads `pos: Option<usize>` through ONE primitive
+    // (`type_mismatch`) — every type-mismatch site picks up positional
+    // rendering with no consumer changes.
+
+    #[test]
+    fn type_mismatch_helper_emits_structured_variant() {
+        let err = type_mismatch("ctx".to_string(), "string", &Sexp::int(7));
+        match err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, "ctx");
+                assert_eq!(expected, "string");
+                assert_eq!(got, "int");
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn type_mismatch_display_matches_legacy_compile_shape() {
+        // The user-visible string is byte-for-byte equivalent to the
+        // pre-lift `LispError::Compile { message: format!("expected …, got …") }`
+        // rendering. Authoring surfaces that pattern-match on the message
+        // text continue to work; tools that pattern-match on the variant
+        // gain structural binding.
+        let err = type_mismatch(":threshold".to_string(), "number", &Sexp::string("tight"));
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: expected number, got string"
+        );
+    }
+
+    #[test]
+    fn extract_string_returns_type_mismatch_variant() {
+        // The kwarg-level `expected X, got Y` site now produces the
+        // structural variant. Pin the variant identity AND the rendered
+        // message so the substrate's contract is locked from both
+        // angles.
+        let args = kwargs_of("(_ :name 42)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_string(&kw, "name").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "string",
+                    got: "int",
+                } if form == ":name"
+            ),
+            "expected TypeMismatch {{ form: \":name\", expected: \"string\", got: \"int\" }}, got {err:?}"
+        );
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :name: expected string, got int"
+        );
+    }
+
+    #[test]
+    fn extract_string_list_per_item_returns_indexed_type_mismatch() {
+        // Per-item failure in a `Vec<String>` kwarg flows through
+        // `type_err_at` → `kwarg_item_form` + `type_mismatch`.
+        let args = kwargs_of(r#"(_ :tags ("ok" 7))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_string_list(&kw, "tags").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "string",
+                    got: "int",
+                } if form == ":tags[1]"
+            ),
+            "expected indexed TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_vec_via_serde_non_list_returns_type_mismatch() {
+        // The vec-fallthrough's "expected list" path lifts into the
+        // same variant — `:steps "scalar"` no longer produces
+        // `LispError::Compile`; it produces `TypeMismatch` with
+        // `expected: "list"`, `got: "string"`. Authoring tools see the
+        // same shape regardless of which extractor reported the
+        // mismatch.
+        let args = kwargs_of(r#"(_ :steps "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "list",
+                    got: "string",
+                } if form == ":steps"
+            ),
+            "expected list-shape TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_string_list_outer_failure_returns_list_of_strings_type_mismatch() {
+        // The outer-shape failure (`:tags "scalar"`) is at the kwarg
+        // level — its `expected` stays `"list of strings"` (wider than
+        // the per-item case's `"string"`) and the form has no `[idx]`
+        // suffix. Same variant; different `expected` + form.
+        let args = kwargs_of(r#"(_ :tags "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_string_list(&kw, "tags").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "list of strings",
+                    got: "string",
+                } if form == ":tags"
+            ),
+            "expected outer-shape TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn type_mismatch_position_is_none_today() {
+        // Negative-control: until `Sexp` carries spans, `position()`
+        // returns `None` for the variant — `format_diagnostic` falls
+        // through to single-line rendering, no caret emitted. Pinning
+        // this contract means a future run that adds `pos: Option<usize>`
+        // does so deliberately, with a fail-before/pass-after delta.
+        let err = type_mismatch(":x".to_string(), "string", &Sexp::int(0));
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn derive_type_mismatch_e2e_via_monitor_threshold() {
+        // End-to-end through `#[derive(TataraDomain)]` on `MonitorSpec`:
+        // a misspelled-as-string `:threshold "tight"` surfaces the
+        // structural variant. Every derived domain inherits the lift —
+        // no per-derive macro change.
+        let forms = read(r#"(defmonitor :name "x" :query "q" :threshold "tight")"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "number",
+                    got: "string",
+                } if form == ":threshold"
+            ),
+            "expected derived TypeMismatch, got {err:?}"
+        );
     }
 }

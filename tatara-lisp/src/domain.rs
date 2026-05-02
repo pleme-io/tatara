@@ -26,25 +26,74 @@ pub trait TataraDomain: Sized {
 
     /// Parse a complete form; validates the head symbol matches `KEYWORD`.
     fn compile_from_sexp(form: &Sexp) -> Result<Self> {
-        let list = form.as_list().ok_or_else(|| LispError::Compile {
-            form: Self::KEYWORD.to_string(),
-            message: "expected list form".into(),
-        })?;
+        let list = form
+            .as_list()
+            .ok_or_else(|| not_a_list_form_err(Self::KEYWORD))?;
         let head = list
             .first()
             .and_then(|s| s.as_symbol())
-            .ok_or_else(|| LispError::Compile {
-                form: Self::KEYWORD.to_string(),
-                message: "missing head symbol".into(),
-            })?;
+            .ok_or_else(|| missing_head_err(Self::KEYWORD))?;
         if head != Self::KEYWORD {
-            return Err(LispError::Compile {
-                form: Self::KEYWORD.to_string(),
-                message: format!("expected ({} ...), got ({} ...)", Self::KEYWORD, head),
-            });
+            return Err(head_mismatch(Self::KEYWORD, head.to_string()));
         }
         Self::compile_from_args(&list[1..])
     }
+}
+
+// ── compile_from_sexp diagnostics — the form-shape gate primitives ─
+//
+// `compile_from_sexp` (the trait default) gates every `TataraDomain`
+// invocation that takes a complete `(KEYWORD …)` form: ProcessSpec,
+// MonitorSpec, AlertPolicySpec, every hand-written impl. Three failure
+// modes — not a list, missing head symbol, wrong head — used to be
+// inline `LispError::Compile { form: KEYWORD.to_string(), message: …}`
+// triples in the trait default. The three-times-rule signal
+// (THEORY.md §VI.1) calls for one named primitive per shape; these
+// are them.
+//
+// `head_mismatch` returns the dedicated `LispError::HeadMismatch`
+// variant — the `got` symbol is structurally exposed, not embedded
+// in a free-form message string. The other two are unstructured
+// `Compile` errors because they carry no runtime data beyond the
+// already-static `KEYWORD`.
+
+/// `T::compile_from_sexp` was passed something that isn't a list.
+/// One named primitive every TataraDomain impl shares.
+#[must_use]
+pub fn not_a_list_form_err(keyword: &'static str) -> LispError {
+    LispError::Compile {
+        form: keyword.to_string(),
+        message: "expected list form".into(),
+    }
+}
+
+/// `T::compile_from_sexp` was passed `()` or a list whose first
+/// element isn't a symbol — there's nothing to dispatch on.
+#[must_use]
+pub fn missing_head_err(keyword: &'static str) -> LispError {
+    LispError::Compile {
+        form: keyword.to_string(),
+        message: "missing head symbol".into(),
+    }
+}
+
+/// Structural head-mismatch builder. Returns the dedicated
+/// `LispError::HeadMismatch` variant so authoring surfaces (REPL, LSP,
+/// `tatara-check`) bind to first-class `keyword`/`got` fields instead
+/// of substring-parsing the rendered message. Display matches the
+/// legacy `Compile`-shaped diagnostic byte-for-byte, so existing
+/// `format!("{err}").contains("expected ({KEYWORD}")` assertions pass
+/// unchanged.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform. A diagnostic
+/// whose `got` is embedded in a free-form message is structurally
+/// incomplete; an authoring surface that wants to render
+/// "did-you-mean" suggestions on the offending head must re-parse
+/// the message. After this lift the slot exists in the variant's
+/// data shape itself.
+#[must_use]
+pub fn head_mismatch(keyword: &'static str, got: String) -> LispError {
+    LispError::HeadMismatch { keyword, got }
 }
 
 // ── kwarg parsing + typed extractors used by the derive macro ──────
@@ -98,8 +147,18 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
 /// with the field unset. Emitted by `#[derive(TataraDomain)]` after
 /// `parse_kwargs` so every derived domain rejects unknown kwargs by default.
 ///
+/// When the offending keyword is a near-miss of an allowed kwarg (bounded
+/// edit distance via `suggest`), the diagnostic prepends a `did you mean
+/// :X?` hint so the operator goes straight to the fix without scanning the
+/// allowed-list. The hint is purely additive — `unknown keyword` and the
+/// full allowed list still appear — so existing assertions
+/// (`msg.contains("unknown keyword")`, `msg.contains(":threshold")`) pass
+/// unchanged.
+///
 /// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — "Ill-typed input
-/// errors before the value exists").
+/// errors before the value exists"); §V.1 ("knowable platform … Render
+/// Anywhere" — naming the likely intended keyword is the floor of a
+/// constructive diagnostic).
 pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
     for key in kw.keys() {
         if !allowed.contains(&key.as_str()) {
@@ -110,9 +169,15 @@ pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
                 .map(|s| format!(":{s}"))
                 .collect::<Vec<_>>()
                 .join(", ");
+            let message = match suggest(key, allowed) {
+                Some(hint) => {
+                    format!("unknown keyword (did you mean :{hint}?; allowed: {allowed_list})")
+                }
+                None => format!("unknown keyword (allowed: {allowed_list})"),
+            };
             return Err(LispError::Compile {
                 form: kwarg_form(key),
-                message: format!("unknown keyword (allowed: {allowed_list})"),
+                message,
             });
         }
     }
@@ -199,11 +264,134 @@ pub fn sexp_type_name(s: &Sexp) -> &'static str {
     }
 }
 
-fn type_err(key: &str, expected: &str, got: &Sexp) -> LispError {
-    LispError::Compile {
-        form: kwarg_form(key),
-        message: format!("expected {expected}, got {}", sexp_type_name(got)),
+/// Suggest the candidate closest to `needle` by Levenshtein distance,
+/// when the closest candidate is within a bounded edit distance.
+///
+/// The bound scales with `needle`'s character length:
+///   - len ≤ 3: bound 1 (single-character typo on a short identifier)
+///   - len ≤ 7: bound 2 (insertion + transposition, two typos)
+///   - len ≥ 8: bound 3 (longer identifiers absorb more drift)
+///
+/// Returns the closest candidate within the bound. Ties are broken
+/// lexicographically so two operators on two machines see the same hint
+/// for the same input — diagnostics are deterministic. An exact match in
+/// `candidates` is excluded (the caller already has the keyword; the
+/// suggestion exists for near-misses only). Empty `candidates` returns
+/// `None`.
+///
+/// One named primitive lifts the substrate's understanding of "near-match
+/// across a candidate set" out of any per-call-site implementation. The
+/// unknown-kwarg diagnostic in `reject_unknown_kwargs` is the first
+/// consumer; future consumers — `LispError::HeadMismatch`'s "did you
+/// mean a registered domain?" hint, `tatara-check`'s registry-dispatch
+/// suggestions, the LSP's completion-failure fallback — bind to one
+/// helper rather than re-implementing edit distance.
+///
+/// Theory anchor: THEORY.md §V.1 — "Knowable platform … Render Anywhere."
+/// Naming the likely intended candidate is the floor of a constructive
+/// diagnostic. THEORY.md §VI.1 — generation over composition: every
+/// near-match suggestion in the substrate routes through ONE primitive.
+///
+/// Frontier inspiration: rustc's `find_best_match_for_name`, Idris's
+/// "did you mean …?" elaborator hint, Roslyn's `SymbolMatcher` — bounded
+/// edit distance over a symbol table. Translation through pleme-io
+/// primitives: a pure function over `&[&str]`, no new error variant, no
+/// new IR layer, no new dep.
+#[must_use]
+pub fn suggest<'a>(needle: &str, candidates: &[&'a str]) -> Option<&'a str> {
+    let bound = suggestion_bound(needle);
+    let mut best: Option<(usize, &'a str)> = None;
+    for &candidate in candidates {
+        if candidate == needle {
+            continue;
+        }
+        let dist = levenshtein(needle, candidate);
+        if dist > bound {
+            continue;
+        }
+        match best {
+            None => best = Some((dist, candidate)),
+            Some((bd, bc)) if dist < bd || (dist == bd && candidate < bc) => {
+                best = Some((dist, candidate));
+            }
+            _ => {}
+        }
     }
+    best.map(|(_, c)| c)
+}
+
+fn suggestion_bound(needle: &str) -> usize {
+    let n = needle.chars().count();
+    if n <= 3 {
+        1
+    } else if n <= 7 {
+        2
+    } else {
+        3
+    }
+}
+
+/// Classic two-row Levenshtein. Operates on `char`s so multibyte input
+/// (e.g. a domain authored with non-ASCII identifiers) measures
+/// character-distance, not byte-distance.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    if a.is_empty() {
+        return b.len();
+    }
+    if b.is_empty() {
+        return a.len();
+    }
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut curr: Vec<usize> = vec![0; b.len() + 1];
+    for (i, ca) in a.iter().enumerate() {
+        curr[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != cb);
+            curr[j + 1] = (prev[j + 1] + 1).min(curr[j] + 1).min(prev[j] + cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    prev[b.len()]
+}
+
+/// Structural type-mismatch builder. Pairs a path-shaped `form` (typically
+/// `kwarg_form(_)` or `kwarg_item_form(_, _)`) with the static `expected`
+/// label and the `got` projection of the offending `Sexp` through
+/// `sexp_type_name`. Returns the dedicated `LispError::TypeMismatch`
+/// variant so authoring surfaces (REPL, LSP, `tatara-check`) bind to
+/// first-class `expected`/`got` fields instead of substring-parsing the
+/// rendered message.
+///
+/// Three inline `format!("expected {X}, got {}", sexp_type_name(_))`
+/// copies in this module (`type_err`, `extract_string_list` per-item,
+/// `extract_vec_via_serde` non-list) used to assemble the same shape by
+/// hand; the three-times rule (THEORY.md §VI.1) calls for one named
+/// primitive. This is it. Future runs that thread `pos: Option<usize>`
+/// from `Sexp` spans add ONE field to the variant; every type-mismatch
+/// site inherits positional rendering with no consumer changes.
+#[must_use]
+pub fn type_mismatch(form: String, expected: &'static str, got: &Sexp) -> LispError {
+    LispError::TypeMismatch {
+        form,
+        expected,
+        got: sexp_type_name(got),
+    }
+}
+
+fn type_err(key: &str, expected: &'static str, got: &Sexp) -> LispError {
+    type_mismatch(kwarg_form(key), expected, got)
+}
+
+/// Item-indexed sibling of `type_err` — pairs `kwarg_item_form` with
+/// `type_mismatch` so a per-item failure inside a list-typed kwarg names
+/// `:<key>[<idx>]` plus the structural `expected`/`got` shape. Used by
+/// `extract_string_list`'s per-item path; future per-item type-mismatch
+/// sites (e.g. typed enums-of-strings, typed numeric vecs) bind here
+/// rather than re-inlining the shape.
+fn type_err_at(key: &str, idx: usize, expected: &'static str, got: &Sexp) -> LispError {
+    type_mismatch(kwarg_item_form(key, idx), expected, got)
 }
 
 pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
@@ -233,10 +421,7 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
         .map(|(idx, s)| {
             s.as_string()
                 .map(String::from)
-                .ok_or_else(|| LispError::Compile {
-                    form: kwarg_item_form(key, idx),
-                    message: format!("expected string, got {}", sexp_type_name(s)),
-                })
+                .ok_or_else(|| type_err_at(key, idx, "string", s))
         })
         .collect()
 }
@@ -351,10 +536,7 @@ pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) ->
     let Some(sexp) = kw.get(key).copied() else {
         return Ok(Vec::new());
     };
-    let list = sexp.as_list().ok_or_else(|| LispError::Compile {
-        form: kwarg_form(key),
-        message: format!("expected list, got {}", sexp_type_name(sexp)),
-    })?;
+    let list = sexp.as_list().ok_or_else(|| type_err(key, "list", sexp))?;
     list.iter()
         .enumerate()
         .map(|(idx, item)| {
@@ -1446,5 +1628,445 @@ mod tests {
         let args = kwargs_of(r#"(_ :name "x" :query "q" :threshold 0.5)"#);
         let kw = parse_kwargs(&args).expect("well-formed kwargs must parse");
         assert_eq!(kw.len(), 3);
+    }
+
+    // ── Structural TypeMismatch variant ────────────────────────────────
+    //
+    // The three "expected X, got Y" sites in this module — `type_err`,
+    // `extract_string_list` per-item, `extract_vec_via_serde` non-list —
+    // used to assemble the message inline via three near-identical
+    // `format!("expected {expected}, got {}", sexp_type_name(_))` copies.
+    // Three copies is the THEORY.md §VI.1 three-times-rule signal.
+    //
+    // `LispError::TypeMismatch { form, expected, got }` collapses the
+    // shape into one structural variant: `form` is the path slot
+    // (`kwarg_form` or `kwarg_item_form`), `expected` is the static
+    // expectation, `got` is the static `sexp_type_name` projection.
+    // Authoring tools (REPL, LSP, `tatara-check`) bind to the variant
+    // directly instead of substring-parsing a rendered message; rendered
+    // text matches the legacy `Compile`-shaped diagnostic byte-for-byte,
+    // so existing `msg.contains("expected …")` assertions pass.
+    //
+    // Pinning the variant identity here keeps the structural binding
+    // safe across versions, and means a future run that gives `Sexp`
+    // source spans threads `pos: Option<usize>` through ONE primitive
+    // (`type_mismatch`) — every type-mismatch site picks up positional
+    // rendering with no consumer changes.
+
+    #[test]
+    fn type_mismatch_helper_emits_structured_variant() {
+        let err = type_mismatch("ctx".to_string(), "string", &Sexp::int(7));
+        match err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, "ctx");
+                assert_eq!(expected, "string");
+                assert_eq!(got, "int");
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn type_mismatch_display_matches_legacy_compile_shape() {
+        // The user-visible string is byte-for-byte equivalent to the
+        // pre-lift `LispError::Compile { message: format!("expected …, got …") }`
+        // rendering. Authoring surfaces that pattern-match on the message
+        // text continue to work; tools that pattern-match on the variant
+        // gain structural binding.
+        let err = type_mismatch(":threshold".to_string(), "number", &Sexp::string("tight"));
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: expected number, got string"
+        );
+    }
+
+    #[test]
+    fn extract_string_returns_type_mismatch_variant() {
+        // The kwarg-level `expected X, got Y` site now produces the
+        // structural variant. Pin the variant identity AND the rendered
+        // message so the substrate's contract is locked from both
+        // angles.
+        let args = kwargs_of("(_ :name 42)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_string(&kw, "name").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "string",
+                    got: "int",
+                } if form == ":name"
+            ),
+            "expected TypeMismatch {{ form: \":name\", expected: \"string\", got: \"int\" }}, got {err:?}"
+        );
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :name: expected string, got int"
+        );
+    }
+
+    #[test]
+    fn extract_string_list_per_item_returns_indexed_type_mismatch() {
+        // Per-item failure in a `Vec<String>` kwarg flows through
+        // `type_err_at` → `kwarg_item_form` + `type_mismatch`.
+        let args = kwargs_of(r#"(_ :tags ("ok" 7))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_string_list(&kw, "tags").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "string",
+                    got: "int",
+                } if form == ":tags[1]"
+            ),
+            "expected indexed TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_vec_via_serde_non_list_returns_type_mismatch() {
+        // The vec-fallthrough's "expected list" path lifts into the
+        // same variant — `:steps "scalar"` no longer produces
+        // `LispError::Compile`; it produces `TypeMismatch` with
+        // `expected: "list"`, `got: "string"`. Authoring tools see the
+        // same shape regardless of which extractor reported the
+        // mismatch.
+        let args = kwargs_of(r#"(_ :steps "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "list",
+                    got: "string",
+                } if form == ":steps"
+            ),
+            "expected list-shape TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_string_list_outer_failure_returns_list_of_strings_type_mismatch() {
+        // The outer-shape failure (`:tags "scalar"`) is at the kwarg
+        // level — its `expected` stays `"list of strings"` (wider than
+        // the per-item case's `"string"`) and the form has no `[idx]`
+        // suffix. Same variant; different `expected` + form.
+        let args = kwargs_of(r#"(_ :tags "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_string_list(&kw, "tags").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "list of strings",
+                    got: "string",
+                } if form == ":tags"
+            ),
+            "expected outer-shape TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn type_mismatch_position_is_none_today() {
+        // Negative-control: until `Sexp` carries spans, `position()`
+        // returns `None` for the variant — `format_diagnostic` falls
+        // through to single-line rendering, no caret emitted. Pinning
+        // this contract means a future run that adds `pos: Option<usize>`
+        // does so deliberately, with a fail-before/pass-after delta.
+        let err = type_mismatch(":x".to_string(), "string", &Sexp::int(0));
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn derive_type_mismatch_e2e_via_monitor_threshold() {
+        // End-to-end through `#[derive(TataraDomain)]` on `MonitorSpec`:
+        // a misspelled-as-string `:threshold "tight"` surfaces the
+        // structural variant. Every derived domain inherits the lift —
+        // no per-derive macro change.
+        let forms = read(r#"(defmonitor :name "x" :query "q" :threshold "tight")"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "number",
+                    got: "string",
+                } if form == ":threshold"
+            ),
+            "expected derived TypeMismatch, got {err:?}"
+        );
+    }
+
+    // ── compile_from_sexp form-shape primitives ───────────────────────
+
+    #[test]
+    fn head_mismatch_emits_structural_variant() {
+        let err = head_mismatch("defmonitor", "not-a-monitor".into());
+        assert!(
+            matches!(
+                err,
+                LispError::HeadMismatch {
+                    keyword: "defmonitor",
+                    ref got,
+                } if got == "not-a-monitor"
+            ),
+            "expected HeadMismatch variant, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn head_mismatch_display_matches_legacy_compile_shape() {
+        // Legacy shape (before this lift):
+        //   "compile error in defmonitor: expected (defmonitor ...), got (X ...)"
+        // The structural variant must render byte-for-byte the same so
+        // existing consumer assertions (e.g. `tatara-check`, the
+        // `derive_errors_on_wrong_head` test) pass unchanged.
+        let err = head_mismatch("defmonitor", "not-a-monitor".into());
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: expected (defmonitor ...), got (not-a-monitor ...)"
+        );
+    }
+
+    #[test]
+    fn not_a_list_form_err_is_compile_with_keyword_form() {
+        let err = not_a_list_form_err("defmonitor");
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor");
+                assert_eq!(message, "expected list form");
+            }
+            other => panic!("expected Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn missing_head_err_is_compile_with_keyword_form() {
+        let err = missing_head_err("defmonitor");
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor");
+                assert_eq!(message, "missing head symbol");
+            }
+            other => panic!("expected Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compile_from_sexp_emits_head_mismatch_for_wrong_head() {
+        // End-to-end through the trait default: a `(not-a-monitor …)`
+        // form fed to `MonitorSpec::compile_from_sexp` surfaces the
+        // structural HeadMismatch — every derived domain (and every
+        // hand-written impl that uses the trait default) inherits.
+        let forms = read(r#"(not-a-monitor :name "x")"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::HeadMismatch {
+                    keyword: "defmonitor",
+                    ref got,
+                } if got == "not-a-monitor"
+            ),
+            "expected HeadMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn compile_from_sexp_emits_compile_for_non_list_form() {
+        // A bare atom (no parens) produces the not-a-list diagnostic.
+        let err = MonitorSpec::compile_from_sexp(&Sexp::int(7)).unwrap_err();
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor");
+                assert_eq!(message, "expected list form");
+            }
+            other => panic!("expected Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compile_from_sexp_emits_compile_for_missing_head() {
+        // `()` is a list whose first element doesn't exist — head can't
+        // be projected to a symbol. The diagnostic names the failure
+        // mode without inventing a "got X" that isn't there.
+        let err = MonitorSpec::compile_from_sexp(&Sexp::List(vec![])).unwrap_err();
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor");
+                assert_eq!(message, "missing head symbol");
+            }
+            other => panic!("expected Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn head_mismatch_position_is_none_today() {
+        // Negative-control: until `Sexp` carries spans, `position()`
+        // returns `None` — `format_diagnostic` falls through to
+        // single-line rendering. A future run that adds
+        // `pos: Option<usize>` to `HeadMismatch` does so deliberately
+        // with a fail-before/pass-after delta.
+        let err = head_mismatch("defmonitor", "not-a-monitor".into());
+        assert_eq!(err.position(), None);
+    }
+
+    // ── suggest — bounded edit-distance over a candidate set ──────────
+
+    #[test]
+    fn suggest_picks_single_typo_within_bound() {
+        // `tthreshold` differs from `threshold` by one insertion (distance
+        // 1). Length 10 → bound 3. The substrate names the likely intended
+        // keyword.
+        let allowed: &[&str] = &["name", "query", "threshold", "tags", "enabled"];
+        assert_eq!(suggest("tthreshold", allowed), Some("threshold"));
+    }
+
+    #[test]
+    fn suggest_picks_transposition_within_bound() {
+        // `htreshold` is one transposition from `threshold` (distance 2 in
+        // plain Levenshtein — one delete + one insert). Length 9 → bound 3.
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        assert_eq!(suggest("htreshold", allowed), Some("threshold"));
+    }
+
+    #[test]
+    fn suggest_returns_none_when_no_candidate_within_bound() {
+        // `garbage` (length 7 → bound 2) is not within distance 2 of any
+        // allowed kwarg. The substrate refuses to invent a hint when the
+        // distance signal isn't there — a wrong hint is worse than none.
+        let allowed: &[&str] = &["name", "query", "threshold", "tags", "enabled"];
+        assert_eq!(suggest("garbage", allowed), None);
+    }
+
+    #[test]
+    fn suggest_excludes_exact_match() {
+        // An exact match means the caller already has the keyword; the
+        // suggestion exists for near-misses only. Without this guard the
+        // primitive would happily echo the input back.
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        assert_eq!(suggest("name", allowed), None);
+    }
+
+    #[test]
+    fn suggest_picks_lexicographically_smaller_on_distance_tie() {
+        // Two candidates at the same distance — pick the lexicographically
+        // smaller one so two operators on two machines see the same hint
+        // for the same input. Diagnostics must be deterministic.
+        let allowed: &[&str] = &["abc", "abd"]; // both distance 1 from "abe"
+        assert_eq!(suggest("abe", allowed), Some("abc"));
+    }
+
+    #[test]
+    fn suggest_handles_empty_candidates() {
+        let allowed: &[&str] = &[];
+        assert_eq!(suggest("anything", allowed), None);
+    }
+
+    #[test]
+    fn suggest_bound_for_short_strings_rejects_distance_two() {
+        // Needle length ≤ 3 → bound 1. `abc` vs `xyz` is distance 3 (full
+        // replacement); short identifiers are too close to noise to trust
+        // a multi-character hint. The bound floor stops false-positives
+        // like `:to` matching `:do`.
+        let allowed: &[&str] = &["xyz"];
+        assert_eq!(suggest("abc", allowed), None);
+    }
+
+    #[test]
+    fn suggest_bound_for_short_strings_accepts_distance_one() {
+        // Within the short-string bound: a single character drift on a
+        // 3-character identifier is suggestible.
+        let allowed: &[&str] = &["abc"];
+        assert_eq!(suggest("abd", allowed), Some("abc"));
+    }
+
+    #[test]
+    fn suggest_handles_unicode_identifiers() {
+        // `levenshtein` operates on chars, not bytes, so a multibyte typo
+        // on a multibyte identifier measures character-distance — `é` is
+        // one character, not two bytes. Tatara naming is Brazilian ×
+        // Japanese (THEORY.md §II.3) so the substrate must not treat
+        // non-ASCII as foreign.
+        let allowed: &[&str] = &["forjé"];
+        assert_eq!(suggest("forje", allowed), Some("forjé"));
+    }
+
+    #[test]
+    fn reject_unknown_kwargs_includes_did_you_mean_for_near_miss() {
+        // End-to-end: a near-miss in the typed-entry gate produces a hint
+        // ahead of the allowed-list. The full allowed-list is still in
+        // the message — the hint is purely additive.
+        let forms = read(r#"(defmonitor :name "x" :tthreshold 0.99)"#).unwrap();
+        let args = forms[0].as_list().unwrap();
+        let kw = parse_kwargs(&args[1..]).unwrap();
+        let allowed: &[&str] = &[
+            "name",
+            "query",
+            "threshold",
+            "window-seconds",
+            "tags",
+            "enabled",
+        ];
+        let err = reject_unknown_kwargs(&kw, allowed).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("did you mean :threshold?"),
+            "message must hint the near-match, got: {msg}"
+        );
+        assert!(
+            msg.contains("allowed: "),
+            "message must still list the allowed set, got: {msg}"
+        );
+        assert!(
+            msg.contains("unknown keyword"),
+            "message must still label the failure, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn reject_unknown_kwargs_omits_did_you_mean_when_no_close_match() {
+        // Negative control: when the offending keyword isn't within the
+        // edit-distance bound of any allowed kwarg, no hint is fabricated.
+        // A wrong hint is worse than no hint.
+        let forms = read(r#"(defmonitor :name "x" :totally-unrelated 1)"#).unwrap();
+        let args = forms[0].as_list().unwrap();
+        let kw = parse_kwargs(&args[1..]).unwrap();
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        let err = reject_unknown_kwargs(&kw, allowed).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            !msg.contains("did you mean"),
+            "message must not hint when no close match exists, got: {msg}"
+        );
+        assert!(
+            msg.contains("unknown keyword"),
+            "message must still label the failure, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn derive_unknown_keyword_hints_near_miss() {
+        // Every derived domain inherits the hint by sharing
+        // `reject_unknown_kwargs` — no derive-emit change required.
+        let forms =
+            read(r#"(defmonitor :name "x" :query "q" :threshold 0.5 :tthreshold 0.99)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("did you mean :threshold?"),
+            "derived domain must inherit the hint, got: {msg}"
+        );
     }
 }

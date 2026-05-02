@@ -1249,7 +1249,7 @@ rec {
           }
           {
             name = "strum";
-            packageId = "strum 0.27.2";
+            packageId = "strum";
             features = [ "derive" ];
           }
           {
@@ -3229,36 +3229,6 @@ rec {
           "cap-std" = [ "dep:cap-std" ];
         };
       };
-      "cassowary" = rec {
-        crateName = "cassowary";
-        version = "0.3.0";
-        edition = "2015";
-        sha256 = "0lvanj0gsk6pc1chqrh4k5k0vi1rfbgzmsk46dwy3nmrqyw711nz";
-        authors = [
-          "Dylan Ede <dylanede@googlemail.com>"
-        ];
-
-      };
-      "castaway" = rec {
-        crateName = "castaway";
-        version = "0.2.4";
-        edition = "2018";
-        sha256 = "0nn5his5f8q20nkyg1nwb40xc19a08yaj4y76a8q2y3mdsmm3ify";
-        authors = [
-          "Stephen M. Coakley <me@stephencoakley.com>"
-        ];
-        dependencies = [
-          {
-            name = "rustversion";
-            packageId = "rustversion";
-          }
-        ];
-        features = {
-          "default" = [ "std" ];
-          "std" = [ "alloc" ];
-        };
-        resolvedDefaultFeatures = [ "alloc" ];
-      };
       "cc" = rec {
         crateName = "cc";
         version = "1.2.56";
@@ -3364,7 +3334,7 @@ rec {
           }
           {
             name = "lru";
-            packageId = "lru 0.13.0";
+            packageId = "lru";
           }
           {
             name = "rand";
@@ -3752,7 +3722,7 @@ rec {
           }
           {
             name = "unicode-width";
-            packageId = "unicode-width 0.2.0";
+            packageId = "unicode-width";
           }
         ];
         features = {
@@ -3762,67 +3732,6 @@ rec {
           "tty" = [ "dep:crossterm" ];
         };
         resolvedDefaultFeatures = [ "default" "tty" ];
-      };
-      "compact_str" = rec {
-        crateName = "compact_str";
-        version = "0.8.1";
-        edition = "2021";
-        sha256 = "0cmgp61hw4fwaakhilwznfgncw2p4wkbvz6dw3i7ibbckh3c8y9v";
-        authors = [
-          "Parker Timmerman <parker@parkertimmerman.com>"
-        ];
-        dependencies = [
-          {
-            name = "castaway";
-            packageId = "castaway";
-            usesDefaultFeatures = false;
-            features = [ "alloc" ];
-          }
-          {
-            name = "cfg-if";
-            packageId = "cfg-if";
-          }
-          {
-            name = "itoa";
-            packageId = "itoa";
-          }
-          {
-            name = "rustversion";
-            packageId = "rustversion";
-          }
-          {
-            name = "ryu";
-            packageId = "ryu";
-          }
-          {
-            name = "static_assertions";
-            packageId = "static_assertions";
-          }
-        ];
-        devDependencies = [
-          {
-            name = "cfg-if";
-            packageId = "cfg-if";
-          }
-        ];
-        features = {
-          "arbitrary" = [ "dep:arbitrary" ];
-          "borsh" = [ "dep:borsh" ];
-          "bytes" = [ "dep:bytes" ];
-          "default" = [ "std" ];
-          "diesel" = [ "dep:diesel" ];
-          "markup" = [ "dep:markup" ];
-          "proptest" = [ "dep:proptest" ];
-          "quickcheck" = [ "dep:quickcheck" ];
-          "rkyv" = [ "dep:rkyv" ];
-          "serde" = [ "dep:serde" ];
-          "smallvec" = [ "dep:smallvec" ];
-          "sqlx" = [ "dep:sqlx" "std" ];
-          "sqlx-mysql" = [ "sqlx" "sqlx/mysql" ];
-          "sqlx-postgres" = [ "sqlx" "sqlx/postgres" ];
-          "sqlx-sqlite" = [ "sqlx" "sqlx/sqlite" ];
-        };
-        resolvedDefaultFeatures = [ "default" "std" ];
       };
       "concurrent-queue" = rec {
         crateName = "concurrent-queue";
@@ -6506,6 +6415,75 @@ rec {
           "full" = [ "syn/full" ];
         };
         resolvedDefaultFeatures = [ "Clone" "Debug" "Hash" "PartialEq" ];
+      };
+      "egaku" = rec {
+        crateName = "egaku";
+        version = "0.1.0";
+        edition = "2024";
+        workspace_member = null;
+        src = pkgs.fetchgit {
+          url = "https://github.com/pleme-io/egaku";
+          rev = "b67e5bb1ab7b817bcc2ecd4ef7a8ea0e06fa814f";
+          sha256 = "0sdr8mg3rq9r8nhg7wm77v7nh2z4vx3j5p3qswkgfacgpbvkalqa";
+        };
+        dependencies = [
+          {
+            name = "serde";
+            packageId = "serde";
+            features = [ "derive" ];
+          }
+          {
+            name = "thiserror";
+            packageId = "thiserror 2.0.18";
+          }
+          {
+            name = "tracing";
+            packageId = "tracing";
+          }
+          {
+            name = "unicode-segmentation";
+            packageId = "unicode-segmentation";
+          }
+          {
+            name = "unicode-width";
+            packageId = "unicode-width";
+          }
+        ];
+
+      };
+      "egaku-term" = rec {
+        crateName = "egaku-term";
+        version = "0.2.1";
+        edition = "2024";
+        workspace_member = null;
+        src = pkgs.fetchgit {
+          url = "https://github.com/pleme-io/egaku-term";
+          rev = "aa3fd63402577c624df499e5e3798d313e4fe6cd";
+          sha256 = "02hjvz74nra29ldpyvf7kn8a4g77fzn2wzjqq0hmghbwmmrj5yac";
+        };
+        libName = "egaku_term";
+        dependencies = [
+          {
+            name = "crossterm";
+            packageId = "crossterm 0.28.1";
+          }
+          {
+            name = "egaku";
+            packageId = "egaku";
+          }
+          {
+            name = "thiserror";
+            packageId = "thiserror 2.0.18";
+          }
+          {
+            name = "unicode-width";
+            packageId = "unicode-width";
+          }
+        ];
+        features = {
+          "tokio" = [ "dep:tokio" "dep:futures-util" "crossterm/event-stream" ];
+        };
+        resolvedDefaultFeatures = [ "default" ];
       };
       "either" = rec {
         crateName = "either";
@@ -9660,29 +9638,6 @@ rec {
         };
         resolvedDefaultFeatures = [ "default" "serde" "std" ];
       };
-      "indoc" = rec {
-        crateName = "indoc";
-        version = "2.0.7";
-        edition = "2021";
-        sha256 = "01np60qdq6lvgh8ww2caajn9j4dibx9n58rvzf7cya1jz69mrkvr";
-        procMacro = true;
-        authors = [
-          "David Tolnay <dtolnay@gmail.com>"
-        ];
-        buildDependencies = [
-          {
-            name = "rustversion";
-            packageId = "rustversion";
-          }
-        ];
-        devDependencies = [
-          {
-            name = "rustversion";
-            packageId = "rustversion";
-          }
-        ];
-
-      };
       "inlinable_string" = rec {
         crateName = "inlinable_string";
         version = "0.1.15";
@@ -9740,41 +9695,6 @@ rec {
           {
             name = "libc";
             packageId = "libc";
-          }
-        ];
-
-      };
-      "instability" = rec {
-        crateName = "instability";
-        version = "0.3.11";
-        edition = "2021";
-        sha256 = "07f1apjp00nzkwmzfzlfm6p4klddf0g2scgdhqnds66dqq2p4yrm";
-        procMacro = true;
-        authors = [
-          "Stephen M. Coakley <me@stephencoakley.com>"
-          "The Ratatui Developers"
-        ];
-        dependencies = [
-          {
-            name = "darling";
-            packageId = "darling 0.23.0";
-          }
-          {
-            name = "indoc";
-            packageId = "indoc";
-          }
-          {
-            name = "proc-macro2";
-            packageId = "proc-macro2";
-          }
-          {
-            name = "quote";
-            packageId = "quote";
-          }
-          {
-            name = "syn";
-            packageId = "syn 2.0.117";
-            features = [ "derive" "full" ];
           }
         ];
 
@@ -9947,7 +9867,6 @@ rec {
           "default" = [ "use_std" ];
           "use_std" = [ "use_alloc" "either/use_std" ];
         };
-        resolvedDefaultFeatures = [ "default" "use_alloc" "use_std" ];
       };
       "itertools 0.14.0" = rec {
         crateName = "itertools";
@@ -11146,29 +11065,7 @@ rec {
         };
         resolvedDefaultFeatures = [ "std" ];
       };
-      "lru 0.12.5" = rec {
-        crateName = "lru";
-        version = "0.12.5";
-        edition = "2015";
-        sha256 = "0f1a7cgqxbyhrmgaqqa11m3azwhcc36w0v5r4izgbhadl3sg8k13";
-        authors = [
-          "Jerome Froelich <jeromefroelic@hotmail.com>"
-        ];
-        dependencies = [
-          {
-            name = "hashbrown";
-            packageId = "hashbrown 0.15.5";
-            optional = true;
-          }
-        ];
-        features = {
-          "default" = [ "hashbrown" ];
-          "hashbrown" = [ "dep:hashbrown" ];
-          "nightly" = [ "hashbrown" "hashbrown/nightly" ];
-        };
-        resolvedDefaultFeatures = [ "default" "hashbrown" ];
-      };
-      "lru 0.13.0" = rec {
+      "lru" = rec {
         crateName = "lru";
         version = "0.13.0";
         edition = "2015";
@@ -15039,97 +14936,6 @@ rec {
           "serde" = [ "dep:serde" ];
         };
       };
-      "ratatui" = rec {
-        crateName = "ratatui";
-        version = "0.29.0";
-        edition = "2021";
-        sha256 = "0yqiccg1wmqqxpb2sz3q2v3nifmhsrfdsjgwhc2w40bqyg199gga";
-        authors = [
-          "Florian Dehau <work@fdehau.com>"
-          "The Ratatui Developers"
-        ];
-        dependencies = [
-          {
-            name = "bitflags";
-            packageId = "bitflags 2.11.0";
-          }
-          {
-            name = "cassowary";
-            packageId = "cassowary";
-          }
-          {
-            name = "compact_str";
-            packageId = "compact_str";
-          }
-          {
-            name = "crossterm";
-            packageId = "crossterm 0.28.1";
-            optional = true;
-          }
-          {
-            name = "indoc";
-            packageId = "indoc";
-          }
-          {
-            name = "instability";
-            packageId = "instability";
-          }
-          {
-            name = "itertools";
-            packageId = "itertools 0.13.0";
-          }
-          {
-            name = "lru";
-            packageId = "lru 0.12.5";
-          }
-          {
-            name = "paste";
-            packageId = "paste";
-          }
-          {
-            name = "strum";
-            packageId = "strum 0.26.3";
-            features = [ "derive" ];
-          }
-          {
-            name = "unicode-segmentation";
-            packageId = "unicode-segmentation";
-          }
-          {
-            name = "unicode-truncate";
-            packageId = "unicode-truncate";
-          }
-          {
-            name = "unicode-width";
-            packageId = "unicode-width 0.2.0";
-          }
-        ];
-        devDependencies = [
-          {
-            name = "crossterm";
-            packageId = "crossterm 0.28.1";
-            features = [ "event-stream" ];
-          }
-          {
-            name = "indoc";
-            packageId = "indoc";
-          }
-        ];
-        features = {
-          "all-widgets" = [ "widget-calendar" ];
-          "crossterm" = [ "dep:crossterm" ];
-          "default" = [ "crossterm" "underline-color" ];
-          "document-features" = [ "dep:document-features" ];
-          "palette" = [ "dep:palette" ];
-          "serde" = [ "dep:serde" "bitflags/serde" "compact_str/serde" ];
-          "termion" = [ "dep:termion" ];
-          "termwiz" = [ "dep:termwiz" ];
-          "underline-color" = [ "dep:crossterm" ];
-          "unstable" = [ "unstable-rendered-line-info" "unstable-widget-ref" "unstable-backend-writer" ];
-          "widget-calendar" = [ "dep:time" ];
-        };
-        resolvedDefaultFeatures = [ "crossterm" "default" "underline-color" ];
-      };
       "rayon" = rec {
         crateName = "rayon";
         version = "1.11.0";
@@ -18664,36 +18470,7 @@ rec {
         ];
 
       };
-      "strum 0.26.3" = rec {
-        crateName = "strum";
-        version = "0.26.3";
-        edition = "2018";
-        sha256 = "01lgl6jvrf4j28v5kmx9bp480ygf1nhvac8b4p7rcj9hxw50zv4g";
-        authors = [
-          "Peter Glotfelty <peter.glotfelty@microsoft.com>"
-        ];
-        dependencies = [
-          {
-            name = "strum_macros";
-            packageId = "strum_macros 0.26.4";
-            optional = true;
-          }
-        ];
-        devDependencies = [
-          {
-            name = "strum_macros";
-            packageId = "strum_macros 0.26.4";
-          }
-        ];
-        features = {
-          "default" = [ "std" ];
-          "derive" = [ "strum_macros" ];
-          "phf" = [ "dep:phf" ];
-          "strum_macros" = [ "dep:strum_macros" ];
-        };
-        resolvedDefaultFeatures = [ "default" "derive" "std" "strum_macros" ];
-      };
-      "strum 0.27.2" = rec {
+      "strum" = rec {
         crateName = "strum";
         version = "0.27.2";
         edition = "2021";
@@ -18704,7 +18481,7 @@ rec {
         dependencies = [
           {
             name = "strum_macros";
-            packageId = "strum_macros 0.27.2";
+            packageId = "strum_macros";
             optional = true;
           }
         ];
@@ -18716,41 +18493,7 @@ rec {
         };
         resolvedDefaultFeatures = [ "default" "derive" "std" "strum_macros" ];
       };
-      "strum_macros 0.26.4" = rec {
-        crateName = "strum_macros";
-        version = "0.26.4";
-        edition = "2018";
-        sha256 = "1gl1wmq24b8md527cpyd5bw9rkbqldd7k1h38kf5ajd2ln2ywssc";
-        procMacro = true;
-        authors = [
-          "Peter Glotfelty <peter.glotfelty@microsoft.com>"
-        ];
-        dependencies = [
-          {
-            name = "heck";
-            packageId = "heck 0.5.0";
-          }
-          {
-            name = "proc-macro2";
-            packageId = "proc-macro2";
-          }
-          {
-            name = "quote";
-            packageId = "quote";
-          }
-          {
-            name = "rustversion";
-            packageId = "rustversion";
-          }
-          {
-            name = "syn";
-            packageId = "syn 2.0.117";
-            features = [ "parsing" "extra-traits" ];
-          }
-        ];
-
-      };
-      "strum_macros 0.27.2" = rec {
+      "strum_macros" = rec {
         crateName = "strum_macros";
         version = "0.27.2";
         edition = "2021";
@@ -19292,6 +19035,14 @@ rec {
             packageId = "dirs 6.0.0";
           }
           {
+            name = "egaku";
+            packageId = "egaku";
+          }
+          {
+            name = "egaku-term";
+            packageId = "egaku-term";
+          }
+          {
             name = "futures-core";
             packageId = "futures-core";
           }
@@ -19303,10 +19054,6 @@ rec {
             name = "openraft";
             packageId = "openraft";
             features = [ "serde" "storage-v2" ];
-          }
-          {
-            name = "ratatui";
-            packageId = "ratatui";
           }
           {
             name = "reqwest";
@@ -23209,56 +22956,7 @@ rec {
         features = {
         };
       };
-      "unicode-truncate" = rec {
-        crateName = "unicode-truncate";
-        version = "1.1.0";
-        edition = "2018";
-        sha256 = "1gr7arjjhrhy8dww7hj8qqlws97xf9d276svr4hs6pxgllklcr5k";
-        libName = "unicode_truncate";
-        authors = [
-          "Aetf <aetf@unlimitedcodeworks.xyz>"
-        ];
-        dependencies = [
-          {
-            name = "itertools";
-            packageId = "itertools 0.13.0";
-            usesDefaultFeatures = false;
-          }
-          {
-            name = "unicode-segmentation";
-            packageId = "unicode-segmentation";
-            usesDefaultFeatures = false;
-          }
-          {
-            name = "unicode-width";
-            packageId = "unicode-width 0.1.14";
-          }
-        ];
-        features = {
-          "default" = [ "std" ];
-        };
-        resolvedDefaultFeatures = [ "default" "std" ];
-      };
-      "unicode-width 0.1.14" = rec {
-        crateName = "unicode-width";
-        version = "0.1.14";
-        edition = "2021";
-        sha256 = "1bzn2zv0gp8xxbxbhifw778a7fc93pa6a1kj24jgg9msj07f7mkx";
-        libName = "unicode_width";
-        authors = [
-          "kwantam <kwantam@gmail.com>"
-          "Manish Goregaokar <manishsmail@gmail.com>"
-        ];
-        features = {
-          "compiler_builtins" = [ "dep:compiler_builtins" ];
-          "core" = [ "dep:core" ];
-          "default" = [ "cjk" ];
-          "rustc-dep-of-std" = [ "std" "core" "compiler_builtins" ];
-          "std" = [ "dep:std" ];
-        };
-        resolvedDefaultFeatures = [ "cjk" "default" ];
-      };
-      "unicode-width 0.2.0" = rec {
+      "unicode-width" = rec {
         crateName = "unicode-width";
         version = "0.2.0";
         edition = "2021";
@@ -27360,7 +27058,7 @@ rec {
           }
           {
             name = "unicode-width";
-            packageId = "unicode-width 0.2.0";
+            packageId = "unicode-width";
           }
           {
             name = "wasm-encoder";

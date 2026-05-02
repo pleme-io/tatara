@@ -147,8 +147,18 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
 /// with the field unset. Emitted by `#[derive(TataraDomain)]` after
 /// `parse_kwargs` so every derived domain rejects unknown kwargs by default.
 ///
+/// When the offending keyword is a near-miss of an allowed kwarg (bounded
+/// edit distance via `suggest`), the diagnostic prepends a `did you mean
+/// :X?` hint so the operator goes straight to the fix without scanning the
+/// allowed-list. The hint is purely additive — `unknown keyword` and the
+/// full allowed list still appear — so existing assertions
+/// (`msg.contains("unknown keyword")`, `msg.contains(":threshold")`) pass
+/// unchanged.
+///
 /// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — "Ill-typed input
-/// errors before the value exists").
+/// errors before the value exists"); §V.1 ("knowable platform … Render
+/// Anywhere" — naming the likely intended keyword is the floor of a
+/// constructive diagnostic).
 pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
     for key in kw.keys() {
         if !allowed.contains(&key.as_str()) {
@@ -159,9 +169,15 @@ pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
                 .map(|s| format!(":{s}"))
                 .collect::<Vec<_>>()
                 .join(", ");
+            let message = match suggest(key, allowed) {
+                Some(hint) => {
+                    format!("unknown keyword (did you mean :{hint}?; allowed: {allowed_list})")
+                }
+                None => format!("unknown keyword (allowed: {allowed_list})"),
+            };
             return Err(LispError::Compile {
                 form: kwarg_form(key),
-                message: format!("unknown keyword (allowed: {allowed_list})"),
+                message,
             });
         }
     }
@@ -246,6 +262,98 @@ pub fn sexp_type_name(s: &Sexp) -> &'static str {
         Sexp::Unquote(_) => "unquote",
         Sexp::UnquoteSplice(_) => "unquote-splice",
     }
+}
+
+/// Suggest the candidate closest to `needle` by Levenshtein distance,
+/// when the closest candidate is within a bounded edit distance.
+///
+/// The bound scales with `needle`'s character length:
+///   - len ≤ 3: bound 1 (single-character typo on a short identifier)
+///   - len ≤ 7: bound 2 (insertion + transposition, two typos)
+///   - len ≥ 8: bound 3 (longer identifiers absorb more drift)
+///
+/// Returns the closest candidate within the bound. Ties are broken
+/// lexicographically so two operators on two machines see the same hint
+/// for the same input — diagnostics are deterministic. An exact match in
+/// `candidates` is excluded (the caller already has the keyword; the
+/// suggestion exists for near-misses only). Empty `candidates` returns
+/// `None`.
+///
+/// One named primitive lifts the substrate's understanding of "near-match
+/// across a candidate set" out of any per-call-site implementation. The
+/// unknown-kwarg diagnostic in `reject_unknown_kwargs` is the first
+/// consumer; future consumers — `LispError::HeadMismatch`'s "did you
+/// mean a registered domain?" hint, `tatara-check`'s registry-dispatch
+/// suggestions, the LSP's completion-failure fallback — bind to one
+/// helper rather than re-implementing edit distance.
+///
+/// Theory anchor: THEORY.md §V.1 — "Knowable platform … Render Anywhere."
+/// Naming the likely intended candidate is the floor of a constructive
+/// diagnostic. THEORY.md §VI.1 — generation over composition: every
+/// near-match suggestion in the substrate routes through ONE primitive.
+///
+/// Frontier inspiration: rustc's `find_best_match_for_name`, Idris's
+/// "did you mean …?" elaborator hint, Roslyn's `SymbolMatcher` — bounded
+/// edit distance over a symbol table. Translation through pleme-io
+/// primitives: a pure function over `&[&str]`, no new error variant, no
+/// new IR layer, no new dep.
+#[must_use]
+pub fn suggest<'a>(needle: &str, candidates: &[&'a str]) -> Option<&'a str> {
+    let bound = suggestion_bound(needle);
+    let mut best: Option<(usize, &'a str)> = None;
+    for &candidate in candidates {
+        if candidate == needle {
+            continue;
+        }
+        let dist = levenshtein(needle, candidate);
+        if dist > bound {
+            continue;
+        }
+        match best {
+            None => best = Some((dist, candidate)),
+            Some((bd, bc)) if dist < bd || (dist == bd && candidate < bc) => {
+                best = Some((dist, candidate));
+            }
+            _ => {}
+        }
+    }
+    best.map(|(_, c)| c)
+}
+
+fn suggestion_bound(needle: &str) -> usize {
+    let n = needle.chars().count();
+    if n <= 3 {
+        1
+    } else if n <= 7 {
+        2
+    } else {
+        3
+    }
+}
+
+/// Classic two-row Levenshtein. Operates on `char`s so multibyte input
+/// (e.g. a domain authored with non-ASCII identifiers) measures
+/// character-distance, not byte-distance.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    if a.is_empty() {
+        return b.len();
+    }
+    if b.is_empty() {
+        return a.len();
+    }
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut curr: Vec<usize> = vec![0; b.len() + 1];
+    for (i, ca) in a.iter().enumerate() {
+        curr[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != cb);
+            curr[j + 1] = (prev[j + 1] + 1).min(curr[j] + 1).min(prev[j] + cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    prev[b.len()]
 }
 
 /// Structural type-mismatch builder. Pairs a path-shaped `form` (typically
@@ -1812,5 +1920,153 @@ mod tests {
         // with a fail-before/pass-after delta.
         let err = head_mismatch("defmonitor", "not-a-monitor".into());
         assert_eq!(err.position(), None);
+    }
+
+    // ── suggest — bounded edit-distance over a candidate set ──────────
+
+    #[test]
+    fn suggest_picks_single_typo_within_bound() {
+        // `tthreshold` differs from `threshold` by one insertion (distance
+        // 1). Length 10 → bound 3. The substrate names the likely intended
+        // keyword.
+        let allowed: &[&str] = &["name", "query", "threshold", "tags", "enabled"];
+        assert_eq!(suggest("tthreshold", allowed), Some("threshold"));
+    }
+
+    #[test]
+    fn suggest_picks_transposition_within_bound() {
+        // `htreshold` is one transposition from `threshold` (distance 2 in
+        // plain Levenshtein — one delete + one insert). Length 9 → bound 3.
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        assert_eq!(suggest("htreshold", allowed), Some("threshold"));
+    }
+
+    #[test]
+    fn suggest_returns_none_when_no_candidate_within_bound() {
+        // `garbage` (length 7 → bound 2) is not within distance 2 of any
+        // allowed kwarg. The substrate refuses to invent a hint when the
+        // distance signal isn't there — a wrong hint is worse than none.
+        let allowed: &[&str] = &["name", "query", "threshold", "tags", "enabled"];
+        assert_eq!(suggest("garbage", allowed), None);
+    }
+
+    #[test]
+    fn suggest_excludes_exact_match() {
+        // An exact match means the caller already has the keyword; the
+        // suggestion exists for near-misses only. Without this guard the
+        // primitive would happily echo the input back.
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        assert_eq!(suggest("name", allowed), None);
+    }
+
+    #[test]
+    fn suggest_picks_lexicographically_smaller_on_distance_tie() {
+        // Two candidates at the same distance — pick the lexicographically
+        // smaller one so two operators on two machines see the same hint
+        // for the same input. Diagnostics must be deterministic.
+        let allowed: &[&str] = &["abc", "abd"]; // both distance 1 from "abe"
+        assert_eq!(suggest("abe", allowed), Some("abc"));
+    }
+
+    #[test]
+    fn suggest_handles_empty_candidates() {
+        let allowed: &[&str] = &[];
+        assert_eq!(suggest("anything", allowed), None);
+    }
+
+    #[test]
+    fn suggest_bound_for_short_strings_rejects_distance_two() {
+        // Needle length ≤ 3 → bound 1. `abc` vs `xyz` is distance 3 (full
+        // replacement); short identifiers are too close to noise to trust
+        // a multi-character hint. The bound floor stops false-positives
+        // like `:to` matching `:do`.
+        let allowed: &[&str] = &["xyz"];
+        assert_eq!(suggest("abc", allowed), None);
+    }
+
+    #[test]
+    fn suggest_bound_for_short_strings_accepts_distance_one() {
+        // Within the short-string bound: a single character drift on a
+        // 3-character identifier is suggestible.
+        let allowed: &[&str] = &["abc"];
+        assert_eq!(suggest("abd", allowed), Some("abc"));
+    }
+
+    #[test]
+    fn suggest_handles_unicode_identifiers() {
+        // `levenshtein` operates on chars, not bytes, so a multibyte typo
+        // on a multibyte identifier measures character-distance — `é` is
+        // one character, not two bytes. Tatara naming is Brazilian ×
+        // Japanese (THEORY.md §II.3) so the substrate must not treat
+        // non-ASCII as foreign.
+        let allowed: &[&str] = &["forjé"];
+        assert_eq!(suggest("forje", allowed), Some("forjé"));
+    }
+
+    #[test]
+    fn reject_unknown_kwargs_includes_did_you_mean_for_near_miss() {
+        // End-to-end: a near-miss in the typed-entry gate produces a hint
+        // ahead of the allowed-list. The full allowed-list is still in
+        // the message — the hint is purely additive.
+        let forms = read(r#"(defmonitor :name "x" :tthreshold 0.99)"#).unwrap();
+        let args = forms[0].as_list().unwrap();
+        let kw = parse_kwargs(&args[1..]).unwrap();
+        let allowed: &[&str] = &[
+            "name",
+            "query",
+            "threshold",
+            "window-seconds",
+            "tags",
+            "enabled",
+        ];
+        let err = reject_unknown_kwargs(&kw, allowed).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("did you mean :threshold?"),
+            "message must hint the near-match, got: {msg}"
+        );
+        assert!(
+            msg.contains("allowed: "),
+            "message must still list the allowed set, got: {msg}"
+        );
+        assert!(
+            msg.contains("unknown keyword"),
+            "message must still label the failure, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn reject_unknown_kwargs_omits_did_you_mean_when_no_close_match() {
+        // Negative control: when the offending keyword isn't within the
+        // edit-distance bound of any allowed kwarg, no hint is fabricated.
+        // A wrong hint is worse than no hint.
+        let forms = read(r#"(defmonitor :name "x" :totally-unrelated 1)"#).unwrap();
+        let args = forms[0].as_list().unwrap();
+        let kw = parse_kwargs(&args[1..]).unwrap();
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        let err = reject_unknown_kwargs(&kw, allowed).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            !msg.contains("did you mean"),
+            "message must not hint when no close match exists, got: {msg}"
+        );
+        assert!(
+            msg.contains("unknown keyword"),
+            "message must still label the failure, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn derive_unknown_keyword_hints_near_miss() {
+        // Every derived domain inherits the hint by sharing
+        // `reject_unknown_kwargs` — no derive-emit change required.
+        let forms =
+            read(r#"(defmonitor :name "x" :query "q" :threshold 0.5 :tthreshold 0.99)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("did you mean :threshold?"),
+            "derived domain must inherit the hint, got: {msg}"
+        );
     }
 }

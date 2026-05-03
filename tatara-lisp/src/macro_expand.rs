@@ -290,10 +290,7 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
             let idx = params
                 .iter()
                 .position(|p| *p == name)
-                .ok_or_else(|| LispError::Compile {
-                    form: format!(",{name}"),
-                    message: "unbound".into(),
-                })?;
+                .ok_or_else(|| unbound_template_var(",", name, params))?;
             ops.push(TemplateOp::Subst(idx));
         }
         Sexp::UnquoteSplice(inner) => {
@@ -304,10 +301,7 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
             let idx = params
                 .iter()
                 .position(|p| *p == name)
-                .ok_or_else(|| LispError::Compile {
-                    form: format!(",@{name}"),
-                    message: "unbound".into(),
-                })?;
+                .ok_or_else(|| unbound_template_var(",@", name, params))?;
             ops.push(TemplateOp::Splice(idx));
         }
         Sexp::List(items) => {
@@ -515,10 +509,7 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
             bindings
                 .get(sym)
                 .cloned()
-                .ok_or_else(|| LispError::Compile {
-                    form: format!(",{sym}"),
-                    message: "unbound".into(),
-                })
+                .ok_or_else(|| unbound_template_var(",", sym, &bound_names(bindings)))
         }
         Sexp::UnquoteSplice(_) => Err(LispError::Compile {
             form: "unquote-splice".into(),
@@ -532,10 +523,9 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
                         form: "unquote-splice".into(),
                         message: "only bound symbols may appear after `,@`".into(),
                     })?;
-                    let val = bindings.get(sym).ok_or_else(|| LispError::Compile {
-                        form: format!(",@{sym}"),
-                        message: "unbound".into(),
-                    })?;
+                    let val = bindings
+                        .get(sym)
+                        .ok_or_else(|| unbound_template_var(",@", sym, &bound_names(bindings)))?;
                     match val {
                         Sexp::List(children) => out.extend(children.iter().cloned()),
                         Sexp::Nil => {}
@@ -550,6 +540,45 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
         Sexp::Quote(_) | Sexp::Quasiquote(_) => Ok(form.clone()),
         _ => Ok(form.clone()),
     }
+}
+
+/// Lift the four inline `LispError::Compile { form: format!("{prefix}{name}"),
+/// message: "unbound" }` triples (compile_node Unquote/UnquoteSplice +
+/// substitute Unquote/UnquoteSplice) behind ONE named primitive. Pairs the
+/// structural variant with `crate::domain::suggest`'s bounded edit-distance
+/// scan over the candidate set so a typo in `,name` against a macro's params
+/// (or against a substitution scope's live bindings) surfaces as
+/// `"compile error in ,xs: unbound; did you mean ,x?"` instead of the bare
+/// `"unbound"`. The candidate set is per-call — params during compile,
+/// `bindings.keys()` during substitute — so the operator's hint is always
+/// drawn from the in-scope name set, never a stale snapshot.
+///
+/// `prefix` is `&'static str` because every call site passes a literal
+/// (`","` / `",@"`); `name` is the offender from source; the hint is
+/// `Option<String>` because the matched candidate borrows from a transient
+/// `Vec<&str>` we built locally — copying the matched name into the variant
+/// is the cheapest way to keep `LispError` lifetime-free.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; four inline
+/// copies in one module is well past the three-times rule. THEORY.md §V.1 —
+/// knowable platform; the structural variant exposes `prefix` / `name` /
+/// `hint` as first-class fields so authoring tools (LSP, REPL,
+/// `tatara-check`) bind to the data shape instead of substring-parsing the
+/// rendered diagnostic.
+fn unbound_template_var(prefix: &'static str, name: &str, candidates: &[&str]) -> LispError {
+    LispError::UnboundTemplateVar {
+        prefix,
+        name: name.to_string(),
+        hint: crate::domain::suggest(name, candidates).map(str::to_string),
+    }
+}
+
+/// Project a `bindings: &HashMap<String, Sexp>` into the `&[&str]` candidate
+/// set `crate::domain::suggest` wants. Cold path — only allocated when an
+/// `,name` / `,@name` substitution misses, i.e. when we're already on the
+/// diagnostic side of the substitute walker.
+fn bound_names(bindings: &HashMap<String, Sexp>) -> Vec<&str> {
+    bindings.keys().map(String::as_str).collect()
 }
 
 #[cfg(test)]
@@ -828,5 +857,131 @@ mod tests {
         assert_eq!(e.cache_size(), 2);
         e.clear_cache();
         assert_eq!(e.cache_size(), 0);
+    }
+
+    // ── Unbound template-var: structural variant + did-you-mean hint ──
+
+    /// Helper for the unbound-template-var tests — pins the variant shape
+    /// and carries any error context up to the assert site for legibility.
+    fn unbound_var(err: &LispError) -> (&str, &str, Option<&str>) {
+        match err {
+            LispError::UnboundTemplateVar { prefix, name, hint } => {
+                (*prefix, name.as_str(), hint.as_deref())
+            }
+            other => panic!("expected UnboundTemplateVar, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unbound_unquote_in_compile_template_emits_structural_variant_with_hint() {
+        // `,xs` against macro params `[x]` — distance 1, bound 1 — hints `,x`.
+        // Path: compile_node Unquote (the bytecode-template compile, default
+        // expander).
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro w (x) `(list ,xs)) (w 1)").unwrap())
+            .expect_err("unbound template var must error");
+        let (prefix, name, hint) = unbound_var(&err);
+        assert_eq!(prefix, ",");
+        assert_eq!(name, "xs");
+        assert_eq!(hint, Some("x"));
+    }
+
+    #[test]
+    fn unbound_unquote_splice_in_compile_template_emits_structural_variant_with_hint() {
+        // `,@argz` against macro params `[args]` — distance 1, bound 2 —
+        // hints `,@args`. Path: compile_node UnquoteSplice.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(
+                read("(defmacro call (f &rest args) `(,f ,@argz)) (call foo a b)").unwrap(),
+            )
+            .expect_err("unbound splice must error");
+        let (prefix, name, hint) = unbound_var(&err);
+        assert_eq!(prefix, ",@");
+        assert_eq!(name, "argz");
+        assert_eq!(hint, Some("args"));
+    }
+
+    #[test]
+    fn unbound_unquote_in_substitute_emits_structural_variant_with_hint() {
+        // Same shape but routed through the substitute-only expander — proves
+        // the substitute path emits the same variant as the bytecode path.
+        let mut e = Expander::new_substitute_only();
+        let err = e
+            .expand_program(read("(defmacro w (x) `(list ,xs)) (w 1)").unwrap())
+            .expect_err("substitute unbound must error");
+        let (prefix, name, hint) = unbound_var(&err);
+        assert_eq!(prefix, ",");
+        assert_eq!(name, "xs");
+        assert_eq!(hint, Some("x"));
+    }
+
+    #[test]
+    fn unbound_unquote_splice_in_substitute_emits_structural_variant_with_hint() {
+        // The substitute path's UnquoteSplice branch fires for splices that
+        // appear inside a list during the recursive walk. `,@argz` against
+        // `[args]` hints `,@args`.
+        let mut e = Expander::new_substitute_only();
+        let err = e
+            .expand_program(
+                read("(defmacro call (f &rest args) `(,f ,@argz)) (call foo a b)").unwrap(),
+            )
+            .expect_err("substitute splice unbound must error");
+        let (prefix, name, hint) = unbound_var(&err);
+        assert_eq!(prefix, ",@");
+        assert_eq!(name, "argz");
+        assert_eq!(hint, Some("args"));
+    }
+
+    #[test]
+    fn unbound_template_var_omits_hint_when_no_close_match() {
+        // `,wholly-unrelated` against `[x]` — far past the bound, so no
+        // hint. Negative control: a wrong hint is worse than no hint, so
+        // the slot must stay empty when the substrate isn't confident.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro w (x) `(list ,wholly-unrelated)) (w 1)").unwrap())
+            .expect_err("unrelated unbound must error");
+        let (prefix, name, hint) = unbound_var(&err);
+        assert_eq!(prefix, ",");
+        assert_eq!(name, "wholly-unrelated");
+        assert_eq!(hint, None);
+    }
+
+    #[test]
+    fn unbound_template_var_message_includes_hint_suffix_end_to_end() {
+        // End-to-end through the Display impl — pins the rendered diagnostic
+        // a downstream tool sees today (REPL, tatara-check). Hint stays
+        // additive: the legacy `"unbound"` substring still appears, so any
+        // assertion that pattern-matches on it keeps passing.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro w (x) `(list ,xs)) (w 1)").unwrap())
+            .expect_err("unbound must error");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("did you mean ,x?"),
+            "expected hint suffix in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("unbound"),
+            "expected legacy `unbound` substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains(",xs"),
+            "expected the offending form in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn unbound_template_var_position_is_none_today() {
+        // Negative control for the future-spans move: until `Sexp` carries
+        // source positions, `position()` returns `None` for this variant.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro w (x) `(list ,xs)) (w 1)").unwrap())
+            .expect_err("unbound must error");
+        assert_eq!(err.position(), None);
     }
 }

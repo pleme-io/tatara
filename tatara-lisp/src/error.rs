@@ -79,6 +79,48 @@ pub enum LispError {
     /// actually misfired.
     #[error("odd keyword arguments: dangling element `{dangling}`")]
     OddKwargs { dangling: String },
+    /// An unquote (`,name`) or unquote-splice (`,@name`) in a macro template
+    /// body referenced a name that wasn't bound by the macro's params (during
+    /// `compile_template`) or wasn't available in the substitution scope
+    /// (during `substitute`). `prefix` is the syntactic marker — `","` for
+    /// unquote, `",@"` for splice — so the rendered diagnostic preserves the
+    /// form exactly as the author wrote it. `hint` is `Some(name)` when the
+    /// substrate found a near-miss against the available bound names within
+    /// the bounded edit distance (see `crate::domain::suggest`); `None`
+    /// otherwise — a wrong hint is worse than no hint, so the slot stays
+    /// empty unless the substrate is confident.
+    ///
+    /// `prefix` is `&'static str` because every call site passes a literal
+    /// (`","` or `",@"`); a typo in the marker can never drift into the
+    /// diagnostic at runtime — the type system is the floor. `name` and
+    /// `hint` are `String` because they come from arbitrary source / the
+    /// live bindings set. When a future run gives `Sexp` source spans, `pos:
+    /// Option<usize>` lands here in ONE place and every unbound-template-var
+    /// site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    ///
+    /// Display matches the legacy `Compile`-shaped diagnostic byte-for-byte
+    /// when `hint` is `None` — `"compile error in {prefix}{name}: unbound"`
+    /// — so existing consumer assertions that pattern-match on the message
+    /// substring keep passing. With a hint, the suffix `"; did you mean
+    /// {prefix}{hint}?"` is appended; the prefix is preserved in the hint so
+    /// the operator can copy-paste the suggestion verbatim.
+    #[error(
+        "compile error in {prefix}{name}: unbound{}",
+        unbound_hint_suffix(prefix, hint.as_deref())
+    )]
+    UnboundTemplateVar {
+        prefix: &'static str,
+        name: String,
+        hint: Option<String>,
+    },
+}
+
+fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
+    match hint {
+        Some(h) => format!("; did you mean {prefix}{h}?"),
+        None => String::new(),
+    }
 }
 
 impl LispError {
@@ -104,7 +146,8 @@ impl LispError {
             | Self::HeadMismatch { .. }
             | Self::Unknown { .. }
             | Self::Missing(_)
-            | Self::OddKwargs { .. } => None,
+            | Self::OddKwargs { .. }
+            | Self::UnboundTemplateVar { .. } => None,
         }
     }
 }
@@ -174,6 +217,69 @@ mod tests {
             }
             .position(),
             None
+        );
+        assert_eq!(
+            LispError::UnboundTemplateVar {
+                prefix: ",",
+                name: "xx".into(),
+                hint: Some("x".into()),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::UnboundTemplateVar {
+                prefix: ",@",
+                name: "ys".into(),
+                hint: None,
+            }
+            .position(),
+            None
+        );
+    }
+
+    #[test]
+    fn unbound_template_var_display_without_hint_matches_legacy_compile_shape() {
+        // Without a hint the variant renders byte-for-byte the same string
+        // the legacy `Compile { form: ",x", message: "unbound" }` shape
+        // produced, so authoring tools that substring-match on the rendered
+        // diagnostic see no drift.
+        let err = LispError::UnboundTemplateVar {
+            prefix: ",",
+            name: "y".into(),
+            hint: None,
+        };
+        assert_eq!(format!("{err}"), "compile error in ,y: unbound");
+    }
+
+    #[test]
+    fn unbound_template_var_display_appends_hint_suffix_when_present() {
+        // With a hint the message gains a `"; did you mean ,X?"` suffix —
+        // the prefix is preserved in the hint so the operator can copy-paste
+        // the suggestion verbatim.
+        let err = LispError::UnboundTemplateVar {
+            prefix: ",",
+            name: "xs".into(),
+            hint: Some("x".into()),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,xs: unbound; did you mean ,x?"
+        );
+    }
+
+    #[test]
+    fn unbound_template_var_display_preserves_splice_prefix_in_hint() {
+        // Splice marker rides through both the form and the suggestion; the
+        // operator never has to translate `,` ↔ `,@` mentally.
+        let err = LispError::UnboundTemplateVar {
+            prefix: ",@",
+            name: "rsts".into(),
+            hint: Some("rest".into()),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,@rsts: unbound; did you mean ,@rest?"
         );
     }
 }

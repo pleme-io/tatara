@@ -150,13 +150,19 @@ fn dispatch(form: &Sexp, root: &Path, report: &mut Report) {
                         let summary = summarize_value(&value);
                         report.pass(format!("{other}: {summary}"));
                     }
-                    Err(e) => report.fail(format!("{other}"), format!("{e}")),
+                    Err(e) => report.fail(other.to_string(), format!("{e}")),
                 }
             } else {
+                // Bind the registry-aware near-miss to the substrate's
+                // `suggest_keyword` primitive — one helper, not a per-
+                // call-site `registered_keywords()` + Levenshtein.
+                let hint = domain::suggest_keyword(other)
+                    .map(|m| format!("did you mean ({m} ...)? "))
+                    .unwrap_or_default();
                 report.fail(
                     format!("unknown check: ({other} ...)"),
                     format!(
-                        "no built-in handler, no registered domain, no `defcheck` macro. \
+                        "{hint}no built-in handler, no registered domain, no `defcheck` macro. \
                          Registered domains: {:?}",
                         domain::registered_keywords()
                     ),

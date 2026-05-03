@@ -122,10 +122,9 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
     let mut kw = HashMap::new();
     let mut i = 0;
     while i + 1 < args.len() {
-        let key = args[i].as_keyword().ok_or_else(|| LispError::Compile {
-            form: "kwargs".into(),
-            message: format!("expected keyword at position {i}"),
-        })?;
+        let key = args[i]
+            .as_keyword()
+            .ok_or_else(|| type_mismatch(kwargs_pos_form(i), "keyword", &args[i]))?;
         if kw.insert(key.to_string(), &args[i + 1]).is_some() {
             return Err(LispError::Compile {
                 form: kwarg_form(key),
@@ -231,6 +230,35 @@ pub fn kwarg_form(key: &str) -> String {
 #[must_use]
 pub fn kwarg_item_form(key: &str, idx: usize) -> String {
     format!(":{key}[{idx}]")
+}
+
+/// Canonical `form:` label for a kwargs-list slot whose key position is
+/// not yet known — the slot itself failed the
+/// "this-position-must-be-a-keyword" gate, so there is no `:<key>` to
+/// hang the path off. Renders `kwargs[<idx>]` — parallel to
+/// `kwarg_item_form`'s `:<key>[<idx>]` shape, rooted at the kwargs
+/// slice rather than at a named kwarg.
+///
+/// Used by `parse_kwargs` to label the structural type-mismatch when
+/// the element at an even position isn't a `Sexp::Atom(Keyword(_))`.
+/// Pairing this label with the existing `LispError::TypeMismatch`
+/// variant (`expected: "keyword"`, `got: sexp_type_name(_)`) means
+/// authoring surfaces (REPL, LSP, `tatara-check`) bind to ONE variant
+/// identity for every typed-entry mismatch — `:<key>` for kwarg-level
+/// failures, `:<key>[<idx>]` for per-item failures, and now
+/// `kwargs[<idx>]` for not-a-keyword-yet failures. When a future run
+/// gives `Sexp` source spans, the slot-form gains a position the same
+/// way `kwarg_form` / `kwarg_item_form` will — one helper, every
+/// consumer inherits.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// fourth `form:`-label primitive after `kwarg_form`,
+/// `kwarg_item_form`, and the registry-keyword path; one helper per
+/// distinct path shape so the substrate's diagnostic surface stays
+/// structurally complete).
+#[must_use]
+pub fn kwargs_pos_form(idx: usize) -> String {
+    format!("kwargs[{idx}]")
 }
 
 /// Stable, human-readable name of a `Sexp`'s outermost shape. Used by the
@@ -1542,6 +1570,17 @@ mod tests {
     }
 
     #[test]
+    fn kwargs_pos_form_renders_canonical_slot_shape() {
+        // Sibling of `kwarg_form` / `kwarg_item_form` — used when the
+        // kwargs slot itself failed the keyword gate, so there is no
+        // `:<key>` to root the path. Pin the shape so `tatara-check` /
+        // LSP / REPL match `kwargs[<idx>]` directly.
+        assert_eq!(kwargs_pos_form(0), "kwargs[0]");
+        assert_eq!(kwargs_pos_form(2), "kwargs[2]");
+        assert_eq!(kwargs_pos_form(42), "kwargs[42]");
+    }
+
+    #[test]
     fn extract_string_list_outer_failure_keeps_unindexed_form() {
         // Negative-control: the outer-shape failure (`:tags "scalar"`)
         // is at the kwarg level, not the item level — its form must NOT
@@ -1654,6 +1693,156 @@ mod tests {
         let args = kwargs_of(r#"(_ :name "x" :query "q" :threshold 0.5)"#);
         let kw = parse_kwargs(&args).expect("well-formed kwargs must parse");
         assert_eq!(kw.len(), 3);
+    }
+
+    // ── Structural TypeMismatch for not-a-keyword-at-position ──────────
+    //
+    // `parse_kwargs` used to raise a `LispError::Compile { form: "kwargs",
+    // message: format!("expected keyword at position {i}") }` triple when
+    // an even-position element wasn't a keyword. Three problems:
+    //   1. `form: "kwargs"` is a generic label — operators couldn't tell
+    //      which slot misfired without re-counting.
+    //   2. The actual got-type was lost; `(_ "x" 5)` and `(_ 5 "x")` and
+    //      `(_ #t 5)` all rendered the same "expected keyword at position
+    //      0" message.
+    //   3. The diagnostic was structurally distinct from every other
+    //      typed-entry mismatch in the substrate (`TypeMismatch`),
+    //      forcing authoring tools to substring-parse instead of binding
+    //      to the variant.
+    //
+    // Lifting into `type_mismatch(kwargs_pos_form(i), "keyword",
+    // &args[i])` collapses all three: the form is `kwargs[<idx>]`, the
+    // got-type is the structural `sexp_type_name(_)` projection, and the
+    // variant is the same `LispError::TypeMismatch` that
+    // `extract_string` / `extract_int` / etc. already produce.
+    //
+    // Theory anchor: THEORY.md §V.1 (knowable platform — the diagnostic
+    // names both expected AND actual); §VI.1 (generation over
+    // composition — one `LispError::TypeMismatch` variant for every
+    // kwarg-shape failure mode).
+
+    #[test]
+    fn parse_kwargs_non_keyword_at_position_0_emits_type_mismatch_variant() {
+        // `(_ "x" 5)` — args[0] is a string, not a keyword. The variant
+        // must be `TypeMismatch`, not the legacy `Compile`. `expected:
+        // "keyword"` is `&'static str`, so a typo in the static field can
+        // never drift; `got: "string"` is `sexp_type_name(_)`'s
+        // exhaustive projection.
+        let args = kwargs_of(r#"(_ "x" 5)"#);
+        let err = parse_kwargs(&args).expect_err("non-keyword position must error");
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "keyword",
+                    got: "string",
+                } if form == "kwargs[0]"
+            ),
+            "expected TypeMismatch {{ form: \"kwargs[0]\", expected: \"keyword\", got: \"string\" }}, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_non_keyword_at_position_2_emits_type_mismatch_variant() {
+        // `(_ :name "x" "y" 5)` — first pair `:name "x"` succeeds; second
+        // pair starts at position 2 with a string. The form must name
+        // `kwargs[2]` so the operator goes straight to the slot — pin the
+        // index math.
+        let args = kwargs_of(r#"(_ :name "x" "y" 5)"#);
+        let err = parse_kwargs(&args).expect_err("non-keyword at later position must error");
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "keyword",
+                    got: "string",
+                } if form == "kwargs[2]"
+            ),
+            "expected indexed TypeMismatch at kwargs[2], got {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_non_keyword_routes_got_through_sexp_type_name() {
+        // The got-type is the structural `sexp_type_name(_)` projection,
+        // not a free-form string — pinning this contract for ints, bools,
+        // and symbols means a regression that re-inlines the diagnostic
+        // (with `format!("got {}", _)`) fails-loudly here. Three shapes
+        // covered: int, bool, symbol — each routes through the typed
+        // projection.
+        let args = kwargs_of(r#"(_ 5 "v")"#);
+        let err = parse_kwargs(&args).expect_err("int at position 0 must error");
+        assert!(
+            matches!(err, LispError::TypeMismatch { got: "int", .. }),
+            "expected got: \"int\", got {err:?}"
+        );
+
+        let args = kwargs_of(r#"(_ #t "v")"#);
+        let err = parse_kwargs(&args).expect_err("bool at position 0 must error");
+        assert!(
+            matches!(err, LispError::TypeMismatch { got: "bool", .. }),
+            "expected got: \"bool\", got {err:?}"
+        );
+
+        let args = kwargs_of(r#"(_ symbolic "v")"#);
+        let err = parse_kwargs(&args).expect_err("symbol at position 0 must error");
+        assert!(
+            matches!(err, LispError::TypeMismatch { got: "symbol", .. }),
+            "expected got: \"symbol\", got {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_non_keyword_message_renders_canonical_type_mismatch_shape() {
+        // Display matches the standard TypeMismatch render — `compile
+        // error in kwargs[0]: expected keyword, got string` — so
+        // authoring tools that already substring-match on `expected …,
+        // got …` (`tatara-check` / LSP / REPL) light up uniformly for
+        // this slot the way they do for kwarg-level type mismatches.
+        let args = kwargs_of(r#"(_ "x" 5)"#);
+        let err = parse_kwargs(&args).expect_err("must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in kwargs[0]: expected keyword, got string"
+        );
+    }
+
+    #[test]
+    fn derive_non_keyword_at_position_e2e_via_monitor() {
+        // End-to-end through `#[derive(TataraDomain)]` on `MonitorSpec`:
+        // `(defmonitor "stray" :name …)` — first kwargs element is a
+        // stray string, not a keyword. The derived path inherits the lift
+        // for free because every derived domain funnels through
+        // `parse_kwargs`; no per-derive macro change.
+        let forms = read(r#"(defmonitor "stray" :name "x" :query "q" :threshold 0.5)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    ref form,
+                    expected: "keyword",
+                    got: "string",
+                } if form == "kwargs[0]"
+            ),
+            "expected derived TypeMismatch at kwargs[0], got {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_non_keyword_position_is_none_today() {
+        // Negative-control for the future-spans move: until `Sexp`
+        // carries source positions, the variant's `position()` returns
+        // `None`. Pinning this contract means a future run that adds
+        // `pos: Option<usize>` to `TypeMismatch` does so with a fail-
+        // before/pass-after delta — and the not-a-keyword path picks up
+        // the span automatically because it routes through the same
+        // primitive (`type_mismatch`) as every other `TypeMismatch` site.
+        let args = kwargs_of(r#"(_ "x" 5)"#);
+        let err = parse_kwargs(&args).expect_err("must error");
+        assert_eq!(err.position(), None);
     }
 
     // ── Structural TypeMismatch variant ────────────────────────────────

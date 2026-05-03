@@ -595,6 +595,32 @@ pub fn registered_keywords() -> Vec<&'static str> {
     registry().lock().unwrap().keys().copied().collect()
 }
 
+/// Suggest the registered domain keyword closest to `needle`, when the
+/// closest one is within a bounded edit distance (`suggest`'s contract).
+///
+/// Wraps `suggest` over `registered_keywords()` so consumers don't repeat
+/// the candidate-set assembly per call site. Authoring surfaces with an
+/// unknown registry-dispatched form (`tatara-check`'s unknown-keyword
+/// fallthrough, future LSP completion-failure paths, REPL hints) bind to
+/// ONE primitive instead of pulling the keyword set themselves and
+/// re-implementing edit-distance ranking. The result is `&'static str`
+/// because every registered keyword is itself `'static` (the trait's
+/// `KEYWORD` const), so the substrate hands back the exact same pointer
+/// the registry stores — no allocation, no lifetime juggling.
+///
+/// Theory anchor: THEORY.md §V.1 — "Knowable platform … Render
+/// Anywhere." A diagnostic that says "unknown form: `defmoniter`" but
+/// withholds the registered near-miss forces the operator to scan the
+/// registry's keyword list visually; naming the candidate is the floor
+/// of a constructive diagnostic. THEORY.md §VI.1 — generation over
+/// composition: every "near-miss across the registry" lookup routes
+/// through ONE primitive.
+#[must_use]
+pub fn suggest_keyword(needle: &str) -> Option<&'static str> {
+    let keywords = registered_keywords();
+    suggest(needle, &keywords)
+}
+
 // ── Sexp ↔ serde_json bridge (universal type support) ──────────────
 //
 // Lets the derive macro fall through to `serde_json::from_value` for any
@@ -2068,5 +2094,72 @@ mod tests {
             msg.contains("did you mean :threshold?"),
             "derived domain must inherit the hint, got: {msg}"
         );
+    }
+
+    // ── suggest_keyword — registry-aware near-miss primitive ───────────
+    //
+    // Wraps `suggest` over `registered_keywords()`. Pinning behavior
+    // here covers the substrate-side guarantee every consumer with an
+    // unknown registry-dispatched form binds to: ONE primitive, not a
+    // per-call-site `registered_keywords()` + `suggest` duplication.
+
+    #[test]
+    fn suggest_keyword_picks_near_miss_from_registry() {
+        // Register MonitorSpec (idempotent — `register::<T>()` overwrites)
+        // so the registry definitely contains `defmonitor` when this
+        // test runs, regardless of test ordering.
+        register::<MonitorSpec>();
+        let hint: Option<&'static str> = suggest_keyword("defmoniter");
+        assert_eq!(
+            hint,
+            Some("defmonitor"),
+            "registry-aware near-miss must resolve `defmoniter` to `defmonitor`"
+        );
+    }
+
+    #[test]
+    fn suggest_keyword_excludes_exact_match() {
+        // When the needle IS a registered keyword, no hint — the
+        // suggestion is for near-misses only. Same posture `suggest`
+        // takes for general candidate sets.
+        register::<MonitorSpec>();
+        assert_eq!(
+            suggest_keyword("defmonitor"),
+            None,
+            "exact registry hits must not echo as suggestions"
+        );
+    }
+
+    #[test]
+    fn suggest_keyword_returns_none_when_no_close_match() {
+        // Needle far enough from any plausible domain keyword that no
+        // registered keyword (now or in the future) lands within the
+        // bounded edit distance — no false-positive hint.
+        register::<MonitorSpec>();
+        assert_eq!(
+            suggest_keyword("xyzqrstuvwx"),
+            None,
+            "needle outside the bound must not produce a hint"
+        );
+    }
+
+    #[test]
+    fn suggest_keyword_result_is_static_str() {
+        // The substrate hands back the SAME `&'static str` the registry
+        // stores — every registered keyword is `'static` (the trait's
+        // `KEYWORD` const), so `suggest_keyword` borrows from `'static`,
+        // not from a temporary `Vec`. Pinning the lifetime here keeps
+        // future consumers (LSP / REPL / forge) safe to embed the hint
+        // in a `&'static str`-typed slot without an allocation.
+        register::<MonitorSpec>();
+        let hint: Option<&'static str> = suggest_keyword("defmoniter");
+        // Force the result through a `'static`-bound slot — if the
+        // signature ever drops `'static`, this fails to compile, which
+        // is exactly the safety net we want.
+        fn requires_static(_s: &'static str) {}
+        if let Some(s) = hint {
+            requires_static(s);
+        }
+        assert!(hint.is_some());
     }
 }

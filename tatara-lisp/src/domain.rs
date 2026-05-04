@@ -181,10 +181,7 @@ pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
 }
 
 pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
-    kw.get(key).copied().ok_or_else(|| LispError::Compile {
-        form: kwarg_form(key),
-        message: "required but not provided".into(),
-    })
+    kw.get(key).copied().ok_or_else(|| missing_kwarg(key))
 }
 
 /// Canonical `form:` label for a kwarg-level `LispError::Compile`. Every
@@ -412,6 +409,51 @@ fn levenshtein(a: &str, b: &str) -> usize {
 #[must_use]
 pub fn duplicate_kwarg(key: &str) -> LispError {
     LispError::DuplicateKwarg {
+        key: key.to_string(),
+    }
+}
+
+/// Structural missing-kwarg builder. Returns the dedicated
+/// `LispError::MissingKwarg` variant so authoring surfaces (REPL, LSP,
+/// `tatara-check`) bind to a first-class `key` field instead of
+/// substring-parsing the rendered message. Display matches the legacy
+/// `Compile { form: kwarg_form(key), message: "required but not
+/// provided" }` rendering byte-for-byte (`"compile error in :{key}:
+/// required but not provided"`), so existing
+/// `msg.contains("required")` / `msg.contains(":threshold")` assertions
+/// keep passing.
+///
+/// `required` (the kwarg lookup helper that fronts every typed
+/// extractor — `extract_string`, `extract_int`, `extract_float`,
+/// `extract_bool`, `extract_via_serde`, plus every hand-written
+/// `TataraDomain` impl in the forge / lattice / tameshi crates) used
+/// to assemble this shape inline. One named primitive lifts that into
+/// the substrate's structural-variant surface, so every kwarg-level
+/// "required-but-absent" failure routes through ONE function instead
+/// of re-formatting the shape per call site. After this lift every
+/// distinct `parse_kwargs` + `required` typed-entry kwarg failure mode
+/// (odd length, not-a-keyword-at-position, duplicate key, missing
+/// required key) is now a structural variant of `LispError`, not a
+/// `Compile`-shaped substring.
+///
+/// Sibling of the pre-existing `Missing(&'static str)` variant —
+/// `MissingKwarg` covers the runtime-key path the kwargs extractors
+/// share (every derive-generated extractor and every hand-written
+/// `TataraDomain` impl); `Missing` stays for compile-time-known names.
+///
+/// Theory anchor: THEORY.md §V.1 — "Knowable platform … Render
+/// Anywhere." A diagnostic whose offending `key` is embedded in a
+/// free-form message is structurally incomplete; an authoring surface
+/// that wants to render a squiggly under the missing kwarg slot or
+/// render a "did you mean :X?" hint must re-parse the message. After
+/// this lift the slot exists in the variant's data shape itself.
+/// THEORY.md §II.1 invariant 1 (typed entry — "Ill-typed input errors
+/// before the value exists") — a missing required kwarg is exactly the
+/// failure mode the typed-entry gate exists to reject; naming it
+/// structurally is the typed posture for that gate's diagnostic.
+#[must_use]
+pub fn missing_kwarg(key: &str) -> LispError {
+    LispError::MissingKwarg {
         key: key.to_string(),
     }
 }
@@ -2526,5 +2568,210 @@ mod tests {
             requires_static(s);
         }
         assert!(hint.is_some());
+    }
+
+    // ── Structural MissingKwarg variant ───────────────────────────────
+    //
+    // `required` is the kwarg-lookup helper that fronts every typed
+    // extractor (`extract_string`, `extract_int`, `extract_float`,
+    // `extract_bool`, `extract_via_serde`) and every hand-written
+    // `TataraDomain` impl that needs a kwarg-by-runtime-key. It used to
+    // assemble the "required but absent" diagnostic inline:
+    //   `LispError::Compile { form: kwarg_form(key), message: "required
+    //    but not provided".into() }`.
+    // The diagnostic *category* ("a required kwarg :k was not provided")
+    // is structurally distinct from every other typed-entry mismatch —
+    // it has no `expected/got` axis, no item index, no near-miss hint —
+    // so it deserves its own structural variant the same way `OddKwargs`
+    // and `DuplicateKwarg` do.
+    //
+    // After this lift `parse_kwargs` + `required` cover every
+    // typed-entry kwarg failure mode with a structural variant of
+    // `LispError`:
+    //   * odd length        → `LispError::OddKwargs { dangling }`
+    //   * not-a-keyword-pos → `LispError::TypeMismatch { form, … }`
+    //   * duplicate key     → `LispError::DuplicateKwarg { key }`
+    //   * missing required  → `LispError::MissingKwarg { key }`
+    // No kwarg-lookup failure produces an unstructured `Compile` shape.
+    //
+    // `MissingKwarg` is the runtime-key sibling of the pre-existing
+    // `Missing(&'static str)` variant — `Missing` stays for compile-
+    // time-known names; `MissingKwarg` covers the runtime-key path
+    // every kwargs extractor shares.
+    //
+    // Display matches the legacy `Compile`-shaped diagnostic byte-for-
+    // byte so existing `msg.contains("required")` /
+    // `msg.contains(":threshold")` assertions pass unchanged; the gain
+    // is structural — authoring surfaces (REPL, LSP, `tatara-check`)
+    // bind to the variant.
+
+    #[test]
+    fn missing_kwarg_emits_structural_variant() {
+        let err = missing_kwarg("name");
+        match err {
+            LispError::MissingKwarg { key } => assert_eq!(key, "name"),
+            other => panic!("expected MissingKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn missing_kwarg_display_matches_legacy_compile_shape() {
+        // The user-visible string is byte-for-byte equivalent to the
+        // pre-lift `LispError::Compile { form: ":threshold", message:
+        // "required but not provided" }` rendering. Authoring surfaces
+        // that pattern-match on the message text continue to work; tools
+        // that pattern-match on the variant gain structural binding.
+        let err = missing_kwarg("threshold");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: required but not provided"
+        );
+    }
+
+    #[test]
+    fn missing_kwarg_preserves_kebab_case_keys() {
+        // Multi-segment kebab-cased keys (`:notify-ref`, `:window-seconds`)
+        // ride through unchanged. A regression that camelCases or
+        // lowercases the key in the rendered diagnostic fails-loudly.
+        let err = missing_kwarg("notify-ref");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :notify-ref: required but not provided"
+        );
+    }
+
+    #[test]
+    fn required_emits_structural_variant_when_absent() {
+        // `(_ :other 1)` looking up `:level` — the kwarg is not in the
+        // map. `required` must surface the structural `MissingKwarg`,
+        // not the legacy `Compile`. Pin the variant identity AND the
+        // key so a regression that re-inlines the inline shape fails-
+        // loudly here.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = required(&kw, "level").unwrap_err();
+        assert!(
+            matches!(err, LispError::MissingKwarg { ref key } if key == "level"),
+            "expected MissingKwarg {{ key: \"level\" }}, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn required_present_kwarg_returns_value_unchanged() {
+        // Negative-control: when the kwarg IS present, `required`
+        // returns its value — the structural-variant lift is for the
+        // absent-key path only.
+        let args = kwargs_of(r#"(_ :level "info")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let v = required(&kw, "level").expect("present kwarg must return Ok");
+        assert_eq!(v.as_string(), Some("info"));
+    }
+
+    #[test]
+    fn required_message_renders_canonical_shape() {
+        // Pin the rendered Display shape so authoring tools that already
+        // substring-match `required` (and `tatara-check`'s
+        // user-defined `defcheck` macros) light up uniformly. A
+        // regression that drifts the separator or the label fails-
+        // loudly here.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = required(&kw, "threshold").unwrap_err();
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: required but not provided"
+        );
+    }
+
+    #[test]
+    fn extract_string_missing_emits_structural_variant() {
+        // `extract_string` fronts every other typed extractor by
+        // routing through `required`. A missing kwarg must produce
+        // `MissingKwarg`, not `TypeMismatch` (no value to type-check)
+        // and not `Compile` (legacy shape). Pin the routing.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_string(&kw, "name").unwrap_err();
+        assert!(
+            matches!(err, LispError::MissingKwarg { ref key } if key == "name"),
+            "expected MissingKwarg from extract_string, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_int_missing_emits_structural_variant() {
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_int(&kw, "n").unwrap_err();
+        assert!(
+            matches!(err, LispError::MissingKwarg { ref key } if key == "n"),
+            "expected MissingKwarg from extract_int, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_float_missing_emits_structural_variant() {
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_float(&kw, "ratio").unwrap_err();
+        assert!(
+            matches!(err, LispError::MissingKwarg { ref key } if key == "ratio"),
+            "expected MissingKwarg from extract_float, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_bool_missing_emits_structural_variant() {
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_bool(&kw, "enabled").unwrap_err();
+        assert!(
+            matches!(err, LispError::MissingKwarg { ref key } if key == "enabled"),
+            "expected MissingKwarg from extract_bool, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_via_serde_missing_emits_structural_variant() {
+        // The serde-fallthrough path also routes through `required`, so
+        // every typed `Deserialize` field (enums, nested structs, vecs
+        // of nested structs) inherits the structural variant for the
+        // absent-key case — uniform shape across the typed-extractor
+        // and the serde-fallthrough surfaces.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_via_serde::<Severity>(&kw, "level").unwrap_err();
+        assert!(
+            matches!(err, LispError::MissingKwarg { ref key } if key == "level"),
+            "expected MissingKwarg from extract_via_serde, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn derive_missing_required_kwarg_e2e_emits_structural_variant() {
+        // End-to-end through `#[derive(TataraDomain)]` on `MonitorSpec`:
+        // omitting the required `:threshold` must surface the structural
+        // `MissingKwarg { key: "threshold" }` — every derived domain
+        // inherits the lift by sharing `required`. No per-derive macro
+        // change required.
+        let forms = read(r#"(defmonitor :name "x" :query "q")"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        assert!(
+            matches!(err, LispError::MissingKwarg { ref key } if key == "threshold"),
+            "derived domain must surface MissingKwarg, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn missing_kwarg_position_is_none_today() {
+        // Negative-control for the future-spans move: until `Sexp`
+        // carries source positions, the variant's `position()` returns
+        // `None`. Pinning this contract means a future run that adds
+        // `pos: Option<usize>` to `MissingKwarg` does so deliberately —
+        // the missing-kwarg path picks up the span automatically because
+        // it routes through the same primitive (`missing_kwarg`) as
+        // every other call site.
+        let err = missing_kwarg("name");
+        assert_eq!(err.position(), None);
     }
 }

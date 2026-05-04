@@ -126,10 +126,7 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
             .as_keyword()
             .ok_or_else(|| type_mismatch(kwargs_pos_form(i), "keyword", &args[i]))?;
         if kw.insert(key.to_string(), &args[i + 1]).is_some() {
-            return Err(LispError::Compile {
-                form: kwarg_form(key),
-                message: "duplicate keyword".into(),
-            });
+            return Err(duplicate_kwarg(key));
         }
         i += 2;
     }
@@ -382,6 +379,41 @@ fn levenshtein(a: &str, b: &str) -> usize {
         std::mem::swap(&mut prev, &mut curr);
     }
     prev[b.len()]
+}
+
+/// Structural duplicate-kwarg builder. Returns the dedicated
+/// `LispError::DuplicateKwarg` variant so authoring surfaces (REPL, LSP,
+/// `tatara-check`) bind to a first-class `key` field instead of
+/// substring-parsing the rendered message. Display matches the legacy
+/// `Compile { form: kwarg_form(key), message: "duplicate keyword" }`
+/// rendering byte-for-byte (`"compile error in :{key}: duplicate
+/// keyword"`), so existing `msg.contains("duplicate keyword")` /
+/// `msg.contains(":name")` assertions keep passing.
+///
+/// Two inline copies of the same triple — `parse_kwargs`'s top-level
+/// duplicate-keyword path and `sexp_to_json`'s nested-kwargs duplicate-
+/// keyword path — used to assemble this shape by hand. One named
+/// primitive lifts both into the substrate's structural-variant surface,
+/// so every `parse_kwargs` failure mode (`OddKwargs` for odd length,
+/// `TypeMismatch` for not-a-keyword-at-position, `DuplicateKwarg` for
+/// duplicate key) is now a structural variant of `LispError`, not a
+/// `Compile`-shaped substring.
+///
+/// Theory anchor: THEORY.md §V.1 — "Knowable platform … Render
+/// Anywhere." A diagnostic whose offending `key` is embedded in a
+/// free-form message is structurally incomplete; an authoring surface
+/// that wants to render a squiggly under the duplicate or hint a fix
+/// must re-parse the message. After this lift the slot exists in the
+/// variant's data shape itself. THEORY.md §II.1 invariant 1 (typed
+/// entry — "Ill-typed input errors before the value exists") — a
+/// duplicate kwarg is exactly the failure mode the typed-entry gate
+/// exists to reject; naming it structurally is the typed posture for
+/// that gate's diagnostic.
+#[must_use]
+pub fn duplicate_kwarg(key: &str) -> LispError {
+    LispError::DuplicateKwarg {
+        key: key.to_string(),
+    }
 }
 
 /// Structural type-mismatch builder. Pairs a path-shaped `form` (typically
@@ -691,10 +723,7 @@ pub fn sexp_to_json(s: &Sexp) -> Result<JValue> {
                     if let Some(k) = items[i].as_keyword() {
                         let value = sexp_to_json(&items[i + 1])?;
                         if map.insert(kebab_to_camel(k), value).is_some() {
-                            return Err(LispError::Compile {
-                                form: kwarg_form(k),
-                                message: "duplicate keyword".into(),
-                            });
+                            return Err(duplicate_kwarg(k));
                         }
                         i += 2;
                     } else {
@@ -2330,6 +2359,153 @@ mod tests {
             None,
             "needle outside the bound must not produce a hint"
         );
+    }
+
+    // ── Structural DuplicateKwarg variant ─────────────────────────────
+    //
+    // `parse_kwargs`'s top-level duplicate path and `sexp_to_json`'s
+    // nested-kwargs duplicate path used to emit identical inline triples:
+    //   `LispError::Compile { form: kwarg_form(k), message: "duplicate
+    //    keyword".into() }`.
+    // Two copies in one module is the prime-directive precursor to the
+    // three-times rule (THEORY.md §VI.1) — and the diagnostic *category*
+    // ("a kwargs slice contained `:k` twice") is structurally distinct
+    // from every other typed-entry mismatch shape, so it deserves its
+    // own structural variant the same way `OddKwargs` does.
+    //
+    // After this lift `parse_kwargs`'s diagnostic surface is structurally
+    // complete — every distinct failure mode binds to ONE structural
+    // variant of `LispError`:
+    //   * odd length        → `LispError::OddKwargs { dangling }`
+    //   * not-a-keyword-pos → `LispError::TypeMismatch { form, … }`
+    //   * duplicate key     → `LispError::DuplicateKwarg { key }`
+    // No `parse_kwargs` failure produces an unstructured `Compile` shape.
+    //
+    // Display matches the legacy `Compile`-shaped diagnostic byte-for-byte
+    // so existing `msg.contains("duplicate keyword")` /
+    // `msg.contains(":name")` assertions pass; the gain is structural —
+    // authoring surfaces (REPL, LSP, `tatara-check`) bind to the variant.
+
+    #[test]
+    fn duplicate_kwarg_emits_structural_variant() {
+        let err = duplicate_kwarg("name");
+        match err {
+            LispError::DuplicateKwarg { key } => assert_eq!(key, "name"),
+            other => panic!("expected DuplicateKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn duplicate_kwarg_display_matches_legacy_compile_shape() {
+        // The user-visible string is byte-for-byte equivalent to the
+        // pre-lift `LispError::Compile { form: ":name", message:
+        // "duplicate keyword" }` rendering. Authoring surfaces that
+        // pattern-match on the message text continue to work; tools that
+        // pattern-match on the variant gain structural binding.
+        let err = duplicate_kwarg("threshold");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: duplicate keyword"
+        );
+    }
+
+    #[test]
+    fn duplicate_kwarg_preserves_kebab_case_keys() {
+        // Multi-segment kebab-cased keys (`:notify-ref`, `:window-seconds`)
+        // ride through unchanged. A regression that camelCases or
+        // lowercases the key in the rendered diagnostic fails-loudly.
+        let err = duplicate_kwarg("notify-ref");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :notify-ref: duplicate keyword"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_top_level_duplicate_emits_structural_variant() {
+        // `(_ :name "x" :name "y")` — top-level duplicate. Replaces the
+        // legacy `Compile { form: ":name", message: "duplicate keyword" }`
+        // shape with the structural `DuplicateKwarg { key: "name" }`.
+        let args = kwargs_of(r#"(_ :name "x" :name "y")"#);
+        let err = parse_kwargs(&args).unwrap_err();
+        assert!(
+            matches!(err, LispError::DuplicateKwarg { ref key } if key == "name"),
+            "expected DuplicateKwarg {{ key: \"name\" }}, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_kwargs_duplicate_message_renders_canonical_shape() {
+        // Pin the rendered Display shape so authoring tools that already
+        // substring-match `duplicate keyword` (and `tatara-check`'s
+        // user-defined `defcheck` macros) light up uniformly. A
+        // regression that drifts the separator (e.g. `kwargs.name`) or
+        // the label (e.g. `repeated key`) fails-loudly here.
+        let args = kwargs_of(r#"(_ :threshold 0.1 :threshold 0.2)"#);
+        let err = parse_kwargs(&args).unwrap_err();
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: duplicate keyword"
+        );
+    }
+
+    #[test]
+    fn sexp_to_json_nested_duplicate_emits_structural_variant() {
+        // `:step (:notify-ref "a" :notify-ref "b")` — the duplicate fires
+        // during the `sexp_to_json` projection, before serde sees a
+        // value. The lift gives the nested path the SAME structural
+        // variant as the top-level path; the operator sees one shape
+        // regardless of which depth misfired.
+        let args = kwargs_of(r#"(_ :step (:notify-ref "a" :notify-ref "b"))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_via_serde::<EscalationStep>(&kw, "step").unwrap_err();
+        assert!(
+            matches!(err, LispError::DuplicateKwarg { ref key } if key == "notify-ref"),
+            "expected DuplicateKwarg {{ key: \"notify-ref\" }} from nested kwargs, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn extract_vec_via_serde_inner_duplicate_emits_structural_variant() {
+        // `:steps ((:notify-ref "a" :notify-ref "b"))` — the duplicate is
+        // inside one vec item. The `sexp_to_json` path fires before the
+        // per-item serde wrapper sees a value, so the inner
+        // `DuplicateKwarg` variant propagates with the inner kwarg's key
+        // — not clobbered by `:steps[0]`. Pinning this means the
+        // operator can pattern-match on `key == "notify-ref"` regardless
+        // of vec nesting.
+        let args = kwargs_of(r#"(_ :steps ((:notify-ref "a" :notify-ref "b")))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
+        assert!(
+            matches!(err, LispError::DuplicateKwarg { ref key } if key == "notify-ref"),
+            "expected DuplicateKwarg {{ key: \"notify-ref\" }} from vec-item kwargs, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn derive_duplicate_kwarg_e2e_emits_structural_variant() {
+        // End-to-end through `#[derive(TataraDomain)]` on `MonitorSpec`:
+        // every derived domain inherits the structural variant by
+        // sharing `parse_kwargs`. No per-derive macro change is
+        // required.
+        let forms = read(r#"(defmonitor :name "x" :name "y" :query "q" :threshold 0.5)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        assert!(
+            matches!(err, LispError::DuplicateKwarg { ref key } if key == "name"),
+            "derived domain must surface DuplicateKwarg, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn duplicate_kwarg_position_is_none_today() {
+        // Negative-control: until `Sexp` carries spans, `position()`
+        // returns `None` for the variant — `format_diagnostic` falls
+        // through to single-line rendering, no caret emitted. Pinning
+        // this contract means a future run that adds `pos: Option<usize>`
+        // does so deliberately, with a fail-before/pass-after delta.
+        let err = duplicate_kwarg("name");
+        assert_eq!(err.position(), None);
     }
 
     #[test]

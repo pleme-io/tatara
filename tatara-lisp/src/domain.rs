@@ -151,6 +151,12 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
 /// (`msg.contains("unknown keyword")`, `msg.contains(":threshold")`) pass
 /// unchanged.
 ///
+/// Returns the structural `LispError::UnknownKwarg { key, hint, allowed }`
+/// variant — same posture as the `OddKwargs` / `DuplicateKwarg` /
+/// `MissingKwarg` siblings. After this lift every distinct typed-entry
+/// kwarg-gate failure mode binds to ONE structural variant of `LispError`,
+/// not a `Compile`-shaped substring.
+///
 /// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — "Ill-typed input
 /// errors before the value exists"); §V.1 ("knowable platform … Render
 /// Anywhere" — naming the likely intended keyword is the floor of a
@@ -158,26 +164,66 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
 pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
     for key in kw.keys() {
         if !allowed.contains(&key.as_str()) {
-            let mut sorted: Vec<&&str> = allowed.iter().collect();
-            sorted.sort();
-            let allowed_list = sorted
-                .iter()
-                .map(|s| format!(":{s}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let message = match suggest(key, allowed) {
-                Some(hint) => {
-                    format!("unknown keyword (did you mean :{hint}?; allowed: {allowed_list})")
-                }
-                None => format!("unknown keyword (allowed: {allowed_list})"),
-            };
-            return Err(LispError::Compile {
-                form: kwarg_form(key),
-                message,
-            });
+            return Err(unknown_kwarg(key, allowed));
         }
     }
     Ok(())
+}
+
+/// Structural unknown-kwarg builder. Returns the dedicated
+/// `LispError::UnknownKwarg` variant so authoring surfaces (REPL, LSP,
+/// `tatara-check`) bind to first-class `key` / `hint` / `allowed`
+/// fields instead of substring-parsing the rendered message. Display
+/// matches the legacy `Compile { form: kwarg_form(key), message:
+/// "unknown keyword (...)" }` rendering byte-for-byte
+/// (`"compile error in :{key}: unknown keyword (did you mean :{hint}?;
+/// allowed: :a, :b, :c)"` with a hint, `"compile error in :{key}:
+/// unknown keyword (allowed: :a, :b, :c)"` without), so existing
+/// `msg.contains("unknown keyword")` / `msg.contains(":threshold")` /
+/// `msg.contains("did you mean :threshold?")` assertions keep
+/// passing.
+///
+/// Encapsulates the three otherwise-inline steps every unknown-kwarg
+/// site shares: (1) ranking the near-miss via `suggest`, (2) sorting
+/// the allowed-set lexicographically so two operators on two machines
+/// see the same message for the same input — diagnostics are
+/// deterministic, (3) materializing the allowed-set as owned
+/// `Vec<String>` so the variant lives independent of the call frame
+/// and crosses thread boundaries cleanly. A future "registry-aware
+/// near-miss for unknown registry-dispatched forms" path
+/// (`tatara-check`'s unknown-keyword fallthrough) binds to this
+/// helper rather than re-formatting the shape per call site.
+///
+/// `reject_unknown_kwargs` is the first consumer; hand-written
+/// `TataraDomain` impls in the forge / lattice / tameshi crates that
+/// don't fit the derive's closed-field-type set bind to the
+/// substrate's primitive instead of inline `LispError::Compile { … }`
+/// assembly. After this lift `reject_unknown_kwargs` is no longer the
+/// last `LispError::Compile { ... }` site in the kwarg-gate's
+/// diagnostic surface — every distinct kwarg-gate failure mode is now
+/// a structural variant of `LispError`.
+///
+/// Theory anchor: THEORY.md §V.1 — "Knowable platform … Render
+/// Anywhere." A diagnostic whose offending `key` / hint / allowed-set
+/// are embedded in a free-form message is structurally incomplete; an
+/// authoring surface that wants to render a squiggly under the typo
+/// or surface the allowed-set as completions must re-parse the
+/// message. After this lift the slots exist in the variant's data
+/// shape itself. THEORY.md §II.1 invariant 1 (typed entry) — an
+/// unknown kwarg is exactly the failure mode the typed-entry gate
+/// exists to reject; naming it structurally is the typed posture for
+/// that gate's diagnostic. THEORY.md §VI.1 (generation over
+/// composition — one named primitive per structural shape).
+#[must_use]
+pub fn unknown_kwarg(key: &str, allowed: &[&str]) -> LispError {
+    let hint = suggest(key, allowed).map(String::from);
+    let mut sorted: Vec<String> = allowed.iter().map(|s| (*s).to_string()).collect();
+    sorted.sort();
+    LispError::UnknownKwarg {
+        key: key.to_string(),
+        hint,
+        allowed: sorted,
+    }
 }
 
 pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
@@ -2772,6 +2818,235 @@ mod tests {
         // it routes through the same primitive (`missing_kwarg`) as
         // every other call site.
         let err = missing_kwarg("name");
+        assert_eq!(err.position(), None);
+    }
+
+    // ── Structural UnknownKwarg variant ───────────────────────────────
+    //
+    // `reject_unknown_kwargs` used to assemble its diagnostic inline:
+    //   `LispError::Compile { form: kwarg_form(key), message: format!(
+    //       "unknown keyword (did you mean :{hint}?; allowed: ...)"
+    //    ) }`
+    // — the offending key, the near-miss hint, and the allowed-set
+    // were all welded into a free-form `message` string. After this
+    // lift the three slots are first-class fields on
+    // `LispError::UnknownKwarg { key, hint, allowed }`, so authoring
+    // surfaces (REPL, LSP, `tatara-check`) bind to the variant
+    // structurally instead of substring-parsing the rendered message.
+    //
+    // This is the FIFTH and LAST structural-variant lift on the
+    // typed-entry kwarg-gate's diagnostic surface — every distinct
+    // failure mode is now a structural variant of `LispError`:
+    //   * odd length        → `LispError::OddKwargs { dangling }`
+    //   * not-a-keyword-pos → `LispError::TypeMismatch { form, … }`
+    //   * duplicate key     → `LispError::DuplicateKwarg { key }`
+    //   * missing required  → `LispError::MissingKwarg { key }`
+    //   * unknown keyword   → `LispError::UnknownKwarg { key, hint,
+    //                                                   allowed }`
+    // No kwarg-gate failure produces an unstructured `Compile` shape.
+    //
+    // Display matches the legacy `Compile`-shaped diagnostic byte-
+    // for-byte so existing `msg.contains("unknown keyword")` /
+    // `msg.contains(":threshold")` / `msg.contains("did you mean
+    // :threshold?")` / `msg.contains("allowed: ")` assertions pass;
+    // the gain is structural — authoring surfaces bind to the variant.
+
+    #[test]
+    fn unknown_kwarg_emits_structural_variant_with_hint() {
+        // `tthreshold` is a near-miss of `threshold`; `suggest` ranks
+        // it within the bounded edit distance, so `unknown_kwarg`
+        // populates the `hint` slot with the allowed candidate.
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        let err = unknown_kwarg("tthreshold", allowed);
+        match err {
+            LispError::UnknownKwarg {
+                key,
+                hint,
+                allowed: alw,
+            } => {
+                assert_eq!(key, "tthreshold");
+                assert_eq!(hint.as_deref(), Some("threshold"));
+                // `unknown_kwarg` sorts the allowed set lexicographically
+                // so two operators on two machines see the same
+                // diagnostic for the same input — diagnostics are
+                // deterministic regardless of HashMap iteration order.
+                assert_eq!(alw, vec!["name", "query", "threshold"]);
+            }
+            other => panic!("expected UnknownKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_kwarg_emits_structural_variant_without_hint_when_no_close_match() {
+        // Negative control: when the offending keyword isn't within the
+        // edit-distance bound of any allowed kwarg, no hint is
+        // fabricated. A wrong hint is worse than no hint.
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        let err = unknown_kwarg("totally-unrelated", allowed);
+        match err {
+            LispError::UnknownKwarg {
+                key,
+                hint,
+                allowed: alw,
+            } => {
+                assert_eq!(key, "totally-unrelated");
+                assert!(hint.is_none(), "no near-miss must produce no hint");
+                assert_eq!(alw, vec!["name", "query", "threshold"]);
+            }
+            other => panic!("expected UnknownKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_kwarg_sorts_allowed_set_lexicographically() {
+        // `unknown_kwarg` is the single named primitive that materializes
+        // the allowed-set as owned `Vec<String>` and sorts it
+        // lexicographically. Pin the sort so a regression that drops it
+        // (and thus drifts the rendered message order across HashMap
+        // iteration ordering) fails-loudly here.
+        let allowed: &[&str] = &["zeta", "alpha", "mu", "beta"];
+        let err = unknown_kwarg("xx", allowed);
+        match err {
+            LispError::UnknownKwarg { allowed: alw, .. } => {
+                assert_eq!(alw, vec!["alpha", "beta", "mu", "zeta"]);
+            }
+            other => panic!("expected UnknownKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_kwarg_display_with_hint_matches_legacy_compile_shape() {
+        // The user-visible string is byte-for-byte equivalent to the
+        // pre-lift `LispError::Compile { form: ":tthreshold", message:
+        // "unknown keyword (did you mean :threshold?; allowed: :name,
+        // :query, :threshold)" }` rendering. Authoring surfaces that
+        // pattern-match on the message text continue to work; tools
+        // that pattern-match on the variant gain structural binding.
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        let err = unknown_kwarg("tthreshold", allowed);
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :tthreshold: unknown keyword \
+             (did you mean :threshold?; allowed: :name, :query, :threshold)"
+        );
+    }
+
+    #[test]
+    fn unknown_kwarg_display_without_hint_matches_legacy_compile_shape() {
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        let err = unknown_kwarg("totally-unrelated", allowed);
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :totally-unrelated: unknown keyword \
+             (allowed: :name, :query, :threshold)"
+        );
+    }
+
+    #[test]
+    fn unknown_kwarg_preserves_kebab_case_keys() {
+        // `:notify-ref`, `:window-seconds`, every kebab-cased kwarg
+        // name round-trips through both the offending-key slot AND the
+        // allowed-list slot unchanged. A regression that camelCases or
+        // lowercases either side fails-loudly here.
+        let allowed: &[&str] = &["notify-ref", "window-seconds"];
+        let err = unknown_kwarg("windou-seconds", allowed);
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :windou-seconds: unknown keyword \
+             (did you mean :window-seconds?; allowed: :notify-ref, :window-seconds)"
+        );
+    }
+
+    #[test]
+    fn reject_unknown_kwargs_emits_structural_variant_for_typo() {
+        // End-to-end: `reject_unknown_kwargs` must surface the
+        // structural `UnknownKwarg`, not the legacy `Compile`. Pin the
+        // variant identity AND the key so a regression that re-inlines
+        // the inline shape fails-loudly here.
+        let forms = read(r#"(defmonitor :name "x" :tthreshold 0.99)"#).unwrap();
+        let args = forms[0].as_list().unwrap();
+        let kw = parse_kwargs(&args[1..]).unwrap();
+        let allowed: &[&str] = &[
+            "name",
+            "query",
+            "threshold",
+            "window-seconds",
+            "tags",
+            "enabled",
+        ];
+        let err = reject_unknown_kwargs(&kw, allowed).unwrap_err();
+        match err {
+            LispError::UnknownKwarg {
+                key,
+                hint,
+                allowed: alw,
+            } => {
+                assert_eq!(key, "tthreshold");
+                assert_eq!(hint.as_deref(), Some("threshold"));
+                assert!(
+                    alw.contains(&"threshold".to_string()),
+                    "allowed-set must include `threshold`, got {alw:?}"
+                );
+                assert_eq!(
+                    alw,
+                    vec![
+                        "enabled",
+                        "name",
+                        "query",
+                        "tags",
+                        "threshold",
+                        "window-seconds"
+                    ],
+                    "allowed-set must be lexicographically sorted"
+                );
+            }
+            other => panic!("expected UnknownKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reject_unknown_kwargs_passes_when_all_known_returns_ok() {
+        // Negative control: when every kwarg IS in the allowed set,
+        // `reject_unknown_kwargs` returns `Ok(())` — the structural-
+        // variant lift is for the unknown path only.
+        let forms = read(r#"(defmonitor :name "x" :query "q" :threshold 0.5)"#).unwrap();
+        let args = forms[0].as_list().unwrap();
+        let kw = parse_kwargs(&args[1..]).unwrap();
+        let allowed: &[&str] = &["name", "query", "threshold"];
+        assert!(reject_unknown_kwargs(&kw, allowed).is_ok());
+    }
+
+    #[test]
+    fn derive_unknown_kwarg_e2e_emits_structural_variant() {
+        // End-to-end through `#[derive(TataraDomain)]` on `MonitorSpec`:
+        // a typo'd `:tthreshold` must surface the structural
+        // `UnknownKwarg { key: "tthreshold", hint: Some("threshold"),
+        // allowed }` — every derived domain inherits the lift by
+        // sharing `reject_unknown_kwargs`. No per-derive macro change
+        // required.
+        let forms =
+            read(r#"(defmonitor :name "x" :query "q" :threshold 0.5 :tthreshold 0.99)"#).unwrap();
+        let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+        match err {
+            LispError::UnknownKwarg { key, hint, .. } => {
+                assert_eq!(key, "tthreshold");
+                assert_eq!(hint.as_deref(), Some("threshold"));
+            }
+            other => panic!("derived domain must surface UnknownKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_kwarg_position_is_none_today() {
+        // Negative-control for the future-spans move: until `Sexp`
+        // carries source positions, the variant's `position()` returns
+        // `None`. Pinning this contract means a future run that adds
+        // `pos: Option<usize>` to `UnknownKwarg` does so deliberately —
+        // the unknown-kwarg path picks up the span automatically
+        // because it routes through the same primitive
+        // (`unknown_kwarg`) as every other call site.
+        let allowed: &[&str] = &["name"];
+        let err = unknown_kwarg("xx", allowed);
         assert_eq!(err.position(), None);
     }
 }

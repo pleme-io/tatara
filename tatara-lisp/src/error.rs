@@ -114,6 +114,26 @@ pub enum LispError {
         name: String,
         hint: Option<String>,
     },
+    /// A kwargs slice contained the same `:key` twice. The offending key is
+    /// carried as a structural field — not embedded in a free-form message —
+    /// so authoring surfaces (REPL, LSP, `tatara-check`) pattern-match on
+    /// the variant and bind to `key` directly instead of substring-parsing
+    /// the rendered diagnostic. Same posture as the `OddKwargs { dangling }`
+    /// sibling: every distinct `parse_kwargs` failure mode (odd length,
+    /// not-a-keyword-at-position, duplicate key) is now a structural variant
+    /// of `LispError`, not a `Compile`-shaped substring.
+    ///
+    /// `key` is `String` because it comes from arbitrary source. Display
+    /// renders `"compile error in :{key}: duplicate keyword"` byte-for-byte
+    /// equivalent to the legacy `Compile { form: kwarg_form(key), message:
+    /// "duplicate keyword" }` shape, so existing consumer assertions
+    /// (`msg.contains(":name")`, `msg.contains("duplicate keyword")`) pass
+    /// unchanged. When a future run gives `Sexp` source spans, `pos:
+    /// Option<usize>` lands here in ONE place and every duplicate-kwarg
+    /// site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in :{key}: duplicate keyword")]
+    DuplicateKwarg { key: String },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -147,7 +167,8 @@ impl LispError {
             | Self::Unknown { .. }
             | Self::Missing(_)
             | Self::OddKwargs { .. }
-            | Self::UnboundTemplateVar { .. } => None,
+            | Self::UnboundTemplateVar { .. }
+            | Self::DuplicateKwarg { .. } => None,
         }
     }
 }
@@ -235,6 +256,39 @@ mod tests {
             }
             .position(),
             None
+        );
+        assert_eq!(
+            LispError::DuplicateKwarg { key: "name".into() }.position(),
+            None
+        );
+    }
+
+    #[test]
+    fn duplicate_kwarg_display_matches_legacy_compile_shape() {
+        // The variant renders byte-for-byte the same string the legacy
+        // `Compile { form: ":name", message: "duplicate keyword" }` shape
+        // produced, so authoring tools (REPL, LSP, `tatara-check`) that
+        // substring-match on the rendered diagnostic see no drift; tools
+        // that pattern-match on the variant gain structural binding.
+        let err = LispError::DuplicateKwarg { key: "name".into() };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :name: duplicate keyword"
+        );
+    }
+
+    #[test]
+    fn duplicate_kwarg_display_carries_kebab_case_keys_unchanged() {
+        // `:notify-ref`, `:window-seconds`, every kebab-cased kwarg name
+        // round-trips through the variant's Display unchanged. Pinning
+        // this contract means a regression that camelCases or lowercases
+        // the key in the rendered message fails-loudly.
+        let err = LispError::DuplicateKwarg {
+            key: "notify-ref".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :notify-ref: duplicate keyword"
         );
     }
 

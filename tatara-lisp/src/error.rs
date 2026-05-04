@@ -134,6 +134,31 @@ pub enum LispError {
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in :{key}: duplicate keyword")]
     DuplicateKwarg { key: String },
+    /// A required kwarg was absent from the kwargs slice. The offending key
+    /// is carried as a structural field — not embedded in a free-form
+    /// message — so authoring surfaces (REPL, LSP, `tatara-check`)
+    /// pattern-match on the variant and bind to `key` directly instead of
+    /// substring-parsing the rendered diagnostic. Same posture as
+    /// `DuplicateKwarg { key }` and `OddKwargs { dangling }`: every
+    /// distinct typed-entry kwarg failure mode is now a structural variant
+    /// of `LispError`, not a `Compile`-shaped substring. Sibling of the
+    /// pre-existing `Missing(&'static str)` variant — `MissingKwarg`
+    /// covers the runtime-key path the kwargs extractors share, while
+    /// `Missing` stays for compile-time-known names.
+    ///
+    /// `key` is `String` because it comes from the runtime kwargs lookup
+    /// (each derive-generated extractor and every hand-written
+    /// `TataraDomain` impl can pass an arbitrary key). Display renders
+    /// `"compile error in :{key}: required but not provided"`
+    /// byte-for-byte equivalent to the legacy `Compile { form:
+    /// kwarg_form(key), message: "required but not provided" }` shape, so
+    /// existing consumer assertions (`msg.contains(":threshold")`,
+    /// `msg.contains("required")`) pass unchanged. When a future run gives
+    /// `Sexp` source spans, `pos: Option<usize>` lands here in ONE place
+    /// and every missing-kwarg site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in :{key}: required but not provided")]
+    MissingKwarg { key: String },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -168,7 +193,8 @@ impl LispError {
             | Self::Missing(_)
             | Self::OddKwargs { .. }
             | Self::UnboundTemplateVar { .. }
-            | Self::DuplicateKwarg { .. } => None,
+            | Self::DuplicateKwarg { .. }
+            | Self::MissingKwarg { .. } => None,
         }
     }
 }
@@ -261,6 +287,10 @@ mod tests {
             LispError::DuplicateKwarg { key: "name".into() }.position(),
             None
         );
+        assert_eq!(
+            LispError::MissingKwarg { key: "name".into() }.position(),
+            None
+        );
     }
 
     #[test]
@@ -289,6 +319,37 @@ mod tests {
         assert_eq!(
             format!("{err}"),
             "compile error in :notify-ref: duplicate keyword"
+        );
+    }
+
+    #[test]
+    fn missing_kwarg_display_matches_legacy_compile_shape() {
+        // The variant renders byte-for-byte the same string the legacy
+        // `Compile { form: ":threshold", message: "required but not provided" }`
+        // shape produced, so authoring tools (REPL, LSP, `tatara-check`) that
+        // substring-match on the rendered diagnostic see no drift; tools
+        // that pattern-match on the variant gain structural binding.
+        let err = LispError::MissingKwarg {
+            key: "threshold".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: required but not provided"
+        );
+    }
+
+    #[test]
+    fn missing_kwarg_display_carries_kebab_case_keys_unchanged() {
+        // `:notify-ref`, `:window-seconds`, every kebab-cased kwarg name
+        // round-trips through the variant's Display unchanged. Pinning
+        // this contract means a regression that camelCases or lowercases
+        // the key in the rendered message fails-loudly.
+        let err = LispError::MissingKwarg {
+            key: "notify-ref".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :notify-ref: required but not provided"
         );
     }
 

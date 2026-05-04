@@ -159,12 +159,68 @@ pub enum LispError {
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in :{key}: required but not provided")]
     MissingKwarg { key: String },
+    /// A kwargs slice contained a `:key` that isn't in the allowed-kwarg
+    /// set for the surrounding `TataraDomain`. The offending key, the
+    /// near-miss hint (if any), and the full allowed set are all carried
+    /// as first-class fields — not embedded in a free-form message — so
+    /// authoring surfaces (REPL, LSP, `tatara-check`) pattern-match on
+    /// the variant and bind to `key` / `hint` / `allowed` directly
+    /// instead of substring-parsing the rendered message. Same posture
+    /// as the `OddKwargs { dangling }`, `DuplicateKwarg { key }`, and
+    /// `MissingKwarg { key }` siblings: every distinct typed-entry
+    /// kwarg-gate failure mode is now a structural variant of
+    /// `LispError`, not a `Compile`-shaped substring.
+    ///
+    /// `key` is `String` because it comes from arbitrary source. `hint`
+    /// is `Some(allowed_keyword)` when `crate::domain::suggest` ranks an
+    /// allowed kwarg within the bounded edit distance; `None`
+    /// otherwise — a wrong hint is worse than no hint, so the slot
+    /// stays empty unless the substrate is confident. `allowed` is
+    /// `Vec<String>` (sorted lexicographically by `unknown_kwarg`)
+    /// because the variant owns its data — the derive-emitted
+    /// `&'static [&'static str]` allowed-set crosses the structural
+    /// boundary as owned `String`s so the diagnostic crosses thread
+    /// boundaries cleanly and lives independent of the call frame.
+    /// Display matches the legacy `Compile { form: kwarg_form(key),
+    /// message: "unknown keyword (...)" }` rendering byte-for-byte
+    /// (`"compile error in :{key}: unknown keyword (did you mean
+    /// :{hint}?; allowed: :a, :b, :c)"` with a hint, `"compile error
+    /// in :{key}: unknown keyword (allowed: :a, :b, :c)"` without),
+    /// so existing consumer assertions
+    /// (`msg.contains("unknown keyword")`,
+    /// `msg.contains("did you mean :threshold?")`,
+    /// `msg.contains("allowed: ")`) pass unchanged. When a future
+    /// run gives `Sexp` source spans, `pos: Option<usize>` lands
+    /// here in ONE place and every unknown-kwarg site picks up
+    /// positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error(
+        "compile error in :{key}: unknown keyword{}",
+        unknown_kwarg_suffix(hint.as_deref(), allowed)
+    )]
+    UnknownKwarg {
+        key: String,
+        hint: Option<String>,
+        allowed: Vec<String>,
+    },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
     match hint {
         Some(h) => format!("; did you mean {prefix}{h}?"),
         None => String::new(),
+    }
+}
+
+fn unknown_kwarg_suffix(hint: Option<&str>, allowed: &[String]) -> String {
+    let allowed_list = allowed
+        .iter()
+        .map(|s| format!(":{s}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    match hint {
+        Some(h) => format!(" (did you mean :{h}?; allowed: {allowed_list})"),
+        None => format!(" (allowed: {allowed_list})"),
     }
 }
 
@@ -194,7 +250,8 @@ impl LispError {
             | Self::OddKwargs { .. }
             | Self::UnboundTemplateVar { .. }
             | Self::DuplicateKwarg { .. }
-            | Self::MissingKwarg { .. } => None,
+            | Self::MissingKwarg { .. }
+            | Self::UnknownKwarg { .. } => None,
         }
     }
 }
@@ -290,6 +347,72 @@ mod tests {
         assert_eq!(
             LispError::MissingKwarg { key: "name".into() }.position(),
             None
+        );
+        assert_eq!(
+            LispError::UnknownKwarg {
+                key: "tthreshold".into(),
+                hint: Some("threshold".into()),
+                allowed: vec!["name".into(), "threshold".into()],
+            }
+            .position(),
+            None
+        );
+    }
+
+    #[test]
+    fn unknown_kwarg_display_with_hint_renders_did_you_mean_then_allowed_list() {
+        // The variant renders byte-for-byte the same string the legacy
+        // `Compile { form: ":tthreshold", message: "unknown keyword (did
+        // you mean :threshold?; allowed: :a, :b, :c)" }` shape produced,
+        // so authoring tools (REPL, LSP, `tatara-check`) that
+        // substring-match on the rendered diagnostic see no drift; tools
+        // that pattern-match on the variant gain structural binding.
+        let err = LispError::UnknownKwarg {
+            key: "tthreshold".into(),
+            hint: Some("threshold".into()),
+            allowed: vec!["name".into(), "query".into(), "threshold".into()],
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :tthreshold: unknown keyword \
+             (did you mean :threshold?; allowed: :name, :query, :threshold)"
+        );
+    }
+
+    #[test]
+    fn unknown_kwarg_display_without_hint_renders_allowed_list_only() {
+        // No hint: the rendered message has the allowed list but no `did
+        // you mean` clause. A wrong hint is worse than no hint — the
+        // slot stays empty unless `suggest` ranks a candidate within
+        // the bounded edit distance.
+        let err = LispError::UnknownKwarg {
+            key: "totally-unrelated".into(),
+            hint: None,
+            allowed: vec!["name".into(), "query".into(), "threshold".into()],
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :totally-unrelated: unknown keyword \
+             (allowed: :name, :query, :threshold)"
+        );
+    }
+
+    #[test]
+    fn unknown_kwarg_display_carries_kebab_case_keys_unchanged() {
+        // `:notify-ref`, `:window-seconds`, every kebab-cased kwarg name
+        // round-trips through both the offending-key slot AND the
+        // allowed-list slot unchanged. Pinning this contract means a
+        // regression that camelCases or lowercases either side fails-
+        // loudly here.
+        let err = LispError::UnknownKwarg {
+            key: "windou-seconds".into(),
+            hint: Some("window-seconds".into()),
+            allowed: vec!["notify-ref".into(), "window-seconds".into()],
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :windou-seconds: unknown keyword \
+             (did you mean :window-seconds?; allowed: :notify-ref, :window-seconds)"
         );
     }
 

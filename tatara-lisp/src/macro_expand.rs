@@ -283,10 +283,9 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
     }
     match node {
         Sexp::Unquote(inner) => {
-            let name = inner.as_symbol().ok_or_else(|| LispError::Compile {
-                form: "unquote".into(),
-                message: "only bound symbols may appear after `,` (no evaluator)".into(),
-            })?;
+            let name = inner
+                .as_symbol()
+                .ok_or_else(|| non_symbol_unquote_target(",", inner))?;
             let idx = params
                 .iter()
                 .position(|p| *p == name)
@@ -294,10 +293,9 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
             ops.push(TemplateOp::Subst(idx));
         }
         Sexp::UnquoteSplice(inner) => {
-            let name = inner.as_symbol().ok_or_else(|| LispError::Compile {
-                form: "unquote-splice".into(),
-                message: "only bound symbols may appear after `,@`".into(),
-            })?;
+            let name = inner
+                .as_symbol()
+                .ok_or_else(|| non_symbol_unquote_target(",@", inner))?;
             let idx = params
                 .iter()
                 .position(|p| *p == name)
@@ -502,10 +500,9 @@ fn bind_args(macro_name: &str, params: &[Param], args: &[Sexp]) -> Result<HashMa
 fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
     match form {
         Sexp::Unquote(inner) => {
-            let sym = inner.as_symbol().ok_or_else(|| LispError::Compile {
-                form: "unquote".into(),
-                message: "only bound symbols may appear after `,` (no evaluator)".into(),
-            })?;
+            let sym = inner
+                .as_symbol()
+                .ok_or_else(|| non_symbol_unquote_target(",", inner))?;
             bindings
                 .get(sym)
                 .cloned()
@@ -519,10 +516,9 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
             let mut out: Vec<Sexp> = Vec::with_capacity(items.len());
             for item in items {
                 if let Sexp::UnquoteSplice(inner) = item {
-                    let sym = inner.as_symbol().ok_or_else(|| LispError::Compile {
-                        form: "unquote-splice".into(),
-                        message: "only bound symbols may appear after `,@`".into(),
-                    })?;
+                    let sym = inner
+                        .as_symbol()
+                        .ok_or_else(|| non_symbol_unquote_target(",@", inner))?;
                     let val = bindings
                         .get(sym)
                         .ok_or_else(|| unbound_template_var(",@", sym, &bound_names(bindings)))?;
@@ -570,6 +566,39 @@ fn unbound_template_var(prefix: &'static str, name: &str, candidates: &[&str]) -
         prefix,
         name: name.to_string(),
         hint: crate::domain::suggest(name, candidates).map(str::to_string),
+    }
+}
+
+/// Lift the four inline `LispError::Compile { form: "unquote" /
+/// "unquote-splice", message: "only bound symbols may appear after `,` /
+/// `,@`" }` triples in this module (compile_node Unquote / UnquoteSplice +
+/// substitute Unquote / UnquoteSplice-inside-list) behind ONE named
+/// primitive. Sibling of `unbound_template_var`: that helper fires when the
+/// slot IS a symbol but the symbol isn't bound; this helper fires when the
+/// slot isn't a symbol at all. Together they close every distinct
+/// typed-entry template-gate failure mode for the no-evaluator template
+/// language: each is a structural variant of `LispError`, not a
+/// `Compile`-shaped substring.
+///
+/// `prefix` is `&'static str` because every call site passes a literal
+/// (`","` / `",@"`); the inner is the offending `Sexp` projected through
+/// `Display` so the operator sees the literal value they wrote — `(list 1
+/// 2)`, `5`, `:foo` — instead of just a type-name. Naming both the
+/// syntactic context AND the offending value is the typed-entry gate's
+/// structural-completeness floor.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; four
+/// inline copies in one module is past the three-times rule. THEORY.md
+/// §V.1 — knowable platform; the structural variant exposes `prefix` /
+/// `got` as first-class fields so authoring tools (LSP, REPL,
+/// `tatara-check`) bind to the data shape instead of substring-parsing
+/// the rendered diagnostic. THEORY.md §II.1 invariant 1 — typed entry;
+/// a non-symbol unquote target is exactly the failure mode the
+/// typed-entry gate exists to reject.
+fn non_symbol_unquote_target(prefix: &'static str, got: &Sexp) -> LispError {
+    LispError::NonSymbolUnquoteTarget {
+        prefix,
+        got: got.to_string(),
     }
 }
 
@@ -983,5 +1012,107 @@ mod tests {
             .expand_program(read("(defmacro w (x) `(list ,xs)) (w 1)").unwrap())
             .expect_err("unbound must error");
         assert_eq!(err.position(), None);
+    }
+
+    // ── Non-symbol unquote target: structural variant ─────────────────
+
+    /// Helper for the non-symbol-unquote-target tests — pins the variant
+    /// shape and carries any error context up to the assert site for
+    /// legibility. Sibling of `unbound_var`.
+    fn non_symbol_target(err: &LispError) -> (&str, &str) {
+        match err {
+            LispError::NonSymbolUnquoteTarget { prefix, got } => (*prefix, got.as_str()),
+            other => panic!("expected NonSymbolUnquoteTarget, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn non_symbol_unquote_in_compile_template_emits_structural_variant() {
+        // `,(list 1 2)` — the inner is a list, not a symbol. Path:
+        // compile_node Unquote (the bytecode-template compile, default
+        // expander). Pins variant identity AND prefix AND the offending
+        // literal so a regression that re-inlines the legacy
+        // `LispError::Compile` shape fails-loudly here.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro w (x) `,(list 1 2)) (w 1)").unwrap())
+            .expect_err("non-symbol unquote target must error");
+        let (prefix, got) = non_symbol_target(&err);
+        assert_eq!(prefix, ",");
+        assert_eq!(got, "(list 1 2)");
+    }
+
+    #[test]
+    fn non_symbol_unquote_splice_in_compile_template_emits_structural_variant() {
+        // `,@5` — the inner is an int atom, not a symbol. Path:
+        // compile_node UnquoteSplice. The integer literal round-trips
+        // through the variant's `got` slot via `Sexp::Display`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro w (x) `(list ,@5)) (w 1)").unwrap())
+            .expect_err("non-symbol splice target must error");
+        let (prefix, got) = non_symbol_target(&err);
+        assert_eq!(prefix, ",@");
+        assert_eq!(got, "5");
+    }
+
+    #[test]
+    fn non_symbol_unquote_in_substitute_emits_structural_variant() {
+        // Same shape as the bytecode path but routed through the
+        // substitute-only expander — proves the substitute path emits the
+        // same variant as the compile_node path. Pins that the lift is
+        // path-uniform.
+        let mut e = Expander::new_substitute_only();
+        let err = e
+            .expand_program(read("(defmacro w (x) `,(list 1 2)) (w 1)").unwrap())
+            .expect_err("substitute non-symbol target must error");
+        let (prefix, got) = non_symbol_target(&err);
+        assert_eq!(prefix, ",");
+        assert_eq!(got, "(list 1 2)");
+    }
+
+    #[test]
+    fn non_symbol_unquote_splice_inside_list_in_substitute_emits_structural_variant() {
+        // The substitute path's UnquoteSplice-inside-list branch fires for
+        // splices that appear inside a list during the recursive walk.
+        // `,@(list 1 2)` inside the body — the inner is a literal list, not
+        // a symbol — emits the same variant as the compile_node path.
+        let mut e = Expander::new_substitute_only();
+        let err = e
+            .expand_program(read("(defmacro w (x) `(outer ,@(list 1 2))) (w 1)").unwrap())
+            .expect_err("substitute non-symbol splice must error");
+        let (prefix, got) = non_symbol_target(&err);
+        assert_eq!(prefix, ",@");
+        assert_eq!(got, "(list 1 2)");
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_position_is_none_today() {
+        // Negative control for the future-spans move: until `Sexp` carries
+        // source positions, `position()` returns `None` for this variant.
+        // A future run that gives `Sexp` source spans adds `pos:
+        // Option<usize>` to ONE place; this test gives that change a
+        // deliberate fail-before/pass-after delta.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro w (x) `,(list 1 2)) (w 1)").unwrap())
+            .expect_err("non-symbol target must error");
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_message_renders_canonical_type_mismatch_shape() {
+        // End-to-end through the Display impl — pins the rendered diagnostic
+        // a downstream tool sees today (REPL, tatara-check). The shape is
+        // parallel to the existing `TypeMismatch` variant: form, expected
+        // shape, offending literal — all three slots present.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro w (x) `,(list 1 2)) (w 1)").unwrap())
+            .expect_err("non-symbol target must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,: expected symbol, got (list 1 2)"
+        );
     }
 }

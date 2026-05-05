@@ -241,6 +241,36 @@ pub enum LispError {
         hint: Option<String>,
         registered: Vec<String>,
     },
+    /// The slot inside a `Sexp::Unquote(_)` (`,X`) or
+    /// `Sexp::UnquoteSplice(_)` (`,@X`) was not a symbol. The `prefix`
+    /// field is the syntactic marker — `","` for unquote, `",@"` for
+    /// splice — so the rendered diagnostic preserves the form exactly
+    /// as the author wrote it. The `got` field is the offending inner's
+    /// `Sexp::Display` projection so the operator sees both what was
+    /// expected (a symbol — the only form a no-evaluator template can
+    /// substitute) and what was actually written (the literal value —
+    /// `(list 1 2)`, `5`, `:foo`, etc.). Naming both halves of the
+    /// failure is the typed-entry gate's structural-completeness floor
+    /// (THEORY.md §V.1).
+    ///
+    /// Sibling of `UnboundTemplateVar { prefix, name, hint }` for the
+    /// same template-side typed-entry surface — that variant fires when
+    /// the slot IS a symbol but the symbol isn't bound; this variant
+    /// fires when the slot isn't a symbol at all. After this lift every
+    /// distinct typed-entry template-gate failure mode binds to ONE
+    /// structural variant of `LispError`, not a `Compile`-shaped
+    /// substring.
+    ///
+    /// `prefix` is `&'static str` because every call site passes a
+    /// literal (`","` / `",@"`); a typo in the marker can never drift
+    /// into the diagnostic at runtime — the type system is the floor.
+    /// `got` is `String` because it comes from arbitrary source via
+    /// `Sexp::Display`. When a future run gives `Sexp` source spans,
+    /// `pos: Option<usize>` lands here in ONE place and every
+    /// non-symbol-unquote-target site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in {prefix}: expected symbol, got {got}")]
+    NonSymbolUnquoteTarget { prefix: &'static str, got: String },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -304,7 +334,8 @@ impl LispError {
             | Self::DuplicateKwarg { .. }
             | Self::MissingKwarg { .. }
             | Self::UnknownKwarg { .. }
-            | Self::UnknownDomainKeyword { .. } => None,
+            | Self::UnknownDomainKeyword { .. }
+            | Self::NonSymbolUnquoteTarget { .. } => None,
         }
     }
 }
@@ -415,6 +446,22 @@ mod tests {
                 keyword: "defmoniter".into(),
                 hint: Some("defmonitor".into()),
                 registered: vec!["defalertpolicy".into(), "defmonitor".into()],
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::NonSymbolUnquoteTarget {
+                prefix: ",",
+                got: "(list 1 2)".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::NonSymbolUnquoteTarget {
+                prefix: ",@",
+                got: "5".into(),
             }
             .position(),
             None
@@ -646,6 +693,55 @@ mod tests {
             "unknown domain keyword: (defalert-policiy ...) \
              (did you mean (defalert-policy ...)?; \
              registered: defalert-policy, defprocess-spec)"
+        );
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_display_renders_canonical_type_mismatch_shape() {
+        // `,(list 1 2)` — the inner is a list, not a symbol. The variant
+        // names the syntactic marker (`,`), the expected shape (`symbol` —
+        // the only form a no-evaluator template can substitute), and the
+        // offending literal (`(list 1 2)`) as first-class fields. Authoring
+        // tools that pattern-match on the variant gain structural binding;
+        // tools that substring-match on the rendered diagnostic see a
+        // stable shape parallel to the existing `TypeMismatch` variant.
+        let err = LispError::NonSymbolUnquoteTarget {
+            prefix: ",",
+            got: "(list 1 2)".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,: expected symbol, got (list 1 2)"
+        );
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_display_preserves_splice_prefix() {
+        // Splice marker rides through the `prefix` field; the rendered
+        // diagnostic is `,@`, not `,`. The operator never has to translate
+        // `,` ↔ `,@` mentally — same posture as `UnboundTemplateVar`.
+        let err = LispError::NonSymbolUnquoteTarget {
+            prefix: ",@",
+            got: "5".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,@: expected symbol, got 5"
+        );
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_display_carries_keyword_atom_unchanged() {
+        // `,:foo` — the inner is a keyword atom. The `:foo` form
+        // round-trips through `Sexp::Display` into the variant's `got`
+        // slot unchanged, so the operator sees what they wrote.
+        let err = LispError::NonSymbolUnquoteTarget {
+            prefix: ",",
+            got: ":foo".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,: expected symbol, got :foo"
         );
     }
 

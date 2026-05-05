@@ -203,6 +203,44 @@ pub enum LispError {
         hint: Option<String>,
         allowed: Vec<String>,
     },
+    /// A registry-dispatched form `(<keyword> ...)` whose head symbol isn't in
+    /// the global `TataraDomain` registry. The offending keyword, the
+    /// near-miss hint (if any), and the full registered keyword set are all
+    /// carried as first-class fields — not embedded in a free-form message —
+    /// so authoring surfaces (REPL, LSP, `tatara-check`) pattern-match on the
+    /// variant and bind to `keyword` / `hint` / `registered` directly instead
+    /// of substring-parsing the rendered message. Same posture as the
+    /// `UnknownKwarg { key, hint, allowed }` sibling: the kwarg-gate's
+    /// unknown-allowed-set rejection and the registry-gate's
+    /// unknown-registered-set rejection share ONE structural shape.
+    ///
+    /// `keyword` is `String` because it comes from arbitrary source (a
+    /// top-level form's head symbol). `hint` is
+    /// `Some(registered_keyword)` when `crate::domain::suggest_keyword`
+    /// ranks a registered keyword within the bounded edit distance;
+    /// `None` otherwise — a wrong hint is worse than no hint, so the slot
+    /// stays empty unless the substrate is confident. `registered` is
+    /// `Vec<String>` (sorted lexicographically by
+    /// `unknown_domain_keyword`) because the variant owns its data — the
+    /// registry's `&'static [&'static str]` keyword-set crosses the
+    /// structural boundary as owned `String`s so the diagnostic crosses
+    /// thread boundaries cleanly and lives independent of the call frame.
+    /// Empty `registered` (no domains seeded) renders `(no domains
+    /// registered)` so the operator sees the structural reason — the
+    /// registry has no candidates at all — instead of a misleading empty
+    /// "registered: " suffix. When a future run gives `Sexp` source
+    /// spans, `pos: Option<usize>` lands here in ONE place and every
+    /// unknown-domain-keyword site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error(
+        "unknown domain keyword: ({keyword} ...){}",
+        unknown_domain_keyword_suffix(hint.as_deref(), registered)
+    )]
+    UnknownDomainKeyword {
+        keyword: String,
+        hint: Option<String>,
+        registered: Vec<String>,
+    },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -221,6 +259,20 @@ fn unknown_kwarg_suffix(hint: Option<&str>, allowed: &[String]) -> String {
     match hint {
         Some(h) => format!(" (did you mean :{h}?; allowed: {allowed_list})"),
         None => format!(" (allowed: {allowed_list})"),
+    }
+}
+
+fn unknown_domain_keyword_suffix(hint: Option<&str>, registered: &[String]) -> String {
+    if registered.is_empty() {
+        return match hint {
+            Some(h) => format!(" (did you mean ({h} ...)?; no domains registered)"),
+            None => " (no domains registered)".into(),
+        };
+    }
+    let registered_list = registered.join(", ");
+    match hint {
+        Some(h) => format!(" (did you mean ({h} ...)?; registered: {registered_list})"),
+        None => format!(" (registered: {registered_list})"),
     }
 }
 
@@ -251,7 +303,8 @@ impl LispError {
             | Self::UnboundTemplateVar { .. }
             | Self::DuplicateKwarg { .. }
             | Self::MissingKwarg { .. }
-            | Self::UnknownKwarg { .. } => None,
+            | Self::UnknownKwarg { .. }
+            | Self::UnknownDomainKeyword { .. } => None,
         }
     }
 }
@@ -353,6 +406,15 @@ mod tests {
                 key: "tthreshold".into(),
                 hint: Some("threshold".into()),
                 allowed: vec!["name".into(), "threshold".into()],
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::UnknownDomainKeyword {
+                keyword: "defmoniter".into(),
+                hint: Some("defmonitor".into()),
+                registered: vec!["defalertpolicy".into(), "defmonitor".into()],
             }
             .position(),
             None
@@ -503,6 +565,87 @@ mod tests {
         assert_eq!(
             format!("{err}"),
             "compile error in ,xs: unbound; did you mean ,x?"
+        );
+    }
+
+    #[test]
+    fn unknown_domain_keyword_display_with_hint_renders_did_you_mean_then_registered_list() {
+        // The variant names the offending keyword's full call shape
+        // (`(defmoniter ...)`), the structural near-miss in the same call
+        // shape (`(defmonitor ...)`), and the sorted registered set.
+        // Authoring tools that pattern-match on the variant gain
+        // structural binding to `keyword` / `hint` / `registered` —
+        // tools that substring-match on the rendered diagnostic see a
+        // stable shape.
+        let err = LispError::UnknownDomainKeyword {
+            keyword: "defmoniter".into(),
+            hint: Some("defmonitor".into()),
+            registered: vec![
+                "defalertpolicy".into(),
+                "defmonitor".into(),
+                "defnotify".into(),
+            ],
+        };
+        assert_eq!(
+            format!("{err}"),
+            "unknown domain keyword: (defmoniter ...) \
+             (did you mean (defmonitor ...)?; \
+             registered: defalertpolicy, defmonitor, defnotify)"
+        );
+    }
+
+    #[test]
+    fn unknown_domain_keyword_display_without_hint_renders_registered_list_only() {
+        // No near-miss within the bounded edit distance: the rendered
+        // message has the registered list but no `did you mean` clause.
+        // A wrong hint is worse than no hint — the slot stays empty
+        // unless `suggest_keyword` ranks a candidate within the bound.
+        let err = LispError::UnknownDomainKeyword {
+            keyword: "totally-unrelated".into(),
+            hint: None,
+            registered: vec!["defalertpolicy".into(), "defmonitor".into()],
+        };
+        assert_eq!(
+            format!("{err}"),
+            "unknown domain keyword: (totally-unrelated ...) \
+             (registered: defalertpolicy, defmonitor)"
+        );
+    }
+
+    #[test]
+    fn unknown_domain_keyword_display_with_empty_registry_renders_no_domains_registered() {
+        // The substrate names the structural reason — the registry has
+        // no candidates at all — instead of a misleading empty
+        // `registered: ` suffix. A typo against an empty registry is
+        // unambiguously a registry-seeding bug, not a near-miss.
+        let err = LispError::UnknownDomainKeyword {
+            keyword: "defmonitor".into(),
+            hint: None,
+            registered: vec![],
+        };
+        assert_eq!(
+            format!("{err}"),
+            "unknown domain keyword: (defmonitor ...) (no domains registered)"
+        );
+    }
+
+    #[test]
+    fn unknown_domain_keyword_display_carries_kebab_case_keywords_unchanged() {
+        // Kebab-cased domain keywords (`defalert-policy`,
+        // `defprocess-spec`) round-trip through the offending-keyword
+        // slot AND the registered-list slot unchanged. Pinning this
+        // contract means a regression that camelCases or lowercases
+        // either side fails-loudly here.
+        let err = LispError::UnknownDomainKeyword {
+            keyword: "defalert-policiy".into(),
+            hint: Some("defalert-policy".into()),
+            registered: vec!["defalert-policy".into(), "defprocess-spec".into()],
+        };
+        assert_eq!(
+            format!("{err}"),
+            "unknown domain keyword: (defalert-policiy ...) \
+             (did you mean (defalert-policy ...)?; \
+             registered: defalert-policy, defprocess-spec)"
         );
     }
 

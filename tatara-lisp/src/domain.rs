@@ -769,6 +769,56 @@ pub fn suggest_keyword(needle: &str) -> Option<&'static str> {
     suggest(needle, &keywords)
 }
 
+/// Structural unknown-domain-keyword builder. Returns the dedicated
+/// `LispError::UnknownDomainKeyword` variant so authoring surfaces
+/// (`tatara-check`, the REPL, the LSP) bind to first-class
+/// `keyword` / `hint` / `registered` fields instead of substring-parsing
+/// the rendered message. The shape mirrors `unknown_kwarg`: the
+/// kwarg-gate's unknown-allowed-set rejection and the registry-gate's
+/// unknown-registered-set rejection share ONE structural primitive shape
+/// across two structural variants — the substrate's diagnostic surface
+/// stays uniform.
+///
+/// Encapsulates the three otherwise-inline steps every unknown-domain-
+/// keyword site shares: (1) ranking the near-miss via `suggest_keyword`
+/// over `registered_keywords()`, (2) sorting the registered set
+/// lexicographically so two operators on two machines see the same
+/// message for the same input — diagnostics are deterministic regardless
+/// of HashMap iteration order, (3) materializing the registered set as
+/// owned `Vec<String>` so the variant lives independent of the call frame
+/// and crosses thread boundaries cleanly.
+///
+/// `tatara-check`'s registry-dispatch fallthrough is the first consumer;
+/// hand-written authoring surfaces (LSP completion-failure fallback, REPL
+/// hints, future multi-error collectors that name every unregistered
+/// `(defX …)` form in one pass) bind to ONE function instead of
+/// re-formatting the shape per call site.
+///
+/// Theory anchor: THEORY.md §V.1 — "Knowable platform … Render Anywhere."
+/// A diagnostic whose offending `keyword` / `hint` / `registered`-set are
+/// embedded in a free-form message is structurally incomplete; an
+/// authoring surface that wants to render a squiggly under the typo or
+/// surface the registered set as completions must re-parse the message.
+/// After this lift the slots exist in the variant's data shape itself.
+/// THEORY.md §VI.1 — generation over composition: every "near-miss across
+/// the registry" lookup routes through `suggest_keyword`, every "diagnose
+/// an unregistered head against the registry" routes through this
+/// primitive.
+#[must_use]
+pub fn unknown_domain_keyword(keyword: &str) -> LispError {
+    let hint = suggest_keyword(keyword).map(String::from);
+    let mut registered: Vec<String> = registered_keywords()
+        .into_iter()
+        .map(String::from)
+        .collect();
+    registered.sort();
+    LispError::UnknownDomainKeyword {
+        keyword: keyword.to_string(),
+        hint,
+        registered,
+    }
+}
+
 // ── Sexp ↔ serde_json bridge (universal type support) ──────────────
 //
 // Lets the derive macro fall through to `serde_json::from_value` for any
@@ -2447,6 +2497,130 @@ mod tests {
             None,
             "needle outside the bound must not produce a hint"
         );
+    }
+
+    // ── unknown_domain_keyword — structural variant + named primitive ─
+    //
+    // Pairs `LispError::UnknownDomainKeyword { keyword, hint, registered }`
+    // with `unknown_domain_keyword(keyword)` so the registry-dispatch
+    // fallthrough (`tatara-check`'s unknown `(defX …)` path) binds to ONE
+    // primitive instead of inline `format!("did you mean ({m} ...)? ")` +
+    // `format!("Registered domains: {:?}", registered_keywords())` +
+    // `report.fail(label, detail)` triples. The shape mirrors
+    // `unknown_kwarg`: same three slots (offending key + optional hint +
+    // sorted candidate set), same deterministic-ordering posture, same
+    // owned-data lifetime contract — the substrate's unknown-something-
+    // against-a-set diagnostic surface is now a single shape.
+    //
+    // Tests pin: variant identity, hint resolution, hint absence, sorted
+    // determinism, kebab-case round-trip, end-to-end Display.
+
+    #[test]
+    fn unknown_domain_keyword_emits_structural_variant_with_hint() {
+        register::<MonitorSpec>();
+        let err = unknown_domain_keyword("defmoniter");
+        match err {
+            LispError::UnknownDomainKeyword {
+                keyword,
+                hint,
+                registered,
+            } => {
+                assert_eq!(keyword, "defmoniter");
+                assert_eq!(hint.as_deref(), Some("defmonitor"));
+                assert!(
+                    registered.contains(&"defmonitor".to_string()),
+                    "registered set must include the registered keyword(s); got {registered:?}"
+                );
+            }
+            other => panic!("expected UnknownDomainKeyword, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_domain_keyword_emits_structural_variant_without_hint_when_no_close_match() {
+        // Needle far from any registered keyword — the hint slot stays
+        // empty (a wrong hint is worse than no hint). This is the
+        // structural counterpart to `suggest_keyword_returns_none_when_no_close_match`
+        // — `unknown_domain_keyword` carries the absence into the variant.
+        register::<MonitorSpec>();
+        let err = unknown_domain_keyword("xyzqrstuvwx");
+        match err {
+            LispError::UnknownDomainKeyword {
+                keyword,
+                hint,
+                registered,
+            } => {
+                assert_eq!(keyword, "xyzqrstuvwx");
+                assert!(
+                    hint.is_none(),
+                    "needle outside the bound must produce no hint"
+                );
+                assert!(!registered.is_empty());
+            }
+            other => panic!("expected UnknownDomainKeyword, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_domain_keyword_sorts_registered_set_lexicographically() {
+        // Registry iteration order is HashMap-derived (non-deterministic),
+        // so the helper sorts the registered set before placing it in the
+        // variant. A regression that drops the sort and lets HashMap
+        // iteration order leak into the diagnostic fails-loudly here.
+        register::<MonitorSpec>();
+        let err = unknown_domain_keyword("totally-unrelated-form");
+        match err {
+            LispError::UnknownDomainKeyword { registered, .. } => {
+                let mut expected = registered.clone();
+                expected.sort();
+                assert_eq!(
+                    registered, expected,
+                    "registered keyword set must be sorted lexicographically"
+                );
+            }
+            other => panic!("expected UnknownDomainKeyword, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_domain_keyword_display_matches_structural_shape_with_hint() {
+        // End-to-end Display from the helper: the offending head's call
+        // shape, the structural near-miss in the same call shape, and
+        // the registered set. The shape is byte-stable so authoring
+        // surfaces that substring-match on the rendered diagnostic see
+        // no drift across registry mutations (modulo the registered
+        // set itself).
+        register::<MonitorSpec>();
+        let err = unknown_domain_keyword("defmoniter");
+        let rendered = format!("{err}");
+        assert!(
+            rendered.starts_with("unknown domain keyword: (defmoniter ...)"),
+            "rendered diagnostic must lead with the offending head: {rendered}"
+        );
+        assert!(
+            rendered.contains("did you mean (defmonitor ...)?"),
+            "rendered diagnostic must surface the structural near-miss: {rendered}"
+        );
+        assert!(
+            rendered.contains("registered: "),
+            "rendered diagnostic must include the registered set: {rendered}"
+        );
+    }
+
+    #[test]
+    fn unknown_domain_keyword_display_carries_kebab_case_keywords_unchanged() {
+        // Kebab-cased domain keywords (a future `defalert-policy`,
+        // `defprocess-spec`) round-trip through the offending-keyword
+        // slot AND the registered-list slot unchanged. The substrate's
+        // diagnostic surface respects the author's casing.
+        let err = LispError::UnknownDomainKeyword {
+            keyword: "defalert-policiy".into(),
+            hint: Some("defalert-policy".into()),
+            registered: vec!["defalert-policy".into(), "defprocess-spec".into()],
+        };
+        assert!(format!("{err}").contains("(defalert-policiy ...)"));
+        assert!(format!("{err}").contains("(defalert-policy ...)?"));
+        assert!(format!("{err}").contains("registered: defalert-policy, defprocess-spec"));
     }
 
     // ── Structural DuplicateKwarg variant ─────────────────────────────

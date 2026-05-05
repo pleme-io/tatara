@@ -153,19 +153,25 @@ fn dispatch(form: &Sexp, root: &Path, report: &mut Report) {
                     Err(e) => report.fail(other.to_string(), format!("{e}")),
                 }
             } else {
-                // Bind the registry-aware near-miss to the substrate's
-                // `suggest_keyword` primitive — one helper, not a per-
-                // call-site `registered_keywords()` + Levenshtein.
-                let hint = domain::suggest_keyword(other)
-                    .map(|m| format!("did you mean ({m} ...)? "))
-                    .unwrap_or_default();
+                // Bind the registry-dispatch fallthrough to the
+                // substrate's structural variant + named primitive —
+                // ONE call into `unknown_domain_keyword` materializes
+                // the offending keyword, the near-miss hint (when one
+                // exists within the bounded edit distance), and the
+                // sorted registered set as first-class fields of
+                // `LispError::UnknownDomainKeyword`. Authoring surfaces
+                // that pattern-match on the variant gain structural
+                // binding to `keyword` / `hint` / `registered`; tools
+                // that substring-match on the rendered diagnostic see
+                // a stable shape. The contextual prose (`no defcheck
+                // macro`) is tatara-check-specific framing — the
+                // variant doesn't carry it because not every
+                // unknown-domain-keyword consumer has a `defcheck`
+                // macroexpander on the same path.
+                let err = domain::unknown_domain_keyword(other);
                 report.fail(
-                    format!("unknown check: ({other} ...)"),
-                    format!(
-                        "{hint}no built-in handler, no registered domain, no `defcheck` macro. \
-                         Registered domains: {:?}",
-                        domain::registered_keywords()
-                    ),
+                    "unknown check",
+                    format!("{err}; no `defcheck` macro on the path"),
                 );
             }
         }

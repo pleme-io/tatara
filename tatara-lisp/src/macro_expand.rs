@@ -256,11 +256,24 @@ pub struct CompiledTemplate {
 ///
 /// Compilation can fail if the template references a name that isn't a
 /// declared parameter — same semantic as the substitute path.
+///
+/// Top-level `,@X` bodies (the splice is the entire body, not nested inside
+/// a `(... ,@xs ...)` list) are rejected here at compile time so the
+/// bytecode path agrees with the substitute path's emission-time rejection
+/// (`splice_outside_list`). Without this gate the bytecode interpreter's
+/// outermost stack frame silently absorbed the splice's items, and the same
+/// macro emitted different output across paths — `compiled_template_matches
+/// _substitute_path` only covered well-positioned splice bodies. After this
+/// gate every `,@-outside-list` body is rejected at registration time on
+/// both paths with ONE structural variant (`LispError::SpliceOutsideList`).
 pub fn compile_template(def: &MacroDef) -> Result<CompiledTemplate> {
     let body = match &def.body {
         Sexp::Quasiquote(inner) => inner.as_ref(),
         other => other,
     };
+    if let Sexp::UnquoteSplice(inner) = body {
+        return Err(splice_outside_list(inner));
+    }
     let params: Vec<&str> = def
         .params
         .iter()
@@ -508,10 +521,7 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
                 .cloned()
                 .ok_or_else(|| unbound_template_var(",", sym, &bound_names(bindings)))
         }
-        Sexp::UnquoteSplice(_) => Err(LispError::Compile {
-            form: "unquote-splice".into(),
-            message: "`,@` may only appear inside a list".into(),
-        }),
+        Sexp::UnquoteSplice(inner) => Err(splice_outside_list(inner)),
         Sexp::List(items) => {
             let mut out: Vec<Sexp> = Vec::with_capacity(items.len());
             for item in items {
@@ -599,6 +609,50 @@ fn non_symbol_unquote_target(prefix: &'static str, got: &Sexp) -> LispError {
     LispError::NonSymbolUnquoteTarget {
         prefix,
         got: got.to_string(),
+    }
+}
+
+/// Lift the lone `LispError::Compile { form: "unquote-splice", message:
+/// "`,@` may only appear inside a list" }` triple — the substitute path's
+/// top-level `,@X` rejection — behind ONE named primitive. Sibling of
+/// `non_symbol_unquote_target` and `unbound_template_var`: those helpers
+/// fire when the slot inside a `,X` / `,@X` is malformed (non-symbol or
+/// unbound symbol); this helper fires when the `,@X` form itself is
+/// ill-positioned (no containing list to flatten into). Together the three
+/// close every distinct typed-entry template-gate failure mode for the
+/// no-evaluator template language: each is a structural variant of
+/// `LispError`, not a `Compile`-shaped substring.
+///
+/// `inner` is the offending `Sexp` projected through `Display` so the
+/// operator sees the literal value they wrote — `xs`, `(list 1 2)`, `5` —
+/// instead of just the bare "may only appear inside a list" verdict. The
+/// helper takes `&Sexp` (parallel to `non_symbol_unquote_target`) and
+/// projects through `to_string()` at the variant boundary; the `prefix:
+/// &'static str` slot is implicit (always `,@`) and absent from the variant
+/// itself, parallel to how `OddKwargs { dangling }` names ONE failure mode
+/// without a syntactic-marker slot.
+///
+/// Used by both the substitute path (top-level `,@X` body) AND the bytecode
+/// path's `compile_template` gate (top-level `,@X` body — closing the prior
+/// silent-divergence where the bytecode interpreter's outermost stack frame
+/// absorbed the splice). After this lift `,@-outside-list` is rejected on
+/// both paths with ONE structural variant — the typed-entry template gate
+/// is fully structural across both expansion strategies.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// emission sites (substitute + compile_template) for one failure mode is
+/// past the three-times rule once the structural shape is named. THEORY.md
+/// §V.1 — knowable platform; the structural variant exposes `got` as a
+/// first-class field so authoring tools (LSP, REPL, `tatara-check`) bind to
+/// the data shape instead of substring-parsing the rendered diagnostic.
+/// THEORY.md §II.1 invariant 1 — typed entry; a `,@X` at a position with no
+/// containing list is exactly the failure mode the typed-entry gate exists
+/// to reject. THEORY.md §II.1 invariant 2 — free middle; both expansion
+/// paths now reject the same set of templates, so a macro that registers
+/// successfully has the same expansion behavior under either strategy.
+fn splice_outside_list(inner: &Sexp) -> LispError {
+    LispError::SpliceOutsideList {
+        got: inner.to_string(),
     }
 }
 
@@ -1098,6 +1152,146 @@ mod tests {
             .expand_program(read("(defmacro w (x) `,(list 1 2)) (w 1)").unwrap())
             .expect_err("non-symbol target must error");
         assert_eq!(err.position(), None);
+    }
+
+    // ── Splice outside list: structural variant + path-uniform rejection ─
+
+    /// Helper for the splice-outside-list tests — pins the variant shape
+    /// and carries the offending `got` field up to the assert site for
+    /// legibility. Sibling of `unbound_var` and `non_symbol_target`.
+    fn splice_outside_list_got(err: &LispError) -> &str {
+        match err {
+            LispError::SpliceOutsideList { got } => got.as_str(),
+            other => panic!("expected SpliceOutsideList, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn splice_outside_list_in_substitute_emits_structural_variant() {
+        // `,@xs` at the body's top level — there is no containing list to
+        // splice into. Path: substitute (the `Expander::new_substitute_only`
+        // path's top-level `Sexp::UnquoteSplice(_)` arm). Pins variant
+        // identity AND the offending inner so a regression that re-inlines
+        // the legacy `LispError::Compile` shape fails-loudly here.
+        let mut e = Expander::new_substitute_only();
+        let err = e
+            .expand_program(read("(defmacro f (xs) `,@xs) (f (list 1 2))").unwrap())
+            .expect_err("splice outside list must error");
+        assert_eq!(splice_outside_list_got(&err), "xs");
+    }
+
+    #[test]
+    fn splice_outside_list_with_list_literal_in_substitute_emits_structural_variant() {
+        // `,@(list 1 2)` at the body's top level — the inner is a literal
+        // list, not a symbol. The structural variant carries the inner's
+        // Sexp::Display projection so the operator sees the literal value
+        // they wrote in the parenthetical.
+        let mut e = Expander::new_substitute_only();
+        let err = e
+            .expand_program(read("(defmacro f (x) `,@(list 1 2)) (f 1)").unwrap())
+            .expect_err("splice outside list must error");
+        assert_eq!(splice_outside_list_got(&err), "(list 1 2)");
+    }
+
+    #[test]
+    fn splice_outside_list_in_compile_template_emits_structural_variant() {
+        // The bytecode path's `compile_template` gate now rejects top-level
+        // `,@X` bodies BEFORE walking — closing the prior silent-divergence
+        // where the bytecode interpreter's outermost stack frame absorbed
+        // the splice. Pins that the bytecode path emits the SAME structural
+        // variant the substitute path emits — `,@-outside-list` is rejected
+        // path-uniformly. Path: `Expander::new()` (compile_templates = true)
+        // → `compile_template` gate.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (xs) `,@xs) (f (list 1 2))").unwrap())
+            .expect_err("compile-template splice outside list must error");
+        assert_eq!(splice_outside_list_got(&err), "xs");
+    }
+
+    #[test]
+    fn splice_outside_list_with_list_literal_in_compile_template_emits_structural_variant() {
+        // Same shape as the substitute test but routed through the bytecode
+        // path's `compile_template` gate. Proves the gate fires on a
+        // non-symbol inner too — the slot's contents are irrelevant; only
+        // the syntactic position matters.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (x) `,@(list 1 2)) (f 1)").unwrap())
+            .expect_err("compile-template splice outside list must error");
+        assert_eq!(splice_outside_list_got(&err), "(list 1 2)");
+    }
+
+    #[test]
+    fn splice_outside_list_substitute_and_bytecode_paths_agree() {
+        // Path-uniform rejection: the SAME source emits the SAME structural
+        // variant (`SpliceOutsideList { got: "xs" }`) under both expansion
+        // strategies. Before the `compile_template` gate, the bytecode path
+        // silently produced a list while the substitute path errored —
+        // expansion strategy was observable. After the gate, the gate is
+        // strategy-uniform, so a macro that registers under one strategy
+        // registers under the other.
+        let src = "(defmacro f (xs) `,@xs) (f (list 1 2))";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let err_subst = subst
+            .expand_program(read(src).unwrap())
+            .expect_err("substitute must error");
+        let err_byte = bytecode
+            .expand_program(read(src).unwrap())
+            .expect_err("bytecode must error");
+        assert_eq!(splice_outside_list_got(&err_subst), "xs");
+        assert_eq!(splice_outside_list_got(&err_byte), "xs");
+    }
+
+    #[test]
+    fn splice_outside_list_position_is_none_today() {
+        // Negative control for the future-spans move: until `Sexp` carries
+        // source positions, `position()` returns `None` for this variant.
+        // A future run that gives `Sexp` source spans adds `pos:
+        // Option<usize>` to ONE place; this test gives that change a
+        // deliberate fail-before/pass-after delta.
+        let mut e = Expander::new_substitute_only();
+        let err = e
+            .expand_program(read("(defmacro f (xs) `,@xs) (f (list 1 2))").unwrap())
+            .expect_err("splice outside list must error");
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn splice_outside_list_message_renders_legacy_substring_with_offending_form() {
+        // End-to-end through the Display impl — pins the rendered diagnostic
+        // a downstream tool sees today (REPL, tatara-check). The legacy
+        // substring `"\`,@\` may only appear inside a list"` is preserved
+        // verbatim AND the parenthetical `(got ,@xs)` names the offending
+        // form; tools that pattern-match on the variant gain structural
+        // binding to `got`.
+        let mut e = Expander::new_substitute_only();
+        let err = e
+            .expand_program(read("(defmacro f (xs) `,@xs) (f (list 1 2))").unwrap())
+            .expect_err("splice outside list must error");
+        let msg = format!("{err}");
+        assert_eq!(
+            msg,
+            "compile error in ,@: `,@` may only appear inside a list (got ,@xs)"
+        );
+    }
+
+    #[test]
+    fn splice_inside_list_still_succeeds_under_both_paths() {
+        // Negative control: a well-positioned splice (`,@xs` INSIDE a list)
+        // continues to succeed under both paths — the new gate only fires
+        // when the splice is the entire body. Pins that the gate is scoped
+        // to top-level only, not all `,@` occurrences. Uses a `&rest`-bound
+        // list so `xs` is unambiguously a Sexp::List `(1 2)` rather than a
+        // bare list-literal whose first symbol would also splice through.
+        let src = "(defmacro f (&rest xs) `(outer ,@xs)) (f 1 2)";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let out_subst = subst.expand_program(read(src).unwrap()).unwrap();
+        let out_byte = bytecode.expand_program(read(src).unwrap()).unwrap();
+        assert_eq!(out_subst, out_byte);
+        assert_eq!(out_subst[0], parse("(outer 1 2)"));
     }
 
     #[test]

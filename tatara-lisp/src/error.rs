@@ -271,6 +271,44 @@ pub enum LispError {
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {prefix}: expected symbol, got {got}")]
     NonSymbolUnquoteTarget { prefix: &'static str, got: String },
+    /// A `,@X` (unquote-splice) appeared at a syntactic position where there
+    /// is no containing list to splice into — i.e. the splice is the entire
+    /// macro-template body, not nested inside a `(... ,@xs ...)` list. Splice
+    /// is always list-flattening: `,@(a b c)` inside `(outer ,@xs)` becomes
+    /// `(outer a b c)`. At a non-list position there is no list to flatten
+    /// into; the form is ill-positioned regardless of whether the inner slot
+    /// is a symbol, a literal, or a bound list.
+    ///
+    /// Sibling of `NonSymbolUnquoteTarget { prefix, got }` and
+    /// `UnboundTemplateVar { prefix, name, hint }` for the template-gate's
+    /// other distinct failure modes — together the three close every
+    /// distinct typed-entry template-gate failure mode for the no-evaluator
+    /// template language: each is a structural variant of `LispError`, not
+    /// a `Compile`-shaped substring. `prefix` is implicit (always `,@`) and
+    /// elided from the variant: this failure mode names ONE syntactic
+    /// marker, parallel to how `OddKwargs` names ONE failure mode (odd-length
+    /// kwargs slice) without a syntactic-marker slot.
+    ///
+    /// `got` is `String` because it comes from arbitrary source via
+    /// `Sexp::Display` (the offending inner — `xs`, `(list 1 2)`, `5`,
+    /// `:foo`, etc.). Naming both the failure mode AND the offending element
+    /// is the typed-entry gate's structural-completeness floor (THEORY.md
+    /// §V.1) — without it the operator must re-read the source to find what
+    /// actually misfired. When a future run gives `Sexp` source spans, `pos:
+    /// Option<usize>` lands here in ONE place and every splice-outside-list
+    /// site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    ///
+    /// Display renders `"compile error in ,@: \`,@\` may only appear inside
+    /// a list (got ,@{got})"` — the legacy substring `"\`,@\` may only
+    /// appear inside a list"` is preserved verbatim so authoring tools that
+    /// substring-match on the rendered diagnostic see no drift; the
+    /// parenthetical `(got ,@{got})` names the offending form so an LSP
+    /// quick-fix that surfaces "the splice has no containing list; you
+    /// wrote `,@xs`" gains the literal value as data, no message re-parsing
+    /// required.
+    #[error("compile error in ,@: `,@` may only appear inside a list (got ,@{got})")]
+    SpliceOutsideList { got: String },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -335,7 +373,8 @@ impl LispError {
             | Self::MissingKwarg { .. }
             | Self::UnknownKwarg { .. }
             | Self::UnknownDomainKeyword { .. }
-            | Self::NonSymbolUnquoteTarget { .. } => None,
+            | Self::NonSymbolUnquoteTarget { .. }
+            | Self::SpliceOutsideList { .. } => None,
         }
     }
 }
@@ -462,6 +501,17 @@ mod tests {
             LispError::NonSymbolUnquoteTarget {
                 prefix: ",@",
                 got: "5".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::SpliceOutsideList { got: "xs".into() }.position(),
+            None
+        );
+        assert_eq!(
+            LispError::SpliceOutsideList {
+                got: "(list 1 2)".into(),
             }
             .position(),
             None
@@ -742,6 +792,69 @@ mod tests {
         assert_eq!(
             format!("{err}"),
             "compile error in ,: expected symbol, got :foo"
+        );
+    }
+
+    #[test]
+    fn splice_outside_list_display_renders_legacy_substring_with_offending_form() {
+        // `,@xs` at the body's top level — there is no containing list to
+        // splice into. The variant names the offending inner (`xs`) as a
+        // first-class field so authoring tools (REPL, LSP, `tatara-check`)
+        // gain structural binding; tools that substring-match on the
+        // rendered diagnostic still see the legacy `"\`,@\` may only appear
+        // inside a list"` substring verbatim.
+        let err = LispError::SpliceOutsideList { got: "xs".into() };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,@: `,@` may only appear inside a list (got ,@xs)"
+        );
+    }
+
+    #[test]
+    fn splice_outside_list_display_carries_list_literal_unchanged() {
+        // The offending inner is a list literal — `,@(list 1 2)` — so the
+        // operator sees the literal value they wrote in the parenthetical,
+        // not just a type-name. Round-trips through `Sexp::Display`.
+        let err = LispError::SpliceOutsideList {
+            got: "(list 1 2)".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,@: `,@` may only appear inside a list (got ,@(list 1 2))"
+        );
+    }
+
+    #[test]
+    fn splice_outside_list_display_carries_kebab_case_symbol_unchanged() {
+        // `,@notify-ref` — kebab-cased symbol round-trips through the
+        // variant's `got` slot unchanged. Pinning this contract means a
+        // regression that camelCases or lowercases the offending form fails
+        // -loudly here.
+        let err = LispError::SpliceOutsideList {
+            got: "notify-ref".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,@: `,@` may only appear inside a list (got ,@notify-ref)"
+        );
+    }
+
+    #[test]
+    fn splice_outside_list_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring as a separate assertion so a regression
+        // that drifts the wording (e.g., to "outside a list" or "without a
+        // containing list") fails-loudly here even if the parenthetical
+        // changes shape. The substring is what consumers downstream
+        // (tatara-check, the REPL) substring-match on today.
+        let err = LispError::SpliceOutsideList { got: "xs".into() };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("`,@` may only appear inside a list"),
+            "expected legacy substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("(got ,@xs)"),
+            "expected offending-form parenthetical in message, got: {msg}"
         );
     }
 

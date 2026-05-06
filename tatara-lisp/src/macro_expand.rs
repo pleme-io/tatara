@@ -352,10 +352,7 @@ fn apply_compiled(
                 let arg = args
                     .get(cursor)
                     .cloned()
-                    .ok_or_else(|| LispError::Compile {
-                        form: format!("call to {macro_name}"),
-                        message: format!("missing required arg: {name}"),
-                    })?;
+                    .ok_or_else(|| missing_macro_arg(macro_name, name))?;
                 args_by_index.push(arg);
                 cursor += 1;
             }
@@ -490,10 +487,10 @@ fn bind_args(macro_name: &str, params: &[Param], args: &[Sexp]) -> Result<HashMa
     for param in params {
         match param {
             Param::Required(name) => {
-                let arg = args.get(i).cloned().ok_or_else(|| LispError::Compile {
-                    form: format!("call to {macro_name}"),
-                    message: format!("missing required arg: {name}"),
-                })?;
+                let arg = args
+                    .get(i)
+                    .cloned()
+                    .ok_or_else(|| missing_macro_arg(macro_name, name))?;
                 bindings.insert(name.clone(), arg);
                 i += 1;
             }
@@ -653,6 +650,47 @@ fn non_symbol_unquote_target(prefix: &'static str, got: &Sexp) -> LispError {
 fn splice_outside_list(inner: &Sexp) -> LispError {
     LispError::SpliceOutsideList {
         got: inner.to_string(),
+    }
+}
+
+/// Lift the two inline `LispError::Compile { form: format!("call to
+/// {macro_name}"), message: format!("missing required arg: {name}") }`
+/// triples — `bind_args` (substitute path) AND `apply_compiled` (bytecode
+/// path) — behind ONE named primitive. Sibling of the typed-entry kwargs
+/// `MissingKwarg { key }` lift: that variant fires when a `(<head> :key
+/// value …)` kwargs form omits a required keyword; this variant fires when
+/// a `(<macroname> a b …)` call omits a required positional param. Together
+/// they close every distinct typed-entry missing-required surface in the
+/// substrate — kwargs-gate AND macro-call-gate now share a single
+/// structural-variant idiom.
+///
+/// Same single emission shape across both expansion strategies — before
+/// this lift the same failure mode emitted byte-identical
+/// `LispError::Compile { … }` triples at TWO call sites; after this lift
+/// both sites share ONE structural variant. Two strategies that picked
+/// different code paths now emit the same structural variant for the same
+/// failure mode (THEORY.md §II.1 invariant 2 — free middle: which strategy
+/// you picked must not change which inputs you reject OR how the rejection
+/// is shaped). Same posture as `splice_outside_list`'s path-uniform
+/// rejection across substitute + compile_template.
+///
+/// `macro_name` and `name` are `&str` borrows from the call-site / param
+/// list; the variant's owned `String`s are formed at the boundary so
+/// `LispError` stays lifetime-free.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// inline copies of one shape is past the three-times-rule trigger once
+/// the structural variant is named (the test count gives this the
+/// fail-before-pass-after edge). THEORY.md §V.1 — knowable platform; the
+/// structural variant exposes `macro_name` / `param` as first-class
+/// fields so authoring tools (LSP, REPL, `tatara-check`) bind to the data
+/// shape instead of substring-parsing the rendered diagnostic. THEORY.md
+/// §II.1 invariant 1 — typed entry; a macro call with too few args is
+/// exactly the failure mode the typed-entry gate exists to reject.
+fn missing_macro_arg(macro_name: &str, param: &str) -> LispError {
+    LispError::MissingMacroArg {
+        macro_name: macro_name.to_string(),
+        param: param.to_string(),
     }
 }
 
@@ -1292,6 +1330,164 @@ mod tests {
         let out_byte = bytecode.expand_program(read(src).unwrap()).unwrap();
         assert_eq!(out_subst, out_byte);
         assert_eq!(out_subst[0], parse("(outer 1 2)"));
+    }
+
+    // ── Missing macro arg: structural variant + path-uniform rejection ──
+
+    /// Helper for the missing-macro-arg tests — pins the variant shape
+    /// and carries the failing macro's name + un-bound param up to the
+    /// assert site for legibility. Sibling of `unbound_var`,
+    /// `non_symbol_target`, and `splice_outside_list_got`.
+    fn missing_macro_arg_fields(err: &LispError) -> (&str, &str) {
+        match err {
+            LispError::MissingMacroArg { macro_name, param } => {
+                (macro_name.as_str(), param.as_str())
+            }
+            other => panic!("expected MissingMacroArg, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn missing_macro_arg_in_compile_template_emits_structural_variant() {
+        // `(need-two 1)` against `(need-two a b)` — `b` has no arg. Path:
+        // `apply_compiled` (the bytecode-template path, default expander).
+        // Pins variant identity AND macro_name AND the un-bound param so a
+        // regression that re-inlines the legacy `LispError::Compile` shape
+        // fails-loudly here.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro need-two (a b) `(,a ,b)) (need-two 1)").unwrap())
+            .expect_err("missing required macro arg must error");
+        let (macro_name, param) = missing_macro_arg_fields(&err);
+        assert_eq!(macro_name, "need-two");
+        assert_eq!(param, "b");
+    }
+
+    #[test]
+    fn missing_macro_arg_in_substitute_emits_structural_variant() {
+        // Same shape as the bytecode test but routed through the
+        // substitute-only expander → `bind_args` is the failing site.
+        // Proves the substitute path emits the SAME structural variant the
+        // bytecode path emits — `missing required arg` rejection is
+        // path-uniform across both expansion strategies.
+        let mut e = Expander::new_substitute_only();
+        let err = e
+            .expand_program(read("(defmacro need-two (a b) `(,a ,b)) (need-two 1)").unwrap())
+            .expect_err("missing required macro arg must error");
+        let (macro_name, param) = missing_macro_arg_fields(&err);
+        assert_eq!(macro_name, "need-two");
+        assert_eq!(param, "b");
+    }
+
+    #[test]
+    fn missing_macro_arg_first_position_is_named() {
+        // `(f)` against `(f a b)` — `a` (the FIRST required param) has no
+        // arg. The variant names `a`, not `b` — naming the LEFTMOST
+        // un-bound param is the shape `bind_args` / `apply_compiled` both
+        // emit (each iterates positionally and bails on the first missing
+        // slot). Pins the leftmost-bail contract so a regression that
+        // names the rightmost (or a surplus) param fails-loudly.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a b) `(,a ,b)) (f)").unwrap())
+            .expect_err("missing first required arg must error");
+        let (macro_name, param) = missing_macro_arg_fields(&err);
+        assert_eq!(macro_name, "f");
+        assert_eq!(param, "a");
+    }
+
+    #[test]
+    fn missing_macro_arg_substitute_and_bytecode_paths_agree() {
+        // Path-uniform rejection: the SAME source emits the SAME structural
+        // variant under both expansion strategies. Negative control for
+        // the divergence-closing posture: a future refactor that drifts
+        // either path's rejection shape (or drops one path's rejection
+        // entirely) fails-loudly here. Sibling of
+        // `splice_outside_list_substitute_and_bytecode_paths_agree` —
+        // both close `THEORY.md §II.1 invariant 2 — free middle` for one
+        // failure mode each.
+        let src = "(defmacro need-two (a b) `(,a ,b)) (need-two 1)";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let err_subst = subst
+            .expand_program(read(src).unwrap())
+            .expect_err("substitute must error");
+        let err_byte = bytecode
+            .expand_program(read(src).unwrap())
+            .expect_err("bytecode must error");
+        assert_eq!(missing_macro_arg_fields(&err_subst), ("need-two", "b"));
+        assert_eq!(missing_macro_arg_fields(&err_byte), ("need-two", "b"));
+    }
+
+    #[test]
+    fn missing_macro_arg_position_is_none_today() {
+        // Negative control for the future-spans move: until `Sexp` carries
+        // source positions, `position()` returns `None` for this variant.
+        // A future run that gives `Sexp` source spans adds `pos:
+        // Option<usize>` to ONE place; this test gives that change a
+        // deliberate fail-before/pass-after delta. Parallel to
+        // `splice_outside_list_position_is_none_today`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro need-two (a b) `(,a ,b)) (need-two 1)").unwrap())
+            .expect_err("missing required macro arg must error");
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn missing_macro_arg_message_renders_legacy_substring_with_macro_name() {
+        // End-to-end through the Display impl — pins the rendered diagnostic
+        // a downstream tool sees today (REPL, tatara-check). The legacy
+        // substring `"missing required arg: {param}"` is preserved verbatim
+        // AND the head clause names the failing macro via `"call to
+        // {macro_name}"`; tools that pattern-match on the variant gain
+        // structural binding to `macro_name` / `param`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro need-two (a b) `(,a ,b)) (need-two 1)").unwrap())
+            .expect_err("missing required macro arg must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in call to need-two: missing required arg: b"
+        );
+    }
+
+    #[test]
+    fn missing_macro_arg_carries_kebab_case_macro_and_param_unchanged() {
+        // Both `macro_name` (`wrap-twice`) and `param` (`notify-ref`)
+        // round-trip through the variant unchanged. Pinning this contract
+        // means a regression that camelCases or lowercases either side
+        // fails-loudly here. Parallel to the
+        // `unknown_kwarg_display_carries_kebab_case_keys_unchanged`
+        // assertion for the kwarg-gate's symmetric surface.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(
+                read("(defmacro wrap-twice (notify-ref body) `(list ,notify-ref ,body)) (wrap-twice :a)")
+                    .unwrap(),
+            )
+            .expect_err("missing required macro arg must error");
+        let (macro_name, param) = missing_macro_arg_fields(&err);
+        assert_eq!(macro_name, "wrap-twice");
+        assert_eq!(param, "body");
+    }
+
+    #[test]
+    fn rest_param_only_macro_with_no_args_still_succeeds() {
+        // Negative control: a macro whose only param is `&rest` must NOT
+        // error when called with zero args — the rest-param binds to the
+        // empty list. The new structural variant fires only on REQUIRED
+        // params; the `Param::Rest` arm in both `bind_args` and
+        // `apply_compiled` continues to bind the empty tail. Pins that the
+        // helper is scoped to required-param failure, not all
+        // arity-mismatch shapes.
+        let src = "(defmacro f (&rest xs) `(list ,@xs)) (f)";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let out_subst = subst.expand_program(read(src).unwrap()).unwrap();
+        let out_byte = bytecode.expand_program(read(src).unwrap()).unwrap();
+        assert_eq!(out_subst, out_byte);
+        assert_eq!(out_subst[0], parse("(list)"));
     }
 
     #[test]

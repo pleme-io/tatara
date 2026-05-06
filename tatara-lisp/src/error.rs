@@ -309,6 +309,43 @@ pub enum LispError {
     /// required.
     #[error("compile error in ,@: `,@` may only appear inside a list (got ,@{got})")]
     SpliceOutsideList { got: String },
+    /// A macro was called with fewer arguments than its required-param arity:
+    /// `(defmacro f (a b) `(,a ,b)) (f 1)` — `b` has no arg. Both the failing
+    /// macro's name AND the un-bound param are first-class structural fields,
+    /// not embedded substrings of `message`, so authoring surfaces (REPL,
+    /// LSP, `tatara-check`) pattern-match on the variant and bind to
+    /// `macro_name` / `param` directly instead of substring-parsing the
+    /// rendered message. Sibling of `MissingKwarg { key }` for the
+    /// macro-call-gate's positional-arity surface — that variant fires when
+    /// a `(<head> :key value …)` kwargs form omits a required keyword;
+    /// this variant fires when a `(<macroname> a b …)` call omits a required
+    /// positional param. The two close every distinct typed-entry
+    /// missing-required surface in the substrate.
+    ///
+    /// Same single emission shape across both expansion strategies — the
+    /// substitute path's `bind_args` and the bytecode path's
+    /// `apply_compiled` share ONE structural variant, parallel to how the
+    /// template-gate's `SpliceOutsideList` is shared across both paths
+    /// (THEORY.md §II.1 invariant 2 — free middle: which strategy you
+    /// picked must not change which inputs you reject). Before this lift
+    /// the same failure mode emitted ONE `LispError::Compile { form:
+    /// format!("call to {macro_name}"), message: format!("missing
+    /// required arg: {param}") }` triple at TWO call sites — the
+    /// three-times rule had two sites with byte-identical shape and one
+    /// failure mode.
+    ///
+    /// `macro_name` and `param` are `String` because they come from
+    /// arbitrary source (the call-site head symbol AND the
+    /// macro-definition's param symbol). Display matches the legacy
+    /// `Compile`-shaped diagnostic byte-for-byte — `"compile error in call
+    /// to {macro_name}: missing required arg: {param}"` — so existing
+    /// consumer assertions (`msg.contains("missing required arg")`) pass
+    /// unchanged. When a future run gives `Sexp` source spans, `pos:
+    /// Option<usize>` lands here in ONE place and every missing-macro-arg
+    /// site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in call to {macro_name}: missing required arg: {param}")]
+    MissingMacroArg { macro_name: String, param: String },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -374,7 +411,8 @@ impl LispError {
             | Self::UnknownKwarg { .. }
             | Self::UnknownDomainKeyword { .. }
             | Self::NonSymbolUnquoteTarget { .. }
-            | Self::SpliceOutsideList { .. } => None,
+            | Self::SpliceOutsideList { .. }
+            | Self::MissingMacroArg { .. } => None,
         }
     }
 }
@@ -512,6 +550,22 @@ mod tests {
         assert_eq!(
             LispError::SpliceOutsideList {
                 got: "(list 1 2)".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::MissingMacroArg {
+                macro_name: "wrap".into(),
+                param: "b".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::MissingMacroArg {
+                macro_name: "call".into(),
+                param: "f".into(),
             }
             .position(),
             None
@@ -855,6 +909,63 @@ mod tests {
         assert!(
             msg.contains("(got ,@xs)"),
             "expected offending-form parenthetical in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn missing_macro_arg_display_matches_legacy_compile_shape() {
+        // The variant renders byte-for-byte the same string the legacy
+        // `Compile { form: format!("call to {macro_name}"), message:
+        // format!("missing required arg: {param}") }` shape produced, so
+        // authoring tools (REPL, LSP, `tatara-check`) that substring-match
+        // on the rendered diagnostic see no drift; tools that pattern-match
+        // on the variant gain structural binding to `macro_name` and
+        // `param`.
+        let err = LispError::MissingMacroArg {
+            macro_name: "wrap".into(),
+            param: "b".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in call to wrap: missing required arg: b"
+        );
+    }
+
+    #[test]
+    fn missing_macro_arg_display_carries_kebab_case_names_unchanged() {
+        // Both `macro_name` and `param` round-trip through the variant's
+        // Display unchanged. Pinning this contract means a regression that
+        // camelCases or lowercases either side fails-loudly here.
+        let err = LispError::MissingMacroArg {
+            macro_name: "wrap-twice".into(),
+            param: "notify-ref".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in call to wrap-twice: \
+             missing required arg: notify-ref"
+        );
+    }
+
+    #[test]
+    fn missing_macro_arg_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring as a separate assertion so a regression
+        // that drifts the wording (e.g., to "missing arg" or "no arg
+        // provided") fails-loudly here even if the head clause changes
+        // shape. The substring is what consumers downstream
+        // (tatara-check, the REPL) substring-match on today.
+        let err = LispError::MissingMacroArg {
+            macro_name: "f".into(),
+            param: "x".into(),
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("missing required arg: x"),
+            "expected legacy substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("call to f"),
+            "expected call-to clause in message, got: {msg}"
         );
     }
 

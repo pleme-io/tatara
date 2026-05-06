@@ -386,6 +386,66 @@ pub enum LispError {
          {position}, got {got}"
     )]
     NonSymbolParam { position: usize, got: String },
+    /// A `&rest` marker in a `defmacro` / `defpoint-template` / `defcheck`
+    /// param list was followed by no element at all (`(&rest)`,
+    /// `(a &rest)`) OR by a non-symbol element (`(&rest 5)`,
+    /// `(&rest :foo)`). The legacy `LispError::Compile { form: "defmacro
+    /// params", message: "&rest needs a name" }` shape named only the
+    /// failure mode — it didn't say WHICH `&rest` (i.e. its position
+    /// within the param list) misfired NOR what was found in the slot
+    /// where the rest-name should have been. The structural variant
+    /// names both: `rest_position` is the 0-based index of the `&rest`
+    /// marker within the param list, `got` is the offending follower's
+    /// `Sexp::Display` projection (`Some("5")`, `Some(":foo")`,
+    /// `Some("(nested)")`) or `None` when the marker was the last
+    /// element in the list and nothing followed at all. Naming both
+    /// the marker position AND the offending follower (or its absence)
+    /// is the typed-entry gate's structural-completeness floor
+    /// (THEORY.md §V.1) — without both, an LSP that wants to surface
+    /// "your `&rest` at param-list position 1 has no name; you wrote
+    /// `5` instead of a symbol" must re-parse the source.
+    ///
+    /// Sibling of `NonSymbolParam { position, got }` for the
+    /// defmacro-syntax-gate's other definition-site failure mode —
+    /// that variant fires when a NON-`&rest` element at a param
+    /// position isn't a symbol; this variant fires specifically on the
+    /// post-`&rest` follower slot, where the failure mode bifurcates
+    /// into "missing entirely" vs. "present but not a symbol". Both
+    /// modes share ONE structural variant via `got: Option<String>`
+    /// (parallel to how `UnboundTemplateVar` and `UnknownKwarg` carry
+    /// `hint: Option<String>` for a present-or-absent secondary slot)
+    /// rather than splitting into two near-identical variants — the
+    /// failure mode IS one ("rest name missing"); the bifurcation is
+    /// in the renderable detail, not in what the gate rejects.
+    ///
+    /// Together, `NonSymbolParam` and `RestParamMissingName` close the
+    /// `parse_params` pair — every distinct failure mode the
+    /// `parse_params` walker can emit is now a structural variant of
+    /// `LispError`, not a `Compile`-shaped substring.
+    ///
+    /// `rest_position` is `usize` because it is always the loop index
+    /// inside `parse_params` at which the `&rest` marker was matched;
+    /// `got` is `Option<String>` because the follower comes from
+    /// arbitrary source via `Sexp::Display` (when present) or doesn't
+    /// exist at all (when the marker was the param list's last
+    /// element). Display preserves the legacy `"compile error in
+    /// defmacro params: &rest needs a name"` prefix byte-for-byte so
+    /// authoring tools that substring-grep on the rendered diagnostic
+    /// see no drift; the structural detail (`(rest marker at position
+    /// {rest_position}, got {got})` when present, `(rest marker at
+    /// position {rest_position}, none provided)` when absent) is
+    /// appended. When a future run gives `Sexp` source spans, `pos:
+    /// Option<usize>` lands here in ONE place and every
+    /// rest-param-missing-name site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error(
+        "compile error in defmacro params: &rest needs a name{}",
+        rest_param_missing_name_suffix(*rest_position, got.as_deref())
+    )]
+    RestParamMissingName {
+        rest_position: usize,
+        got: Option<String>,
+    },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -404,6 +464,13 @@ fn unknown_kwarg_suffix(hint: Option<&str>, allowed: &[String]) -> String {
     match hint {
         Some(h) => format!(" (did you mean :{h}?; allowed: {allowed_list})"),
         None => format!(" (allowed: {allowed_list})"),
+    }
+}
+
+fn rest_param_missing_name_suffix(rest_position: usize, got: Option<&str>) -> String {
+    match got {
+        Some(g) => format!(" (rest marker at position {rest_position}, got {g})"),
+        None => format!(" (rest marker at position {rest_position}, none provided)"),
     }
 }
 
@@ -453,7 +520,8 @@ impl LispError {
             | Self::NonSymbolUnquoteTarget { .. }
             | Self::SpliceOutsideList { .. }
             | Self::MissingMacroArg { .. }
-            | Self::NonSymbolParam { .. } => None,
+            | Self::NonSymbolParam { .. }
+            | Self::RestParamMissingName { .. } => None,
         }
     }
 }
@@ -623,6 +691,22 @@ mod tests {
             LispError::NonSymbolParam {
                 position: 2,
                 got: "(nested)".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::RestParamMissingName {
+                rest_position: 1,
+                got: None,
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::RestParamMissingName {
+                rest_position: 0,
+                got: Some("5".into()),
             }
             .position(),
             None
@@ -1083,6 +1167,86 @@ mod tests {
             format!("{err}"),
             "compile error in defmacro params: \
              expected symbol at position 2, got :k"
+        );
+    }
+
+    #[test]
+    fn rest_param_missing_name_display_with_got_renders_marker_position_and_got() {
+        // `(defmacro f (a &rest 5) …)` — `&rest` at param-list position 1,
+        // followed by `5` at position 2. The variant renders both the
+        // marker's position AND the offending follower via `Sexp::Display`
+        // — both are first-class structural data, not embedded substrings
+        // of `message`. A regression that drops either field from the
+        // rendered diagnostic fails-loudly here.
+        let err = LispError::RestParamMissingName {
+            rest_position: 1,
+            got: Some("5".into()),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: &rest needs a name \
+             (rest marker at position 1, got 5)"
+        );
+    }
+
+    #[test]
+    fn rest_param_missing_name_display_without_got_renders_marker_position_only() {
+        // `(defmacro f (a &rest))` — `&rest` at param-list position 1, no
+        // follower at all. The variant renders the marker position and
+        // names the absence structurally (`none provided`) instead of a
+        // misleading empty / partial parenthetical. Sibling of how
+        // `UnknownDomainKeyword` renders `(no domains registered)` for
+        // the empty-registry case — the structural reason is named.
+        let err = LispError::RestParamMissingName {
+            rest_position: 1,
+            got: None,
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: &rest needs a name \
+             (rest marker at position 1, none provided)"
+        );
+    }
+
+    #[test]
+    fn rest_param_missing_name_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substrings — `"defmacro params"` and `"&rest
+        // needs a name"` — as separate assertions so a regression that
+        // drifts either fragment fails-loudly here even if the appended
+        // marker / got clause changes shape. The substrings are what
+        // consumers downstream substring-match on today; the prefix
+        // matches the legacy `Compile { form: "defmacro params",
+        // message: "&rest needs a name" }` byte-for-byte.
+        let err = LispError::RestParamMissingName {
+            rest_position: 0,
+            got: None,
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("defmacro params"),
+            "expected legacy form label in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("&rest needs a name"),
+            "expected legacy substring in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn rest_param_missing_name_display_carries_keyword_got_unchanged() {
+        // `Sexp::Display` for `Atom::Keyword(s)` writes `:s`; pin that the
+        // variant's Display passes the keyword form through unchanged so
+        // an LSP that surfaces "you wrote `:foo` where a rest-name was
+        // expected" gains the literal keyword value as data, no
+        // re-parsing required.
+        let err = LispError::RestParamMissingName {
+            rest_position: 2,
+            got: Some(":foo".into()),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: &rest needs a name \
+             (rest marker at position 2, got :foo)"
         );
     }
 

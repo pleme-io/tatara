@@ -464,13 +464,12 @@ fn parse_params(list: &[Sexp]) -> Result<Vec<Param>> {
             .as_symbol()
             .ok_or_else(|| non_symbol_param(i, &list[i]))?;
         if s == "&rest" {
-            let name =
-                list.get(i + 1)
-                    .and_then(|x| x.as_symbol())
-                    .ok_or_else(|| LispError::Compile {
-                        form: "defmacro params".into(),
-                        message: "&rest needs a name".into(),
-                    })?;
+            let Some(next) = list.get(i + 1) else {
+                return Err(rest_param_missing_name(i, None));
+            };
+            let Some(name) = next.as_symbol() else {
+                return Err(rest_param_missing_name(i, Some(next)));
+            };
             out.push(Param::Rest(name.to_string()));
             return Ok(out);
         }
@@ -730,6 +729,49 @@ fn non_symbol_param(position: usize, got: &Sexp) -> LispError {
     LispError::NonSymbolParam {
         position,
         got: got.to_string(),
+    }
+}
+
+/// Lift the lone `LispError::Compile { form: "defmacro params", message:
+/// "&rest needs a name" }` triple in `parse_params` behind ONE named
+/// primitive. Sibling of `non_symbol_param`: that helper fires when a
+/// NON-`&rest` element at a param position isn't a symbol; this helper
+/// fires specifically on the post-`&rest` follower slot, where the
+/// failure mode bifurcates into "missing entirely" (`got = None`) vs.
+/// "present but not a symbol" (`got = Some(...)`). Together, the two
+/// helpers close the `parse_params` walker — every distinct failure
+/// mode the walker can emit is now a structural variant of `LispError`,
+/// not a `Compile`-shaped substring.
+///
+/// `rest_position` is the loop index inside `parse_params` at which
+/// the `&rest` marker was matched, i.e. the 0-based index of `&rest`
+/// within the param list (`(defmacro f (a &rest 5) …)` — rest_position
+/// 1 is `&rest`, the offender follows at 2); naming the marker
+/// position lets an LSP quick-fix point at the `&rest` form itself
+/// rather than at the next list element. `got` is `Option<&Sexp>`
+/// because the follower slot bifurcates: `None` when the marker was
+/// the param list's last element (no follower at all), `Some(sexp)`
+/// when a follower exists but isn't a symbol; the helper projects
+/// through `to_string()` at the variant boundary so the variant stays
+/// lifetime-free.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
+/// inline copy still earns a named primitive once the structural shape
+/// is named (the test count gives this the fail-before-pass-after
+/// edge, parallel to how `non_symbol_param` was lifted from a single
+/// site for the structural-completeness payoff). THEORY.md §V.1 —
+/// knowable platform; the structural variant exposes `rest_position` /
+/// `got` as first-class fields so authoring tools (LSP, REPL,
+/// `tatara-check`) bind to the data shape instead of substring-parsing
+/// the rendered diagnostic. THEORY.md §II.1 invariant 1 — typed entry;
+/// a `&rest` marker followed by no name (or by a non-symbol) is
+/// exactly the failure mode the typed-entry gate exists to reject —
+/// and the gate must reject DEFINITIONS as readily as it rejects
+/// CALLS.
+fn rest_param_missing_name(rest_position: usize, got: Option<&Sexp>) -> LispError {
+    LispError::RestParamMissingName {
+        rest_position,
+        got: got.map(Sexp::to_string),
     }
 }
 
@@ -1692,6 +1734,213 @@ mod tests {
             .expect_err("bytecode must error");
         assert_eq!(non_symbol_param_fields(&err_subst), (1, "5"));
         assert_eq!(non_symbol_param_fields(&err_byte), (1, "5"));
+    }
+
+    /// Helper for the rest-param-missing-name tests — pins the variant
+    /// shape and carries the marker position + offending follower (or
+    /// its absence) up to the assert site for legibility. Sibling of
+    /// `non_symbol_param_fields`.
+    fn rest_param_missing_name_fields(err: &LispError) -> (usize, Option<&str>) {
+        match err {
+            LispError::RestParamMissingName { rest_position, got } => {
+                (*rest_position, got.as_deref())
+            }
+            other => panic!("expected RestParamMissingName, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rest_param_missing_name_when_only_rest_emits_structural_variant_with_no_got() {
+        // `(defmacro f (&rest))` — the marker is the only param-list
+        // element; nothing follows. Pins variant identity AND that
+        // `rest_position == 0` (the first slot) AND that `got == None`
+        // (no follower exists). A regression that re-inlines the legacy
+        // `LispError::Compile` shape (which named neither field) fails-
+        // loudly here.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (&rest) `(list))").unwrap())
+            .expect_err("&rest with no follower must error");
+        let (rest_position, got) = rest_param_missing_name_fields(&err);
+        assert_eq!(rest_position, 0);
+        assert_eq!(got, None);
+    }
+
+    #[test]
+    fn rest_param_missing_name_at_end_of_param_list_emits_structural_variant() {
+        // `(defmacro f (a &rest))` — `a` parses fine, `&rest` at param-list
+        // position 1 has no follower at all. Pins that `rest_position`
+        // advances with the loop index, so an LSP quick-fix that wants to
+        // point at "your `&rest` at position 1 has no name" gains the
+        // marker position as data, no source re-parse required.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a &rest) `(,a))").unwrap())
+            .expect_err("&rest with no follower must error");
+        let (rest_position, got) = rest_param_missing_name_fields(&err);
+        assert_eq!(rest_position, 1);
+        assert_eq!(got, None);
+    }
+
+    #[test]
+    fn rest_param_missing_name_with_int_follower_emits_structural_variant() {
+        // `(defmacro f (&rest 5))` — `&rest` at position 0 followed by
+        // `5` (an integer literal, not a symbol). Pins that the variant's
+        // `got` field is `Some` and carries the offending follower's
+        // `Sexp::Display` projection; the bifurcation between "missing
+        // entirely" and "present but non-symbol" is in the renderable
+        // detail, not in what the gate rejects.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (&rest 5) `(list))").unwrap())
+            .expect_err("&rest followed by non-symbol must error");
+        let (rest_position, got) = rest_param_missing_name_fields(&err);
+        assert_eq!(rest_position, 0);
+        assert_eq!(got, Some("5"));
+    }
+
+    #[test]
+    fn rest_param_missing_name_with_keyword_follower_emits_structural_variant() {
+        // `(defmacro f (a &rest :foo))` — keyword follower at the rest-name
+        // slot. `Sexp::Display` for `Atom::Keyword(s)` writes `:s`; pins
+        // that the variant's `got` field round-trips the keyword form
+        // unchanged so an LSP that surfaces "you wrote `:foo` where a
+        // rest-name was expected" gains the literal keyword value as
+        // data, no re-parsing required.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a &rest :foo) `(,a))").unwrap())
+            .expect_err("&rest followed by keyword must error");
+        let (rest_position, got) = rest_param_missing_name_fields(&err);
+        assert_eq!(rest_position, 1);
+        assert_eq!(got, Some(":foo"));
+    }
+
+    #[test]
+    fn rest_param_missing_name_with_nested_list_follower_emits_structural_variant() {
+        // `(defmacro f (&rest (nested)))` — nested-list follower at the
+        // rest-name slot. `Sexp::Display` for `List(xs)` writes
+        // `(<x1> <x2> ...)`; pins that the variant's `got` field carries
+        // the nested form's full Display projection unchanged so the
+        // operator sees what they wrote.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (&rest (nested)) `(list))").unwrap())
+            .expect_err("&rest followed by list must error");
+        let (rest_position, got) = rest_param_missing_name_fields(&err);
+        assert_eq!(rest_position, 0);
+        assert_eq!(got, Some("(nested)"));
+    }
+
+    #[test]
+    fn rest_param_missing_name_in_defpoint_template_emits_same_variant() {
+        // `defpoint-template` shares `parse_params` with `defmacro` (all
+        // three head keywords route through `macro_def_from`). Pins that
+        // the lift fires path-uniformly across the three head keywords —
+        // a regression that handles `defpoint-template`'s param list
+        // differently from `defmacro`'s would fail-loudly here.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defpoint-template t (a &rest) `(,a))").unwrap())
+            .expect_err("&rest with no follower must error");
+        let (rest_position, got) = rest_param_missing_name_fields(&err);
+        assert_eq!(rest_position, 1);
+        assert_eq!(got, None);
+    }
+
+    #[test]
+    fn rest_param_missing_name_in_defcheck_emits_same_variant() {
+        // Sibling for the `defcheck` head; rounds out the three-head-
+        // keyword coverage so the lift is path-uniform across
+        // `defmacro` / `defpoint-template` / `defcheck`. After this
+        // test the defmacro-syntax-gate rejects `&rest`-without-name
+        // identically across all three head keywords — the
+        // typed-entry surface is single-shape across the cluster.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defcheck c (&rest 5) `(list))").unwrap())
+            .expect_err("&rest followed by non-symbol must error");
+        let (rest_position, got) = rest_param_missing_name_fields(&err);
+        assert_eq!(rest_position, 0);
+        assert_eq!(got, Some("5"));
+    }
+
+    #[test]
+    fn rest_param_missing_name_substitute_and_bytecode_paths_agree() {
+        // Path-uniform rejection: the SAME source emits the SAME
+        // structural variant under both expansion strategies. The
+        // defmacro-syntax-gate fires inside `macro_def_from` →
+        // `parse_params`, BEFORE either strategy's expansion path
+        // runs; so both `Expander::new()` (bytecode) and
+        // `Expander::new_substitute_only()` (substitute) reject the
+        // SAME malformed defmacro at the SAME gate. Sibling of
+        // `non_symbol_param_substitute_and_bytecode_paths_agree`.
+        let src = "(defmacro f (a &rest 5) `(,a))";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let err_subst = subst
+            .expand_program(read(src).unwrap())
+            .expect_err("substitute must error");
+        let err_byte = bytecode
+            .expand_program(read(src).unwrap())
+            .expect_err("bytecode must error");
+        assert_eq!(rest_param_missing_name_fields(&err_subst), (1, Some("5")));
+        assert_eq!(rest_param_missing_name_fields(&err_byte), (1, Some("5")));
+    }
+
+    #[test]
+    fn rest_param_missing_name_message_renders_legacy_substring_with_marker() {
+        // End-to-end through Display — pins the rendered diagnostic
+        // consumers see today (REPL, tatara-check) AND the new `(rest
+        // marker at position {rest_position}, got {got})` clause. The
+        // legacy `"&rest needs a name"` substring rides through
+        // verbatim.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a &rest 5) `(,a))").unwrap())
+            .expect_err("&rest followed by non-symbol must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: &rest needs a name \
+             (rest marker at position 1, got 5)"
+        );
+    }
+
+    #[test]
+    fn rest_param_missing_name_message_renders_none_provided_when_follower_absent() {
+        // Same as the prior test but for the "missing entirely" branch.
+        // The renderable detail is `(rest marker at position
+        // {rest_position}, none provided)` — naming the absence
+        // structurally instead of an empty / partial parenthetical.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a &rest) `(,a))").unwrap())
+            .expect_err("&rest with no follower must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: &rest needs a name \
+             (rest marker at position 1, none provided)"
+        );
+    }
+
+    #[test]
+    fn rest_param_missing_name_position_is_none_today() {
+        // Pins that `position()` returns `None` so the future `pos:
+        // Option<usize>` add (once `Sexp` carries source spans) lands
+        // as a deliberate fail-before/pass-after delta rather than a
+        // silent default. Parallel to
+        // `non_symbol_param_position_is_none_today` and
+        // `missing_macro_arg_position_is_none_today`.
+        let err_missing = LispError::RestParamMissingName {
+            rest_position: 1,
+            got: None,
+        };
+        assert_eq!(err_missing.position(), None);
+        let err_got = LispError::RestParamMissingName {
+            rest_position: 0,
+            got: Some("5".into()),
+        };
+        assert_eq!(err_got.position(), None);
     }
 
     #[test]

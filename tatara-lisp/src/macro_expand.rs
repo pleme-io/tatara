@@ -460,10 +460,9 @@ fn parse_params(list: &[Sexp]) -> Result<Vec<Param>> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < list.len() {
-        let s = list[i].as_symbol().ok_or_else(|| LispError::Compile {
-            form: "defmacro params".into(),
-            message: "expected symbol".into(),
-        })?;
+        let s = list[i]
+            .as_symbol()
+            .ok_or_else(|| non_symbol_param(i, &list[i]))?;
         if s == "&rest" {
             let name =
                 list.get(i + 1)
@@ -691,6 +690,46 @@ fn missing_macro_arg(macro_name: &str, param: &str) -> LispError {
     LispError::MissingMacroArg {
         macro_name: macro_name.to_string(),
         param: param.to_string(),
+    }
+}
+
+/// Lift the lone `LispError::Compile { form: "defmacro params", message:
+/// "expected symbol" }` triple in `parse_params` behind ONE named
+/// primitive. Sibling of `missing_macro_arg`: that helper fires when the
+/// macro CALL is malformed (call-site missing a positional arg); this
+/// helper fires when the macro DEFINITION is malformed (definition-site
+/// has a non-symbol where a param name should be). Together they open
+/// the defmacro-syntax-gate / macro-call-gate split — call-site
+/// rejections vs. definition-site rejections — each as its own
+/// structural-variant family on `LispError`.
+///
+/// `position` is the loop index inside `parse_params`, i.e. the 0-based
+/// index of the offending element within the param list (`(defmacro f
+/// (a 5 b) …)` — position 1 is the literal `5`); naming it lets an LSP
+/// quick-fix point at the exact list element instead of the whole
+/// param list. `got` is the offending `Sexp` projected through
+/// `Display` so the operator sees the literal value they wrote
+/// (`5`, `:foo`, `(nested)`) at the variant boundary; the helper takes
+/// `&Sexp` (parallel to `non_symbol_unquote_target` and
+/// `splice_outside_list`) and projects through `to_string()` so the
+/// variant stays lifetime-free.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
+/// inline copy still earns a named primitive once the structural shape
+/// is named (the test count gives this the fail-before-pass-after edge,
+/// parallel to how `OddKwargs` was lifted from a single site for the
+/// structural-completeness payoff). THEORY.md §V.1 — knowable platform;
+/// the structural variant exposes `position` / `got` as first-class
+/// fields so authoring tools (LSP, REPL, `tatara-check`) bind to the
+/// data shape instead of substring-parsing the rendered diagnostic.
+/// THEORY.md §II.1 invariant 1 — typed entry; a non-symbol element
+/// inside a defmacro param list is exactly the failure mode the
+/// typed-entry gate exists to reject — and it must reject DEFINITIONS
+/// as readily as it rejects CALLS.
+fn non_symbol_param(position: usize, got: &Sexp) -> LispError {
+    LispError::NonSymbolParam {
+        position,
+        got: got.to_string(),
     }
 }
 
@@ -1488,6 +1527,188 @@ mod tests {
         let out_byte = bytecode.expand_program(read(src).unwrap()).unwrap();
         assert_eq!(out_subst, out_byte);
         assert_eq!(out_subst[0], parse("(list)"));
+    }
+
+    /// Helper for the non-symbol-param tests — pins the variant shape and
+    /// carries the failing position + offending element up to the assert
+    /// site for legibility. Sibling of `missing_macro_arg_fields`.
+    fn non_symbol_param_fields(err: &LispError) -> (usize, &str) {
+        match err {
+            LispError::NonSymbolParam { position, got } => (*position, got.as_str()),
+            other => panic!("expected NonSymbolParam, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn non_symbol_param_at_first_position_emits_structural_variant() {
+        // `(defmacro f (5) ...)` — the first element of the param list is
+        // an integer literal, not a symbol. Pins variant identity AND
+        // that `position` is the loop index inside `parse_params` (0 for
+        // the first slot) AND that `got` is the offending element via
+        // `Sexp::Display` (`5`). A regression that re-inlines the legacy
+        // `LispError::Compile` shape (which named neither the position
+        // nor the offending element) fails-loudly here.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (5) `(list ,a))").unwrap())
+            .expect_err("non-symbol param must error");
+        let (position, got) = non_symbol_param_fields(&err);
+        assert_eq!(position, 0);
+        assert_eq!(got, "5");
+    }
+
+    #[test]
+    fn non_symbol_param_at_second_position_emits_structural_variant() {
+        // `(defmacro f (a 5) ...)` — `a` parses fine, `5` at position 1
+        // misfires. Pins that `position` advances with the loop index, so
+        // an LSP quick-fix that wants to point at "the second element of
+        // your param list" gains the index as data, no source re-parse
+        // required.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a 5) `(,a))").unwrap())
+            .expect_err("non-symbol param must error");
+        let (position, got) = non_symbol_param_fields(&err);
+        assert_eq!(position, 1);
+        assert_eq!(got, "5");
+    }
+
+    #[test]
+    fn non_symbol_param_carries_keyword_value_unchanged() {
+        // `:k` at a param-list position. `Sexp::Display` for
+        // `Atom::Keyword(s)` writes `:s`; pins that the variant's `got`
+        // field round-trips the keyword form unchanged so an LSP that
+        // surfaces "you wrote `:k` where a symbol was expected" gains
+        // the literal keyword value as data, no re-parsing required.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (:k) `(list))").unwrap())
+            .expect_err("non-symbol param must error");
+        let (position, got) = non_symbol_param_fields(&err);
+        assert_eq!(position, 0);
+        assert_eq!(got, ":k");
+    }
+
+    #[test]
+    fn non_symbol_param_carries_nested_list_value_unchanged() {
+        // A nested list at a param-list position. `Sexp::Display` for
+        // `List(xs)` writes `(<x1> <x2> ...)`; pins that the variant's
+        // `got` field carries the nested form's full Display projection
+        // unchanged so the operator sees what they wrote.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f ((nested)) `(list))").unwrap())
+            .expect_err("non-symbol param must error");
+        let (position, got) = non_symbol_param_fields(&err);
+        assert_eq!(position, 0);
+        assert_eq!(got, "(nested)");
+    }
+
+    #[test]
+    fn non_symbol_param_in_defpoint_template_emits_same_variant() {
+        // `defpoint-template` shares `parse_params` with `defmacro` (all
+        // three head keywords route through `macro_def_from`). Pins that
+        // the lift fires path-uniformly across the three head keywords
+        // — `defmacro`, `defpoint-template`, `defcheck` — so the
+        // structural-completeness floor holds for every defmacro-shaped
+        // form, not just the one with the `defmacro` head literal.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defpoint-template obs (5) `(defpoint))").unwrap())
+            .expect_err("non-symbol param must error");
+        let (position, got) = non_symbol_param_fields(&err);
+        assert_eq!(position, 0);
+        assert_eq!(got, "5");
+    }
+
+    #[test]
+    fn non_symbol_param_in_defcheck_emits_same_variant() {
+        // Sibling of the defpoint-template test — `defcheck` is the
+        // third head keyword `macro_def_from` recognizes. All three
+        // route through the same `parse_params` and now reject
+        // non-symbol params with the same structural variant.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defcheck pair (a 5) `(do))").unwrap())
+            .expect_err("non-symbol param must error");
+        let (position, got) = non_symbol_param_fields(&err);
+        assert_eq!(position, 1);
+        assert_eq!(got, "5");
+    }
+
+    #[test]
+    fn non_symbol_param_position_is_none_today() {
+        // Negative control for the future-spans move: until `Sexp`
+        // carries source positions, `position()` on `LispError` returns
+        // `None` for this variant. A future run that gives `Sexp`
+        // source spans adds `pos: Option<usize>` to ONE place; this
+        // test gives that change a deliberate fail-before/pass-after
+        // delta. Parallel to `missing_macro_arg_position_is_none_today`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (5) `(list))").unwrap())
+            .expect_err("non-symbol param must error");
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn non_symbol_param_message_renders_legacy_substring_with_position() {
+        // End-to-end through Display — pins the rendered diagnostic that
+        // downstream tools (REPL, `tatara-check`) see today. Legacy
+        // substrings `"defmacro params"` AND `"expected symbol"` are
+        // preserved verbatim; the appended `at position {position}, got
+        // {got}` clause is the new structural detail. Tools that
+        // pattern-match on the variant gain structural binding to
+        // `position` / `got`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a 5) `(,a))").unwrap())
+            .expect_err("non-symbol param must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: \
+             expected symbol at position 1, got 5"
+        );
+    }
+
+    #[test]
+    fn non_symbol_param_substitute_and_bytecode_paths_agree() {
+        // Path-uniform rejection: the SAME source emits the SAME
+        // structural variant under both expansion strategies. The
+        // defmacro-syntax-gate fires inside `macro_def_from` →
+        // `parse_params`, BEFORE either strategy's expansion path runs;
+        // so both `Expander::new()` (bytecode) and
+        // `Expander::new_substitute_only()` (substitute) reject the
+        // SAME malformed defmacro at the SAME gate. Sibling of
+        // `missing_macro_arg_substitute_and_bytecode_paths_agree`.
+        let src = "(defmacro f (a 5) `(,a))";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let err_subst = subst
+            .expand_program(read(src).unwrap())
+            .expect_err("substitute must error");
+        let err_byte = bytecode
+            .expand_program(read(src).unwrap())
+            .expect_err("bytecode must error");
+        assert_eq!(non_symbol_param_fields(&err_subst), (1, "5"));
+        assert_eq!(non_symbol_param_fields(&err_byte), (1, "5"));
+    }
+
+    #[test]
+    fn rest_marker_at_param_list_position_is_not_non_symbol_param() {
+        // Negative control: `&rest` is a symbol (`Atom::Symbol("&rest")`)
+        // at the parser level, so `as_symbol()` succeeds for it. The
+        // `NonSymbolParam` variant does NOT fire on the `&rest` marker
+        // itself; the dedicated `&rest needs a name` rejection (a
+        // separate failure mode in this cluster) handles malformed
+        // rest-param shapes. Pins that the lift is scoped to
+        // non-symbol elements at param-list positions, not to
+        // every malformed-param shape.
+        let mut e = Expander::new();
+        let out = e
+            .expand_program(read("(defmacro f (a &rest xs) `(list ,a ,@xs)) (f 1 2 3)").unwrap())
+            .expect("&rest with name must succeed");
+        assert_eq!(out[0], parse("(list 1 2 3)"));
     }
 
     #[test]

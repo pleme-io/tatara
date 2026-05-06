@@ -346,6 +346,46 @@ pub enum LispError {
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in call to {macro_name}: missing required arg: {param}")]
     MissingMacroArg { macro_name: String, param: String },
+    /// A non-symbol element appeared in a `defmacro` / `defpoint-template`
+    /// / `defcheck` param list at the named position. The legacy
+    /// `LispError::Compile { form: "defmacro params", message: "expected
+    /// symbol" }` shape named only the failure mode — it didn't say WHICH
+    /// element of the param list misfired NOR what was found in its slot.
+    /// The structural variant names both: `position` is the 0-based index
+    /// of the offending element within the param list, `got` is its
+    /// `Sexp::Display` projection so the operator sees the literal value
+    /// they wrote (`5`, `"x"`, `:foo`, `(nested)`) instead of the bare
+    /// "expected symbol" verdict. Naming both the position AND the
+    /// offending element is the typed-entry gate's
+    /// structural-completeness floor (THEORY.md §V.1) — without both an
+    /// LSP that wants to surface "the third element of your param list
+    /// isn't a symbol; you wrote `5`" must re-parse the source.
+    ///
+    /// Sibling of `MissingMacroArg { macro_name, param }` for the
+    /// macro-call-gate's positional-arity surface — that variant fires
+    /// when a CALL `(<macroname> a b …)` omits a required positional
+    /// param; this variant fires when the DEFMACRO `(defmacro <name> (a
+    /// b …) …)` declaration's param list contains a non-symbol where a
+    /// param name was expected. The two are the macro-call-gate and the
+    /// defmacro-syntax-gate's first-named structural failure modes
+    /// respectively — call-site malformed vs. definition-site malformed.
+    ///
+    /// `position` is `usize` because it is always the loop index inside
+    /// `parse_params`; `got` is `String` because it comes from arbitrary
+    /// source via `Sexp::Display`. Display preserves the legacy
+    /// `"compile error in defmacro params: expected symbol"` prefix
+    /// byte-for-byte so authoring tools that substring-grep on the
+    /// rendered diagnostic see no drift; the structural detail (`at
+    /// position {position}, got {got}`) is appended. When a future run
+    /// gives `Sexp` source spans, `pos: Option<usize>` lands here in ONE
+    /// place and every non-symbol-param site picks up positional
+    /// rendering via `crate::diagnostic::format_diagnostic`
+    /// mechanically.
+    #[error(
+        "compile error in defmacro params: expected symbol at position \
+         {position}, got {got}"
+    )]
+    NonSymbolParam { position: usize, got: String },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -412,7 +452,8 @@ impl LispError {
             | Self::UnknownDomainKeyword { .. }
             | Self::NonSymbolUnquoteTarget { .. }
             | Self::SpliceOutsideList { .. }
-            | Self::MissingMacroArg { .. } => None,
+            | Self::MissingMacroArg { .. }
+            | Self::NonSymbolParam { .. } => None,
         }
     }
 }
@@ -566,6 +607,22 @@ mod tests {
             LispError::MissingMacroArg {
                 macro_name: "call".into(),
                 param: "f".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::NonSymbolParam {
+                position: 0,
+                got: "5".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::NonSymbolParam {
+                position: 2,
+                got: "(nested)".into(),
             }
             .position(),
             None
@@ -966,6 +1023,66 @@ mod tests {
         assert!(
             msg.contains("call to f"),
             "expected call-to clause in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn non_symbol_param_display_carries_position_and_got() {
+        // The variant renders both the failing position (0-based index
+        // within the param list) AND the offending element via
+        // `Sexp::Display` — both fields are first-class structural data,
+        // not embedded substrings of `message`. A regression that drops
+        // either field from the rendered diagnostic fails-loudly here.
+        let err = LispError::NonSymbolParam {
+            position: 1,
+            got: "5".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: \
+             expected symbol at position 1, got 5"
+        );
+    }
+
+    #[test]
+    fn non_symbol_param_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substrings — `"defmacro params"` and `"expected
+        // symbol"` — as separate assertions so a regression that drifts
+        // either fragment fails-loudly here even if the appended position
+        // / got clause changes shape. The substrings are what consumers
+        // downstream substring-match on today; the prefix matches the
+        // legacy `Compile { form: "defmacro params", message: "expected
+        // symbol" }` byte-for-byte.
+        let err = LispError::NonSymbolParam {
+            position: 0,
+            got: "(nested)".into(),
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("defmacro params"),
+            "expected legacy form label in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("expected symbol"),
+            "expected legacy substring in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn non_symbol_param_display_carries_keyword_got_unchanged() {
+        // `Sexp::Display` for `Atom::Keyword(s)` writes `:s`; pin that
+        // the variant's Display passes the keyword form through
+        // unchanged so an LSP that surfaces "you wrote `:k` where a
+        // symbol was expected" gains the literal value as data, no
+        // re-parsing required.
+        let err = LispError::NonSymbolParam {
+            position: 2,
+            got: ":k".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: \
+             expected symbol at position 2, got :k"
         );
     }
 

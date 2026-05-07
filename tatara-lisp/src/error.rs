@@ -555,6 +555,64 @@ pub enum LispError {
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {head}: expected name symbol, got {got}")]
     DefmacroNonSymbolName { head: &'static str, got: String },
+    /// A `defmacro` / `defpoint-template` / `defcheck` form passed both
+    /// the arity gate (≥4 elements) AND the name-symbol gate (list[1]
+    /// is a symbol) but its param-list slot — `list[2]`, the third
+    /// element after the head — wasn't a list. The legacy
+    /// `LispError::Compile { form: head.to_string(), message: "expected
+    /// param list" }` shape named only the failure mode — it didn't
+    /// say WHAT was found in the param-list slot, so an authoring
+    /// surface that wants to surface "you wrote `x` where a param list
+    /// was expected" had to re-parse the source. The structural variant
+    /// carries both: `head` is the head keyword (one of `"defmacro"` /
+    /// `"defpoint-template"` / `"defcheck"`); `got` is the offending
+    /// `Sexp::Display` projection of the non-list element. Naming both
+    /// the head AND the offending element is the typed-entry gate's
+    /// structural-completeness floor (THEORY.md §V.1).
+    ///
+    /// Sibling of `DefmacroArity`, `DefmacroNonSymbolName`, and the
+    /// `parse_params` pair (`NonSymbolParam`, `RestParamMissingName`)
+    /// for the defmacro-syntax-gate's other definition-site failure
+    /// modes. Walking a malformed `(defmacro …)` from the outside in,
+    /// the gate fires:
+    ///   1. `DefmacroArity { head, arity }` if the form has fewer
+    ///      than 4 elements (`(defmacro)`, `(defmacro f)`).
+    ///   2. `DefmacroNonSymbolName { head, got }` if list[1] isn't a
+    ///      symbol (`(defmacro 5 () body)`).
+    ///   3. `DefmacroNonListParams { head, got }` if list[2] isn't a
+    ///      list (`(defmacro f x body)`).
+    ///   4. Inside `parse_params`: `NonSymbolParam { position, got }`
+    ///      and `RestParamMissingName { rest_position, got }`.
+    ///
+    /// This run lifts step 3; after it, every inline `LispError::Compile
+    /// { … }` triple in `macro_def_from` has been lifted to a structural
+    /// variant — the entire `macro_def_from` rejection chain (arity →
+    /// name-symbol → param-list → parse_params) is structurally typed
+    /// for failure modes, with each variant naming WHICH failure mode
+    /// AND WHAT was offending.
+    ///
+    /// `head` is `&'static str` because every call site projects
+    /// through the `matches!("defmacro" | "defpoint-template" |
+    /// "defcheck")` gate immediately above — the head is always one of
+    /// three known literals at that point; using a static slot makes
+    /// that compile-time guarantee load-bearing in the type system (a
+    /// typo in the head literal can never drift into the diagnostic at
+    /// runtime — the type system is the floor, same posture as
+    /// `TypeMismatch.expected`, `HeadMismatch.keyword`,
+    /// `DefmacroArity.head`, and `DefmacroNonSymbolName.head`). `got`
+    /// is `String` because it comes from arbitrary source via
+    /// `Sexp::Display` (e.g. `x`, `5`, `:foo`, `"params"`).
+    ///
+    /// Display preserves the legacy `"expected param list"` substring
+    /// byte-for-byte: the prefix `compile error in {head}:` matches
+    /// the legacy `Compile { form: head.to_string(), message:
+    /// "expected param list" }` shape; the structural detail (`, got
+    /// {got}`) is appended. When a future run gives `Sexp` source
+    /// spans, `pos: Option<usize>` lands here in ONE place and every
+    /// non-list-params site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in {head}: expected param list, got {got}")]
+    DefmacroNonListParams { head: &'static str, got: String },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -632,7 +690,8 @@ impl LispError {
             | Self::NonSymbolParam { .. }
             | Self::RestParamMissingName { .. }
             | Self::DefmacroArity { .. }
-            | Self::DefmacroNonSymbolName { .. } => None,
+            | Self::DefmacroNonSymbolName { .. }
+            | Self::DefmacroNonListParams { .. } => None,
         }
     }
 }
@@ -842,6 +901,22 @@ mod tests {
             LispError::DefmacroNonSymbolName {
                 head: "defmacro",
                 got: "5".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::DefmacroNonListParams {
+                head: "defmacro",
+                got: "x".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::DefmacroNonListParams {
+                head: "defcheck",
+                got: ":foo".into(),
             }
             .position(),
             None
@@ -1569,6 +1644,105 @@ mod tests {
         let msg = format!("{err}");
         assert!(
             msg.contains("expected name symbol"),
+            "expected legacy substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("compile error in defmacro:"),
+            "expected legacy form-label prefix in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_list_params_display_with_symbol_got_renders_legacy_prefix_and_got() {
+        // `(defmacro f x body)` — list[2] is the symbol `x`, not a
+        // list. The variant renders both the head keyword AND the
+        // offending `Sexp::Display` projection — both fields are
+        // first-class structural data, not embedded substrings of
+        // `message`. The prefix `compile error in defmacro: expected
+        // param list` matches the legacy `Compile { form: "defmacro",
+        // message: "expected param list" }` byte-for-byte; the
+        // structural detail (`, got x`) is appended. A regression that
+        // drops either field from the rendered diagnostic fails-loudly
+        // here.
+        let err = LispError::DefmacroNonListParams {
+            head: "defmacro",
+            got: "x".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro: expected param list, got x"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_list_params_display_carries_defpoint_template_head_unchanged() {
+        // Pin that the head slot accepts every literal the call-site
+        // matches! gate admits — `defpoint-template` is the second
+        // head keyword `macro_def_from` recognizes. The prefix
+        // `compile error in defpoint-template:` carries the actual
+        // head so an LSP that wants to point at "your defpoint-
+        // template form's param-list slot isn't a list" gains the
+        // head as data.
+        let err = LispError::DefmacroNonListParams {
+            head: "defpoint-template",
+            got: "5".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defpoint-template: expected param list, got 5"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_list_params_display_carries_defcheck_head_unchanged() {
+        // Sibling for the `defcheck` head; rounds out the three-head-
+        // keyword coverage so the variant renders identically across
+        // `defmacro` / `defpoint-template` / `defcheck` (modulo the
+        // head literal in the prefix).
+        let err = LispError::DefmacroNonListParams {
+            head: "defcheck",
+            got: ":k".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defcheck: expected param list, got :k"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_list_params_display_carries_string_got_unchanged() {
+        // `Sexp::Display` for `Atom::String(s)` writes `"s"` (with
+        // quotes); pin that the variant's Display passes the string
+        // form through unchanged so an LSP that surfaces "you wrote
+        // `\"params\"` where a param list was expected" gains the
+        // literal value as data, no re-parsing required.
+        let err = LispError::DefmacroNonListParams {
+            head: "defmacro",
+            got: "\"params\"".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro: expected param list, got \"params\""
+        );
+    }
+
+    #[test]
+    fn defmacro_non_list_params_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"expected param list"` — as a
+        // separate assertion so a regression that drifts the wording
+        // (e.g., to "expected list" or "params must be a list")
+        // fails-loudly here even if the appended `, got X` clause
+        // changes shape. The substring is what consumers downstream
+        // (tatara-check, the REPL) substring-match on today; the
+        // prefix matches the legacy `Compile { form: head.to_string(),
+        // message: "expected param list" }` byte-for-byte.
+        let err = LispError::DefmacroNonListParams {
+            head: "defmacro",
+            got: "x".into(),
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("expected param list"),
             "expected legacy substring in message, got: {msg}"
         );
         assert!(

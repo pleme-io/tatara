@@ -435,10 +435,7 @@ fn macro_def_from(form: &Sexp) -> Result<Option<MacroDef>> {
         return Ok(None);
     }
     if list.len() < 4 {
-        return Err(LispError::Compile {
-            form: head.to_string(),
-            message: "(defmacro name (params) body) required".into(),
-        });
+        return Err(defmacro_arity(head, list.len()));
     }
     let name = list[1]
         .as_symbol()
@@ -773,6 +770,56 @@ fn rest_param_missing_name(rest_position: usize, got: Option<&Sexp>) -> LispErro
         rest_position,
         got: got.map(Sexp::to_string),
     }
+}
+
+/// Lift the lone `LispError::Compile { form: head.to_string(), message:
+/// "(defmacro name (params) body) required" }` triple in
+/// `macro_def_from` behind ONE named primitive. Sibling of
+/// `non_symbol_param` and `rest_param_missing_name`: those helpers
+/// fire INSIDE `parse_params`, AFTER the arity gate has passed; this
+/// helper fires AT the arity gate itself, BEFORE name / params / body
+/// validation can run. Together the three close `macro_def_from`'s
+/// outermost rejection chain — every distinct failure mode the gate
+/// can emit at the top level becomes a structural variant of
+/// `LispError`, not a `Compile`-shaped substring.
+///
+/// `head` is `&str` at the call site (a borrow into the form's symbol
+/// element); the `matches!("defmacro" | "defpoint-template" |
+/// "defcheck")` gate immediately above proves it is always one of
+/// three known literals. The helper projects to `&'static str` so the
+/// variant's `head` slot encodes that compile-time guarantee in the
+/// type system rather than carrying an arbitrary owned `String` —
+/// same posture as `TypeMismatch.expected: &'static str` and
+/// `HeadMismatch.keyword: &'static str`. `arity` is `usize` (the
+/// length of the form including the head element).
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
+/// inline copy still earns a named primitive once the structural
+/// shape is named (the test count gives this the fail-before/pass-
+/// after edge, parallel to how `non_symbol_param` and
+/// `rest_param_missing_name` were lifted from a single site for the
+/// structural-completeness payoff). THEORY.md §V.1 — knowable
+/// platform; the structural variant exposes `head` / `arity` as
+/// first-class fields so authoring tools (LSP, REPL, `tatara-check`)
+/// bind to the data shape instead of substring-parsing the rendered
+/// diagnostic. THEORY.md §II.1 invariant 1 — typed entry; a defmacro
+/// form with too few elements is exactly the failure mode the typed-
+/// entry gate exists to reject — and the gate must reject
+/// DEFINITIONS as readily as it rejects CALLS. THEORY.md §II.1
+/// invariant 2 — free middle; the arity gate fires inside
+/// `macro_def_from` BEFORE either expansion strategy runs, so both
+/// `Expander::new()` (bytecode) and `Expander::new_substitute_only()`
+/// (substitute) reject the SAME malformed defmacro at the SAME gate.
+fn defmacro_arity(head: &str, arity: usize) -> LispError {
+    let head: &'static str = match head {
+        "defmacro" => "defmacro",
+        "defpoint-template" => "defpoint-template",
+        "defcheck" => "defcheck",
+        _ => unreachable!(
+            "matches! gate above ensures head is defmacro / defpoint-template / defcheck"
+        ),
+    };
+    LispError::DefmacroArity { head, arity }
 }
 
 /// Project a `bindings: &HashMap<String, Sexp>` into the `&[&str]` candidate
@@ -1941,6 +1988,173 @@ mod tests {
             got: Some("5".into()),
         };
         assert_eq!(err_got.position(), None);
+    }
+
+    /// Helper for the defmacro-arity tests — pins the variant shape and
+    /// carries the head / arity up to the assert site for legibility.
+    /// Sibling of `non_symbol_param_fields` and
+    /// `rest_param_missing_name_fields`.
+    fn defmacro_arity_fields(err: &LispError) -> (&str, usize) {
+        match err {
+            LispError::DefmacroArity { head, arity } => (head, *arity),
+            other => panic!("expected DefmacroArity, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn defmacro_arity_with_head_only_emits_structural_variant() {
+        // `(defmacro)` — only the head, no name / params / body. Pins
+        // variant identity AND that `arity == 1` (just the head
+        // element) AND that `head == "defmacro"`. A regression that
+        // re-inlines the legacy `LispError::Compile` shape (which
+        // named neither field) fails-loudly here.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro)").unwrap())
+            .expect_err("defmacro arity gate must error");
+        let (head, arity) = defmacro_arity_fields(&err);
+        assert_eq!(head, "defmacro");
+        assert_eq!(arity, 1);
+    }
+
+    #[test]
+    fn defmacro_arity_with_head_and_name_emits_structural_variant() {
+        // `(defmacro f)` — head + name, missing params + body. Pins
+        // that `arity` advances with the actual form length (2 for
+        // this case) so an LSP quick-fix that wants to surface "you
+        // wrote 2 elements; need 4" gains the count as data, no
+        // source re-parse required.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f)").unwrap())
+            .expect_err("defmacro arity gate must error");
+        let (head, arity) = defmacro_arity_fields(&err);
+        assert_eq!(head, "defmacro");
+        assert_eq!(arity, 2);
+    }
+
+    #[test]
+    fn defmacro_arity_with_head_name_params_emits_structural_variant() {
+        // `(defmacro f ())` — head + name + params, missing body
+        // (the most-complete partial defmacro that still trips the
+        // arity gate). Pins that `arity == 3` exactly so an LSP
+        // quick-fix that wants to surface "your defmacro is one
+        // element short — body is missing" gains the count as data.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f ())").unwrap())
+            .expect_err("defmacro arity gate must error");
+        let (head, arity) = defmacro_arity_fields(&err);
+        assert_eq!(head, "defmacro");
+        assert_eq!(arity, 3);
+    }
+
+    #[test]
+    fn defmacro_arity_in_defpoint_template_emits_same_variant() {
+        // `defpoint-template` shares `macro_def_from` with `defmacro`
+        // (all three head keywords route through the same gate). Pins
+        // that the lift fires path-uniformly across the three head
+        // keywords AND that the variant's `head` slot carries the
+        // actual head literal — `defpoint-template`, not `defmacro`
+        // — so an LSP that wants to point at "your defpoint-template
+        // form is missing elements" gains the head as data.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defpoint-template t)").unwrap())
+            .expect_err("defpoint-template arity gate must error");
+        let (head, arity) = defmacro_arity_fields(&err);
+        assert_eq!(head, "defpoint-template");
+        assert_eq!(arity, 2);
+    }
+
+    #[test]
+    fn defmacro_arity_in_defcheck_emits_same_variant() {
+        // Sibling of the defpoint-template test — `defcheck` is the
+        // third head keyword `macro_def_from` recognizes. All three
+        // route through the same arity gate and now reject too-short
+        // forms with the same structural variant.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defcheck)").unwrap())
+            .expect_err("defcheck arity gate must error");
+        let (head, arity) = defmacro_arity_fields(&err);
+        assert_eq!(head, "defcheck");
+        assert_eq!(arity, 1);
+    }
+
+    #[test]
+    fn defmacro_arity_substitute_and_bytecode_paths_agree() {
+        // Path-uniform rejection: the SAME source emits the SAME
+        // structural variant under both expansion strategies. The
+        // arity gate fires inside `macro_def_from` BEFORE either
+        // strategy's expansion path runs; so both `Expander::new()`
+        // (bytecode) and `Expander::new_substitute_only()`
+        // (substitute) reject the SAME malformed defmacro at the
+        // SAME gate. Sibling of
+        // `non_symbol_param_substitute_and_bytecode_paths_agree` and
+        // `rest_param_missing_name_substitute_and_bytecode_paths_agree`.
+        let src = "(defmacro f)";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let err_subst = subst
+            .expand_program(read(src).unwrap())
+            .expect_err("substitute must error");
+        let err_byte = bytecode
+            .expand_program(read(src).unwrap())
+            .expect_err("bytecode must error");
+        assert_eq!(defmacro_arity_fields(&err_subst), ("defmacro", 2));
+        assert_eq!(defmacro_arity_fields(&err_byte), ("defmacro", 2));
+    }
+
+    #[test]
+    fn defmacro_arity_message_renders_legacy_substring_with_arity() {
+        // End-to-end through Display — pins the rendered diagnostic
+        // consumers see today (REPL, `tatara-check`) AND the new
+        // `(got {arity} elements, need 4)` clause. The legacy
+        // `"(defmacro name (params) body) required"` substring
+        // rides through verbatim. Tools that pattern-match on the
+        // variant gain structural binding to `head` / `arity`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f)").unwrap())
+            .expect_err("defmacro arity gate must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro: (defmacro name (params) body) required \
+             (got 2 elements, need 4)"
+        );
+    }
+
+    #[test]
+    fn defmacro_arity_position_is_none_today() {
+        // Negative control for the future-spans move: until `Sexp`
+        // carries source positions, `position()` on `LispError`
+        // returns `None` for this variant. A future run that gives
+        // `Sexp` source spans adds `pos: Option<usize>` to ONE place;
+        // this test gives that change a deliberate fail-before/pass-
+        // after delta. Parallel to
+        // `non_symbol_param_position_is_none_today` and
+        // `rest_param_missing_name_position_is_none_today`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro)").unwrap())
+            .expect_err("defmacro arity gate must error");
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn defmacro_arity_does_not_fire_for_well_formed_arity_4_defmacro() {
+        // Negative control: a defmacro with exactly 4 elements (head
+        // + name + params + body) passes the arity gate. Pins that
+        // the lift is scoped to the arity-deficient case, not to
+        // every defmacro form. After this test, a regression that
+        // tightens the arity gate to >= 5 (e.g. spuriously requiring
+        // a docstring slot) fails-loudly here.
+        let mut e = Expander::new();
+        let out = e
+            .expand_program(read("(defmacro id (x) `,x) (id 42)").unwrap())
+            .expect("well-formed defmacro must succeed");
+        assert_eq!(out[0], Sexp::int(42));
     }
 
     #[test]

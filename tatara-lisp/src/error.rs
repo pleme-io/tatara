@@ -446,6 +446,62 @@ pub enum LispError {
         rest_position: usize,
         got: Option<String>,
     },
+    /// A `defmacro` / `defpoint-template` / `defcheck` form had fewer
+    /// than 4 list elements: the head keyword must be followed by a
+    /// name symbol, a param list, and a body — three required slots
+    /// after the head, total length 4. The legacy `LispError::Compile
+    /// { form: head.to_string(), message: "(defmacro name (params)
+    /// body) required" }` shape named only the failure mode — it
+    /// didn't say HOW MANY elements the operator actually wrote, so
+    /// an authoring surface that wants to surface "you wrote 2
+    /// elements; need 4" had to re-parse the source. The structural
+    /// variant carries both: `head` is the head keyword (one of
+    /// `"defmacro"` / `"defpoint-template"` / `"defcheck"`); `arity`
+    /// is the actual length of the form, including the head element.
+    /// Naming the actual arity is the typed-entry gate's structural-
+    /// completeness floor (THEORY.md §V.1).
+    ///
+    /// Sibling of `NonSymbolParam` and `RestParamMissingName` for
+    /// the defmacro-syntax-gate's other definition-site failure
+    /// modes — those variants fire INSIDE `parse_params`, AFTER the
+    /// arity gate has passed; this variant fires AT the arity gate
+    /// itself, BEFORE name / params / body validation can run.
+    /// Together, the three close `macro_def_from`'s outermost
+    /// rejection chain — every distinct failure mode the gate can
+    /// emit at the top level becomes a structural variant of
+    /// `LispError`, not a `Compile`-shaped substring.
+    ///
+    /// `head` is `&'static str` because every call site projects
+    /// through the `matches!("defmacro" | "defpoint-template" |
+    /// "defcheck")` gate immediately above — the head is always one
+    /// of three known literals at that point; using a static slot
+    /// makes that compile-time guarantee load-bearing in the type
+    /// system (a typo in the head literal can never drift into the
+    /// diagnostic at runtime — the type system is the floor, same
+    /// posture as `TypeMismatch.expected` and `HeadMismatch.keyword`).
+    /// `arity` is `usize` because it is always `list.len()` at the
+    /// call site (the length of the form including the head
+    /// element).
+    ///
+    /// Display preserves the legacy `"(defmacro name (params) body)
+    /// required"` substring byte-for-byte: the head is parameterized
+    /// in the prefix `compile error in {head}:`, but the example
+    /// template literal stays `(defmacro name (params) body)` —
+    /// matching the legacy form's small infidelity for non-defmacro
+    /// heads (the legacy shape rendered `compile error in
+    /// defpoint-template: (defmacro name (params) body) required`)
+    /// so authoring tools that substring-grep on the legacy
+    /// rendering see no drift; the structural detail (`got {arity}
+    /// elements, need 4`) is appended. When a future run gives
+    /// `Sexp` source spans, `pos: Option<usize>` lands here in ONE
+    /// place and every defmacro-arity site picks up positional
+    /// rendering via `crate::diagnostic::format_diagnostic`
+    /// mechanically.
+    #[error(
+        "compile error in {head}: (defmacro name (params) body) required \
+         (got {arity} elements, need 4)"
+    )]
+    DefmacroArity { head: &'static str, arity: usize },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -521,7 +577,8 @@ impl LispError {
             | Self::SpliceOutsideList { .. }
             | Self::MissingMacroArg { .. }
             | Self::NonSymbolParam { .. }
-            | Self::RestParamMissingName { .. } => None,
+            | Self::RestParamMissingName { .. }
+            | Self::DefmacroArity { .. } => None,
         }
     }
 }
@@ -707,6 +764,22 @@ mod tests {
             LispError::RestParamMissingName {
                 rest_position: 0,
                 got: Some("5".into()),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::DefmacroArity {
+                head: "defmacro",
+                arity: 1,
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::DefmacroArity {
+                head: "defcheck",
+                arity: 3,
             }
             .position(),
             None
@@ -1247,6 +1320,92 @@ mod tests {
             format!("{err}"),
             "compile error in defmacro params: &rest needs a name \
              (rest marker at position 2, got :foo)"
+        );
+    }
+
+    #[test]
+    fn defmacro_arity_display_with_defmacro_head_renders_arity_and_legacy_template() {
+        // The variant renders both the head keyword AND the actual
+        // arity — both fields are first-class structural data, not
+        // embedded substrings of `message`. The example template
+        // `(defmacro name (params) body)` stays the literal `defmacro`
+        // (not the head) — matching the legacy form's behavior so
+        // authoring tools that substring-grep on the rendered
+        // diagnostic see no drift. A regression that drops either
+        // field from the rendered diagnostic fails-loudly here.
+        let err = LispError::DefmacroArity {
+            head: "defmacro",
+            arity: 1,
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro: (defmacro name (params) body) required \
+             (got 1 elements, need 4)"
+        );
+    }
+
+    #[test]
+    fn defmacro_arity_display_carries_defpoint_template_head_unchanged() {
+        // Pin that the head slot accepts every literal the call-site
+        // matches! gate admits — `defpoint-template` is the second
+        // head keyword `macro_def_from` recognizes. The example
+        // template literal stays `(defmacro name (params) body)` even
+        // for non-defmacro heads (matching the legacy behavior); the
+        // prefix `compile error in defpoint-template:` carries the
+        // actual head so an LSP that wants to point at "your
+        // defpoint-template form is missing elements" gains the head
+        // as data.
+        let err = LispError::DefmacroArity {
+            head: "defpoint-template",
+            arity: 2,
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defpoint-template: \
+             (defmacro name (params) body) required \
+             (got 2 elements, need 4)"
+        );
+    }
+
+    #[test]
+    fn defmacro_arity_display_carries_defcheck_head_unchanged() {
+        // Sibling for the `defcheck` head; rounds out the three-head-
+        // keyword coverage so the variant renders identically across
+        // `defmacro` / `defpoint-template` / `defcheck` (modulo the
+        // head literal in the prefix).
+        let err = LispError::DefmacroArity {
+            head: "defcheck",
+            arity: 3,
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defcheck: (defmacro name (params) body) required \
+             (got 3 elements, need 4)"
+        );
+    }
+
+    #[test]
+    fn defmacro_arity_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"(defmacro name (params) body)
+        // required"` — as a separate assertion so a regression that
+        // drifts the example template fails-loudly here even if the
+        // appended `got X elements, need 4` clause changes shape. The
+        // substring is what consumers downstream substring-match on
+        // today; the prefix matches the legacy `Compile { form:
+        // head.to_string(), message: "(defmacro name (params) body)
+        // required" }` byte-for-byte.
+        let err = LispError::DefmacroArity {
+            head: "defmacro",
+            arity: 0,
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("(defmacro name (params) body) required"),
+            "expected legacy template substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("compile error in defmacro:"),
+            "expected legacy form-label prefix in message, got: {msg}"
         );
     }
 

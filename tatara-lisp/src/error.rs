@@ -502,6 +502,59 @@ pub enum LispError {
          (got {arity} elements, need 4)"
     )]
     DefmacroArity { head: &'static str, arity: usize },
+    /// A `defmacro` / `defpoint-template` / `defcheck` form passed the
+    /// arity gate (≥4 elements) but its name slot — `list[1]`, the
+    /// element directly after the head — wasn't a symbol. The legacy
+    /// `LispError::Compile { form: head.to_string(), message: "expected
+    /// name symbol" }` shape named only the failure mode — it didn't
+    /// say WHAT was found in the name slot, so an authoring surface
+    /// that wants to surface "you wrote `5` where a name symbol was
+    /// expected" had to re-parse the source. The structural variant
+    /// carries both: `head` is the head keyword (one of `"defmacro"` /
+    /// `"defpoint-template"` / `"defcheck"`); `got` is the offending
+    /// `Sexp::Display` projection of the non-symbol element. Naming
+    /// both the head AND the offending element is the typed-entry
+    /// gate's structural-completeness floor (THEORY.md §V.1).
+    ///
+    /// Sibling of `DefmacroArity` and the `parse_params` pair
+    /// (`NonSymbolParam`, `RestParamMissingName`) for the
+    /// defmacro-syntax-gate's other definition-site failure modes.
+    /// Walking a malformed `(defmacro …)` from the outside in, the
+    /// gate fires:
+    ///   1. `DefmacroArity { head, arity }` if the form has fewer
+    ///      than 4 elements (`(defmacro)`, `(defmacro f)`).
+    ///   2. `DefmacroNonSymbolName { head, got }` if list[1] isn't a
+    ///      symbol (`(defmacro 5 () body)`, `(defmacro :foo () body)`).
+    ///   3. Inside `parse_params`: `NonSymbolParam { position, got }`
+    ///      and `RestParamMissingName { rest_position, got }`.
+    ///
+    /// This run lifts step 2; the only remaining `Compile`-shaped
+    /// site in `macro_def_from` is the `expected param list` gate
+    /// (list[2] is not a list), which is the next move in the same
+    /// rejection chain.
+    ///
+    /// `head` is `&'static str` because every call site projects
+    /// through the `matches!("defmacro" | "defpoint-template" |
+    /// "defcheck")` gate immediately above — the head is always one
+    /// of three known literals at that point; using a static slot
+    /// makes that compile-time guarantee load-bearing in the type
+    /// system (a typo in the head literal can never drift into the
+    /// diagnostic at runtime — the type system is the floor, same
+    /// posture as `TypeMismatch.expected`, `HeadMismatch.keyword`,
+    /// and `DefmacroArity.head`). `got` is `String` because it
+    /// comes from arbitrary source via `Sexp::Display` (e.g. `5`,
+    /// `:foo`, `"name"`, `(nested)`).
+    ///
+    /// Display preserves the legacy `"expected name symbol"` substring
+    /// byte-for-byte: the prefix `compile error in {head}:` matches
+    /// the legacy `Compile { form: head.to_string(), message:
+    /// "expected name symbol" }` shape; the structural detail (`,
+    /// got {got}`) is appended. When a future run gives `Sexp` source
+    /// spans, `pos: Option<usize>` lands here in ONE place and every
+    /// non-symbol-name site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in {head}: expected name symbol, got {got}")]
+    DefmacroNonSymbolName { head: &'static str, got: String },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -578,7 +631,8 @@ impl LispError {
             | Self::MissingMacroArg { .. }
             | Self::NonSymbolParam { .. }
             | Self::RestParamMissingName { .. }
-            | Self::DefmacroArity { .. } => None,
+            | Self::DefmacroArity { .. }
+            | Self::DefmacroNonSymbolName { .. } => None,
         }
     }
 }
@@ -780,6 +834,22 @@ mod tests {
             LispError::DefmacroArity {
                 head: "defcheck",
                 arity: 3,
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::DefmacroNonSymbolName {
+                head: "defmacro",
+                got: "5".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::DefmacroNonSymbolName {
+                head: "defpoint-template",
+                got: ":foo".into(),
             }
             .position(),
             None
@@ -1402,6 +1472,104 @@ mod tests {
         assert!(
             msg.contains("(defmacro name (params) body) required"),
             "expected legacy template substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("compile error in defmacro:"),
+            "expected legacy form-label prefix in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_display_with_int_got_renders_legacy_prefix_and_got() {
+        // `(defmacro 5 () body)` — list[1] is `5`, not a symbol. The
+        // variant renders both the head keyword AND the offending
+        // `Sexp::Display` projection — both fields are first-class
+        // structural data, not embedded substrings of `message`. The
+        // prefix `compile error in defmacro: expected name symbol`
+        // matches the legacy `Compile { form: "defmacro", message:
+        // "expected name symbol" }` byte-for-byte; the structural
+        // detail (`, got 5`) is appended. A regression that drops
+        // either field from the rendered diagnostic fails-loudly here.
+        let err = LispError::DefmacroNonSymbolName {
+            head: "defmacro",
+            got: "5".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro: expected name symbol, got 5"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_display_carries_defpoint_template_head_unchanged() {
+        // Pin that the head slot accepts every literal the call-site
+        // matches! gate admits — `defpoint-template` is the second
+        // head keyword `macro_def_from` recognizes. The prefix
+        // `compile error in defpoint-template:` carries the actual
+        // head so an LSP that wants to point at "your defpoint-
+        // template form's name slot isn't a symbol" gains the head
+        // as data.
+        let err = LispError::DefmacroNonSymbolName {
+            head: "defpoint-template",
+            got: ":foo".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defpoint-template: expected name symbol, got :foo"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_display_carries_defcheck_head_unchanged() {
+        // Sibling for the `defcheck` head; rounds out the three-head-
+        // keyword coverage so the variant renders identically across
+        // `defmacro` / `defpoint-template` / `defcheck` (modulo the
+        // head literal in the prefix).
+        let err = LispError::DefmacroNonSymbolName {
+            head: "defcheck",
+            got: "(nested)".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defcheck: expected name symbol, got (nested)"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_display_carries_string_got_unchanged() {
+        // `Sexp::Display` for `Atom::String(s)` writes `"s"` (with
+        // quotes); pin that the variant's Display passes the string
+        // form through unchanged so an LSP that surfaces "you wrote
+        // `\"name\"` where a name symbol was expected" gains the
+        // literal value as data, no re-parsing required.
+        let err = LispError::DefmacroNonSymbolName {
+            head: "defmacro",
+            got: "\"name\"".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro: expected name symbol, got \"name\""
+        );
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"expected name symbol"` — as a
+        // separate assertion so a regression that drifts the wording
+        // (e.g., to "expected symbol" or "name must be a symbol")
+        // fails-loudly here even if the appended `, got X` clause
+        // changes shape. The substring is what consumers downstream
+        // (tatara-check, the REPL) substring-match on today; the
+        // prefix matches the legacy `Compile { form: head.to_string(),
+        // message: "expected name symbol" }` byte-for-byte.
+        let err = LispError::DefmacroNonSymbolName {
+            head: "defmacro",
+            got: "5".into(),
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("expected name symbol"),
+            "expected legacy substring in message, got: {msg}"
         );
         assert!(
             msg.contains("compile error in defmacro:"),

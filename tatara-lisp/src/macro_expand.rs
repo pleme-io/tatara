@@ -439,10 +439,7 @@ fn macro_def_from(form: &Sexp) -> Result<Option<MacroDef>> {
     }
     let name = list[1]
         .as_symbol()
-        .ok_or_else(|| LispError::Compile {
-            form: head.to_string(),
-            message: "expected name symbol".into(),
-        })?
+        .ok_or_else(|| defmacro_non_symbol_name(head, &list[1]))?
         .to_string();
     let param_list = list[2].as_list().ok_or_else(|| LispError::Compile {
         form: head.to_string(),
@@ -820,6 +817,76 @@ fn defmacro_arity(head: &str, arity: usize) -> LispError {
         ),
     };
     LispError::DefmacroArity { head, arity }
+}
+
+/// Lift the lone `LispError::Compile { form: head.to_string(), message:
+/// "expected name symbol" }` triple in `macro_def_from` behind ONE
+/// named primitive. Sibling of `defmacro_arity`, `non_symbol_param`,
+/// and `rest_param_missing_name`: those helpers fire at the OUTERMOST
+/// arity gate (`defmacro_arity`) or INSIDE `parse_params`
+/// (`non_symbol_param`, `rest_param_missing_name`); this helper fires
+/// AFTER the arity gate has passed but BEFORE `parse_params` runs —
+/// at the second of three `macro_def_from` rejection points
+/// (arity → name-symbol → param-list → parse_params).
+///
+/// Walking a malformed `(defmacro …)` from the outside in, the gate
+/// fires:
+///   1. `defmacro_arity(head, arity)` if the form has fewer than 4
+///      elements (`(defmacro)`, `(defmacro f)`).
+///   2. `defmacro_non_symbol_name(head, &list[1])` if list[1] isn't a
+///      symbol (`(defmacro 5 () body)`, `(defmacro :foo () body)`).
+///   3. The `expected param list` gate (NEXT LIFT) if list[2] isn't a
+///      list (`(defmacro f x body)`).
+///   4. Inside `parse_params`: `non_symbol_param` and
+///      `rest_param_missing_name`.
+///
+/// After this lift step 2 is structural; the only remaining
+/// `Compile`-shaped site in `macro_def_from` is step 3 (`expected
+/// param list`).
+///
+/// `head` is `&str` at the call site (a borrow into the form's
+/// symbol element); the `matches!("defmacro" | "defpoint-template" |
+/// "defcheck")` gate at the function's top proves it is always one
+/// of three known literals. The helper projects to `&'static str` so
+/// the variant's `head` slot encodes that compile-time guarantee in
+/// the type system rather than carrying an arbitrary owned `String`
+/// — same posture as `defmacro_arity`'s projection. `got` is `&Sexp`
+/// at the call site (a borrow into the form's name slot); the
+/// helper projects through `to_string()` so the variant's `got`
+/// slot stays lifetime-free, parallel to how `non_symbol_param` and
+/// `non_symbol_unquote_target` project their `&Sexp` arguments.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
+/// inline copy still earns a named primitive once the structural
+/// shape is named (the test count gives this the fail-before/pass-
+/// after edge, parallel to how `defmacro_arity`, `non_symbol_param`,
+/// and `rest_param_missing_name` were lifted from a single site for
+/// the structural-completeness payoff). THEORY.md §V.1 — knowable
+/// platform; the structural variant exposes `head` / `got` as
+/// first-class fields so authoring tools (LSP, REPL,
+/// `tatara-check`) bind to the data shape instead of substring-
+/// parsing the rendered diagnostic. THEORY.md §II.1 invariant 1 —
+/// typed entry; a defmacro form whose name slot isn't a symbol is
+/// exactly the failure mode the typed-entry gate exists to reject —
+/// and the gate must reject DEFINITIONS as readily as it rejects
+/// CALLS. THEORY.md §II.1 invariant 2 — free middle; the
+/// name-symbol gate fires inside `macro_def_from` BEFORE either
+/// expansion strategy runs, so both `Expander::new()` (bytecode) and
+/// `Expander::new_substitute_only()` (substitute) reject the SAME
+/// malformed defmacro at the SAME gate.
+fn defmacro_non_symbol_name(head: &str, got: &Sexp) -> LispError {
+    let head: &'static str = match head {
+        "defmacro" => "defmacro",
+        "defpoint-template" => "defpoint-template",
+        "defcheck" => "defcheck",
+        _ => unreachable!(
+            "matches! gate above ensures head is defmacro / defpoint-template / defcheck"
+        ),
+    };
+    LispError::DefmacroNonSymbolName {
+        head,
+        got: got.to_string(),
+    }
 }
 
 /// Project a `bindings: &HashMap<String, Sexp>` into the `&[&str]` candidate
@@ -2155,6 +2222,229 @@ mod tests {
             .expand_program(read("(defmacro id (x) `,x) (id 42)").unwrap())
             .expect("well-formed defmacro must succeed");
         assert_eq!(out[0], Sexp::int(42));
+    }
+
+    /// Helper for the defmacro-non-symbol-name tests — pins variant
+    /// shape and carries the head / got up to the assert site for
+    /// legibility. Sibling of `defmacro_arity_fields`,
+    /// `non_symbol_param_fields`, and `rest_param_missing_name_fields`.
+    fn defmacro_non_symbol_name_fields(err: &LispError) -> (&str, &str) {
+        match err {
+            LispError::DefmacroNonSymbolName { head, got } => (head, got.as_str()),
+            other => panic!("expected DefmacroNonSymbolName, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_with_int_emits_structural_variant() {
+        // `(defmacro 5 () body)` — the form passes the arity gate
+        // (4 elements) but list[1] is `5`, not a symbol. Pins variant
+        // identity AND that `head == "defmacro"` AND that `got ==
+        // "5"`. A regression that re-inlines the legacy
+        // `LispError::Compile { form: "defmacro", message: "expected
+        // name symbol" }` shape (which named the failure mode but
+        // not the offending element) fails-loudly here.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro 5 () body)").unwrap())
+            .expect_err("defmacro non-symbol name gate must error");
+        let (head, got) = defmacro_non_symbol_name_fields(&err);
+        assert_eq!(head, "defmacro");
+        assert_eq!(got, "5");
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_with_keyword_emits_structural_variant() {
+        // `(defmacro :foo () body)` — list[1] is the keyword `:foo`,
+        // not a symbol. Pins that `Sexp::Display` for
+        // `Atom::Keyword(s)` writes `:s` and the variant's `got` slot
+        // carries the keyword form unchanged. An LSP that wants to
+        // surface "you wrote `:foo` where a name symbol was expected"
+        // gains the literal keyword value as data, no source re-parse
+        // required.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro :foo () body)").unwrap())
+            .expect_err("defmacro non-symbol name gate must error");
+        let (head, got) = defmacro_non_symbol_name_fields(&err);
+        assert_eq!(head, "defmacro");
+        assert_eq!(got, ":foo");
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_with_string_emits_structural_variant() {
+        // `(defmacro "name" () body)` — list[1] is the string
+        // literal `"name"`, not a symbol. Pins that `Sexp::Display`
+        // for `Atom::String(s)` writes `"s"` (with quotes) and the
+        // variant's `got` slot carries the quoted form unchanged.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro \"name\" () body)").unwrap())
+            .expect_err("defmacro non-symbol name gate must error");
+        let (head, got) = defmacro_non_symbol_name_fields(&err);
+        assert_eq!(head, "defmacro");
+        assert_eq!(got, "\"name\"");
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_with_nested_list_emits_structural_variant() {
+        // `(defmacro (nested) () body)` — list[1] is a nested list,
+        // not a symbol. Pins that `Sexp::Display` for a list writes
+        // `(elements)` and the variant's `got` slot carries the
+        // parenthesized form unchanged.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro (nested) () body)").unwrap())
+            .expect_err("defmacro non-symbol name gate must error");
+        let (head, got) = defmacro_non_symbol_name_fields(&err);
+        assert_eq!(head, "defmacro");
+        assert_eq!(got, "(nested)");
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_in_defpoint_template_emits_same_variant() {
+        // `defpoint-template` shares `macro_def_from` with `defmacro`
+        // (all three head keywords route through the same gate).
+        // Pins that the lift fires path-uniformly across the three
+        // head keywords AND that the variant's `head` slot carries
+        // the actual head literal — `defpoint-template`, not
+        // `defmacro` — so an LSP that wants to point at "your
+        // defpoint-template form's name slot isn't a symbol" gains
+        // the head as data.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defpoint-template 7 () body)").unwrap())
+            .expect_err("defpoint-template non-symbol name gate must error");
+        let (head, got) = defmacro_non_symbol_name_fields(&err);
+        assert_eq!(head, "defpoint-template");
+        assert_eq!(got, "7");
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_in_defcheck_emits_same_variant() {
+        // Sibling for the `defcheck` head — third head keyword
+        // `macro_def_from` recognizes. Rounds out the three-head-
+        // keyword coverage so the lift is path-uniform across
+        // `defmacro` / `defpoint-template` / `defcheck`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defcheck :k () body)").unwrap())
+            .expect_err("defcheck non-symbol name gate must error");
+        let (head, got) = defmacro_non_symbol_name_fields(&err);
+        assert_eq!(head, "defcheck");
+        assert_eq!(got, ":k");
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_substitute_and_bytecode_paths_agree() {
+        // Path-uniform rejection: the SAME source emits the SAME
+        // structural variant under both expansion strategies. The
+        // name-symbol gate fires inside `macro_def_from` BEFORE
+        // either expansion strategy runs, so the gate is naturally
+        // path-uniform; pinning it gives a regression that drifts
+        // either strategy's handling of non-symbol-name defmacros (or
+        // makes one strategy accept what the other rejects) a fail-
+        // before/pass-after edge. Sibling of
+        // `defmacro_arity_substitute_and_bytecode_paths_agree`,
+        // `non_symbol_param_substitute_and_bytecode_paths_agree`, and
+        // `rest_param_missing_name_substitute_and_bytecode_paths_agree`.
+        let src = "(defmacro 5 () body)";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let err_subst = subst
+            .expand_program(read(src).unwrap())
+            .expect_err("substitute must error");
+        let err_byte = bytecode
+            .expand_program(read(src).unwrap())
+            .expect_err("bytecode must error");
+        assert_eq!(
+            defmacro_non_symbol_name_fields(&err_subst),
+            ("defmacro", "5")
+        );
+        assert_eq!(
+            defmacro_non_symbol_name_fields(&err_byte),
+            ("defmacro", "5")
+        );
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_message_renders_legacy_substring_with_got() {
+        // End-to-end through Display — pins the rendered diagnostic
+        // consumers see today (REPL, `tatara-check`) AND the new
+        // `, got {got}` clause. The legacy `"expected name symbol"`
+        // substring rides through verbatim; the prefix matches the
+        // legacy `Compile { form: "defmacro", message: "expected name
+        // symbol" }` byte-for-byte. Tools that pattern-match on the
+        // variant gain structural binding to `head` / `got`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro 5 () body)").unwrap())
+            .expect_err("defmacro non-symbol name gate must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro: expected name symbol, got 5"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_position_is_none_today() {
+        // Negative control for the future-spans move: until `Sexp`
+        // carries source positions, `position()` on `LispError`
+        // returns `None` for this variant. A future run that gives
+        // `Sexp` source spans adds `pos: Option<usize>` to ONE place;
+        // this test gives that change a deliberate fail-before/pass-
+        // after delta. Parallel to
+        // `defmacro_arity_position_is_none_today`,
+        // `non_symbol_param_position_is_none_today`, and
+        // `rest_param_missing_name_position_is_none_today`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro 5 () body)").unwrap())
+            .expect_err("defmacro non-symbol name gate must error");
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_does_not_fire_for_well_formed_defmacro() {
+        // Negative control: a defmacro whose name slot IS a symbol
+        // passes the name-symbol gate. Pins that the lift is scoped
+        // to the non-symbol-name case, not to every defmacro form.
+        // After this test, a regression that tightens the gate to
+        // reject e.g. kebab-cased names fails-loudly here.
+        let mut e = Expander::new();
+        let out = e
+            .expand_program(read("(defmacro id (x) `,x) (id 42)").unwrap())
+            .expect("well-formed defmacro must succeed");
+        assert_eq!(out[0], Sexp::int(42));
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_fires_after_arity_gate_passes() {
+        // Pins the gate ordering: a 4-element defmacro whose name
+        // slot is non-symbol fires `DefmacroNonSymbolName`, NOT
+        // `DefmacroArity`. The arity gate (>= 4 elements) admits
+        // this form; the name-symbol gate is the next checkpoint.
+        // A regression that swaps the gate ordering (e.g. checks
+        // name-symbol before arity, so `(defmacro 5)` would emit
+        // `DefmacroNonSymbolName` instead of `DefmacroArity`) fails-
+        // loudly here.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro 5 () body)").unwrap())
+            .expect_err("name-symbol gate must error");
+        assert!(
+            matches!(err, LispError::DefmacroNonSymbolName { .. }),
+            "expected DefmacroNonSymbolName, got: {err:?}"
+        );
+
+        let err_arity = e
+            .expand_program(read("(defmacro 5)").unwrap())
+            .expect_err("arity gate must error");
+        assert!(
+            matches!(err_arity, LispError::DefmacroArity { .. }),
+            "expected DefmacroArity (arity < 4 short-circuits before name check), \
+             got: {err_arity:?}"
+        );
     }
 
     #[test]

@@ -667,6 +667,82 @@ pub enum LispError {
     /// via `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {keyword}: expected list form")]
     NotAListForm { keyword: &'static str },
+    /// `T::compile_from_sexp` was passed a list whose head can't be
+    /// projected to a symbol — either the list is empty (`()` — there
+    /// is no first element) or its first element exists but isn't a
+    /// symbol (`(5 …)`, `(:foo …)`, `("x" …)`, `((nested) …)`). The
+    /// legacy `LispError::Compile { form: keyword.to_string(),
+    /// message: "missing head symbol" }` shape collapsed both
+    /// sub-modes into one diagnostic — a `()` form and a `(5 …)` form
+    /// produced byte-identical messages, so an authoring surface that
+    /// wants to surface "your form is empty" vs. "your form's head is
+    /// `5`, not a symbol" had to re-parse the source. The structural
+    /// variant carries `got: Option<String>` so the two sub-modes are
+    /// distinguishable structurally — `None` for the empty-list case,
+    /// `Some(g)` for the present-but-not-symbol case where `g` is
+    /// the offending head's `Sexp::Display` projection. Naming both
+    /// the failure mode AND the structural detail (empty vs. offending
+    /// head) is the typed-entry gate's structural-completeness floor
+    /// (THEORY.md §V.1).
+    ///
+    /// Sibling of `NotAListForm { keyword }` and `HeadMismatch
+    /// { keyword, got }` — together the three close every distinct
+    /// failure mode the trait-default `compile_from_sexp` rejection
+    /// chain can emit. Walking a malformed `(KEYWORD …)` form from
+    /// the outside in:
+    ///   1. `NotAListForm { keyword }` — the form isn't a list at all
+    ///      (`5`, `:foo`, `"x"`, `name` — bare atoms).
+    ///   2. `MissingHeadSymbol { keyword, got }` — the form is a
+    ///      list but list[0] doesn't exist (`()`) or isn't a symbol
+    ///      (`(5 …)`, `(:foo …)`).
+    ///   3. `HeadMismatch { keyword, got }` — list[0] is a symbol
+    ///      but doesn't match `T::KEYWORD` (`(other-name …)`).
+    ///
+    /// After this lift the entire `compile_from_sexp` rejection chain
+    /// is structurally typed for failure modes — every distinct
+    /// rejection binds to ONE structural variant of `LispError`, not
+    /// a `Compile`-shaped substring. The `got: Option<String>`
+    /// posture parallels `RestParamMissingName.got: Option<String>`:
+    /// the failure mode IS one ("head can't be projected to a
+    /// symbol"); the bifurcation is in the renderable detail (empty
+    /// vs. present-but-wrong-type), not in what the gate rejects, so
+    /// the two sub-modes share ONE variant rather than splitting into
+    /// near-identical siblings.
+    ///
+    /// `keyword` is `&'static str` because every call site passes
+    /// `Self::KEYWORD` from the trait default — a compile-time literal
+    /// sourced from the `#[tatara(keyword = "...")]` derive attribute
+    /// (or hand-written const). Using a static slot makes that
+    /// compile-time guarantee load-bearing in the type system (a typo
+    /// in the keyword can never drift into the diagnostic at runtime —
+    /// the type system is the floor, same posture as
+    /// `NotAListForm.keyword`, `HeadMismatch.keyword`, and the
+    /// `Defmacro*.head` family). `got` is `Option<String>` because
+    /// the offending head comes from arbitrary source via
+    /// `Sexp::Display` (when present) or doesn't exist at all (when
+    /// the list is empty).
+    ///
+    /// Display preserves the legacy `"missing head symbol"` substring
+    /// AND the `"compile error in {keyword}:"` prefix byte-for-byte —
+    /// `"compile error in {keyword}: missing head symbol"` is the
+    /// stable prefix; the structural detail (`(empty list)` for
+    /// `None`, `(got {g})` for `Some(g)`) is appended in a
+    /// parenthetical, parallel to how `RestParamMissingName` appends
+    /// `(rest marker at position {n}, got {g})` /
+    /// `(rest marker at position {n}, none provided)` and how
+    /// `SpliceOutsideList` appends `(got ,@{got})`. When a future
+    /// run gives `Sexp` source spans, `pos: Option<usize>` lands
+    /// here in ONE place and every missing-head-symbol site picks up
+    /// positional rendering via `crate::diagnostic::format_diagnostic`
+    /// mechanically.
+    #[error(
+        "compile error in {keyword}: missing head symbol{}",
+        missing_head_symbol_suffix(got.as_deref())
+    )]
+    MissingHeadSymbol {
+        keyword: &'static str,
+        got: Option<String>,
+    },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -692,6 +768,13 @@ fn rest_param_missing_name_suffix(rest_position: usize, got: Option<&str>) -> St
     match got {
         Some(g) => format!(" (rest marker at position {rest_position}, got {g})"),
         None => format!(" (rest marker at position {rest_position}, none provided)"),
+    }
+}
+
+fn missing_head_symbol_suffix(got: Option<&str>) -> String {
+    match got {
+        Some(g) => format!(" (got {g})"),
+        None => " (empty list)".into(),
     }
 }
 
@@ -746,7 +829,8 @@ impl LispError {
             | Self::DefmacroArity { .. }
             | Self::DefmacroNonSymbolName { .. }
             | Self::DefmacroNonListParams { .. }
-            | Self::NotAListForm { .. } => None,
+            | Self::NotAListForm { .. }
+            | Self::MissingHeadSymbol { .. } => None,
         }
     }
 }
@@ -997,6 +1081,138 @@ mod tests {
             }
             .position(),
             None
+        );
+        assert_eq!(
+            LispError::MissingHeadSymbol {
+                keyword: "defmonitor",
+                got: None,
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::MissingHeadSymbol {
+                keyword: "defpoint",
+                got: Some("5".into()),
+            }
+            .position(),
+            None
+        );
+    }
+
+    #[test]
+    fn missing_head_symbol_display_with_empty_list_renders_legacy_prefix_and_empty_marker() {
+        // `()` — list[0] doesn't exist. The variant renders the
+        // legacy prefix `compile error in {keyword}: missing head
+        // symbol` byte-for-byte AND names the structural reason
+        // `(empty list)` parenthetically — same posture as how
+        // `RestParamMissingName` renders `(rest marker at position
+        // N, none provided)` and how `UnknownDomainKeyword` renders
+        // `(no domains registered)` for the empty-side case. A
+        // regression that drops either fragment fails-loudly here.
+        let err = LispError::MissingHeadSymbol {
+            keyword: "defmonitor",
+            got: None,
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: missing head symbol (empty list)"
+        );
+    }
+
+    #[test]
+    fn missing_head_symbol_display_with_int_got_renders_legacy_prefix_and_got() {
+        // `(5 …)` — list[0] is the int `5`, not a symbol. The variant
+        // renders both the keyword AND the offending head's
+        // `Sexp::Display` projection — both fields are first-class
+        // structural data, not embedded substrings of `message`. The
+        // prefix `compile error in {keyword}: missing head symbol`
+        // matches the legacy `Compile { form: keyword.to_string(),
+        // message: "missing head symbol" }` byte-for-byte; the
+        // structural detail (`(got 5)`) is appended.
+        let err = LispError::MissingHeadSymbol {
+            keyword: "defmonitor",
+            got: Some("5".into()),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: missing head symbol (got 5)"
+        );
+    }
+
+    #[test]
+    fn missing_head_symbol_display_carries_keyword_atom_got_unchanged() {
+        // `(:foo …)` — list[0] is a keyword atom. `Sexp::Display` for
+        // `Atom::Keyword(s)` writes `:s`; pin that the variant's
+        // Display passes the keyword form through unchanged so an
+        // LSP that surfaces "you wrote `:foo` where a head symbol
+        // was expected" gains the literal keyword value as data, no
+        // re-parsing required.
+        let err = LispError::MissingHeadSymbol {
+            keyword: "defalertpolicy",
+            got: Some(":foo".into()),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defalertpolicy: missing head symbol (got :foo)"
+        );
+    }
+
+    #[test]
+    fn missing_head_symbol_display_carries_string_got_unchanged() {
+        // `Sexp::Display` for `Atom::Str(s)` writes `"s"` (with quotes);
+        // pin that the variant's Display passes the string form through
+        // unchanged so an LSP that surfaces "you wrote `\"name\"` where
+        // a head symbol was expected" gains the literal value as data,
+        // no re-parsing required.
+        let err = LispError::MissingHeadSymbol {
+            keyword: "defmonitor",
+            got: Some("\"name\"".into()),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: missing head symbol (got \"name\")"
+        );
+    }
+
+    #[test]
+    fn missing_head_symbol_display_carries_nested_list_got_unchanged() {
+        // `((nested) …)` — list[0] is itself a list. The nested form
+        // round-trips through `Sexp::Display` into the variant's `got`
+        // slot unchanged so the operator sees what they wrote.
+        let err = LispError::MissingHeadSymbol {
+            keyword: "defmonitor",
+            got: Some("(nested)".into()),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: missing head symbol (got (nested))"
+        );
+    }
+
+    #[test]
+    fn missing_head_symbol_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"missing head symbol"` — as a
+        // separate assertion so a regression that drifts the wording
+        // (e.g., to "no head symbol" or "head must be a symbol")
+        // fails-loudly here even if the appended parenthetical changes
+        // shape. The substring is what consumers downstream
+        // (`tatara-check`, the REPL) substring-match on today; the
+        // prefix matches the legacy `Compile { form:
+        // keyword.to_string(), message: "missing head symbol" }`
+        // byte-for-byte.
+        let err = LispError::MissingHeadSymbol {
+            keyword: "defmonitor",
+            got: None,
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("missing head symbol"),
+            "expected legacy substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("compile error in defmonitor:"),
+            "expected legacy form-label prefix in message, got: {msg}"
         );
     }
 

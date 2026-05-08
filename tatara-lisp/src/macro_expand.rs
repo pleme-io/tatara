@@ -428,12 +428,12 @@ fn macro_def_from(form: &Sexp) -> Result<Option<MacroDef>> {
     let Some(list) = form.as_list() else {
         return Ok(None);
     };
-    let Some(head) = list.first().and_then(|s| s.as_symbol()) else {
+    let Some(head_str) = list.first().and_then(|s| s.as_symbol()) else {
         return Ok(None);
     };
-    if !matches!(head, "defmacro" | "defpoint-template" | "defcheck") {
+    let Some(head) = MacroDefHead::from_keyword(head_str) else {
         return Ok(None);
-    }
+    };
     if list.len() < 4 {
         return Err(defmacro_arity(head, list.len()));
     }
@@ -768,6 +768,83 @@ fn rest_param_missing_name(rest_position: usize, got: Option<&Sexp>) -> LispErro
     }
 }
 
+/// The closed set of macro-definition head keywords that
+/// `macro_def_from` accepts: `defmacro`, `defpoint-template`, and
+/// `defcheck`. Encoding the set as a typed enum (rather than a
+/// `matches!` literal at the gate plus three duplicated `match head
+/// { … }` projections inside the error helpers) lifts the closed-set
+/// guarantee from runtime string comparison into the type system —
+/// adding a new head keyword requires extending `MacroDefHead`,
+/// which rustc-enforces matching at every projection site.
+///
+/// Walking a malformed `(defmacro …)` from the outside in, the gate
+/// fires:
+///   1. `MacroDefHead::from_keyword(head_str)` — gates the form
+///      against the closed set; returns `None` for any non-canonical
+///      head, in which case `macro_def_from` returns `Ok(None)` (not
+///      a defmacro form, walk past).
+///   2. `defmacro_arity(head, list.len())` if the form has fewer
+///      than 4 elements.
+///   3. `defmacro_non_symbol_name(head, &list[1])` if list[1] isn't
+///      a symbol.
+///   4. `defmacro_non_list_params(head, &list[2])` if list[2] isn't
+///      a list.
+///   5. Inside `parse_params`: `non_symbol_param` and
+///      `rest_param_missing_name` (which don't carry the head — the
+///      offending element's position inside the param list is what
+///      they pin).
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// the three-times rule. The same three-literal closed set
+/// (`"defmacro" | "defpoint-template" | "defcheck"`) was inlined at
+/// FOUR sites: the `matches!` gate at the top of `macro_def_from`
+/// AND the projection match inside each of `defmacro_arity`,
+/// `defmacro_non_symbol_name`, and `defmacro_non_list_params`. The
+/// enum lift collapses the four sites to one (`from_keyword`) plus
+/// one (`keyword`), with rustc exhaustiveness as the future
+/// invariant-keeper. THEORY.md §V.1 — knowable platform; the closed
+/// set becomes a TYPE rather than a `matches!` literal, so the
+/// compile-time guarantee is load-bearing in the type system rather
+/// than re-asserted via `unreachable!()` panics in three error
+/// helpers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MacroDefHead {
+    Defmacro,
+    DefpointTemplate,
+    Defcheck,
+}
+
+impl MacroDefHead {
+    /// Project a `head: &str` borrow (a `Sexp` symbol slice) into
+    /// the typed `MacroDefHead`. Returns `None` if `head` is not one
+    /// of the three canonical macro-definition head keywords; the
+    /// caller (`macro_def_from`) then returns `Ok(None)` to mean
+    /// "this form is not a defmacro form."
+    fn from_keyword(head: &str) -> Option<Self> {
+        match head {
+            "defmacro" => Some(Self::Defmacro),
+            "defpoint-template" => Some(Self::DefpointTemplate),
+            "defcheck" => Some(Self::Defcheck),
+            _ => None,
+        }
+    }
+
+    /// Project the typed `MacroDefHead` back to the canonical
+    /// `&'static str` literal that the `LispError::Defmacro*`
+    /// variants carry in their `head` slot. The variant fields stay
+    /// `head: &'static str` (not `MacroDefHead`) so the variant's
+    /// data shape and Display output are unchanged — the enum is an
+    /// internal projection detail of the helpers that construct
+    /// those variants and of `macro_def_from`'s entry gate.
+    fn keyword(self) -> &'static str {
+        match self {
+            Self::Defmacro => "defmacro",
+            Self::DefpointTemplate => "defpoint-template",
+            Self::Defcheck => "defcheck",
+        }
+    }
+}
+
 /// Lift the lone `LispError::Compile { form: head.to_string(), message:
 /// "(defmacro name (params) body) required" }` triple in
 /// `macro_def_from` behind ONE named primitive. Sibling of
@@ -779,15 +856,15 @@ fn rest_param_missing_name(rest_position: usize, got: Option<&Sexp>) -> LispErro
 /// can emit at the top level becomes a structural variant of
 /// `LispError`, not a `Compile`-shaped substring.
 ///
-/// `head` is `&str` at the call site (a borrow into the form's symbol
-/// element); the `matches!("defmacro" | "defpoint-template" |
-/// "defcheck")` gate immediately above proves it is always one of
-/// three known literals. The helper projects to `&'static str` so the
-/// variant's `head` slot encodes that compile-time guarantee in the
-/// type system rather than carrying an arbitrary owned `String` —
-/// same posture as `TypeMismatch.expected: &'static str` and
-/// `HeadMismatch.keyword: &'static str`. `arity` is `usize` (the
-/// length of the form including the head element).
+/// `head` is `MacroDefHead` (the typed closed-set enum), having been
+/// projected through `MacroDefHead::from_keyword` at the top of
+/// `macro_def_from`. The helper projects to `&'static str` via
+/// `head.keyword()` so the variant's `head` slot encodes the
+/// compile-time guarantee in the type system rather than carrying
+/// an arbitrary owned `String` — same posture as
+/// `TypeMismatch.expected: &'static str` and `HeadMismatch.keyword:
+/// &'static str`. `arity` is `usize` (the length of the form
+/// including the head element).
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; one
 /// inline copy still earns a named primitive once the structural
@@ -806,16 +883,11 @@ fn rest_param_missing_name(rest_position: usize, got: Option<&Sexp>) -> LispErro
 /// `macro_def_from` BEFORE either expansion strategy runs, so both
 /// `Expander::new()` (bytecode) and `Expander::new_substitute_only()`
 /// (substitute) reject the SAME malformed defmacro at the SAME gate.
-fn defmacro_arity(head: &str, arity: usize) -> LispError {
-    let head: &'static str = match head {
-        "defmacro" => "defmacro",
-        "defpoint-template" => "defpoint-template",
-        "defcheck" => "defcheck",
-        _ => unreachable!(
-            "matches! gate above ensures head is defmacro / defpoint-template / defcheck"
-        ),
-    };
-    LispError::DefmacroArity { head, arity }
+fn defmacro_arity(head: MacroDefHead, arity: usize) -> LispError {
+    LispError::DefmacroArity {
+        head: head.keyword(),
+        arity,
+    }
 }
 
 /// Lift the lone `LispError::Compile { form: head.to_string(), message:
@@ -843,17 +915,17 @@ fn defmacro_arity(head: &str, arity: usize) -> LispError {
 /// `Compile`-shaped site in `macro_def_from` is step 3 (`expected
 /// param list`).
 ///
-/// `head` is `&str` at the call site (a borrow into the form's
-/// symbol element); the `matches!("defmacro" | "defpoint-template" |
-/// "defcheck")` gate at the function's top proves it is always one
-/// of three known literals. The helper projects to `&'static str` so
-/// the variant's `head` slot encodes that compile-time guarantee in
-/// the type system rather than carrying an arbitrary owned `String`
-/// — same posture as `defmacro_arity`'s projection. `got` is `&Sexp`
-/// at the call site (a borrow into the form's name slot); the
-/// helper projects through `to_string()` so the variant's `got`
-/// slot stays lifetime-free, parallel to how `non_symbol_param` and
-/// `non_symbol_unquote_target` project their `&Sexp` arguments.
+/// `head` is `MacroDefHead` (the typed closed-set enum), having been
+/// projected through `MacroDefHead::from_keyword` at the top of
+/// `macro_def_from`. The helper projects to `&'static str` via
+/// `head.keyword()` so the variant's `head` slot encodes the
+/// compile-time guarantee in the type system rather than carrying
+/// an arbitrary owned `String` — same posture as `defmacro_arity`'s
+/// projection. `got` is `&Sexp` at the call site (a borrow into
+/// the form's name slot); the helper projects through `to_string()`
+/// so the variant's `got` slot stays lifetime-free, parallel to how
+/// `non_symbol_param` and `non_symbol_unquote_target` project their
+/// `&Sexp` arguments.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; one
 /// inline copy still earns a named primitive once the structural
@@ -873,17 +945,9 @@ fn defmacro_arity(head: &str, arity: usize) -> LispError {
 /// expansion strategy runs, so both `Expander::new()` (bytecode) and
 /// `Expander::new_substitute_only()` (substitute) reject the SAME
 /// malformed defmacro at the SAME gate.
-fn defmacro_non_symbol_name(head: &str, got: &Sexp) -> LispError {
-    let head: &'static str = match head {
-        "defmacro" => "defmacro",
-        "defpoint-template" => "defpoint-template",
-        "defcheck" => "defcheck",
-        _ => unreachable!(
-            "matches! gate above ensures head is defmacro / defpoint-template / defcheck"
-        ),
-    };
+fn defmacro_non_symbol_name(head: MacroDefHead, got: &Sexp) -> LispError {
     LispError::DefmacroNonSymbolName {
-        head,
+        head: head.keyword(),
         got: got.to_string(),
     }
 }
@@ -917,16 +981,15 @@ fn defmacro_non_symbol_name(head: &str, got: &Sexp) -> LispError {
 /// lifted to a structural variant — the entire `macro_def_from`
 /// rejection chain is structurally typed for failure modes.
 ///
-/// `head` is `&str` at the call site (a borrow into the form's
-/// symbol element); the `matches!("defmacro" | "defpoint-template" |
-/// "defcheck")` gate at the function's top proves it is always one
-/// of three known literals. The helper projects to `&'static str` so
-/// the variant's `head` slot encodes that compile-time guarantee in
-/// the type system rather than carrying an arbitrary owned `String`
-/// — same posture as `defmacro_arity`'s and
-/// `defmacro_non_symbol_name`'s projections. `got` is `&Sexp` at
-/// the call site (a borrow into the form's param-list slot); the
-/// helper projects through `to_string()` so the variant's `got`
+/// `head` is `MacroDefHead` (the typed closed-set enum), having been
+/// projected through `MacroDefHead::from_keyword` at the top of
+/// `macro_def_from`. The helper projects to `&'static str` via
+/// `head.keyword()` so the variant's `head` slot encodes the
+/// compile-time guarantee in the type system rather than carrying
+/// an arbitrary owned `String` — same posture as `defmacro_arity`'s
+/// and `defmacro_non_symbol_name`'s projections. `got` is `&Sexp`
+/// at the call site (a borrow into the form's param-list slot);
+/// the helper projects through `to_string()` so the variant's `got`
 /// slot stays lifetime-free, parallel to how `non_symbol_param`,
 /// `non_symbol_unquote_target`, and `defmacro_non_symbol_name`
 /// project their `&Sexp` arguments.
@@ -950,17 +1013,9 @@ fn defmacro_non_symbol_name(head: &str, got: &Sexp) -> LispError {
 /// expansion strategy runs, so both `Expander::new()` (bytecode)
 /// and `Expander::new_substitute_only()` (substitute) reject the
 /// SAME malformed defmacro at the SAME gate.
-fn defmacro_non_list_params(head: &str, got: &Sexp) -> LispError {
-    let head: &'static str = match head {
-        "defmacro" => "defmacro",
-        "defpoint-template" => "defpoint-template",
-        "defcheck" => "defcheck",
-        _ => unreachable!(
-            "matches! gate above ensures head is defmacro / defpoint-template / defcheck"
-        ),
-    };
+fn defmacro_non_list_params(head: MacroDefHead, got: &Sexp) -> LispError {
     LispError::DefmacroNonListParams {
-        head,
+        head: head.keyword(),
         got: got.to_string(),
     }
 }
@@ -2131,6 +2186,191 @@ mod tests {
             got: Some("5".into()),
         };
         assert_eq!(err_got.position(), None);
+    }
+
+    // --- MacroDefHead enum (the closed-set lift) ---
+    //
+    // The next nine tests pin the typed-enum lift that closes the
+    // three-times rule on the `head: &str → &'static str` projection
+    // idiom previously inlined at FOUR sites (the `matches!` gate at
+    // the top of `macro_def_from` plus the projection match inside
+    // each of `defmacro_arity`, `defmacro_non_symbol_name`,
+    // `defmacro_non_list_params`). Every test in this block names
+    // `MacroDefHead` directly — the symbol exists only after the
+    // lift, so the entire block is fail-before/pass-after by
+    // construction (compile-time edge). Theory anchor: THEORY.md
+    // §VI.1 — three-times rule; THEORY.md §V.1 — the closed set is
+    // a TYPE rather than a `matches!` literal.
+
+    #[test]
+    fn macro_def_head_from_keyword_recognizes_defmacro() {
+        // Pins that `MacroDefHead::from_keyword("defmacro")` returns
+        // `Some(MacroDefHead::Defmacro)` — the first of the three
+        // canonical macro-definition head keywords. A regression that
+        // re-inlines a `matches!`-only gate (without the typed-enum
+        // projection) deletes `from_keyword` and fails-loudly here.
+        assert_eq!(
+            MacroDefHead::from_keyword("defmacro"),
+            Some(MacroDefHead::Defmacro)
+        );
+    }
+
+    #[test]
+    fn macro_def_head_from_keyword_recognizes_defpoint_template() {
+        // Pins that `MacroDefHead::from_keyword("defpoint-template")`
+        // returns `Some(MacroDefHead::DefpointTemplate)` — the second
+        // of the three canonical head keywords. The `defpoint-template`
+        // form is the K8s-as-processes authoring surface (see
+        // tatara-process); `macro_def_from` must recognize it
+        // identically to `defmacro` so the `(defpoint-template …)`
+        // form's macro-style binding works the same way.
+        assert_eq!(
+            MacroDefHead::from_keyword("defpoint-template"),
+            Some(MacroDefHead::DefpointTemplate)
+        );
+    }
+
+    #[test]
+    fn macro_def_head_from_keyword_recognizes_defcheck() {
+        // Pins that `MacroDefHead::from_keyword("defcheck")` returns
+        // `Some(MacroDefHead::Defcheck)` — the third and final
+        // canonical head keyword. The `defcheck` form is the
+        // workspace-coherence authoring surface (see
+        // tatara-reconciler/checks.lisp); `macro_def_from` must
+        // recognize it identically to `defmacro` so user-defined
+        // checks inherit the macro-style binding semantics.
+        assert_eq!(
+            MacroDefHead::from_keyword("defcheck"),
+            Some(MacroDefHead::Defcheck)
+        );
+    }
+
+    #[test]
+    fn macro_def_head_from_keyword_rejects_unknown() {
+        // Pins that `MacroDefHead::from_keyword` returns `None` for
+        // anything outside the closed set — a non-symbol keyword
+        // (`"if"`), a near-miss spelling (`"defmacroo"`,
+        // `"defcheckk"`), and the empty string. `macro_def_from`
+        // depends on this `None` projection to mean "this form is
+        // not a defmacro form" and walk past — a regression that
+        // accidentally accepts a near-miss head (e.g. via a
+        // lower-cased `EqualFold` match) would route `(defmacroo …)`
+        // through the arity gate, which is wrong. Pins all four
+        // canonical near-miss / non-canonical inputs.
+        assert_eq!(MacroDefHead::from_keyword("if"), None);
+        assert_eq!(MacroDefHead::from_keyword("defmacroo"), None);
+        assert_eq!(MacroDefHead::from_keyword("defcheckk"), None);
+        assert_eq!(MacroDefHead::from_keyword(""), None);
+    }
+
+    #[test]
+    fn macro_def_head_keyword_round_trips_each_variant() {
+        // Pins that `MacroDefHead::keyword` returns the canonical
+        // `&'static str` literal for each variant. Together with
+        // `from_keyword` this closes the bidirectional projection:
+        // for every canonical head keyword `s`, `MacroDefHead::
+        // from_keyword(s).unwrap().keyword() == s`. The `&'static
+        // str` lifetime on the return type is load-bearing — it's
+        // what lets the `LispError::Defmacro*` variants carry
+        // `head: &'static str` slots without an arbitrary owned
+        // `String`. Pinning the `: &'static str` binding here
+        // makes the lifetime requirement load-bearing in the test.
+        let s_defmacro: &'static str = MacroDefHead::Defmacro.keyword();
+        let s_defpoint: &'static str = MacroDefHead::DefpointTemplate.keyword();
+        let s_defcheck: &'static str = MacroDefHead::Defcheck.keyword();
+        assert_eq!(s_defmacro, "defmacro");
+        assert_eq!(s_defpoint, "defpoint-template");
+        assert_eq!(s_defcheck, "defcheck");
+    }
+
+    #[test]
+    fn macro_def_head_keyword_round_trips_through_from_keyword() {
+        // Pins that the two halves of the projection compose to the
+        // identity on the closed set: for every canonical head
+        // keyword, projecting `&str → MacroDefHead → &'static str`
+        // returns the original literal. Sibling of
+        // `macro_def_head_keyword_round_trips_each_variant` —
+        // together they pin both directions of the bidirection.
+        for kw in ["defmacro", "defpoint-template", "defcheck"] {
+            let head = MacroDefHead::from_keyword(kw).expect("canonical keyword must project");
+            assert_eq!(head.keyword(), kw);
+        }
+    }
+
+    #[test]
+    fn macro_def_head_threads_through_defmacro_arity_helper() {
+        // Pins that `defmacro_arity` accepts a typed `MacroDefHead`
+        // and projects through `head.keyword()` for the variant's
+        // `head` slot. A regression that drops the `MacroDefHead`
+        // parameter type (e.g. by reverting to `head: &str` with the
+        // inlined match) breaks compilation here. Pinning each of
+        // the three variants gives the `MacroDefHead → &'static str`
+        // projection the same path-uniformity edge the existing
+        // `defmacro_arity_in_*_emits_same_variant` tests pin for the
+        // call-site path through `macro_def_from`.
+        for (head, kw) in [
+            (MacroDefHead::Defmacro, "defmacro"),
+            (MacroDefHead::DefpointTemplate, "defpoint-template"),
+            (MacroDefHead::Defcheck, "defcheck"),
+        ] {
+            let err = defmacro_arity(head, 2);
+            match err {
+                LispError::DefmacroArity { head: h, arity: 2 } => assert_eq!(h, kw),
+                other => panic!("expected DefmacroArity, got: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn macro_def_head_threads_through_defmacro_non_symbol_name_helper() {
+        // Sibling of the `defmacro_arity` threading test — pins that
+        // `defmacro_non_symbol_name` accepts a typed `MacroDefHead`
+        // and projects through `head.keyword()` for the variant's
+        // `head` slot. The `got: &Sexp` parameter rides through
+        // unchanged via `to_string()`.
+        let got = parse("5");
+        for (head, kw) in [
+            (MacroDefHead::Defmacro, "defmacro"),
+            (MacroDefHead::DefpointTemplate, "defpoint-template"),
+            (MacroDefHead::Defcheck, "defcheck"),
+        ] {
+            let err = defmacro_non_symbol_name(head, &got);
+            match err {
+                LispError::DefmacroNonSymbolName { head: h, got: g } => {
+                    assert_eq!(h, kw);
+                    assert_eq!(g, "5");
+                }
+                other => panic!("expected DefmacroNonSymbolName, got: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn macro_def_head_threads_through_defmacro_non_list_params_helper() {
+        // Sibling of the `defmacro_arity` and
+        // `defmacro_non_symbol_name` threading tests — pins that
+        // `defmacro_non_list_params` accepts a typed `MacroDefHead`
+        // and projects through `head.keyword()` for the variant's
+        // `head` slot. Together the three threading tests close the
+        // typed-enum lift across all three error helpers — every
+        // call site that constructs a `LispError::Defmacro*` variant
+        // takes its `head` from a `MacroDefHead.keyword()` call,
+        // never from a `&str` match.
+        let got = parse("x");
+        for (head, kw) in [
+            (MacroDefHead::Defmacro, "defmacro"),
+            (MacroDefHead::DefpointTemplate, "defpoint-template"),
+            (MacroDefHead::Defcheck, "defcheck"),
+        ] {
+            let err = defmacro_non_list_params(head, &got);
+            match err {
+                LispError::DefmacroNonListParams { head: h, got: g } => {
+                    assert_eq!(h, kw);
+                    assert_eq!(g, "x");
+                }
+                other => panic!("expected DefmacroNonListParams, got: {other:?}"),
+            }
+        }
     }
 
     /// Helper for the defmacro-arity tests — pins the variant shape and

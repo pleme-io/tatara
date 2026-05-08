@@ -613,6 +613,60 @@ pub enum LispError {
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {head}: expected param list, got {got}")]
     DefmacroNonListParams { head: &'static str, got: String },
+    /// `T::compile_from_sexp` (the `TataraDomain` trait default) was
+    /// passed something that isn't a list — a bare atom (`5`, `:foo`,
+    /// `"x"`, `name`) where a top-level `(KEYWORD …)` form was
+    /// expected. The legacy `LispError::Compile { form:
+    /// keyword.to_string(), message: "expected list form" }` shape
+    /// named only the failure mode and the keyword, and required
+    /// authoring tools (REPL, LSP, `tatara-check`) to substring-grep
+    /// the rendered message to recognize this specific gate. The
+    /// structural variant carries `keyword` as a first-class field so
+    /// consumers pattern-match on the variant and bind directly to
+    /// the keyword instead of substring-parsing.
+    ///
+    /// Sibling of `HeadMismatch` — both are typed-entry rejection
+    /// gates inside the trait default `compile_from_sexp` walking a
+    /// malformed form from the outside in:
+    ///   1. `NotAListForm { keyword }` if the form isn't a list at
+    ///      all (`5`, `:foo`, `"x"`, `name` — bare atoms).
+    ///   2. `LispError::Compile { form, message: "missing head
+    ///      symbol" }` (NOT YET LIFTED) if the list is empty or
+    ///      list[0] isn't a symbol (`()`, `(5 …)`, `(:foo …)`).
+    ///   3. `HeadMismatch { keyword, got }` if list[0] is a symbol
+    ///      but doesn't match `T::KEYWORD` (`(other-name …)`).
+    ///
+    /// After this lift step 1 is structural; the `missing head
+    /// symbol` gate is the next move in the same rejection chain
+    /// (its own structural-variant lift, parallel to how the
+    /// `defmacro_*` family was lifted gate-by-gate).
+    ///
+    /// `keyword` is `&'static str` because every call site passes
+    /// `Self::KEYWORD` from the trait default — a compile-time
+    /// literal sourced from the `#[tatara(keyword = "...")]` derive
+    /// attribute (or hand-written const). Using a static slot makes
+    /// that compile-time guarantee load-bearing in the type system
+    /// (a typo in the keyword can never drift into the diagnostic at
+    /// runtime — the type system is the floor, same posture as
+    /// `HeadMismatch.keyword`, `TypeMismatch.expected`, and the
+    /// `Defmacro*.head` family).
+    ///
+    /// Display preserves the legacy `"expected list form"` substring
+    /// AND the `"compile error in {keyword}:"` prefix byte-for-byte
+    /// — `"compile error in {keyword}: expected list form"` — so
+    /// existing consumer assertions (e.g., the
+    /// `compile_from_sexp_emits_compile_for_non_list_form` test
+    /// against `MonitorSpec`, `tatara-check`'s diagnostic capture)
+    /// pass unchanged. The variant carries no `got` slot because the
+    /// offending value's type is itself the diagnostic — `5` /
+    /// `:foo` / `"x"` / `name` all reduce to the same failure mode
+    /// (not a list); naming the type would be redundant with what
+    /// the source already shows. When a future run gives `Sexp`
+    /// source spans, `pos: Option<usize>` lands here in ONE place
+    /// and every not-a-list-form site picks up positional rendering
+    /// via `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in {keyword}: expected list form")]
+    NotAListForm { keyword: &'static str },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -691,7 +745,8 @@ impl LispError {
             | Self::RestParamMissingName { .. }
             | Self::DefmacroArity { .. }
             | Self::DefmacroNonSymbolName { .. }
-            | Self::DefmacroNonListParams { .. } => None,
+            | Self::DefmacroNonListParams { .. }
+            | Self::NotAListForm { .. } => None,
         }
     }
 }
@@ -928,6 +983,79 @@ mod tests {
             }
             .position(),
             None
+        );
+        assert_eq!(
+            LispError::NotAListForm {
+                keyword: "defmonitor",
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::NotAListForm {
+                keyword: "defpoint",
+            }
+            .position(),
+            None
+        );
+    }
+
+    #[test]
+    fn not_a_list_form_display_renders_legacy_compile_shape() {
+        // Pin the rendered diagnostic byte-for-byte against the
+        // legacy `Compile { form: keyword.to_string(), message:
+        // "expected list form" }` shape. Authoring tools that
+        // substring-grep on the rendered message see no drift; tools
+        // that pattern-match on the variant gain structural binding.
+        let err = LispError::NotAListForm {
+            keyword: "defmonitor",
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: expected list form"
+        );
+    }
+
+    #[test]
+    fn not_a_list_form_display_carries_keyword_unchanged() {
+        // Pin path-uniformity across distinct keywords — every
+        // `TataraDomain` impl funnels through `not_a_list_form_err`
+        // with its own `Self::KEYWORD`, so the variant's `keyword`
+        // slot must round-trip every literal the derive macro
+        // accepts. A regression that drops or rewrites the keyword
+        // (e.g., lowercasing, stripping the `def` prefix) fails-
+        // loudly here.
+        let err = LispError::NotAListForm {
+            keyword: "defpoint",
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defpoint: expected list form"
+        );
+    }
+
+    #[test]
+    fn not_a_list_form_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"expected list form"` — as a
+        // separate assertion so a regression that drifts the
+        // wording (e.g., to "expected list" or "must be a list")
+        // fails-loudly here even if the prefix changes shape.
+        // The substring is what consumers downstream
+        // (`tatara-check`, the REPL) substring-match on today; the
+        // prefix matches the legacy `Compile { form:
+        // keyword.to_string(), message: "expected list form" }`
+        // byte-for-byte.
+        let err = LispError::NotAListForm {
+            keyword: "defalertpolicy",
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("expected list form"),
+            "expected legacy substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("compile error in defalertpolicy:"),
+            "expected legacy form-label prefix in message, got: {msg}"
         );
     }
 

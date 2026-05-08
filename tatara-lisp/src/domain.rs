@@ -51,20 +51,39 @@ pub trait TataraDomain: Sized {
 // (THEORY.md §VI.1) calls for one named primitive per shape; these
 // are them.
 //
-// `head_mismatch` returns the dedicated `LispError::HeadMismatch`
-// variant — the `got` symbol is structurally exposed, not embedded
-// in a free-form message string. The other two are unstructured
-// `Compile` errors because they carry no runtime data beyond the
-// already-static `KEYWORD`.
+// `head_mismatch` returns `LispError::HeadMismatch` and
+// `not_a_list_form_err` returns `LispError::NotAListForm` — both
+// gates carry their distinguishing data (the offending head symbol
+// for HeadMismatch, the keyword for NotAListForm) as first-class
+// variant fields so authoring tools pattern-match structurally
+// instead of substring-grepping the rendered message. The remaining
+// `missing_head_err` is still an unstructured `Compile` error
+// pending its own structural lift.
 
 /// `T::compile_from_sexp` was passed something that isn't a list.
-/// One named primitive every TataraDomain impl shares.
+/// One named primitive every TataraDomain impl shares — returns the
+/// dedicated `LispError::NotAListForm { keyword }` variant so
+/// authoring surfaces (REPL, LSP, `tatara-check`) bind to the
+/// first-class `keyword` field instead of substring-parsing the
+/// rendered message. Display matches the legacy `Compile`-shaped
+/// diagnostic byte-for-byte (`"compile error in {keyword}: expected
+/// list form"`), so existing `format!("{err}").contains("expected
+/// list form")` assertions pass unchanged.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform. The legacy
+/// `Compile { form, message }` shape required consumers to
+/// pattern-match on `message == "expected list form"` to recognize
+/// this specific gate (versus the sibling `missing head symbol`
+/// gate, which produces the same `Compile` shape with a different
+/// message). After this lift the discriminator is the variant
+/// itself — a regression that drifts the message string can no
+/// longer drift the gate's identity. THEORY.md §II.1 invariant 1 —
+/// typed entry; a non-list form is exactly the failure mode the
+/// typed-entry gate exists to reject, and the gate's identity is
+/// now load-bearing in the type system.
 #[must_use]
 pub fn not_a_list_form_err(keyword: &'static str) -> LispError {
-    LispError::Compile {
-        form: keyword.to_string(),
-        message: "expected list form".into(),
-    }
+    LispError::NotAListForm { keyword }
 }
 
 /// `T::compile_from_sexp` was passed `()` or a list whose first
@@ -2222,15 +2241,39 @@ mod tests {
     }
 
     #[test]
-    fn not_a_list_form_err_is_compile_with_keyword_form() {
+    fn not_a_list_form_err_emits_structural_variant() {
+        // After the structural lift the helper returns
+        // `LispError::NotAListForm { keyword }`, not the legacy
+        // `Compile { form, message }` triple. Pinning variant
+        // identity (rather than substring-matching on `message ==
+        // "expected list form"`) means a regression that revives
+        // the `Compile`-shaped construction fails-loudly here.
         let err = not_a_list_form_err("defmonitor");
-        match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "defmonitor");
-                assert_eq!(message, "expected list form");
-            }
-            other => panic!("expected Compile, got {other:?}"),
-        }
+        assert!(
+            matches!(
+                err,
+                LispError::NotAListForm {
+                    keyword: "defmonitor"
+                }
+            ),
+            "expected NotAListForm variant, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn not_a_list_form_err_display_matches_legacy_compile_shape() {
+        // Legacy shape (before this lift):
+        //   "compile error in defmonitor: expected list form"
+        // The structural variant must render byte-for-byte the
+        // same so existing consumer assertions (e.g., the
+        // `compile_from_sexp_emits_*_for_non_list_form` tests
+        // against `MonitorSpec`, `tatara-check`'s diagnostic
+        // capture, REPL substring matchers) pass unchanged.
+        let err = not_a_list_form_err("defmonitor");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: expected list form"
+        );
     }
 
     #[test]
@@ -2266,16 +2309,55 @@ mod tests {
     }
 
     #[test]
-    fn compile_from_sexp_emits_compile_for_non_list_form() {
-        // A bare atom (no parens) produces the not-a-list diagnostic.
+    fn compile_from_sexp_emits_not_a_list_form_for_bare_atom() {
+        // End-to-end through the trait default: a bare-atom form
+        // (no parens) fed to `MonitorSpec::compile_from_sexp`
+        // surfaces the structural `NotAListForm` variant — every
+        // derived domain (and every hand-written impl that uses
+        // the trait default) inherits the structural gate.
         let err = MonitorSpec::compile_from_sexp(&Sexp::int(7)).unwrap_err();
-        match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "defmonitor");
-                assert_eq!(message, "expected list form");
-            }
-            other => panic!("expected Compile, got {other:?}"),
-        }
+        assert!(
+            matches!(
+                err,
+                LispError::NotAListForm {
+                    keyword: "defmonitor"
+                }
+            ),
+            "expected NotAListForm, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn compile_from_sexp_emits_not_a_list_form_for_keyword_atom() {
+        // A keyword atom (`:foo`) is also a non-list — pin path-
+        // uniformity across atom kinds. The keyword projection in
+        // the variant doesn't change with the offending atom's
+        // type because `NotAListForm` carries no `got` slot — the
+        // failure mode IS "not a list", regardless of what kind
+        // of atom was supplied.
+        let err = MonitorSpec::compile_from_sexp(&Sexp::keyword("foo")).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NotAListForm {
+                    keyword: "defmonitor"
+                }
+            ),
+            "expected NotAListForm, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn compile_from_sexp_emits_not_a_list_form_display_matches_legacy() {
+        // End-to-end Display rendering: a non-list form fed to
+        // `compile_from_sexp` produces the byte-identical legacy
+        // string that `tatara-check`, the REPL, and downstream
+        // substring-matchers grep on.
+        let err = MonitorSpec::compile_from_sexp(&Sexp::int(7)).unwrap_err();
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: expected list form"
+        );
     }
 
     #[test]

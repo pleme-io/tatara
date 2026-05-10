@@ -743,6 +743,76 @@ pub enum LispError {
         keyword: &'static str,
         got: Option<String>,
     },
+    /// `compile_named_from_forms::<T>` — driving every `(KEYWORD NAME …)`
+    /// positional-name surface (`(defpoint NAME …)`, `(defalertpolicy
+    /// NAME …)`) — was passed a list whose head matched `T::KEYWORD` but
+    /// whose tail had no NAME slot at all. `(defpoint)` — list.len() == 1
+    /// (just the keyword); the gate fires before NAME extraction. The
+    /// legacy `LispError::Compile { form: T::KEYWORD.to_string(),
+    /// message: format!("expected ({} NAME …)", T::KEYWORD) }` shape
+    /// named the failure mode AND the keyword by embedding both into a
+    /// formatted message — required authoring tools (REPL, LSP,
+    /// `tatara-check`) to substring-grep the rendered diagnostic to
+    /// recognize this specific gate. The structural variant carries
+    /// `keyword` as a first-class field so consumers pattern-match on
+    /// the variant and bind to the keyword directly instead of
+    /// substring-parsing.
+    ///
+    /// Sibling of `NotAListForm { keyword }`, `MissingHeadSymbol
+    /// { keyword, got }`, and `HeadMismatch { keyword, got }` — those
+    /// close the trait-default `compile_from_sexp` rejection chain
+    /// (the keyword-only entry point, `(KEYWORD :k v …)`); this
+    /// variant opens the parallel `compile_named_from_forms`
+    /// rejection chain (the positional-name entry point, `(KEYWORD
+    /// NAME :k v …)`). Walking a malformed `(KEYWORD NAME …)` form
+    /// from the outside in:
+    ///   1. `NamedFormMissingName { keyword }` — the form passes the
+    ///      keyword-head match but has no NAME slot (`(defpoint)`).
+    ///   2. `LispError::Compile { form, message: "positional NAME
+    ///      must be a symbol or string" }` (NOT YET LIFTED) — the
+    ///      form has a NAME slot but it's not a symbol or string
+    ///      (`(defpoint 5 …)`, `(defpoint :foo …)`, `(defpoint
+    ///      (nested) …)`).
+    ///   3. Inside `T::compile_from_args(&list[2..])` — derive-
+    ///      generated kwargs handling with its own structural
+    ///      variants (`UnknownKwarg`, `MissingKwarg`, etc.).
+    ///
+    /// This run lifts step 1; step 2 is the next move in the same
+    /// rejection chain (its own structural-variant lift, parallel to
+    /// how the `compile_from_sexp` chain was lifted gate-by-gate
+    /// across `092a2b2` (`NotAListForm`) and `b3e941e`
+    /// (`MissingHeadSymbol`)).
+    ///
+    /// `keyword` is `&'static str` because every call site passes
+    /// `T::KEYWORD` from `compile_named_from_forms` — a compile-time
+    /// literal sourced from the `#[tatara(keyword = "...")]` derive
+    /// attribute (or hand-written const). Using a static slot makes
+    /// that compile-time guarantee load-bearing in the type system —
+    /// a typo in the keyword can never drift into the diagnostic at
+    /// runtime, the type system is the floor, same posture as
+    /// `NotAListForm.keyword`, `MissingHeadSymbol.keyword`,
+    /// `HeadMismatch.keyword`, `TypeMismatch.expected`, and the
+    /// `Defmacro*.head` family. The variant carries no `arity` slot
+    /// because the offending form's structure is invariant — every
+    /// trigger has list.len() == 1 exactly (list[0] is the keyword,
+    /// no list[1] for NAME); naming a fixed value would be
+    /// misleading data, parallel to how `NotAListForm` carries no
+    /// `got` slot (the form's not-a-list type is itself the
+    /// diagnostic).
+    ///
+    /// Display matches the legacy `Compile`-shaped diagnostic
+    /// byte-for-byte — `"compile error in {keyword}: expected
+    /// ({keyword} NAME …)"` (note: `…` is the Unicode horizontal
+    /// ellipsis U+2026, preserved verbatim from the legacy
+    /// `format!("expected ({} NAME …)", T::KEYWORD)` shape) — so
+    /// existing consumer assertions (`tatara-check`'s diagnostic
+    /// capture, REPL substring-greps) pass unchanged. When a future
+    /// run gives `Sexp` source spans, `pos: Option<usize>` lands
+    /// here in ONE place and every named-form-missing-name site
+    /// picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in {keyword}: expected ({keyword} NAME …)")]
+    NamedFormMissingName { keyword: &'static str },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -830,7 +900,8 @@ impl LispError {
             | Self::DefmacroNonSymbolName { .. }
             | Self::DefmacroNonListParams { .. }
             | Self::NotAListForm { .. }
-            | Self::MissingHeadSymbol { .. } => None,
+            | Self::MissingHeadSymbol { .. }
+            | Self::NamedFormMissingName { .. } => None,
         }
     }
 }
@@ -1094,6 +1165,20 @@ mod tests {
             LispError::MissingHeadSymbol {
                 keyword: "defpoint",
                 got: Some("5".into()),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::NamedFormMissingName {
+                keyword: "defpoint",
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::NamedFormMissingName {
+                keyword: "defalertpolicy",
             }
             .position(),
             None
@@ -2107,6 +2192,103 @@ mod tests {
         assert_eq!(
             format!("{err}"),
             "compile error in ,@rsts: unbound; did you mean ,@rest?"
+        );
+    }
+
+    #[test]
+    fn named_form_missing_name_display_renders_legacy_compile_shape() {
+        // `(defpoint)` — list.len() == 1 (just the keyword, no NAME). The
+        // variant renders byte-for-byte the same string the legacy
+        // `Compile { form: "defpoint", message: "expected (defpoint NAME …)"
+        // }` shape produced, so authoring tools (REPL, LSP, `tatara-check`)
+        // that substring-match on the rendered diagnostic see no drift;
+        // tools that pattern-match on the variant gain structural binding
+        // to `keyword`.
+        let err = LispError::NamedFormMissingName {
+            keyword: "defpoint",
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defpoint: expected (defpoint NAME …)"
+        );
+    }
+
+    #[test]
+    fn named_form_missing_name_display_carries_defalertpolicy_keyword_unchanged() {
+        // Pin path-uniformity across distinct keywords — every
+        // `compile_named` caller funnels through `NamedFormMissingName`
+        // with its own `T::KEYWORD`, so the variant's `keyword` slot
+        // must round-trip every literal the derive macro accepts. A
+        // regression that drops or rewrites the keyword (e.g.,
+        // lowercasing, stripping the `def` prefix) fails-loudly here.
+        let err = LispError::NamedFormMissingName {
+            keyword: "defalertpolicy",
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defalertpolicy: expected (defalertpolicy NAME …)"
+        );
+    }
+
+    #[test]
+    fn named_form_missing_name_display_carries_kebab_case_keyword_unchanged() {
+        // Kebab-cased domain keywords (`defprocess-spec`, `defalert-policy`)
+        // round-trip through both occurrences of the keyword in the rendered
+        // diagnostic — the prefix `compile error in {keyword}:` AND the
+        // example template `(... NAME …)`. Pinning this contract means a
+        // regression that camelCases either occurrence fails-loudly here.
+        let err = LispError::NamedFormMissingName {
+            keyword: "defprocess-spec",
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defprocess-spec: expected (defprocess-spec NAME …)"
+        );
+    }
+
+    #[test]
+    fn named_form_missing_name_display_preserves_unicode_ellipsis_byte_for_byte() {
+        // The legacy `format!("expected ({} NAME …)", T::KEYWORD)` shape used
+        // the Unicode horizontal-ellipsis character (U+2026), not the ASCII
+        // three-dot sequence `...`. Pin the codepoint exactly so a regression
+        // that replaces `…` with `...` fails-loudly here — consumers
+        // downstream that substring-match on `"…"` would silently miss every
+        // future occurrence otherwise.
+        let err = LispError::NamedFormMissingName {
+            keyword: "defmonitor",
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains('\u{2026}'),
+            "expected Unicode horizontal-ellipsis (U+2026) in message, got: {msg}"
+        );
+        assert!(
+            !msg.contains("..."),
+            "expected no ASCII three-dot sequence in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn named_form_missing_name_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"expected ({keyword} NAME …)"` — as a
+        // separate assertion so a regression that drifts the wording (e.g.,
+        // to "expected NAME after keyword" or "missing positional name")
+        // fails-loudly here. The substring is what consumers downstream
+        // (`tatara-check`, the REPL) substring-match on today; the prefix
+        // matches the legacy `Compile { form: T::KEYWORD.to_string(),
+        // message: format!("expected ({} NAME …)", T::KEYWORD) }`
+        // byte-for-byte.
+        let err = LispError::NamedFormMissingName {
+            keyword: "defmonitor",
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("expected (defmonitor NAME"),
+            "expected legacy substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("compile error in defmonitor:"),
+            "expected legacy form-label prefix in message, got: {msg}"
         );
     }
 }

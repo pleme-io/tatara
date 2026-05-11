@@ -15,9 +15,55 @@
 //! format; translation through pleme-io primitives is byte-offset
 //! spans on the existing `LispError`, no new IR layer.
 
-use std::fmt::Write as _;
-
 use crate::error::LispError;
+
+/// `writeln!` into a writer whose `fmt::Write` impl is infallible.
+///
+/// `format_diagnostic` assembles its rustc-style snippet by emitting
+/// four formatted lines into a `String`. `String`'s `fmt::Write` impl
+/// is total — `impl fmt::Write for String { fn write_str(&mut self, s)
+/// { self.push_str(s); Ok(()) } }` — so every `writeln!`/`write!` into
+/// it returns `Ok(())`; the inline `.expect("writes to a String never
+/// fail")` triple recurred at four sites (THEORY.md §VI.1
+/// three-times rule, crossed decisively).
+///
+/// Lifting it into ONE macro centralizes the canonical panic message:
+/// a typo in the expect-string can never drift across the four
+/// emission sites at runtime. Sibling of `infallible_write!` for the
+/// non-newline-terminated single-write case (the trailing caret line
+/// in `format_diagnostic`).
+///
+/// Theory grounding: THEORY.md §VI.1 — the four-times duplication of
+/// `.expect("writes to a String never fail")` collapses into one
+/// named primitive. The macro names the invariant ("infallible write
+/// to String") as a primitive of the diagnostic-rendering substrate,
+/// so future writer-type changes (e.g., `String` → a typed builder)
+/// land in ONE place — every call site picks up the new emission
+/// posture mechanically.
+macro_rules! infallible_writeln {
+    ($out:expr, $($t:tt)*) => {{
+        // Hygienically bring `fmt::Write::write_fmt` into scope so
+        // call sites don't need a separate `use std::fmt::Write as _`
+        // import — the macro is self-contained.
+        use ::std::fmt::Write as _;
+        ::std::writeln!($out, $($t)*).expect("writes to a String never fail")
+    }};
+}
+
+/// `write!` into a writer whose `fmt::Write` impl is infallible — the
+/// non-newline-terminated sibling of `infallible_writeln!`. Used by
+/// `format_diagnostic` for its trailing caret line, which must not
+/// emit a closing newline (so consumers concatenating the rendered
+/// diagnostic into a longer message see the caret as the final
+/// character, not the line after it). Same `String`-infallibility
+/// invariant; same canonical panic message; same theory-anchor
+/// (THEORY.md §VI.1).
+macro_rules! infallible_write {
+    ($out:expr, $($t:tt)*) => {{
+        use ::std::fmt::Write as _;
+        ::std::write!($out, $($t)*).expect("writes to a String never fail")
+    }};
+}
 
 /// 1-based line + column. `line_col` walks the source up to a byte
 /// offset; `\n` increments `line` and resets `column` to 1.
@@ -95,13 +141,12 @@ pub fn format_diagnostic(src: &str, err: &LispError, label: Option<&str>) -> Str
 
     out.push('\n');
     match label {
-        Some(label) => writeln!(out, "{gutter}--> {label}:{line}:{column}"),
-        None => writeln!(out, "{gutter}--> line {line}, column {column}"),
+        Some(label) => infallible_writeln!(out, "{gutter}--> {label}:{line}:{column}"),
+        None => infallible_writeln!(out, "{gutter}--> line {line}, column {column}"),
     }
-    .expect("writes to a String never fail");
-    writeln!(out, "{gutter} |").expect("writes to a String never fail");
-    writeln!(out, "{line_str} | {line_text}").expect("writes to a String never fail");
-    write!(out, "{gutter} | {caret_pad}^").expect("writes to a String never fail");
+    infallible_writeln!(out, "{gutter} |");
+    infallible_writeln!(out, "{line_str} | {line_text}");
+    infallible_write!(out, "{gutter} | {caret_pad}^");
     out
 }
 
@@ -244,6 +289,56 @@ error: unexpected end of input at position 7
 1 | (a b) '
   |        ^";
         assert_eq!(rendered, expected, "got:\n{rendered}");
+    }
+
+    #[test]
+    fn infallible_writeln_macro_appends_formatted_line_with_trailing_newline() {
+        // Pin the macro's emission shape: `writeln!`-equivalent into a
+        // `String`, no swallowed bytes, no missing newline. A regression
+        // that drops the newline or mis-handles format-arg interpolation
+        // fails-loudly here. The macro is the centralized substitute
+        // for the four inline `.expect("writes to a String never
+        // fail")` triples that recurred in `format_diagnostic`'s body
+        // pre-lift.
+        let mut out = String::new();
+        infallible_writeln!(out, "hello {x}", x = 42);
+        assert_eq!(out, "hello 42\n");
+    }
+
+    #[test]
+    fn infallible_write_macro_appends_formatted_text_without_newline() {
+        // Sibling of `infallible_writeln!` — non-newline-terminated
+        // emission. Pin that the macro does NOT add a trailing newline
+        // so the caret-line rendering in `format_diagnostic` stays
+        // byte-for-byte stable. A regression that adds a newline here
+        // fails-loudly via the existing `format_diagnostic_*` tests
+        // AND this isolated unit-pin.
+        let mut out = String::new();
+        infallible_write!(out, "tail {y}", y = "value");
+        assert_eq!(out, "tail value");
+    }
+
+    #[test]
+    fn infallible_macros_preserve_format_diagnostic_byte_identity() {
+        // The lift is a pure refactor — `format_diagnostic`'s rendered
+        // output must be byte-for-byte identical to the pre-lift state
+        // across every existing test case. The five `format_diagnostic_*`
+        // tests below already pin specific expected strings; this test
+        // re-asserts that path-uniformity at the macro-substitution
+        // layer: emit one full diagnostic and confirm both the caret
+        // line (the only `infallible_write!` site) AND the gutter
+        // lines (three `infallible_writeln!` sites) render correctly
+        // together.
+        let src = "   )";
+        let err = read(src).unwrap_err();
+        let rendered = format_diagnostic(src, &err, Some("macros.lisp"));
+        assert!(rendered.starts_with("error: unmatched closing paren"));
+        assert!(rendered.contains("\n --> macros.lisp:1:4\n"));
+        assert!(rendered.ends_with("^"));
+        assert!(
+            !rendered.ends_with("^\n"),
+            "trailing caret line must NOT emit a newline (would drift consumer concat)"
+        );
     }
 
     #[test]

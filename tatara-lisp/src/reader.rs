@@ -145,26 +145,44 @@ fn parse<I: Iterator<Item = Spanned>>(
             }
         }
         Some((Token::RParen, pos)) => Err(LispError::UnmatchedParen { pos }),
-        Some((Token::Quote, _)) => {
-            let inner = parse(it, eof_pos)?;
-            Ok(Sexp::Quote(Box::new(inner)))
-        }
-        Some((Token::Quasiquote, _)) => {
-            let inner = parse(it, eof_pos)?;
-            Ok(Sexp::Quasiquote(Box::new(inner)))
-        }
-        Some((Token::Unquote, _)) => {
-            let inner = parse(it, eof_pos)?;
-            Ok(Sexp::Unquote(Box::new(inner)))
-        }
-        Some((Token::UnquoteSplice, _)) => {
-            let inner = parse(it, eof_pos)?;
-            Ok(Sexp::UnquoteSplice(Box::new(inner)))
-        }
+        Some((Token::Quote, _)) => read_quoted(it, eof_pos, Sexp::Quote),
+        Some((Token::Quasiquote, _)) => read_quoted(it, eof_pos, Sexp::Quasiquote),
+        Some((Token::Unquote, _)) => read_quoted(it, eof_pos, Sexp::Unquote),
+        Some((Token::UnquoteSplice, _)) => read_quoted(it, eof_pos, Sexp::UnquoteSplice),
         Some((Token::Str(s), _)) => Ok(Sexp::Atom(Atom::Str(s))),
         Some((Token::Atom(s), _)) => Ok(atom_from_str(&s)),
         None => Err(LispError::Eof { pos: eof_pos }),
     }
+}
+
+/// Parse the datum following a quote-like prefix token (`'`, `` ` ``, `,`,
+/// `,@`) and wrap it in the corresponding `Sexp` constructor.
+///
+/// Centralizes the four byte-identical "read-inner-and-box" arms in
+/// `parse` — one per homoiconic prefix — into ONE emission site. Each
+/// `Sexp::Quote` / `Sexp::Quasiquote` / `Sexp::Unquote` /
+/// `Sexp::UnquoteSplice` tuple-variant constructor is itself a
+/// `fn(Box<Sexp>) -> Sexp` (Rust tuple-variant ctors are first-class
+/// function pointers), passed in via the `wrap` parameter so the helper
+/// is shape-of-arm, not shape-of-variant — adding a fifth homoiconic
+/// marker becomes ONE new arm, not three lines.
+///
+/// Theory anchor: THEORY.md §VI.1 — three-times rule. The four
+/// `Some((Token::Quote*, _))` arms in `parse` each ran `let inner =
+/// parse(it, eof_pos)?; Ok(Sexp::*(Box::new(inner)))` — byte-identical
+/// modulo the `Sexp::*` constructor. Lifted into one helper so the
+/// next change to the read-inner shape (e.g. threading source spans
+/// when `Sexp` carries `pos: Option<usize>`) lands as ONE edit, not
+/// four. Parallel posture to `tagged()` in `interop.rs` — the
+/// canonical-form interop's analogous closed-set wrap helper across
+/// the same four homoiconic variants.
+fn read_quoted<I: Iterator<Item = Spanned>>(
+    it: &mut std::iter::Peekable<I>,
+    eof_pos: usize,
+    wrap: fn(Box<Sexp>) -> Sexp,
+) -> Result<Sexp> {
+    let inner = parse(it, eof_pos)?;
+    Ok(wrap(Box::new(inner)))
 }
 
 fn atom_from_str(s: &str) -> Sexp {
@@ -303,5 +321,121 @@ mod tests {
             rendered.contains("position 0"),
             "expected position in display, got {rendered:?}"
         );
+    }
+
+    // ── read_quoted helper: closed-set quote-prefix dispatch ────────────
+    //
+    // The four homoiconic prefix tokens (`'`, `` ` ``, `,`, `,@`) each
+    // funnel through `read_quoted`, which takes the matching `Sexp::*`
+    // tuple-variant constructor as a `fn(Box<Sexp>) -> Sexp` and wraps
+    // the parsed inner. The arms below pin each prefix's identity AND
+    // path-uniformity: every prefix produces ONE corresponding `Sexp`
+    // variant, with the inner Sexp unchanged. A regression that swaps
+    // two constructors (e.g. `Sexp::Quasiquote` instead of `Sexp::Quote`)
+    // OR that drops the `Box::new` round-trip fails loudly here.
+
+    #[test]
+    fn quote_prefix_round_trips_through_read_quoted_into_sexp_quote() {
+        // `'foo` — the standalone quote prefix wraps the next datum.
+        let f = read("'foo").unwrap();
+        assert_eq!(f.len(), 1);
+        match &f[0] {
+            Sexp::Quote(inner) => assert_eq!(inner.as_symbol(), Some("foo")),
+            other => panic!("expected Sexp::Quote, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn quasiquote_prefix_round_trips_through_read_quoted_into_sexp_quasiquote() {
+        // `` `foo `` — the quasiquote prefix is the macro-template entry.
+        let f = read("`foo").unwrap();
+        assert_eq!(f.len(), 1);
+        match &f[0] {
+            Sexp::Quasiquote(inner) => assert_eq!(inner.as_symbol(), Some("foo")),
+            other => panic!("expected Sexp::Quasiquote, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unquote_prefix_round_trips_through_read_quoted_into_sexp_unquote() {
+        // `,foo` — the unquote prefix is the substitution marker inside a
+        // quasiquote. Pin that the bare `,` (not `,@`) dispatches to
+        // `Sexp::Unquote`, NOT to `Sexp::UnquoteSplice` — the tokenizer's
+        // `,`-then-peek-`@` discriminator must round-trip cleanly through
+        // the `read_quoted` helper without crossing wires.
+        let f = read(",foo").unwrap();
+        assert_eq!(f.len(), 1);
+        match &f[0] {
+            Sexp::Unquote(inner) => assert_eq!(inner.as_symbol(), Some("foo")),
+            other => panic!("expected Sexp::Unquote, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unquote_splice_prefix_round_trips_through_read_quoted_into_sexp_unquote_splice() {
+        // `,@foo` — the unquote-splice prefix flattens a bound list into
+        // its containing list. Pin that the tokenizer's two-char marker
+        // `,@` dispatches to `Sexp::UnquoteSplice`, distinct from
+        // `Sexp::Unquote` above — both share the helper's read-and-wrap
+        // shape but differ on the constructor passed in. A regression
+        // that conflates the two fails loudly here.
+        let f = read(",@xs").unwrap();
+        assert_eq!(f.len(), 1);
+        match &f[0] {
+            Sexp::UnquoteSplice(inner) => assert_eq!(inner.as_symbol(), Some("xs")),
+            other => panic!("expected Sexp::UnquoteSplice, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn quote_prefix_recursively_wraps_via_read_quoted_for_nested_homoiconic_forms() {
+        // `',foo` — quote of an unquote. The outer prefix invokes
+        // `read_quoted` with `Sexp::Quote`; the inner prefix invokes
+        // `read_quoted` with `Sexp::Unquote`. Pin recursion: the helper's
+        // single emission site is reentrant via the recursive `parse`
+        // call, so nested homoiconic forms compose without each variant
+        // needing its own special-case re-entry. A regression that flattens
+        // or short-circuits the recursion fails here.
+        let f = read("',foo").unwrap();
+        assert_eq!(f.len(), 1);
+        match &f[0] {
+            Sexp::Quote(outer) => match outer.as_ref() {
+                Sexp::Unquote(inner) => assert_eq!(inner.as_symbol(), Some("foo")),
+                other => panic!("expected inner Sexp::Unquote, got {other:?}"),
+            },
+            other => panic!("expected outer Sexp::Quote, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_quoted_propagates_inner_parse_error_unchanged() {
+        // `'` with no following datum — the helper's inner `parse` call
+        // returns `LispError::Eof`. Pin that `read_quoted` propagates
+        // that error verbatim (no rewrap, no swallow) so the user-facing
+        // diagnostic still names the EOF byte offset; a regression that
+        // catches-and-translates the inner error here would surface as
+        // a degraded position-less diagnostic.
+        let src = "'";
+        let err = read(src).unwrap_err();
+        match err {
+            LispError::Eof { pos } => assert_eq!(pos, src.len()),
+            other => panic!("expected Eof, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_quoted_propagates_unmatched_open_paren_for_quoted_list() {
+        // `'(a b` — the helper recurses into a list-parse that hits
+        // `UnmatchedOpenParen`. Pin that the inner error propagates
+        // unchanged. Same posture as
+        // `read_quoted_propagates_inner_parse_error_unchanged` but for
+        // a different inner failure mode — the helper's wrap step is
+        // strictly typed-OK over Result, and any inner error short-
+        // circuits without re-wrapping.
+        let err = read("'(a b").unwrap_err();
+        match err {
+            LispError::UnmatchedOpenParen { pos } => assert_eq!(pos, 1),
+            other => panic!("expected UnmatchedOpenParen, got {other:?}"),
+        }
     }
 }

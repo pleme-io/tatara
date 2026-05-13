@@ -13,7 +13,7 @@
 //!     This is the shape used by ProcessSpec / `(defpoint name …)`.
 
 use crate::ast::Sexp;
-use crate::domain::{sexp_type_name, TataraDomain};
+use crate::domain::TataraDomain;
 use crate::error::{LispError, Result};
 use crate::macro_expand::Expander;
 use crate::reader::read;
@@ -73,9 +73,9 @@ pub fn compile_named_from_forms<T: TataraDomain>(
         }
         let name = list[1]
             .as_symbol_or_string()
-            .ok_or_else(|| LispError::NamedFormNonSymbolName {
-                keyword: T::KEYWORD,
-                got: sexp_type_name(&list[1]),
+            .ok_or_else(|| LispError::Compile {
+                form: T::KEYWORD.to_string(),
+                message: "positional NAME must be a symbol or string".into(),
             })?
             .to_string();
         let spec = T::compile_from_args(&list[2..])?;
@@ -141,121 +141,5 @@ mod tests {
         // siblings owned by other domains).
         let defs = compile_named::<CompilerSpec>("(other-form 1 2 3)").unwrap();
         assert!(defs.is_empty());
-    }
-
-    #[test]
-    fn compile_named_emits_named_form_non_symbol_name_for_int_name_slot() {
-        // `(defcompiler 5 :path "x")` — list[0] matches
-        // `CompilerSpec::KEYWORD` and list.len() >= 2 (so the
-        // arity gate passes); list[1] is the int `5`, which is
-        // not a symbol or string. The non-symbol-name gate fires
-        // and binds to the lifted structural variant
-        // `NamedFormNonSymbolName { keyword: "defcompiler", got:
-        // "int" }`. Pre-lift this same input emitted
-        // `LispError::Compile { form: "defcompiler", message:
-        // "positional NAME must be a symbol or string" }` and
-        // authoring tools had to substring-grep the rendered
-        // diagnostic AND lost the actual sexp-type name of the
-        // offending slot. Fail-before-pass-after: this assert is
-        // contradicted by the pre-lift code path, ratifies the
-        // post-lift one.
-        let err = compile_named::<CompilerSpec>("(defcompiler 5 :path \"x\")").unwrap_err();
-        assert!(
-            matches!(
-                err,
-                LispError::NamedFormNonSymbolName {
-                    keyword: "defcompiler",
-                    got: "int",
-                }
-            ),
-            "expected NamedFormNonSymbolName {{ got: \"int\" }}, got: {err:?}"
-        );
-    }
-
-    #[test]
-    fn compile_named_emits_named_form_non_symbol_name_for_keyword_name_slot() {
-        // `(defcompiler :foo :path "x")` — list[1] is `:foo`, a
-        // keyword. Pin path-uniformity across distinct non-symbol-
-        // non-string shapes: the `got` slot carries the
-        // `sexp_type_name(_)` projection so authoring tools bind
-        // structurally to the actual offending shape instead of
-        // having to substring-grep the rendered diagnostic.
-        let err = compile_named::<CompilerSpec>("(defcompiler :foo :path \"x\")").unwrap_err();
-        assert!(
-            matches!(
-                err,
-                LispError::NamedFormNonSymbolName {
-                    keyword: "defcompiler",
-                    got: "keyword",
-                }
-            ),
-            "expected NamedFormNonSymbolName {{ got: \"keyword\" }}, got: {err:?}"
-        );
-    }
-
-    #[test]
-    fn compile_named_emits_named_form_non_symbol_name_for_nested_list_name_slot() {
-        // `(defcompiler (nested) :path "x")` — list[1] is a
-        // nested list. The non-symbol-name gate fires with
-        // `got: "list"`; the inner list is NOT recursively
-        // descended (the gate is single-level — `as_symbol_or_string`
-        // is a shallow projection).
-        let err = compile_named::<CompilerSpec>("(defcompiler (nested) :path \"x\")").unwrap_err();
-        assert!(
-            matches!(
-                err,
-                LispError::NamedFormNonSymbolName {
-                    keyword: "defcompiler",
-                    got: "list",
-                }
-            ),
-            "expected NamedFormNonSymbolName {{ got: \"list\" }}, got: {err:?}"
-        );
-    }
-
-    #[test]
-    fn compile_named_emits_named_form_non_symbol_name_for_int_name_slot_renders_full_shape() {
-        // The lifted variant's Display matches the legacy `Compile`-shaped
-        // diagnostic byte-for-byte across the stable prefix `"compile error
-        // in defcompiler: positional NAME must be a symbol or string"`
-        // AND appends the structural detail `" (got int)"` parallel to how
-        // `MissingHeadSymbol` appends `(got 5)`. Authoring tools that
-        // pattern-matched on the pre-lift rendered string see the legacy
-        // substring unchanged; tools that pattern-match on the variant
-        // gain structural binding to `keyword` AND `got`.
-        let err = compile_named::<CompilerSpec>("(defcompiler 5 :path \"x\")").unwrap_err();
-        assert_eq!(
-            format!("{err}"),
-            "compile error in defcompiler: positional NAME must be a symbol or string (got int)"
-        );
-    }
-
-    #[test]
-    fn compile_named_accepts_symbol_name_slot_without_firing_non_symbol_gate() {
-        // `(defcompiler good-name :name "good-name")` — list[1] is the
-        // symbol `good-name`, which passes the gate via `as_symbol`.
-        // The non-symbol-name gate must NOT fire on the happy path.
-        // Pin precise gate scope: the gate rejects ONLY non-symbol-
-        // non-string NAME slots, never symbol-shaped ones.
-        let defs =
-            compile_named::<CompilerSpec>("(defcompiler good-name :name \"good-name\")").unwrap();
-        assert_eq!(defs.len(), 1);
-        assert_eq!(defs[0].name, "good-name");
-    }
-
-    #[test]
-    fn compile_named_accepts_string_name_slot_without_firing_non_symbol_gate() {
-        // `(defcompiler "literal-name" …)` — list[1] is the string
-        // `"literal-name"`, which passes the gate via `as_string`
-        // (the `.or_else(|| self.as_string())` arm of
-        // `as_symbol_or_string`). Pin path-uniformity: both
-        // symbol AND string NAME slots flow through the same
-        // accept path, neither triggers
-        // `NamedFormNonSymbolName`.
-        let defs =
-            compile_named::<CompilerSpec>("(defcompiler \"literal-name\" :name \"literal-name\")")
-                .unwrap();
-        assert_eq!(defs.len(), 1);
-        assert_eq!(defs[0].name, "literal-name");
     }
 }

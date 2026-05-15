@@ -606,19 +606,113 @@ fn type_err_at(key: &str, idx: usize, expected: &'static str, got: &Sexp) -> Lis
     type_mismatch(kwarg_item_form(key, idx), expected, got)
 }
 
-pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
+/// Required atomic-kwarg extractor — fronts every typed-atom public
+/// `extract_X` helper (`extract_string`, `extract_int`, `extract_float`,
+/// `extract_bool`). The four byte-identical inline shapes —
+///
+/// ```ignore
+/// let v = required(kw, key)?;
+/// v.as_X().ok_or_else(|| type_err(key, "<X-name>", v))
+/// ```
+///
+/// — collapse to ONE generic primitive parameterized by the projection
+/// function `project: FnOnce(&'a Sexp) -> Option<T>` and the typed-name
+/// label `expected: &'static str`. The four-times rule (THEORY.md §VI.1)
+/// is decisively crossed; lifting it into ONE primitive means the next
+/// change to the typed-atom failure-projection shape (e.g. threading
+/// `pos: Option<usize>` once `Sexp` carries spans, attaching a structural
+/// `source: SexpTypeMismatch` chain) lands as ONE signature change inside
+/// `extract_atom`, and all four public extractors pick up the upgrade
+/// mechanically — no per-extractor edit, no per-extractor test drift.
+///
+/// `T` is generic so the helper handles both owned (`i64`, `f64`, `bool`)
+/// and borrowed (`&'a str`) projections uniformly — the lifetime
+/// threading `&'a Sexp → Option<&'a str>` works because every
+/// `Sexp::as_*` method is `for<'b> fn(&'b Self) -> Option<…&'b str…>`;
+/// the helper inherits that lifetime quantification through
+/// `FnOnce(&'a Sexp) -> Option<T>`. Calling `extract_atom(kw, key,
+/// "string", Sexp::as_string)` infers `T = &'a str`; calling
+/// `extract_atom(kw, key, "int", Sexp::as_int)` infers `T = i64`.
+///
+/// Sibling of `extract_optional_atom` for the optional kwarg path —
+/// together the two close every distinct typed-atom kwarg extractor's
+/// shape: required vs. optional, returning `Result<T>` vs.
+/// `Result<Option<T>>` from the same underlying projection. Future
+/// extension to additional atomic types (e.g. `Atom::Bytes` if/when
+/// added) is ONE one-line public delegate plus ONE call site — no
+/// new error-path duplication.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// three-times rule decisively crossed (four byte-identical
+/// extract+project+type-err shapes across `extract_string`,
+/// `extract_int`, `extract_float`, `extract_bool`). THEORY.md §V.1 —
+/// knowable platform / constructive diagnostics: the typed-atom
+/// kwarg-failure projection lives in ONE primitive so authoring
+/// surfaces (`tatara-check`, REPL, LSP) pick up the diagnostic-shape
+/// promotion mechanically once the variant is structurally extended.
+/// THEORY.md §II.1 invariant 1 — typed entry; the typed-atom
+/// extractor IS the rust-level typed-entry gate for primitive kwargs,
+/// and naming its single shape lifts the gate from four-site
+/// duplication to one rust function the substrate's diagnostic
+/// promotions hang off of.
+fn extract_atom<'a, T, F>(
+    kw: &'a Kwargs<'a>,
+    key: &str,
+    expected: &'static str,
+    project: F,
+) -> Result<T>
+where
+    F: FnOnce(&'a Sexp) -> Option<T>,
+{
     let v = required(kw, key)?;
-    v.as_string().ok_or_else(|| type_err(key, "string", v))
+    project(v).ok_or_else(|| type_err(key, expected, v))
+}
+
+/// Optional sibling of `extract_atom` — collapses the four byte-identical
+/// inline shapes of `extract_optional_string`, `extract_optional_int`,
+/// `extract_optional_float`, `extract_optional_bool`:
+///
+/// ```ignore
+/// match kw.get(key) {
+///     None => Ok(None),
+///     Some(v) => v.as_X().map(Some).ok_or_else(|| type_err(key, "<X-name>", v)),
+/// }
+/// ```
+///
+/// into ONE generic primitive. Same `T`/`project`/`expected` shape as
+/// `extract_atom`; the difference is the `kw.get(key)` short-circuit at
+/// the `None` arm — an absent kwarg is not an error for optional
+/// extractors, only a malformed-present one is. The `.copied()` on
+/// `kw.get(key)` projects `Option<&&'a Sexp>` to `Option<&'a Sexp>` so
+/// the `project` call gets the same `&'a Sexp` shape as the required
+/// path — type-checks against the same projection functions
+/// (`Sexp::as_string`, `Sexp::as_int`, etc.) without per-call casts.
+///
+/// Future structural promotion of the type-mismatch diagnostic lands at
+/// ONE call site inside this helper — same property as `extract_atom`.
+fn extract_optional_atom<'a, T, F>(
+    kw: &'a Kwargs<'a>,
+    key: &str,
+    expected: &'static str,
+    project: F,
+) -> Result<Option<T>>
+where
+    F: FnOnce(&'a Sexp) -> Option<T>,
+{
+    match kw.get(key).copied() {
+        None => Ok(None),
+        Some(v) => project(v)
+            .map(Some)
+            .ok_or_else(|| type_err(key, expected, v)),
+    }
+}
+
+pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
+    extract_atom(kw, key, "string", Sexp::as_string)
 }
 
 pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<&'a str>> {
-    match kw.get(key) {
-        None => Ok(None),
-        Some(v) => match v.as_string() {
-            Some(s) => Ok(Some(s)),
-            None => Err(type_err(key, "string", v)),
-        },
-    }
+    extract_optional_atom(kw, key, "string", Sexp::as_string)
 }
 
 pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
@@ -639,45 +733,27 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
 }
 
 pub fn extract_int(kw: &Kwargs<'_>, key: &str) -> Result<i64> {
-    let v = required(kw, key)?;
-    v.as_int().ok_or_else(|| type_err(key, "int", v))
+    extract_atom(kw, key, "int", Sexp::as_int)
 }
 
 pub fn extract_optional_int(kw: &Kwargs<'_>, key: &str) -> Result<Option<i64>> {
-    match kw.get(key) {
-        None => Ok(None),
-        Some(v) => v.as_int().map(Some).ok_or_else(|| type_err(key, "int", v)),
-    }
+    extract_optional_atom(kw, key, "int", Sexp::as_int)
 }
 
 pub fn extract_float(kw: &Kwargs<'_>, key: &str) -> Result<f64> {
-    let v = required(kw, key)?;
-    v.as_float().ok_or_else(|| type_err(key, "number", v))
+    extract_atom(kw, key, "number", Sexp::as_float)
 }
 
 pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>> {
-    match kw.get(key) {
-        None => Ok(None),
-        Some(v) => v
-            .as_float()
-            .map(Some)
-            .ok_or_else(|| type_err(key, "number", v)),
-    }
+    extract_optional_atom(kw, key, "number", Sexp::as_float)
 }
 
 pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
-    let v = required(kw, key)?;
-    v.as_bool().ok_or_else(|| type_err(key, "bool", v))
+    extract_atom(kw, key, "bool", Sexp::as_bool)
 }
 
 pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>> {
-    match kw.get(key) {
-        None => Ok(None),
-        Some(v) => v
-            .as_bool()
-            .map(Some)
-            .ok_or_else(|| type_err(key, "bool", v)),
-    }
+    extract_optional_atom(kw, key, "bool", Sexp::as_bool)
 }
 
 // ── Universal serde-Deserialize fallthrough (enums, nested structs, …) ──
@@ -3809,5 +3885,273 @@ mod tests {
             LispError::Compile { form, .. } => assert_eq!(form, "deflocal"),
             other => panic!("expected LispError::Compile, got {other:?}"),
         }
+    }
+
+    // ── extract_atom / extract_optional_atom: typed-atom dedup lift ───
+    //
+    // The eight inline `extract_X` / `extract_optional_X` shapes
+    // (`extract_string`, `extract_int`, `extract_float`, `extract_bool`
+    // + their optional siblings) all funneled through one of two
+    // byte-identical inline `required + project + type_err` triples
+    // (required path) or `kw.get + project + type_err` quadruples
+    // (optional path). The lift collapses each four-site cluster to
+    // ONE named generic primitive (`extract_atom`, `extract_optional_atom`)
+    // parameterized by the typed-name label + projection function.
+    //
+    // The tests below pin: (a) each generic helper's failure-routing
+    // surface — missing-required → `MissingKwarg`, present-but-
+    // wrong-type → `TypeMismatch` (required path); absent → `Ok(None)`,
+    // present-and-correct → `Ok(Some)`, present-but-wrong-type →
+    // `TypeMismatch` (optional path); (b) every public delegate
+    // (`extract_string`, `extract_int`, `extract_float`, `extract_bool`
+    // + optional siblings) routes through the generic helper with the
+    // canonical typed-name label intact; (c) Display byte-identity is
+    // preserved across the dedup — a regression that drifts the
+    // typed-name label (e.g. lowercases `"number"` → `"float"`) fails-
+    // loudly at the Display assertion; (d) the borrowed-return path
+    // (`extract_string` returns `&'a str` from `&'a Sexp`) round-trips
+    // its lifetime through `FnOnce(&'a Sexp) -> Option<&'a str>`
+    // cleanly — a regression that breaks the borrow threading fails-
+    // to-compile.
+
+    #[test]
+    fn extract_atom_propagates_missing_kwarg_via_required() {
+        // The required path's first gate — absent kwarg routes through
+        // `required` which emits `LispError::MissingKwarg { key }`. Pin
+        // the canonical `MissingKwarg` shape and key verbatim; a
+        // regression that swallows the gate (e.g. silent `Ok(default)`)
+        // or drifts the key slot fails-loudly here. Distinct from
+        // `extract_atom_emits_type_mismatch_for_wrong_type` — that
+        // pins the second gate.
+        let kw: Kwargs<'_> = HashMap::new();
+        let err = extract_atom(&kw, "missing", "int", Sexp::as_int)
+            .expect_err("absent required kwarg must error");
+        match err {
+            LispError::MissingKwarg { key } => assert_eq!(key, "missing"),
+            other => panic!("expected MissingKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn extract_atom_emits_type_mismatch_for_wrong_type() {
+        // The required path's second gate — present-but-wrong-type
+        // kwarg routes through `type_err` which emits
+        // `LispError::TypeMismatch { form, expected, got }`. Pin all
+        // three slots: `form` is `kwarg_form(key)` (`:wrongkey`),
+        // `expected` is the typed-name label fed in verbatim
+        // (`"int"`), `got` is `Sexp::Display`'s projection of the
+        // offending atom's type (`"string"`). A regression that
+        // drifts the typed-name label fails-loudly here.
+        let string_sexp = Sexp::string("not-an-int");
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("wrongkey".to_string(), &string_sexp);
+        let err = extract_atom(&kw, "wrongkey", "int", Sexp::as_int)
+            .expect_err("present-but-wrong-type kwarg must error");
+        match err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, ":wrongkey");
+                assert_eq!(expected, "int");
+                assert_eq!(got, "string");
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn extract_atom_returns_value_on_match() {
+        // Positive control for `extract_atom` — present and correctly-
+        // typed kwarg returns the projected value. Distinct from the
+        // two negative paths above; closes the closed set of three
+        // outcomes (missing, wrong-type, ok) for the required path.
+        let int_sexp = Sexp::int(42);
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("count".to_string(), &int_sexp);
+        let v = extract_atom(&kw, "count", "int", Sexp::as_int)
+            .expect("present-and-correct kwarg must succeed");
+        assert_eq!(v, 42);
+    }
+
+    #[test]
+    fn extract_optional_atom_returns_none_for_absent_kwarg() {
+        // The optional path's first arm — absent kwarg returns
+        // `Ok(None)`, NOT an error. Pin the structural distinction
+        // from the required path (which errors on absent) by
+        // exercising the same key against both paths; the optional
+        // sibling must NEVER call `required` and must NEVER emit
+        // `MissingKwarg`. A regression that mistakenly routes the
+        // absent arm through `required` would surface here as an
+        // `Err(MissingKwarg)` instead of `Ok(None)`.
+        let kw: Kwargs<'_> = HashMap::new();
+        let v = extract_optional_atom::<i64, _>(&kw, "absent", "int", Sexp::as_int)
+            .expect("absent optional kwarg must succeed with None");
+        assert!(v.is_none());
+    }
+
+    #[test]
+    fn extract_optional_atom_emits_type_mismatch_for_wrong_type() {
+        // The optional path's second arm — present-but-wrong-type
+        // kwarg errors via `type_err` with the same `TypeMismatch`
+        // shape as the required path. Distinct from `extract_atom
+        // _emits_type_mismatch_for_wrong_type` only in which kwarg
+        // path emitted the error — same variant, same slot
+        // semantics. Pins that the optional path does NOT silently
+        // swallow type mismatches by returning `Ok(None)` for a
+        // present-but-wrong-type kwarg — that would be a typed-entry
+        // gate failure.
+        let string_sexp = Sexp::string("not-a-bool");
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("flag".to_string(), &string_sexp);
+        let err = extract_optional_atom::<bool, _>(&kw, "flag", "bool", Sexp::as_bool)
+            .expect_err("present-but-wrong-type optional kwarg must error");
+        match err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, ":flag");
+                assert_eq!(expected, "bool");
+                assert_eq!(got, "string");
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn extract_optional_atom_returns_some_on_match() {
+        // The optional path's third arm — present and correctly-
+        // typed kwarg returns `Ok(Some(value))`. Closes the closed
+        // set of three outcomes (absent, wrong-type, ok) for the
+        // optional path; together with the required-path tests,
+        // every distinct extractor outcome is covered.
+        let float_sexp = Sexp::float(3.5);
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("ratio".to_string(), &float_sexp);
+        let v = extract_optional_atom(&kw, "ratio", "number", Sexp::as_float)
+            .expect("present-and-correct optional kwarg must succeed");
+        assert_eq!(v, Some(3.5));
+    }
+
+    #[test]
+    fn extract_string_borrows_lifetime_through_extract_atom() {
+        // The borrowed-return path — `extract_string` returns `&'a str`
+        // borrowed from the kwarg `&'a Sexp`. Pins that the lift's
+        // `FnOnce(&'a Sexp) -> Option<&'a str>` boundary threads the
+        // lifetime correctly: a regression that breaks the
+        // higher-ranked lifetime would fail-to-compile (not a runtime
+        // assertion). The runtime assertion below pins that the
+        // returned `&str` round-trips the kwarg's literal content.
+        let s_sexp = Sexp::string("prom-up");
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("name".to_string(), &s_sexp);
+        let got = extract_string(&kw, "name").expect("present string must succeed");
+        assert_eq!(got, "prom-up");
+    }
+
+    #[test]
+    fn public_extract_delegates_inherit_canonical_type_labels() {
+        // Path-uniformity across all four public typed-name labels —
+        // `extract_int` ("int"), `extract_float` ("number"),
+        // `extract_bool` ("bool"), `extract_string` ("string"). Each
+        // delegate must route through `extract_atom` with the
+        // canonical label intact; a regression that drifts a label
+        // (e.g. `extract_float`'s "number" → "float", or
+        // `extract_int`'s "int" → "integer") would surface as a
+        // `TypeMismatch.expected` field-value drift when the
+        // extractor is fed a wrong-typed kwarg.
+        let s = Sexp::string("not-typed");
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("x".to_string(), &s);
+        for (extractor_name, expected_label, err) in [
+            (
+                "extract_int",
+                "int",
+                extract_int(&kw, "x").expect_err("must error"),
+            ),
+            (
+                "extract_float",
+                "number",
+                extract_float(&kw, "x").expect_err("must error"),
+            ),
+            (
+                "extract_bool",
+                "bool",
+                extract_bool(&kw, "x").expect_err("must error"),
+            ),
+        ] {
+            match err {
+                LispError::TypeMismatch { expected, .. } => assert_eq!(
+                    expected, expected_label,
+                    "{extractor_name} must thread the canonical label {expected_label:?}",
+                ),
+                other => panic!("{extractor_name}: expected TypeMismatch, got {other:?}"),
+            }
+        }
+        // `extract_string` against a non-string keyword sexp: same
+        // shape, different label. Pinned separately because the
+        // string extractor's signature carries a borrow lifetime that
+        // doesn't match the tuple shape of the loop above.
+        let kw_sexp = Sexp::keyword("not-a-string");
+        let mut kw2: Kwargs<'_> = HashMap::new();
+        kw2.insert("x".to_string(), &kw_sexp);
+        let err = extract_string(&kw2, "x").expect_err("must error");
+        match err {
+            LispError::TypeMismatch { expected, .. } => assert_eq!(expected, "string"),
+            other => panic!("extract_string: expected TypeMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn extract_atom_renders_legacy_type_mismatch_display() {
+        // End-to-end through the `LispError` Display impl — pins that
+        // the dedup preserves the legacy `TypeMismatch`-shaped
+        // diagnostic byte-for-byte. Authoring tools (`tatara-check`,
+        // REPL) that substring-grep on the rendered diagnostic see
+        // no drift across the lift. Parallel to how
+        // `compile_named_named_form_missing_name_renders_legacy
+        // _compile_shape` (compile.rs) pins the lifted helper's
+        // Display contract.
+        let s = Sexp::string("not-an-int");
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("threshold".to_string(), &s);
+        let err = extract_int(&kw, "threshold").expect_err("type-mismatch must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: expected int, got string"
+        );
+    }
+
+    #[test]
+    fn full_monitor_round_trips_through_extract_atom_dedup() {
+        // End-to-end positive control: a well-formed defmonitor
+        // exercises every typed-atom extractor (`extract_string` on
+        // `:name`/`:query`, `extract_float` on `:threshold`,
+        // `extract_optional_int` on `:window-seconds`,
+        // `extract_optional_bool` on `:enabled`). Pins that the
+        // dedup doesn't regress any of the public delegates'
+        // semantic — a `MonitorSpec` compiled before and after the
+        // lift must produce byte-identical values. Same posture as
+        // `derive_compiles_full_form` (the pre-existing positive
+        // control); duplicated here to lock the helper-routing
+        // invariant.
+        let forms = read(
+            r#"(defmonitor
+                 :name "prom-up"
+                 :query "up{job='prometheus'}"
+                 :threshold 0.99
+                 :window-seconds 300
+                 :tags ("prod" "observability")
+                 :enabled #t)"#,
+        )
+        .unwrap();
+        let spec = MonitorSpec::compile_from_sexp(&forms[0]).unwrap();
+        assert_eq!(spec.name, "prom-up");
+        assert_eq!(spec.threshold, 0.99);
+        assert_eq!(spec.window_seconds, Some(300));
+        assert_eq!(spec.enabled, Some(true));
     }
 }

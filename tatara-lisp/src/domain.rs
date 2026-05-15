@@ -784,10 +784,7 @@ where
         keyword: T::KEYWORD,
         compile: |args| {
             let v = T::compile_from_args(args)?;
-            serde_json::to_value(&v).map_err(|e| LispError::Compile {
-                form: T::KEYWORD.to_string(),
-                message: format!("serialize: {e}"),
-            })
+            serde_json::to_value(&v).map_err(serialize_to_json_err::<T>)
         },
     };
     registry().lock().unwrap().insert(T::KEYWORD, handler);
@@ -1016,6 +1013,84 @@ fn camel_to_kebab(s: &str) -> String {
 // passes the typed re-validation is safe by construction — the Rust type
 // system is the floor.
 
+/// Lift the two byte-identical inline `LispError::Compile { form:
+/// T::KEYWORD.to_string(), message: format!("serialize…: {e}") }` sites
+/// — one in `register::<T>`'s registry-dispatch closure, one in
+/// `rewrite_typed::<T>`'s round-trip prelude — into ONE named primitive.
+/// Both sites share the exact same failure mode ("serde_json::to_value of
+/// a typed `T` value errored") and the exact same `form` slot
+/// (`T::KEYWORD.to_string()`), differing only in the message body —
+/// `"serialize: {e}"` versus the redundant-keyword `"serialize {KEYWORD}:
+/// {e}"`. Canonicalizing both on `"serialize: {e}"` drops the keyword
+/// repetition from the `rewrite_typed` display (was `"compile error in
+/// defmonitor: serialize defmonitor: …"`, now `"compile error in
+/// defmonitor: serialize: …"`) so the two sites render uniformly and a
+/// future structural promotion (e.g. `LispError::DomainSerialize {
+/// keyword: &'static str, source: serde_json::Error }`) lands as ONE
+/// signature change inside the helper.
+///
+/// `<T: TataraDomain>` is the type-level boundary: the `T::KEYWORD`
+/// projection is mechanically applied, so a typo can never drift the
+/// `form` slot across the two call sites. The helper takes
+/// `serde_json::Error` by value so `map_err(serialize_to_json_err::<T>)`
+/// composes point-free at every site — no `.into()` boilerplate, no
+/// `&e` borrow at the call site.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// three-times rule, decisively crossed across two functions in this
+/// file (`register::<T>` + `rewrite_typed::<T>`, two sites today;
+/// `rewriter_non_list_err::<T>` immediately below names the third
+/// gate). Parallel to `deserialize_err` / `deserialize_item_err` (the
+/// extractor-side `serde_json::from_value` failure mode is already
+/// lifted to ONE named primitive per shape), so the substrate's
+/// JSON-boundary diagnostic surface — `from_value` (extractors) and
+/// `to_value` (registry + rewriter) — is symmetric: both directions
+/// funnel through a named domain-keyed primitive. THEORY.md §II.1
+/// invariant 1 (typed entry): the JSON-projection round-trip is the
+/// proof; the helper names its rejection shape at the type level so
+/// authoring surfaces (`tatara-check`, REPL, future LSP) bind to a
+/// uniform "serialize-failed" diagnostic shape regardless of whether
+/// the failure originated at registry-dispatch time or rewriter time.
+fn serialize_to_json_err<T: TataraDomain>(e: serde_json::Error) -> LispError {
+    LispError::Compile {
+        form: T::KEYWORD.to_string(),
+        message: format!("serialize: {e}"),
+    }
+}
+
+/// Lift the lone inline `LispError::Compile { form: T::KEYWORD.to_string(),
+/// message: format!("rewriter must return a list; got {other}") }` site
+/// in `rewrite_typed::<T>`'s rewriter-output gate into ONE named
+/// primitive. The gate enforces the rewriter's `Sexp::List` contract:
+/// the round-trip projects a typed value to `Sexp::List` via
+/// `json_to_sexp`, hands that list to the rewriter `F`, and
+/// re-enters `T::compile_from_args` via the list's items. A non-list
+/// result violates the round-trip's structural promise — the helper
+/// names that violation at the type level so a future structural
+/// `LispError::RewriterNonList { keyword: &'static str, got: &'static
+/// str }` variant (paired with `sexp_type_name` for the `got` slot)
+/// lands as ONE signature change inside the helper.
+///
+/// `<T: TataraDomain>` carries the keyword projection; the helper takes
+/// `got: &Sexp` so the call site moves the matched `other` into the
+/// helper by reference without an extra clone. Display preserves the
+/// legacy `"rewriter must return a list; got {got}"` substring shape so
+/// any authoring tool grepping the rendered diagnostic sees no drift.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// single-site lift earns its keep because the helper boundary is the
+/// landing site for the structural-variant promotion. THEORY.md §II.1
+/// invariant 3 (typed exit): `rewrite_typed` IS the typed-exit gate of
+/// the self-optimization primitive — any rewrite that survives the
+/// gate is well-typed by construction. The non-list rejection is the
+/// proof's rejection shape; the helper makes it first-class.
+fn rewriter_non_list_err<T: TataraDomain>(got: &Sexp) -> LispError {
+    LispError::Compile {
+        form: T::KEYWORD.to_string(),
+        message: format!("rewriter must return a list; got {got}"),
+    }
+}
+
 /// Rewrite a typed `T` through Lisp form and re-validate on the way back.
 ///
 /// The rewriter receives the value's kwargs representation (a `Sexp::List`
@@ -1027,20 +1102,12 @@ where
     T: TataraDomain + serde::Serialize,
     F: FnOnce(Sexp) -> Result<Sexp>,
 {
-    let json = serde_json::to_value(&input).map_err(|e| LispError::Compile {
-        form: T::KEYWORD.to_string(),
-        message: format!("serialize {}: {e}", T::KEYWORD),
-    })?;
+    let json = serde_json::to_value(&input).map_err(serialize_to_json_err::<T>)?;
     let sexp = json_to_sexp(&json);
     let rewritten = rewrite(sexp)?;
     let args = match rewritten {
         Sexp::List(items) => items,
-        other => {
-            return Err(LispError::Compile {
-                form: T::KEYWORD.to_string(),
-                message: format!("rewriter must return a list; got {other}"),
-            })
-        }
+        other => return Err(rewriter_non_list_err::<T>(&other)),
     };
     T::compile_from_args(&args)
 }
@@ -3465,5 +3532,282 @@ mod tests {
         let allowed: &[&str] = &["name"];
         let err = unknown_kwarg("xx", allowed);
         assert_eq!(err.position(), None);
+    }
+
+    // ── domain-keyed serialize / rewriter-output emission shape ────────
+    //
+    // The two byte-identical inline `LispError::Compile { form:
+    // T::KEYWORD.to_string(), message: format!("serialize…: {e}") }`
+    // sites — `register::<T>` (registry-dispatch closure) and
+    // `rewrite_typed::<T>` (round-trip prelude) — funnel through
+    // `serialize_to_json_err::<T>`. The lone inline non-list-rewriter
+    // gate in `rewrite_typed::<T>` funnels through
+    // `rewriter_non_list_err::<T>`. These tests pin: (a) the helpers
+    // produce the canonical `Compile`-shaped variant with `form =
+    // T::KEYWORD`; (b) Display renders the canonical
+    // `"compile error in <keyword>: serialize: …"` / `"compile error
+    // in <keyword>: rewriter must return a list; got …"` shape;
+    // (c) end-to-end through `rewrite_typed` — a rewriter returning a
+    // non-list `Sexp` routes through the helper with the right shape.
+    //
+    // The redundant-keyword `"serialize {KEYWORD}: …"` shape that
+    // `rewrite_typed` used pre-lift is dropped; both sites now render
+    // the cleaner `"serialize: …"` shape. The test pins the new
+    // canonical form so a regression that re-inlines the old shape
+    // fails loudly.
+
+    fn make_serde_err() -> serde_json::Error {
+        // Hand-craft a `serde_json::Error` via a known-failing parse so
+        // the test exercises the helper's `{e}` Display projection
+        // without needing a `Serialize` impl that panics on a real T.
+        serde_json::from_str::<i32>("not-a-number").unwrap_err()
+    }
+
+    #[test]
+    fn serialize_to_json_err_produces_canonical_compile_shape() {
+        let e = make_serde_err();
+        let raw = format!("{e}");
+        let err = serialize_to_json_err::<MonitorSpec>(e);
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor", "form must be T::KEYWORD verbatim");
+                assert_eq!(
+                    message,
+                    format!("serialize: {raw}"),
+                    "message must be the canonical `serialize: {{e}}` projection"
+                );
+            }
+            other => panic!("expected LispError::Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serialize_to_json_err_display_renders_canonical_string() {
+        // The Display impl renders `"compile error in <keyword>:
+        // serialize: <e>"` — `tatara-check` / REPL / future LSP that
+        // substring-grep this shape see no drift, and the redundant
+        // keyword repetition (`"serialize defmonitor: …"`) that
+        // `rewrite_typed` used pre-lift is gone.
+        let e = make_serde_err();
+        let raw = format!("{e}");
+        let err = serialize_to_json_err::<MonitorSpec>(e);
+        let rendered = format!("{err}");
+        assert_eq!(
+            rendered,
+            format!("compile error in defmonitor: serialize: {raw}"),
+        );
+        // Negative: the pre-lift `"serialize defmonitor: …"` redundant-
+        // keyword shape must NOT appear in the new render.
+        assert!(
+            !rendered.contains("serialize defmonitor:"),
+            "redundant-keyword shape must be gone, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn rewriter_non_list_err_produces_canonical_compile_shape() {
+        let got = Sexp::int(42);
+        let err = rewriter_non_list_err::<MonitorSpec>(&got);
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor", "form must be T::KEYWORD verbatim");
+                assert_eq!(
+                    message, "rewriter must return a list; got 42",
+                    "message must preserve the legacy substring shape verbatim"
+                );
+            }
+            other => panic!("expected LispError::Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rewriter_non_list_err_display_renders_canonical_string() {
+        // The legacy `"rewriter must return a list; got …"` substring
+        // shape is preserved byte-for-byte so authoring-tool grep over
+        // the rendered diagnostic sees no drift across the lift.
+        let got = Sexp::symbol("not-a-list");
+        let err = rewriter_non_list_err::<MonitorSpec>(&got);
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: rewriter must return a list; got not-a-list",
+        );
+    }
+
+    #[test]
+    fn rewriter_non_list_err_includes_got_sexp_display() {
+        // The `got` payload is projected via the `Sexp` Display impl —
+        // pinning a few representative variants keeps the diagnostic's
+        // failing-value-naming surface stable across versions. Lists
+        // never reach this gate (they short-circuit into the
+        // `Sexp::List(items) => items` arm of `rewrite_typed`), but the
+        // helper is shape-of-arm — it accepts any non-list `Sexp` the
+        // caller hands it. Render strings track the `Sexp::Display`
+        // contract verbatim (`Sexp::Nil` → `"()"`, not `"nil"`).
+        let cases: &[(Sexp, &str)] = &[
+            (Sexp::int(7), "7"),
+            (Sexp::string("hi"), "\"hi\""),
+            (Sexp::symbol("foo"), "foo"),
+            (Sexp::keyword("k"), ":k"),
+            (Sexp::Nil, "()"),
+        ];
+        for (sexp, want_render) in cases {
+            let err = rewriter_non_list_err::<MonitorSpec>(sexp);
+            let msg = match err {
+                LispError::Compile { message, .. } => message,
+                other => panic!("expected LispError::Compile, got {other:?}"),
+            };
+            assert_eq!(
+                msg,
+                format!("rewriter must return a list; got {want_render}"),
+                "Sexp Display projection must thread through unchanged for {sexp:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rewrite_typed_routes_non_list_output_through_helper_e2e() {
+        // End-to-end through `rewrite_typed::<MonitorSpec>`: a
+        // rewriter returning a non-list `Sexp` (here, an int) MUST
+        // route through `rewriter_non_list_err::<MonitorSpec>` and
+        // emit a `LispError::Compile { form: "defmonitor", message:
+        // "rewriter must return a list; got 42" }`. Pre-lift this
+        // path emitted the same shape inline; post-lift it funnels
+        // through the helper, so a regression that re-inlines the
+        // shape (or drifts the form/message) fails loudly here.
+        let input = MonitorSpec {
+            name: "x".into(),
+            query: "q".into(),
+            threshold: 0.5,
+            window_seconds: None,
+            tags: vec![],
+            enabled: None,
+        };
+        let err = rewrite_typed(input, |_sexp| Ok(Sexp::int(42))).unwrap_err();
+        match err {
+            LispError::Compile { form, message } => {
+                assert_eq!(form, "defmonitor");
+                assert_eq!(message, "rewriter must return a list; got 42");
+            }
+            other => panic!("expected LispError::Compile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rewrite_typed_routes_non_list_output_for_every_non_list_variant() {
+        // The non-list gate covers EVERY non-list `Sexp` shape — pin
+        // a representative sample (atom, quote, unquote-splice)
+        // through the gate to confirm the helper is shape-of-arm,
+        // not shape-of-some-variants. `Sexp::Nil` renders as `()` per
+        // the `Sexp::Display` contract.
+        let input = MonitorSpec {
+            name: "x".into(),
+            query: "q".into(),
+            threshold: 0.5,
+            window_seconds: None,
+            tags: vec![],
+            enabled: None,
+        };
+        let non_lists = [
+            Sexp::int(0),
+            Sexp::string("bad"),
+            Sexp::symbol("not-a-list"),
+            Sexp::Nil,
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ];
+        for bad in non_lists {
+            // Each iteration consumes input by cloning the prelude
+            // (rewrite_typed takes input by value).
+            let clone = MonitorSpec {
+                name: input.name.clone(),
+                query: input.query.clone(),
+                threshold: input.threshold,
+                window_seconds: input.window_seconds,
+                tags: input.tags.clone(),
+                enabled: input.enabled,
+            };
+            let bad_disp = format!("{bad}");
+            let err = rewrite_typed(clone, |_sexp| Ok(bad.clone())).unwrap_err();
+            match err {
+                LispError::Compile { form, message } => {
+                    assert_eq!(form, "defmonitor");
+                    assert_eq!(
+                        message,
+                        format!("rewriter must return a list; got {bad_disp}"),
+                    );
+                }
+                other => panic!("expected LispError::Compile, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn rewrite_typed_well_formed_list_routes_past_non_list_gate() {
+        // Positive control — a well-formed list `Sexp` returned by the
+        // rewriter routes PAST `rewriter_non_list_err::<T>` cleanly
+        // into `T::compile_from_args`. The helper is precisely scoped
+        // to non-list `Sexp` outputs; identity-rewriting through the
+        // gate preserves the typed value end-to-end. Uses a local
+        // single-field domain so the round-trip needs no
+        // `#[serde(rename_all)]` plumbing — the production-side
+        // round-trip case is covered by
+        // `tatara_domains::rewrite_typed_end_to_end`.
+        #[derive(DeriveTataraDomain, Serialize, Deserialize, Debug)]
+        #[tatara(keyword = "defroundtrip")]
+        struct RoundTripSpec {
+            name: String,
+        }
+        let input = RoundTripSpec { name: "x".into() };
+        let out = rewrite_typed(input, |sexp| {
+            assert!(
+                sexp.is_list(),
+                "rewriter receives a `Sexp::List` of alternating kwargs"
+            );
+            Ok(sexp)
+        })
+        .expect("identity-rewrite of a well-formed typed value must round-trip");
+        assert_eq!(out.name, "x");
+    }
+
+    #[test]
+    fn helpers_are_type_bound_via_t_keyword() {
+        // Type-bound symmetry: both helpers project `T::KEYWORD` at the
+        // type level — `<T: TataraDomain>` is the boundary, so a typo
+        // can never drift the `form` slot across the two call sites in
+        // `register::<T>` + `rewrite_typed::<T>`. Pin the projection by
+        // exercising the helpers against TWO domains in this module
+        // (`MonitorSpec` — defmonitor — and a local domain with a
+        // different keyword) and confirm each helper emits the
+        // domain's KEYWORD verbatim.
+        #[derive(DeriveTataraDomain, Serialize, Debug)]
+        #[tatara(keyword = "deflocal")]
+        struct LocalSpec {
+            name: String,
+        }
+        // Reference the field so clippy `dead_code` doesn't trip.
+        let _local = LocalSpec {
+            name: "z".to_string(),
+        };
+        let e1 = make_serde_err();
+        let m_err = serialize_to_json_err::<MonitorSpec>(e1);
+        let e2 = make_serde_err();
+        let l_err = serialize_to_json_err::<LocalSpec>(e2);
+        match m_err {
+            LispError::Compile { form, .. } => assert_eq!(form, "defmonitor"),
+            other => panic!("expected LispError::Compile, got {other:?}"),
+        }
+        match l_err {
+            LispError::Compile { form, .. } => assert_eq!(form, "deflocal"),
+            other => panic!("expected LispError::Compile, got {other:?}"),
+        }
+        let got = Sexp::int(0);
+        match rewriter_non_list_err::<MonitorSpec>(&got) {
+            LispError::Compile { form, .. } => assert_eq!(form, "defmonitor"),
+            other => panic!("expected LispError::Compile, got {other:?}"),
+        }
+        match rewriter_non_list_err::<LocalSpec>(&got) {
+            LispError::Compile { form, .. } => assert_eq!(form, "deflocal"),
+            other => panic!("expected LispError::Compile, got {other:?}"),
+        }
     }
 }

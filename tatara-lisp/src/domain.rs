@@ -1134,36 +1134,63 @@ fn serialize_to_json_err<T: TataraDomain>(e: serde_json::Error) -> LispError {
     }
 }
 
-/// Lift the lone inline `LispError::Compile { form: T::KEYWORD.to_string(),
-/// message: format!("rewriter must return a list; got {other}") }` site
-/// in `rewrite_typed::<T>`'s rewriter-output gate into ONE named
-/// primitive. The gate enforces the rewriter's `Sexp::List` contract:
-/// the round-trip projects a typed value to `Sexp::List` via
-/// `json_to_sexp`, hands that list to the rewriter `F`, and
-/// re-enters `T::compile_from_args` via the list's items. A non-list
-/// result violates the round-trip's structural promise — the helper
-/// names that violation at the type level so a future structural
-/// `LispError::RewriterNonList { keyword: &'static str, got: &'static
-/// str }` variant (paired with `sexp_type_name` for the `got` slot)
-/// lands as ONE signature change inside the helper.
+/// Promote the previously `LispError::Compile`-shaped helper into the
+/// structural `LispError::RewriterNonList { keyword, got }` variant —
+/// the typed-exit-side mirror of the typed-entry-side
+/// `NamedFormNonSymbolName` lift. The gate enforces the rewriter's
+/// `Sexp::List` contract: the round-trip projects a typed value to
+/// `Sexp::List` via `json_to_sexp`, hands that list to the rewriter
+/// `F`, and re-enters `T::compile_from_args` via the list's items. A
+/// non-list result violates the round-trip's structural promise — this
+/// helper names that violation at the type level so authoring tools
+/// (REPL, LSP, `tatara-check`) bind on variant identity rather than
+/// substring-grepping the rendered diagnostic.
 ///
-/// `<T: TataraDomain>` carries the keyword projection; the helper takes
-/// `got: &Sexp` so the call site moves the matched `other` into the
-/// helper by reference without an extra clone. Display preserves the
-/// legacy `"rewriter must return a list; got {got}"` substring shape so
-/// any authoring tool grepping the rendered diagnostic sees no drift.
+/// After this lift the self-optimization primitive's rejection chain is
+/// structurally typed at BOTH boundaries: typed-entry
+/// (`NamedFormMissingName`, `NamedFormNonSymbolName`) AND typed-exit
+/// (this variant). The typed-entry chain rejects a wrong-shaped author-
+/// supplied form before `compile_from_args` runs; the typed-exit chain
+/// rejects a wrong-shaped rewriter output before `compile_from_args`
+/// re-runs on the round-tripped representation. Every distinct rejection
+/// mode in `rewrite_typed::<T>` is now a pattern-matchable variant.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition;
-/// single-site lift earns its keep because the helper boundary is the
-/// landing site for the structural-variant promotion. THEORY.md §II.1
-/// invariant 3 (typed exit): `rewrite_typed` IS the typed-exit gate of
-/// the self-optimization primitive — any rewrite that survives the
-/// gate is well-typed by construction. The non-list rejection is the
-/// proof's rejection shape; the helper makes it first-class.
+/// `<T: TataraDomain>` carries the keyword projection — `T::KEYWORD`
+/// (`&'static str`) flows into the variant's `keyword` slot at the
+/// boundary so a typo in the keyword can never drift into the diagnostic
+/// at runtime, same posture as `NamedFormNonSymbolName.keyword`,
+/// `NamedFormMissingName.keyword`, `MissingHeadSymbol.keyword`,
+/// `HeadMismatch.keyword`, `NotAListForm.keyword`, and the
+/// `Defmacro*.head` family. The helper takes `got: &Sexp` and projects
+/// to `got.to_string()` at the boundary so the variant's `got: String`
+/// slot carries the rewriter's offending output verbatim — value-
+/// rendering (not just shape-name), same posture as
+/// `HeadMismatch.got: String` and `MissingHeadSymbol.got:
+/// Option<String>`; the value (not just its sexp-type) is the
+/// actionable diagnostic detail for a typed-exit rejection.
+///
+/// Display preserves the legacy `"compile error in {keyword}: rewriter
+/// must return a list; got {got}"` shape byte-for-byte so authoring
+/// tools that pattern-matched on the pre-lift rendered string see no
+/// drift across the lift; tools that pattern-match on the variant
+/// gain structural binding to `keyword` AND `got`.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 3 (typed exit) —
+/// `rewrite_typed` IS the typed-exit gate of the self-optimization
+/// primitive; any rewrite that survives the gate is well-typed by
+/// construction, AND now the rejection mode is itself structurally
+/// typed. THEORY.md §V.1 — knowable platform; the structural variant
+/// exposes `keyword` / `got` as first-class fields so authoring tools
+/// bind to the data shape instead of substring-parsing the rendered
+/// diagnostic. THEORY.md §VI.1 — generation over composition; the
+/// helper boundary lands the structural-variant promotion (parallel to
+/// how `MissingHeadSymbol` / `HeadMismatch` / `NamedFormMissingName` /
+/// `NamedFormNonSymbolName` promoted prior `Compile`-shaped sites into
+/// structural variants).
 fn rewriter_non_list_err<T: TataraDomain>(got: &Sexp) -> LispError {
-    LispError::Compile {
-        form: T::KEYWORD.to_string(),
-        message: format!("rewriter must return a list; got {got}"),
+    LispError::RewriterNonList {
+        keyword: T::KEYWORD,
+        got: got.to_string(),
     }
 }
 
@@ -3681,18 +3708,25 @@ mod tests {
     }
 
     #[test]
-    fn rewriter_non_list_err_produces_canonical_compile_shape() {
+    fn rewriter_non_list_err_produces_structural_variant() {
+        // Post-lift the helper emits the structural
+        // `LispError::RewriterNonList { keyword, got }` variant, not the
+        // `Compile`-shaped triple it used to. Fail-before-pass-after:
+        // pre-lift this same input emitted `LispError::Compile { form:
+        // "defmonitor", message: "rewriter must return a list; got 42" }`
+        // and authoring tools had to substring-grep the rendered
+        // diagnostic to recognize this specific gate; post-lift the
+        // gate IS its variant identity. `got` carries the `Sexp::Display`
+        // projection verbatim (value-rendering, not just shape name) —
+        // same posture as `HeadMismatch.got: String`.
         let got = Sexp::int(42);
         let err = rewriter_non_list_err::<MonitorSpec>(&got);
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "defmonitor", "form must be T::KEYWORD verbatim");
-                assert_eq!(
-                    message, "rewriter must return a list; got 42",
-                    "message must preserve the legacy substring shape verbatim"
-                );
+            LispError::RewriterNonList { keyword, got } => {
+                assert_eq!(keyword, "defmonitor", "keyword must be T::KEYWORD verbatim");
+                assert_eq!(got, "42", "got must preserve the Sexp::Display projection");
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::RewriterNonList, got {other:?}"),
         }
     }
 
@@ -3728,13 +3762,12 @@ mod tests {
         ];
         for (sexp, want_render) in cases {
             let err = rewriter_non_list_err::<MonitorSpec>(sexp);
-            let msg = match err {
-                LispError::Compile { message, .. } => message,
-                other => panic!("expected LispError::Compile, got {other:?}"),
+            let got = match err {
+                LispError::RewriterNonList { got, .. } => got,
+                other => panic!("expected LispError::RewriterNonList, got {other:?}"),
             };
             assert_eq!(
-                msg,
-                format!("rewriter must return a list; got {want_render}"),
+                got, *want_render,
                 "Sexp Display projection must thread through unchanged for {sexp:?}"
             );
         }
@@ -3745,11 +3778,11 @@ mod tests {
         // End-to-end through `rewrite_typed::<MonitorSpec>`: a
         // rewriter returning a non-list `Sexp` (here, an int) MUST
         // route through `rewriter_non_list_err::<MonitorSpec>` and
-        // emit a `LispError::Compile { form: "defmonitor", message:
-        // "rewriter must return a list; got 42" }`. Pre-lift this
-        // path emitted the same shape inline; post-lift it funnels
-        // through the helper, so a regression that re-inlines the
-        // shape (or drifts the form/message) fails loudly here.
+        // emit a `LispError::RewriterNonList { keyword: "defmonitor",
+        // got: "42" }`. Fail-before-pass-after: pre-lift this path
+        // emitted `LispError::Compile { ... }` and a regression that
+        // re-inlines the shape (or drifts the keyword/got) fails
+        // loudly here.
         let input = MonitorSpec {
             name: "x".into(),
             query: "q".into(),
@@ -3760,11 +3793,11 @@ mod tests {
         };
         let err = rewrite_typed(input, |_sexp| Ok(Sexp::int(42))).unwrap_err();
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "defmonitor");
-                assert_eq!(message, "rewriter must return a list; got 42");
+            LispError::RewriterNonList { keyword, got } => {
+                assert_eq!(keyword, "defmonitor");
+                assert_eq!(got, "42");
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::RewriterNonList, got {other:?}"),
         }
     }
 
@@ -3805,14 +3838,11 @@ mod tests {
             let bad_disp = format!("{bad}");
             let err = rewrite_typed(clone, |_sexp| Ok(bad.clone())).unwrap_err();
             match err {
-                LispError::Compile { form, message } => {
-                    assert_eq!(form, "defmonitor");
-                    assert_eq!(
-                        message,
-                        format!("rewriter must return a list; got {bad_disp}"),
-                    );
+                LispError::RewriterNonList { keyword, got } => {
+                    assert_eq!(keyword, "defmonitor");
+                    assert_eq!(got, bad_disp);
                 }
-                other => panic!("expected LispError::Compile, got {other:?}"),
+                other => panic!("expected LispError::RewriterNonList, got {other:?}"),
             }
         }
     }
@@ -3878,12 +3908,12 @@ mod tests {
         }
         let got = Sexp::int(0);
         match rewriter_non_list_err::<MonitorSpec>(&got) {
-            LispError::Compile { form, .. } => assert_eq!(form, "defmonitor"),
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            LispError::RewriterNonList { keyword, .. } => assert_eq!(keyword, "defmonitor"),
+            other => panic!("expected LispError::RewriterNonList, got {other:?}"),
         }
         match rewriter_non_list_err::<LocalSpec>(&got) {
-            LispError::Compile { form, .. } => assert_eq!(form, "deflocal"),
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            LispError::RewriterNonList { keyword, .. } => assert_eq!(keyword, "deflocal"),
+            other => panic!("expected LispError::RewriterNonList, got {other:?}"),
         }
     }
 

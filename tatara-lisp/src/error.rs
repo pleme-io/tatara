@@ -851,6 +851,55 @@ pub enum LispError {
         keyword: &'static str,
         got: &'static str,
     },
+    /// `rewrite_typed::<T>` — the typed-exit gate of the self-optimization
+    /// primitive (THEORY.md §II.1 invariant 3) — was handed a rewriter
+    /// closure whose output, after typed round-trip through canonical JSON,
+    /// did not project to `Sexp::List`. The round-trip contract is:
+    /// serialize `T` → `Sexp::List` (alternating kwargs), hand the list
+    /// to the rewriter `F`, re-enter `T::compile_from_args` over the
+    /// returned list's items. A non-list result violates that contract —
+    /// the gate fires before `compile_from_args` runs, so a wrong-shaped
+    /// rewriter output is rejected at the typed-exit boundary rather than
+    /// confusingly later inside the kwargs decoder.
+    ///
+    /// Mirror at the typed-exit boundary of the typed-entry-side
+    /// `NamedFormNonSymbolName` lift: the latter rejects a wrong-typed
+    /// NAME slot at `compile_named_from_forms::<T>`'s entry; this variant
+    /// rejects a wrong-typed rewriter output at `rewrite_typed::<T>`'s
+    /// exit. Both round-trip the same compile-time `T::KEYWORD` projection
+    /// into the variant's `keyword` slot, so authoring tools (REPL, LSP,
+    /// `tatara-check`) bind on variant identity at both boundaries of the
+    /// self-optimization primitive rather than substring-grepping the
+    /// rendered diagnostic.
+    ///
+    /// `keyword` is `&'static str` because every call site passes
+    /// `T::KEYWORD` from `rewrite_typed::<T>` — a compile-time literal
+    /// sourced from the `#[tatara(keyword = "...")]` derive attribute (or
+    /// hand-written const). Using a static slot makes that compile-time
+    /// guarantee load-bearing in the type system — a typo can never drift
+    /// into the diagnostic at runtime, the type system is the floor, same
+    /// posture as `NotAListForm.keyword`, `MissingHeadSymbol.keyword`,
+    /// `HeadMismatch.keyword`, `NamedFormMissingName.keyword`, and
+    /// `NamedFormNonSymbolName.keyword`. `got` is `String` because it
+    /// carries the offending Sexp's `Display` projection — the value the
+    /// rewriter actually produced, not just its outermost shape name —
+    /// parallel to `HeadMismatch.got: String` and `MissingHeadSymbol.got:
+    /// Option<String>`; for a typed-exit-side rejection the value (not
+    /// just its shape) is the actionable diagnostic detail, since
+    /// authoring a rewriter that returns the wrong value is the failure
+    /// mode being named.
+    ///
+    /// Display matches the legacy `Compile`-shaped diagnostic byte-for-
+    /// byte — `"compile error in {keyword}: rewriter must return a list;
+    /// got {got}"` — so existing consumer assertions (`tatara-check`'s
+    /// diagnostic capture, REPL substring-greps that match on `"rewriter
+    /// must return a list; got "`) pass unchanged across the lift. When
+    /// a future run gives `Sexp` source spans, `pos: Option<usize>`
+    /// lands here in ONE place and every rewriter-non-list site picks up
+    /// positional rendering via `crate::diagnostic::format_diagnostic`
+    /// mechanically.
+    #[error("compile error in {keyword}: rewriter must return a list; got {got}")]
+    RewriterNonList { keyword: &'static str, got: String },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -940,7 +989,8 @@ impl LispError {
             | Self::NotAListForm { .. }
             | Self::MissingHeadSymbol { .. }
             | Self::NamedFormMissingName { .. }
-            | Self::NamedFormNonSymbolName { .. } => None,
+            | Self::NamedFormNonSymbolName { .. }
+            | Self::RewriterNonList { .. } => None,
         }
     }
 }
@@ -2442,5 +2492,125 @@ mod tests {
             msg.contains("compile error in defmonitor:"),
             "expected legacy form-label prefix in message, got: {msg}"
         );
+    }
+
+    // ── RewriterNonList: typed-exit structural-variant lift ─────────
+    //
+    // `rewriter_non_list_err::<T>` (the typed-exit gate of
+    // `rewrite_typed::<T>`'s round-trip) was promoted from the
+    // `LispError::Compile`-shaped triple to the structural
+    // `LispError::RewriterNonList { keyword, got }` variant. The
+    // tests below pin: (a) Display matches the legacy `"compile error
+    // in {keyword}: rewriter must return a list; got {got}"` shape
+    // byte-for-byte across representative `got` renderings (int,
+    // symbol, nil rendered as "()", quoted form); (b) the legacy
+    // substring `"rewriter must return a list; got "` and the legacy
+    // prefix `"compile error in {keyword}:"` both survive the lift
+    // unchanged for substring-grep consumers; (c) kebab-case keywords
+    // thread unchanged; (d) `position()` is `None` today (lands as
+    // one branch when source spans arrive).
+
+    #[test]
+    fn rewriter_non_list_display_renders_legacy_shape_with_int_got() {
+        // `Sexp::int(42)` projects to `Sexp::Display = "42"`. The variant
+        // renders the legacy `"compile error in {keyword}: rewriter must
+        // return a list; got {got}"` shape byte-for-byte — same wording
+        // as the pre-lift `Compile`-shaped triple.
+        let err = LispError::RewriterNonList {
+            keyword: "defmonitor",
+            got: "42".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: rewriter must return a list; got 42"
+        );
+    }
+
+    #[test]
+    fn rewriter_non_list_display_carries_symbol_got_unchanged() {
+        // `Sexp::symbol("not-a-list")` projects to `"not-a-list"`. Pin
+        // path-uniformity across distinct `Sexp::Display` outputs: the
+        // `got` slot threads the value-rendering into the diagnostic
+        // unchanged.
+        let err = LispError::RewriterNonList {
+            keyword: "defmonitor",
+            got: "not-a-list".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: rewriter must return a list; got not-a-list"
+        );
+    }
+
+    #[test]
+    fn rewriter_non_list_display_carries_nil_got_as_paren_paren() {
+        // `Sexp::Nil` projects to `"()"` per the `Sexp::Display`
+        // contract — NOT `"nil"`. Pin the contract so a regression
+        // that drifts `Sexp::Nil`'s Display fails-loudly here even
+        // before reaching the rewriter end-to-end test.
+        let err = LispError::RewriterNonList {
+            keyword: "defmonitor",
+            got: "()".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: rewriter must return a list; got ()"
+        );
+    }
+
+    #[test]
+    fn rewriter_non_list_display_carries_kebab_case_keyword_unchanged() {
+        // Kebab-cased domain keywords (`defprocess-spec`,
+        // `defalert-policy`) round-trip through the rendered
+        // diagnostic's `compile error in {keyword}:` prefix unchanged.
+        // A regression that camelCases the keyword fails-loudly here.
+        let err = LispError::RewriterNonList {
+            keyword: "defprocess-spec",
+            got: "7".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defprocess-spec: rewriter must return a list; got 7"
+        );
+    }
+
+    #[test]
+    fn rewriter_non_list_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"rewriter must return a list;
+        // got "` — as a separate assertion so a regression that drifts
+        // the wording (e.g., to "rewriter returned non-list", "expected
+        // list output") fails-loudly here. The substring is what
+        // consumers downstream (`tatara-check`, the REPL) substring-
+        // match on; the prefix matches the legacy `Compile { form:
+        // T::KEYWORD.to_string(), message: format!("rewriter must
+        // return a list; got {other}") }` byte-for-byte.
+        let err = LispError::RewriterNonList {
+            keyword: "defmonitor",
+            got: "42".into(),
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("rewriter must return a list; got "),
+            "expected legacy substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("compile error in defmonitor:"),
+            "expected legacy form-label prefix in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn rewriter_non_list_position_is_none_today() {
+        // Until `Sexp` carries source positions, the variant's
+        // `position()` returns `None`. Pin the contract: a future run
+        // that adds `pos: Option<usize>` does so deliberately —
+        // `rewrite_typed`'s rewriter-output rejection picks up the
+        // span automatically because it routes through one helper
+        // (`rewriter_non_list_err`).
+        let err = LispError::RewriterNonList {
+            keyword: "defmonitor",
+            got: "42".into(),
+        };
+        assert_eq!(err.position(), None);
     }
 }

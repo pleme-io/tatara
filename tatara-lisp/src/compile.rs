@@ -13,7 +13,7 @@
 //!     This is the shape used by ProcessSpec / `(defpoint name …)`.
 
 use crate::ast::Sexp;
-use crate::domain::TataraDomain;
+use crate::domain::{sexp_type_name, TataraDomain};
 use crate::error::{LispError, Result};
 use crate::macro_expand::Expander;
 use crate::reader::read;
@@ -29,58 +29,60 @@ pub struct NamedDefinition<T> {
 /// Back-compat alias — the old `Definition` type was `NamedDefinition<ProcessSpec>`.
 pub type Definition<T> = NamedDefinition<T>;
 
-/// Lift the inline `LispError::Compile { form: T::KEYWORD.to_string(),
-/// message: "positional NAME must be a symbol or string" }` triple at
-/// the NAME-slot validation site in `compile_named_from_forms::<T>`
-/// into ONE named primitive. Sibling of `LispError::NamedFormMissingName`
-/// (the structural variant already in flight on the rejection chain):
-/// that variant fires when the form has no NAME slot at all
-/// (`(defpoint)`); this helper fires AFTER the arity gate has passed
-/// but BEFORE `T::compile_from_args` runs — at the second of two
+/// Promote the previously `LispError::Compile`-shaped helper into the
+/// structural `LispError::NamedFormNonSymbolName { keyword, got }`
+/// variant. Sibling of `NamedFormMissingName { keyword }` — that variant
+/// fires when the form has no NAME slot at all (`(defpoint)`); this
+/// helper fires AFTER the arity gate has passed but BEFORE
+/// `T::compile_from_args` runs — at the second of two
 /// `compile_named_from_forms` rejection points
-/// (arity → name-symbol-or-string → compile_from_args).
-///
-/// Emission stays `LispError::Compile`-shaped (byte-identical Display)
-/// so authoring-tool substring greps (`tatara-check`, REPL) see no
-/// drift across the lift. Naming the failure mode at the helper
-/// boundary instead of inline at the call site:
-///
-/// 1. Centralizes the canonical legacy message
-///    `"positional NAME must be a symbol or string"` in ONE place —
-///    a typo can never drift if the lift is ever extended to a
-///    second site (e.g. a future `compile_named_from_sexp` entry
-///    point that shares the gate).
-/// 2. Names the failure mode at the type level — the helper is the
-///    one place to land a future promotion to a structural variant
-///    (e.g. `LispError::NamedFormNonSymbolName { keyword, got }`).
-///    Every call site picks up the promotion mechanically.
-/// 3. Closes the "compile.rs has zero inline `LispError::Compile {
-///    ... }` triples" milestone — every emission site in this file
-///    now funnels through either a structural variant
-///    (`NamedFormMissingName`) or a named helper (this one).
+/// (arity → name-symbol-or-string → compile_from_args). After this lift
+/// the entire `compile_named_from_forms::<T>` rejection chain is
+/// structurally typed end-to-end — every gate in the named-form
+/// authoring surface (`(defpoint NAME …)`, `(defalertpolicy NAME …)`,
+/// `(defcompiler NAME …)`) emits a pattern-matchable variant.
 ///
 /// `T` is the typed-domain witness; the helper projects to
-/// `T::KEYWORD.to_string()` at the boundary so the variant's `form`
-/// slot carries the authoring-surface keyword verbatim, parallel to
-/// how `NamedFormMissingName { keyword: T::KEYWORD }` carries the
-/// same identifier as a `&'static str`.
+/// `T::KEYWORD` (`&'static str`) at the boundary so the variant's
+/// `keyword` slot encodes the compile-time guarantee in the type
+/// system — a typo in the keyword can never drift into the
+/// diagnostic at runtime, same posture as `NamedFormMissingName.
+/// keyword`, `NotAListForm.keyword`, `MissingHeadSymbol.keyword`,
+/// `HeadMismatch.keyword`, `TypeMismatch.expected`, and the
+/// `Defmacro*.head` family. `got: &Sexp` is projected through
+/// `sexp_type_name` at the boundary so the variant's `got` slot is
+/// also `&'static str` (sourced from `sexp_type_name`'s exhaustive
+/// match over `Sexp` — same posture as `TypeMismatch.got`); a future
+/// `Sexp` variant gets named in `sexp_type_name` once and every
+/// consumer inherits.
 ///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; one
-/// inline copy still earns a named primitive once the structural
-/// shape is named (the test count gives this the fail-before/pass-
-/// after edge, parallel to how `splice_outside_list`,
-/// `non_symbol_param`, and `rest_param_missing_name` were lifted
-/// from a single site for the structural-completeness payoff).
-/// THEORY.md §V.1 — knowable platform; naming the failure mode at
-/// the helper boundary is the first step toward exposing
-/// `keyword` / `got` as first-class fields on a future structural
-/// variant. THEORY.md §II.1 invariant 1 — typed entry; a NAME slot
-/// that isn't a symbol or string is exactly the failure mode the
-/// typed-entry gate exists to reject.
-fn named_form_non_symbol_name<T: TataraDomain>() -> LispError {
-    LispError::Compile {
-        form: T::KEYWORD.to_string(),
-        message: "positional NAME must be a symbol or string".into(),
+/// Display preserves the legacy `"compile error in {keyword}:
+/// positional NAME must be a symbol or string"` prefix byte-for-byte
+/// AND appends the structural detail `(got {got})` parenthetically
+/// — same posture as `MissingHeadSymbol`'s `(got {g})` /
+/// `(empty list)` and `RestParamMissingName`'s `(rest marker at
+/// position {n}, …)`. Authoring tools that pattern-matched on the
+/// pre-lift rendered string see the legacy substring unchanged;
+/// tools that pattern-match on the variant gain structural binding
+/// to `keyword` AND `got`.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// the helper boundary lands the structural-variant promotion
+/// (parallel to how `MissingHeadSymbol` / `HeadMismatch` /
+/// `NamedFormMissingName` promoted prior `Compile`-shaped sites
+/// into structural variants). THEORY.md §II.1 invariant 1 — typed
+/// entry; a NAME slot that isn't a symbol or string is exactly the
+/// failure mode the typed-entry gate exists to reject, AND now the
+/// failure mode is itself structurally typed (operators / authoring
+/// tools can pattern-match on identity, no substring parse
+/// required). THEORY.md §V.1 — knowable platform; the structural
+/// variant exposes `keyword` / `got` as first-class fields so
+/// authoring tools (LSP, REPL, `tatara-check`) bind to the data
+/// shape instead of substring-parsing the rendered diagnostic.
+fn named_form_non_symbol_name<T: TataraDomain>(got: &Sexp) -> LispError {
+    LispError::NamedFormNonSymbolName {
+        keyword: T::KEYWORD,
+        got: sexp_type_name(got),
     }
 }
 
@@ -128,7 +130,7 @@ pub fn compile_named_from_forms<T: TataraDomain>(
         }
         let name = list[1]
             .as_symbol_or_string()
-            .ok_or_else(named_form_non_symbol_name::<T>)?
+            .ok_or_else(|| named_form_non_symbol_name::<T>(&list[1]))?
             .to_string();
         let spec = T::compile_from_args(&list[2..])?;
         out.push(NamedDefinition { name, spec });
@@ -195,99 +197,117 @@ mod tests {
         assert!(defs.is_empty());
     }
 
-    // ── named_form_non_symbol_name: helper lift ─────────────────────
+    // ── named_form_non_symbol_name: structural-variant lift ─────────
     //
-    // The lone inline `LispError::Compile { form: T::KEYWORD.to_string(),
-    // message: "positional NAME must be a symbol or string" }` triple in
-    // `compile_named_from_forms::<T>` (the second gate in the
-    // arity → name-symbol-or-string → compile_from_args rejection chain)
-    // was lifted to `named_form_non_symbol_name::<T>()`. Emission stays
-    // `LispError::Compile`-shaped (byte-identical Display) so authoring-
-    // tool substring greps see no drift across the lift; the gain is the
-    // named primitive at the helper boundary plus the future-promotion
-    // landing site for a structural `LispError::NamedFormNonSymbolName
-    // { keyword, got }` variant.
+    // The previously `LispError::Compile`-shaped helper
+    // `named_form_non_symbol_name::<T>()` was promoted to the
+    // structural `LispError::NamedFormNonSymbolName { keyword, got }`
+    // variant. The helper signature changes from `() -> LispError` to
+    // `(got: &Sexp) -> LispError`: the offending NAME slot's outermost
+    // shape is projected through `sexp_type_name` at the boundary so
+    // the variant's `got` slot is `&'static str` (sourced from the
+    // exhaustive match over `Sexp`'s closed set of 12 type names —
+    // same posture as `TypeMismatch.got`). Display preserves the
+    // legacy `"compile error in {keyword}: positional NAME must be a
+    // symbol or string"` prefix byte-for-byte AND appends the
+    // structural detail `(got {got})` parenthetically.
     //
     // The tests below pin: (a) each malformed NAME-slot input (int,
     // keyword, nested list) routes through the helper to the
-    // `LispError::Compile` variant with the canonical keyword and
-    // message; (b) the helper threads `T::KEYWORD` verbatim through
-    // the `form` slot; (c) end-to-end through the `LispError` Display
-    // impl matches the legacy rendering byte-for-byte; (d) the helper
+    // structural `LispError::NamedFormNonSymbolName` variant with the
+    // canonical keyword and `sexp_type_name`-projected `got`; (b) the
+    // helper threads `T::KEYWORD` verbatim through the `keyword` slot;
+    // (c) end-to-end through the `LispError` Display impl renders the
+    // legacy prefix AND the appended `(got X)` suffix; (d) the helper
     // is precisely scoped — a symbol NAME slot AND a string NAME slot
     // both pass through to `compile_from_args` cleanly, NOT through
     // the helper.
 
     #[test]
-    fn compile_named_emits_compile_variant_for_int_name_slot_via_helper() {
+    fn compile_named_emits_named_form_non_symbol_name_for_int_name_slot() {
         // `(defcompiler 5 :name "x")` — list[1] is an int literal, not
         // a symbol or string. The `as_symbol_or_string` ok_or_else
-        // chain routes through `named_form_non_symbol_name::<T>()`,
-        // which emits a `LispError::Compile { form: T::KEYWORD,
-        // message: "positional NAME must be a symbol or string" }`-
-        // shaped variant. A regression that drifts the variant (e.g.,
-        // to a different shape) or the form/message slots fails-loudly
-        // here. Same posture as the `compile_named_emits_named_form
-        // _missing_name_for_keyword_only_form` test (the arity-gate
-        // sibling): both pin the rejection-chain step at its emission
-        // shape.
+        // chain routes through `named_form_non_symbol_name::<T>(&list[1])`,
+        // which emits the structural `LispError::NamedFormNonSymbolName
+        // { keyword: "defcompiler", got: "int" }` variant. Pre-lift
+        // this same input emitted `LispError::Compile { form:
+        // "defcompiler", message: "positional NAME must be a symbol or
+        // string" }` and authoring tools had to substring-grep the
+        // rendered diagnostic AND lost the actual sexp-type name of the
+        // offending slot. Fail-before-pass-after: this assert is
+        // contradicted by the pre-lift code path, ratifies the
+        // post-lift one.
         let err = compile_named::<CompilerSpec>("(defcompiler 5 :name \"x\")").unwrap_err();
-        match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "defcompiler");
-                assert_eq!(message, "positional NAME must be a symbol or string");
-            }
-            other => panic!("expected LispError::Compile, got {other:?}"),
-        }
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormNonSymbolName {
+                    keyword: "defcompiler",
+                    got: "int",
+                }
+            ),
+            "expected NamedFormNonSymbolName {{ got: \"int\" }}, got: {err:?}"
+        );
     }
 
     #[test]
-    fn compile_named_emits_compile_variant_for_keyword_name_slot_via_helper() {
-        // `(defcompiler :foo :name "x")` — list[1] is a keyword, not a
-        // symbol or string. Sibling negative path to the int-NAME case;
-        // pins the helper covers every non-symbol-or-string Sexp shape
-        // at the NAME slot, not just integers.
+    fn compile_named_emits_named_form_non_symbol_name_for_keyword_name_slot() {
+        // `(defcompiler :foo :name "x")` — list[1] is `:foo`, a keyword.
+        // Pin path-uniformity across distinct non-symbol-non-string
+        // shapes: the `got` slot carries the `sexp_type_name(_)`
+        // projection so authoring tools bind structurally to the actual
+        // offending shape instead of having to substring-grep the
+        // rendered diagnostic.
         let err = compile_named::<CompilerSpec>("(defcompiler :foo :name \"x\")").unwrap_err();
-        match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "defcompiler");
-                assert_eq!(message, "positional NAME must be a symbol or string");
-            }
-            other => panic!("expected LispError::Compile, got {other:?}"),
-        }
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormNonSymbolName {
+                    keyword: "defcompiler",
+                    got: "keyword",
+                }
+            ),
+            "expected NamedFormNonSymbolName {{ got: \"keyword\" }}, got: {err:?}"
+        );
     }
 
     #[test]
-    fn compile_named_emits_compile_variant_for_nested_list_name_slot_via_helper() {
-        // `(defcompiler (nested) :name "x")` — list[1] is a list, not
-        // a symbol or string. Third negative path; closes the
-        // "non-symbol-or-string at NAME slot" failure-mode set across
-        // the three distinct Sexp shapes (atom-int, atom-keyword,
-        // list) the helper rejects.
+    fn compile_named_emits_named_form_non_symbol_name_for_nested_list_name_slot() {
+        // `(defcompiler (nested) :name "x")` — list[1] is a nested list.
+        // Closes the "non-symbol-or-string at NAME slot" failure-mode
+        // set across three distinct Sexp shapes (atom-int, atom-keyword,
+        // list); the `got` slot reads `list` and the inner list is NOT
+        // recursively descended (the gate is single-level —
+        // `as_symbol_or_string` is a shallow projection).
         let err = compile_named::<CompilerSpec>("(defcompiler (nested) :name \"x\")").unwrap_err();
-        match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "defcompiler");
-                assert_eq!(message, "positional NAME must be a symbol or string");
-            }
-            other => panic!("expected LispError::Compile, got {other:?}"),
-        }
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormNonSymbolName {
+                    keyword: "defcompiler",
+                    got: "list",
+                }
+            ),
+            "expected NamedFormNonSymbolName {{ got: \"list\" }}, got: {err:?}"
+        );
     }
 
     #[test]
-    fn compile_named_non_symbol_name_renders_legacy_compile_shape() {
-        // The lifted helper's Display matches the legacy `Compile`-shaped
-        // diagnostic byte-for-byte — `"compile error in defcompiler:
-        // positional NAME must be a symbol or string"` — so authoring
-        // tools (`tatara-check`'s diagnostic capture, REPL substring-
-        // greps) that pattern-matched on the rendered string see no
-        // drift across the lift. Parallel to how
-        // `compile_named_named_form_missing_name_renders_legacy_compile
-        // _shape` pins the arity-gate sibling's Display contract.
+    fn compile_named_non_symbol_name_renders_legacy_prefix_and_got_suffix() {
+        // The lifted variant's Display matches the legacy `Compile`-shaped
+        // diagnostic byte-for-byte across the stable prefix `"compile
+        // error in defcompiler: positional NAME must be a symbol or
+        // string"` AND appends the structural detail `" (got int)"`
+        // parallel to how `MissingHeadSymbol` appends `(got 5)` and
+        // `RestParamMissingName` appends `(rest marker at position N,
+        // got X)`. Authoring tools that pattern-matched on the pre-lift
+        // rendered string see the legacy substring unchanged; tools that
+        // pattern-match on the variant gain structural binding to
+        // `keyword` AND `got`.
         let err = compile_named::<CompilerSpec>("(defcompiler 5)").unwrap_err();
         assert_eq!(
             format!("{err}"),
-            "compile error in defcompiler: positional NAME must be a symbol or string"
+            "compile error in defcompiler: positional NAME must be a symbol or string (got int)"
         );
     }
 

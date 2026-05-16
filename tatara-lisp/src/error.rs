@@ -813,6 +813,44 @@ pub enum LispError {
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {keyword}: expected ({keyword} NAME …)")]
     NamedFormMissingName { keyword: &'static str },
+    /// `compile_named_from_forms::<T>` was passed a `(KEYWORD NAME …)` form
+    /// whose NAME slot exists but isn't projectable to a symbol or string —
+    /// `(defpoint 5 …)`, `(defpoint :foo …)`, `(defpoint (nested) …)`. Gate
+    /// 2 of the same rejection chain `NamedFormMissingName` opens: that
+    /// variant fires when there is no NAME slot at all (`(defpoint)` —
+    /// list.len() == 1); this variant fires when the NAME slot exists but
+    /// is wrong-typed. Together the two close `compile_named_from_forms`'s
+    /// outer rejection chain — every typed-entry rejection mode in the
+    /// positional-name authoring surface is now a structural variant of
+    /// `LispError`, not a `Compile`-shaped substring.
+    ///
+    /// `keyword` is `&'static str` because every call site passes
+    /// `T::KEYWORD` — a compile-time literal sourced from the
+    /// `#[tatara(keyword = "...")]` derive attribute (or hand-written
+    /// const); a typo in the keyword can never drift into the diagnostic
+    /// at runtime. `got` is `&'static str` because it is always the
+    /// output of `crate::domain::sexp_type_name`, whose match is
+    /// exhaustive over `Sexp` at compile time — same posture as
+    /// `TypeMismatch.got`. The two-`&'static str` shape makes the
+    /// compile-time guarantee load-bearing in the type system, parallel
+    /// to `NotAListForm.keyword`, `MissingHeadSymbol.keyword`,
+    /// `HeadMismatch.keyword`, and the `Defmacro*.head` family.
+    ///
+    /// Display preserves the legacy `"positional NAME must be a symbol
+    /// or string"` substring AND the `"compile error in {keyword}:"`
+    /// prefix byte-for-byte; the structural detail (`(got {got})`) is
+    /// appended in a parenthetical, parallel to how `MissingHeadSymbol`
+    /// appends `(got {g})` / `(empty list)` and how `RestParamMissingName`
+    /// appends `(rest marker at position {n}, got {g})`. When a future
+    /// run gives `Sexp` source spans, `pos: Option<usize>` lands here in
+    /// ONE place and every named-form-non-symbol-name site picks up
+    /// positional rendering via `crate::diagnostic::format_diagnostic`
+    /// mechanically.
+    #[error("compile error in {keyword}: positional NAME must be a symbol or string (got {got})")]
+    NamedFormNonSymbolName {
+        keyword: &'static str,
+        got: &'static str,
+    },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -901,7 +939,8 @@ impl LispError {
             | Self::DefmacroNonListParams { .. }
             | Self::NotAListForm { .. }
             | Self::MissingHeadSymbol { .. }
-            | Self::NamedFormMissingName { .. } => None,
+            | Self::NamedFormMissingName { .. }
+            | Self::NamedFormNonSymbolName { .. } => None,
         }
     }
 }
@@ -1179,6 +1218,22 @@ mod tests {
         assert_eq!(
             LispError::NamedFormMissingName {
                 keyword: "defalertpolicy",
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::NamedFormNonSymbolName {
+                keyword: "defpoint",
+                got: "int",
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::NamedFormNonSymbolName {
+                keyword: "defalertpolicy",
+                got: "list",
             }
             .position(),
             None
@@ -2285,6 +2340,103 @@ mod tests {
         assert!(
             msg.contains("expected (defmonitor NAME"),
             "expected legacy form-label prefix in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("compile error in defmonitor:"),
+            "expected legacy form-label prefix in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn named_form_non_symbol_name_display_renders_legacy_prefix_with_int_got() {
+        // `(defpoint 5 …)` — list[1] is the int `5`. The variant renders
+        // the legacy prefix `compile error in {keyword}: positional NAME
+        // must be a symbol or string` byte-for-byte AND appends the
+        // structural detail `(got int)` parenthetically — same posture as
+        // how `MissingHeadSymbol` appends `(got 5)` and how
+        // `RestParamMissingName` appends `(rest marker at position N,
+        // got X)`. The `got` slot is `&'static str` sourced from
+        // `sexp_type_name`; pin the int-arm rendering as the canonical
+        // example.
+        let err = LispError::NamedFormNonSymbolName {
+            keyword: "defpoint",
+            got: "int",
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defpoint: positional NAME must be a symbol or string (got int)"
+        );
+    }
+
+    #[test]
+    fn named_form_non_symbol_name_display_carries_keyword_got_unchanged() {
+        // `(defpoint :foo …)` — list[1] is a `:foo` keyword. Pin
+        // path-uniformity across distinct `sexp_type_name` outputs: the
+        // `got` slot reads `keyword` (the static name from
+        // `sexp_type_name(Sexp::Atom(Atom::Keyword(_)))`), threaded into
+        // the parenthetical unchanged.
+        let err = LispError::NamedFormNonSymbolName {
+            keyword: "defpoint",
+            got: "keyword",
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defpoint: positional NAME must be a symbol or string (got keyword)"
+        );
+    }
+
+    #[test]
+    fn named_form_non_symbol_name_display_carries_list_got_unchanged() {
+        // `(defpoint (nested) …)` — list[1] is a nested list. Pin the
+        // `list` arm of `sexp_type_name` round-trips into the variant's
+        // `got` slot unchanged so an LSP that surfaces "you wrote a
+        // nested list where a NAME symbol was expected" gains the
+        // structural shape as data, no re-parsing required.
+        let err = LispError::NamedFormNonSymbolName {
+            keyword: "defalertpolicy",
+            got: "list",
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defalertpolicy: positional NAME must be a symbol or string (got list)"
+        );
+    }
+
+    #[test]
+    fn named_form_non_symbol_name_display_carries_kebab_case_keyword_unchanged() {
+        // Kebab-cased domain keywords (`defprocess-spec`, `defalert-policy`)
+        // round-trip through the rendered diagnostic's `compile error in
+        // {keyword}:` prefix unchanged. A regression that camelCases the
+        // keyword fails-loudly here.
+        let err = LispError::NamedFormNonSymbolName {
+            keyword: "defprocess-spec",
+            got: "int",
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defprocess-spec: positional NAME must be a symbol or string (got int)"
+        );
+    }
+
+    #[test]
+    fn named_form_non_symbol_name_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"positional NAME must be a symbol
+        // or string"` — as a separate assertion so a regression that
+        // drifts the wording (e.g., to "NAME must be a symbol", "NAME
+        // slot wrong-typed") fails-loudly here even if the appended
+        // parenthetical changes shape. The substring is what consumers
+        // downstream (`tatara-check`, the REPL) substring-match on
+        // today; the prefix matches the legacy `Compile { form:
+        // T::KEYWORD.to_string(), message: "positional NAME must be a
+        // symbol or string" }` byte-for-byte.
+        let err = LispError::NamedFormNonSymbolName {
+            keyword: "defmonitor",
+            got: "int",
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("positional NAME must be a symbol or string"),
+            "expected legacy substring in message, got: {msg}"
         );
         assert!(
             msg.contains("compile error in defmonitor:"),

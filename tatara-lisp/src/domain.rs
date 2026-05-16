@@ -1089,48 +1089,71 @@ fn camel_to_kebab(s: &str) -> String {
 // passes the typed re-validation is safe by construction — the Rust type
 // system is the floor.
 
-/// Lift the two byte-identical inline `LispError::Compile { form:
-/// T::KEYWORD.to_string(), message: format!("serialize…: {e}") }` sites
-/// — one in `register::<T>`'s registry-dispatch closure, one in
-/// `rewrite_typed::<T>`'s round-trip prelude — into ONE named primitive.
-/// Both sites share the exact same failure mode ("serde_json::to_value of
-/// a typed `T` value errored") and the exact same `form` slot
-/// (`T::KEYWORD.to_string()`), differing only in the message body —
-/// `"serialize: {e}"` versus the redundant-keyword `"serialize {KEYWORD}:
-/// {e}"`. Canonicalizing both on `"serialize: {e}"` drops the keyword
-/// repetition from the `rewrite_typed` display (was `"compile error in
-/// defmonitor: serialize defmonitor: …"`, now `"compile error in
-/// defmonitor: serialize: …"`) so the two sites render uniformly and a
-/// future structural promotion (e.g. `LispError::DomainSerialize {
-/// keyword: &'static str, source: serde_json::Error }`) lands as ONE
-/// signature change inside the helper.
+/// Promote the previously `LispError::Compile`-shaped helper into the
+/// structural `LispError::DomainSerialize { keyword, message }` variant
+/// — the typed-exit-side `to_value` mirror of the typed-entry-side
+/// `NamedFormNonSymbolName` / typed-exit-side `RewriterNonList` lifts.
+/// The gate fires when `serde_json::to_value` of a typed `T` value
+/// errors at two byte-identical sites: `register::<T>`'s registry-
+/// dispatch closure (serializes the just-typed value to JSON for the
+/// dispatcher) and `rewrite_typed::<T>`'s round-trip prelude
+/// (serializes the input to JSON before projecting to a `Sexp::List`
+/// for the rewriter closure). Both share the exact same failure mode
+/// and the exact same `keyword` projection from `T::KEYWORD`; the lift
+/// promotes them to ONE structural variant so authoring tools (REPL,
+/// LSP, `tatara-check`) bind on variant identity rather than
+/// substring-grepping the rendered diagnostic.
 ///
 /// `<T: TataraDomain>` is the type-level boundary: the `T::KEYWORD`
-/// projection is mechanically applied, so a typo can never drift the
-/// `form` slot across the two call sites. The helper takes
-/// `serde_json::Error` by value so `map_err(serialize_to_json_err::<T>)`
-/// composes point-free at every site — no `.into()` boilerplate, no
-/// `&e` borrow at the call site.
+/// projection is mechanically applied to the variant's `keyword: &'static
+/// str` slot, so a typo can never drift across the two call sites — the
+/// type system is the floor, same posture as `RewriterNonList.keyword`,
+/// `NamedFormMissingName.keyword`, `NamedFormNonSymbolName.keyword`,
+/// `NotAListForm.keyword`, `MissingHeadSymbol.keyword`,
+/// `HeadMismatch.keyword`, and the `Defmacro*.head` family. The helper
+/// takes `serde_json::Error` by value so
+/// `map_err(serialize_to_json_err::<T>)` composes point-free at every
+/// site — no `.into()` boilerplate, no `&e` borrow at the call site.
+/// The `serde_json::Error::Display` projection is materialized into the
+/// variant's `message: String` slot at the boundary so the variant
+/// lives independent of the call frame and the original error chain
+/// (other variants in this enum are also `String`-carrying;
+/// participating in the same Display contract keeps every consumer's
+/// rendering pipeline uniform).
+///
+/// Display matches the legacy `Compile`-shaped diagnostic byte-for-byte
+/// — `"compile error in {keyword}: serialize: {message}"` — so
+/// existing substring-grep consumers (`tatara-check`'s diagnostic
+/// capture, REPL substring-greps that match on `"serialize: "`) pass
+/// unchanged across the lift. The redundant-keyword `"serialize
+/// {KEYWORD}: …"` shape that `rewrite_typed` carried pre-canonicalize
+/// is already gone (the canonicalize step landed before the structural
+/// lift); both sites render the cleaner `"serialize: …"` shape now.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
 /// three-times rule, decisively crossed across two functions in this
-/// file (`register::<T>` + `rewrite_typed::<T>`, two sites today;
-/// `rewriter_non_list_err::<T>` immediately below names the third
-/// gate). Parallel to `deserialize_err` / `deserialize_item_err` (the
-/// extractor-side `serde_json::from_value` failure mode is already
-/// lifted to ONE named primitive per shape), so the substrate's
-/// JSON-boundary diagnostic surface — `from_value` (extractors) and
-/// `to_value` (registry + rewriter) — is symmetric: both directions
-/// funnel through a named domain-keyed primitive. THEORY.md §II.1
-/// invariant 1 (typed entry): the JSON-projection round-trip is the
-/// proof; the helper names its rejection shape at the type level so
-/// authoring surfaces (`tatara-check`, REPL, future LSP) bind to a
-/// uniform "serialize-failed" diagnostic shape regardless of whether
-/// the failure originated at registry-dispatch time or rewriter time.
+/// file (`register::<T>` + `rewrite_typed::<T>`, two sites; the third
+/// `to_value`-side gate `rewriter_non_list_err::<T>` immediately below
+/// is the typed-exit-list sibling). After this lift the `to_value`
+/// boundary's two distinct rejection modes BOTH bind to structural
+/// variants of `LispError` keyed on `T::KEYWORD` —
+/// `DomainSerialize { keyword, message }` (serialize-failed) +
+/// `RewriterNonList { keyword, got }` (output-wrong-shape) — so the
+/// substrate's typed-exit JSON surface is structurally complete on the
+/// emission side. The `from_value` direction (the typed-entry JSON
+/// boundary, key-keyed via `deserialize_err` / `deserialize_item_err`)
+/// remains the last `LispError::Compile { ... }` construction site in
+/// this file; promoting it is a future-run lift parallel to this one
+/// but key-keyed instead of keyword-keyed. THEORY.md §II.1 invariant 1
+/// (typed entry) + invariant 3 (typed exit): the JSON-projection
+/// round-trip is the proof; the helper names its rejection shape at
+/// the type level so authoring surfaces bind to a uniform "serialize-
+/// failed" structural shape regardless of whether the failure
+/// originated at registry-dispatch time or rewriter time.
 fn serialize_to_json_err<T: TataraDomain>(e: serde_json::Error) -> LispError {
-    LispError::Compile {
-        form: T::KEYWORD.to_string(),
-        message: format!("serialize: {e}"),
+    LispError::DomainSerialize {
+        keyword: T::KEYWORD,
+        message: e.to_string(),
     }
 }
 
@@ -3645,13 +3668,23 @@ mod tests {
     // `rewrite_typed::<T>` (round-trip prelude) — funnel through
     // `serialize_to_json_err::<T>`. The lone inline non-list-rewriter
     // gate in `rewrite_typed::<T>` funnels through
-    // `rewriter_non_list_err::<T>`. These tests pin: (a) the helpers
-    // produce the canonical `Compile`-shaped variant with `form =
-    // T::KEYWORD`; (b) Display renders the canonical
+    // `rewriter_non_list_err::<T>`. These tests pin: (a) the
+    // serialize helper produces the structural
+    // `LispError::DomainSerialize { keyword: T::KEYWORD, message }`
+    // variant — fail-before-pass-after: pre-lift this assertion
+    // matched on `LispError::Compile { form, message }` with
+    // `form = T::KEYWORD.to_string()`; post-lift the variant identity
+    // IS the diagnostic, no substring parse required;
+    // (b) the non-list-rewriter helper produces the structural
+    // `LispError::RewriterNonList { keyword, got }` variant with
+    // `keyword = T::KEYWORD`;
+    // (c) Display renders the canonical
     // `"compile error in <keyword>: serialize: …"` / `"compile error
-    // in <keyword>: rewriter must return a list; got …"` shape;
-    // (c) end-to-end through `rewrite_typed` — a rewriter returning a
-    // non-list `Sexp` routes through the helper with the right shape.
+    // in <keyword>: rewriter must return a list; got …"` shape
+    // byte-for-byte across the lift so substring-grep consumers see no
+    // drift; (d) end-to-end through `rewrite_typed` — a rewriter
+    // returning a non-list `Sexp` routes through the helper with the
+    // right shape.
     //
     // The redundant-keyword `"serialize {KEYWORD}: …"` shape that
     // `rewrite_typed` used pre-lift is dropped; both sites now render
@@ -3667,20 +3700,33 @@ mod tests {
     }
 
     #[test]
-    fn serialize_to_json_err_produces_canonical_compile_shape() {
+    fn serialize_to_json_err_produces_structural_domain_serialize_variant() {
+        // Post-lift the helper emits the structural
+        // `LispError::DomainSerialize { keyword, message }` variant,
+        // not the `Compile`-shaped triple it used to. Fail-before-
+        // pass-after: pre-lift this same input emitted
+        // `LispError::Compile { form: "defmonitor", message:
+        // "serialize: <e>" }` and authoring tools had to substring-
+        // grep the rendered diagnostic to recognize this specific
+        // gate; post-lift the gate IS its variant identity. `keyword`
+        // carries `T::KEYWORD` verbatim (compile-time guarantee load-
+        // bearing in the type system); `message` carries the
+        // `serde_json::Error::Display` projection unchanged — no
+        // `"serialize: "` prefix in the field, the prefix is in
+        // `LispError::Display` so consumers binding on the field get
+        // the raw underlying message.
         let e = make_serde_err();
         let raw = format!("{e}");
         let err = serialize_to_json_err::<MonitorSpec>(e);
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "defmonitor", "form must be T::KEYWORD verbatim");
+            LispError::DomainSerialize { keyword, message } => {
+                assert_eq!(keyword, "defmonitor", "keyword must be T::KEYWORD verbatim");
                 assert_eq!(
-                    message,
-                    format!("serialize: {raw}"),
-                    "message must be the canonical `serialize: {{e}}` projection"
+                    message, raw,
+                    "message must be the serde_json::Error::Display projection verbatim",
                 );
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::DomainSerialize, got {other:?}"),
         }
     }
 
@@ -3688,9 +3734,10 @@ mod tests {
     fn serialize_to_json_err_display_renders_canonical_string() {
         // The Display impl renders `"compile error in <keyword>:
         // serialize: <e>"` — `tatara-check` / REPL / future LSP that
-        // substring-grep this shape see no drift, and the redundant
-        // keyword repetition (`"serialize defmonitor: …"`) that
-        // `rewrite_typed` used pre-lift is gone.
+        // substring-grep this shape see no drift across the structural
+        // lift, and the redundant keyword repetition (`"serialize
+        // defmonitor: …"`) that `rewrite_typed` used pre-canonicalize
+        // is gone.
         let e = make_serde_err();
         let raw = format!("{e}");
         let err = serialize_to_json_err::<MonitorSpec>(e);
@@ -3699,8 +3746,8 @@ mod tests {
             rendered,
             format!("compile error in defmonitor: serialize: {raw}"),
         );
-        // Negative: the pre-lift `"serialize defmonitor: …"` redundant-
-        // keyword shape must NOT appear in the new render.
+        // Negative: the pre-canonicalize `"serialize defmonitor: …"`
+        // redundant-keyword shape must NOT appear in the new render.
         assert!(
             !rendered.contains("serialize defmonitor:"),
             "redundant-keyword shape must be gone, got: {rendered}"
@@ -3899,12 +3946,12 @@ mod tests {
         let e2 = make_serde_err();
         let l_err = serialize_to_json_err::<LocalSpec>(e2);
         match m_err {
-            LispError::Compile { form, .. } => assert_eq!(form, "defmonitor"),
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            LispError::DomainSerialize { keyword, .. } => assert_eq!(keyword, "defmonitor"),
+            other => panic!("expected LispError::DomainSerialize, got {other:?}"),
         }
         match l_err {
-            LispError::Compile { form, .. } => assert_eq!(form, "deflocal"),
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            LispError::DomainSerialize { keyword, .. } => assert_eq!(keyword, "deflocal"),
+            other => panic!("expected LispError::DomainSerialize, got {other:?}"),
         }
         let got = Sexp::int(0);
         match rewriter_non_list_err::<MonitorSpec>(&got) {

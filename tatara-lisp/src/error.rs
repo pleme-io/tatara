@@ -900,6 +900,72 @@ pub enum LispError {
     /// mechanically.
     #[error("compile error in {keyword}: rewriter must return a list; got {got}")]
     RewriterNonList { keyword: &'static str, got: String },
+    /// `serde_json::to_value` of a typed `T` value (any registered
+    /// `TataraDomain`) errored. Two sites share this failure mode:
+    /// `register::<T>`'s registry-dispatch closure (the registered
+    /// handler serializes the just-typed value to JSON for the
+    /// dispatcher) and `rewrite_typed::<T>`'s round-trip prelude (the
+    /// self-optimization primitive serializes its input to JSON before
+    /// projecting it to a `Sexp::List` for the rewriter closure). Both
+    /// funnel through `serialize_to_json_err::<T>` so the type-level
+    /// `T::KEYWORD` projection is mechanically threaded into the
+    /// `keyword` slot, parallel to how `rewriter_non_list_err::<T>`
+    /// threads `T::KEYWORD` into `RewriterNonList.keyword`.
+    ///
+    /// Mirror at the typed-exit boundary of the typed-entry-side
+    /// `from_value` failure path (`extract_via_serde` /
+    /// `extract_vec_via_serde` still route through the legacy
+    /// `LispError::Compile { form: kwarg_form(key), message:
+    /// format!("deserialize: {e}") }` shape via `deserialize_err` /
+    /// `deserialize_item_err` — a future run lifts that direction).
+    /// After this lift the `to_value` direction (the typed-exit JSON
+    /// boundary, keyword-keyed) is structural; the `from_value`
+    /// direction (the typed-entry JSON boundary, key-keyed) remains
+    /// the only `LispError::Compile { ... }` construction site in
+    /// `tatara-lisp/src/domain.rs`.
+    ///
+    /// Sibling of `RewriterNonList { keyword, got }` for the
+    /// `rewrite_typed::<T>` rejection chain — that variant fires when
+    /// the rewriter's OUTPUT is not a list; this variant fires when
+    /// the round-trip's INPUT (the typed value) fails to project to
+    /// JSON at all. Together with `RewriterNonList`, every distinct
+    /// `to_value`-side rejection mode in the self-optimization
+    /// primitive and the registry-dispatch closure binds to ONE
+    /// structural variant of `LispError`, not a `Compile`-shaped
+    /// substring.
+    ///
+    /// `keyword` is `&'static str` because every call site projects
+    /// `T::KEYWORD` via `serialize_to_json_err::<T>` — a compile-time
+    /// literal sourced from the `#[tatara(keyword = "...")]` derive
+    /// attribute (or hand-written const). Using a static slot makes
+    /// that compile-time guarantee load-bearing in the type system —
+    /// a typo can never drift into the diagnostic at runtime, the
+    /// type system is the floor, same posture as
+    /// `RewriterNonList.keyword`, `NamedFormMissingName.keyword`,
+    /// `NamedFormNonSymbolName.keyword`, `NotAListForm.keyword`,
+    /// `MissingHeadSymbol.keyword`, `HeadMismatch.keyword`, and the
+    /// `Defmacro*.head` family. `message` is `String` because it
+    /// carries the `serde_json::Error::Display` projection (errors
+    /// render `expected … at line L column C` shapes — arbitrary text
+    /// from the underlying `serde_json::Error`). Carrying the rendered
+    /// message rather than a `#[source] serde_json::Error` keeps the
+    /// variant's structural shape parallel to every other String-
+    /// carrying variant in this enum — every consumer renders via
+    /// Display, none consumes the underlying error chain.
+    ///
+    /// Display matches the legacy `Compile`-shaped diagnostic byte-
+    /// for-byte — `"compile error in {keyword}: serialize: {message}"`
+    /// — so existing consumer assertions (`tatara-check`'s diagnostic
+    /// capture, REPL substring-greps that match on `"serialize: "`)
+    /// pass unchanged across the lift. When a future run gives `Sexp`
+    /// source spans, `pos: Option<usize>` lands here in ONE place and
+    /// every domain-serialize site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in {keyword}: serialize: {message}")]
+    DomainSerialize {
+        keyword: &'static str,
+        message: String,
+    },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -990,7 +1056,8 @@ impl LispError {
             | Self::MissingHeadSymbol { .. }
             | Self::NamedFormMissingName { .. }
             | Self::NamedFormNonSymbolName { .. }
-            | Self::RewriterNonList { .. } => None,
+            | Self::RewriterNonList { .. }
+            | Self::DomainSerialize { .. } => None,
         }
     }
 }
@@ -1284,6 +1351,30 @@ mod tests {
             LispError::NamedFormNonSymbolName {
                 keyword: "defalertpolicy",
                 got: "list",
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::RewriterNonList {
+                keyword: "defmonitor",
+                got: "42".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::DomainSerialize {
+                keyword: "defmonitor",
+                message: "expected value at line 1 column 1".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::DomainSerialize {
+                keyword: "defalertpolicy",
+                message: "key must be a string".into(),
             }
             .position(),
             None
@@ -2612,5 +2703,111 @@ mod tests {
             got: "42".into(),
         };
         assert_eq!(err.position(), None);
+    }
+
+    // ── DomainSerialize: typed-exit `to_value` structural-variant lift ──
+    //
+    // `serialize_to_json_err::<T>` (the `to_value`-side gate shared
+    // between `register::<T>`'s registry-dispatch closure and
+    // `rewrite_typed::<T>`'s round-trip prelude) was promoted from the
+    // `LispError::Compile`-shaped triple to the structural
+    // `LispError::DomainSerialize { keyword, message }` variant. The
+    // tests below pin: (a) Display matches the legacy `"compile error
+    // in {keyword}: serialize: {message}"` shape byte-for-byte across
+    // representative `message` renderings (serde_json's stock
+    // diagnostic, hand-crafted message); (b) the legacy substring
+    // `"serialize: "` and the legacy prefix `"compile error in
+    // {keyword}:"` both survive the lift unchanged for substring-grep
+    // consumers; (c) kebab-case keywords thread through unchanged.
+    // The `position()` floor is pinned in the main
+    // `position_is_none_for_non_positional_variants` block above.
+
+    #[test]
+    fn domain_serialize_display_renders_legacy_shape_with_short_message() {
+        // Hand-crafted `message` slot — the variant renders the legacy
+        // `"compile error in {keyword}: serialize: {message}"` shape
+        // byte-for-byte. Same wording as the pre-lift `Compile`-shaped
+        // triple in `serialize_to_json_err`.
+        let err = LispError::DomainSerialize {
+            keyword: "defmonitor",
+            message: "key must be a string".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: serialize: key must be a string"
+        );
+    }
+
+    #[test]
+    fn domain_serialize_display_carries_serde_json_diagnostic_unchanged() {
+        // Use a real `serde_json::Error` so the test exercises a
+        // representative `{e}` shape (`"expected value at line L column
+        // C"`) and pins that the variant's Display rendering threads
+        // the underlying diagnostic through unchanged.
+        let raw = serde_json::from_str::<i32>("not-a-number")
+            .expect_err("parse must fail")
+            .to_string();
+        let err = LispError::DomainSerialize {
+            keyword: "defmonitor",
+            message: raw.clone(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            format!("compile error in defmonitor: serialize: {raw}")
+        );
+    }
+
+    #[test]
+    fn domain_serialize_display_carries_kebab_case_keyword_unchanged() {
+        // Kebab-cased domain keywords (`defprocess-spec`,
+        // `defalert-policy`) round-trip through the rendered
+        // diagnostic's `compile error in {keyword}:` prefix unchanged.
+        // A regression that camelCases the keyword fails-loudly here.
+        let err = LispError::DomainSerialize {
+            keyword: "defalert-policy",
+            message: "expected struct".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defalert-policy: serialize: expected struct"
+        );
+    }
+
+    #[test]
+    fn domain_serialize_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"serialize: "` — as a separate
+        // assertion so a regression that drifts the wording (e.g., to
+        // "to_json failed", "json encode error") fails-loudly here.
+        // The substring is what consumers downstream (`tatara-check`,
+        // the REPL) substring-match on; the prefix matches the legacy
+        // `Compile { form: T::KEYWORD.to_string(), message:
+        // format!("serialize: {e}") }` byte-for-byte.
+        let err = LispError::DomainSerialize {
+            keyword: "defmonitor",
+            message: "boom".into(),
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("serialize: "),
+            "expected legacy substring in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("compile error in defmonitor:"),
+            "expected legacy form-label prefix in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn domain_serialize_display_empty_message_renders_bare_prefix() {
+        // Edge case: an empty `message` slot renders as `"compile
+        // error in {keyword}: serialize: "` — pin the trailing space
+        // after the `serialize:` marker stays put. A regression that
+        // strips trailing whitespace (e.g., via `.trim_end()`) or
+        // drops the marker entirely fails-loudly here.
+        let err = LispError::DomainSerialize {
+            keyword: "defmonitor",
+            message: String::new(),
+        };
+        assert_eq!(format!("{err}"), "compile error in defmonitor: serialize: ");
     }
 }

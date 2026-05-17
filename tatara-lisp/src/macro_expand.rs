@@ -27,7 +27,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 use crate::ast::Sexp;
-use crate::error::{LispError, Result};
+use crate::error::{LispError, Result, TemplateInvariantKind};
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
@@ -336,49 +336,42 @@ fn contains_unquote(node: &Sexp) -> bool {
     }
 }
 
-/// Lift the four byte-identical inline `LispError::Compile { form:
-/// macro_name.into(), message: <invariant> }` triples in `apply_compiled`
-/// into ONE named primitive. Every invariant violation here is a
-/// COMPILER-INTERNAL bug — the bytecode that drives `apply_compiled` is
-/// produced by `compile_template` / `compile_node` in this same file, and
-/// a well-formed bytecode never references an out-of-bounds param index
-/// (Subst / Splice gates) nor leaves the runtime stack unbalanced at the
-/// final pop (EndList / no-value gates). The helper names that invariant
-/// at the type level: the four sites — Subst-bad-index, Splice-bad-index,
-/// EndList-empty-stack, final-no-value — funnel through ONE emission
-/// shape, so any future structural promotion (e.g. a
-/// `LispError::TemplateInvariant { macro: String, kind: InvariantKind,
-/// op_index: usize }` variant that names the gate at the type level
-/// instead of substring-rendering it through `message`) lands as ONE edit
-/// inside the helper, not four edits across `apply_compiled`'s body.
+/// Promote the previously `LispError::Compile`-shaped helper into the
+/// structural `LispError::TemplateInvariant { macro_name, kind }` variant.
+/// The four reachable bytecode-runtime invariant violations in
+/// `apply_compiled` — Subst-bad-index, Splice-bad-index, EndList-empty-
+/// stack, final-no-value — funnel through ONE emission shape keyed on
+/// the closed-set `TemplateInvariantKind` enum. The index payload of
+/// the Subst / Splice gates lives INSIDE the variant (`SubstBadIndex(usize)`
+/// / `SpliceBadIndex(usize)`), so the invalid combination "stack-gate
+/// kind with an op-index" (e.g. `EndListEmptyStack` carrying a `usize`)
+/// is structurally unrepresentable — the type system encodes "this gate
+/// has an index, that gate does not."
 ///
-/// Emission stays `LispError::Compile`-shaped (byte-identical Display)
-/// so authoring-tool substring greps (`tatara-check`, REPL) see no drift
-/// across the lift. The `message: impl Into<String>` boundary accepts
-/// both `format!`-produced `String` (the Subst / Splice arms thread the
-/// op's bad index through `{idx}`) and `&'static str` literals (the
-/// EndList / no-value arms have no dynamic payload) cleanly at every
-/// call site without per-site `.into()` boilerplate.
+/// Display matches the legacy `Compile`-shaped diagnostic byte-for-byte
+/// across all four kinds (`"compile error in {macro_name}: <invariant>"`)
+/// via the closed-set `TemplateInvariantKind::message()` projection, so
+/// authoring-tool substring greps (`tatara-check`, REPL) see no drift
+/// across the lift.
 ///
-/// Theory anchor: THEORY.md §VI.1 — three-times rule, decisively crossed
-/// (four byte-identical sites in ONE function). Parallel to
-/// `named_form_non_symbol_name` (compile.rs, the immediately prior
-/// claude-routine lift on a sibling file) and `infallible_writeln!` /
-/// `infallible_write!` (diagnostic.rs, the same posture on the writeln-
-/// expect quadruple) — same lift posture, same byte-identical-Display
-/// constraint, same future-promotion landing site. THEORY.md §V.1 —
-/// knowable platform / constructive diagnostics: the bytecode-invariant
-/// failure mode is named at the helper boundary so an authoring-tool
-/// pattern-matching the `Compile`-shaped variant today picks up a
-/// structural-variant promotion (a `TemplateInvariant` variant) without
-/// touching `apply_compiled`. THEORY.md §II.1 invariant 5 (composition
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// of bytecode-invariant failure modes becomes a TYPE rather than a
+/// free-form `message: String` slot. THEORY.md §VI.1 — generation over
+/// composition; the typed enum lands the structural-completeness floor
+/// for the bytecode-runtime surface, parallel to how `CompilerSpecIoStage`
+/// lands the structural-completeness floor for the disk-persistence
+/// surface (`compiler_spec.rs`, the immediately prior claude-routine
+/// lift on a sibling file). THEORY.md §II.1 invariant 5 (composition
 /// preserves proofs): a well-formed bytecode invariant is the proof
-/// that drives the interpreter; the helper makes the proof's REJECTION
-/// shape first-class.
-fn template_invariant_violation(macro_name: &str, message: impl Into<String>) -> LispError {
-    LispError::Compile {
-        form: macro_name.into(),
-        message: message.into(),
+/// that drives the interpreter; the structural variant makes the
+/// proof's REJECTION shape first-class — authoring tools (REPL, LSP,
+/// `tatara-check`) pattern-match on the `kind` slot and bind to the
+/// gate identity directly instead of substring-parsing the rendered
+/// diagnostic.
+fn template_invariant_violation(macro_name: &str, kind: TemplateInvariantKind) -> LispError {
+    LispError::TemplateInvariant {
+        macro_name: macro_name.into(),
+        kind,
     }
 }
 
@@ -422,7 +415,7 @@ fn apply_compiled(
                     .ok_or_else(|| {
                         template_invariant_violation(
                             macro_name,
-                            format!("compiled template referenced bad param index {idx}"),
+                            TemplateInvariantKind::SubstBadIndex(*idx),
                         )
                     })?
                     .clone();
@@ -432,7 +425,7 @@ fn apply_compiled(
                 let v = args_by_index.get(*idx).ok_or_else(|| {
                     template_invariant_violation(
                         macro_name,
-                        format!("compiled template referenced bad splice index {idx}"),
+                        TemplateInvariantKind::SpliceBadIndex(*idx),
                     )
                 })?;
                 match v {
@@ -446,7 +439,7 @@ fn apply_compiled(
                 let items = stack.pop().ok_or_else(|| {
                     template_invariant_violation(
                         macro_name,
-                        "compiled template: EndList with empty stack",
+                        TemplateInvariantKind::EndListEmptyStack,
                     )
                 })?;
                 stack.last_mut().unwrap().push(Sexp::List(items));
@@ -454,7 +447,7 @@ fn apply_compiled(
         }
     }
     let mut top = stack.pop().ok_or_else(|| {
-        template_invariant_violation(macro_name, "compiled template produced no value")
+        template_invariant_violation(macro_name, TemplateInvariantKind::FinalNoValue)
     })?;
     if top.len() == 1 {
         Ok(top.remove(0))
@@ -3106,24 +3099,28 @@ mod tests {
         );
     }
 
-    // ── template_invariant_violation: helper lift ───────────────────
+    // ── template_invariant_violation: structural lift ───────────────
     //
     // The four byte-identical inline `LispError::Compile { form:
     // macro_name.into(), message: <invariant> }` triples in `apply_compiled`
     // (Subst-bad-index, Splice-bad-index, EndList-empty-stack,
-    // final-no-value gates) were lifted to `template_invariant_violation`.
-    // Emission stays `LispError::Compile`-shaped (byte-identical Display)
-    // so authoring-tool substring greps see no drift across the lift; the
-    // gain is the named primitive at the helper boundary plus the
-    // future-promotion landing site for a structural
-    // `LispError::TemplateInvariant { macro, kind, op_index }` variant.
+    // final-no-value gates) were lifted to `template_invariant_violation`,
+    // and the helper's emission was promoted from `LispError::Compile`-
+    // shape to the structural `LispError::TemplateInvariant { macro_name,
+    // kind: TemplateInvariantKind }` variant. The index payload of the
+    // Subst / Splice gates lives INSIDE the variant (`SubstBadIndex(usize)`
+    // / `SpliceBadIndex(usize)`), so the invalid combination "stack-gate
+    // kind with an op-index" (e.g. `EndListEmptyStack` carrying a `usize`)
+    // is structurally unrepresentable. Display matches the legacy
+    // `Compile`-shaped diagnostic byte-for-byte via the closed-set
+    // `TemplateInvariantKind::message()` projection so authoring-tool
+    // substring greps see no drift across the lift.
     //
-    // The tests below pin: (a) the helper produces the canonical
-    // `LispError::Compile` shape with `form = macro_name` and `message`
-    // verbatim; (b) the `Into<String>` boundary handles BOTH
-    // `format!`-produced `String` (the Subst / Splice arms) AND
-    // `&'static str` literals (the EndList / no-value arms) cleanly;
-    // (c) the two REACHABLE invariant-violation paths through
+    // The tests below pin: (a) the helper produces the structural
+    // `LispError::TemplateInvariant` variant with `macro_name` and `kind`
+    // first-class; (b) the Subst / Splice gates thread the bad index
+    // through the typed variants `SubstBadIndex(usize)` / `SpliceBadIndex(usize)`
+    // unchanged; (c) the two REACHABLE invariant-violation paths through
     // `apply_compiled` — Subst with out-of-bounds idx, Splice with
     // out-of-bounds idx — route through the helper end-to-end (the
     // EndList / no-value paths are guarded by `last_mut().unwrap()`
@@ -3136,44 +3133,38 @@ mod tests {
     // NOT route through the helper.
 
     #[test]
-    fn template_invariant_violation_emits_compile_variant_with_macro_name_as_form() {
+    fn template_invariant_violation_emits_structural_variant_with_macro_name_and_kind() {
         // Direct unit test of the helper: a fixed macro_name and a
-        // `&'static str` message produce a `LispError::Compile` variant
-        // with the macro_name in the `form` slot and the message
-        // verbatim in the `message` slot. A regression that drifts the
-        // variant (e.g., to a different shape) or swaps form/message
-        // slots fails-loudly here.
-        let err = template_invariant_violation("test-macro", "compiled template produced no value");
+        // `TemplateInvariantKind` produce a `LispError::TemplateInvariant`
+        // variant with the macro_name in the `macro_name` slot and the
+        // kind passed through verbatim in the `kind` slot. A regression
+        // that drifts the variant (e.g., back to `LispError::Compile`)
+        // or swaps the slot positions fails-loudly here.
+        let err = template_invariant_violation("test-macro", TemplateInvariantKind::FinalNoValue);
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "test-macro");
-                assert_eq!(message, "compiled template produced no value");
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "test-macro");
+                assert_eq!(kind, TemplateInvariantKind::FinalNoValue);
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
         }
     }
 
     #[test]
-    fn template_invariant_violation_threads_format_args_through_into_string() {
-        // The `message: impl Into<String>` boundary accepts a `String`
-        // produced by `format!()` cleanly — no per-site `.into()`
-        // boilerplate at the call sites for the dynamic-payload arms
-        // (Subst / Splice). Pin that the helper's signature accepts
-        // both `&'static str` and `String` at the same call-site
-        // ergonomic shape; a regression that narrows the signature
-        // (e.g., to `&str`) would force per-site `.into()` at the
-        // String-producing sites and fail here.
-        let idx = 7usize;
-        let err = template_invariant_violation(
-            "wrap",
-            format!("compiled template referenced bad param index {idx}"),
-        );
+    fn template_invariant_violation_threads_subst_idx_through_typed_variant() {
+        // The Subst gate's `usize` idx lives INSIDE the
+        // `TemplateInvariantKind::SubstBadIndex(usize)` variant rather
+        // than being substring-rendered into a free-form `message`
+        // slot. Pin that the helper threads the bad index through the
+        // typed variant unchanged; a regression that drops the index
+        // payload (e.g., via a `usize -> ()` projection) fails here.
+        let err = template_invariant_violation("wrap", TemplateInvariantKind::SubstBadIndex(7));
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "wrap");
-                assert_eq!(message, "compiled template referenced bad param index 7");
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "wrap");
+                assert_eq!(kind, TemplateInvariantKind::SubstBadIndex(7));
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
         }
     }
 
@@ -3183,22 +3174,22 @@ mod tests {
         // an empty params list: `args_by_index` has length 0, so
         // `.get(99)` returns None and the `ok_or_else` triggers
         // through the helper. Fail-before-pass-after: this same input
-        // pre-lift went through the inline `LispError::Compile {
-        // form: macro_name.into(), message: format!("compiled template
-        // referenced bad param index {idx}") }` triple at lines
-        // 376-380; post-lift it routes through
-        // `template_invariant_violation` and emits the canonical
-        // `Compile`-shaped variant with byte-identical message.
+        // pre-lift went through `LispError::Compile { form: macro_name,
+        // message: format!("compiled template referenced bad param
+        // index {idx}") }`; post-lift it routes through
+        // `template_invariant_violation` and emits the structural
+        // `TemplateInvariant { macro_name, kind: SubstBadIndex(99) }`
+        // variant with the bad index threaded through as typed data.
         let tmpl = CompiledTemplate {
             ops: vec![TemplateOp::Subst(99)],
         };
         let err = apply_compiled("test-macro", &[], &tmpl, &[]).expect_err("bad idx must error");
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "test-macro");
-                assert_eq!(message, "compiled template referenced bad param index 99");
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "test-macro");
+                assert_eq!(kind, TemplateInvariantKind::SubstBadIndex(99));
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
         }
     }
 
@@ -3206,20 +3197,19 @@ mod tests {
     fn apply_compiled_splice_bad_idx_routes_through_template_invariant_violation() {
         // Hand-crafted CompiledTemplate with a Splice(42) op against
         // an empty params list. Sibling of the Subst-bad-idx test;
-        // pins the Splice gate (lines 384-387 pre-lift) routes through
-        // the helper with the canonical `bad splice index {idx}`
-        // message.
+        // pins the Splice gate routes through the helper with the
+        // typed `SpliceBadIndex(42)` kind carrying the bad index.
         let tmpl = CompiledTemplate {
             ops: vec![TemplateOp::Splice(42)],
         };
         let err =
             apply_compiled("call-macro", &[], &tmpl, &[]).expect_err("bad splice idx must error");
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "call-macro");
-                assert_eq!(message, "compiled template referenced bad splice index 42");
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "call-macro");
+                assert_eq!(kind, TemplateInvariantKind::SpliceBadIndex(42));
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
         }
     }
 

@@ -1107,6 +1107,63 @@ pub enum LispError {
         stage: CompilerSpecIoStage,
         message: String,
     },
+    /// `apply_compiled`'s bytecode-runtime invariant violation. Four call
+    /// sites in `macro_expand.rs::apply_compiled` share this failure mode
+    /// through ONE structural variant keyed on the closed-set
+    /// `TemplateInvariantKind` enum. Every violation here is a
+    /// COMPILER-INTERNAL bug — the bytecode that drives `apply_compiled`
+    /// is produced by `compile_template` / `compile_node` in this same
+    /// module, and a well-formed bytecode never references an
+    /// out-of-bounds param index (Subst / Splice gates) nor leaves the
+    /// runtime stack unbalanced at the final pop (EndList / no-value
+    /// gates).
+    ///
+    /// Encoding the four failure modes as ONE typed enum (rather than a
+    /// free-form `message: String` slot) makes the constraint that ONLY
+    /// 4 distinct violations are reachable load-bearing in the type
+    /// system — a regression that drifts the failure mode (e.g. a fifth
+    /// "wrong opcode" gate added without a `TemplateInvariantKind`
+    /// extension) becomes a `match` compile error at the projection site,
+    /// not a substring-grep regression that ships. Same posture as
+    /// `CompilerSpecIoStage` for `CompilerSpecIo`: the closed set becomes
+    /// a TYPE, not a `matches!` literal in the helper. The index slot of
+    /// the Subst / Splice gates lives INSIDE the variant
+    /// (`SubstBadIndex(usize)` / `SpliceBadIndex(usize)`) rather than on
+    /// the outer variant as `op_index: Option<usize>`, so the invalid
+    /// combination `EndListEmptyStack { op_index: Some(_) }` is
+    /// structurally unrepresentable — the type system encodes "this gate
+    /// has an index, that gate does not."
+    ///
+    /// Display matches the legacy `Compile`-shaped diagnostic
+    /// byte-for-byte across all four kinds — `"compile error in
+    /// {macro_name}: {kind.message()}"` — so existing consumer assertions
+    /// (`tatara-check`'s diagnostic capture, REPL substring-greps that
+    /// match on `"compiled template referenced bad param index"`,
+    /// `"compiled template referenced bad splice index"`, `"compiled
+    /// template: EndList with empty stack"`, `"compiled template produced
+    /// no value"`) pass unchanged across the lift.
+    ///
+    /// `macro_name` is `String` because it comes from arbitrary source
+    /// (the call-site head symbol). `kind` is `TemplateInvariantKind` —
+    /// a closed-set typed enum whose `message()` projection feeds the
+    /// Display rendering.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+    /// of bytecode-invariant failure modes becomes a TYPE rather than a
+    /// runtime string-comparison-and-format dance. THEORY.md §VI.1 —
+    /// generation over composition; the typed enum lands the structural-
+    /// completeness floor for the bytecode-runtime surface, parallel to
+    /// how `CompilerSpecIoStage` lands the structural-completeness floor
+    /// for the disk-persistence surface and `MacroDefHead` lands it for
+    /// the macro-definition-head closed set. THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs): a well-formed bytecode invariant
+    /// is the proof that drives the interpreter; the structural variant
+    /// makes the proof's REJECTION shape first-class.
+    #[error("compile error in {macro_name}: {}", kind.message())]
+    TemplateInvariant {
+        macro_name: String,
+        kind: TemplateInvariantKind,
+    },
 }
 
 /// Closed-set identifier for the (operation, stage) pair of a
@@ -1173,6 +1230,78 @@ impl CompilerSpecIoStage {
             Self::RealizeToDiskWrite => "write",
             Self::LoadFromDiskRead => "read",
             Self::LoadFromDiskDeserialize => "deserialize",
+        }
+    }
+}
+
+/// Closed-set identifier for a bytecode-runtime invariant violation
+/// surfaced by `macro_expand.rs::apply_compiled`. Encodes the four
+/// reachable failure modes — Subst with an out-of-bounds param index,
+/// Splice with an out-of-bounds param index, EndList against an empty
+/// stack, and a final pop yielding no value — as a typed enum, so the
+/// invalid combination of "stack-gate kind with an op-index payload"
+/// (e.g. `EndListEmptyStack` carrying a `usize`) is structurally
+/// unrepresentable: the index payload lives INSIDE the variants that
+/// actually carry one (`SubstBadIndex(usize)` / `SpliceBadIndex(usize)`).
+///
+/// Same posture as `CompilerSpecIoStage`: the closed set becomes a
+/// TYPE, not a free-form `message: String` slot inside the helper. The
+/// `message()` projection feeds the `LispError::TemplateInvariant`
+/// Display rendering directly via the `#[error(...)]` annotation;
+/// adding a new bytecode-runtime invariant (e.g. a future `WrongOpcode`
+/// gate that names a malformed bytecode header at the type level)
+/// requires extending this enum, which rustc-enforces matching at the
+/// projection site.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// of bytecode-invariant failure modes becomes a TYPE rather than a
+/// runtime string-format dance. THEORY.md §VI.1 — generation over
+/// composition; the typed enum lands the structural-completeness floor
+/// for the bytecode-runtime surface, parallel to how `CompilerSpecIoStage`
+/// lands the structural-completeness floor for the disk-persistence
+/// surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TemplateInvariantKind {
+    /// `TemplateOp::Subst(idx)` referenced a param index that
+    /// `args_by_index.get(idx)` returned `None` for — the compiled
+    /// bytecode referenced an out-of-bounds required-param slot.
+    SubstBadIndex(usize),
+    /// `TemplateOp::Splice(idx)` referenced a param index that
+    /// `args_by_index.get(idx)` returned `None` for — the compiled
+    /// bytecode referenced an out-of-bounds splice-target param slot.
+    SpliceBadIndex(usize),
+    /// `TemplateOp::EndList` ran against an empty runtime stack —
+    /// `stack.pop()` returned `None`, meaning the compiled bytecode
+    /// emitted an `EndList` without a matching `BeginList`. The stack
+    /// is the proof artifact; an unbalanced stack is the bytecode
+    /// compiler's proof obligation having been silently dropped.
+    EndListEmptyStack,
+    /// The final `stack.pop()` after the bytecode loop yielded `None`
+    /// — the compiled bytecode produced no value at all (an empty op
+    /// list, or a body that consumes its own output). Distinct from
+    /// `EndListEmptyStack`: that fires mid-loop on an explicit
+    /// `EndList`; this fires after the loop on the implicit final
+    /// pop.
+    FinalNoValue,
+}
+
+impl TemplateInvariantKind {
+    /// The `{message}` slot of the legacy `LispError::Compile { form:
+    /// macro_name, message: <invariant> }` shape. Each variant projects
+    /// to the canonical message string the pre-lift inline triples
+    /// emitted — byte-for-byte equivalent so authoring-tool substring
+    /// greps (`tatara-check`, REPL) see no drift across the lift.
+    #[must_use]
+    pub fn message(self) -> String {
+        match self {
+            Self::SubstBadIndex(idx) => {
+                format!("compiled template referenced bad param index {idx}")
+            }
+            Self::SpliceBadIndex(idx) => {
+                format!("compiled template referenced bad splice index {idx}")
+            }
+            Self::EndListEmptyStack => "compiled template: EndList with empty stack".into(),
+            Self::FinalNoValue => "compiled template produced no value".into(),
         }
     }
 }
@@ -1275,7 +1404,8 @@ impl LispError {
             | Self::RewriterNonList { .. }
             | Self::DomainSerialize { .. }
             | Self::KwargDeserialize { .. }
-            | Self::CompilerSpecIo { .. } => None,
+            | Self::CompilerSpecIo { .. }
+            | Self::TemplateInvariant { .. } => None,
         }
     }
 }
@@ -3495,5 +3625,233 @@ mod tests {
         assert_eq!(stage, copied);
         assert_eq!(stage, super::CompilerSpecIoStage::LoadFromDiskRead);
         assert_ne!(stage, super::CompilerSpecIoStage::RealizeToDiskWrite);
+    }
+
+    // ── TemplateInvariantKind + TemplateInvariant variant ───────────
+    //
+    // Closed-set posture for the bytecode-runtime invariant surface in
+    // `macro_expand.rs::apply_compiled`. The index payload of the Subst /
+    // Splice gates lives INSIDE the variants (`SubstBadIndex(usize)` /
+    // `SpliceBadIndex(usize)`), so the invalid combination "stack-gate
+    // kind with an op-index" (e.g. `EndListEmptyStack` carrying a
+    // `usize`) is structurally unrepresentable. Display matches the
+    // legacy `Compile`-shaped diagnostic byte-for-byte through the
+    // `TemplateInvariantKind::message()` projection so authoring-tool
+    // substring greps see no drift across the lift.
+
+    #[test]
+    fn template_invariant_kind_message_for_subst_bad_idx() {
+        // `SubstBadIndex(idx)` projects to the canonical
+        // `"compiled template referenced bad param index {idx}"`
+        // shape — byte-for-byte equivalent to the pre-lift inline
+        // `format!()` at the Subst gate.
+        assert_eq!(
+            super::TemplateInvariantKind::SubstBadIndex(99).message(),
+            "compiled template referenced bad param index 99"
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::SubstBadIndex(0).message(),
+            "compiled template referenced bad param index 0"
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_message_for_splice_bad_idx() {
+        // `SpliceBadIndex(idx)` projects to the canonical
+        // `"compiled template referenced bad splice index {idx}"`
+        // shape — byte-for-byte equivalent to the pre-lift inline
+        // `format!()` at the Splice gate. Distinct word (`splice` vs
+        // `param`) keeps the two gates legible in diagnostic output.
+        assert_eq!(
+            super::TemplateInvariantKind::SpliceBadIndex(42).message(),
+            "compiled template referenced bad splice index 42"
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_message_for_endlist_empty_stack() {
+        // `EndListEmptyStack` projects to the canonical static-string
+        // shape — no dynamic payload, no `format!()` overhead. The
+        // pre-lift inline `&'static str` literal at the EndList gate
+        // is preserved verbatim.
+        assert_eq!(
+            super::TemplateInvariantKind::EndListEmptyStack.message(),
+            "compiled template: EndList with empty stack"
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_message_for_final_no_value() {
+        // `FinalNoValue` projects to the canonical static-string
+        // shape for the post-loop final-pop gate. Preserves the
+        // pre-lift inline `&'static str` literal verbatim.
+        assert_eq!(
+            super::TemplateInvariantKind::FinalNoValue.message(),
+            "compiled template produced no value"
+        );
+    }
+
+    #[test]
+    fn template_invariant_display_renders_legacy_compile_shape_for_subst_bad_idx() {
+        // End-to-end through the `LispError` Display impl — pins the
+        // rendered diagnostic byte-for-byte: `"compile error in
+        // {macro_name}: compiled template referenced bad param index
+        // {idx}"`. Authoring tools that substring-grep the rendered
+        // diagnostic (`tatara-check`, REPL substring-greps) see no
+        // drift across the lift from the pre-lift `Compile { form:
+        // macro_name, message: format!(...) }` shape.
+        let err = LispError::TemplateInvariant {
+            macro_name: "test-macro".into(),
+            kind: super::TemplateInvariantKind::SubstBadIndex(99),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in test-macro: compiled template referenced bad param index 99"
+        );
+    }
+
+    #[test]
+    fn template_invariant_display_renders_legacy_compile_shape_for_splice_bad_idx() {
+        // Sibling Display test for the Splice gate. Pins the message
+        // byte-for-byte: `"compile error in call-macro: compiled
+        // template referenced bad splice index 42"`.
+        let err = LispError::TemplateInvariant {
+            macro_name: "call-macro".into(),
+            kind: super::TemplateInvariantKind::SpliceBadIndex(42),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in call-macro: compiled template referenced bad splice index 42"
+        );
+    }
+
+    #[test]
+    fn template_invariant_display_renders_legacy_compile_shape_for_endlist() {
+        // Sibling Display test for the EndList gate. Pins the static-
+        // message byte-for-byte: `"compile error in wrap: compiled
+        // template: EndList with empty stack"`. Even though this gate
+        // is currently guarded by `last_mut().unwrap()` and not
+        // reachable through any single CompiledTemplate, the structural
+        // variant carries the canonical message verbatim — defensive
+        // against future changes to the stack discipline.
+        let err = LispError::TemplateInvariant {
+            macro_name: "wrap".into(),
+            kind: super::TemplateInvariantKind::EndListEmptyStack,
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in wrap: compiled template: EndList with empty stack"
+        );
+    }
+
+    #[test]
+    fn template_invariant_display_renders_legacy_compile_shape_for_final_no_value() {
+        // Sibling Display test for the final-no-value gate. Pins the
+        // static-message byte-for-byte: `"compile error in id: compiled
+        // template produced no value"`. Closes the structural-
+        // completeness floor of the closed-set `TemplateInvariantKind`
+        // × Display matrix — all four reachable kinds are pinned.
+        let err = LispError::TemplateInvariant {
+            macro_name: "id".into(),
+            kind: super::TemplateInvariantKind::FinalNoValue,
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in id: compiled template produced no value"
+        );
+    }
+
+    #[test]
+    fn template_invariant_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring set — `"compiled template"`,
+        // `"bad param index"`, `"bad splice index"`, `"EndList with
+        // empty stack"`, `"produced no value"` — as a separate
+        // assertion so a regression that drifts ANY of the four
+        // surface words (e.g., to "invalid", "missing", "no result")
+        // fails-loudly here. The substrings are what consumers
+        // downstream (`tatara-check`, REPL) substring-match on today.
+        let subst = LispError::TemplateInvariant {
+            macro_name: "m".into(),
+            kind: super::TemplateInvariantKind::SubstBadIndex(0),
+        };
+        let msg = format!("{subst}");
+        assert!(
+            msg.contains("compiled template"),
+            "expected `compiled template` prefix, got: {msg}"
+        );
+        assert!(
+            msg.contains("bad param index"),
+            "expected `bad param index` substring, got: {msg}"
+        );
+
+        let splice = LispError::TemplateInvariant {
+            macro_name: "m".into(),
+            kind: super::TemplateInvariantKind::SpliceBadIndex(0),
+        };
+        let msg = format!("{splice}");
+        assert!(
+            msg.contains("bad splice index"),
+            "expected `bad splice index` substring, got: {msg}"
+        );
+
+        let endlist = LispError::TemplateInvariant {
+            macro_name: "m".into(),
+            kind: super::TemplateInvariantKind::EndListEmptyStack,
+        };
+        let msg = format!("{endlist}");
+        assert!(
+            msg.contains("EndList with empty stack"),
+            "expected `EndList with empty stack` substring, got: {msg}"
+        );
+
+        let final_nv = LispError::TemplateInvariant {
+            macro_name: "m".into(),
+            kind: super::TemplateInvariantKind::FinalNoValue,
+        };
+        let msg = format!("{final_nv}");
+        assert!(
+            msg.contains("produced no value"),
+            "expected `produced no value` substring, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_is_copy_and_partial_eq() {
+        // Pin the closed-set posture: `TemplateInvariantKind` derives
+        // Copy + PartialEq + Eq + Debug so it composes ergonomically
+        // in tests and in consumer pattern-matches (no clone-and-own
+        // dance). Same posture as `CompilerSpecIoStage` and
+        // `MacroDefHead`. A regression that drops Copy fails-loudly
+        // here (the let-binding would move out instead of copy).
+        let kind = super::TemplateInvariantKind::SubstBadIndex(7);
+        let copied = kind;
+        assert_eq!(kind, copied);
+        assert_eq!(kind, super::TemplateInvariantKind::SubstBadIndex(7));
+        assert_ne!(kind, super::TemplateInvariantKind::SubstBadIndex(8));
+        assert_ne!(kind, super::TemplateInvariantKind::SpliceBadIndex(7));
+        assert_ne!(kind, super::TemplateInvariantKind::EndListEmptyStack);
+    }
+
+    #[test]
+    fn template_invariant_kind_index_payload_is_structurally_scoped_to_index_carrying_variants() {
+        // The closed-set invariant: only `SubstBadIndex` and
+        // `SpliceBadIndex` carry a `usize` payload; `EndListEmptyStack`
+        // and `FinalNoValue` are bare. This is enforced by the variant
+        // shape itself — there is no way to construct
+        // `EndListEmptyStack(7)` because the variant has no fields.
+        // This test pins the structural shape: the four reachable
+        // failure modes split 2+2 into "index-carrying" and "bare".
+        // A regression that adds a payload to the bare variants (or
+        // strips it from the index-carrying ones) fails to compile,
+        // making this test redundant — but the test documents the
+        // shape for readers walking the closed set.
+        match super::TemplateInvariantKind::SubstBadIndex(5) {
+            super::TemplateInvariantKind::SubstBadIndex(idx) => assert_eq!(idx, 5),
+            other => panic!("expected SubstBadIndex, got {other:?}"),
+        }
+        match super::TemplateInvariantKind::EndListEmptyStack {
+            super::TemplateInvariantKind::EndListEmptyStack => {}
+            other => panic!("expected EndListEmptyStack, got {other:?}"),
+        }
     }
 }

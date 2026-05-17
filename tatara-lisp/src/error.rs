@@ -1036,6 +1036,145 @@ pub enum LispError {
         idx: Option<usize>,
         message: String,
     },
+    /// `compiler_spec.rs`'s disk-persistence surface emitted an
+    /// I/O or serde failure. Four call sites in `compiler_spec.rs`
+    /// share this failure mode through ONE structural variant keyed
+    /// on the closed-set `CompilerSpecIoStage` enum (`realize_to_disk`
+    /// × {serialize, write} ⊎ `load_from_disk` × {read, deserialize}).
+    ///
+    /// Encoding the (operation, stage) pair as ONE typed enum (rather
+    /// than two `&'static str` slots `operation` × `stage`) makes the
+    /// constraint that ONLY 4 of the 2×4 = 8 hypothetical pairs are
+    /// reachable load-bearing in the type system — a typo like
+    /// `(operation: "load_from_disk", stage: "write")` becomes
+    /// structurally unrepresentable rather than re-asserted at the
+    /// helper boundary via runtime string comparison. Same posture as
+    /// `MacroDefHead` in `macro_expand.rs`: the closed set becomes a
+    /// TYPE, and rustc's exhaustiveness check is the future invariant-
+    /// keeper. Adding a new disk-persistence operation (e.g.,
+    /// `load_from_str`) requires extending `CompilerSpecIoStage`,
+    /// which rustc-enforces matching at every projection site
+    /// (`operation()` / `label()`).
+    ///
+    /// Mirror at the disk boundary of the typed-domain JSON-projection
+    /// round-trip's `DomainSerialize` / `KwargDeserialize` sibling pair
+    /// at the in-memory kwarg boundary: those variants reject
+    /// `to_value::<T>` / `from_value::<T>` failures at the typed-domain
+    /// boundary; this variant rejects file I/O + top-level JSON
+    /// failures at the disk boundary. After this lift, every distinct
+    /// failure mode in `tatara-lisp/src/compiler_spec.rs`'s persistence
+    /// surface is structurally typed; there are zero
+    /// `LispError::Compile { ... }` construction sites left in
+    /// `tatara-lisp/src/compiler_spec.rs`.
+    ///
+    /// `stage` is `CompilerSpecIoStage` — a closed-set typed enum
+    /// whose `operation()` and `label()` projections feed the Display
+    /// rendering — so the compile-time guarantee on BOTH slots is
+    /// load-bearing in the type system. `message` is `String` because
+    /// it carries the underlying error's `Display` projection
+    /// (`serde_json::Error` for serialize / deserialize, `std::io::Error`
+    /// for read / write — arbitrary text); carrying the rendered
+    /// message rather than a `#[source]` chain keeps the variant's
+    /// structural shape parallel to every other String-carrying variant
+    /// in this enum (`DomainSerialize.message`, `KwargDeserialize.message`,
+    /// `Compile.message`).
+    ///
+    /// `message` carries the raw underlying-error `Display` projection
+    /// — NO `"{stage}: "` prefix in the field, the prefix is in the
+    /// `Display` rendering — so consumers that pattern-match on
+    /// `message` get the underlying diagnostic unchanged, parallel to
+    /// how `DomainSerialize.message` carries the raw `serde_json`
+    /// projection (the `"serialize: "` prefix lives in Display, not in
+    /// the slot) and `KwargDeserialize.message` carries the raw
+    /// `serde_json` projection (the `"deserialize: "` prefix lives in
+    /// Display, not in the slot).
+    ///
+    /// Display matches the legacy `Compile`-shaped diagnostic byte-for-
+    /// byte across all four stages — `"compile error in {operation}:
+    /// {stage}: {message}"` where `{operation}` is `stage.operation()`
+    /// and `{stage}` is `stage.label()` — so existing consumer
+    /// assertions (`tatara-check`'s diagnostic capture, REPL substring-
+    /// greps that match on `"realize_to_disk"`, `"load_from_disk"`,
+    /// `"serialize: "`, `"write: "`, `"read: "`, `"deserialize: "`)
+    /// pass unchanged across the lift. When a future run gives `Sexp`
+    /// source spans, `pos: Option<usize>` lands here in ONE place
+    /// (though the disk surface is non-positional — failures originate
+    /// from file I/O / serde, not from a Sexp slot — so the field
+    /// would stay `None` at every call site, the variant joining the
+    /// `position_is_none_for_non_positional_variants` cohort).
+    #[error("compile error in {}: {}: {message}", stage.operation(), stage.label())]
+    CompilerSpecIo {
+        stage: CompilerSpecIoStage,
+        message: String,
+    },
+}
+
+/// Closed-set identifier for the (operation, stage) pair of a
+/// `LispError::CompilerSpecIo` failure. Encodes the four reachable
+/// pairs in `tatara-lisp/src/compiler_spec.rs`'s disk-persistence
+/// surface — `realize_to_disk` × {serialize, write} ⊎ `load_from_disk`
+/// × {read, deserialize} — as a typed enum, so invalid combinations
+/// like `(load_from_disk, write)` or `(realize_to_disk, deserialize)`
+/// are structurally unrepresentable rather than re-asserted at the
+/// helper boundary via runtime string comparison.
+///
+/// Same posture as `MacroDefHead` in `macro_expand.rs`: the closed set
+/// becomes a TYPE, not a `matches!` literal AND a triplicate
+/// `match operation { ... }` projection inside each error helper. The
+/// `operation()` / `label()` projections feed the
+/// `LispError::CompilerSpecIo` Display rendering directly via the
+/// `#[error(...)]` annotation; adding a new disk-persistence operation
+/// (e.g., `load_from_str` for in-memory loads) requires extending this
+/// enum, which rustc-enforces matching at every projection site.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// of (operation, stage) pairs becomes a TYPE rather than a runtime
+/// string-comparison-and-format dance. THEORY.md §VI.1 — generation
+/// over composition; the typed enum lands the structural-completeness
+/// floor for the disk-persistence surface, parallel to how
+/// `MacroDefHead` lands the structural-completeness floor for the
+/// macro-definition-head closed set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompilerSpecIoStage {
+    /// `serde_json::to_string_pretty` of a `CompilerSpec` errored
+    /// inside `realize_to_disk`.
+    RealizeToDiskSerialize,
+    /// `std::fs::write` of the serialized `CompilerSpec` JSON errored
+    /// inside `realize_to_disk`.
+    RealizeToDiskWrite,
+    /// `std::fs::read_to_string` of the on-disk `CompilerSpec` JSON
+    /// errored inside `load_from_disk`.
+    LoadFromDiskRead,
+    /// `serde_json::from_str` of the on-disk `CompilerSpec` JSON
+    /// errored inside `load_from_disk`.
+    LoadFromDiskDeserialize,
+}
+
+impl CompilerSpecIoStage {
+    /// The public entry point's name — the `{form}` slot of the legacy
+    /// `Compile`-shaped diagnostic. `realize_to_disk` for the
+    /// serialize / write variants; `load_from_disk` for the read /
+    /// deserialize variants.
+    #[must_use]
+    pub fn operation(self) -> &'static str {
+        match self {
+            Self::RealizeToDiskSerialize | Self::RealizeToDiskWrite => "realize_to_disk",
+            Self::LoadFromDiskRead | Self::LoadFromDiskDeserialize => "load_from_disk",
+        }
+    }
+
+    /// The step within the operation that failed — the `{stage}` slot
+    /// of the legacy `"{stage}: {error}"` message shape. One of
+    /// `"serialize"`, `"write"`, `"read"`, `"deserialize"`.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::RealizeToDiskSerialize => "serialize",
+            Self::RealizeToDiskWrite => "write",
+            Self::LoadFromDiskRead => "read",
+            Self::LoadFromDiskDeserialize => "deserialize",
+        }
+    }
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -1135,7 +1274,8 @@ impl LispError {
             | Self::NamedFormNonSymbolName { .. }
             | Self::RewriterNonList { .. }
             | Self::DomainSerialize { .. }
-            | Self::KwargDeserialize { .. } => None,
+            | Self::KwargDeserialize { .. }
+            | Self::CompilerSpecIo { .. } => None,
         }
     }
 }
@@ -1471,6 +1611,22 @@ mod tests {
                 key: "steps".into(),
                 idx: Some(1),
                 message: "invalid type: integer `7`, expected a string".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::CompilerSpecIo {
+                stage: super::CompilerSpecIoStage::RealizeToDiskSerialize,
+                message: "expected struct CompilerSpec".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::CompilerSpecIo {
+                stage: super::CompilerSpecIoStage::LoadFromDiskDeserialize,
+                message: "expected value at line 1 column 1".into(),
             }
             .position(),
             None
@@ -3070,5 +3226,274 @@ mod tests {
             format!("{err}"),
             "compile error in :steps[0]: deserialize: bad"
         );
+    }
+
+    // ── CompilerSpecIo: disk-persistence structural-variant lift ────
+    //
+    // `compiler_spec_io_err` (the helper shared by all four
+    // `realize_to_disk` / `load_from_disk` call sites in
+    // `compiler_spec.rs`) was promoted from the `LispError::Compile`-
+    // shaped triple to the structural `LispError::CompilerSpecIo {
+    // stage, message }` variant — closing the LAST
+    // `LispError::Compile { ... }` construction site in
+    // `tatara-lisp/src/compiler_spec.rs`. The `stage` slot is the
+    // typed closed-set `CompilerSpecIoStage` enum, so the
+    // (operation, stage) pair is structurally constrained — only the
+    // four reachable pairs (`realize_to_disk` × {serialize, write}
+    // ⊎ `load_from_disk` × {read, deserialize}) are representable
+    // in the variant.
+    //
+    // The tests below pin: (a) Display matches the legacy `"compile
+    // error in {operation}: {stage}: {message}"` shape byte-for-byte
+    // across all four stages; (b) the closed-set `operation()` /
+    // `label()` projections; (c) the `CompilerSpecIoStage` enum is
+    // Copy + Eq + Debug (matches the `MacroDefHead` posture); (d) the
+    // legacy substring `"realize_to_disk"`, `"load_from_disk"`,
+    // `"serialize: "`, `"write: "`, `"read: "`, `"deserialize: "`
+    // survive the lift unchanged for substring-grep consumers. The
+    // `position()` floor for both representative stages is pinned in
+    // the main `position_is_none_for_non_positional_variants` block
+    // above.
+
+    #[test]
+    fn compiler_spec_io_stage_operation_projects_realize_for_serialize_and_write() {
+        // Both `realize_to_disk` stages share the same `operation()`
+        // projection. Pin the closed-set posture: the operation slot
+        // of the legacy `Compile`-shaped triple is now a TYPED
+        // projection from `CompilerSpecIoStage`, not an
+        // independently-passed `&'static str` that could drift.
+        assert_eq!(
+            super::CompilerSpecIoStage::RealizeToDiskSerialize.operation(),
+            "realize_to_disk"
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::RealizeToDiskWrite.operation(),
+            "realize_to_disk"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_operation_projects_load_for_read_and_deserialize() {
+        // Both `load_from_disk` stages share the same `operation()`
+        // projection. Sibling to the realize-side assertion: pins the
+        // bifurcation of the closed set by `operation()` is exhaustive
+        // and exactly 2-way (`realize_to_disk` ⊎ `load_from_disk`).
+        assert_eq!(
+            super::CompilerSpecIoStage::LoadFromDiskRead.operation(),
+            "load_from_disk"
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::LoadFromDiskDeserialize.operation(),
+            "load_from_disk"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_label_projects_canonical_stage_strings() {
+        // Each `CompilerSpecIoStage` projects to its canonical
+        // `label()` — the `{stage}` slot of the legacy `"{stage}:
+        // {error}"` message. Pin all four projections so a regression
+        // that drifts ANY label (e.g., to "ser", "load", "decode",
+        // "json-out") fails-loudly here. The four labels are the
+        // surface that `tatara-check`'s diagnostic capture and the
+        // REPL substring-grep on today.
+        assert_eq!(
+            super::CompilerSpecIoStage::RealizeToDiskSerialize.label(),
+            "serialize"
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::RealizeToDiskWrite.label(),
+            "write"
+        );
+        assert_eq!(super::CompilerSpecIoStage::LoadFromDiskRead.label(), "read");
+        assert_eq!(
+            super::CompilerSpecIoStage::LoadFromDiskDeserialize.label(),
+            "deserialize"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_display_renders_legacy_shape_for_realize_serialize() {
+        // `RealizeToDiskSerialize` — the `serde_json::to_string_pretty`
+        // failure inside `realize_to_disk`. The variant renders the
+        // legacy `"compile error in realize_to_disk: serialize:
+        // {message}"` shape byte-for-byte — same wording as the
+        // pre-lift `Compile { form: "realize_to_disk", message:
+        // "serialize: {e}" }` triple.
+        let err = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::RealizeToDiskSerialize,
+            message: "expected struct CompilerSpec".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in realize_to_disk: serialize: expected struct CompilerSpec"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_display_renders_legacy_shape_for_realize_write() {
+        // `RealizeToDiskWrite` — the `std::fs::write` failure inside
+        // `realize_to_disk`. Pin path-uniformity across the second
+        // stage of the realize-side operation: same operation prefix,
+        // distinct stage label (`write` vs `serialize`).
+        let err = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::RealizeToDiskWrite,
+            message: "No such file or directory (os error 2)".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in realize_to_disk: write: No such file or directory (os error 2)"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_display_renders_legacy_shape_for_load_read() {
+        // `LoadFromDiskRead` — the `std::fs::read_to_string` failure
+        // inside `load_from_disk`. Pin path-uniformity across the
+        // operation slot: `load_from_disk` vs `realize_to_disk` are
+        // structurally distinct via the typed enum, both round-trip
+        // through Display unchanged.
+        let err = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::LoadFromDiskRead,
+            message: "No such file or directory (os error 2)".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in load_from_disk: read: No such file or directory (os error 2)"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_display_renders_legacy_shape_for_load_deserialize() {
+        // `LoadFromDiskDeserialize` — the `serde_json::from_str`
+        // failure inside `load_from_disk`. Pin path-uniformity across
+        // the fourth and final reachable stage. Together with the
+        // three sibling tests, this closes the structural-completeness
+        // floor of the closed-set `CompilerSpecIoStage` × Display
+        // matrix — all four reachable pairs are pinned.
+        let err = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::LoadFromDiskDeserialize,
+            message: "expected value at line 1 column 1".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in load_from_disk: deserialize: expected value at line 1 column 1"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_display_carries_serde_json_diagnostic_unchanged() {
+        // Use a real `serde_json::Error` so the test exercises a
+        // representative `{e}` shape and pins that the variant's
+        // Display rendering threads the underlying diagnostic through
+        // unchanged. Same posture as `domain_serialize_display_carries_
+        // serde_json_diagnostic_unchanged` and
+        // `kwarg_deserialize_display_carries_serde_json_diagnostic_
+        // unchanged`.
+        let raw = serde_json::from_str::<i32>("not-a-number")
+            .expect_err("parse must fail")
+            .to_string();
+        let err = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::LoadFromDiskDeserialize,
+            message: raw.clone(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            format!("compile error in load_from_disk: deserialize: {raw}")
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring set — `"realize_to_disk"`,
+        // `"load_from_disk"`, `"serialize: "`, `"write: "`,
+        // `"read: "`, `"deserialize: "` — as a separate assertion so a
+        // regression that drifts ANY of the six surface words (e.g.,
+        // to "save", "load", "json-out", "json-in") fails-loudly here.
+        // The substrings are what consumers downstream (`tatara-check`,
+        // the REPL) substring-match on today; the prefix matches the
+        // legacy `Compile { form: "{operation}", message: "{stage}:
+        // {e}" }` byte-for-byte across all four reachable pairs.
+        let realize_serialize = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::RealizeToDiskSerialize,
+            message: "boom".into(),
+        };
+        let msg = format!("{realize_serialize}");
+        assert!(
+            msg.contains("realize_to_disk"),
+            "expected realize-side operation in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("serialize: "),
+            "expected serialize-stage substring in message, got: {msg}"
+        );
+
+        let realize_write = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::RealizeToDiskWrite,
+            message: "boom".into(),
+        };
+        let msg = format!("{realize_write}");
+        assert!(
+            msg.contains("write: "),
+            "expected write-stage substring in message, got: {msg}"
+        );
+
+        let load_read = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::LoadFromDiskRead,
+            message: "boom".into(),
+        };
+        let msg = format!("{load_read}");
+        assert!(
+            msg.contains("load_from_disk"),
+            "expected load-side operation in message, got: {msg}"
+        );
+        assert!(
+            msg.contains("read: "),
+            "expected read-stage substring in message, got: {msg}"
+        );
+
+        let load_deserialize = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::LoadFromDiskDeserialize,
+            message: "boom".into(),
+        };
+        let msg = format!("{load_deserialize}");
+        assert!(
+            msg.contains("deserialize: "),
+            "expected deserialize-stage substring in message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_display_empty_message_renders_bare_stage_marker() {
+        // Edge case: an empty `message` slot renders as `"compile
+        // error in {operation}: {stage}: "` — pin the trailing space
+        // after the stage marker stays put across all four pairs. A
+        // regression that strips trailing whitespace (e.g., via
+        // `.trim_end()`) or drops the marker entirely fails-loudly here.
+        // Sibling of `domain_serialize_display_empty_message_renders_
+        // bare_prefix`.
+        let err = LispError::CompilerSpecIo {
+            stage: super::CompilerSpecIoStage::RealizeToDiskWrite,
+            message: String::new(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in realize_to_disk: write: "
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_is_copy_and_partial_eq() {
+        // Pin the closed-set posture: `CompilerSpecIoStage` derives
+        // Copy + PartialEq + Eq + Debug so it composes ergonomically
+        // in tests and in consumer pattern-matches (no clone-and-
+        // own dance). Same posture as `MacroDefHead`. A regression
+        // that drops Copy fails-loudly here (the let-binding would
+        // move out instead of copy).
+        let stage = super::CompilerSpecIoStage::LoadFromDiskRead;
+        let copied = stage;
+        assert_eq!(stage, copied);
+        assert_eq!(stage, super::CompilerSpecIoStage::LoadFromDiskRead);
+        assert_ne!(stage, super::CompilerSpecIoStage::RealizeToDiskWrite);
     }
 }

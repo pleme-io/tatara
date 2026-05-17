@@ -39,7 +39,7 @@ use std::path::Path;
 use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
 use crate::ast::Sexp;
-use crate::error::{LispError, Result};
+use crate::error::{CompilerSpecIoStage, LispError, Result};
 use crate::macro_expand::Expander;
 use crate::reader::read;
 
@@ -122,27 +122,35 @@ pub fn realize_in_memory(spec: CompilerSpec) -> Result<RealizedCompiler> {
     Ok(RealizedCompiler { spec, preloaded })
 }
 
-/// Wrap an I/O / serde failure during `CompilerSpec` persistence as a
-/// `LispError::Compile` triple with a uniform `{stage}: {e}` message
-/// shape. Eliminates four byte-identical `Compile`-shaped triples across
+/// Promote the previously `LispError::Compile`-shaped helper into the
+/// structural `LispError::CompilerSpecIo { stage, message }` variant.
+/// Eliminates four byte-identical `Compile`-shaped triples across
 /// `realize_to_disk` (serialize / write) and `load_from_disk` (read /
-/// deserialize), collapsing the four-times-repeated pattern into one
-/// emission site. `operation` is the public entry point's name (used as
-/// the `form` slot — the failure's authoring surface); `stage` is the
-/// step within that operation that failed (`"serialize"`, `"write"`,
-/// `"read"`, `"deserialize"`). Both slots are `&'static str` so a typo
-/// in either can never drift into the diagnostic at runtime — same
-/// posture as `LispError::TypeMismatch.expected`. Returns `LispError`
-/// directly (not `Result`), so call sites compose with `map_err` /
-/// `ok_or_else` without an extra `?`.
-fn compiler_spec_io_err(
-    operation: &'static str,
-    stage: &'static str,
-    e: impl std::fmt::Display,
-) -> LispError {
-    LispError::Compile {
-        form: operation.into(),
-        message: format!("{stage}: {e}"),
+/// deserialize), funneling the four call sites through ONE emission
+/// site keyed on the closed-set `CompilerSpecIoStage` enum.
+///
+/// `stage` is `CompilerSpecIoStage` (the typed closed-set enum). The
+/// helper projects `stage.operation()` and `stage.label()` into the
+/// variant's Display rendering mechanically, so the compile-time
+/// guarantee on BOTH slots is load-bearing in the type system — a
+/// typo in either component can never drift into the diagnostic at
+/// runtime AND the (operation, stage) pair is structurally constrained
+/// to the four reachable pairs (`realize_to_disk` × {serialize, write}
+/// ⊎ `load_from_disk` × {read, deserialize}). Same posture as how
+/// `defmacro_arity` projects `MacroDefHead` through `head.keyword()`
+/// into `LispError::DefmacroArity.head`. Returns `LispError` directly
+/// (not `Result`), so call sites compose with `map_err` / `ok_or_else`
+/// without an extra `?`, parallel to the pre-lift signature.
+///
+/// After this lift the four call sites bind on variant identity
+/// (`LispError::CompilerSpecIo { stage: CompilerSpecIoStage::_, … }`)
+/// instead of substring-grepping the rendered `Compile`-shaped
+/// diagnostic; closes the LAST `LispError::Compile { ... }`
+/// construction site in `tatara-lisp/src/compiler_spec.rs`.
+fn compiler_spec_io_err(stage: CompilerSpecIoStage, e: impl std::fmt::Display) -> LispError {
+    LispError::CompilerSpecIo {
+        stage,
+        message: e.to_string(),
     }
 }
 
@@ -150,17 +158,18 @@ fn compiler_spec_io_err(
 /// Pair with `load_from_disk` to round-trip.
 pub fn realize_to_disk(spec: &CompilerSpec, path: impl AsRef<Path>) -> Result<()> {
     let json = serde_json::to_string_pretty(spec)
-        .map_err(|e| compiler_spec_io_err("realize_to_disk", "serialize", e))?;
-    std::fs::write(path, json).map_err(|e| compiler_spec_io_err("realize_to_disk", "write", e))
+        .map_err(|e| compiler_spec_io_err(CompilerSpecIoStage::RealizeToDiskSerialize, e))?;
+    std::fs::write(path, json)
+        .map_err(|e| compiler_spec_io_err(CompilerSpecIoStage::RealizeToDiskWrite, e))
 }
 
 /// Read a serialized `CompilerSpec` from disk and realize it. Inverse of
 /// `realize_to_disk`.
 pub fn load_from_disk(path: impl AsRef<Path>) -> Result<RealizedCompiler> {
     let json = std::fs::read_to_string(path)
-        .map_err(|e| compiler_spec_io_err("load_from_disk", "read", e))?;
+        .map_err(|e| compiler_spec_io_err(CompilerSpecIoStage::LoadFromDiskRead, e))?;
     let spec: CompilerSpec = serde_json::from_str(&json)
-        .map_err(|e| compiler_spec_io_err("load_from_disk", "deserialize", e))?;
+        .map_err(|e| compiler_spec_io_err(CompilerSpecIoStage::LoadFromDiskDeserialize, e))?;
     realize_in_memory(spec)
 }
 
@@ -288,22 +297,54 @@ mod tests {
     }
 
     #[test]
-    fn compiler_spec_io_err_renders_uniform_stage_prefix_in_message() {
-        // Pin the helper's emission shape: the `form` slot carries the
-        // public operation's name (`realize_to_disk` / `load_from_disk`)
-        // and the `message` slot is `{stage}: {underlying-error}`. The
-        // four pre-lift call sites carried four byte-identical inline
-        // copies of this triple shape; the lift collapses them to one.
-        // A regression that drifts the `{stage}: ` prefix shape (or the
-        // form-slot — e.g. by lowercasing it, prepending a marker) fails
-        // -loudly here.
-        let err = super::compiler_spec_io_err("realize_to_disk", "serialize", "boom");
+    fn compiler_spec_io_err_emits_structural_variant_with_typed_stage() {
+        // Pin the helper's post-lift emission shape: it now returns the
+        // structural `LispError::CompilerSpecIo { stage, message }`
+        // variant directly, with `stage` typed as the closed-set
+        // `CompilerSpecIoStage` enum and `message` carrying the raw
+        // underlying-error `Display` projection (NO `{stage}: ` prefix
+        // in the field — the prefix is in the Display impl, parallel
+        // to how `DomainSerialize.message` and `KwargDeserialize.message`
+        // carry raw `serde_json` projections). Pre-lift, the same call
+        // returned `LispError::Compile { form: "realize_to_disk",
+        // message: "serialize: boom" }`; fail-before-pass-after: this
+        // assert is contradicted by the pre-lift code path, ratifies
+        // the post-lift one.
+        let err = super::compiler_spec_io_err(CompilerSpecIoStage::RealizeToDiskSerialize, "boom");
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "realize_to_disk");
-                assert_eq!(message, "serialize: boom");
+            LispError::CompilerSpecIo { stage, message } => {
+                assert_eq!(stage, CompilerSpecIoStage::RealizeToDiskSerialize);
+                assert_eq!(message, "boom");
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::CompilerSpecIo, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compiler_spec_io_err_threads_each_stage_through_unchanged() {
+        // Path-uniformity: pin all four reachable `CompilerSpecIoStage`
+        // values round-trip through the helper unchanged. A regression
+        // that swaps two stages' identities or hard-codes a single
+        // stage at the helper boundary fails-loudly here. Together
+        // with the call-site tests below, this closes the
+        // (helper × stage) matrix end-to-end.
+        for stage in [
+            CompilerSpecIoStage::RealizeToDiskSerialize,
+            CompilerSpecIoStage::RealizeToDiskWrite,
+            CompilerSpecIoStage::LoadFromDiskRead,
+            CompilerSpecIoStage::LoadFromDiskDeserialize,
+        ] {
+            let err = super::compiler_spec_io_err(stage, "boom");
+            match err {
+                LispError::CompilerSpecIo {
+                    stage: got_stage,
+                    message,
+                } => {
+                    assert_eq!(got_stage, stage, "stage round-trip drifted");
+                    assert_eq!(message, "boom", "message slot mutated unexpectedly");
+                }
+                other => panic!("expected LispError::CompilerSpecIo, got {other:?}"),
+            }
         }
     }
 
@@ -313,9 +354,10 @@ mod tests {
         // through the same helper. `realize_to_disk` of a spec to a
         // path under a non-existent parent directory triggers the
         // `std::fs::write` failure path, which the helper wraps as
-        // `Compile { form: "realize_to_disk", message: "write: ..." }`.
-        // A regression that drops or rewrites the `write: ` stage
-        // prefix fails-loudly here.
+        // `CompilerSpecIo { stage: RealizeToDiskWrite, message: ... }`.
+        // The structural variant binds tools on the typed enum
+        // (`stage == CompilerSpecIoStage::RealizeToDiskWrite`) instead
+        // of substring-greppying `"write: "` out of `message`.
         let spec = CompilerSpec {
             name: "io-fail".into(),
             dialect: "standard".into(),
@@ -330,14 +372,14 @@ mod tests {
             std::path::PathBuf::from("/nonexistent-dir-that-cannot-exist-tatara-routine/spec.json");
         let err = realize_to_disk(&spec, &bogus).unwrap_err();
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "realize_to_disk");
+            LispError::CompilerSpecIo { stage, message } => {
+                assert_eq!(stage, CompilerSpecIoStage::RealizeToDiskWrite);
                 assert!(
-                    message.starts_with("write: "),
-                    "expected write-stage prefix, got {message:?}"
+                    !message.is_empty(),
+                    "expected non-empty underlying-error message"
                 );
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::CompilerSpecIo, got {other:?}"),
         }
     }
 
@@ -345,12 +387,12 @@ mod tests {
     fn load_from_disk_propagates_read_failure_via_compiler_spec_io_err() {
         // Sibling negative path: `load_from_disk` of a path that doesn't
         // exist triggers the `std::fs::read_to_string` failure path,
-        // which the helper wraps as `Compile { form: "load_from_disk",
-        // message: "read: ..." }`. Pinning the stage prefix `read: `
-        // distinct from `write: ` proves the helper threads the
-        // {stage} slot through correctly per call site — a regression
-        // that hard-codes a single stage label or swaps two sites'
-        // labels fails-loudly here.
+        // which the helper wraps as `CompilerSpecIo { stage:
+        // LoadFromDiskRead, message: ... }`. Pinning the typed stage
+        // identity `LoadFromDiskRead` distinct from `RealizeToDiskWrite`
+        // proves the helper threads the stage slot through correctly
+        // per call site — a regression that hard-codes a single stage
+        // label or swaps two sites' labels fails-loudly here.
         let bogus =
             std::path::PathBuf::from("/nonexistent-dir-that-cannot-exist-tatara-routine/spec.json");
         // RealizedCompiler is not Debug so we manually destructure the Result
@@ -360,14 +402,14 @@ mod tests {
             Err(e) => e,
         };
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "load_from_disk");
+            LispError::CompilerSpecIo { stage, message } => {
+                assert_eq!(stage, CompilerSpecIoStage::LoadFromDiskRead);
                 assert!(
-                    message.starts_with("read: "),
-                    "expected read-stage prefix, got {message:?}"
+                    !message.is_empty(),
+                    "expected non-empty underlying-error message"
                 );
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::CompilerSpecIo, got {other:?}"),
         }
     }
 
@@ -375,10 +417,13 @@ mod tests {
     fn load_from_disk_propagates_deserialize_failure_via_compiler_spec_io_err() {
         // Pin the deserialize-stage path: a file whose contents are not
         // valid JSON triggers `serde_json::from_str` failure, which the
-        // helper wraps as `Compile { form: "load_from_disk", message:
-        // "deserialize: ..." }`. Pinning the deserialize-stage prefix
-        // separately from read-stage proves the helper distinguishes
-        // sequential failure sites within ONE entry point.
+        // helper wraps as `CompilerSpecIo { stage:
+        // LoadFromDiskDeserialize, message: ... }`. Pinning the typed
+        // stage identity `LoadFromDiskDeserialize` separately from
+        // `LoadFromDiskRead` proves the helper distinguishes
+        // sequential failure sites within ONE entry point structurally
+        // — invalid combinations like `(LoadFromDisk, Write)` are
+        // unrepresentable at the type level.
         let tmp = std::env::temp_dir().join(format!("tatara-bad-spec-{}.json", std::process::id()));
         std::fs::write(&tmp, "not-json").unwrap();
         // RealizedCompiler is not Debug so we manually destructure the Result.
@@ -388,15 +433,70 @@ mod tests {
         };
         let _ = std::fs::remove_file(&tmp);
         match err {
-            LispError::Compile { form, message } => {
-                assert_eq!(form, "load_from_disk");
+            LispError::CompilerSpecIo { stage, message } => {
+                assert_eq!(stage, CompilerSpecIoStage::LoadFromDiskDeserialize);
                 assert!(
-                    message.starts_with("deserialize: "),
-                    "expected deserialize-stage prefix, got {message:?}"
+                    !message.is_empty(),
+                    "expected non-empty underlying-error message"
                 );
             }
-            other => panic!("expected LispError::Compile, got {other:?}"),
+            other => panic!("expected LispError::CompilerSpecIo, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn realize_to_disk_call_site_end_to_end_renders_legacy_diagnostic_byte_for_byte() {
+        // End-to-end pin of the typed-exit-to-Display projection: the
+        // `realize_to_disk` write-failure path renders as the legacy
+        // `"compile error in realize_to_disk: write: {os-error}"` shape
+        // byte-for-byte (modulo the OS-specific message tail, which
+        // we substring-match on). The rendering is what downstream
+        // consumers (`tatara-check`'s diagnostic capture, REPL substring-
+        // greps) see — a regression that drifts the operation prefix
+        // or the stage marker fails-loudly here AND in the unit
+        // `compiler_spec_io_display_*` tests, so the contract is
+        // pinned at BOTH the variant-construction boundary AND the
+        // end-to-end call-site boundary.
+        let spec = CompilerSpec {
+            name: "io-fail".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        };
+        let bogus =
+            std::path::PathBuf::from("/nonexistent-dir-that-cannot-exist-tatara-routine/spec.json");
+        let err = realize_to_disk(&spec, &bogus).unwrap_err();
+        let rendered = format!("{err}");
+        assert!(
+            rendered.starts_with("compile error in realize_to_disk: write: "),
+            "expected legacy operation-and-stage prefix, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn load_from_disk_call_site_end_to_end_renders_legacy_diagnostic_byte_for_byte() {
+        // Sibling end-to-end pin for the deserialize-stage path: a
+        // file whose contents aren't valid JSON renders as the legacy
+        // `"compile error in load_from_disk: deserialize: {serde-error}"`
+        // shape byte-for-byte. Pins the contract at the load-side
+        // call-site boundary, mirroring the realize-side sibling test.
+        let tmp = std::env::temp_dir().join(format!(
+            "tatara-bad-spec-end2end-{}.json",
+            std::process::id()
+        ));
+        std::fs::write(&tmp, "not-json").unwrap();
+        let err = match load_from_disk(&tmp) {
+            Ok(_) => panic!("expected load_from_disk failure on malformed json"),
+            Err(e) => e,
+        };
+        let _ = std::fs::remove_file(&tmp);
+        let rendered = format!("{err}");
+        assert!(
+            rendered.starts_with("compile error in load_from_disk: deserialize: "),
+            "expected legacy operation-and-stage prefix, got: {rendered}"
+        );
     }
 
     #[test]

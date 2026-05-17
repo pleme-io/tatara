@@ -913,15 +913,15 @@ pub enum LispError {
     /// threads `T::KEYWORD` into `RewriterNonList.keyword`.
     ///
     /// Mirror at the typed-exit boundary of the typed-entry-side
-    /// `from_value` failure path (`extract_via_serde` /
-    /// `extract_vec_via_serde` still route through the legacy
-    /// `LispError::Compile { form: kwarg_form(key), message:
-    /// format!("deserialize: {e}") }` shape via `deserialize_err` /
-    /// `deserialize_item_err` — a future run lifts that direction).
-    /// After this lift the `to_value` direction (the typed-exit JSON
-    /// boundary, keyword-keyed) is structural; the `from_value`
-    /// direction (the typed-entry JSON boundary, key-keyed) remains
-    /// the only `LispError::Compile { ... }` construction site in
+    /// `from_value` failure path: `extract_via_serde` /
+    /// `extract_optional_via_serde` / `extract_vec_via_serde` route
+    /// through `deserialize_err` / `deserialize_item_err`, which now
+    /// produce the structural `LispError::KwargDeserialize { key, idx,
+    /// message }` variant — the typed-entry-side sibling of this lift.
+    /// After both lifts BOTH directions of the JSON-projection round-
+    /// trip — `to_value` (typed-exit, keyword-keyed) AND `from_value`
+    /// (typed-entry, key-keyed) — are structurally typed; there are
+    /// zero `LispError::Compile { ... }` construction sites left in
     /// `tatara-lisp/src/domain.rs`.
     ///
     /// Sibling of `RewriterNonList { keyword, got }` for the
@@ -966,6 +966,76 @@ pub enum LispError {
         keyword: &'static str,
         message: String,
     },
+    /// `serde_json::from_value::<T>` of a kwarg's canonical-JSON projection
+    /// errored. Two distinct sites share this failure mode through ONE
+    /// structural variant bifurcated by an `idx: Option<usize>` slot,
+    /// parallel to how `MissingHeadSymbol { keyword, got: Option<String> }`
+    /// bifurcates the empty-list vs. present-but-not-symbol gate through
+    /// an Option slot:
+    ///
+    ///   1. `extract_via_serde` (required) and `extract_optional_via_serde`
+    ///      (optional) — kwarg-keyed `from_value` failures at the scalar /
+    ///      `Option<T>` path. `idx: None`; the failure binds to the kwarg
+    ///      slot identity ONLY (`:{key}`).
+    ///   2. `extract_vec_via_serde` (per-item) — kwarg-AND-index-keyed
+    ///      `from_value` failures inside a `Vec<T>` kwarg's items.
+    ///      `idx: Some(i)`; the failure binds to the kwarg slot AND the
+    ///      failing item index (`:{key}[{i}]`).
+    ///
+    /// Mirror at the typed-entry JSON boundary of the typed-exit-side
+    /// `DomainSerialize { keyword, message }` lift: the latter rejects a
+    /// `to_value::<T>` failure (typed-exit, keyword-keyed, sourced from
+    /// `T::KEYWORD` and so `&'static str`); this variant rejects a
+    /// `from_value::<T>` failure (typed-entry, key-keyed, sourced from the
+    /// runtime kwarg lookup and so `String`). Together the two close the
+    /// JSON-projection boundary of the typed-domain surface — every
+    /// distinct `serde_json` failure mode at the typed-domain boundary
+    /// binds to ONE structural variant of `LispError`, not a
+    /// `Compile`-shaped substring.
+    ///
+    /// `key` is `String` because it comes from the runtime kwargs lookup
+    /// (each derive-generated extractor and every hand-written
+    /// `TataraDomain` impl can pass an arbitrary key) — same posture as
+    /// `MissingKwarg.key`, `DuplicateKwarg.key`, `UnknownKwarg.key`. `idx`
+    /// is `Option<usize>` because it bifurcates the two sub-modes
+    /// structurally — `None` for kwarg-scalar / kwarg-optional paths,
+    /// `Some(i)` for the per-item path — same posture as
+    /// `MissingHeadSymbol.got: Option<String>` and
+    /// `RestParamMissingName.got: Option<String>`. `message` is `String`
+    /// because it carries the `serde_json::Error::Display` projection
+    /// (errors render `expected … at line L column C` shapes — arbitrary
+    /// text from the underlying `serde_json::Error`); carrying the
+    /// rendered message rather than a `#[source] serde_json::Error` keeps
+    /// the variant's structural shape parallel to every other String-
+    /// carrying variant in this enum (`DomainSerialize.message`,
+    /// `Compile.message`).
+    ///
+    /// `message` carries the raw `serde_json::Error::Display` projection
+    /// — NO `"deserialize: "` prefix in the field, the prefix is in the
+    /// `Display` rendering — so consumers that pattern-match on
+    /// `message` get the underlying diagnostic unchanged, parallel to how
+    /// `DomainSerialize.message` carries the raw `serde_json` projection
+    /// (the `"serialize: "` prefix lives in Display, not in the slot).
+    ///
+    /// Display matches the legacy `Compile`-shaped diagnostic byte-for-
+    /// byte across both sub-modes: `"compile error in :{key}: deserialize:
+    /// {message}"` for `idx: None`, `"compile error in :{key}[{idx}]:
+    /// deserialize: {message}"` for `idx: Some(_)` — so existing
+    /// substring-grep consumers (`tatara-check`'s diagnostic capture,
+    /// REPL substring-greps that match on `"deserialize: "`, `":steps[1]"`,
+    /// `":level"`) pass unchanged across the lift. When a future run
+    /// gives `Sexp` source spans, `pos: Option<usize>` lands here in ONE
+    /// place and every kwarg-deserialize site picks up positional
+    /// rendering via `crate::diagnostic::format_diagnostic` mechanically.
+    #[error(
+        "compile error in {}: deserialize: {message}",
+        kwarg_deserialize_form(key, *idx)
+    )]
+    KwargDeserialize {
+        key: String,
+        idx: Option<usize>,
+        message: String,
+    },
 }
 
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
@@ -998,6 +1068,13 @@ fn missing_head_symbol_suffix(got: Option<&str>) -> String {
     match got {
         Some(g) => format!(" (got {g})"),
         None => " (empty list)".into(),
+    }
+}
+
+fn kwarg_deserialize_form(key: &str, idx: Option<usize>) -> String {
+    match idx {
+        None => format!(":{key}"),
+        Some(i) => format!(":{key}[{i}]"),
     }
 }
 
@@ -1057,7 +1134,8 @@ impl LispError {
             | Self::NamedFormMissingName { .. }
             | Self::NamedFormNonSymbolName { .. }
             | Self::RewriterNonList { .. }
-            | Self::DomainSerialize { .. } => None,
+            | Self::DomainSerialize { .. }
+            | Self::KwargDeserialize { .. } => None,
         }
     }
 }
@@ -1375,6 +1453,24 @@ mod tests {
             LispError::DomainSerialize {
                 keyword: "defalertpolicy",
                 message: "key must be a string".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::KwargDeserialize {
+                key: "level".into(),
+                idx: None,
+                message: "unknown variant `NotASeverity`".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::KwargDeserialize {
+                key: "steps".into(),
+                idx: Some(1),
+                message: "invalid type: integer `7`, expected a string".into(),
             }
             .position(),
             None
@@ -2809,5 +2905,170 @@ mod tests {
             message: String::new(),
         };
         assert_eq!(format!("{err}"), "compile error in defmonitor: serialize: ");
+    }
+
+    // ── KwargDeserialize: typed-entry `from_value` structural-variant lift ──
+    //
+    // `deserialize_err(key, err)` and `deserialize_item_err(key, idx,
+    // err)` (the `from_value`-side gate shared between
+    // `extract_via_serde`, `extract_optional_via_serde`, and
+    // `extract_vec_via_serde`) were promoted from the
+    // `LispError::Compile`-shaped triple to the structural
+    // `LispError::KwargDeserialize { key, idx, message }` variant. The
+    // tests below pin: (a) Display matches the legacy `"compile error
+    // in :{key}: deserialize: {message}"` shape byte-for-byte for the
+    // scalar path (`idx: None`); (b) Display matches the indexed
+    // `"compile error in :{key}[{idx}]: deserialize: {message}"` shape
+    // byte-for-byte for the per-item path (`idx: Some(i)`); (c) the
+    // legacy substring `"deserialize: "` and the legacy prefix
+    // `"compile error in :"` both survive the lift unchanged for
+    // substring-grep consumers; (d) kebab-case keys thread through
+    // unchanged. The `position()` floor is pinned in the main
+    // `position_is_none_for_non_positional_variants` block above.
+
+    #[test]
+    fn kwarg_deserialize_display_scalar_path_renders_legacy_shape() {
+        // `idx: None` — scalar / `Option<T>` path. The variant renders
+        // the legacy `"compile error in :{key}: deserialize: {message}"`
+        // shape byte-for-byte. Same wording as the pre-lift `Compile`-
+        // shaped triple in `deserialize_err`.
+        let err = LispError::KwargDeserialize {
+            key: "level".into(),
+            idx: None,
+            message: "unknown variant `NotASeverity`".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :level: deserialize: unknown variant `NotASeverity`"
+        );
+    }
+
+    #[test]
+    fn kwarg_deserialize_display_per_item_path_renders_indexed_shape() {
+        // `idx: Some(i)` — per-item path. The variant renders the
+        // legacy `"compile error in :{key}[{idx}]: deserialize:
+        // {message}"` shape byte-for-byte. Same wording as the pre-lift
+        // `Compile`-shaped triple in `deserialize_item_err`.
+        let err = LispError::KwargDeserialize {
+            key: "steps".into(),
+            idx: Some(1),
+            message: "invalid type: integer `7`, expected a string".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :steps[1]: deserialize: invalid type: integer `7`, expected a string"
+        );
+    }
+
+    #[test]
+    fn kwarg_deserialize_display_carries_serde_json_diagnostic_unchanged() {
+        // Use a real `serde_json::Error` so the test exercises a
+        // representative `{e}` shape (`"expected value at line L
+        // column C"`) and pins that the variant's Display rendering
+        // threads the underlying diagnostic through unchanged.
+        let raw = serde_json::from_str::<i32>("not-a-number")
+            .expect_err("parse must fail")
+            .to_string();
+        let err = LispError::KwargDeserialize {
+            key: "count".into(),
+            idx: None,
+            message: raw.clone(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            format!("compile error in :count: deserialize: {raw}")
+        );
+    }
+
+    #[test]
+    fn kwarg_deserialize_display_carries_kebab_case_key_unchanged() {
+        // Kebab-cased kwarg names (`notify-ref`, `wait-minutes`,
+        // `window-seconds`) round-trip through the rendered diagnostic's
+        // `compile error in :{key}:` prefix unchanged. A regression that
+        // camelCases the key fails-loudly here.
+        let err = LispError::KwargDeserialize {
+            key: "notify-ref".into(),
+            idx: None,
+            message: "missing field `notify-ref`".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :notify-ref: deserialize: missing field `notify-ref`"
+        );
+    }
+
+    #[test]
+    fn kwarg_deserialize_display_carries_kebab_case_key_with_index_unchanged() {
+        // Kebab-cased keys round-trip through the indexed path too —
+        // `:notify-refs[2]` not `:notifyRefs[2]`. Pinning both paths
+        // means a regression in either site (scalar or per-item) fails-
+        // loudly here.
+        let err = LispError::KwargDeserialize {
+            key: "wait-minutes".into(),
+            idx: Some(2),
+            message: "expected u64".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :wait-minutes[2]: deserialize: expected u64"
+        );
+    }
+
+    #[test]
+    fn kwarg_deserialize_display_preserves_legacy_substring_for_message_grep() {
+        // Pin the legacy substring — `"deserialize: "` — as a separate
+        // assertion so a regression that drifts the wording (e.g., to
+        // "from_json failed", "json decode error") fails-loudly here.
+        // The substring is what consumers downstream (`tatara-check`,
+        // the REPL) substring-match on; the prefix matches the legacy
+        // `Compile { form: kwarg_form(key), message: format!("deserialize:
+        // {e}") }` byte-for-byte. Both sub-modes (`idx: None` AND `idx:
+        // Some(_)`) preserve the substring.
+        let scalar = LispError::KwargDeserialize {
+            key: "level".into(),
+            idx: None,
+            message: "boom".into(),
+        };
+        let scalar_msg = format!("{scalar}");
+        assert!(
+            scalar_msg.contains("deserialize: "),
+            "expected legacy substring in scalar message, got: {scalar_msg}"
+        );
+        assert!(
+            scalar_msg.contains("compile error in :level:"),
+            "expected legacy form-label prefix in scalar message, got: {scalar_msg}"
+        );
+
+        let item = LispError::KwargDeserialize {
+            key: "steps".into(),
+            idx: Some(3),
+            message: "boom".into(),
+        };
+        let item_msg = format!("{item}");
+        assert!(
+            item_msg.contains("deserialize: "),
+            "expected legacy substring in item message, got: {item_msg}"
+        );
+        assert!(
+            item_msg.contains("compile error in :steps[3]:"),
+            "expected indexed form-label prefix in item message, got: {item_msg}"
+        );
+    }
+
+    #[test]
+    fn kwarg_deserialize_display_zero_index_is_first_class() {
+        // Edge case: `idx: Some(0)` must render as `:steps[0]`, not
+        // `:steps` (which would collide with the scalar path's
+        // rendering). Pin that the bifurcation is by `Option` identity,
+        // not by `idx > 0`.
+        let err = LispError::KwargDeserialize {
+            key: "steps".into(),
+            idx: Some(0),
+            message: "bad".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :steps[0]: deserialize: bad"
+        );
     }
 }

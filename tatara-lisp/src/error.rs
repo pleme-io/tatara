@@ -471,17 +471,25 @@ pub enum LispError {
     /// emit at the top level becomes a structural variant of
     /// `LispError`, not a `Compile`-shaped substring.
     ///
-    /// `head` is `&'static str` because every call site projects
-    /// through the `matches!("defmacro" | "defpoint-template" |
-    /// "defcheck")` gate immediately above — the head is always one
-    /// of three known literals at that point; using a static slot
-    /// makes that compile-time guarantee load-bearing in the type
-    /// system (a typo in the head literal can never drift into the
-    /// diagnostic at runtime — the type system is the floor, same
-    /// posture as `TypeMismatch.expected` and `HeadMismatch.keyword`).
-    /// `arity` is `usize` because it is always `list.len()` at the
-    /// call site (the length of the form including the head
-    /// element).
+    /// `head` is `MacroDefHead` — the closed-set typed enum whose
+    /// three variants are EXACTLY the three reachable head keywords
+    /// (`Defmacro` ⊎ `DefpointTemplate` ⊎ `Defcheck`). Encoding the
+    /// closed set as a TYPE makes the constraint that ONLY 3 head
+    /// identities are reachable load-bearing in the type system — a
+    /// fourth pseudo-head can never drift into the diagnostic at
+    /// runtime; consumers (REPL, LSP, `tatara-check`) pattern-match
+    /// on `MacroDefHead::Defcheck` etc. directly instead of
+    /// substring-matching `head == "defcheck"`. Same posture as
+    /// `LispError::CompilerSpecIo.stage: CompilerSpecIoStage` and
+    /// `LispError::TemplateInvariant.kind: TemplateInvariantKind`:
+    /// the closed set becomes a TYPE rather than a `&'static str`
+    /// projection at the helper boundary. `arity` is `usize` because
+    /// it is always `list.len()` at the call site (the length of
+    /// the form including the head element). Display renders the
+    /// head via `MacroDefHead`'s Display impl (which projects
+    /// through `MacroDefHead::keyword()` to the canonical `&'static
+    /// str` literal), so the legacy `head: &'static str`-shaped
+    /// diagnostic rides through byte-for-byte.
     ///
     /// Display preserves the legacy `"(defmacro name (params) body)
     /// required"` substring byte-for-byte: the head is parameterized
@@ -501,7 +509,7 @@ pub enum LispError {
         "compile error in {head}: (defmacro name (params) body) required \
          (got {arity} elements, need 4)"
     )]
-    DefmacroArity { head: &'static str, arity: usize },
+    DefmacroArity { head: MacroDefHead, arity: usize },
     /// A `defmacro` / `defpoint-template` / `defcheck` form passed the
     /// arity gate (≥4 elements) but its name slot — `list[1]`, the
     /// element directly after the head — wasn't a symbol. The legacy
@@ -533,17 +541,13 @@ pub enum LispError {
     /// (list[2] is not a list), which is the next move in the same
     /// rejection chain.
     ///
-    /// `head` is `&'static str` because every call site projects
-    /// through the `matches!("defmacro" | "defpoint-template" |
-    /// "defcheck")` gate immediately above — the head is always one
-    /// of three known literals at that point; using a static slot
-    /// makes that compile-time guarantee load-bearing in the type
-    /// system (a typo in the head literal can never drift into the
-    /// diagnostic at runtime — the type system is the floor, same
-    /// posture as `TypeMismatch.expected`, `HeadMismatch.keyword`,
-    /// and `DefmacroArity.head`). `got` is `String` because it
-    /// comes from arbitrary source via `Sexp::Display` (e.g. `5`,
-    /// `:foo`, `"name"`, `(nested)`).
+    /// `head` is `MacroDefHead` — same typed closed-set posture as
+    /// `DefmacroArity.head`: the three reachable head identities
+    /// (`Defmacro` ⊎ `DefpointTemplate` ⊎ `Defcheck`) are encoded as
+    /// a TYPE so consumers pattern-match on variant identity rather
+    /// than substring-comparing the rendered `head` literal.
+    /// `got` is `String` because it comes from arbitrary source via
+    /// `Sexp::Display` (e.g. `5`, `:foo`, `"name"`, `(nested)`).
     ///
     /// Display preserves the legacy `"expected name symbol"` substring
     /// byte-for-byte: the prefix `compile error in {head}:` matches
@@ -554,7 +558,7 @@ pub enum LispError {
     /// non-symbol-name site picks up positional rendering via
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {head}: expected name symbol, got {got}")]
-    DefmacroNonSymbolName { head: &'static str, got: String },
+    DefmacroNonSymbolName { head: MacroDefHead, got: String },
     /// A `defmacro` / `defpoint-template` / `defcheck` form passed both
     /// the arity gate (≥4 elements) AND the name-symbol gate (list[1]
     /// is a symbol) but its param-list slot — `list[2]`, the third
@@ -591,17 +595,14 @@ pub enum LispError {
     /// for failure modes, with each variant naming WHICH failure mode
     /// AND WHAT was offending.
     ///
-    /// `head` is `&'static str` because every call site projects
-    /// through the `matches!("defmacro" | "defpoint-template" |
-    /// "defcheck")` gate immediately above — the head is always one of
-    /// three known literals at that point; using a static slot makes
-    /// that compile-time guarantee load-bearing in the type system (a
-    /// typo in the head literal can never drift into the diagnostic at
-    /// runtime — the type system is the floor, same posture as
-    /// `TypeMismatch.expected`, `HeadMismatch.keyword`,
-    /// `DefmacroArity.head`, and `DefmacroNonSymbolName.head`). `got`
-    /// is `String` because it comes from arbitrary source via
-    /// `Sexp::Display` (e.g. `x`, `5`, `:foo`, `"params"`).
+    /// `head` is `MacroDefHead` — same typed closed-set posture as
+    /// `DefmacroArity.head` and `DefmacroNonSymbolName.head`. After
+    /// this lift all three `Defmacro*` variants share ONE typed
+    /// head identity, parallel to how `LispError::CompilerSpecIo`
+    /// carries `stage: CompilerSpecIoStage` for the four
+    /// disk-persistence (operation, stage) pairs. `got` is `String`
+    /// because it comes from arbitrary source via `Sexp::Display`
+    /// (e.g. `x`, `5`, `:foo`, `"params"`).
     ///
     /// Display preserves the legacy `"expected param list"` substring
     /// byte-for-byte: the prefix `compile error in {head}:` matches
@@ -612,7 +613,7 @@ pub enum LispError {
     /// non-list-params site picks up positional rendering via
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {head}: expected param list, got {got}")]
-    DefmacroNonListParams { head: &'static str, got: String },
+    DefmacroNonListParams { head: MacroDefHead, got: String },
     /// `T::compile_from_sexp` (the `TataraDomain` trait default) was
     /// passed something that isn't a list — a bare atom (`5`, `:foo`,
     /// `"x"`, `name`) where a top-level `(KEYWORD …)` form was
@@ -1306,6 +1307,93 @@ impl TemplateInvariantKind {
     }
 }
 
+/// Closed-set identifier for the head keyword of a `defmacro`-shape
+/// rejection — the three canonical macro-definition heads
+/// `defmacro` / `defpoint-template` / `defcheck`. Carried as a typed
+/// slot on `LispError::DefmacroArity`, `LispError::DefmacroNonSymbolName`,
+/// and `LispError::DefmacroNonListParams` so authoring tools (REPL, LSP,
+/// `tatara-check`) bind to variant identity rather than substring-matching
+/// the rendered `head` string.
+///
+/// Mirror at the macro-definition-head boundary of the prior-run
+/// `CompilerSpecIoStage` (disk-persistence surface) and
+/// `TemplateInvariantKind` (bytecode-runtime surface) closed-set lifts:
+/// those variants key on a typed enum for the (operation, stage) pair
+/// and the invariant kind respectively; this enum keys the three
+/// `Defmacro*` variants on a typed head identity. Adding a new
+/// macro-definition head requires extending this enum, which rustc-
+/// enforces matching at every projection site (`keyword()`) — the
+/// closed set becomes a TYPE rather than a `matches!` literal at the
+/// `macro_def_from` gate plus three `match head` projections inside
+/// each variant's helper.
+///
+/// `from_keyword(&str) -> Option<Self>` projects an arbitrary source
+/// symbol into the typed enum; `keyword(self) -> &'static str` projects
+/// back to the canonical literal for `LispError::Display` rendering.
+/// The bidirection is the identity on the closed set —
+/// `from_keyword(k).unwrap().keyword() == k` for every canonical `k`.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// macro-definition heads becomes a TYPE rather than a runtime
+/// string-comparison-and-format dance. THEORY.md §VI.1 — generation
+/// over composition; the typed enum lands the structural-completeness
+/// floor for the macro-definition-head surface, parallel to how
+/// `CompilerSpecIoStage` lands it for the disk-persistence surface and
+/// `TemplateInvariantKind` for the bytecode-runtime surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MacroDefHead {
+    /// `(defmacro NAME (PARAMS) BODY)` — the canonical Lisp-style macro
+    /// definition.
+    Defmacro,
+    /// `(defpoint-template NAME (PARAMS) BODY)` — the K8s-as-processes
+    /// authoring surface's macro form (see `tatara-process`).
+    DefpointTemplate,
+    /// `(defcheck NAME (PARAMS) BODY)` — the workspace-coherence
+    /// authoring surface's macro form (see
+    /// `tatara-reconciler/checks.lisp`).
+    Defcheck,
+}
+
+impl MacroDefHead {
+    /// Project a `head: &str` borrow (a `Sexp` symbol slice) into the
+    /// typed `MacroDefHead`. Returns `None` if `head` is not one of the
+    /// three canonical macro-definition head keywords; the caller
+    /// (`macro_def_from`) then returns `Ok(None)` to mean "this form is
+    /// not a defmacro form."
+    #[must_use]
+    pub fn from_keyword(head: &str) -> Option<Self> {
+        match head {
+            "defmacro" => Some(Self::Defmacro),
+            "defpoint-template" => Some(Self::DefpointTemplate),
+            "defcheck" => Some(Self::Defcheck),
+            _ => None,
+        }
+    }
+
+    /// Project the typed `MacroDefHead` back to the canonical
+    /// `&'static str` literal — feeds the `LispError::Defmacro*` Display
+    /// rendering via the `#[error(...)]` annotation. The `&'static str`
+    /// lifetime is load-bearing: it's what lets the variants project
+    /// through this method into their `compile error in {head}:` prefix
+    /// without an allocation, parallel to how
+    /// `CompilerSpecIoStage::operation()` / `label()` feed
+    /// `LispError::CompilerSpecIo`'s Display.
+    #[must_use]
+    pub fn keyword(self) -> &'static str {
+        match self {
+            Self::Defmacro => "defmacro",
+            Self::DefpointTemplate => "defpoint-template",
+            Self::Defcheck => "defcheck",
+        }
+    }
+}
+
+impl std::fmt::Display for MacroDefHead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.keyword())
+    }
+}
+
 fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
     match hint {
         Some(h) => format!("; did you mean {prefix}{h}?"),
@@ -1412,7 +1500,7 @@ impl LispError {
 
 #[cfg(test)]
 mod tests {
-    use super::LispError;
+    use super::{LispError, MacroDefHead};
 
     #[test]
     fn position_extracts_offset_from_positional_variants() {
@@ -1597,7 +1685,7 @@ mod tests {
         );
         assert_eq!(
             LispError::DefmacroArity {
-                head: "defmacro",
+                head: MacroDefHead::Defmacro,
                 arity: 1,
             }
             .position(),
@@ -1605,7 +1693,7 @@ mod tests {
         );
         assert_eq!(
             LispError::DefmacroArity {
-                head: "defcheck",
+                head: MacroDefHead::Defcheck,
                 arity: 3,
             }
             .position(),
@@ -1613,7 +1701,7 @@ mod tests {
         );
         assert_eq!(
             LispError::DefmacroNonSymbolName {
-                head: "defmacro",
+                head: MacroDefHead::Defmacro,
                 got: "5".into(),
             }
             .position(),
@@ -1621,7 +1709,7 @@ mod tests {
         );
         assert_eq!(
             LispError::DefmacroNonListParams {
-                head: "defmacro",
+                head: MacroDefHead::Defmacro,
                 got: "x".into(),
             }
             .position(),
@@ -1629,7 +1717,7 @@ mod tests {
         );
         assert_eq!(
             LispError::DefmacroNonListParams {
-                head: "defcheck",
+                head: MacroDefHead::Defcheck,
                 got: ":foo".into(),
             }
             .position(),
@@ -1637,7 +1725,7 @@ mod tests {
         );
         assert_eq!(
             LispError::DefmacroNonSymbolName {
-                head: "defpoint-template",
+                head: MacroDefHead::DefpointTemplate,
                 got: ":foo".into(),
             }
             .position(),
@@ -2486,7 +2574,7 @@ mod tests {
         // diagnostic see no drift. A regression that drops either
         // field from the rendered diagnostic fails-loudly here.
         let err = LispError::DefmacroArity {
-            head: "defmacro",
+            head: MacroDefHead::Defmacro,
             arity: 1,
         };
         assert_eq!(
@@ -2508,7 +2596,7 @@ mod tests {
         // defpoint-template form is missing elements" gains the head
         // as data.
         let err = LispError::DefmacroArity {
-            head: "defpoint-template",
+            head: MacroDefHead::DefpointTemplate,
             arity: 2,
         };
         assert_eq!(
@@ -2526,7 +2614,7 @@ mod tests {
         // `defmacro` / `defpoint-template` / `defcheck` (modulo the
         // head literal in the prefix).
         let err = LispError::DefmacroArity {
-            head: "defcheck",
+            head: MacroDefHead::Defcheck,
             arity: 3,
         };
         assert_eq!(
@@ -2547,7 +2635,7 @@ mod tests {
         // head.to_string(), message: "(defmacro name (params) body)
         // required" }` byte-for-byte.
         let err = LispError::DefmacroArity {
-            head: "defmacro",
+            head: MacroDefHead::Defmacro,
             arity: 0,
         };
         let msg = format!("{err}");
@@ -2573,7 +2661,7 @@ mod tests {
         // detail (`, got 5`) is appended. A regression that drops
         // either field from the rendered diagnostic fails-loudly here.
         let err = LispError::DefmacroNonSymbolName {
-            head: "defmacro",
+            head: MacroDefHead::Defmacro,
             got: "5".into(),
         };
         assert_eq!(
@@ -2592,7 +2680,7 @@ mod tests {
         // template form's name slot isn't a symbol" gains the head
         // as data.
         let err = LispError::DefmacroNonSymbolName {
-            head: "defpoint-template",
+            head: MacroDefHead::DefpointTemplate,
             got: ":foo".into(),
         };
         assert_eq!(
@@ -2608,7 +2696,7 @@ mod tests {
         // `defmacro` / `defpoint-template` / `defcheck` (modulo the
         // head literal in the prefix).
         let err = LispError::DefmacroNonSymbolName {
-            head: "defcheck",
+            head: MacroDefHead::Defcheck,
             got: "(nested)".into(),
         };
         assert_eq!(
@@ -2625,7 +2713,7 @@ mod tests {
         // `\"name\"` where a name symbol was expected" gains the
         // literal value as data, no re-parsing required.
         let err = LispError::DefmacroNonSymbolName {
-            head: "defmacro",
+            head: MacroDefHead::Defmacro,
             got: "\"name\"".into(),
         };
         assert_eq!(
@@ -2645,7 +2733,7 @@ mod tests {
         // prefix matches the legacy `Compile { form: head.to_string(),
         // message: "expected name symbol" }` byte-for-byte.
         let err = LispError::DefmacroNonSymbolName {
-            head: "defmacro",
+            head: MacroDefHead::Defmacro,
             got: "5".into(),
         };
         let msg = format!("{err}");
@@ -2672,7 +2760,7 @@ mod tests {
         // drops either field from the rendered diagnostic fails-loudly
         // here.
         let err = LispError::DefmacroNonListParams {
-            head: "defmacro",
+            head: MacroDefHead::Defmacro,
             got: "x".into(),
         };
         assert_eq!(
@@ -2691,7 +2779,7 @@ mod tests {
         // template form's param-list slot isn't a list" gains the
         // head as data.
         let err = LispError::DefmacroNonListParams {
-            head: "defpoint-template",
+            head: MacroDefHead::DefpointTemplate,
             got: "5".into(),
         };
         assert_eq!(
@@ -2707,7 +2795,7 @@ mod tests {
         // `defmacro` / `defpoint-template` / `defcheck` (modulo the
         // head literal in the prefix).
         let err = LispError::DefmacroNonListParams {
-            head: "defcheck",
+            head: MacroDefHead::Defcheck,
             got: ":k".into(),
         };
         assert_eq!(
@@ -2724,7 +2812,7 @@ mod tests {
         // `\"params\"` where a param list was expected" gains the
         // literal value as data, no re-parsing required.
         let err = LispError::DefmacroNonListParams {
-            head: "defmacro",
+            head: MacroDefHead::Defmacro,
             got: "\"params\"".into(),
         };
         assert_eq!(
@@ -2744,7 +2832,7 @@ mod tests {
         // prefix matches the legacy `Compile { form: head.to_string(),
         // message: "expected param list" }` byte-for-byte.
         let err = LispError::DefmacroNonListParams {
-            head: "defmacro",
+            head: MacroDefHead::Defmacro,
             got: "x".into(),
         };
         let msg = format!("{err}");
@@ -3853,5 +3941,174 @@ mod tests {
             super::TemplateInvariantKind::EndListEmptyStack => {}
             other => panic!("expected EndListEmptyStack, got {other:?}"),
         }
+    }
+
+    // --- MacroDefHead typed-slot lift (the closed-set promotion) ---
+    //
+    // The next eight tests pin the typed-slot promotion that closes
+    // the three-times rule across the `LispError::Defmacro*` family.
+    // Before this lift the three variants' `head` slot was
+    // `&'static str`, projected from a `MacroDefHead` via
+    // `head.keyword()` at the helper boundary; consumers had to
+    // substring-compare against three string literals to recognize
+    // a head identity. After the lift the slot IS the typed enum,
+    // so authoring tools (REPL, LSP, `tatara-check`) pattern-match
+    // on `MacroDefHead::Defmacro` etc. directly — same posture as
+    // `CompilerSpecIoStage` for `LispError::CompilerSpecIo` and
+    // `TemplateInvariantKind` for `LispError::TemplateInvariant`.
+
+    #[test]
+    fn defmacro_arity_head_slot_is_macro_def_head_not_static_str() {
+        // Pin that the `head` slot of `LispError::DefmacroArity` is
+        // `MacroDefHead` (the typed closed-set enum), not `&'static
+        // str`. A regression that reverts the slot to `&'static str`
+        // breaks the typed binding here at compile time; a
+        // construction with a stringly-typed head would fail to
+        // construct. This test is the structural-completeness pin
+        // for the typed-slot promotion, parallel to how
+        // `compiler_spec_io_carries_typed_stage_field` (if it
+        // existed) would pin `LispError::CompilerSpecIo.stage`.
+        let err = LispError::DefmacroArity {
+            head: MacroDefHead::Defmacro,
+            arity: 1,
+        };
+        match err {
+            LispError::DefmacroArity { head, arity } => {
+                assert_eq!(head, MacroDefHead::Defmacro);
+                assert_eq!(arity, 1);
+            }
+            other => panic!("expected DefmacroArity, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_head_slot_is_macro_def_head_not_static_str() {
+        // Sibling pin of `defmacro_arity_head_slot_is_macro_def_head_not_static_str`
+        // for the `LispError::DefmacroNonSymbolName` variant. The
+        // `head` slot carries `MacroDefHead` directly so consumers
+        // bind on variant identity (`MacroDefHead::DefpointTemplate`)
+        // instead of substring-matching the rendered diagnostic.
+        let err = LispError::DefmacroNonSymbolName {
+            head: MacroDefHead::DefpointTemplate,
+            got: "5".into(),
+        };
+        match err {
+            LispError::DefmacroNonSymbolName { head, got } => {
+                assert_eq!(head, MacroDefHead::DefpointTemplate);
+                assert_eq!(got, "5");
+            }
+            other => panic!("expected DefmacroNonSymbolName, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn defmacro_non_list_params_head_slot_is_macro_def_head_not_static_str() {
+        // Sibling pin of `defmacro_arity_head_slot_is_macro_def_head_not_static_str`
+        // for the `LispError::DefmacroNonListParams` variant. The
+        // `head` slot carries `MacroDefHead` directly so consumers
+        // pattern-match on `MacroDefHead::Defcheck` etc. for the
+        // workspace-coherence authoring surface's third head
+        // keyword.
+        let err = LispError::DefmacroNonListParams {
+            head: MacroDefHead::Defcheck,
+            got: "7".into(),
+        };
+        match err {
+            LispError::DefmacroNonListParams { head, got } => {
+                assert_eq!(head, MacroDefHead::Defcheck);
+                assert_eq!(got, "7");
+            }
+            other => panic!("expected DefmacroNonListParams, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn macro_def_head_display_renders_canonical_keyword_for_each_variant() {
+        // Pin `MacroDefHead`'s Display impl — it must project through
+        // `keyword()` so the `#[error(...)]` annotation on each
+        // `LispError::Defmacro*` variant renders the canonical
+        // `&'static str` literal byte-for-byte. The Display
+        // bidirection is `MacroDefHead → &'static str`; the inverse
+        // (`&str → Option<MacroDefHead>`) lives in `from_keyword`.
+        // Together the two close the bidirectional projection on the
+        // closed set.
+        assert_eq!(format!("{}", MacroDefHead::Defmacro), "defmacro");
+        assert_eq!(
+            format!("{}", MacroDefHead::DefpointTemplate),
+            "defpoint-template"
+        );
+        assert_eq!(format!("{}", MacroDefHead::Defcheck), "defcheck");
+    }
+
+    #[test]
+    fn defmacro_arity_display_renders_legacy_prefix_via_macro_def_head_display() {
+        // End-to-end through `LispError`'s Display: the typed `head:
+        // MacroDefHead` slot projects to the canonical `&'static
+        // str` literal at render time via `MacroDefHead`'s Display
+        // impl, so the rendered diagnostic is byte-for-byte
+        // identical to the pre-lift `head: &'static str` shape.
+        // Authoring tools that substring-match on `"compile error
+        // in defmacro:"` see no drift across the typed-slot
+        // promotion.
+        let err = LispError::DefmacroArity {
+            head: MacroDefHead::Defmacro,
+            arity: 2,
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro: (defmacro name (params) body) required \
+             (got 2 elements, need 4)"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_display_renders_via_macro_def_head_display_for_defpoint_template() {
+        // Sibling end-to-end test for the `defpoint-template` head:
+        // pins that the typed-slot promotion preserves the
+        // K8s-as-processes authoring surface's diagnostic shape
+        // byte-for-byte. A regression that drifts `MacroDefHead`'s
+        // Display impl (e.g. returns `"DefpointTemplate"` instead of
+        // `"defpoint-template"`) fails-loudly here.
+        let err = LispError::DefmacroNonSymbolName {
+            head: MacroDefHead::DefpointTemplate,
+            got: ":foo".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defpoint-template: expected name symbol, got :foo"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_list_params_display_renders_via_macro_def_head_display_for_defcheck() {
+        // Sibling end-to-end test for the `defcheck` head: pins that
+        // the typed-slot promotion preserves the workspace-coherence
+        // authoring surface's diagnostic shape byte-for-byte.
+        let err = LispError::DefmacroNonListParams {
+            head: MacroDefHead::Defcheck,
+            got: "x".into(),
+        };
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defcheck: expected param list, got x"
+        );
+    }
+
+    #[test]
+    fn macro_def_head_is_copy_and_partial_eq_for_pattern_match_ergonomics() {
+        // Pin that `MacroDefHead` derives `Copy + PartialEq + Eq +
+        // Debug + Clone` — the posture every closed-set typed enum
+        // in this module shares (`CompilerSpecIoStage`,
+        // `TemplateInvariantKind`). Copy lets consumers pattern-match
+        // on the variant without explicit cloning; `PartialEq + Eq`
+        // makes `assert_eq!` and `matches!` ergonomic; `Debug` makes
+        // the `other => panic!("got {other:?}")` shape ergonomic at
+        // assertion sites. A regression that drops any of these
+        // derives breaks compilation here.
+        let h = MacroDefHead::Defmacro;
+        let h_copy: MacroDefHead = h; // Copy
+        assert_eq!(h, h_copy); // PartialEq
+        assert!(matches!(h, MacroDefHead::Defmacro)); // exhaustive match
+        let _: String = format!("{h:?}"); // Debug
     }
 }

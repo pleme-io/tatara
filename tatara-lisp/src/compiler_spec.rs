@@ -137,8 +137,8 @@ pub fn realize_in_memory(spec: CompilerSpec) -> Result<RealizedCompiler> {
 /// runtime AND the (operation, stage) pair is structurally constrained
 /// to the four reachable pairs (`realize_to_disk` × {serialize, write}
 /// ⊎ `load_from_disk` × {read, deserialize}). Same posture as how
-/// `defmacro_arity` projects `MacroDefHead` through `head.keyword()`
-/// into `LispError::DefmacroArity.head`. Returns `LispError` directly
+/// `defmacro_arity` threads `MacroDefHead` straight into
+/// `LispError::DefmacroArity.head`. Returns `LispError` directly
 /// (not `Result`), so call sites compose with `map_err` / `ok_or_else`
 /// without an extra `?`, parallel to the pre-lift signature.
 ///

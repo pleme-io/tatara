@@ -90,14 +90,24 @@ pub enum LispError {
     /// otherwise — a wrong hint is worse than no hint, so the slot stays
     /// empty unless the substrate is confident.
     ///
-    /// `prefix` is `&'static str` because every call site passes a literal
-    /// (`","` or `",@"`); a typo in the marker can never drift into the
-    /// diagnostic at runtime — the type system is the floor. `name` and
-    /// `hint` are `String` because they come from arbitrary source / the
-    /// live bindings set. When a future run gives `Sexp` source spans, `pos:
-    /// Option<usize>` lands here in ONE place and every unbound-template-var
-    /// site picks up positional rendering via
-    /// `crate::diagnostic::format_diagnostic` mechanically.
+    /// `prefix` is `UnquoteForm` — the closed-set typed enum whose two
+    /// variants are EXACTLY the two reachable syntactic markers
+    /// (`Unquote` ⊎ `Splice`). Encoding the closed set as a TYPE makes the
+    /// constraint that ONLY 2 marker identities are reachable load-bearing
+    /// in the type system — a third pseudo-marker can never drift into the
+    /// diagnostic at runtime; consumers (REPL, LSP, `tatara-check`)
+    /// pattern-match on `UnquoteForm::Splice` etc. directly instead of
+    /// substring-matching `prefix == ",@"`. Same posture as
+    /// `LispError::Defmacro*.head: MacroDefHead`,
+    /// `LispError::CompilerSpecIo.stage: CompilerSpecIoStage`, and
+    /// `LispError::TemplateInvariant.kind: TemplateInvariantKind`: the
+    /// closed set becomes a TYPE rather than a `&'static str` projection
+    /// at the helper boundary. `name` and `hint` are `String` because
+    /// they come from arbitrary source / the live bindings set. When a
+    /// future run gives `Sexp` source spans, `pos: Option<usize>` lands
+    /// here in ONE place and every unbound-template-var site picks up
+    /// positional rendering via `crate::diagnostic::format_diagnostic`
+    /// mechanically.
     ///
     /// Display matches the legacy `Compile`-shaped diagnostic byte-for-byte
     /// when `hint` is `None` — `"compile error in {prefix}{name}: unbound"`
@@ -107,10 +117,10 @@ pub enum LispError {
     /// the operator can copy-paste the suggestion verbatim.
     #[error(
         "compile error in {prefix}{name}: unbound{}",
-        unbound_hint_suffix(prefix, hint.as_deref())
+        unbound_hint_suffix(*prefix, hint.as_deref())
     )]
     UnboundTemplateVar {
-        prefix: &'static str,
+        prefix: UnquoteForm,
         name: String,
         hint: Option<String>,
     },
@@ -261,16 +271,22 @@ pub enum LispError {
     /// structural variant of `LispError`, not a `Compile`-shaped
     /// substring.
     ///
-    /// `prefix` is `&'static str` because every call site passes a
-    /// literal (`","` / `",@"`); a typo in the marker can never drift
-    /// into the diagnostic at runtime — the type system is the floor.
-    /// `got` is `String` because it comes from arbitrary source via
-    /// `Sexp::Display`. When a future run gives `Sexp` source spans,
-    /// `pos: Option<usize>` lands here in ONE place and every
+    /// `prefix` is `UnquoteForm` — the closed-set typed enum whose two
+    /// variants are EXACTLY the two reachable syntactic markers
+    /// (`Unquote` ⊎ `Splice`). Encoding the closed set as a TYPE makes
+    /// the constraint load-bearing in the type system — a third
+    /// pseudo-marker can never drift into the diagnostic at runtime;
+    /// consumers (REPL, LSP, `tatara-check`) pattern-match on
+    /// `UnquoteForm::Splice` etc. directly instead of substring-matching
+    /// `prefix == ",@"`. Same typed-slot posture as `UnboundTemplateVar`'s
+    /// `prefix` slot, parallel to `LispError::Defmacro*.head:
+    /// MacroDefHead`. `got` is `String` because it comes from arbitrary
+    /// source via `Sexp::Display`. When a future run gives `Sexp` source
+    /// spans, `pos: Option<usize>` lands here in ONE place and every
     /// non-symbol-unquote-target site picks up positional rendering via
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {prefix}: expected symbol, got {got}")]
-    NonSymbolUnquoteTarget { prefix: &'static str, got: String },
+    NonSymbolUnquoteTarget { prefix: UnquoteForm, got: String },
     /// A `,@X` (unquote-splice) appeared at a syntactic position where there
     /// is no containing list to splice into — i.e. the splice is the entire
     /// macro-template body, not nested inside a `(... ,@xs ...)` list. Splice
@@ -1394,9 +1410,82 @@ impl std::fmt::Display for MacroDefHead {
     }
 }
 
-fn unbound_hint_suffix(prefix: &str, hint: Option<&str>) -> String {
+/// Closed-set identifier for the syntactic marker of a macro-template
+/// unquote (`,`) or unquote-splice (`,@`). Carried as a typed slot on
+/// `LispError::UnboundTemplateVar` and `LispError::NonSymbolUnquoteTarget`
+/// so authoring tools (REPL, LSP, `tatara-check`) bind to variant identity
+/// via `UnquoteForm::Splice` rather than substring-matching the rendered
+/// `prefix` literal.
+///
+/// Mirror at the template-marker boundary of the prior-run `MacroDefHead`
+/// (macro-definition-head closed set), `CompilerSpecIoStage`
+/// (disk-persistence surface), and `TemplateInvariantKind` (bytecode-runtime
+/// surface) closed-set lifts: those enums key their respective rejection
+/// variants on a typed identity; this enum keys the two unquote-template
+/// rejection variants (`UnboundTemplateVar`, `NonSymbolUnquoteTarget`) on a
+/// typed marker identity. Adding a new unquote variant (e.g., a hypothetical
+/// `,~` form) requires extending this enum, which rustc-enforces matching at
+/// every projection site (`marker()`) — the closed set becomes a TYPE rather
+/// than two `&'static str`-keyed slots that could drift independently.
+///
+/// `marker(self) -> &'static str` projects the typed `UnquoteForm` back to
+/// the canonical literal for `LispError::Display` rendering. The `&'static
+/// str` lifetime is load-bearing: it lets both variants project through this
+/// method into their `compile error in {prefix}…:` prefix without an
+/// allocation, parallel to how `MacroDefHead::keyword()` and
+/// `CompilerSpecIoStage::operation()` / `label()` feed their respective
+/// `LispError::*` Display impls.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// unquote markers becomes a TYPE rather than a runtime
+/// string-comparison-and-format dance. A typo like `prefix: ",,"` is
+/// structurally unrepresentable rather than re-asserted at the helper
+/// boundary. THEORY.md §VI.1 — generation over composition; the typed enum
+/// lands the structural-completeness floor for the template-marker surface,
+/// parallel to how `MacroDefHead` lands it for the macro-definition-head
+/// surface and `CompilerSpecIoStage` for the disk-persistence surface.
+/// THEORY.md §II.1 invariant 1 (typed entry): a non-symbol unquote target /
+/// an unbound template var is exactly the failure mode the typed-entry gate
+/// exists to reject, and the marker identity is part of the proof.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnquoteForm {
+    /// `,x` — single-value substitution. The `,` marker; the inner symbol
+    /// is substituted with its bound value at template expansion.
+    Unquote,
+    /// `,@x` — list-splice substitution. The `,@` marker; the inner symbol
+    /// must be bound to a list, whose elements are flattened into the
+    /// containing list at template expansion.
+    Splice,
+}
+
+impl UnquoteForm {
+    /// Project the typed `UnquoteForm` to the canonical `&'static str`
+    /// literal — feeds the `LispError::UnboundTemplateVar` /
+    /// `LispError::NonSymbolUnquoteTarget` Display rendering via the
+    /// `#[error(...)]` annotation. The `&'static str` lifetime is
+    /// load-bearing: it lets the variants project through this method into
+    /// their `compile error in {prefix}…:` prefix without an allocation,
+    /// parallel to how `MacroDefHead::keyword()` and
+    /// `CompilerSpecIoStage::operation()` / `label()` feed their respective
+    /// `LispError::*` Display impls.
+    #[must_use]
+    pub fn marker(self) -> &'static str {
+        match self {
+            Self::Unquote => ",",
+            Self::Splice => ",@",
+        }
+    }
+}
+
+impl std::fmt::Display for UnquoteForm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.marker())
+    }
+}
+
+fn unbound_hint_suffix(prefix: UnquoteForm, hint: Option<&str>) -> String {
     match hint {
-        Some(h) => format!("; did you mean {prefix}{h}?"),
+        Some(h) => format!("; did you mean {}{h}?", prefix.marker()),
         None => String::new(),
     }
 }
@@ -1500,7 +1589,7 @@ impl LispError {
 
 #[cfg(test)]
 mod tests {
-    use super::{LispError, MacroDefHead};
+    use super::{LispError, MacroDefHead, UnquoteForm};
 
     #[test]
     fn position_extracts_offset_from_positional_variants() {
@@ -1566,7 +1655,7 @@ mod tests {
         );
         assert_eq!(
             LispError::UnboundTemplateVar {
-                prefix: ",",
+                prefix: UnquoteForm::Unquote,
                 name: "xx".into(),
                 hint: Some("x".into()),
             }
@@ -1575,7 +1664,7 @@ mod tests {
         );
         assert_eq!(
             LispError::UnboundTemplateVar {
-                prefix: ",@",
+                prefix: UnquoteForm::Splice,
                 name: "ys".into(),
                 hint: None,
             }
@@ -1610,7 +1699,7 @@ mod tests {
         );
         assert_eq!(
             LispError::NonSymbolUnquoteTarget {
-                prefix: ",",
+                prefix: UnquoteForm::Unquote,
                 got: "(list 1 2)".into(),
             }
             .position(),
@@ -1618,7 +1707,7 @@ mod tests {
         );
         assert_eq!(
             LispError::NonSymbolUnquoteTarget {
-                prefix: ",@",
+                prefix: UnquoteForm::Splice,
                 got: "5".into(),
             }
             .position(),
@@ -2150,7 +2239,7 @@ mod tests {
         // produced, so authoring tools that substring-match on the rendered
         // diagnostic see no drift.
         let err = LispError::UnboundTemplateVar {
-            prefix: ",",
+            prefix: UnquoteForm::Unquote,
             name: "y".into(),
             hint: None,
         };
@@ -2163,7 +2252,7 @@ mod tests {
         // the prefix is preserved in the hint so the operator can copy-paste
         // the suggestion verbatim.
         let err = LispError::UnboundTemplateVar {
-            prefix: ",",
+            prefix: UnquoteForm::Unquote,
             name: "xs".into(),
             hint: Some("x".into()),
         };
@@ -2264,7 +2353,7 @@ mod tests {
         // tools that substring-match on the rendered diagnostic see a
         // stable shape parallel to the existing `TypeMismatch` variant.
         let err = LispError::NonSymbolUnquoteTarget {
-            prefix: ",",
+            prefix: UnquoteForm::Unquote,
             got: "(list 1 2)".into(),
         };
         assert_eq!(
@@ -2279,7 +2368,7 @@ mod tests {
         // diagnostic is `,@`, not `,`. The operator never has to translate
         // `,` ↔ `,@` mentally — same posture as `UnboundTemplateVar`.
         let err = LispError::NonSymbolUnquoteTarget {
-            prefix: ",@",
+            prefix: UnquoteForm::Splice,
             got: "5".into(),
         };
         assert_eq!(
@@ -2294,7 +2383,7 @@ mod tests {
         // round-trips through `Sexp::Display` into the variant's `got`
         // slot unchanged, so the operator sees what they wrote.
         let err = LispError::NonSymbolUnquoteTarget {
-            prefix: ",",
+            prefix: UnquoteForm::Unquote,
             got: ":foo".into(),
         };
         assert_eq!(
@@ -2851,7 +2940,7 @@ mod tests {
         // Splice marker rides through both the form and the suggestion; the
         // operator never has to translate `,` ↔ `,@` mentally.
         let err = LispError::UnboundTemplateVar {
-            prefix: ",@",
+            prefix: UnquoteForm::Splice,
             name: "rsts".into(),
             hint: Some("rest".into()),
         };
@@ -4110,5 +4199,171 @@ mod tests {
         assert_eq!(h, h_copy); // PartialEq
         assert!(matches!(h, MacroDefHead::Defmacro)); // exhaustive match
         let _: String = format!("{h:?}"); // Debug
+    }
+
+    // --- UnquoteForm typed-slot lift (the closed-set promotion) ---
+    //
+    // The next six tests pin the typed-slot promotion that closes the
+    // three-times rule across `LispError::UnboundTemplateVar` /
+    // `LispError::NonSymbolUnquoteTarget` — the two template-marker
+    // rejection variants for the no-evaluator template language.
+    // Before this lift each variant's `prefix` slot was `&'static
+    // str`, set from the literal `","` / `",@"` at four (Unbound) +
+    // four (NonSymbol) call sites; consumers had to substring-compare
+    // against two string literals to recognize the marker identity.
+    // After the lift the slot IS the typed `UnquoteForm` enum, so
+    // authoring tools (REPL, LSP, `tatara-check`) pattern-match on
+    // `UnquoteForm::Splice` etc. directly — same posture as
+    // `MacroDefHead` for `LispError::Defmacro*`, `CompilerSpecIoStage`
+    // for `LispError::CompilerSpecIo`, `TemplateInvariantKind` for
+    // `LispError::TemplateInvariant`.
+
+    #[test]
+    fn unbound_template_var_prefix_slot_is_unquote_form_not_static_str() {
+        // Pin that the `prefix` slot of `LispError::UnboundTemplateVar`
+        // is `UnquoteForm` (the typed closed-set enum), not `&'static
+        // str`. A regression that reverts the slot to `&'static str`
+        // breaks the typed binding here at compile time; a
+        // construction with a stringly-typed prefix would fail to
+        // construct. This test is the structural-completeness pin
+        // for the typed-slot promotion, parallel to how
+        // `defmacro_arity_head_slot_is_macro_def_head_not_static_str`
+        // pins `LispError::DefmacroArity.head`.
+        let err = LispError::UnboundTemplateVar {
+            prefix: UnquoteForm::Unquote,
+            name: "xs".into(),
+            hint: None,
+        };
+        match err {
+            LispError::UnboundTemplateVar { prefix, name, hint } => {
+                assert_eq!(prefix, UnquoteForm::Unquote);
+                assert_eq!(name, "xs");
+                assert_eq!(hint, None);
+            }
+            other => panic!("expected UnboundTemplateVar, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_prefix_slot_is_unquote_form_not_static_str() {
+        // Sibling pin for `LispError::NonSymbolUnquoteTarget`. The
+        // `prefix` slot carries `UnquoteForm` directly so consumers
+        // bind on variant identity (`UnquoteForm::Splice`) instead
+        // of substring-matching the rendered diagnostic. Together
+        // with `unbound_template_var_prefix_slot_is_unquote_form_not_static_str`,
+        // the two pin the typed-slot promotion across ALL template-
+        // marker rejection variants — the two reachable rejection
+        // identities (`UnboundTemplateVar`, `NonSymbolUnquoteTarget`)
+        // share ONE typed marker identity.
+        let err = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Splice,
+            got: "(list 1 2)".into(),
+        };
+        match err {
+            LispError::NonSymbolUnquoteTarget { prefix, got } => {
+                assert_eq!(prefix, UnquoteForm::Splice);
+                assert_eq!(got, "(list 1 2)");
+            }
+            other => panic!("expected NonSymbolUnquoteTarget, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unquote_form_marker_projects_canonical_literal_for_each_variant() {
+        // Pin `UnquoteForm::marker()` — it must project each variant
+        // to the canonical `&'static str` literal byte-for-byte. The
+        // projection feeds the `#[error(...)]` annotation on
+        // `LispError::UnboundTemplateVar` /
+        // `LispError::NonSymbolUnquoteTarget` via the Display impl,
+        // and the `unbound_hint_suffix` helper's `prefix.marker()`
+        // call site. A regression that drifts the literal (e.g.,
+        // returns `"un"` instead of `","`) fails-loudly here.
+        assert_eq!(UnquoteForm::Unquote.marker(), ",");
+        assert_eq!(UnquoteForm::Splice.marker(), ",@");
+    }
+
+    #[test]
+    fn unquote_form_display_renders_canonical_marker_for_each_variant() {
+        // Pin `UnquoteForm`'s Display impl — it must project through
+        // `marker()` so the `#[error(...)]` annotation on each
+        // affected `LispError::*` variant renders the canonical
+        // `&'static str` literal byte-for-byte. Same posture as
+        // `MacroDefHead`'s Display impl (which projects through
+        // `keyword()`).
+        assert_eq!(format!("{}", UnquoteForm::Unquote), ",");
+        assert_eq!(format!("{}", UnquoteForm::Splice), ",@");
+    }
+
+    #[test]
+    fn unbound_template_var_display_renders_canonical_marker_for_each_variant() {
+        // End-to-end through `LispError`'s Display: the typed `prefix:
+        // UnquoteForm` slot projects to the canonical `&'static str`
+        // literal at render time via `UnquoteForm`'s Display impl,
+        // so the rendered diagnostic is byte-for-byte identical to
+        // the pre-lift `prefix: &'static str` shape. Authoring tools
+        // that substring-match on `,xs` / `,@xs` see no drift across
+        // the typed-slot promotion. Paired with
+        // `non_symbol_unquote_target_display_renders_canonical_marker_for_each_variant`
+        // to pin the lift end-to-end on BOTH affected variants.
+        let unquote = LispError::UnboundTemplateVar {
+            prefix: UnquoteForm::Unquote,
+            name: "xs".into(),
+            hint: None,
+        };
+        assert_eq!(format!("{unquote}"), "compile error in ,xs: unbound");
+
+        let splice = LispError::UnboundTemplateVar {
+            prefix: UnquoteForm::Splice,
+            name: "argz".into(),
+            hint: Some("args".into()),
+        };
+        assert_eq!(
+            format!("{splice}"),
+            "compile error in ,@argz: unbound; did you mean ,@args?"
+        );
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_display_renders_canonical_marker_for_each_variant() {
+        // Sibling end-to-end pin for `LispError::NonSymbolUnquoteTarget`.
+        // Pins that the typed-slot promotion preserves the
+        // template-marker diagnostic shape byte-for-byte for BOTH
+        // variants of `UnquoteForm`.
+        let unquote = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Unquote,
+            got: "(list 1 2)".into(),
+        };
+        assert_eq!(
+            format!("{unquote}"),
+            "compile error in ,: expected symbol, got (list 1 2)"
+        );
+
+        let splice = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Splice,
+            got: "5".into(),
+        };
+        assert_eq!(
+            format!("{splice}"),
+            "compile error in ,@: expected symbol, got 5"
+        );
+    }
+
+    #[test]
+    fn unquote_form_is_copy_and_partial_eq_for_pattern_match_ergonomics() {
+        // Pin that `UnquoteForm` derives `Copy + PartialEq + Eq +
+        // Debug + Clone` — the posture every closed-set typed enum
+        // in this module shares (`MacroDefHead`, `CompilerSpecIoStage`,
+        // `TemplateInvariantKind`). Copy lets consumers pattern-match
+        // on the variant without explicit cloning; `PartialEq + Eq`
+        // makes `assert_eq!` and `matches!` ergonomic; `Debug` makes
+        // the `other => panic!("got {other:?}")` shape ergonomic at
+        // assertion sites. A regression that drops any of these
+        // derives breaks compilation here.
+        let f = UnquoteForm::Splice;
+        let f_copy: UnquoteForm = f; // Copy
+        assert_eq!(f, f_copy); // PartialEq
+        assert!(matches!(f, UnquoteForm::Splice)); // exhaustive match
+        assert_ne!(f, UnquoteForm::Unquote); // Eq/Ne
+        let _: String = format!("{f:?}"); // Debug
     }
 }

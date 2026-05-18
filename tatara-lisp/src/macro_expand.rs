@@ -27,7 +27,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 use crate::ast::Sexp;
-use crate::error::{LispError, MacroDefHead, Result, TemplateInvariantKind};
+use crate::error::{LispError, MacroDefHead, Result, TemplateInvariantKind, UnquoteForm};
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
@@ -298,21 +298,21 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
         Sexp::Unquote(inner) => {
             let name = inner
                 .as_symbol()
-                .ok_or_else(|| non_symbol_unquote_target(",", inner))?;
+                .ok_or_else(|| non_symbol_unquote_target(UnquoteForm::Unquote, inner))?;
             let idx = params
                 .iter()
                 .position(|p| *p == name)
-                .ok_or_else(|| unbound_template_var(",", name, params))?;
+                .ok_or_else(|| unbound_template_var(UnquoteForm::Unquote, name, params))?;
             ops.push(TemplateOp::Subst(idx));
         }
         Sexp::UnquoteSplice(inner) => {
             let name = inner
                 .as_symbol()
-                .ok_or_else(|| non_symbol_unquote_target(",@", inner))?;
+                .ok_or_else(|| non_symbol_unquote_target(UnquoteForm::Splice, inner))?;
             let idx = params
                 .iter()
                 .position(|p| *p == name)
-                .ok_or_else(|| unbound_template_var(",@", name, params))?;
+                .ok_or_else(|| unbound_template_var(UnquoteForm::Splice, name, params))?;
             ops.push(TemplateOp::Splice(idx));
         }
         Sexp::List(items) => {
@@ -547,11 +547,10 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
         Sexp::Unquote(inner) => {
             let sym = inner
                 .as_symbol()
-                .ok_or_else(|| non_symbol_unquote_target(",", inner))?;
-            bindings
-                .get(sym)
-                .cloned()
-                .ok_or_else(|| unbound_template_var(",", sym, &bound_names(bindings)))
+                .ok_or_else(|| non_symbol_unquote_target(UnquoteForm::Unquote, inner))?;
+            bindings.get(sym).cloned().ok_or_else(|| {
+                unbound_template_var(UnquoteForm::Unquote, sym, &bound_names(bindings))
+            })
         }
         Sexp::UnquoteSplice(inner) => Err(splice_outside_list(inner)),
         Sexp::List(items) => {
@@ -560,10 +559,10 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
                 if let Sexp::UnquoteSplice(inner) = item {
                     let sym = inner
                         .as_symbol()
-                        .ok_or_else(|| non_symbol_unquote_target(",@", inner))?;
-                    let val = bindings
-                        .get(sym)
-                        .ok_or_else(|| unbound_template_var(",@", sym, &bound_names(bindings)))?;
+                        .ok_or_else(|| non_symbol_unquote_target(UnquoteForm::Splice, inner))?;
+                    let val = bindings.get(sym).ok_or_else(|| {
+                        unbound_template_var(UnquoteForm::Splice, sym, &bound_names(bindings))
+                    })?;
                     match val {
                         Sexp::List(children) => out.extend(children.iter().cloned()),
                         Sexp::Nil => {}
@@ -591,11 +590,19 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
 /// `bindings.keys()` during substitute — so the operator's hint is always
 /// drawn from the in-scope name set, never a stale snapshot.
 ///
-/// `prefix` is `&'static str` because every call site passes a literal
-/// (`","` / `",@"`); `name` is the offender from source; the hint is
-/// `Option<String>` because the matched candidate borrows from a transient
-/// `Vec<&str>` we built locally — copying the matched name into the variant
-/// is the cheapest way to keep `LispError` lifetime-free.
+/// `prefix` is `UnquoteForm` — the closed-set typed enum whose two
+/// variants are EXACTLY the two reachable syntactic markers
+/// (`Unquote` ⊎ `Splice`). Threading the typed marker through the helper
+/// boundary (rather than `&'static str`) lands the same compile-time
+/// closed-set guarantee `defmacro_arity` / `defmacro_non_symbol_name` /
+/// `defmacro_non_list_params` get from threading `MacroDefHead`: the
+/// closed set is encoded in the type system, so a regression that drifts
+/// the marker (e.g. a fourth `prefix: ",,"` call site) becomes a type
+/// error at the call site, not a runtime substring drift. `name` is the
+/// offender from source; the hint is `Option<String>` because the matched
+/// candidate borrows from a transient `Vec<&str>` we built locally —
+/// copying the matched name into the variant is the cheapest way to keep
+/// `LispError` lifetime-free.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; four inline
 /// copies in one module is well past the three-times rule. THEORY.md §V.1 —
@@ -603,7 +610,7 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
 /// `hint` as first-class fields so authoring tools (LSP, REPL,
 /// `tatara-check`) bind to the data shape instead of substring-parsing the
 /// rendered diagnostic.
-fn unbound_template_var(prefix: &'static str, name: &str, candidates: &[&str]) -> LispError {
+fn unbound_template_var(prefix: UnquoteForm, name: &str, candidates: &[&str]) -> LispError {
     LispError::UnboundTemplateVar {
         prefix,
         name: name.to_string(),
@@ -622,10 +629,14 @@ fn unbound_template_var(prefix: &'static str, name: &str, candidates: &[&str]) -
 /// language: each is a structural variant of `LispError`, not a
 /// `Compile`-shaped substring.
 ///
-/// `prefix` is `&'static str` because every call site passes a literal
-/// (`","` / `",@"`); the inner is the offending `Sexp` projected through
-/// `Display` so the operator sees the literal value they wrote — `(list 1
-/// 2)`, `5`, `:foo` — instead of just a type-name. Naming both the
+/// `prefix` is `UnquoteForm` — the closed-set typed enum whose two
+/// variants are EXACTLY the two reachable syntactic markers
+/// (`Unquote` ⊎ `Splice`). Threading the typed marker through the helper
+/// boundary (rather than `&'static str`) lands the same compile-time
+/// closed-set guarantee `unbound_template_var` carries: the closed set is
+/// encoded in the type system. The inner is the offending `Sexp` projected
+/// through `Display` so the operator sees the literal value they wrote —
+/// `(list 1 2)`, `5`, `:foo` — instead of just a type-name. Naming both the
 /// syntactic context AND the offending value is the typed-entry gate's
 /// structural-completeness floor.
 ///
@@ -637,7 +648,7 @@ fn unbound_template_var(prefix: &'static str, name: &str, candidates: &[&str]) -
 /// the rendered diagnostic. THEORY.md §II.1 invariant 1 — typed entry;
 /// a non-symbol unquote target is exactly the failure mode the
 /// typed-entry gate exists to reject.
-fn non_symbol_unquote_target(prefix: &'static str, got: &Sexp) -> LispError {
+fn non_symbol_unquote_target(prefix: UnquoteForm, got: &Sexp) -> LispError {
     LispError::NonSymbolUnquoteTarget {
         prefix,
         got: got.to_string(),
@@ -1274,7 +1285,7 @@ mod tests {
 
     /// Helper for the unbound-template-var tests — pins the variant shape
     /// and carries any error context up to the assert site for legibility.
-    fn unbound_var(err: &LispError) -> (&str, &str, Option<&str>) {
+    fn unbound_var(err: &LispError) -> (UnquoteForm, &str, Option<&str>) {
         match err {
             LispError::UnboundTemplateVar { prefix, name, hint } => {
                 (*prefix, name.as_str(), hint.as_deref())
@@ -1293,7 +1304,7 @@ mod tests {
             .expand_program(read("(defmacro w (x) `(list ,xs)) (w 1)").unwrap())
             .expect_err("unbound template var must error");
         let (prefix, name, hint) = unbound_var(&err);
-        assert_eq!(prefix, ",");
+        assert_eq!(prefix, UnquoteForm::Unquote);
         assert_eq!(name, "xs");
         assert_eq!(hint, Some("x"));
     }
@@ -1309,7 +1320,7 @@ mod tests {
             )
             .expect_err("unbound splice must error");
         let (prefix, name, hint) = unbound_var(&err);
-        assert_eq!(prefix, ",@");
+        assert_eq!(prefix, UnquoteForm::Splice);
         assert_eq!(name, "argz");
         assert_eq!(hint, Some("args"));
     }
@@ -1323,7 +1334,7 @@ mod tests {
             .expand_program(read("(defmacro w (x) `(list ,xs)) (w 1)").unwrap())
             .expect_err("substitute unbound must error");
         let (prefix, name, hint) = unbound_var(&err);
-        assert_eq!(prefix, ",");
+        assert_eq!(prefix, UnquoteForm::Unquote);
         assert_eq!(name, "xs");
         assert_eq!(hint, Some("x"));
     }
@@ -1340,7 +1351,7 @@ mod tests {
             )
             .expect_err("substitute splice unbound must error");
         let (prefix, name, hint) = unbound_var(&err);
-        assert_eq!(prefix, ",@");
+        assert_eq!(prefix, UnquoteForm::Splice);
         assert_eq!(name, "argz");
         assert_eq!(hint, Some("args"));
     }
@@ -1355,7 +1366,7 @@ mod tests {
             .expand_program(read("(defmacro w (x) `(list ,wholly-unrelated)) (w 1)").unwrap())
             .expect_err("unrelated unbound must error");
         let (prefix, name, hint) = unbound_var(&err);
-        assert_eq!(prefix, ",");
+        assert_eq!(prefix, UnquoteForm::Unquote);
         assert_eq!(name, "wholly-unrelated");
         assert_eq!(hint, None);
     }
@@ -1401,7 +1412,7 @@ mod tests {
     /// Helper for the non-symbol-unquote-target tests — pins the variant
     /// shape and carries any error context up to the assert site for
     /// legibility. Sibling of `unbound_var`.
-    fn non_symbol_target(err: &LispError) -> (&str, &str) {
+    fn non_symbol_target(err: &LispError) -> (UnquoteForm, &str) {
         match err {
             LispError::NonSymbolUnquoteTarget { prefix, got } => (*prefix, got.as_str()),
             other => panic!("expected NonSymbolUnquoteTarget, got: {other:?}"),
@@ -1420,7 +1431,7 @@ mod tests {
             .expand_program(read("(defmacro w (x) `,(list 1 2)) (w 1)").unwrap())
             .expect_err("non-symbol unquote target must error");
         let (prefix, got) = non_symbol_target(&err);
-        assert_eq!(prefix, ",");
+        assert_eq!(prefix, UnquoteForm::Unquote);
         assert_eq!(got, "(list 1 2)");
     }
 
@@ -1434,7 +1445,7 @@ mod tests {
             .expand_program(read("(defmacro w (x) `(list ,@5)) (w 1)").unwrap())
             .expect_err("non-symbol splice target must error");
         let (prefix, got) = non_symbol_target(&err);
-        assert_eq!(prefix, ",@");
+        assert_eq!(prefix, UnquoteForm::Splice);
         assert_eq!(got, "5");
     }
 
@@ -1449,7 +1460,7 @@ mod tests {
             .expand_program(read("(defmacro w (x) `,(list 1 2)) (w 1)").unwrap())
             .expect_err("substitute non-symbol target must error");
         let (prefix, got) = non_symbol_target(&err);
-        assert_eq!(prefix, ",");
+        assert_eq!(prefix, UnquoteForm::Unquote);
         assert_eq!(got, "(list 1 2)");
     }
 
@@ -1464,7 +1475,7 @@ mod tests {
             .expand_program(read("(defmacro w (x) `(outer ,@(list 1 2))) (w 1)").unwrap())
             .expect_err("substitute non-symbol splice must error");
         let (prefix, got) = non_symbol_target(&err);
-        assert_eq!(prefix, ",@");
+        assert_eq!(prefix, UnquoteForm::Splice);
         assert_eq!(got, "(list 1 2)");
     }
 

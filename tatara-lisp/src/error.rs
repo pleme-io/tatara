@@ -1483,6 +1483,90 @@ impl std::fmt::Display for UnquoteForm {
     }
 }
 
+/// Closed-set identifier for a kwargs-path projection — the `form:` label
+/// shape that a typed-entry kwarg failure renders into the `compile error
+/// in {form}:` prefix of a `LispError::TypeMismatch` diagnostic. Encodes
+/// the three reachable path shapes the kwargs gate emits — `:<key>` for a
+/// named kwarg (`extract_string` / `extract_int` / etc. failure),
+/// `:<key>[<idx>]` for the Nth item of a list-typed kwarg
+/// (`extract_string_list` per-item failure), and `kwargs[<idx>]` for an
+/// even-position slot that failed the "this-position-must-be-a-keyword"
+/// gate before a key was known (`parse_kwargs` direct call) — as a typed
+/// borrowed enum, so authoring tools (REPL, LSP, `tatara-check`) bind to
+/// path-shape identity (`KwargPath::Item { .. }` etc.) rather than
+/// substring-matching the rendered prefix.
+///
+/// Mirror at the kwargs-path-shape boundary of the prior-run
+/// `MacroDefHead` (macro-definition-head closed set),
+/// `CompilerSpecIoStage` (disk-persistence surface),
+/// `TemplateInvariantKind` (bytecode-runtime surface), and `UnquoteForm`
+/// (template-marker syntactic forms) closed-set lifts: those enums key
+/// their respective rejection variants on a typed identity carried inside
+/// the variant's data shape; this enum keys the THREE distinct `form:`
+/// label shapes emitted by the kwarg-gate's typed-entry chain on a typed
+/// path identity. The three `format!` literals that used to live inline
+/// in `domain.rs::kwarg_form` / `kwarg_item_form` / `kwargs_pos_form`
+/// (three byte-identical `format!` shapes, one per helper) collapse into
+/// ONE `Display` impl on this enum — the canonical literals (`":<key>"`
+/// / `":<key>[<idx>]"` / `"kwargs[<idx>]"`) live in ONE place, so a typo
+/// in any one of the three shapes can never drift independent of the
+/// others (THEORY.md §VI.1 three-times rule). Adding a fourth path shape
+/// (e.g., `:<key>.<field>` for nested-struct kwarg failures or
+/// `:<key>::<variant>` for sum-typed kwarg failures) requires extending
+/// this enum, which rustc-enforces matching at the `Display` projection
+/// site.
+///
+/// `'a` is the lifetime of the borrowed `key` payload — every call site
+/// passes a `&str` borrow from arbitrary source (the kwarg's identifier),
+/// projected through `Display` into a fresh `String` at the helper
+/// boundary so the resulting `form:` slot stays lifetime-free for
+/// inclusion in `LispError::TypeMismatch.form: String`. A future run that
+/// promotes `TypeMismatch.form: String` to `form: KwargPath<'static>` (or
+/// to an owned `KwargPathOwned` companion) will replace the helper's
+/// `.to_string()` projection with direct field assignment — one
+/// signature change inside the helpers, every call site inherits.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// kwargs-path shapes becomes a TYPE rather than three byte-identical
+/// `format!` literals scattered across helper definitions. THEORY.md
+/// §VI.1 — generation over composition; the typed enum lands the
+/// structural-completeness floor for the kwargs-path surface, parallel
+/// to how `CompilerSpecIoStage` lands it for the disk-persistence
+/// surface, `MacroDefHead` for the macro-definition-head surface,
+/// `TemplateInvariantKind` for the bytecode-runtime surface, and
+/// `UnquoteForm` for the template-marker surface. THEORY.md §II.1
+/// invariant 1 — typed entry; the kwargs-path's renderable identity is
+/// part of the proof of WHICH kwarg-gate fired, and the typed enum makes
+/// that identity first-class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KwargPath<'a> {
+    /// `:<key>` — failure at a named kwarg (`extract_string`,
+    /// `extract_int`, `extract_float`, `extract_bool`, etc.). The `key`
+    /// borrow is the offending kwarg's identifier from arbitrary source.
+    Named(&'a str),
+    /// `:<key>[<idx>]` — failure at the Nth item of a list-typed kwarg
+    /// (`extract_string_list` per-item failure). The `key` borrow is the
+    /// containing kwarg's identifier; `idx` is the 0-based item index
+    /// inside that kwarg's list value.
+    Item { key: &'a str, idx: usize },
+    /// `kwargs[<idx>]` — failure at the Nth slot of the kwargs slice
+    /// before a key was known (`parse_kwargs`'s
+    /// "this-position-must-be-a-keyword" gate firing on an even-position
+    /// slot). `idx` is the 0-based position into the raw kwargs slice
+    /// (not into a particular kwarg's value).
+    Slot(usize),
+}
+
+impl<'a> std::fmt::Display for KwargPath<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Named(key) => write!(f, ":{key}"),
+            Self::Item { key, idx } => write!(f, ":{key}[{idx}]"),
+            Self::Slot(idx) => write!(f, "kwargs[{idx}]"),
+        }
+    }
+}
+
 fn unbound_hint_suffix(prefix: UnquoteForm, hint: Option<&str>) -> String {
     match hint {
         Some(h) => format!("; did you mean {}{h}?", prefix.marker()),
@@ -1589,7 +1673,7 @@ impl LispError {
 
 #[cfg(test)]
 mod tests {
-    use super::{LispError, MacroDefHead, UnquoteForm};
+    use super::{KwargPath, LispError, MacroDefHead, UnquoteForm};
 
     #[test]
     fn position_extracts_offset_from_positional_variants() {
@@ -4365,5 +4449,117 @@ mod tests {
         assert!(matches!(f, UnquoteForm::Splice)); // exhaustive match
         assert_ne!(f, UnquoteForm::Unquote); // Eq/Ne
         let _: String = format!("{f:?}"); // Debug
+    }
+
+    #[test]
+    fn kwarg_path_named_display_renders_legacy_colon_key_literal() {
+        // `KwargPath::Named(":<key>")` Display must render the literal
+        // `:<key>` byte-for-byte equivalent to the pre-lift
+        // `format!(":{key}")` inline literal in `kwarg_form`. The
+        // canonical literal lives in ONE place (the Display impl), so
+        // a regression that drifts the prefix (e.g., to `key:` or
+        // `<key>:`) fails-loudly here AND breaks every
+        // `LispError::TypeMismatch.form` consumer that depends on the
+        // `:<key>` shape (the substrate's hot path).
+        assert_eq!(format!("{}", KwargPath::Named("threshold")), ":threshold");
+    }
+
+    #[test]
+    fn kwarg_path_item_display_renders_legacy_colon_key_bracket_idx_literal() {
+        // `KwargPath::Item { key, idx }` Display must render
+        // `:<key>[<idx>]` byte-for-byte equivalent to the pre-lift
+        // `format!(":{key}[{idx}]")` inline literal in `kwarg_item_form`.
+        // The bracketed-index suffix is what `extract_string_list`'s
+        // per-item failure path emits; a regression that drifts the
+        // bracket-shape (e.g., to `:steps.1` or `:steps#1`) breaks every
+        // LSP underline that depends on the bracket shape.
+        assert_eq!(
+            format!(
+                "{}",
+                KwargPath::Item {
+                    key: "steps",
+                    idx: 1
+                }
+            ),
+            ":steps[1]"
+        );
+    }
+
+    #[test]
+    fn kwarg_path_slot_display_renders_legacy_kwargs_bracket_idx_literal() {
+        // `KwargPath::Slot(idx)` Display must render `kwargs[<idx>]`
+        // byte-for-byte equivalent to the pre-lift
+        // `format!("kwargs[{idx}]")` inline literal in `kwargs_pos_form`.
+        // The `kwargs` prefix (no leading colon) is what `parse_kwargs`'s
+        // "this-position-must-be-a-keyword" gate emits when the slot
+        // failed BEFORE a key was known; the slot shape is structurally
+        // distinct from the named-kwarg shape (`:<key>` vs `kwargs[i]`)
+        // so consumers can bifurcate on path identity.
+        assert_eq!(format!("{}", KwargPath::Slot(0)), "kwargs[0]");
+    }
+
+    #[test]
+    fn kwarg_path_named_carries_kebab_case_keys_unchanged() {
+        // Kebab-cased kwarg names (`:notify-ref`, `:window-seconds`)
+        // round-trip through the Display unchanged — the path shape
+        // doesn't transform the key, it just wraps it in the `:<…>`
+        // prefix. Pinning this contract means a regression that
+        // camelCases or lowercases the key in the rendered prefix
+        // fails-loudly here.
+        assert_eq!(format!("{}", KwargPath::Named("notify-ref")), ":notify-ref");
+        assert_eq!(
+            format!(
+                "{}",
+                KwargPath::Item {
+                    key: "window-seconds",
+                    idx: 3
+                }
+            ),
+            ":window-seconds[3]"
+        );
+    }
+
+    #[test]
+    fn kwarg_path_is_copy_and_partial_eq_for_pattern_match_ergonomics() {
+        // `KwargPath` derives Copy + Clone + Debug + PartialEq + Eq so
+        // that pattern-matching call sites (REPL diagnostic capture,
+        // `tatara-check`'s failure clustering, an LSP that surfaces
+        // "your `:steps[3]` failed" with structural binding) can
+        // compare-by-value cheaply AND inhabit the same kind of test
+        // assertion shape as `MacroDefHead`, `UnquoteForm`,
+        // `CompilerSpecIoStage`, and `TemplateInvariantKind`. A
+        // regression that drops any of these derives breaks compilation
+        // here.
+        let p = KwargPath::Item {
+            key: "steps",
+            idx: 2,
+        };
+        let p_copy: KwargPath<'_> = p; // Copy
+        assert_eq!(p, p_copy); // PartialEq
+        assert!(matches!(p, KwargPath::Item { idx: 2, .. })); // exhaustive match
+        assert_ne!(p, KwargPath::Slot(2)); // Eq/Ne — Item and Slot are distinct path identities
+        let _: String = format!("{p:?}"); // Debug
+    }
+
+    #[test]
+    fn kwarg_path_named_and_slot_have_distinct_display_shapes() {
+        // The bifurcation between named-kwarg failures (`:<key>`) and
+        // pre-key slot failures (`kwargs[<idx>]`) is structural — same
+        // failure surface (kwargs gate), different path identity. Pin
+        // the structural-distinctness: even at the rendered-string
+        // level the two shapes don't collide. Two consumers depend on
+        // this:
+        //   1. `tatara-check`'s diagnostic capture, which groups by
+        //      path prefix — a slot failure must NOT be confused with
+        //      a `:kwargs`-keyed named-kwarg failure.
+        //   2. An LSP's structural binding — the `KwargPath::Slot`
+        //      identity says "we don't know which kwarg yet"; the
+        //      `KwargPath::Named` identity says "we know the kwarg
+        //      identifier and it's this".
+        let named = format!("{}", KwargPath::Named("kwargs"));
+        let slot = format!("{}", KwargPath::Slot(0));
+        assert_eq!(named, ":kwargs");
+        assert_eq!(slot, "kwargs[0]");
+        assert_ne!(named, slot);
     }
 }

@@ -303,13 +303,27 @@ pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
 /// single named primitive rather than seven inline `format!(":{key}")`
 /// copies.
 ///
+/// Projects through the typed `crate::error::KwargPath::Named` Display
+/// impl — the canonical `:<key>` literal lives in ONE place
+/// (`KwargPath`'s Display match arm) alongside its sibling shapes
+/// `kwarg_item_form` / `kwargs_pos_form`, so a typo in any of the three
+/// can never drift independent of the others. A future run that promotes
+/// `LispError::TypeMismatch.form: String` to `form: KwargPath`-shaped
+/// owned data replaces this helper's `.to_string()` projection with
+/// direct field assignment; every call site inherits the structural
+/// upgrade mechanically.
+///
 /// Theory anchor: THEORY.md §VI.1 — "Generation over composition.
 /// Three-times rule: when a pattern repeats three times, extract an
 /// archetype/backend/synthesizer and generate from it." Seven inline
-/// copies in one module is the textbook signal.
+/// copies in one module is the textbook signal. THEORY.md §V.1 —
+/// knowable platform; the typed `KwargPath` enum encodes the closed set
+/// of three reachable path shapes at the type level so authoring tools
+/// bind to path-shape identity rather than substring-matching the
+/// rendered prefix.
 #[must_use]
 pub fn kwarg_form(key: &str) -> String {
-    format!(":{key}")
+    crate::error::KwargPath::Named(key).to_string()
 }
 
 /// Canonical `form:` label for a failure inside the Nth item of a
@@ -331,9 +345,14 @@ pub fn kwarg_form(key: &str) -> String {
 /// Theory anchor: THEORY.md §V.1 — "Knowable platform … Render
 /// Anywhere." A diagnostic that names the kwarg but loses the item index
 /// is structurally incomplete; the path completes it.
+///
+/// Projects through the typed `crate::error::KwargPath::Item` Display
+/// impl — the canonical `:<key>[<idx>]` literal lives in ONE place
+/// alongside `kwarg_form` / `kwargs_pos_form`. See `kwarg_form` for the
+/// typed-enum's role and future-promotion path.
 #[must_use]
 pub fn kwarg_item_form(key: &str, idx: usize) -> String {
-    format!(":{key}[{idx}]")
+    crate::error::KwargPath::Item { key, idx }.to_string()
 }
 
 /// Canonical `form:` label for a kwargs-list slot whose key position is
@@ -360,9 +379,14 @@ pub fn kwarg_item_form(key: &str, idx: usize) -> String {
 /// `kwarg_item_form`, and the registry-keyword path; one helper per
 /// distinct path shape so the substrate's diagnostic surface stays
 /// structurally complete).
+///
+/// Projects through the typed `crate::error::KwargPath::Slot` Display
+/// impl — the canonical `kwargs[<idx>]` literal lives in ONE place
+/// alongside `kwarg_form` / `kwarg_item_form`. See `kwarg_form` for the
+/// typed-enum's role and future-promotion path.
 #[must_use]
 pub fn kwargs_pos_form(idx: usize) -> String {
-    format!("kwargs[{idx}]")
+    crate::error::KwargPath::Slot(idx).to_string()
 }
 
 /// Stable, human-readable name of a `Sexp`'s outermost shape. Used by the

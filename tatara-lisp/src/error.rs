@@ -30,16 +30,23 @@ pub enum LispError {
     /// pattern-match on the variant and bind directly to `expected` /
     /// `got` instead of substring-parsing the rendered message.
     ///
-    /// `expected` is `&'static str` so a typo can never drift into the
-    /// diagnostic at runtime; `got` is `&'static str` because it is
-    /// always the output of `crate::domain::sexp_type_name`, whose match
-    /// is exhaustive over `Sexp` at compile time. When a future run gives
-    /// `Sexp` source spans, `pos: Option<usize>` lands here in ONE place
-    /// and every type-mismatch site picks up positional rendering via
+    /// `form` is the typed closed-set `KwargPath` enum so consumers
+    /// pattern-match on path-shape identity (`KwargPath::Item { .. }`,
+    /// `KwargPath::Slot(_)`, `KwargPath::Named(_)`) directly rather than
+    /// substring-matching the rendered prefix. The Display projection
+    /// flows through `KwargPath::Display`, so the user-facing
+    /// `"compile error in {form}: …"` rendering matches the legacy
+    /// `String`-shaped diagnostic byte-for-byte. `expected` is
+    /// `&'static str` so a typo can never drift into the diagnostic at
+    /// runtime; `got` is `&'static str` because it is always the output
+    /// of `crate::domain::sexp_type_name`, whose match is exhaustive
+    /// over `Sexp` at compile time. When a future run gives `Sexp`
+    /// source spans, `pos: Option<usize>` lands here in ONE place and
+    /// every type-mismatch site picks up positional rendering via
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {form}: expected {expected}, got {got}")]
     TypeMismatch {
-        form: String,
+        form: KwargPath,
         expected: &'static str,
         got: &'static str,
     },
@@ -1516,15 +1523,22 @@ impl std::fmt::Display for UnquoteForm {
 /// this enum, which rustc-enforces matching at the `Display` projection
 /// site.
 ///
-/// `'a` is the lifetime of the borrowed `key` payload — every call site
-/// passes a `&str` borrow from arbitrary source (the kwarg's identifier),
-/// projected through `Display` into a fresh `String` at the helper
-/// boundary so the resulting `form:` slot stays lifetime-free for
-/// inclusion in `LispError::TypeMismatch.form: String`. A future run that
-/// promotes `TypeMismatch.form: String` to `form: KwargPath<'static>` (or
-/// to an owned `KwargPathOwned` companion) will replace the helper's
-/// `.to_string()` projection with direct field assignment — one
-/// signature change inside the helpers, every call site inherits.
+/// `KwargPath` owns its `key` payload as `String` so it can inhabit
+/// `LispError::TypeMismatch.form` (and any future error variant) without
+/// a borrow constraint. The owned shape is the typed-slot promotion the
+/// prior-run `KwargPath` landing pre-staged: every projection site that
+/// used to produce a `String` via `KwargPath::Named(key).to_string()` (the
+/// three sibling helpers `kwarg_form` / `kwarg_item_form` /
+/// `kwargs_pos_form` and the fourth `kwarg_deserialize_form` helper) now
+/// produces a typed `KwargPath` value directly; `type_mismatch` and every
+/// `TypeMismatch.form` consumer pattern-match on the variant identity
+/// (`KwargPath::Item { key, idx }`, `KwargPath::Slot(idx)`, etc.) instead
+/// of substring-parsing the rendered prefix.
+///
+/// `Copy` is dropped because `String` is not `Copy`; `Clone + Debug +
+/// PartialEq + Eq` are retained (same posture as every other owned-data
+/// `LispError` field). The closed-set structural-completeness floor is
+/// unchanged — only the data ownership changed.
 ///
 /// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
 /// kwargs-path shapes becomes a TYPE rather than three byte-identical
@@ -1537,18 +1551,20 @@ impl std::fmt::Display for UnquoteForm {
 /// `UnquoteForm` for the template-marker surface. THEORY.md §II.1
 /// invariant 1 — typed entry; the kwargs-path's renderable identity is
 /// part of the proof of WHICH kwarg-gate fired, and the typed enum makes
-/// that identity first-class.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KwargPath<'a> {
+/// that identity first-class — now as load-bearing data on the
+/// `TypeMismatch` variant rather than as a projection-to-String.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KwargPath {
     /// `:<key>` — failure at a named kwarg (`extract_string`,
     /// `extract_int`, `extract_float`, `extract_bool`, etc.). The `key`
-    /// borrow is the offending kwarg's identifier from arbitrary source.
-    Named(&'a str),
+    /// is the offending kwarg's identifier, owned so the variant lives
+    /// independent of the call frame.
+    Named(String),
     /// `:<key>[<idx>]` — failure at the Nth item of a list-typed kwarg
-    /// (`extract_string_list` per-item failure). The `key` borrow is the
-    /// containing kwarg's identifier; `idx` is the 0-based item index
-    /// inside that kwarg's list value.
-    Item { key: &'a str, idx: usize },
+    /// (`extract_string_list` per-item failure). The `key` is the
+    /// containing kwarg's identifier (owned); `idx` is the 0-based item
+    /// index inside that kwarg's list value.
+    Item { key: String, idx: usize },
     /// `kwargs[<idx>]` — failure at the Nth slot of the kwargs slice
     /// before a key was known (`parse_kwargs`'s
     /// "this-position-must-be-a-keyword" gate firing on an even-position
@@ -1557,7 +1573,27 @@ pub enum KwargPath<'a> {
     Slot(usize),
 }
 
-impl<'a> std::fmt::Display for KwargPath<'a> {
+impl KwargPath {
+    /// Owned constructor for the `:<key>` shape — used by every call site
+    /// that has a `&str` borrow of the kwarg identifier and wants to lift
+    /// it into the typed enum without an inline `.to_string()` projection.
+    #[must_use]
+    pub fn named(key: &str) -> Self {
+        Self::Named(key.to_string())
+    }
+
+    /// Owned constructor for the `:<key>[<idx>]` shape — sibling of
+    /// `named`, threading the per-item index alongside the kwarg key.
+    #[must_use]
+    pub fn item(key: &str, idx: usize) -> Self {
+        Self::Item {
+            key: key.to_string(),
+            idx,
+        }
+    }
+}
+
+impl std::fmt::Display for KwargPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Named(key) => write!(f, ":{key}"),
@@ -1629,8 +1665,8 @@ fn missing_head_symbol_suffix(got: Option<&str>) -> String {
 /// shape collapses into the typed enum's Display projection.
 fn kwarg_deserialize_form(key: &str, idx: Option<usize>) -> String {
     match idx {
-        None => KwargPath::Named(key).to_string(),
-        Some(i) => KwargPath::Item { key, idx: i }.to_string(),
+        None => KwargPath::named(key).to_string(),
+        Some(i) => KwargPath::item(key, i).to_string(),
     }
 }
 
@@ -1741,7 +1777,7 @@ mod tests {
         );
         assert_eq!(
             LispError::TypeMismatch {
-                form: ":x".into(),
+                form: KwargPath::named("x"),
                 expected: "string",
                 got: "int",
             }
@@ -3662,7 +3698,7 @@ mod tests {
         for key in ["level", "notify-ref", "window-seconds", ""] {
             assert_eq!(
                 super::kwarg_deserialize_form(key, None),
-                KwargPath::Named(key).to_string(),
+                KwargPath::named(key).to_string(),
                 "kwarg_deserialize_form scalar path diverged from KwargPath::Named for key {key:?}"
             );
         }
@@ -3686,7 +3722,7 @@ mod tests {
         ] {
             assert_eq!(
                 super::kwarg_deserialize_form(key, Some(idx)),
-                KwargPath::Item { key, idx }.to_string(),
+                KwargPath::item(key, idx).to_string(),
                 "kwarg_deserialize_form item path diverged from KwargPath::Item for ({key:?}, {idx})"
             );
         }
@@ -3711,7 +3747,7 @@ mod tests {
             format!("{scalar}"),
             format!(
                 "compile error in {}: deserialize: boom",
-                KwargPath::Named("level")
+                KwargPath::named("level")
             )
         );
 
@@ -3724,10 +3760,7 @@ mod tests {
             format!("{item}"),
             format!(
                 "compile error in {}: deserialize: boom",
-                KwargPath::Item {
-                    key: "steps",
-                    idx: 3
-                }
+                KwargPath::item("steps", 3)
             )
         );
     }
@@ -4574,7 +4607,7 @@ mod tests {
         // `<key>:`) fails-loudly here AND breaks every
         // `LispError::TypeMismatch.form` consumer that depends on the
         // `:<key>` shape (the substrate's hot path).
-        assert_eq!(format!("{}", KwargPath::Named("threshold")), ":threshold");
+        assert_eq!(format!("{}", KwargPath::named("threshold")), ":threshold");
     }
 
     #[test]
@@ -4586,16 +4619,7 @@ mod tests {
         // per-item failure path emits; a regression that drifts the
         // bracket-shape (e.g., to `:steps.1` or `:steps#1`) breaks every
         // LSP underline that depends on the bracket shape.
-        assert_eq!(
-            format!(
-                "{}",
-                KwargPath::Item {
-                    key: "steps",
-                    idx: 1
-                }
-            ),
-            ":steps[1]"
-        );
+        assert_eq!(format!("{}", KwargPath::item("steps", 1)), ":steps[1]");
     }
 
     #[test]
@@ -4619,36 +4643,30 @@ mod tests {
         // prefix. Pinning this contract means a regression that
         // camelCases or lowercases the key in the rendered prefix
         // fails-loudly here.
-        assert_eq!(format!("{}", KwargPath::Named("notify-ref")), ":notify-ref");
+        assert_eq!(format!("{}", KwargPath::named("notify-ref")), ":notify-ref");
         assert_eq!(
-            format!(
-                "{}",
-                KwargPath::Item {
-                    key: "window-seconds",
-                    idx: 3
-                }
-            ),
+            format!("{}", KwargPath::item("window-seconds", 3)),
             ":window-seconds[3]"
         );
     }
 
     #[test]
-    fn kwarg_path_is_copy_and_partial_eq_for_pattern_match_ergonomics() {
-        // `KwargPath` derives Copy + Clone + Debug + PartialEq + Eq so
-        // that pattern-matching call sites (REPL diagnostic capture,
+    fn kwarg_path_is_clone_and_partial_eq_for_pattern_match_ergonomics() {
+        // `KwargPath` derives Clone + Debug + PartialEq + Eq so that
+        // pattern-matching call sites (REPL diagnostic capture,
         // `tatara-check`'s failure clustering, an LSP that surfaces
-        // "your `:steps[3]` failed" with structural binding) can
-        // compare-by-value cheaply AND inhabit the same kind of test
+        // "your `:steps[3]` failed" with structural binding) compare
+        // by reference cheaply AND inhabit the same kind of test
         // assertion shape as `MacroDefHead`, `UnquoteForm`,
-        // `CompilerSpecIoStage`, and `TemplateInvariantKind`. A
-        // regression that drops any of these derives breaks compilation
-        // here.
-        let p = KwargPath::Item {
-            key: "steps",
-            idx: 2,
-        };
-        let p_copy: KwargPath<'_> = p; // Copy
-        assert_eq!(p, p_copy); // PartialEq
+        // `CompilerSpecIoStage`, and `TemplateInvariantKind`. `Copy`
+        // is intentionally NOT derived because `String` is not `Copy`
+        // — the owned key payload is the load-bearing property of the
+        // typed-slot promotion onto `LispError::TypeMismatch.form`. A
+        // regression that drops any of the retained derives or that
+        // re-adds `Copy` breaks compilation here.
+        let p = KwargPath::item("steps", 2);
+        let p_clone = p.clone(); // Clone
+        assert_eq!(p, p_clone); // PartialEq
         assert!(matches!(p, KwargPath::Item { idx: 2, .. })); // exhaustive match
         assert_ne!(p, KwargPath::Slot(2)); // Eq/Ne — Item and Slot are distinct path identities
         let _: String = format!("{p:?}"); // Debug
@@ -4669,10 +4687,93 @@ mod tests {
         //      identity says "we don't know which kwarg yet"; the
         //      `KwargPath::Named` identity says "we know the kwarg
         //      identifier and it's this".
-        let named = format!("{}", KwargPath::Named("kwargs"));
+        let named = format!("{}", KwargPath::named("kwargs"));
         let slot = format!("{}", KwargPath::Slot(0));
         assert_eq!(named, ":kwargs");
         assert_eq!(slot, "kwargs[0]");
         assert_ne!(named, slot);
+    }
+
+    #[test]
+    fn type_mismatch_form_carries_typed_kwarg_path_named_through_variant_slot() {
+        // After the typed-slot promotion, `LispError::TypeMismatch.form`
+        // is `KwargPath` — owned, structurally bound to the closed-set
+        // typed enum. Consumers (REPL, LSP, `tatara-check`) pattern-match
+        // on the variant identity `KwargPath::Named(_)` directly rather
+        // than substring-matching a rendered prefix. Pin the structural
+        // binding AND the Display projection so the byte-for-byte
+        // rendering contract is anchored from both angles. A regression
+        // that re-introduces a String-shaped form (collapsing the typed
+        // enum back into a free-form label) fails-loudly here.
+        let err = LispError::TypeMismatch {
+            form: KwargPath::named("threshold"),
+            expected: "number",
+            got: "string",
+        };
+        match &err {
+            LispError::TypeMismatch { form, .. } => {
+                assert_eq!(*form, KwargPath::Named("threshold".into()));
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: expected number, got string"
+        );
+    }
+
+    #[test]
+    fn type_mismatch_form_carries_typed_kwarg_path_item_through_variant_slot() {
+        // Sibling pin to `…_named_…` for the per-item path. The
+        // `KwargPath::Item { key, idx }` shape names the offending kwarg
+        // AND the failing item index in one structural variant; the
+        // bracketed `:<key>[<idx>]` rendering is unchanged.
+        let err = LispError::TypeMismatch {
+            form: KwargPath::item("steps", 3),
+            expected: "string",
+            got: "int",
+        };
+        match &err {
+            LispError::TypeMismatch { form, .. } => {
+                assert_eq!(
+                    *form,
+                    KwargPath::Item {
+                        key: "steps".into(),
+                        idx: 3
+                    }
+                );
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :steps[3]: expected string, got int"
+        );
+    }
+
+    #[test]
+    fn type_mismatch_form_carries_typed_kwarg_path_slot_through_variant_slot() {
+        // Sibling pin to `…_named_…` for the pre-key slot path. The
+        // `KwargPath::Slot(idx)` shape names the offending position
+        // without binding a key — it's the
+        // "this-position-must-be-a-keyword" gate firing before any
+        // identifier is known. The rendered `kwargs[<idx>]` shape
+        // (no leading colon) bifurcates structurally from
+        // `KwargPath::Named`'s `:<key>` shape.
+        let err = LispError::TypeMismatch {
+            form: KwargPath::Slot(2),
+            expected: "keyword",
+            got: "string",
+        };
+        match &err {
+            LispError::TypeMismatch { form, .. } => {
+                assert_eq!(*form, KwargPath::Slot(2));
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in kwargs[2]: expected keyword, got string"
+        );
     }
 }

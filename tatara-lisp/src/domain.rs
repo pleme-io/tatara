@@ -294,8 +294,8 @@ pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
     kw.get(key).copied().ok_or_else(|| missing_kwarg(key))
 }
 
-/// Canonical `form:` label for a kwarg-level `LispError::Compile`. Every
-/// typed-entry diagnostic that names a kwarg (`required`, `type_err`,
+/// Canonical typed `form:` value for a kwarg-level `LispError::TypeMismatch`.
+/// Every typed-entry diagnostic that names a kwarg (`required`, `type_err`,
 /// `deserialize_err`, the duplicate-keyword paths in `parse_kwargs` and
 /// `sexp_to_json`, the unknown-keyword path in `reject_unknown_kwargs`,
 /// the non-list path in `extract_vec_via_serde`) routes through this one
@@ -303,15 +303,13 @@ pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
 /// single named primitive rather than seven inline `format!(":{key}")`
 /// copies.
 ///
-/// Projects through the typed `crate::error::KwargPath::Named` Display
-/// impl — the canonical `:<key>` literal lives in ONE place
+/// Returns the typed `crate::error::KwargPath::Named(key.to_string())` value
+/// directly — consumers feed it into `LispError::TypeMismatch.form: KwargPath`
+/// where it is structurally bound via pattern-match (`KwargPath::Named(_)`),
+/// not substring-matched. The canonical `:<key>` literal lives in ONE place
 /// (`KwargPath`'s Display match arm) alongside its sibling shapes
 /// `kwarg_item_form` / `kwargs_pos_form`, so a typo in any of the three
-/// can never drift independent of the others. A future run that promotes
-/// `LispError::TypeMismatch.form: String` to `form: KwargPath`-shaped
-/// owned data replaces this helper's `.to_string()` projection with
-/// direct field assignment; every call site inherits the structural
-/// upgrade mechanically.
+/// can never drift independent of the others.
 ///
 /// Theory anchor: THEORY.md §VI.1 — "Generation over composition.
 /// Three-times rule: when a pattern repeats three times, extract an
@@ -320,10 +318,12 @@ pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
 /// knowable platform; the typed `KwargPath` enum encodes the closed set
 /// of three reachable path shapes at the type level so authoring tools
 /// bind to path-shape identity rather than substring-matching the
-/// rendered prefix.
+/// rendered prefix. THEORY.md §II.1 invariant 1 (typed entry) — the
+/// kwargs-path identity is now load-bearing data on the variant rather
+/// than a projection-to-String.
 #[must_use]
-pub fn kwarg_form(key: &str) -> String {
-    crate::error::KwargPath::Named(key).to_string()
+pub fn kwarg_form(key: &str) -> crate::error::KwargPath {
+    crate::error::KwargPath::named(key)
 }
 
 /// Canonical `form:` label for a failure inside the Nth item of a
@@ -346,13 +346,15 @@ pub fn kwarg_form(key: &str) -> String {
 /// Anywhere." A diagnostic that names the kwarg but loses the item index
 /// is structurally incomplete; the path completes it.
 ///
-/// Projects through the typed `crate::error::KwargPath::Item` Display
-/// impl — the canonical `:<key>[<idx>]` literal lives in ONE place
-/// alongside `kwarg_form` / `kwargs_pos_form`. See `kwarg_form` for the
-/// typed-enum's role and future-promotion path.
+/// Returns the typed `crate::error::KwargPath::Item { key, idx }` value
+/// directly — consumers feed it into `LispError::TypeMismatch.form: KwargPath`
+/// where it is structurally bound via pattern-match (`KwargPath::Item { .. }`),
+/// not substring-matched. The canonical `:<key>[<idx>]` literal lives in ONE
+/// place alongside `kwarg_form` / `kwargs_pos_form`. See `kwarg_form` for the
+/// typed-enum's role.
 #[must_use]
-pub fn kwarg_item_form(key: &str, idx: usize) -> String {
-    crate::error::KwargPath::Item { key, idx }.to_string()
+pub fn kwarg_item_form(key: &str, idx: usize) -> crate::error::KwargPath {
+    crate::error::KwargPath::item(key, idx)
 }
 
 /// Canonical `form:` label for a kwargs-list slot whose key position is
@@ -380,13 +382,15 @@ pub fn kwarg_item_form(key: &str, idx: usize) -> String {
 /// distinct path shape so the substrate's diagnostic surface stays
 /// structurally complete).
 ///
-/// Projects through the typed `crate::error::KwargPath::Slot` Display
-/// impl — the canonical `kwargs[<idx>]` literal lives in ONE place
-/// alongside `kwarg_form` / `kwarg_item_form`. See `kwarg_form` for the
-/// typed-enum's role and future-promotion path.
+/// Returns the typed `crate::error::KwargPath::Slot(idx)` value directly —
+/// consumers feed it into `LispError::TypeMismatch.form: KwargPath` where it
+/// is structurally bound via pattern-match (`KwargPath::Slot(_)`), not
+/// substring-matched. The canonical `kwargs[<idx>]` literal lives in ONE
+/// place alongside `kwarg_form` / `kwarg_item_form`. See `kwarg_form` for
+/// the typed-enum's role.
 #[must_use]
-pub fn kwargs_pos_form(idx: usize) -> String {
-    crate::error::KwargPath::Slot(idx).to_string()
+pub fn kwargs_pos_form(idx: usize) -> crate::error::KwargPath {
+    crate::error::KwargPath::Slot(idx)
 }
 
 /// Stable, human-readable name of a `Sexp`'s outermost shape. Used by the
@@ -592,13 +596,14 @@ pub fn missing_kwarg(key: &str) -> LispError {
     }
 }
 
-/// Structural type-mismatch builder. Pairs a path-shaped `form` (typically
-/// `kwarg_form(_)` or `kwarg_item_form(_, _)`) with the static `expected`
-/// label and the `got` projection of the offending `Sexp` through
-/// `sexp_type_name`. Returns the dedicated `LispError::TypeMismatch`
-/// variant so authoring surfaces (REPL, LSP, `tatara-check`) bind to
-/// first-class `expected`/`got` fields instead of substring-parsing the
-/// rendered message.
+/// Structural type-mismatch builder. Pairs a typed `form: KwargPath`
+/// (typically `kwarg_form(_)` / `kwarg_item_form(_, _)` /
+/// `kwargs_pos_form(_)`) with the static `expected` label and the `got`
+/// projection of the offending `Sexp` through `sexp_type_name`. Returns
+/// the dedicated `LispError::TypeMismatch` variant so authoring surfaces
+/// (REPL, LSP, `tatara-check`) bind to first-class `form`/`expected`/`got`
+/// fields — pattern-matching on `KwargPath::Item { .. }` etc. directly —
+/// instead of substring-parsing the rendered message.
 ///
 /// Three inline `format!("expected {X}, got {}", sexp_type_name(_))`
 /// copies in this module (`type_err`, `extract_string_list` per-item,
@@ -608,7 +613,11 @@ pub fn missing_kwarg(key: &str) -> LispError {
 /// from `Sexp` spans add ONE field to the variant; every type-mismatch
 /// site inherits positional rendering with no consumer changes.
 #[must_use]
-pub fn type_mismatch(form: String, expected: &'static str, got: &Sexp) -> LispError {
+pub fn type_mismatch(
+    form: crate::error::KwargPath,
+    expected: &'static str,
+    got: &Sexp,
+) -> LispError {
     LispError::TypeMismatch {
         form,
         expected,
@@ -622,8 +631,8 @@ fn type_err(key: &str, expected: &'static str, got: &Sexp) -> LispError {
 
 /// Item-indexed sibling of `type_err` — pairs `kwarg_item_form` with
 /// `type_mismatch` so a per-item failure inside a list-typed kwarg names
-/// `:<key>[<idx>]` plus the structural `expected`/`got` shape. Used by
-/// `extract_string_list`'s per-item path; future per-item type-mismatch
+/// `KwargPath::Item { key, idx }` plus the structural `expected`/`got` shape.
+/// Used by `extract_string_list`'s per-item path; future per-item type-mismatch
 /// sites (e.g. typed enums-of-strings, typed numeric vecs) bind here
 /// rather than re-inlining the shape.
 fn type_err_at(key: &str, idx: usize, expected: &'static str, got: &Sexp) -> LispError {
@@ -2096,29 +2105,50 @@ mod tests {
 
     #[test]
     fn kwarg_form_renders_canonical_shape() {
-        assert_eq!(kwarg_form("threshold"), ":threshold");
-        assert_eq!(kwarg_form("notify-ref"), ":notify-ref");
+        // After the typed-slot promotion the helpers return `KwargPath`
+        // (the typed enum, structurally bound) rather than `String`;
+        // Display projects each variant to its canonical literal
+        // byte-for-byte equivalent to the legacy `format!` shape. Pin
+        // both the structural identity AND the rendered literal so the
+        // dual contract (typed-binding + byte-for-byte display) is
+        // anchored from both angles.
+        assert_eq!(
+            kwarg_form("threshold"),
+            crate::error::KwargPath::Named("threshold".into())
+        );
+        assert_eq!(kwarg_form("threshold").to_string(), ":threshold");
+        assert_eq!(kwarg_form("notify-ref").to_string(), ":notify-ref");
         // No transformation of the key — the surface name is what the
         // author sees in the source. `kebab_to_camel` happens elsewhere.
-        assert_eq!(kwarg_form(""), ":");
+        assert_eq!(kwarg_form("").to_string(), ":");
     }
 
     #[test]
     fn kwarg_item_form_renders_canonical_indexed_shape() {
-        assert_eq!(kwarg_item_form("tags", 0), ":tags[0]");
-        assert_eq!(kwarg_item_form("steps", 1), ":steps[1]");
-        assert_eq!(kwarg_item_form("steps", 17), ":steps[17]");
+        assert_eq!(
+            kwarg_item_form("tags", 0),
+            crate::error::KwargPath::Item {
+                key: "tags".into(),
+                idx: 0
+            }
+        );
+        assert_eq!(kwarg_item_form("tags", 0).to_string(), ":tags[0]");
+        assert_eq!(kwarg_item_form("steps", 1).to_string(), ":steps[1]");
+        assert_eq!(kwarg_item_form("steps", 17).to_string(), ":steps[17]");
     }
 
     #[test]
     fn kwargs_pos_form_renders_canonical_slot_shape() {
         // Sibling of `kwarg_form` / `kwarg_item_form` — used when the
         // kwargs slot itself failed the keyword gate, so there is no
-        // `:<key>` to root the path. Pin the shape so `tatara-check` /
-        // LSP / REPL match `kwargs[<idx>]` directly.
-        assert_eq!(kwargs_pos_form(0), "kwargs[0]");
-        assert_eq!(kwargs_pos_form(2), "kwargs[2]");
-        assert_eq!(kwargs_pos_form(42), "kwargs[42]");
+        // `:<key>` to root the path. Pin both the structural identity
+        // (`KwargPath::Slot(i)`) AND the rendered literal
+        // (`kwargs[<idx>]`) so `tatara-check` / LSP / REPL match either
+        // surface directly.
+        assert_eq!(kwargs_pos_form(0), crate::error::KwargPath::Slot(0));
+        assert_eq!(kwargs_pos_form(0).to_string(), "kwargs[0]");
+        assert_eq!(kwargs_pos_form(2).to_string(), "kwargs[2]");
+        assert_eq!(kwargs_pos_form(42).to_string(), "kwargs[42]");
     }
 
     #[test]
@@ -2343,12 +2373,12 @@ mod tests {
             matches!(
                 err,
                 LispError::TypeMismatch {
-                    ref form,
+                    form: crate::error::KwargPath::Slot(0),
                     expected: "keyword",
                     got: "string",
-                } if form == "kwargs[0]"
+                }
             ),
-            "expected TypeMismatch {{ form: \"kwargs[0]\", expected: \"keyword\", got: \"string\" }}, got {err:?}"
+            "expected TypeMismatch {{ form: KwargPath::Slot(0), expected: \"keyword\", got: \"string\" }}, got {err:?}"
         );
     }
 
@@ -2357,19 +2387,19 @@ mod tests {
         // `(_ :name "x" "y" 5)` — first pair `:name "x"` succeeds; second
         // pair starts at position 2 with a string. The form must name
         // `kwargs[2]` so the operator goes straight to the slot — pin the
-        // index math.
+        // index math via the typed `KwargPath::Slot(2)` identity.
         let args = kwargs_of(r#"(_ :name "x" "y" 5)"#);
         let err = parse_kwargs(&args).expect_err("non-keyword at later position must error");
         assert!(
             matches!(
                 err,
                 LispError::TypeMismatch {
-                    ref form,
+                    form: crate::error::KwargPath::Slot(2),
                     expected: "keyword",
                     got: "string",
-                } if form == "kwargs[2]"
+                }
             ),
-            "expected indexed TypeMismatch at kwargs[2], got {err:?}"
+            "expected indexed TypeMismatch at KwargPath::Slot(2), got {err:?}"
         );
     }
 
@@ -2431,12 +2461,12 @@ mod tests {
             matches!(
                 err,
                 LispError::TypeMismatch {
-                    ref form,
+                    form: crate::error::KwargPath::Slot(0),
                     expected: "keyword",
                     got: "string",
-                } if form == "kwargs[0]"
+                }
             ),
-            "expected derived TypeMismatch at kwargs[0], got {err:?}"
+            "expected derived TypeMismatch at KwargPath::Slot(0), got {err:?}"
         );
     }
 
@@ -2479,14 +2509,18 @@ mod tests {
 
     #[test]
     fn type_mismatch_helper_emits_structured_variant() {
-        let err = type_mismatch("ctx".to_string(), "string", &Sexp::int(7));
+        // `type_mismatch` now takes a typed `KwargPath` for `form` — pin
+        // the structural identity of every slot, including that the
+        // typed enum is threaded into the variant byte-identically (not
+        // coerced through a String round-trip).
+        let err = type_mismatch(kwarg_form("ctx"), "string", &Sexp::int(7));
         match err {
             LispError::TypeMismatch {
                 form,
                 expected,
                 got,
             } => {
-                assert_eq!(form, "ctx");
+                assert_eq!(form, crate::error::KwargPath::Named("ctx".into()));
                 assert_eq!(expected, "string");
                 assert_eq!(got, "int");
             }
@@ -2501,7 +2535,7 @@ mod tests {
         // rendering. Authoring surfaces that pattern-match on the message
         // text continue to work; tools that pattern-match on the variant
         // gain structural binding.
-        let err = type_mismatch(":threshold".to_string(), "number", &Sexp::string("tight"));
+        let err = type_mismatch(kwarg_form("threshold"), "number", &Sexp::string("tight"));
         assert_eq!(
             format!("{err}"),
             "compile error in :threshold: expected number, got string"
@@ -2519,14 +2553,14 @@ mod tests {
         let err = extract_string(&kw, "name").unwrap_err();
         assert!(
             matches!(
-                err,
+                &err,
                 LispError::TypeMismatch {
-                    ref form,
+                    form,
                     expected: "string",
                     got: "int",
-                } if form == ":name"
+                } if matches!(form, crate::error::KwargPath::Named(k) if k == "name")
             ),
-            "expected TypeMismatch {{ form: \":name\", expected: \"string\", got: \"int\" }}, got {err:?}"
+            "expected TypeMismatch {{ form: KwargPath::Named(\"name\"), expected: \"string\", got: \"int\" }}, got {err:?}"
         );
         assert_eq!(
             format!("{err}"),
@@ -2537,20 +2571,22 @@ mod tests {
     #[test]
     fn extract_string_list_per_item_returns_indexed_type_mismatch() {
         // Per-item failure in a `Vec<String>` kwarg flows through
-        // `type_err_at` → `kwarg_item_form` + `type_mismatch`.
+        // `type_err_at` → `kwarg_item_form` + `type_mismatch`. Pin the
+        // typed `KwargPath::Item { key: "tags", idx: 1 }` identity
+        // directly (no String round-trip).
         let args = kwargs_of(r#"(_ :tags ("ok" 7))"#);
         let kw = parse_kwargs(&args).unwrap();
         let err = extract_string_list(&kw, "tags").unwrap_err();
         assert!(
             matches!(
-                err,
+                &err,
                 LispError::TypeMismatch {
-                    ref form,
+                    form,
                     expected: "string",
                     got: "int",
-                } if form == ":tags[1]"
+                } if matches!(form, crate::error::KwargPath::Item { key, idx: 1 } if key == "tags")
             ),
-            "expected indexed TypeMismatch, got {err:?}"
+            "expected indexed TypeMismatch at KwargPath::Item {{ key: \"tags\", idx: 1 }}, got {err:?}"
         );
     }
 
@@ -2559,22 +2595,22 @@ mod tests {
         // The vec-fallthrough's "expected list" path lifts into the
         // same variant — `:steps "scalar"` no longer produces
         // `LispError::Compile`; it produces `TypeMismatch` with
-        // `expected: "list"`, `got: "string"`. Authoring tools see the
-        // same shape regardless of which extractor reported the
-        // mismatch.
+        // `form: KwargPath::Named("steps")`, `expected: "list"`,
+        // `got: "string"`. Authoring tools see the same shape regardless
+        // of which extractor reported the mismatch.
         let args = kwargs_of(r#"(_ :steps "scalar")"#);
         let kw = parse_kwargs(&args).unwrap();
         let err = extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
         assert!(
             matches!(
-                err,
+                &err,
                 LispError::TypeMismatch {
-                    ref form,
+                    form,
                     expected: "list",
                     got: "string",
-                } if form == ":steps"
+                } if matches!(form, crate::error::KwargPath::Named(k) if k == "steps")
             ),
-            "expected list-shape TypeMismatch, got {err:?}"
+            "expected list-shape TypeMismatch at KwargPath::Named(\"steps\"), got {err:?}"
         );
     }
 
@@ -2583,20 +2619,21 @@ mod tests {
         // The outer-shape failure (`:tags "scalar"`) is at the kwarg
         // level — its `expected` stays `"list of strings"` (wider than
         // the per-item case's `"string"`) and the form has no `[idx]`
-        // suffix. Same variant; different `expected` + form.
+        // suffix (`KwargPath::Named`, not `KwargPath::Item`). Same
+        // variant; different `expected` + path-shape.
         let args = kwargs_of(r#"(_ :tags "scalar")"#);
         let kw = parse_kwargs(&args).unwrap();
         let err = extract_string_list(&kw, "tags").unwrap_err();
         assert!(
             matches!(
-                err,
+                &err,
                 LispError::TypeMismatch {
-                    ref form,
+                    form,
                     expected: "list of strings",
                     got: "string",
-                } if form == ":tags"
+                } if matches!(form, crate::error::KwargPath::Named(k) if k == "tags")
             ),
-            "expected outer-shape TypeMismatch, got {err:?}"
+            "expected outer-shape TypeMismatch at KwargPath::Named(\"tags\"), got {err:?}"
         );
     }
 
@@ -2607,7 +2644,7 @@ mod tests {
         // through to single-line rendering, no caret emitted. Pinning
         // this contract means a future run that adds `pos: Option<usize>`
         // does so deliberately, with a fail-before/pass-after delta.
-        let err = type_mismatch(":x".to_string(), "string", &Sexp::int(0));
+        let err = type_mismatch(kwarg_form("x"), "string", &Sexp::int(0));
         assert_eq!(err.position(), None);
     }
 
@@ -2621,12 +2658,12 @@ mod tests {
         let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
         assert!(
             matches!(
-                err,
+                &err,
                 LispError::TypeMismatch {
-                    ref form,
+                    form,
                     expected: "number",
                     got: "string",
-                } if form == ":threshold"
+                } if matches!(form, crate::error::KwargPath::Named(k) if k == "threshold")
             ),
             "expected derived TypeMismatch, got {err:?}"
         );
@@ -4215,7 +4252,7 @@ mod tests {
                 expected,
                 got,
             } => {
-                assert_eq!(form, ":wrongkey");
+                assert_eq!(form, crate::error::KwargPath::Named("wrongkey".into()));
                 assert_eq!(expected, "int");
                 assert_eq!(got, "string");
             }
@@ -4275,7 +4312,7 @@ mod tests {
                 expected,
                 got,
             } => {
-                assert_eq!(form, ":flag");
+                assert_eq!(form, crate::error::KwargPath::Named("flag".into()));
                 assert_eq!(expected, "bool");
                 assert_eq!(got, "string");
             }

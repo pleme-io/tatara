@@ -14,7 +14,7 @@ use std::sync::{Mutex, OnceLock};
 use serde::de::DeserializeOwned;
 
 use crate::ast::{Atom, Sexp};
-use crate::error::{LispError, Result};
+use crate::error::{KwargPath, LispError, Result};
 
 /// A Rust type compilable from a Lisp form.
 pub trait TataraDomain: Sized {
@@ -808,19 +808,25 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
 //     the substrate — `tatara-check` / LSP / REPL render it uniformly.
 //
 // Both helpers below funnel through the structural
-// `LispError::KwargDeserialize { key, idx, message }` variant — the
-// typed-entry-side `from_value` mirror of the typed-exit-side `to_value`
-// `LispError::DomainSerialize { keyword, message }` lift. The two sites
-// bifurcate via the `idx: Option<usize>` slot: `None` for kwarg-keyed
-// failures (the `extract_via_serde` / `extract_optional_via_serde` path),
-// `Some(i)` for kwarg-AND-index-keyed failures (the
+// `LispError::KwargDeserialize { path: KwargPath, message }` variant —
+// the typed-entry-side `from_value` mirror of the typed-exit-side
+// `to_value` `LispError::DomainSerialize { keyword, message }` lift. The
+// two sites bifurcate via the typed `KwargPath` enum's variant identity:
+// `KwargPath::Named(key)` for kwarg-keyed failures (the
+// `extract_via_serde` / `extract_optional_via_serde` path),
+// `KwargPath::Item { key, idx }` for kwarg-AND-index-keyed failures (the
 // `extract_vec_via_serde` per-item path). After this lift the
 // `from_value` boundary's two distinct rejection modes BOTH bind to ONE
-// structural variant of `LispError`, not a `Compile`-shaped substring.
-// Together with `DomainSerialize`, every distinct `serde_json` failure
-// mode at the typed-domain JSON boundary — both directions of the
-// round-trip — is now structurally typed. This is the LAST
-// `LispError::Compile { ... }` construction site in this file.
+// structural variant of `LispError`, not a `Compile`-shaped substring;
+// the `(key, idx: Option<usize>)` bifurcation collapses into
+// `KwargPath`'s `Named` vs. `Item` variant identity, so the invalid
+// sibling-slot combination `(key: "", idx: Some(_))` for a scalar path
+// is structurally unrepresentable rather than re-asserted at the helper
+// boundary via runtime `Option::is_some` comparison. Together with
+// `DomainSerialize`, every distinct `serde_json` failure mode at the
+// typed-domain JSON boundary — both directions of the round-trip — is
+// now structurally typed. This is the LAST `LispError::Compile { ... }`
+// construction site in this file.
 //
 // Theory anchor: THEORY.md §VI.1 (generation over composition — the
 // generator must lean on the library, not duplicate the library inline).
@@ -830,14 +836,14 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
 // diagnostic.
 
 /// Kwarg-keyed `serde_json::from_value` failure builder. Returns the
-/// structural `LispError::KwargDeserialize { key, idx: None, message }`
-/// variant so authoring surfaces (REPL, LSP, `tatara-check`) bind to
-/// first-class `key` / `message` fields instead of substring-parsing the
-/// rendered diagnostic. The `idx: None` slot bifurcates the variant
-/// from the per-item path (`deserialize_item_err`'s `idx: Some(_)`) —
-/// parallel to how `MissingHeadSymbol { keyword, got: Option<String> }`
-/// bifurcates the empty-list vs. present-but-not-symbol gate through an
-/// Option slot.
+/// structural `LispError::KwargDeserialize { path: KwargPath::Named(key),
+/// message }` variant so authoring surfaces (REPL, LSP, `tatara-check`)
+/// bind to a first-class typed `path` slot and `message` field instead
+/// of substring-parsing the rendered diagnostic. The
+/// `KwargPath::Named(_)` variant identity bifurcates this builder from
+/// the per-item path (`deserialize_item_err`'s
+/// `KwargPath::Item { .. }`) — the bifurcation lives inside `KwargPath`,
+/// not in a sibling `idx: Option<usize>` slot on the variant.
 ///
 /// `message` carries the raw `serde_json::Error::Display` projection —
 /// NO `"deserialize: "` prefix in the field, the prefix is in
@@ -863,23 +869,22 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
 /// is now load-bearing in the type system.
 fn deserialize_err(key: &str, err: &serde_json::Error) -> LispError {
     LispError::KwargDeserialize {
-        key: key.to_string(),
-        idx: None,
+        path: KwargPath::named(key),
         message: err.to_string(),
     }
 }
 
 /// Item-indexed serde failure inside a `Vec<T>` kwarg. Returns the same
-/// structural `LispError::KwargDeserialize { key, idx, message }` variant
-/// as `deserialize_err`, with `idx: Some(idx)` — the per-item sub-mode of
-/// the same JSON-projection rejection chain. Pairs with the indexed-form
-/// `:{key}[{idx}]` rendering so the diagnostic names both the outer kwarg
-/// AND the failing item index — `:steps[1]` — instead of dropping the
-/// index.
+/// structural `LispError::KwargDeserialize { path: KwargPath, message }`
+/// variant as `deserialize_err`, but with `path: KwargPath::Item { key,
+/// idx }` — the per-item sub-mode of the same JSON-projection rejection
+/// chain. Pairs with the indexed-form `:{key}[{idx}]` rendering (via
+/// `KwargPath`'s Display impl) so the diagnostic names both the outer
+/// kwarg AND the failing item index — `:steps[1]` — instead of dropping
+/// the index.
 fn deserialize_item_err(key: &str, idx: usize, err: &serde_json::Error) -> LispError {
     LispError::KwargDeserialize {
-        key: key.to_string(),
-        idx: Some(idx),
+        path: KwargPath::item(key, idx),
         message: err.to_string(),
     }
 }
@@ -1231,11 +1236,12 @@ fn camel_to_kebab(s: &str) -> String {
 /// `RewriterNonList { keyword, got }` (output-wrong-shape) — so the
 /// substrate's typed-exit JSON surface is structurally complete on the
 /// emission side. The `from_value` direction (the typed-entry JSON
-/// boundary, key-keyed via `deserialize_err` / `deserialize_item_err`)
-/// now binds to the sibling `LispError::KwargDeserialize { key, idx,
-/// message }` variant, closing the round-trip's last `LispError::Compile
-/// { ... }` site in this file; both directions of the JSON-projection
-/// boundary are structural. THEORY.md §II.1 invariant 1
+/// boundary, kwargs-path-keyed via `deserialize_err` /
+/// `deserialize_item_err`) now binds to the sibling
+/// `LispError::KwargDeserialize { path: KwargPath, message }` variant,
+/// closing the round-trip's last `LispError::Compile { ... }` site in
+/// this file; both directions of the JSON-projection boundary are
+/// structural. THEORY.md §II.1 invariant 1
 /// (typed entry) + invariant 3 (typed exit): the JSON-projection
 /// round-trip is the proof; the helper names its rejection shape at
 /// the type level so authoring surfaces bind to a uniform "serialize-
@@ -1568,12 +1574,11 @@ mod tests {
             matches!(
                 err,
                 LispError::KwargDeserialize {
-                    ref key,
-                    idx: None,
+                    path: KwargPath::Named(ref key),
                     ref message,
                 } if key == "level" && !message.is_empty()
             ),
-            "expected KwargDeserialize {{ key: \"level\", idx: None, .. }}, got {err:?}"
+            "expected KwargDeserialize {{ path: KwargPath::Named(\"level\"), .. }}, got {err:?}"
         );
         let msg = format!("{err}");
         assert!(
@@ -1677,12 +1682,11 @@ mod tests {
             matches!(
                 err,
                 LispError::KwargDeserialize {
-                    ref key,
-                    idx: Some(1),
+                    path: KwargPath::Item { ref key, idx: 1 },
                     ref message,
                 } if key == "steps" && !message.is_empty()
             ),
-            "expected KwargDeserialize {{ key: \"steps\", idx: Some(1), .. }}, got {err:?}"
+            "expected KwargDeserialize {{ path: KwargPath::Item {{ key: \"steps\", idx: 1 }}, .. }}, got {err:?}"
         );
         let msg = format!("{err}");
         assert!(msg.contains(":steps"), "got: {msg}");
@@ -2202,12 +2206,11 @@ mod tests {
             matches!(
                 err,
                 LispError::KwargDeserialize {
-                    ref key,
-                    idx: Some(1),
+                    path: KwargPath::Item { ref key, idx: 1 },
                     ..
                 } if key == "steps"
             ),
-            "expected KwargDeserialize {{ key: \"steps\", idx: Some(1), .. }}, got {err:?}"
+            "expected KwargDeserialize {{ path: KwargPath::Item {{ key: \"steps\", idx: 1 }}, .. }}, got {err:?}"
         );
         let msg = format!("{err}");
         assert!(msg.contains(":steps[1]"), "got: {msg}");
@@ -2219,11 +2222,12 @@ mod tests {
         // `:level NotASeverity` — well-formed Sexp, ill-formed enum.
         // The optional path must NOT short-circuit when the kwarg IS
         // present but malformed; it must produce the same structural
-        // `LispError::KwargDeserialize { idx: None }` variant the
-        // required path produces, so the typed-entry `from_value`
-        // rejection mode is uniform across the required + optional
-        // pair — `extract_via_serde` and `extract_optional_via_serde`
-        // share ONE error path via `deserialize_err`.
+        // `LispError::KwargDeserialize { path: KwargPath::Named(_), .. }`
+        // variant the required path produces, so the typed-entry
+        // `from_value` rejection mode is uniform across the required +
+        // optional pair — `extract_via_serde` and
+        // `extract_optional_via_serde` share ONE error path via
+        // `deserialize_err`.
         let args = kwargs_of("(_ :level NotASeverity)");
         let kw = parse_kwargs(&args).unwrap();
         let err = extract_optional_via_serde::<Severity>(&kw, "level").unwrap_err();
@@ -2231,12 +2235,11 @@ mod tests {
             matches!(
                 err,
                 LispError::KwargDeserialize {
-                    ref key,
-                    idx: None,
+                    path: KwargPath::Named(ref key),
                     ref message,
                 } if key == "level" && !message.is_empty()
             ),
-            "expected KwargDeserialize {{ key: \"level\", idx: None, .. }}, got {err:?}"
+            "expected KwargDeserialize {{ path: KwargPath::Named(\"level\"), .. }}, got {err:?}"
         );
     }
 
@@ -2244,28 +2247,41 @@ mod tests {
     fn kwarg_deserialize_helpers_share_variant_across_scalar_and_per_item_paths() {
         // Type-bound symmetry: `extract_via_serde` (scalar / required)
         // AND `extract_vec_via_serde` (per-item) BOTH funnel through
-        // the SAME structural variant — `LispError::KwargDeserialize`
-        // — bifurcated by `idx: Option<usize>`. Pin both paths in ONE
-        // test so the symmetry is load-bearing in the type system: a
-        // regression that drifts either site to a different variant
-        // fails-loudly here. Mirror at the typed-entry-side of the
-        // typed-exit-side `helpers_are_type_bound_via_t_keyword`
-        // symmetry test (which pins `register::<T>` AND
-        // `rewrite_typed::<T>` BOTH route through `DomainSerialize`).
+        // the SAME structural variant — `LispError::KwargDeserialize` —
+        // bifurcated by `KwargPath::Named` vs. `KwargPath::Item`
+        // variant identity. Pin both paths in ONE test so the symmetry
+        // is load-bearing in the type system: a regression that drifts
+        // either site to a different variant fails-loudly here. Mirror
+        // at the typed-entry-side of the typed-exit-side
+        // `helpers_are_type_bound_via_t_keyword` symmetry test (which
+        // pins `register::<T>` AND `rewrite_typed::<T>` BOTH route
+        // through `DomainSerialize`).
         let args = kwargs_of("(_ :level NotASeverity)");
         let kw = parse_kwargs(&args).unwrap();
         let scalar_err = extract_via_serde::<Severity>(&kw, "level").unwrap_err();
         assert!(
-            matches!(scalar_err, LispError::KwargDeserialize { idx: None, .. }),
-            "scalar path must produce KwargDeserialize with idx: None, got {scalar_err:?}"
+            matches!(
+                scalar_err,
+                LispError::KwargDeserialize {
+                    path: KwargPath::Named(_),
+                    ..
+                }
+            ),
+            "scalar path must produce KwargDeserialize with KwargPath::Named, got {scalar_err:?}"
         );
 
         let args = kwargs_of(r#"(_ :steps ((:notify-ref 7)))"#);
         let kw = parse_kwargs(&args).unwrap();
         let item_err = extract_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
         assert!(
-            matches!(item_err, LispError::KwargDeserialize { idx: Some(0), .. }),
-            "per-item path must produce KwargDeserialize with idx: Some(_), got {item_err:?}"
+            matches!(
+                item_err,
+                LispError::KwargDeserialize {
+                    path: KwargPath::Item { idx: 0, .. },
+                    ..
+                }
+            ),
+            "per-item path must produce KwargDeserialize with KwargPath::Item, got {item_err:?}"
         );
     }
 

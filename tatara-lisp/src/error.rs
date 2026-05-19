@@ -992,47 +992,61 @@ pub enum LispError {
     },
     /// `serde_json::from_value::<T>` of a kwarg's canonical-JSON projection
     /// errored. Two distinct sites share this failure mode through ONE
-    /// structural variant bifurcated by an `idx: Option<usize>` slot,
-    /// parallel to how `MissingHeadSymbol { keyword, got: Option<String> }`
-    /// bifurcates the empty-list vs. present-but-not-symbol gate through
-    /// an Option slot:
+    /// structural variant whose data carries the typed closed-set
+    /// `KwargPath` enum directly — `KwargPath::Named(key)` for the scalar
+    /// / `Option<T>` path, `KwargPath::Item { key, idx }` for the per-item
+    /// path inside a `Vec<T>` kwarg. The bifurcation lives inside the
+    /// typed enum's variant identity, not in a sibling `idx: Option<usize>`
+    /// slot:
     ///
     ///   1. `extract_via_serde` (required) and `extract_optional_via_serde`
     ///      (optional) — kwarg-keyed `from_value` failures at the scalar /
-    ///      `Option<T>` path. `idx: None`; the failure binds to the kwarg
-    ///      slot identity ONLY (`:{key}`).
+    ///      `Option<T>` path. `path: KwargPath::Named(key)`; the failure
+    ///      binds to the kwarg slot identity ONLY (`:{key}`).
     ///   2. `extract_vec_via_serde` (per-item) — kwarg-AND-index-keyed
     ///      `from_value` failures inside a `Vec<T>` kwarg's items.
-    ///      `idx: Some(i)`; the failure binds to the kwarg slot AND the
-    ///      failing item index (`:{key}[{i}]`).
+    ///      `path: KwargPath::Item { key, idx }`; the failure binds to the
+    ///      kwarg slot AND the failing item index (`:{key}[{i}]`).
     ///
     /// Mirror at the typed-entry JSON boundary of the typed-exit-side
     /// `DomainSerialize { keyword, message }` lift: the latter rejects a
     /// `to_value::<T>` failure (typed-exit, keyword-keyed, sourced from
     /// `T::KEYWORD` and so `&'static str`); this variant rejects a
-    /// `from_value::<T>` failure (typed-entry, key-keyed, sourced from the
-    /// runtime kwarg lookup and so `String`). Together the two close the
-    /// JSON-projection boundary of the typed-domain surface — every
-    /// distinct `serde_json` failure mode at the typed-domain boundary
-    /// binds to ONE structural variant of `LispError`, not a
-    /// `Compile`-shaped substring.
+    /// `from_value::<T>` failure (typed-entry, kwargs-path-keyed, sourced
+    /// from the runtime kwarg lookup and carried as a typed `KwargPath`).
+    /// Together the two close the JSON-projection boundary of the
+    /// typed-domain surface — every distinct `serde_json` failure mode at
+    /// the typed-domain boundary binds to ONE structural variant of
+    /// `LispError`, not a `Compile`-shaped substring.
     ///
-    /// `key` is `String` because it comes from the runtime kwargs lookup
-    /// (each derive-generated extractor and every hand-written
-    /// `TataraDomain` impl can pass an arbitrary key) — same posture as
-    /// `MissingKwarg.key`, `DuplicateKwarg.key`, `UnknownKwarg.key`. `idx`
-    /// is `Option<usize>` because it bifurcates the two sub-modes
-    /// structurally — `None` for kwarg-scalar / kwarg-optional paths,
-    /// `Some(i)` for the per-item path — same posture as
-    /// `MissingHeadSymbol.got: Option<String>` and
-    /// `RestParamMissingName.got: Option<String>`. `message` is `String`
-    /// because it carries the `serde_json::Error::Display` projection
-    /// (errors render `expected … at line L column C` shapes — arbitrary
-    /// text from the underlying `serde_json::Error`); carrying the
-    /// rendered message rather than a `#[source] serde_json::Error` keeps
-    /// the variant's structural shape parallel to every other String-
-    /// carrying variant in this enum (`DomainSerialize.message`,
-    /// `Compile.message`).
+    /// Sibling of `TypeMismatch.form: KwargPath`: both kwargs-path-keyed
+    /// typed-entry rejection modes now carry the SAME typed kwargs-path
+    /// identity inside their variant's data shape. The `(key, idx:
+    /// Option<usize>)` bifurcation collapses into `KwargPath`'s variant
+    /// identity — `Named` vs. `Item` — so the invalid combination
+    /// `(key: "", idx: Some(0))` for a scalar path (or any combination that
+    /// invented a fourth sub-mode) becomes structurally unrepresentable
+    /// rather than re-asserted at the helper boundary via runtime
+    /// `Option::is_some` comparison. Same closed-set posture as
+    /// `LispError::TypeMismatch.form: KwargPath`,
+    /// `LispError::Defmacro*.head: MacroDefHead`,
+    /// `LispError::UnboundTemplateVar.prefix: UnquoteForm`,
+    /// `LispError::CompilerSpecIo.stage: CompilerSpecIoStage`, and
+    /// `LispError::TemplateInvariant.kind: TemplateInvariantKind`.
+    ///
+    /// `path` is `KwargPath` — the closed-set typed enum whose variants
+    /// are EXACTLY the reachable kwargs-path shapes (`Named(String)` /
+    /// `Item { key: String, idx: usize }` / `Slot(usize)`). The runtime
+    /// `kwarg lookup` source-of-key is carried inside the typed enum's
+    /// `String` payload; the per-item-index bifurcation is the enum's
+    /// `Named` vs. `Item` variant identity, not a sibling Option slot.
+    /// `message` is `String` because it carries the
+    /// `serde_json::Error::Display` projection (errors render `expected …
+    /// at line L column C` shapes — arbitrary text from the underlying
+    /// `serde_json::Error`); carrying the rendered message rather than a
+    /// `#[source] serde_json::Error` keeps the variant's structural shape
+    /// parallel to every other String-carrying variant in this enum
+    /// (`DomainSerialize.message`, `Compile.message`).
     ///
     /// `message` carries the raw `serde_json::Error::Display` projection
     /// — NO `"deserialize: "` prefix in the field, the prefix is in the
@@ -1042,24 +1056,18 @@ pub enum LispError {
     /// (the `"serialize: "` prefix lives in Display, not in the slot).
     ///
     /// Display matches the legacy `Compile`-shaped diagnostic byte-for-
-    /// byte across both sub-modes: `"compile error in :{key}: deserialize:
-    /// {message}"` for `idx: None`, `"compile error in :{key}[{idx}]:
-    /// deserialize: {message}"` for `idx: Some(_)` — so existing
-    /// substring-grep consumers (`tatara-check`'s diagnostic capture,
-    /// REPL substring-greps that match on `"deserialize: "`, `":steps[1]"`,
-    /// `":level"`) pass unchanged across the lift. When a future run
-    /// gives `Sexp` source spans, `pos: Option<usize>` lands here in ONE
-    /// place and every kwarg-deserialize site picks up positional
-    /// rendering via `crate::diagnostic::format_diagnostic` mechanically.
-    #[error(
-        "compile error in {}: deserialize: {message}",
-        kwarg_deserialize_form(key, *idx)
-    )]
-    KwargDeserialize {
-        key: String,
-        idx: Option<usize>,
-        message: String,
-    },
+    /// byte across both sub-modes via `KwargPath`'s Display projection:
+    /// `"compile error in :{key}: deserialize: {message}"` for
+    /// `KwargPath::Named`, `"compile error in :{key}[{idx}]: deserialize:
+    /// {message}"` for `KwargPath::Item` — so existing substring-grep
+    /// consumers (`tatara-check`'s diagnostic capture, REPL substring-greps
+    /// that match on `"deserialize: "`, `":steps[1]"`, `":level"`) pass
+    /// unchanged across the lift. When a future run gives `Sexp` source
+    /// spans, `pos: Option<usize>` lands here in ONE place and every
+    /// kwarg-deserialize site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
+    #[error("compile error in {path}: deserialize: {message}")]
+    KwargDeserialize { path: KwargPath, message: String },
     /// `compiler_spec.rs`'s disk-persistence surface emitted an
     /// I/O or serde failure. Four call sites in `compiler_spec.rs`
     /// share this failure mode through ONE structural variant keyed
@@ -1636,40 +1644,6 @@ fn missing_head_symbol_suffix(got: Option<&str>) -> String {
     }
 }
 
-/// Canonical `form:` label for a `LispError::KwargDeserialize` Display
-/// rendering — `:<key>` when `idx: None` (scalar / `Option<T>` path) or
-/// `:<key>[<idx>]` when `idx: Some(i)` (per-item path inside a `Vec<T>`
-/// kwarg).
-///
-/// Projects through the typed `KwargPath` enum's `Display` impl — the
-/// canonical `:<key>` and `:<key>[<idx>]` literals live in ONE place
-/// (`KwargPath`'s Display match arm) alongside the three sibling helpers
-/// in `crate::domain` (`kwarg_form` / `kwarg_item_form` /
-/// `kwargs_pos_form`). Before this lift, this helper carried its OWN two
-/// inline `format!` shapes — byte-identical to `KwargPath::Named` /
-/// `KwargPath::Item`'s Display arms but scattered across a fourth
-/// definition site, the textbook three-times-rule signal (THEORY.md
-/// §VI.1). Routing through `KwargPath` closes that signal: every
-/// `:<key>` / `:<key>[<idx>]` rendered literal across `tatara-lisp/src/`
-/// now flows through ONE Display impl.
-///
-/// Adding a fourth path shape to `KwargPath` (e.g.,
-/// `:<key>.<field>` for nested-struct kwarg failures) extends the enum
-/// ONCE and rustc-enforces matching at this site via the `match idx`
-/// arm; ONE-place enum extension, zero downstream changes at the
-/// helper's call site (the `#[error(...)]` attribute on
-/// `LispError::KwargDeserialize`).
-///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition /
-/// three-times rule. The fourth byte-identical `:<key>` / `:<key>[<idx>]`
-/// shape collapses into the typed enum's Display projection.
-fn kwarg_deserialize_form(key: &str, idx: Option<usize>) -> String {
-    match idx {
-        None => KwargPath::named(key).to_string(),
-        Some(i) => KwargPath::item(key, i).to_string(),
-    }
-}
-
 fn unknown_domain_keyword_suffix(hint: Option<&str>, registered: &[String]) -> String {
     if registered.is_empty() {
         return match hint {
@@ -2053,8 +2027,7 @@ mod tests {
         );
         assert_eq!(
             LispError::KwargDeserialize {
-                key: "level".into(),
-                idx: None,
+                path: KwargPath::named("level"),
                 message: "unknown variant `NotASeverity`".into(),
             }
             .position(),
@@ -2062,8 +2035,7 @@ mod tests {
         );
         assert_eq!(
             LispError::KwargDeserialize {
-                key: "steps".into(),
-                idx: Some(1),
+                path: KwargPath::item("steps", 1),
                 message: "invalid type: integer `7`, expected a string".into(),
             }
             .position(),
@@ -3524,27 +3496,32 @@ mod tests {
     // `extract_via_serde`, `extract_optional_via_serde`, and
     // `extract_vec_via_serde`) were promoted from the
     // `LispError::Compile`-shaped triple to the structural
-    // `LispError::KwargDeserialize { key, idx, message }` variant. The
-    // tests below pin: (a) Display matches the legacy `"compile error
-    // in :{key}: deserialize: {message}"` shape byte-for-byte for the
-    // scalar path (`idx: None`); (b) Display matches the indexed
-    // `"compile error in :{key}[{idx}]: deserialize: {message}"` shape
-    // byte-for-byte for the per-item path (`idx: Some(i)`); (c) the
-    // legacy substring `"deserialize: "` and the legacy prefix
-    // `"compile error in :"` both survive the lift unchanged for
-    // substring-grep consumers; (d) kebab-case keys thread through
-    // unchanged. The `position()` floor is pinned in the main
-    // `position_is_none_for_non_positional_variants` block above.
+    // `LispError::KwargDeserialize { path: KwargPath, message }`
+    // variant — the `(key: String, idx: Option<usize>)` bifurcation
+    // collapsed into the typed `KwargPath` enum's `Named` vs. `Item`
+    // variant identity. The tests below pin: (a) Display matches the
+    // legacy `"compile error in :{key}: deserialize: {message}"` shape
+    // byte-for-byte for the scalar path (`path: KwargPath::Named`); (b)
+    // Display matches the indexed `"compile error in :{key}[{idx}]:
+    // deserialize: {message}"` shape byte-for-byte for the per-item
+    // path (`path: KwargPath::Item`); (c) the legacy substring
+    // `"deserialize: "` and the legacy prefix `"compile error in :"`
+    // both survive the lift unchanged for substring-grep consumers;
+    // (d) kebab-case keys thread through unchanged; (e) the typed
+    // `path` slot carries `KwargPath` data DIRECTLY (not as a projection
+    // through a helper), structurally bound via pattern-match on the
+    // typed enum's variant identity. The `position()` floor is pinned
+    // in the main `position_is_none_for_non_positional_variants` block
+    // above.
 
     #[test]
     fn kwarg_deserialize_display_scalar_path_renders_legacy_shape() {
-        // `idx: None` — scalar / `Option<T>` path. The variant renders
-        // the legacy `"compile error in :{key}: deserialize: {message}"`
-        // shape byte-for-byte. Same wording as the pre-lift `Compile`-
-        // shaped triple in `deserialize_err`.
+        // `path: KwargPath::Named(_)` — scalar / `Option<T>` path. The
+        // variant renders the legacy `"compile error in :{key}:
+        // deserialize: {message}"` shape byte-for-byte. Same wording as
+        // the pre-lift `Compile`-shaped triple in `deserialize_err`.
         let err = LispError::KwargDeserialize {
-            key: "level".into(),
-            idx: None,
+            path: KwargPath::named("level"),
             message: "unknown variant `NotASeverity`".into(),
         };
         assert_eq!(
@@ -3555,13 +3532,12 @@ mod tests {
 
     #[test]
     fn kwarg_deserialize_display_per_item_path_renders_indexed_shape() {
-        // `idx: Some(i)` — per-item path. The variant renders the
-        // legacy `"compile error in :{key}[{idx}]: deserialize:
-        // {message}"` shape byte-for-byte. Same wording as the pre-lift
-        // `Compile`-shaped triple in `deserialize_item_err`.
+        // `path: KwargPath::Item { .. }` — per-item path. The variant
+        // renders the legacy `"compile error in :{key}[{idx}]:
+        // deserialize: {message}"` shape byte-for-byte. Same wording as
+        // the pre-lift `Compile`-shaped triple in `deserialize_item_err`.
         let err = LispError::KwargDeserialize {
-            key: "steps".into(),
-            idx: Some(1),
+            path: KwargPath::item("steps", 1),
             message: "invalid type: integer `7`, expected a string".into(),
         };
         assert_eq!(
@@ -3580,8 +3556,7 @@ mod tests {
             .expect_err("parse must fail")
             .to_string();
         let err = LispError::KwargDeserialize {
-            key: "count".into(),
-            idx: None,
+            path: KwargPath::named("count"),
             message: raw.clone(),
         };
         assert_eq!(
@@ -3597,8 +3572,7 @@ mod tests {
         // `compile error in :{key}:` prefix unchanged. A regression that
         // camelCases the key fails-loudly here.
         let err = LispError::KwargDeserialize {
-            key: "notify-ref".into(),
-            idx: None,
+            path: KwargPath::named("notify-ref"),
             message: "missing field `notify-ref`".into(),
         };
         assert_eq!(
@@ -3614,8 +3588,7 @@ mod tests {
         // means a regression in either site (scalar or per-item) fails-
         // loudly here.
         let err = LispError::KwargDeserialize {
-            key: "wait-minutes".into(),
-            idx: Some(2),
+            path: KwargPath::item("wait-minutes", 2),
             message: "expected u64".into(),
         };
         assert_eq!(
@@ -3632,11 +3605,10 @@ mod tests {
         // The substring is what consumers downstream (`tatara-check`,
         // the REPL) substring-match on; the prefix matches the legacy
         // `Compile { form: kwarg_form(key), message: format!("deserialize:
-        // {e}") }` byte-for-byte. Both sub-modes (`idx: None` AND `idx:
-        // Some(_)`) preserve the substring.
+        // {e}") }` byte-for-byte. Both sub-modes (`KwargPath::Named`
+        // AND `KwargPath::Item`) preserve the substring.
         let scalar = LispError::KwargDeserialize {
-            key: "level".into(),
-            idx: None,
+            path: KwargPath::named("level"),
             message: "boom".into(),
         };
         let scalar_msg = format!("{scalar}");
@@ -3650,8 +3622,7 @@ mod tests {
         );
 
         let item = LispError::KwargDeserialize {
-            key: "steps".into(),
-            idx: Some(3),
+            path: KwargPath::item("steps", 3),
             message: "boom".into(),
         };
         let item_msg = format!("{item}");
@@ -3667,13 +3638,13 @@ mod tests {
 
     #[test]
     fn kwarg_deserialize_display_zero_index_is_first_class() {
-        // Edge case: `idx: Some(0)` must render as `:steps[0]`, not
-        // `:steps` (which would collide with the scalar path's
-        // rendering). Pin that the bifurcation is by `Option` identity,
-        // not by `idx > 0`.
+        // Edge case: `path: KwargPath::Item { idx: 0, .. }` must render
+        // as `:steps[0]`, not `:steps` (which would collide with the
+        // scalar path's `KwargPath::Named` rendering). Pin that the
+        // bifurcation is by `KwargPath` variant identity, not by
+        // `idx > 0`.
         let err = LispError::KwargDeserialize {
-            key: "steps".into(),
-            idx: Some(0),
+            path: KwargPath::item("steps", 0),
             message: "bad".into(),
         };
         assert_eq!(
@@ -3683,64 +3654,86 @@ mod tests {
     }
 
     #[test]
-    fn kwarg_deserialize_form_scalar_path_routes_through_kwarg_path_named_display() {
-        // Pin the structural lift: `kwarg_deserialize_form(key, None)`
-        // projects through `KwargPath::Named(key).to_string()` rather
-        // than carrying its own `format!(":{key}")` literal. The two
-        // outputs MUST stay byte-for-byte equivalent — that is the
-        // contract of routing the rendered literal through a single
-        // typed-enum Display impl. A regression that drifts either side
-        // (e.g., re-introducing an inline `format!` literal in
-        // `kwarg_deserialize_form` that diverges from `KwargPath`'s
-        // Display arm) fails-loudly here. Tested across a representative
-        // matrix — scalar names, kebab-case kwargs, and the empty-key
-        // edge case — so any divergence at any shape is caught.
-        for key in ["level", "notify-ref", "window-seconds", ""] {
-            assert_eq!(
-                super::kwarg_deserialize_form(key, None),
-                KwargPath::named(key).to_string(),
-                "kwarg_deserialize_form scalar path diverged from KwargPath::Named for key {key:?}"
-            );
-        }
+    fn kwarg_deserialize_path_named_threads_typed_kwarg_path_through_variant_slot() {
+        // Structural pin: the scalar / `Option<T>` path's
+        // `LispError::KwargDeserialize` carries the typed
+        // `KwargPath::Named(key)` value DIRECTLY in its `path` slot,
+        // not a `(key: String, idx: None)` pair. Authoring tools (REPL,
+        // LSP, `tatara-check`) bind on the typed enum's variant
+        // identity (`KwargPath::Named(_)`) rather than substring-
+        // matching the rendered `form:` prefix, parallel to how
+        // `TypeMismatch.form` is bound. A regression that re-bifurcates
+        // the variant into a `(key, idx: Option<usize>)` pair fails the
+        // structural assertion here (the slot would no longer be a
+        // typed `KwargPath`).
+        let err = LispError::KwargDeserialize {
+            path: KwargPath::named("level"),
+            message: "boom".into(),
+        };
+        let LispError::KwargDeserialize {
+            ref path,
+            ref message,
+        } = err
+        else {
+            panic!("expected KwargDeserialize, got {err:?}");
+        };
+        assert_eq!(*path, KwargPath::Named("level".into()));
+        assert_eq!(message, "boom");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :level: deserialize: boom"
+        );
     }
 
     #[test]
-    fn kwarg_deserialize_form_item_path_routes_through_kwarg_path_item_display() {
-        // Sibling pin to `…_scalar_path_…`: `kwarg_deserialize_form(key,
-        // Some(idx))` projects through `KwargPath::Item { key, idx
-        // }.to_string()`. Both outputs MUST stay byte-for-byte
-        // equivalent. Tested across the `idx: Some(0)` edge case (which
-        // must NOT collapse to the scalar shape), small indices, and
-        // large indices — so a regression that special-cases `idx == 0`
-        // or overflows past a small range is caught.
-        for (key, idx) in [
-            ("steps", 0_usize),
-            ("steps", 1),
-            ("tags", 2),
-            ("notify-refs", 17),
-            ("", 0),
-        ] {
-            assert_eq!(
-                super::kwarg_deserialize_form(key, Some(idx)),
-                KwargPath::item(key, idx).to_string(),
-                "kwarg_deserialize_form item path diverged from KwargPath::Item for ({key:?}, {idx})"
-            );
-        }
+    fn kwarg_deserialize_path_item_threads_typed_kwarg_path_through_variant_slot() {
+        // Sibling structural pin to `…_path_named_…`: the per-item path
+        // carries `KwargPath::Item { key, idx }` directly in its `path`
+        // slot. The `(key, idx)` bifurcation lives inside the typed
+        // enum's variant identity (`KwargPath::Named` vs.
+        // `KwargPath::Item`), so the invalid sibling slot combination
+        // `(key: "", idx: Some(_))` for a scalar / Optional path is
+        // structurally unrepresentable in the variant's data shape.
+        let err = LispError::KwargDeserialize {
+            path: KwargPath::item("steps", 1),
+            message: "bad".into(),
+        };
+        let LispError::KwargDeserialize {
+            ref path,
+            ref message,
+        } = err
+        else {
+            panic!("expected KwargDeserialize, got {err:?}");
+        };
+        assert_eq!(
+            *path,
+            KwargPath::Item {
+                key: "steps".into(),
+                idx: 1
+            }
+        );
+        assert_eq!(message, "bad");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :steps[1]: deserialize: bad"
+        );
     }
 
     #[test]
-    fn kwarg_deserialize_display_form_prefix_matches_kwarg_path_display() {
+    fn kwarg_deserialize_display_prefix_matches_kwarg_path_display() {
         // End-to-end pin: the `LispError::KwargDeserialize` variant's
-        // Display rendering uses `kwarg_deserialize_form` as its `form:`
-        // label, and that label MUST equal `KwargPath`'s Display
-        // projection across BOTH sub-modes. Asserts the full rendered
-        // diagnostic, anchored on the canonical `KwargPath`-projected
-        // prefix — so a regression that drifts the `form:` label out of
-        // the typed-enum's match arm fails-loudly at the variant's
-        // Display boundary, not just at the helper.
+        // Display rendering threads its typed `path: KwargPath` slot
+        // through `KwargPath`'s `Display` impl directly (via the
+        // `#[error("compile error in {path}: ...")]` annotation, no
+        // intermediate helper). The full rendered diagnostic MUST be
+        // anchored on the canonical `KwargPath`-projected prefix
+        // across BOTH variants of `KwargPath` — a regression that
+        // drifts either projection (e.g., re-introducing an inline
+        // `format!` literal in a `#[error(..., fmt_fn(path))]` annotation
+        // that diverges from `KwargPath`'s Display arm) fails-loudly
+        // here.
         let scalar = LispError::KwargDeserialize {
-            key: "level".into(),
-            idx: None,
+            path: KwargPath::named("level"),
             message: "boom".into(),
         };
         assert_eq!(
@@ -3752,8 +3745,7 @@ mod tests {
         );
 
         let item = LispError::KwargDeserialize {
-            key: "steps".into(),
-            idx: Some(3),
+            path: KwargPath::item("steps", 3),
             message: "boom".into(),
         };
         assert_eq!(

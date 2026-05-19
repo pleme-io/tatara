@@ -1600,10 +1600,37 @@ fn missing_head_symbol_suffix(got: Option<&str>) -> String {
     }
 }
 
+/// Canonical `form:` label for a `LispError::KwargDeserialize` Display
+/// rendering — `:<key>` when `idx: None` (scalar / `Option<T>` path) or
+/// `:<key>[<idx>]` when `idx: Some(i)` (per-item path inside a `Vec<T>`
+/// kwarg).
+///
+/// Projects through the typed `KwargPath` enum's `Display` impl — the
+/// canonical `:<key>` and `:<key>[<idx>]` literals live in ONE place
+/// (`KwargPath`'s Display match arm) alongside the three sibling helpers
+/// in `crate::domain` (`kwarg_form` / `kwarg_item_form` /
+/// `kwargs_pos_form`). Before this lift, this helper carried its OWN two
+/// inline `format!` shapes — byte-identical to `KwargPath::Named` /
+/// `KwargPath::Item`'s Display arms but scattered across a fourth
+/// definition site, the textbook three-times-rule signal (THEORY.md
+/// §VI.1). Routing through `KwargPath` closes that signal: every
+/// `:<key>` / `:<key>[<idx>]` rendered literal across `tatara-lisp/src/`
+/// now flows through ONE Display impl.
+///
+/// Adding a fourth path shape to `KwargPath` (e.g.,
+/// `:<key>.<field>` for nested-struct kwarg failures) extends the enum
+/// ONCE and rustc-enforces matching at this site via the `match idx`
+/// arm; ONE-place enum extension, zero downstream changes at the
+/// helper's call site (the `#[error(...)]` attribute on
+/// `LispError::KwargDeserialize`).
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition /
+/// three-times rule. The fourth byte-identical `:<key>` / `:<key>[<idx>]`
+/// shape collapses into the typed enum's Display projection.
 fn kwarg_deserialize_form(key: &str, idx: Option<usize>) -> String {
     match idx {
-        None => format!(":{key}"),
-        Some(i) => format!(":{key}[{i}]"),
+        None => KwargPath::Named(key).to_string(),
+        Some(i) => KwargPath::Item { key, idx: i }.to_string(),
     }
 }
 
@@ -3616,6 +3643,92 @@ mod tests {
         assert_eq!(
             format!("{err}"),
             "compile error in :steps[0]: deserialize: bad"
+        );
+    }
+
+    #[test]
+    fn kwarg_deserialize_form_scalar_path_routes_through_kwarg_path_named_display() {
+        // Pin the structural lift: `kwarg_deserialize_form(key, None)`
+        // projects through `KwargPath::Named(key).to_string()` rather
+        // than carrying its own `format!(":{key}")` literal. The two
+        // outputs MUST stay byte-for-byte equivalent — that is the
+        // contract of routing the rendered literal through a single
+        // typed-enum Display impl. A regression that drifts either side
+        // (e.g., re-introducing an inline `format!` literal in
+        // `kwarg_deserialize_form` that diverges from `KwargPath`'s
+        // Display arm) fails-loudly here. Tested across a representative
+        // matrix — scalar names, kebab-case kwargs, and the empty-key
+        // edge case — so any divergence at any shape is caught.
+        for key in ["level", "notify-ref", "window-seconds", ""] {
+            assert_eq!(
+                super::kwarg_deserialize_form(key, None),
+                KwargPath::Named(key).to_string(),
+                "kwarg_deserialize_form scalar path diverged from KwargPath::Named for key {key:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn kwarg_deserialize_form_item_path_routes_through_kwarg_path_item_display() {
+        // Sibling pin to `…_scalar_path_…`: `kwarg_deserialize_form(key,
+        // Some(idx))` projects through `KwargPath::Item { key, idx
+        // }.to_string()`. Both outputs MUST stay byte-for-byte
+        // equivalent. Tested across the `idx: Some(0)` edge case (which
+        // must NOT collapse to the scalar shape), small indices, and
+        // large indices — so a regression that special-cases `idx == 0`
+        // or overflows past a small range is caught.
+        for (key, idx) in [
+            ("steps", 0_usize),
+            ("steps", 1),
+            ("tags", 2),
+            ("notify-refs", 17),
+            ("", 0),
+        ] {
+            assert_eq!(
+                super::kwarg_deserialize_form(key, Some(idx)),
+                KwargPath::Item { key, idx }.to_string(),
+                "kwarg_deserialize_form item path diverged from KwargPath::Item for ({key:?}, {idx})"
+            );
+        }
+    }
+
+    #[test]
+    fn kwarg_deserialize_display_form_prefix_matches_kwarg_path_display() {
+        // End-to-end pin: the `LispError::KwargDeserialize` variant's
+        // Display rendering uses `kwarg_deserialize_form` as its `form:`
+        // label, and that label MUST equal `KwargPath`'s Display
+        // projection across BOTH sub-modes. Asserts the full rendered
+        // diagnostic, anchored on the canonical `KwargPath`-projected
+        // prefix — so a regression that drifts the `form:` label out of
+        // the typed-enum's match arm fails-loudly at the variant's
+        // Display boundary, not just at the helper.
+        let scalar = LispError::KwargDeserialize {
+            key: "level".into(),
+            idx: None,
+            message: "boom".into(),
+        };
+        assert_eq!(
+            format!("{scalar}"),
+            format!(
+                "compile error in {}: deserialize: boom",
+                KwargPath::Named("level")
+            )
+        );
+
+        let item = LispError::KwargDeserialize {
+            key: "steps".into(),
+            idx: Some(3),
+            message: "boom".into(),
+        };
+        assert_eq!(
+            format!("{item}"),
+            format!(
+                "compile error in {}: deserialize: boom",
+                KwargPath::Item {
+                    key: "steps",
+                    idx: 3
+                }
+            )
         );
     }
 

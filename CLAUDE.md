@@ -262,23 +262,27 @@ shigoto's ★★ promotion (second production consumer after tend).
 parity work. Cannot half-ship without leaving the FSM in two
 implementations. Treat as its own focused milestone.
 
-#### P6-remainder — shikumi defaults + HM/NixOS/Darwin module trio
+#### P6-remainder — shikumi defaults + HM/NixOS/Darwin module trio — ✓ DONE
 
-**What:** The CLI half (`feira ephemeral graph|plan`) shipped. The
-remaining typed-config + module trio lives in shikumi.
+Shipped: `tatara_reconciler::ephemeral_defaults::EphemeralDefaults` +
+the three module files (`module/{home-manager,nixos,darwin}/
+tatara-reconciler-ephemeral.nix`). See the **EphemeralDefaults**
+section in this file for the schema + module surface.
 
-**Migration path:**
-1. Define `shikumi::EphemeralDefaults { ttl, max_concurrent_per_cluster,
-   registry, root_ca_name, default_chart_ref }` schema.
-2. Three module surfaces: HM (`services.tatara-reconciler.ephemeral`),
-   NixOS (`services.tatara-reconciler.ephemeral`), Darwin
-   (operator-facing dev defaults only).
-3. saguão `vigia` policy: auto-issue per-namespace Issuer when a
-   namespace carries label `tatara.pleme.io/ephemeral=true`. Reuses
-   existing saguão PKI; no new CA root.
+Operator runtime UX (`feira ephemeral up|down|status|list|wait`)
+shipped in `caixa-feira` — see the **Ephemeral story — destination
+state** section above for the full closed-loop workflow.
 
-**Not blocked on anything.** Estimated ~200 LoC of typed schema +
-~150 LoC of module wiring.
+#### Saguão vigia auto-Issuer — ✗ NOT REQUIRED
+
+Earlier migration plans listed this as a follow-up. After re-checking
+the closed-loop ephemeral pattern: it isn't needed. The closed-loop
+runs ClusterIP + in-cluster HTTP between the bundled SaaS + Gateway;
+no Ingress, no per-namespace TLS, no per-namespace Issuer to derive.
+The reconciler's `EphemeralDefaults.root_ca_name` references a
+cluster-wide `ClusterIssuer` for the rare case where an ephemeral
+env wants externally-reachable TLS (operator-supplied; not
+auto-derived). **Removed from the deferred list as a category error.**
 
 #### Probe binary image — Nix builder wired, image not yet published
 

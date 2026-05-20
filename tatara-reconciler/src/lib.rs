@@ -15,6 +15,7 @@
 pub mod boundary;
 pub mod context;
 pub mod controller;
+pub mod lifetime_clock;
 pub mod patch;
 pub mod phase_machine;
 pub mod pid;

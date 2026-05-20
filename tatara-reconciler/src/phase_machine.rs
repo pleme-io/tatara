@@ -29,6 +29,7 @@ use tatara_process::prelude::*;
 use tatara_process::status::CheckedCondition;
 
 use crate::context::Context;
+use crate::lifetime_clock::{self, AutoTerminate};
 use crate::{boundary, patch, pid, render, ssapply};
 
 const HEARTBEAT: u64 = 30;
@@ -189,9 +190,11 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
         }
     }
 
-    // 2. Intent variant dispatch.
+    // 2. Intent variant dispatch — variants that the render module
+    //    can synthesize K8s/Flux resources for proceed; the rest log
+    //    and wait. Aplicacao landed in P2 (ephemeral env path).
     match p.spec.intent.variant()? {
-        IntentVariant::Flux(_) => {}
+        IntentVariant::Flux(_) | IntentVariant::Aplicacao(_) => {}
         other => {
             warn!(
                 namespace = %ns,
@@ -233,6 +236,16 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     // VERIFY — poll each owned Flux CR for Ready; update per-ref status;
     //          advance to Attested when all are Ready.
     let (ns, name) = namespace_and_name(p)?;
+
+    // Ephemeral TTL clock — if the lifetime is :ephemeral and TTL has
+    // elapsed, force-transition to Exiting regardless of postcondition
+    // state. The phase machine handles SIGTERM cascade from there.
+    if let AutoTerminate::Now { reason } =
+        lifetime_clock::evaluate(p, ProcessPhase::Running, chrono::Utc::now())
+    {
+        return transition_to_exiting(ctx, &ns, &name, &reason).await;
+    }
+
     let refs = p
         .status
         .as_ref()
@@ -353,8 +366,16 @@ async fn evaluate_conditions(
 
 pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
     // ATTEST heartbeat — re-check Flux resources; if any drift to NotReady,
-    // transition to Reconverging. Otherwise stay Attested.
+    // transition to Reconverging. Ephemeral lifetimes with a teardown
+    // policy that includes Attested skip the heartbeat and SIGTERM now.
     let (ns, name) = namespace_and_name(p)?;
+
+    if let AutoTerminate::Now { reason } =
+        lifetime_clock::evaluate(p, ProcessPhase::Attested, chrono::Utc::now())
+    {
+        return transition_to_exiting(ctx, &ns, &name, &reason).await;
+    }
+
     let refs = p
         .status
         .as_ref()
@@ -550,9 +571,34 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
 }
 
 pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
-    // Non-zero exit — record and advance to Zombie.
+    // Non-zero exit. Ephemeral lifetimes with teardown_on_failed transition
+    // through Exiting (children drain) before reaching Zombie; permanent
+    // and Never-teardown ephemeral Processes go straight to Zombie so the
+    // operator can inspect the failure.
     let (ns, name) = namespace_and_name(p)?;
     let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+
+    if let AutoTerminate::Now { reason } =
+        lifetime_clock::evaluate(p, ProcessPhase::Failed, chrono::Utc::now())
+    {
+        // Failed → Exiting is not in the canonical FSM transition table
+        // (phase.rs marks Failed → Zombie as the only legal next step).
+        // Honor the FSM and let the cascade happen at Zombie via the
+        // existing finalizer-driven owner GC, while still recording the
+        // teardown reason so the operator sees why cleanup happened
+        // automatically.
+        let body = json!({
+            "phase": ProcessPhase::Zombie,
+            "phaseSince": chrono::Utc::now(),
+            "message": reason,
+        });
+        patch::patch_process_status(&api, &name, body)
+            .await
+            .map_err(|e| anyhow!("patch (failed→zombie, ephemeral teardown): {e}"))?;
+        info!(namespace = %ns, name = %name, "failed → zombie (ephemeral teardown)");
+        return Ok(Action::requeue(Duration::from_secs(TICK_RETRY)));
+    }
+
     let body = json!({
         "phase": ProcessPhase::Zombie,
         "phaseSince": chrono::Utc::now(),
@@ -561,6 +607,33 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
         .await
         .map_err(|e| anyhow!("patch (failed→zombie): {e}"))?;
     info!(namespace = %ns, name = %name, "failed → zombie");
+    Ok(Action::requeue(Duration::from_secs(TICK_RETRY)))
+}
+
+/// Transition Running/Attested → Exiting with an operator-visible reason.
+/// The existing `handle_exiting` cascade drains children + delegates
+/// resource GC to K8s ownerReferences.
+async fn transition_to_exiting(
+    ctx: &Context,
+    ns: &str,
+    name: &str,
+    reason: &str,
+) -> Result<Action> {
+    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), ns);
+    let body = json!({
+        "phase": ProcessPhase::Exiting,
+        "phaseSince": chrono::Utc::now(),
+        "message": reason,
+    });
+    patch::patch_process_status(&api, name, body)
+        .await
+        .map_err(|e| anyhow!("patch (→exiting, ephemeral): {e}"))?;
+    info!(
+        namespace = %ns,
+        name = %name,
+        reason = %reason,
+        "→ exiting (ephemeral lifetime clock)"
+    );
     Ok(Action::requeue(Duration::from_secs(TICK_RETRY)))
 }
 

@@ -54,6 +54,7 @@ hex = "0.4"
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }
+humantime = "2"
 
 # Observability endpoint
 axum = { version = "0.8", features = ["json"] }

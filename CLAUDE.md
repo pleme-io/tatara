@@ -56,7 +56,7 @@ manifesto + anti-patterns for the pattern.
 | `tatara-lisp` | **Homoiconic S-expression surface.** Reader, AST, macroexpander (quasi-quote + unquote + splice + `&rest`), `TataraDomain` trait, domain registry, `TypedRewriter` (self-optimization primitive), generic `compile_typed`/`compile_named`, iac-forge canonical-form interop (feature-gated). |
 | `tatara-lisp-derive` | **`#[derive(TataraDomain)]`** — proc macro that auto-generates a Lisp compiler for any struct with `serde::Deserialize`. Universal-Deserialize fallthrough handles enums, nested structs, `Vec<Nested>`. Honors `#[serde(default)]`. |
 | `tatara-domains` | Reference typed domains (MonitorSpec, NotifySpec, Severity enum, EscalationStep, AlertPolicySpec) + `register_all()` registry seed. Demonstrates every derive kind. |
-| `tatara-reconciler` | **FluxCD-adjacent K8s controller.** 10-phase Unix lifecycle. Owner-ref-emitted Kustomizations. Signal annotation ingestion. Finalizer-guarded termination. Three-pillar BLAKE3 attestation chain. `tatara-check` binary runs `checks.lisp`. Replaces `tatara-kube`. |
+| `tatara-reconciler` | **FluxCD-adjacent K8s controller.** 10-phase Unix lifecycle. Owner-ref-emitted Kustomizations. Signal annotation ingestion. Finalizer-guarded termination. Three-pillar BLAKE3 attestation chain. `tatara-check` binary runs `checks.lisp`. Replaces `tatara-kube`. **P2 (2026-05):** `render::render_aplicacao` emits a FluxCD `HelmRelease` + (for `oci://` chart refs) an `OCIRepository`, both owned by the Process; `lifetime_clock` module enforces TTL expiry + `TeardownPolicy` transitions through Running/Attested/Failed — ephemeral envs auto-cascade to `Exiting → Zombie → Reaped` without operator intervention. |
 
 ### Operational surfaces
 

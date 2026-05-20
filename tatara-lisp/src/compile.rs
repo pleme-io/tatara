@@ -13,7 +13,7 @@
 //!     This is the shape used by ProcessSpec / `(defpoint name …)`.
 
 use crate::ast::Sexp;
-use crate::domain::{sexp_type_name, TataraDomain};
+use crate::domain::{sexp_shape, TataraDomain};
 use crate::error::{LispError, Result};
 use crate::macro_expand::Expander;
 use crate::reader::read;
@@ -82,7 +82,7 @@ pub type Definition<T> = NamedDefinition<T>;
 fn named_form_non_symbol_name<T: TataraDomain>(got: &Sexp) -> LispError {
     LispError::NamedFormNonSymbolName {
         keyword: T::KEYWORD,
-        got: sexp_type_name(got),
+        got: sexp_shape(got),
     }
 }
 
@@ -142,7 +142,7 @@ pub fn compile_named_from_forms<T: TataraDomain>(
 mod tests {
     use super::compile_named;
     use crate::compiler_spec::CompilerSpec;
-    use crate::error::LispError;
+    use crate::error::{LispError, SexpShape};
 
     #[test]
     fn compile_named_emits_named_form_missing_name_for_keyword_only_form() {
@@ -204,18 +204,20 @@ mod tests {
     // structural `LispError::NamedFormNonSymbolName { keyword, got }`
     // variant. The helper signature changes from `() -> LispError` to
     // `(got: &Sexp) -> LispError`: the offending NAME slot's outermost
-    // shape is projected through `sexp_type_name` at the boundary so
-    // the variant's `got` slot is `&'static str` (sourced from the
-    // exhaustive match over `Sexp`'s closed set of 12 type names —
-    // same posture as `TypeMismatch.got`). Display preserves the
-    // legacy `"compile error in {keyword}: positional NAME must be a
-    // symbol or string"` prefix byte-for-byte AND appends the
-    // structural detail `(got {got})` parenthetically.
+    // shape is projected through `sexp_shape` at the boundary so the
+    // variant's `got` slot is the typed `SexpShape` closed-set enum
+    // (sourced from the exhaustive match over `Sexp`'s closed set of
+    // 12 outer shapes — same posture as `TypeMismatch.got: SexpShape`).
+    // Display preserves the legacy `"compile error in {keyword}:
+    // positional NAME must be a symbol or string"` prefix byte-for-byte
+    // AND appends the structural detail `(got {got})` parenthetically
+    // (where `{got}` flows through `SexpShape::Display` to the canonical
+    // literal).
     //
     // The tests below pin: (a) each malformed NAME-slot input (int,
     // keyword, nested list) routes through the helper to the
     // structural `LispError::NamedFormNonSymbolName` variant with the
-    // canonical keyword and `sexp_type_name`-projected `got`; (b) the
+    // canonical keyword and typed `SexpShape`-projected `got`; (b) the
     // helper threads `T::KEYWORD` verbatim through the `keyword` slot;
     // (c) end-to-end through the `LispError` Display impl renders the
     // legacy prefix AND the appended `(got X)` suffix; (d) the helper
@@ -243,10 +245,10 @@ mod tests {
                 err,
                 LispError::NamedFormNonSymbolName {
                     keyword: "defcompiler",
-                    got: "int",
+                    got: SexpShape::Int,
                 }
             ),
-            "expected NamedFormNonSymbolName {{ got: \"int\" }}, got: {err:?}"
+            "expected NamedFormNonSymbolName {{ got: SexpShape::Int }}, got: {err:?}"
         );
     }
 
@@ -264,10 +266,10 @@ mod tests {
                 err,
                 LispError::NamedFormNonSymbolName {
                     keyword: "defcompiler",
-                    got: "keyword",
+                    got: SexpShape::Keyword,
                 }
             ),
-            "expected NamedFormNonSymbolName {{ got: \"keyword\" }}, got: {err:?}"
+            "expected NamedFormNonSymbolName {{ got: SexpShape::Keyword }}, got: {err:?}"
         );
     }
 
@@ -285,10 +287,10 @@ mod tests {
                 err,
                 LispError::NamedFormNonSymbolName {
                     keyword: "defcompiler",
-                    got: "list",
+                    got: SexpShape::List,
                 }
             ),
-            "expected NamedFormNonSymbolName {{ got: \"list\" }}, got: {err:?}"
+            "expected NamedFormNonSymbolName {{ got: SexpShape::List }}, got: {err:?}"
         );
     }
 

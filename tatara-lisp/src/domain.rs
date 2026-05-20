@@ -14,7 +14,7 @@ use std::sync::{Mutex, OnceLock};
 use serde::de::DeserializeOwned;
 
 use crate::ast::{Atom, Sexp};
-use crate::error::{ExpectedKwargShape, KwargPath, LispError, Result};
+use crate::error::{ExpectedKwargShape, KwargPath, LispError, Result, SexpShape};
 
 /// A Rust type compilable from a Lisp form.
 pub trait TataraDomain: Sized {
@@ -393,35 +393,55 @@ pub fn kwargs_pos_form(idx: usize) -> crate::error::KwargPath {
     crate::error::KwargPath::Slot(idx)
 }
 
-/// Stable, human-readable name of a `Sexp`'s outermost shape. Used by the
-/// typed extractors to render `expected X, got Y` diagnostics so a
-/// type-mismatched kwarg names both sides of the failure, not just the
-/// expected side. Names are part of the public surface — `tatara-check`,
-/// the LSP, and the REPL are expected to match on them — so they don't
-/// drift across versions.
+/// Typed projection of a `Sexp`'s outermost shape into the closed-set
+/// `SexpShape` enum — the twelve reachable shapes the reader can produce.
+/// Used by the typed extractors to thread the observed shape into
+/// `LispError::TypeMismatch.got: SexpShape` /
+/// `LispError::NamedFormNonSymbolName.got: SexpShape` so a typed-entry
+/// gate's rejection-shape identity is load-bearing data in the type
+/// system, not a `&'static str` projection at the helper boundary.
+/// Consumers (REPL, LSP, `tatara-check`) pattern-match on
+/// `SexpShape::Int` etc. directly rather than substring-matching the
+/// rendered `got` literal.
 ///
 /// Theory anchor: THEORY.md §V.1 — knowable platform. An error that names
 /// only the expected side leaves the operator to guess what was passed;
-/// naming both is the floor of constructive diagnostics. When a future
-/// run gives `Sexp` source spans, this helper is the single site that
-/// learns to thread `got Y at <pos>`; today's call sites pick up the
-/// span automatically.
+/// naming both is the floor of constructive diagnostics. The typed
+/// projection extends that posture: not just naming both sides, but
+/// encoding the observed shape's identity as a TYPE so a regression that
+/// drifts the label becomes a compile error, not a runtime substring
+/// drift. When a future run gives `Sexp` source spans, this helper is
+/// the single site that learns to thread `got Y at <pos>`; today's call
+/// sites pick up the span automatically.
+#[must_use]
+pub fn sexp_shape(s: &Sexp) -> SexpShape {
+    match s {
+        Sexp::Nil => SexpShape::Nil,
+        Sexp::Atom(Atom::Symbol(_)) => SexpShape::Symbol,
+        Sexp::Atom(Atom::Keyword(_)) => SexpShape::Keyword,
+        Sexp::Atom(Atom::Str(_)) => SexpShape::String,
+        Sexp::Atom(Atom::Int(_)) => SexpShape::Int,
+        Sexp::Atom(Atom::Float(_)) => SexpShape::Float,
+        Sexp::Atom(Atom::Bool(_)) => SexpShape::Bool,
+        Sexp::List(_) => SexpShape::List,
+        Sexp::Quote(_) => SexpShape::Quote,
+        Sexp::Quasiquote(_) => SexpShape::Quasiquote,
+        Sexp::Unquote(_) => SexpShape::Unquote,
+        Sexp::UnquoteSplice(_) => SexpShape::UnquoteSplice,
+    }
+}
+
+/// Stable, human-readable name of a `Sexp`'s outermost shape — the
+/// `&'static str` projection of `sexp_shape(_).label()`. Retained for
+/// callers that want the canonical literal directly (e.g. test
+/// assertions on the rendered `expected X, got Y` substring); new code
+/// constructing `LispError::TypeMismatch` / `NamedFormNonSymbolName`
+/// passes through `sexp_shape` directly so the typed identity rides
+/// the variant slot rather than collapsing through the literal at the
+/// helper boundary.
 #[must_use]
 pub fn sexp_type_name(s: &Sexp) -> &'static str {
-    match s {
-        Sexp::Nil => "nil",
-        Sexp::Atom(Atom::Symbol(_)) => "symbol",
-        Sexp::Atom(Atom::Keyword(_)) => "keyword",
-        Sexp::Atom(Atom::Str(_)) => "string",
-        Sexp::Atom(Atom::Int(_)) => "int",
-        Sexp::Atom(Atom::Float(_)) => "float",
-        Sexp::Atom(Atom::Bool(_)) => "bool",
-        Sexp::List(_) => "list",
-        Sexp::Quote(_) => "quote",
-        Sexp::Quasiquote(_) => "quasiquote",
-        Sexp::Unquote(_) => "unquote",
-        Sexp::UnquoteSplice(_) => "unquote-splice",
-    }
+    sexp_shape(s).label()
 }
 
 /// Suggest the candidate closest to `needle` by Levenshtein distance,
@@ -621,7 +641,7 @@ pub fn type_mismatch(
     LispError::TypeMismatch {
         form,
         expected,
-        got: sexp_type_name(got),
+        got: sexp_shape(got),
     }
 }
 
@@ -1849,6 +1869,80 @@ mod tests {
         );
     }
 
+    #[test]
+    fn sexp_shape_covers_every_variant() {
+        // The typed sister to `sexp_type_name_covers_every_variant` —
+        // every `Sexp` variant projects to exactly one `SexpShape`
+        // variant. After the typed-slot lift the projection's identity
+        // is load-bearing data on `LispError::TypeMismatch.got` and
+        // `LispError::NamedFormNonSymbolName.got`; pinning the
+        // projection here means a regression that drops a `Sexp`
+        // variant's typed `SexpShape` mapping fails-loudly. A future
+        // `Sexp` extension (e.g. `Sexp::Vector` for `#(...)` reader
+        // syntax) would force a `SexpShape` extension AND a new arm
+        // in this test, parallel to how `sexp_type_name_covers_every
+        // _variant` pins the legacy `&'static str` projection.
+        assert_eq!(sexp_shape(&Sexp::Nil), SexpShape::Nil);
+        assert_eq!(sexp_shape(&Sexp::symbol("foo")), SexpShape::Symbol);
+        assert_eq!(sexp_shape(&Sexp::keyword("k")), SexpShape::Keyword);
+        assert_eq!(sexp_shape(&Sexp::string("s")), SexpShape::String);
+        assert_eq!(sexp_shape(&Sexp::int(7)), SexpShape::Int);
+        assert_eq!(sexp_shape(&Sexp::float(7.5)), SexpShape::Float);
+        assert_eq!(sexp_shape(&Sexp::boolean(true)), SexpShape::Bool);
+        assert_eq!(sexp_shape(&Sexp::List(vec![])), SexpShape::List);
+        assert_eq!(
+            sexp_shape(&Sexp::Quote(Box::new(Sexp::Nil))),
+            SexpShape::Quote
+        );
+        assert_eq!(
+            sexp_shape(&Sexp::Quasiquote(Box::new(Sexp::Nil))),
+            SexpShape::Quasiquote
+        );
+        assert_eq!(
+            sexp_shape(&Sexp::Unquote(Box::new(Sexp::Nil))),
+            SexpShape::Unquote
+        );
+        assert_eq!(
+            sexp_shape(&Sexp::UnquoteSplice(Box::new(Sexp::Nil))),
+            SexpShape::UnquoteSplice
+        );
+    }
+
+    #[test]
+    fn sexp_type_name_delegates_to_sexp_shape_label_for_every_variant() {
+        // Pin that the legacy `&'static str` projection and the typed
+        // `SexpShape::label()` projection AGREE on every variant —
+        // `sexp_type_name(s) == sexp_shape(s).label()` is the
+        // bidirection contract that lets the legacy entry point stay
+        // pub for tests that match on rendered substrings while new
+        // code constructing `LispError::TypeMismatch` /
+        // `NamedFormNonSymbolName` passes through `sexp_shape`
+        // directly. A regression that drifts either projection
+        // (e.g. typo in `SexpShape::label()` arm, change in
+        // `sexp_type_name`'s match) fails-loudly here.
+        let samples = [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::List(vec![]),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ];
+        for s in &samples {
+            assert_eq!(
+                sexp_type_name(s),
+                sexp_shape(s).label(),
+                "sexp_type_name and sexp_shape(_).label() must agree for {s:?}"
+            );
+        }
+    }
+
     fn type_err_message(err: LispError) -> String {
         format!("{err}")
     }
@@ -2381,10 +2475,11 @@ mod tests {
     #[test]
     fn parse_kwargs_non_keyword_at_position_0_emits_type_mismatch_variant() {
         // `(_ "x" 5)` — args[0] is a string, not a keyword. The variant
-        // must be `TypeMismatch`, not the legacy `Compile`. `expected:
-        // "keyword"` is `&'static str`, so a typo in the static field can
-        // never drift; `got: "string"` is `sexp_type_name(_)`'s
-        // exhaustive projection.
+        // must be `TypeMismatch`, not the legacy `Compile`. `expected`
+        // is the typed `ExpectedKwargShape` enum, so a typo in the static
+        // label can never drift; `got` is the typed `SexpShape` enum
+        // sourced from `sexp_shape(_)`'s exhaustive projection over
+        // `Sexp`'s closed set of 12 outermost shapes.
         let args = kwargs_of(r#"(_ "x" 5)"#);
         let err = parse_kwargs(&args).expect_err("non-keyword position must error");
         assert!(
@@ -2393,10 +2488,10 @@ mod tests {
                 LispError::TypeMismatch {
                     form: crate::error::KwargPath::Slot(0),
                     expected: ExpectedKwargShape::Keyword,
-                    got: "string",
+                    got: SexpShape::String,
                 }
             ),
-            "expected TypeMismatch {{ form: KwargPath::Slot(0), expected: Keyword, got: \"string\" }}, got {err:?}"
+            "expected TypeMismatch {{ form: KwargPath::Slot(0), expected: Keyword, got: SexpShape::String }}, got {err:?}"
         );
     }
 
@@ -2414,7 +2509,7 @@ mod tests {
                 LispError::TypeMismatch {
                     form: crate::error::KwargPath::Slot(2),
                     expected: ExpectedKwargShape::Keyword,
-                    got: "string",
+                    got: SexpShape::String,
                 }
             ),
             "expected indexed TypeMismatch at KwargPath::Slot(2), got {err:?}"
@@ -2423,7 +2518,7 @@ mod tests {
 
     #[test]
     fn parse_kwargs_non_keyword_routes_got_through_sexp_type_name() {
-        // The got-type is the structural `sexp_type_name(_)` projection,
+        // The got-type is the structural `sexp_shape(_)` projection,
         // not a free-form string — pinning this contract for ints, bools,
         // and symbols means a regression that re-inlines the diagnostic
         // (with `format!("got {}", _)`) fails-loudly here. Three shapes
@@ -2432,22 +2527,40 @@ mod tests {
         let args = kwargs_of(r#"(_ 5 "v")"#);
         let err = parse_kwargs(&args).expect_err("int at position 0 must error");
         assert!(
-            matches!(err, LispError::TypeMismatch { got: "int", .. }),
-            "expected got: \"int\", got {err:?}"
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    got: SexpShape::Int,
+                    ..
+                }
+            ),
+            "expected got: SexpShape::Int, got {err:?}"
         );
 
         let args = kwargs_of(r#"(_ #t "v")"#);
         let err = parse_kwargs(&args).expect_err("bool at position 0 must error");
         assert!(
-            matches!(err, LispError::TypeMismatch { got: "bool", .. }),
-            "expected got: \"bool\", got {err:?}"
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    got: SexpShape::Bool,
+                    ..
+                }
+            ),
+            "expected got: SexpShape::Bool, got {err:?}"
         );
 
         let args = kwargs_of(r#"(_ symbolic "v")"#);
         let err = parse_kwargs(&args).expect_err("symbol at position 0 must error");
         assert!(
-            matches!(err, LispError::TypeMismatch { got: "symbol", .. }),
-            "expected got: \"symbol\", got {err:?}"
+            matches!(
+                err,
+                LispError::TypeMismatch {
+                    got: SexpShape::Symbol,
+                    ..
+                }
+            ),
+            "expected got: SexpShape::Symbol, got {err:?}"
         );
     }
 
@@ -2481,7 +2594,7 @@ mod tests {
                 LispError::TypeMismatch {
                     form: crate::error::KwargPath::Slot(0),
                     expected: ExpectedKwargShape::Keyword,
-                    got: "string",
+                    got: SexpShape::String,
                 }
             ),
             "expected derived TypeMismatch at KwargPath::Slot(0), got {err:?}"
@@ -2541,7 +2654,7 @@ mod tests {
             } => {
                 assert_eq!(form, crate::error::KwargPath::Named("ctx".into()));
                 assert_eq!(expected, ExpectedKwargShape::String);
-                assert_eq!(got, "int");
+                assert_eq!(got, SexpShape::Int);
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
         }
@@ -2580,10 +2693,10 @@ mod tests {
                 LispError::TypeMismatch {
                     form,
                     expected: ExpectedKwargShape::String,
-                    got: "int",
+                    got: SexpShape::Int,
                 } if matches!(form, crate::error::KwargPath::Named(k) if k == "name")
             ),
-            "expected TypeMismatch {{ form: KwargPath::Named(\"name\"), expected: String, got: \"int\" }}, got {err:?}"
+            "expected TypeMismatch {{ form: KwargPath::Named(\"name\"), expected: String, got: SexpShape::Int }}, got {err:?}"
         );
         assert_eq!(
             format!("{err}"),
@@ -2606,7 +2719,7 @@ mod tests {
                 LispError::TypeMismatch {
                     form,
                     expected: ExpectedKwargShape::String,
-                    got: "int",
+                    got: SexpShape::Int,
                 } if matches!(form, crate::error::KwargPath::Item { key, idx: 1 } if key == "tags")
             ),
             "expected indexed TypeMismatch at KwargPath::Item {{ key: \"tags\", idx: 1 }}, got {err:?}"
@@ -2630,7 +2743,7 @@ mod tests {
                 LispError::TypeMismatch {
                     form,
                     expected: ExpectedKwargShape::List,
-                    got: "string",
+                    got: SexpShape::String,
                 } if matches!(form, crate::error::KwargPath::Named(k) if k == "steps")
             ),
             "expected list-shape TypeMismatch at KwargPath::Named(\"steps\"), got {err:?}"
@@ -2653,7 +2766,7 @@ mod tests {
                 LispError::TypeMismatch {
                     form,
                     expected: ExpectedKwargShape::ListOfStrings,
-                    got: "string",
+                    got: SexpShape::String,
                 } if matches!(form, crate::error::KwargPath::Named(k) if k == "tags")
             ),
             "expected outer-shape TypeMismatch at KwargPath::Named(\"tags\"), got {err:?}"
@@ -2685,7 +2798,7 @@ mod tests {
                 LispError::TypeMismatch {
                     form,
                     expected: ExpectedKwargShape::Number,
-                    got: "string",
+                    got: SexpShape::String,
                 } if matches!(form, crate::error::KwargPath::Named(k) if k == "threshold")
             ),
             "expected derived TypeMismatch, got {err:?}"
@@ -4277,7 +4390,7 @@ mod tests {
             } => {
                 assert_eq!(form, crate::error::KwargPath::Named("wrongkey".into()));
                 assert_eq!(expected, ExpectedKwargShape::Int);
-                assert_eq!(got, "string");
+                assert_eq!(got, SexpShape::String);
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
         }
@@ -4339,7 +4452,7 @@ mod tests {
             } => {
                 assert_eq!(form, crate::error::KwargPath::Named("flag".into()));
                 assert_eq!(expected, ExpectedKwargShape::Bool);
-                assert_eq!(got, "string");
+                assert_eq!(got, SexpShape::String);
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
         }

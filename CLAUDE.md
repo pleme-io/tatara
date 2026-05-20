@@ -2,6 +2,16 @@
 
 > **★★★ CSE / Knowable Construction.** This repo operates under **Constructive Substrate Engineering** — canonical specification at [`pleme-io/theory/CONSTRUCTIVE-SUBSTRATE-ENGINEERING.md`](https://github.com/pleme-io/theory/blob/main/CONSTRUCTIVE-SUBSTRATE-ENGINEERING.md). The Compounding Directive (operational rules: solve once, load-bearing fixes only, idiom-first, models stay current, direction beats velocity) is in the org-level pleme-io/CLAUDE.md ★★★ section. Read both before non-trivial changes.
 
+> **skip-format-ban: migration in progress.** The workspace has 81
+> pre-existing `format!(…)` callsites that pre-date the ★★ Typed Emission
+> directive — most are inside `anyhow!(…)` / `tracing::…!(…)` macro
+> arguments or compose simple K8s annotation strings (`{ns}/{name}`).
+> The audit lives in P7; until it's swept, no `clippy.toml` with
+> `disallowed_macros` is wired at the workspace root. **New code in
+> this repo should still avoid `format!(…)` of platform syntax (YAML,
+> Nix, Go AST, Helm).** The ban is appropriate; the migration is
+> mechanical but unfinished.
+
 
 <!-- Blackmatter alignment: pillars 1, 6, 10 -->
 <!-- See ~/code/github/pleme-io/BLACKMATTER.md for pillar definitions. -->

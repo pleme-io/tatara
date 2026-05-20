@@ -4828,7 +4828,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "shikumi",
+ "shikumi 0.1.0 (git+https://github.com/pleme-io/shikumi)",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5369,6 +5369,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ccc8076840c4da029af4f87e4e8daeb0fca6b87bbb02e10cb60b791450e11e4"
 dependencies = [
  "dirs 4.0.0",
+]
+
+[[package]]
+name = "shikumi"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "figment",
+ "notify",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -6107,6 +6121,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "shikumi 0.1.0",
  "tatara-core",
  "tatara-domains",
  "tatara-lattice",

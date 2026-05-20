@@ -25,6 +25,9 @@ tatara-lattice = { path = "../tatara-lattice" }
 tatara-lisp = { path = "../tatara-lisp" }
 tatara-domains = { path = "../tatara-domains" }
 
+# Typed config + hot-reload (XDG discovery + env override + ArcSwap).
+shikumi = { path = "../../shikumi" }
+
 # For tatara-check — CustomResourceExt + serde_yaml come from deps above.
 
 # Kubernetes

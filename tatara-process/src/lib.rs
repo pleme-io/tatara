@@ -82,6 +82,17 @@ pub fn compile_source(src: &str) -> tatara_lisp::Result<Vec<Definition>> {
     tatara_lisp::compile_named::<crate::crd::ProcessSpec>(src)
 }
 
+/// Register every domain owned by this crate with the global Lisp
+/// dispatcher. Call once per binary, typically near the top of `main`.
+/// After this call, `tatara_lisp::domain::lookup("defpoint")` and
+/// `lookup("defephemeral")` both resolve to the right typed compiler.
+///
+/// Idempotent — registering the same type twice is a no-op.
+pub fn register_all() {
+    tatara_lisp::domain::register::<crate::crd::ProcessSpec>();
+    tatara_lisp::domain::register::<crate::ephemeral::EphemeralSpec>();
+}
+
 #[cfg(test)]
 mod compile_tests {
     use super::compile_source;
@@ -189,6 +200,20 @@ mod compile_tests {
         // Lifetime defaults to Permanent (no variant set, resolver still works).
         assert!(d.spec.lifetime.is_default());
         assert!(!d.spec.lifetime.is_ephemeral());
+    }
+
+    /// Registering all process-owned domains is idempotent and resolves
+    /// both `defpoint` (ProcessSpec) and `defephemeral` (EphemeralSpec).
+    #[test]
+    fn register_all_resolves_defpoint_and_defephemeral() {
+        use tatara_lisp::domain::lookup;
+        super::register_all();
+        super::register_all(); // idempotent
+        assert!(lookup("defpoint").is_some(), "defpoint must resolve");
+        assert!(
+            lookup("defephemeral").is_some(),
+            "defephemeral must resolve"
+        );
     }
 
     /// End-to-end: a `(defpoint …)` form may carry the full ephemeral

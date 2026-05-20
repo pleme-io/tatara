@@ -32,7 +32,10 @@ impl Report {
 }
 
 fn main() -> ExitCode {
-    // Seed the global domain registry with example typed domains authored as Lisp.
+    // Seed the global domain registry with every domain authored as Lisp.
+    // - tatara-process: defpoint (ProcessSpec) + defephemeral (EphemeralSpec)
+    // - tatara-domains: defmonitor, defnotify, defalertpolicy (demo set)
+    tatara_process::register_all();
     tatara_domains::register_all();
 
     let root = match workspace_root() {
@@ -318,46 +321,119 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
             }
         })
         .unwrap_or_default();
+    // Optional `:domain <name>` — selects which typed surface to compile.
+    // Default `point` (ProcessSpec via `(defpoint …)`). New: `ephemeral`
+    // (EphemeralSpec via `(defephemeral …)`).
+    let domain = kw
+        .iter()
+        .find_map(|(k, v)| {
+            if k == "domain" {
+                v.as_symbol().or_else(|| v.as_string()).map(String::from)
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "point".into());
 
     let src = match fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) => return report.fail(label, format!("read: {e}")),
     };
-    let defs = match tatara_process::compile_source(&src) {
-        Ok(d) => d,
-        Err(e) => {
-            return report.fail(label, tatara_lisp::format_diagnostic(&src, &e, Some(rel)));
+
+    let n_defs = match domain.as_str() {
+        "point" => {
+            let defs = match tatara_process::compile_source(&src) {
+                Ok(d) => d,
+                Err(e) => {
+                    return report.fail(
+                        label,
+                        tatara_lisp::format_diagnostic(&src, &e, Some(rel)),
+                    );
+                }
+            };
+            if defs.len() < min_defs {
+                return report.fail(
+                    label,
+                    format!("expected ≥ {} definitions, got {}", min_defs, defs.len()),
+                );
+            }
+            let first = &defs[0];
+            for req in &requires {
+                let ok = match req.as_str() {
+                    "intent-nix" => first.spec.intent.nix.is_some(),
+                    "intent-flux" => first.spec.intent.flux.is_some(),
+                    "intent-lisp" => first.spec.intent.lisp.is_some(),
+                    "intent-container" => first.spec.intent.container.is_some(),
+                    "intent-aplicacao" => first.spec.intent.aplicacao.is_some(),
+                    "lifetime-ephemeral" => first.spec.lifetime.is_ephemeral(),
+                    "depends-on" => !first.spec.depends_on.is_empty(),
+                    "boundary-pre" => !first.spec.boundary.preconditions.is_empty(),
+                    "boundary-post" => !first.spec.boundary.postconditions.is_empty(),
+                    "compliance" => !first.spec.compliance.bindings.is_empty(),
+                    "signals" => first.spec.signals.sigterm_grace_seconds > 0,
+                    other => {
+                        return report.fail(label, format!("unknown :requires tag: {other}"));
+                    }
+                };
+                if !ok {
+                    return report.fail(label, format!("definition missing required: {req}"));
+                }
+            }
+            defs.len()
+        }
+        "ephemeral" => {
+            let defs = match tatara_process::ephemeral::compile_ephemeral_source(&src) {
+                Ok(d) => d,
+                Err(e) => {
+                    return report.fail(
+                        label,
+                        tatara_lisp::format_diagnostic(&src, &e, Some(rel)),
+                    );
+                }
+            };
+            if defs.len() < min_defs {
+                return report.fail(
+                    label,
+                    format!("expected ≥ {} definitions, got {}", min_defs, defs.len()),
+                );
+            }
+            let first = &defs[0];
+            for req in &requires {
+                let ok = match req.as_str() {
+                    "aplicacao" => !first.spec.aplicacao.chart_ref.is_empty(),
+                    "ttl" => !first.spec.ttl.is_empty(),
+                    "teardown" => true, // typed enum — always present
+                    "postconditions" => !first.spec.postconditions.is_empty(),
+                    "preconditions" => !first.spec.preconditions.is_empty(),
+                    "closed-loop-auth" => first.spec.postconditions.iter().any(|c| {
+                        matches!(
+                            c.kind,
+                            tatara_process::boundary::ConditionKind::ClosedLoopAuth
+                        )
+                    }),
+                    other => {
+                        return report.fail(
+                            label,
+                            format!("unknown :requires tag for ephemeral domain: {other}"),
+                        );
+                    }
+                };
+                if !ok {
+                    return report.fail(label, format!("definition missing required: {req}"));
+                }
+            }
+            defs.len()
+        }
+        other => {
+            return report.fail(
+                label,
+                format!("unknown :domain {other:?} (known: point, ephemeral)"),
+            );
         }
     };
-    if defs.len() < min_defs {
-        return report.fail(
-            label,
-            format!("expected ≥ {} definitions, got {}", min_defs, defs.len()),
-        );
-    }
-    let first = &defs[0];
-    for req in &requires {
-        let ok = match req.as_str() {
-            "intent-nix" => first.spec.intent.nix.is_some(),
-            "intent-flux" => first.spec.intent.flux.is_some(),
-            "intent-lisp" => first.spec.intent.lisp.is_some(),
-            "intent-container" => first.spec.intent.container.is_some(),
-            "depends-on" => !first.spec.depends_on.is_empty(),
-            "boundary-pre" => !first.spec.boundary.preconditions.is_empty(),
-            "boundary-post" => !first.spec.boundary.postconditions.is_empty(),
-            "compliance" => !first.spec.compliance.bindings.is_empty(),
-            "signals" => first.spec.signals.sigterm_grace_seconds > 0,
-            other => {
-                return report.fail(label, format!("unknown :requires tag: {other}"));
-            }
-        };
-        if !ok {
-            return report.fail(label, format!("definition missing required: {req}"));
-        }
-    }
+
     report.pass(format!(
-        "{label} ({} defs, {} checks)",
-        defs.len(),
+        "{label} ({n_defs} defs, {} checks)",
         requires.len()
     ));
 }

@@ -42,6 +42,16 @@
   "examples/process/observability-stack.lisp"
   "examples/process/observability-stack.nix")
 
+;; ─── Ephemeral env reference form ─────────────────────────────────
+;; (defephemeral …) compiles via tatara-process's typed EphemeralSpec
+;; surface. The `:domain ephemeral` switch selects compile_ephemeral_source
+;; in tatara-check. `:requires` tags are ephemeral-specific.
+(lisp-compiles
+  "examples/process/akeyless-ephemeral.lisp"
+  :domain ephemeral
+  :min-definitions 1
+  :requires (aplicacao ttl teardown postconditions closed-loop-auth))
+
 ;; ─── Tier 1 registry demo ─────────────────────────────────────────
 ;; These keywords aren't built-in — they're `#[derive(TataraDomain)]`
 ;; types from `tatara-domains`, registered at startup by tatara-check.

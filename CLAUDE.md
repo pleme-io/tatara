@@ -119,6 +119,11 @@ A single `Process` carries:
    `(defephemeral …)` keyword is sugar that `From<EphemeralSpec>` lowers
    into a `ProcessSpec` of this exact shape.
 
+> **Lisp bools: Scheme `#t` / `#f`, not `true` / `false`.** The reader
+> treats bare `true`/`false` as symbols → strings, which silently
+> breaks `serde_json::Value` fields expecting bool. Use `#t`/`#f` in
+> every `:values-overlay` payload.
+
 ### FluxCD is `exec(2)`
 
 `tatara-reconciler` does **not** replace source-controller /

@@ -223,7 +223,7 @@ mod tests {
                           :version "0.5.5"
                           :profile "gateway-with-internal-saas"
                           :values-overlay (:cluster (:name "ephemeral-test-01")
-                                           :data (:mysql (:persistence (:enabled false)))
+                                           :data (:mysql (:persistence (:enabled #f)))
                                            :compliance (:overlays []))
                           :release-name "akeyless-saas-consolidated"
                           :target-namespace "akeyless-test"
@@ -259,6 +259,12 @@ mod tests {
         assert_eq!(
             d.spec.aplicacao.values_overlay["cluster"]["name"],
             "ephemeral-test-01"
+        );
+        // Boolean #f is preserved as a typed JSON bool (not the string "false").
+        // tatara-lisp uses Scheme syntax for bools — `#t` / `#f`.
+        assert_eq!(
+            d.spec.aplicacao.values_overlay["data"]["mysql"]["persistence"]["enabled"],
+            false
         );
 
         // Lifetime knobs.

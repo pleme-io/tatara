@@ -81,6 +81,20 @@ pub mod annotations {
     pub const ATTESTATION_ROOT: &str = "tatara.pleme.io/attestation-root";
     pub const GENERATION: &str = "tatara.pleme.io/generation";
     pub const SIGNAL: &str = "tatara.pleme.io/signal";
+    /// Stamped by the reconciler when transitioning into `Releasing`
+    /// — records which terminal-reached gate the Process came from
+    /// (`Attested` or `Failed`) so `handle_releasing` can pick the
+    /// matching `ExportTrigger` set + the correct post-Releasing
+    /// destination (`Exiting` from Attested, `Zombie` from Failed).
+    pub const RELEASED_FROM: &str = "tatara.pleme.io/released-from";
+    /// Labels the export-worker Jobs the reconciler emits during
+    /// `Releasing`. Selector: `tatara.pleme.io/role=export`.
+    pub const ROLE: &str = "tatara.pleme.io/role";
+    /// Index of an export inside `lifetime.ephemeral.exports`.
+    /// Stamped on the corresponding tatara-export-worker Job + its
+    /// receipt ConfigMap so the reconciler can correlate them
+    /// without re-parsing the spec JSON.
+    pub const EXPORT_INDEX: &str = "tatara.pleme.io/export-index";
 }
 
 /// Standard finalizer for the Process reconciler.

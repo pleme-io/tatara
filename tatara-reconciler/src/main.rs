@@ -38,6 +38,24 @@ struct Cli {
     /// Heartbeat interval in seconds.
     #[arg(long, env = "TATARA_HEARTBEAT_SECONDS", default_value_t = 30u64)]
     heartbeat_seconds: u64,
+    /// Container image stamped into every tatara-export-worker Job
+    /// the reconciler emits during the `Releasing` phase.
+    #[arg(
+        long,
+        env = "TATARA_EXPORT_WORKER_IMAGE",
+        default_value = "ghcr.io/pleme-io/tatara-export-worker:0.2.0"
+    )]
+    export_worker_image: String,
+    /// ServiceAccount the export-worker Jobs run as. Operators
+    /// provision it (Role + RoleBinding granting list/get/patch on
+    /// ConfigMaps + get on Processes) via the reconciler's Helm
+    /// chart.
+    #[arg(
+        long,
+        env = "TATARA_EXPORT_WORKER_SERVICE_ACCOUNT",
+        default_value = "tatara-export-worker"
+    )]
+    export_worker_service_account: String,
 }
 
 #[tokio::main]
@@ -62,6 +80,8 @@ async fn main() -> Result<()> {
         default_boundary_timeout_seconds: 900,
         heartbeat_seconds: cli.heartbeat_seconds,
         process_table_name: "proc".into(),
+        export_worker_image: cli.export_worker_image,
+        export_worker_service_account: cli.export_worker_service_account,
     });
     let ctx = Arc::new(Context {
         kube: kube.clone(),

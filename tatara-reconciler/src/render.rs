@@ -5,9 +5,11 @@ use anyhow::Result;
 use serde_json::{json, Value};
 
 use tatara_process::annotations;
+use tatara_process::export::ExportSpec;
 use tatara_process::intent::{
     AplicacaoIntent, FluxIntent, Intent, IntentVariant, LispIntent, NixIntent,
 };
+use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
 
 /// Produced resources from a render pass.
@@ -286,6 +288,188 @@ pub fn artifact_hash(bytes: &[u8]) -> String {
     hex::encode(blake3::hash(bytes).as_bytes())
 }
 
+// ─── Export-worker Job rendering ───────────────────────────────────
+
+/// Compute the canonical Job name for an `ExportSpec` at `index`
+/// inside `lifetime.ephemeral.exports`. Deterministic + stable across
+/// reconciles so re-applying the same spec is idempotent — the
+/// reconciler creates the Job only once.
+///
+/// Shape: `<process-name>-export-<index>`. Stays under the 63-char
+/// K8s name limit for any reasonable process name.
+pub fn export_job_name(process_name: &str, index: usize) -> String {
+    format!("{process_name}-export-{index}")
+}
+
+/// Canonical receipt ConfigMap name for an export Job.
+/// Shape: `<process-name>-export-<index>-receipt`.
+pub fn export_receipt_configmap_name(process_name: &str, index: usize) -> String {
+    format!("{process_name}-export-{index}-receipt")
+}
+
+/// Render one `batch/v1` Job per ExportSpec that fires for the
+/// given terminal-reached gate (`Attested` or `Failed`).
+///
+/// Each Job:
+///   * is owned by the Process (cascading delete on Reaped)
+///   * carries labels selectable by the reconciler's `handle_releasing`
+///     watch loop: `tatara.pleme.io/process={ns/name}`,
+///     `tatara.pleme.io/role=export`,
+///     `tatara.pleme.io/export-index={index}`
+///   * runs `tatara-export-worker` from the supplied `image`
+///   * passes the ExportSpec JSON as the `--spec` argv flag
+///   * stamps the previous attestation root (when present on
+///     `process.status.attestation.composed_root`) as
+///     `--previous-root` so the receipt chains into the Process
+///     attestation tree
+///   * targets a receipt ConfigMap derived from `export_receipt_configmap_name`;
+///     the reconciler's `JobAttested` evaluator reads that ConfigMap
+///     once the Job reports Succeeded.
+///
+/// The function is pure — no kube client, no IO — so the JSON
+/// shape is unit-testable. The caller (`handle_releasing`) applies
+/// each rendered Job via `ssapply`.
+pub fn render_export_jobs(
+    process: &Process,
+    gate: ProcessPhase,
+    image: &str,
+    service_account: &str,
+) -> Result<Vec<Value>> {
+    let ephemeral = match process.spec.lifetime.ephemeral.as_ref() {
+        Some(e) => e,
+        None => return Ok(vec![]),
+    };
+    let ns = process
+        .metadata
+        .namespace
+        .as_deref()
+        .unwrap_or("default")
+        .to_string();
+    let name = process
+        .metadata
+        .name
+        .as_deref()
+        .unwrap_or("unnamed")
+        .to_string();
+    let process_ref = format!("{ns}/{name}");
+    let uid = process.metadata.uid.as_deref().unwrap_or("");
+    let previous_root = process
+        .status
+        .as_ref()
+        .and_then(|s| s.attestation.as_ref())
+        .map(|a| a.composed_root.clone());
+
+    let mut out = Vec::new();
+    for (index, spec) in ephemeral.exports.iter().enumerate() {
+        let fires = match gate {
+            ProcessPhase::Attested => spec.when.fires_on_attested(),
+            ProcessPhase::Failed => spec.when.fires_on_failed(),
+            _ => false,
+        };
+        if !fires {
+            continue;
+        }
+        out.push(one_export_job(
+            &ns,
+            &name,
+            &process_ref,
+            uid,
+            previous_root.as_deref(),
+            index,
+            spec,
+            image,
+            service_account,
+        )?);
+    }
+    Ok(out)
+}
+
+fn one_export_job(
+    ns: &str,
+    name: &str,
+    process_ref: &str,
+    uid: &str,
+    previous_root: Option<&str>,
+    index: usize,
+    spec: &ExportSpec,
+    image: &str,
+    service_account: &str,
+) -> Result<Value> {
+    let job_name = export_job_name(name, index);
+    let receipt_cm = export_receipt_configmap_name(name, index);
+    let spec_json = serde_json::to_string(spec)?;
+
+    let mut args = vec![
+        Value::from("--spec"),
+        Value::from(spec_json),
+        Value::from("--process-namespace"),
+        Value::from(ns.to_string()),
+        Value::from("--process-name"),
+        Value::from(name.to_string()),
+        Value::from("--receipt-configmap"),
+        Value::from(receipt_cm),
+    ];
+    if let Some(prev) = previous_root {
+        args.push(Value::from("--previous-root"));
+        args.push(Value::from(prev.to_string()));
+    }
+
+    let mut owner_refs = vec![];
+    if !uid.is_empty() {
+        owner_refs.push(json!({
+            "apiVersion": format!("{}/{}", tatara_process::GROUP, tatara_process::VERSION),
+            "kind": "Process",
+            "name": name,
+            "uid": uid,
+            "controller": true,
+            "blockOwnerDeletion": true,
+        }));
+    }
+
+    Ok(json!({
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "metadata": {
+            "name": job_name,
+            "namespace": ns,
+            "labels": {
+                annotations::MANAGED_BY: "tatara-reconciler",
+                annotations::PROCESS: process_ref,
+                annotations::ROLE: "export",
+                annotations::EXPORT_INDEX: index.to_string(),
+            },
+            "ownerReferences": owner_refs,
+        },
+        "spec": {
+            "backoffLimit": 1,
+            "ttlSecondsAfterFinished": 3600,
+            "template": {
+                "metadata": {
+                    "labels": {
+                        annotations::PROCESS: process_ref,
+                        annotations::ROLE: "export",
+                        annotations::EXPORT_INDEX: index.to_string(),
+                    },
+                },
+                "spec": {
+                    "restartPolicy": "Never",
+                    "serviceAccountName": service_account,
+                    "containers": [{
+                        "name": "worker",
+                        "image": image,
+                        "imagePullPolicy": "IfNotPresent",
+                        "args": args,
+                        "resources": {
+                            "requests": { "cpu": "10m", "memory": "32Mi" },
+                            "limits":   { "cpu": "200m", "memory": "128Mi" },
+                        },
+                    }],
+                },
+            },
+        },
+    }))
+}
+
 /// Compute the `intent_hash` pillar from canonical intent bytes.
 pub fn intent_hash(bytes: &[u8]) -> String {
     hex::encode(blake3::hash(bytes).as_bytes())
@@ -478,5 +662,249 @@ mod aplicacao_tests {
             split_repo_chart("loose-chart-name"),
             ("default".into(), "loose-chart-name".into())
         );
+    }
+}
+
+#[cfg(test)]
+mod export_job_tests {
+    use super::*;
+    use tatara_process::attestation::ProcessAttestation;
+    use tatara_process::classification::{
+        Classification, ConvergencePointType, SubstrateType,
+    };
+    use tatara_process::crd::{ProcessSpec, ProcessStatus};
+    use tatara_process::export::{
+        ArtifactSource, ExportSpec, ExportTrigger, HttpEventChannel, NatsSubjectChannel,
+        ReceiptsSource, RunMarkerSource, VectorChannel,
+    };
+    use tatara_process::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
+
+    fn spec_receipts_attested() -> ExportSpec {
+        ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                nats_subject: Some(NatsSubjectChannel {
+                    subject: "pleme.pleme-dev.ephemeral.{{run_id}}.receipt".into(),
+                    stream: "EPHEMERAL_RECEIPTS".into(),
+                    url: None,
+                }),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::OnAttested,
+            experiment_id_override: None,
+        }
+    }
+
+    fn spec_run_marker_always() -> ExportSpec {
+        ExportSpec {
+            source: ArtifactSource {
+                run_marker: Some(RunMarkerSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                http_event: Some(HttpEventChannel {
+                    endpoint: None,
+                    signal_type: "ephemeral-marker".into(),
+                }),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::Always,
+            experiment_id_override: None,
+        }
+    }
+
+    fn process_with(exports: Vec<ExportSpec>, with_prev_root: bool) -> Process {
+        let mut status = ProcessStatus::default();
+        if with_prev_root {
+            status.attestation = Some(ProcessAttestation::initial(
+                "art".into(),
+                None,
+                "intent".into(),
+            ));
+        }
+        let spec = ProcessSpec {
+            identity: Default::default(),
+            classification: Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Default::default(),
+                calm: Default::default(),
+                data_classification: Default::default(),
+            },
+            intent: Default::default(),
+            boundary: Default::default(),
+            compliance: Default::default(),
+            depends_on: vec![],
+            signals: Default::default(),
+            lifetime: Lifetime {
+                ephemeral: Some(EphemeralLifetime {
+                    ttl: "1h".into(),
+                    teardown_policy: TeardownPolicy::OnAttested,
+                    max_concurrent: 1,
+                    exports,
+                }),
+                ..Lifetime::default()
+            },
+            suspended: false,
+        };
+        let mut p = Process::new("r1", spec);
+        p.metadata.namespace = Some("akeyless-test".into());
+        p.metadata.uid = Some("uid-abc".into());
+        p.status = Some(status);
+        p
+    }
+
+    #[test]
+    fn no_exports_no_jobs() {
+        let p = process_with(vec![], false);
+        let jobs = render_export_jobs(
+            &p,
+            ProcessPhase::Attested,
+            "ghcr.io/x/worker:0",
+            "tatara-export-worker",
+        )
+        .unwrap();
+        assert!(jobs.is_empty());
+    }
+
+    #[test]
+    fn renders_one_job_per_applicable_export() {
+        let p = process_with(
+            vec![spec_receipts_attested(), spec_run_marker_always()],
+            false,
+        );
+        // Both fire on Attested → 2 jobs.
+        let jobs = render_export_jobs(
+            &p,
+            ProcessPhase::Attested,
+            "ghcr.io/pleme-io/tatara-export-worker:0.2.0",
+            "tatara-export-worker",
+        )
+        .unwrap();
+        assert_eq!(jobs.len(), 2);
+
+        // Only the Always one fires on Failed → 1 job.
+        let jobs = render_export_jobs(
+            &p,
+            ProcessPhase::Failed,
+            "ghcr.io/pleme-io/tatara-export-worker:0.2.0",
+            "tatara-export-worker",
+        )
+        .unwrap();
+        assert_eq!(jobs.len(), 1);
+    }
+
+    #[test]
+    fn rendered_job_carries_canonical_labels() {
+        let p = process_with(vec![spec_receipts_attested()], false);
+        let jobs = render_export_jobs(
+            &p,
+            ProcessPhase::Attested,
+            "img:tag",
+            "tatara-export-worker",
+        )
+        .unwrap();
+        let labels = &jobs[0]["metadata"]["labels"];
+        assert_eq!(labels[tatara_process::annotations::PROCESS], "akeyless-test/r1");
+        assert_eq!(labels[tatara_process::annotations::ROLE], "export");
+        assert_eq!(labels[tatara_process::annotations::EXPORT_INDEX], "0");
+        assert_eq!(jobs[0]["metadata"]["name"], "r1-export-0");
+        assert_eq!(jobs[0]["metadata"]["namespace"], "akeyless-test");
+    }
+
+    #[test]
+    fn rendered_job_has_owner_reference_to_process() {
+        let p = process_with(vec![spec_receipts_attested()], false);
+        let jobs = render_export_jobs(&p, ProcessPhase::Attested, "img", "sa").unwrap();
+        let owner = &jobs[0]["metadata"]["ownerReferences"][0];
+        assert_eq!(owner["kind"], "Process");
+        assert_eq!(owner["name"], "r1");
+        assert_eq!(owner["uid"], "uid-abc");
+        assert_eq!(owner["controller"], true);
+        assert_eq!(owner["blockOwnerDeletion"], true);
+    }
+
+    #[test]
+    fn rendered_job_passes_spec_as_argv() {
+        let p = process_with(vec![spec_receipts_attested()], false);
+        let jobs = render_export_jobs(&p, ProcessPhase::Attested, "img", "sa").unwrap();
+        let args = jobs[0]["spec"]["template"]["spec"]["containers"][0]["args"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap_or(""))
+            .collect::<Vec<_>>();
+        // --spec contains the serialized ExportSpec JSON.
+        let i_spec = args.iter().position(|a| *a == "--spec").unwrap();
+        let spec_arg: ExportSpec = serde_json::from_str(args[i_spec + 1]).unwrap();
+        assert!(spec_arg.source.receipts.is_some());
+
+        // Downward-API stamps for the worker.
+        let i_ns = args.iter().position(|a| *a == "--process-namespace").unwrap();
+        assert_eq!(args[i_ns + 1], "akeyless-test");
+        let i_n = args.iter().position(|a| *a == "--process-name").unwrap();
+        assert_eq!(args[i_n + 1], "r1");
+        let i_rcm = args.iter().position(|a| *a == "--receipt-configmap").unwrap();
+        assert_eq!(args[i_rcm + 1], "r1-export-0-receipt");
+    }
+
+    #[test]
+    fn rendered_job_includes_previous_root_when_attestation_present() {
+        let p_no_root = process_with(vec![spec_receipts_attested()], false);
+        let p_with_root = process_with(vec![spec_receipts_attested()], true);
+
+        let j_no = render_export_jobs(&p_no_root, ProcessPhase::Attested, "img", "sa").unwrap();
+        let j_with =
+            render_export_jobs(&p_with_root, ProcessPhase::Attested, "img", "sa").unwrap();
+
+        let args_no = j_no[0]["spec"]["template"]["spec"]["containers"][0]["args"]
+            .as_array()
+            .unwrap();
+        let args_with = j_with[0]["spec"]["template"]["spec"]["containers"][0]["args"]
+            .as_array()
+            .unwrap();
+        assert!(args_no
+            .iter()
+            .all(|v| v.as_str() != Some("--previous-root")));
+        assert!(args_with
+            .iter()
+            .any(|v| v.as_str() == Some("--previous-root")));
+    }
+
+    #[test]
+    fn rendered_job_uses_supplied_image_and_service_account() {
+        let p = process_with(vec![spec_receipts_attested()], false);
+        let jobs = render_export_jobs(
+            &p,
+            ProcessPhase::Attested,
+            "ghcr.io/pleme-io/tatara-export-worker:0.2.0",
+            "custom-sa",
+        )
+        .unwrap();
+        assert_eq!(
+            jobs[0]["spec"]["template"]["spec"]["containers"][0]["image"],
+            "ghcr.io/pleme-io/tatara-export-worker:0.2.0"
+        );
+        assert_eq!(
+            jobs[0]["spec"]["template"]["spec"]["serviceAccountName"],
+            "custom-sa"
+        );
+        assert_eq!(jobs[0]["spec"]["template"]["spec"]["restartPolicy"], "Never");
+        assert_eq!(jobs[0]["spec"]["backoffLimit"], 1);
+        assert_eq!(jobs[0]["spec"]["ttlSecondsAfterFinished"], 3600);
+    }
+
+    #[test]
+    fn export_job_name_is_deterministic() {
+        assert_eq!(export_job_name("r1", 0), "r1-export-0");
+        assert_eq!(export_job_name("akeyless-attest", 5), "akeyless-attest-export-5");
+    }
+
+    #[test]
+    fn export_receipt_configmap_name_is_deterministic() {
+        assert_eq!(export_receipt_configmap_name("r1", 0), "r1-export-0-receipt");
     }
 }

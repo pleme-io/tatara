@@ -523,44 +523,179 @@ pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {
 }
 
 /// Releasing — the export window. Process has reached a terminal
-/// gate (`Attested` or `Failed`) and has declared `ExportSpec`s that
-/// match the gate; the worker (tatara-export-worker, Phase 4) emits
-/// one Job per spec, watches them, and the Process advances when
-/// all Jobs reach a terminal state.
+/// gate (`Attested` or `Failed`) and declared `ExportSpec`s that
+/// match the gate; the reconciler emits one tatara-export-worker
+/// Job per spec, watches them through their batch/v1 phase, and
+/// advances the Process when every Job has reached a terminal
+/// state.
 ///
-/// Phase 3 stub — no worker exists yet, so we advance straight to
-/// `Exiting` to keep the state machine flowing. When Phase 4 lands,
-/// the worker emission + Job watch loop replaces this no-op.
+/// Post-Releasing destination depends on which terminal-reached
+/// gate the Process came through:
+///   - Attested → Releasing → Exiting (cascade children, then Zombie)
+///   - Failed   → Releasing → Zombie  (no cascade; resources already in error state)
+///
+/// The gate is recorded on the `tatara.pleme.io/released-from`
+/// annotation by [`transition_to_releasing`]. Missing annotation
+/// defaults to `Attested` for forward-compat with older Processes
+/// that may pre-date the annotation contract.
 pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
     let (ns, name) = namespace_and_name(p)?;
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
 
-    // Count the exports we *would* emit when the worker lands.
-    // Logged here as a substrate-progress signal — when Phase 4
-    // arrives the operator can grep tatara-reconciler logs for
-    // "releasing-pending" to see which Processes were poised to
-    // export.
-    let pending = p
+    // 1. Recover the gate we came through from the annotation.
+    let gate = released_from_annotation(p);
+
+    // 2. Filter applicable exports for that gate. Nothing applicable
+    //    = nothing to do; advance immediately to the post-Releasing
+    //    destination. Operators see this in the logs as a "no-op
+    //    Releasing" — useful when an export-less spec is mistakenly
+    //    routed here by a race in transition_to_releasing.
+    let applicable: Vec<(usize, &tatara_process::export::ExportSpec)> = p
         .spec
         .lifetime
         .ephemeral
-        .as_ref()
-        .map(|e| e.exports.len())
-        .unwrap_or(0);
+        .iter()
+        .flat_map(|e| {
+            e.exports.iter().enumerate().filter(|(_, s)| match gate {
+                ProcessPhase::Attested => s.when.fires_on_attested(),
+                ProcessPhase::Failed => s.when.fires_on_failed(),
+                _ => false,
+            })
+        })
+        .collect();
+
+    if applicable.is_empty() {
+        return advance_out_of_releasing(ctx, &ns, &name, gate, "no applicable exports").await;
+    }
+
+    // 3. Render + apply (idempotent SSA) one Job per applicable
+    //    export. The renderer is pure (render::render_export_jobs);
+    //    apply_owned wires owner refs + std annotations.
+    let rendered = render::render_export_jobs(
+        p,
+        gate,
+        &ctx.config.export_worker_image,
+        &ctx.config.export_worker_service_account,
+    )
+    .map_err(|e| anyhow!("render export jobs: {e}"))?;
+    for job in rendered {
+        ssapply::apply_owned(ctx.kube.clone(), p, &ns, job)
+            .await
+            .map_err(|e| anyhow!("apply export job: {e}"))?;
+    }
+
+    // 4. Watch all our export Jobs. Use a label selector that picks
+    //    up only this Process's exports — not any sibling Process's.
+    let jobs_api: Api<k8s_openapi::api::batch::v1::Job> =
+        Api::namespaced(ctx.kube.clone(), &ns);
+    let selector = format!(
+        "{}={},{}=export",
+        tatara_process::annotations::PROCESS,
+        format!("{ns}/{name}"),
+        tatara_process::annotations::ROLE,
+    );
+    let lp = kube::api::ListParams::default().labels(&selector);
+    let jobs = jobs_api
+        .list(&lp)
+        .await
+        .map_err(|e| anyhow!("list export jobs: {e}"))?;
+
+    let mut total = 0usize;
+    let mut succeeded = 0usize;
+    let mut failed = 0usize;
+    let mut active = 0usize;
+    for j in &jobs.items {
+        total += 1;
+        let st = j.status.as_ref();
+        if st.and_then(|s| s.succeeded).unwrap_or(0) > 0 {
+            succeeded += 1;
+        } else if st.and_then(|s| s.failed).unwrap_or(0) > 0 {
+            failed += 1;
+        } else {
+            active += 1;
+        }
+    }
+
     info!(
         namespace = %ns,
         name = %name,
-        exports_pending = pending,
-        "releasing → exiting (Phase 3 stub — worker Job emission lands in Phase 4)"
+        gate = ?gate,
+        applicable = applicable.len(),
+        jobs_total = total,
+        succeeded,
+        failed,
+        active,
+        "releasing — export Jobs in flight"
     );
 
+    if active > 0 || total < applicable.len() {
+        // Some Jobs still running, or some Jobs not yet picked up by
+        // our list (Job creation lag). Heartbeat back.
+        return Ok(Action::requeue(Duration::from_secs(SHORT_RETRY)));
+    }
+
+    // All Jobs reached a terminal state. Even a Failed Job is fine —
+    // the worker writes its receipt either way, and the FSM advances
+    // both Attested-from and Failed-from paths regardless.
+    advance_out_of_releasing(
+        ctx,
+        &ns,
+        &name,
+        gate,
+        &format!("exports complete (succeeded={succeeded}, failed={failed})"),
+    )
+    .await
+}
+
+/// Inspect `tatara.pleme.io/released-from` to determine which
+/// terminal-reached gate the Process came through. Defaults to
+/// `Attested` when absent (forward-compat: pre-annotation Processes
+/// in Releasing are treated as Attested-routed).
+fn released_from_annotation(p: &Process) -> ProcessPhase {
+    let v = p
+        .metadata
+        .annotations
+        .as_ref()
+        .and_then(|m| m.get(tatara_process::annotations::RELEASED_FROM))
+        .cloned()
+        .unwrap_or_default();
+    match v.as_str() {
+        "Failed" => ProcessPhase::Failed,
+        _ => ProcessPhase::Attested,
+    }
+}
+
+/// Patch the Process to its post-Releasing destination per the
+/// gate it came through. Operator-visible message records why we
+/// left the export window (timeout-free path; budget enforcement
+/// lives in the upcoming shigoto migration).
+async fn advance_out_of_releasing(
+    ctx: &Context,
+    ns: &str,
+    name: &str,
+    gate: ProcessPhase,
+    reason: &str,
+) -> Result<Action> {
+    let next = match gate {
+        ProcessPhase::Failed => ProcessPhase::Zombie,
+        _ => ProcessPhase::Exiting,
+    };
+    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), ns);
     let body = json!({
-        "phase": ProcessPhase::Exiting,
+        "phase": next,
         "phaseSince": chrono::Utc::now(),
+        "message": format!("releasing → {next} — {reason}"),
     });
-    patch::patch_process_status(&api, &name, body)
+    patch::patch_process_status(&api, name, body)
         .await
-        .map_err(|e| anyhow!("patch (releasing→exiting): {e}"))?;
+        .map_err(|e| anyhow!("patch (releasing→{next}): {e}"))?;
+    info!(
+        namespace = %ns,
+        name = %name,
+        gate = ?gate,
+        next = ?next,
+        reason = %reason,
+        "releasing → next"
+    );
     Ok(Action::requeue(Duration::from_secs(TICK_RETRY)))
 }
 
@@ -680,9 +815,13 @@ fn has_applicable_exports(p: &Process, phase: ProcessPhase) -> bool {
 }
 
 /// Transition Attested/Failed → Releasing with an operator-visible
-/// reason. The actual export-worker Job emission lives in
-/// `handle_releasing` (Phase 4c); this helper only flips the phase
-/// + records why so the operator sees the routing decision.
+/// reason. Stamps `tatara.pleme.io/released-from = {Attested|Failed}`
+/// on the Process metadata so `handle_releasing` can recover the
+/// gate it came through without rebuilding a phase-history table.
+///
+/// Two patches: one annotation patch (metadata) + one status patch
+/// (phase). The annotation stamp is idempotent — re-applying the
+/// same annotation is a no-op on the wire.
 async fn transition_to_releasing(
     ctx: &Context,
     ns: &str,
@@ -690,6 +829,27 @@ async fn transition_to_releasing(
     reason: &str,
 ) -> Result<Action> {
     let api: Api<Process> = Api::namespaced(ctx.kube.clone(), ns);
+
+    // 1. Stamp the released-from annotation — derived from the
+    //    *current* phase, which is the gate we're leaving.
+    let gate = p_current_phase_str(&api, name).await?;
+    let annotation_patch = json!({
+        "metadata": {
+            "annotations": {
+                tatara_process::annotations::RELEASED_FROM: gate,
+            }
+        }
+    });
+    let pp = kube::api::PatchParams::apply("tatara-reconciler").force();
+    api.patch(
+        name,
+        &pp,
+        &kube::api::Patch::Apply::<serde_json::Value>(annotation_patch),
+    )
+    .await
+    .map_err(|e| anyhow!("annotate released-from: {e}"))?;
+
+    // 2. Patch phase=Releasing with the operator-visible reason.
     let body = json!({
         "phase": ProcessPhase::Releasing,
         "phaseSince": chrono::Utc::now(),
@@ -701,10 +861,30 @@ async fn transition_to_releasing(
     info!(
         namespace = %ns,
         name = %name,
+        gate = %gate,
         reason = %reason,
         "→ releasing (export window opens)"
     );
     Ok(Action::requeue(Duration::from_secs(TICK_RETRY)))
+}
+
+/// Read the Process's current phase as a string for the
+/// released-from annotation. Only valid values reach here:
+/// "Attested" or "Failed" (the two terminal-reached gates).
+async fn p_current_phase_str(api: &Api<Process>, name: &str) -> Result<String> {
+    let p = api
+        .get_status(name)
+        .await
+        .map_err(|e| anyhow!("get status (released-from): {e}"))?;
+    let phase = p
+        .status
+        .as_ref()
+        .map(|s| s.phase)
+        .unwrap_or(ProcessPhase::Attested);
+    Ok(match phase {
+        ProcessPhase::Failed => "Failed".to_string(),
+        _ => "Attested".to_string(),
+    })
 }
 
 /// Transition Running/Attested → Exiting with an operator-visible reason.

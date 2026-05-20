@@ -1,0 +1,422 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ephemeralpools.tatara.pleme.io
+spec:
+  group: tatara.pleme.io
+  names:
+    categories: []
+    kind: EphemeralPool
+    plural: ephemeralpools
+    shortNames:
+    - epool
+    singular: ephemeralpool
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.desiredSize
+      name: Desired
+      type: integer
+    - jsonPath: .status.readyCount
+      name: Ready
+      type: integer
+    - jsonPath: .status.allocatedCount
+      name: Allocated
+      type: integer
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for PoolSpec via `CustomResource`
+        properties:
+          spec:
+            description: |-
+              `EphemeralPool` CRD spec — typed pool of warm Processes.
+
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: EphemeralPool metadata: name: akeyless-attest-pool namespace: ephemeral-pools spec: desiredSize: 3 minSize: 1 maxSize: 5 returnPolicy: Reset selector: repos: ["pleme-io/akeyless-*"] branches: ["main", "release-*"] prLabels: ["needs-akeyless"] template: aplicacao: chartRef: "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment" version: "0.5.5" profile: "gateway-with-internal-saas" … ttl: "2h" teardown: OnAttested postconditions: [ … ] ```
+            properties:
+              desiredSize:
+                description: Target number of warm Processes the pool maintains in `Free` state (sum of Free + Spawning targets `desired_size`).
+                format: uint32
+                minimum: 0.0
+                type: integer
+              freeTtl:
+                default: 24h
+                description: How long a pool member may sit in `Free` before the reconciler recycles it (humantime). Defends against drift / stale state. Default `"24h"`.
+                type: string
+              maxAllocationTtl:
+                default: 4h
+                description: Max time the reconciler allows a single allocation to hold a member before forcibly returning it (humantime). Hard cap independent of the allocation's own TTL. Default `"4h"`.
+                type: string
+              maxSize:
+                default: 0
+                description: Hard ceiling on total pool members (free + allocated + spawning). `0` = no cap. Default = 0.
+                format: uint32
+                minimum: 0.0
+                type: integer
+              minSize:
+                default: 0
+                description: Hard floor on the free count. The reconciler refuses to scale below this even on cost-pressure signals. Default = 0.
+                format: uint32
+                minimum: 0.0
+                type: integer
+              returnPolicy:
+                default: Replace
+                description: What to do when an allocation releases.
+                enum:
+                - Replace
+                - Reset
+                - Keep
+                type: string
+              selector:
+                default:
+                  branches: []
+                  kinds: []
+                  prLabels: []
+                  repos: []
+                description: Routing selector — which allocation requests this pool serves. The reconciler matches incoming `EphemeralAllocation` CRs against this selector (most-specific wins across pools sharing a namespace).
+                properties:
+                  branches:
+                    default: []
+                    description: Glob-matched against `EphemeralAllocation.spec.requestor.branch`. Empty = match every branch.
+                    items:
+                      type: string
+                    type: array
+                  kinds:
+                    default: []
+                    description: Allocation `kind` strings this pool can serve (e.g., "github-pr", "manual", "ci-run"). Empty = any kind.
+                    items:
+                      type: string
+                    type: array
+                  prLabels:
+                    default: []
+                    description: PR labels (all-must-match, AND semantics). Empty = no label requirement.
+                    items:
+                      type: string
+                    type: array
+                  repos:
+                    default: []
+                    description: Glob-matched against `EphemeralAllocation.spec.requestor.repo`. Empty = match every repo.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              template:
+                description: Template for each pool member — a typed `EphemeralSpec` that the reconciler lowers to `ProcessSpec` and instantiates. While in the free list each member's lifetime is overridden to `Permanent`; allocation flips it back to `Ephemeral` with the requestor's TTL.
+                properties:
+                  aplicacao:
+                    description: The Aplicacao chart + profile + overlay to install.
+                    properties:
+                      chartRef:
+                        description: Helm chart reference. OCI (`oci://…`) or repo-relative (`pleme-io/lareira-akeyless-deployment`).
+                        type: string
+                      installTimeout:
+                        description: Install timeout (`humantime` duration). Empty = chart-controller default.
+                        nullable: true
+                        type: string
+                      profile:
+                        description: Architecture profile from the chart's `values/*.yaml` family (e.g. `gateway-with-internal-saas`, `saas-internal`). Leave empty to use chart defaults.
+                        type: string
+                      releaseName:
+                        description: HelmRelease name override. Defaults to the Process's PID-derived name.
+                        nullable: true
+                        type: string
+                      targetNamespace:
+                        description: Target namespace for the chart. Defaults to the Process's namespace.
+                        nullable: true
+                        type: string
+                      valuesOverlay:
+                        description: Typed values overlay merged on top of the profile. Free-form JSON to keep tatara-process decoupled from chart schemas.
+                      version:
+                        description: Chart version (Helm semver constraint; `">=0.5.5"` allowed).
+                        type: string
+                    required:
+                    - chartRef
+                    - version
+                    type: object
+                  classification:
+                    description: Optional Process classification override. When omitted, defaults to `Gate / Compute / Internal / Bounded / NonMonotone`.
+                    nullable: true
+                    properties:
+                      calm:
+                        default: Monotone
+                        description: CALM theorem classification — determines whether coordination is required.
+                        enum:
+                        - Monotone
+                        - NonMonotone
+                        type: string
+                      dataClassification:
+                        default: Internal
+                        description: Data sensitivity, drives compliance baseline selection.
+                        enum:
+                        - Public
+                        - Internal
+                        - Confidential
+                        - Pii
+                        - Phi
+                        - Pci
+                        type: string
+                      horizon:
+                        default:
+                          kind: Bounded
+                        description: How long the point runs. Flattened struct-of-optionals so the OpenAPI schema carries a single `kind` discriminator without per-variant merge.
+                        properties:
+                          direction:
+                            description: Whether to minimize or maximize the metric (Asymptotic only).
+                            enum:
+                            - Minimize
+                            - Maximize
+                            nullable: true
+                            type: string
+                          healthyRateThreshold:
+                            description: Rate threshold considered healthy (Asymptotic only).
+                            format: double
+                            nullable: true
+                            type: number
+                          kind:
+                            default: Bounded
+                            enum:
+                            - Bounded
+                            - Asymptotic
+                            type: string
+                          metric:
+                            description: Metric being optimized (Asymptotic only).
+                            nullable: true
+                            type: string
+                        type: object
+                      pointType:
+                        description: Structural type — how data flows through the point.
+                        enum:
+                        - Transform
+                        - Fork
+                        - Join
+                        - Gate
+                        - Select
+                        - Broadcast
+                        - Reduce
+                        - Observe
+                        type: string
+                      substrate:
+                        description: Operational substrate.
+                        enum:
+                        - Financial
+                        - Compute
+                        - Network
+                        - Storage
+                        - Security
+                        - Identity
+                        - Observability
+                        - Regulatory
+                        type: string
+                    required:
+                    - pointType
+                    - substrate
+                    type: object
+                  maxConcurrent:
+                    default: 1
+                    description: Cluster-wide concurrency budget across ephemeral Processes sharing the same `:aplicacao :chart-ref`. `0` = no cap.
+                    format: uint32
+                    minimum: 0.0
+                    type: integer
+                  parent:
+                    description: Optional parent PID path.
+                    nullable: true
+                    type: string
+                  postconditions:
+                    default: []
+                    description: Boundary postconditions evaluated before reaching `Attested`. Typically `HelmReleaseReleased` plus one or more `ClosedLoopAuth` / `JobAttested` checks for test suites + closed-loop probes.
+                    items:
+                      description: A single boundary predicate.
+                      properties:
+                        kind:
+                          enum:
+                          - ProcessPhase
+                          - KustomizationHealthy
+                          - HelmReleaseReleased
+                          - PromQL
+                          - Cel
+                          - NixEval
+                          - JobAttested
+                          - ClosedLoopAuth
+                          type: string
+                        params:
+                          description: Kind-specific payload (free-form JSON).
+                      required:
+                      - kind
+                      type: object
+                    type: array
+                  preconditions:
+                    default: []
+                    description: Optional boundary preconditions (Namespace, Issuer, PullSecret readiness etc.).
+                    items:
+                      description: A single boundary predicate.
+                      properties:
+                        kind:
+                          enum:
+                          - ProcessPhase
+                          - KustomizationHealthy
+                          - HelmReleaseReleased
+                          - PromQL
+                          - Cel
+                          - NixEval
+                          - JobAttested
+                          - ClosedLoopAuth
+                          type: string
+                        params:
+                          description: Kind-specific payload (free-form JSON).
+                      required:
+                      - kind
+                      type: object
+                    type: array
+                  teardown:
+                    default: Always
+                    description: When the ephemeral Process auto-terminates.
+                    enum:
+                    - Always
+                    - OnAttested
+                    - OnFailed
+                    - Never
+                    type: string
+                  ttl:
+                    default: 1h
+                    description: TTL — `humantime` duration (`"1h"`, `"30m"`).
+                    type: string
+                  verifyTimeout:
+                    description: VERIFY-phase timeout. Empty = controller default.
+                    nullable: true
+                    type: string
+                required:
+                - aplicacao
+                type: object
+            required:
+            - desiredSize
+            - template
+            type: object
+          status:
+            description: '`EphemeralPool.status` — observed pool population state.'
+            nullable: true
+            properties:
+              allocatedCount:
+                default: 0
+                description: Number of members currently `Allocated`.
+                format: uint32
+                minimum: 0.0
+                type: integer
+              conditions:
+                default: []
+                description: Standard Kubernetes Conditions.
+                items:
+                  description: Standard K8s Condition shape (kept local so tatara-process doesn't depend on k8s_openapi types in its public schema).
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              members:
+                default: []
+                description: Member ledger — one entry per pool slot.
+                items:
+                  description: One pool slot's state.
+                  properties:
+                    allocationRef:
+                      description: 'If allocated: the AllocationRef holding this slot.'
+                      nullable: true
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      type: object
+                    enteredStateAt:
+                      description: When the member entered the current state.
+                      format: date-time
+                      type: string
+                    processName:
+                      description: '`metadata.name` of the backing Process.'
+                      type: string
+                    state:
+                      description: Pool member's current slot state.
+                      enum:
+                      - Spawning
+                      - Free
+                      - Allocated
+                      - Returning
+                      - Failed
+                      type: string
+                  required:
+                  - enteredStateAt
+                  - processName
+                  - state
+                  type: object
+                type: array
+              message:
+                description: Operator-visible message (e.g., "scaled down to floor").
+                nullable: true
+                type: string
+              phase:
+                default: Initializing
+                description: Pool lifecycle phase.
+                enum:
+                - Initializing
+                - Steady
+                - ScalingUp
+                - ScalingDown
+                - Degraded
+                - Draining
+                type: string
+              phaseSince:
+                description: When the pool entered the current phase.
+                format: date-time
+                nullable: true
+                type: string
+              readyCount:
+                default: 0
+                description: Number of members currently in `Free` state (ready for allocation).
+                format: uint32
+                minimum: 0.0
+                type: integer
+              returningCount:
+                default: 0
+                description: Number of members currently `Returning` (reset or replace in progress).
+                format: uint32
+                minimum: 0.0
+                type: integer
+              spawningCount:
+                default: 0
+                description: Number of members currently `Spawning` (not yet Attested).
+                format: uint32
+                minimum: 0.0
+                type: integer
+            type: object
+        required:
+        - spec
+        title: EphemeralPool
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+

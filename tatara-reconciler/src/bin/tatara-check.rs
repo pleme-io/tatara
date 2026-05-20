@@ -11,6 +11,8 @@ use std::process::ExitCode;
 
 use kube::CustomResourceExt;
 use tatara_lisp::{domain, read, Expander, Sexp};
+use tatara_process::allocation::EphemeralAllocation;
+use tatara_process::pool::EphemeralPool;
 use tatara_process::prelude::{Process, ProcessTable};
 
 #[derive(Default)]
@@ -208,6 +210,8 @@ fn check_crd_in_sync(args: &[Sexp], root: &Path, report: &mut Report) {
     let current = match kind {
         "Process" => serde_yaml::to_string(&Process::crd()),
         "ProcessTable" => serde_yaml::to_string(&ProcessTable::crd()),
+        "EphemeralPool" => serde_yaml::to_string(&EphemeralPool::crd()),
+        "EphemeralAllocation" => serde_yaml::to_string(&EphemeralAllocation::crd()),
         other => return report.fail(format!("crd-in-sync {other}"), "unknown CRD kind"),
     };
     let current = match current {

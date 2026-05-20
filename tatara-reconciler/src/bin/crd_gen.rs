@@ -6,10 +6,17 @@
 
 use kube::CustomResourceExt;
 
+use tatara_process::allocation::EphemeralAllocation;
+use tatara_process::pool::EphemeralPool;
 use tatara_process::prelude::{Process, ProcessTable};
 
 fn main() {
-    let crds = [Process::crd(), ProcessTable::crd()];
+    let crds = [
+        Process::crd(),
+        ProcessTable::crd(),
+        EphemeralPool::crd(),
+        EphemeralAllocation::crd(),
+    ];
     for crd in crds {
         let yaml = serde_yaml::to_string(&crd).expect("CRD is serializable");
         println!("---\n{yaml}");

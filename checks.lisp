@@ -29,8 +29,10 @@
        (yaml-parses ,values-yaml)))
 
 ;; ─── CRDs match Rust types ────────────────────────────────────────
-(crd-in-sync Process      "chart/tatara-reconciler/crds/processes.yaml")
-(crd-in-sync ProcessTable "chart/tatara-reconciler/crds/processtables.yaml")
+(crd-in-sync Process              "chart/tatara-reconciler/crds/processes.yaml")
+(crd-in-sync ProcessTable         "chart/tatara-reconciler/crds/processtables.yaml")
+(crd-in-sync EphemeralPool        "chart/tatara-reconciler/crds/ephemeralpools.yaml")
+(crd-in-sync EphemeralAllocation  "chart/tatara-reconciler/crds/ephemeralallocations.yaml")
 
 ;; ─── Helm chart surface (via user macro) ──────────────────────────
 (chart-roots-parse "chart/tatara-reconciler/Chart.yaml"

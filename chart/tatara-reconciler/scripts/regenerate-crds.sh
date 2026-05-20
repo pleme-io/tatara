@@ -24,11 +24,15 @@ awk '
   /^---$/ { doc++; next }
   doc == 1 { print > "'"$TMP"'/processes.yaml" }
   doc == 2 { print > "'"$TMP"'/processtables.yaml" }
+  doc == 3 { print > "'"$TMP"'/ephemeralpools.yaml" }
+  doc == 4 { print > "'"$TMP"'/ephemeralallocations.yaml" }
 ' "$TMP/all.yaml"
 
 mkdir -p "$CRDS_DIR"
-mv "$TMP/processes.yaml"      "$CRDS_DIR/processes.yaml"
-mv "$TMP/processtables.yaml"  "$CRDS_DIR/processtables.yaml"
+mv "$TMP/processes.yaml"              "$CRDS_DIR/processes.yaml"
+mv "$TMP/processtables.yaml"          "$CRDS_DIR/processtables.yaml"
+mv "$TMP/ephemeralpools.yaml"         "$CRDS_DIR/ephemeralpools.yaml"
+mv "$TMP/ephemeralallocations.yaml"   "$CRDS_DIR/ephemeralallocations.yaml"
 
 echo "wrote:"
 ls -la "$CRDS_DIR"

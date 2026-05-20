@@ -1,0 +1,196 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ephemeralallocations.tatara.pleme.io
+spec:
+  group: tatara.pleme.io
+  names:
+    categories: []
+    kind: EphemeralAllocation
+    plural: ephemeralallocations
+    shortNames:
+    - ealloc
+    singular: ephemeralallocation
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.poolRef.name
+      name: Pool
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.assignedProcess.name
+      name: Process
+      type: string
+    - jsonPath: .spec.requestor.kind
+      name: Requestor
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for AllocationSpec via `CustomResource`
+        properties:
+          spec:
+            description: |-
+              `EphemeralAllocation` CRD spec — a typed request for a pool member.
+
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: EphemeralAllocation metadata: name: pr-123-akeyless namespace: ephemeral-pools spec: poolRef: name: akeyless-attest-pool namespace: ephemeral-pools requestor: kind: github-pr repo: "pleme-io/akeyless-deployment" branch: "fix-something" prNumber: 123 prLabels: ["needs-akeyless"] ttl: "1h" ```
+            properties:
+              note:
+                description: Operator-supplied notes — surfaced in `feira allocation list` for audit / debugging context.
+                nullable: true
+                type: string
+              poolRef:
+                description: Direct pool reference. When set, skip selector-based routing.
+                nullable: true
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+              requestor:
+                description: Who is asking for the env.
+                properties:
+                  actor:
+                    description: Free-form actor — username, CI runner ID, etc.
+                    nullable: true
+                    type: string
+                  branch:
+                    description: Optional branch name. Matched against `PoolSelector.branches`.
+                    nullable: true
+                    type: string
+                  kind:
+                    description: 'Discriminator: `"github-pr"`, `"manual"`, `"ci-run"`, `"scheduled"`, …'
+                    type: string
+                  prLabels:
+                    default: []
+                    description: PR / commit labels — matched as a subset against `PoolSelector.prLabels`.
+                    items:
+                      type: string
+                    type: array
+                  prNumber:
+                    description: 'Optional PR number (for `kind: github-pr`). Surfaces in printcolumns + audit.'
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  repo:
+                    description: Optional repo identifier (e.g., `"pleme-io/akeyless-deployment"`). Matched against `PoolSelector.repos`.
+                    nullable: true
+                    type: string
+                  sha:
+                    description: 'Optional commit SHA (for `kind: github-pr` or `ci-run`). Stamped onto the allocated Process for traceability.'
+                    nullable: true
+                    type: string
+                required:
+                - kind
+                type: object
+              ttl:
+                description: How long the requestor needs the env (`humantime`). The pool reconciler clamps this to `pool.spec.maxAllocationTtl`. When unset, falls back to the pool's `template.ttl`.
+                nullable: true
+                type: string
+            required:
+            - requestor
+            type: object
+          status:
+            description: '`EphemeralAllocation.status` — observed allocation state.'
+            nullable: true
+            properties:
+              allocatedAt:
+                description: When the allocation was matched to a Process.
+                format: date-time
+                nullable: true
+                type: string
+              assignedProcess:
+                description: The Process backing this allocation, if Bound.
+                nullable: true
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+              boundPool:
+                description: Pool that owns the matched member. Set as soon as routing resolves; not cleared on release (audit trail).
+                nullable: true
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+              conditions:
+                default: []
+                description: Standard Conditions.
+                items:
+                  description: Allocation Condition (same shape as PoolCondition for downstream uniformity).
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              expiresAt:
+                description: Wall-clock expiry derived from `spec.ttl` + `allocated_at`. The pool reconciler force-returns the member at this point.
+                format: date-time
+                nullable: true
+                type: string
+              message:
+                description: Operator-visible message.
+                nullable: true
+                type: string
+              phase:
+                default: Pending
+                description: Current lifecycle phase.
+                enum:
+                - Pending
+                - Queued
+                - Bound
+                - Releasing
+                - Released
+                - NoMatchingPool
+                - Failed
+                type: string
+              phaseSince:
+                description: When the phase last changed.
+                format: date-time
+                nullable: true
+                type: string
+            type: object
+        required:
+        - spec
+        title: EphemeralAllocation
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+

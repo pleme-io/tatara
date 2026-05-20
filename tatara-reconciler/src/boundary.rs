@@ -482,7 +482,8 @@ pub fn phase_rank(p: ProcessPhase) -> u8 {
         ProcessPhase::Execing => 2,
         ProcessPhase::Running | ProcessPhase::Reconverging => 3,
         ProcessPhase::Attested => 4,
-        ProcessPhase::Exiting
+        ProcessPhase::Releasing
+        | ProcessPhase::Exiting
         | ProcessPhase::Failed
         | ProcessPhase::Zombie
         | ProcessPhase::Reaped => 0,

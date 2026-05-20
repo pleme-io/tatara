@@ -86,6 +86,7 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
         ProcessPhase::Running => phase_machine::handle_running(&process, &ctx).await,
         ProcessPhase::Attested => phase_machine::handle_attested(&process, &ctx).await,
         ProcessPhase::Reconverging => phase_machine::handle_reconverging(&process, &ctx).await,
+        ProcessPhase::Releasing => phase_machine::handle_releasing(&process, &ctx).await,
         ProcessPhase::Exiting => phase_machine::handle_exiting(&process, &ctx).await,
         ProcessPhase::Failed => phase_machine::handle_failed(&process, &ctx).await,
         ProcessPhase::Zombie => phase_machine::handle_zombie(&process, &ctx).await,

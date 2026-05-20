@@ -516,6 +516,48 @@ pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {
     Ok(Action::requeue(Duration::from_secs(TICK_RETRY)))
 }
 
+/// Releasing — the export window. Process has reached a terminal
+/// gate (`Attested` or `Failed`) and has declared `ExportSpec`s that
+/// match the gate; the worker (tatara-export-worker, Phase 4) emits
+/// one Job per spec, watches them, and the Process advances when
+/// all Jobs reach a terminal state.
+///
+/// Phase 3 stub — no worker exists yet, so we advance straight to
+/// `Exiting` to keep the state machine flowing. When Phase 4 lands,
+/// the worker emission + Job watch loop replaces this no-op.
+pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
+    let (ns, name) = namespace_and_name(p)?;
+    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+
+    // Count the exports we *would* emit when the worker lands.
+    // Logged here as a substrate-progress signal — when Phase 4
+    // arrives the operator can grep tatara-reconciler logs for
+    // "releasing-pending" to see which Processes were poised to
+    // export.
+    let pending = p
+        .spec
+        .lifetime
+        .ephemeral
+        .as_ref()
+        .map(|e| e.exports.len())
+        .unwrap_or(0);
+    info!(
+        namespace = %ns,
+        name = %name,
+        exports_pending = pending,
+        "releasing → exiting (Phase 3 stub — worker Job emission lands in Phase 4)"
+    );
+
+    let body = json!({
+        "phase": ProcessPhase::Exiting,
+        "phaseSince": chrono::Utc::now(),
+    });
+    patch::patch_process_status(&api, &name, body)
+        .await
+        .map_err(|e| anyhow!("patch (releasing→exiting): {e}"))?;
+    Ok(Action::requeue(Duration::from_secs(TICK_RETRY)))
+}
+
 pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
     // Cascade terminate: delete child Processes first, then move to Zombie.
     // Owner references on owned Flux CRs cause K8s to GC them once we're gone.

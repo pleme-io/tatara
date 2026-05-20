@@ -54,6 +54,9 @@ hex = "0.4"
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }
+# humantime moved into tatara-process (lifetime_clock primitive) — reconciler
+# transitively gets it via tatara-process; keep listed here too because the
+# binary may want it directly later (no harm in the duplicate now).
 humantime = "2"
 
 # Observability endpoint

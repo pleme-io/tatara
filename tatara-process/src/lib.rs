@@ -13,6 +13,7 @@ pub mod ephemeral;
 pub mod identity;
 pub mod intent;
 pub mod lifetime;
+pub mod lifetime_clock;
 pub mod phase;
 pub mod receipt;
 pub mod signal;
@@ -38,6 +39,7 @@ pub mod prelude {
     pub use crate::lifetime::{
         EphemeralLifetime, Lifetime, LifetimeVariant, PermanentLifetime, TeardownPolicy,
     };
+    pub use crate::lifetime_clock::{evaluate as lifetime_clock_evaluate, AutoTerminate};
     pub use crate::phase::ProcessPhase;
     pub use crate::receipt::{ReceiptEnvelope, ReceiptError, RECEIPT_VERSION};
     pub use crate::signal::{ProcessSignal, SighupStrategy};

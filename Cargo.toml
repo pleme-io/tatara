@@ -35,6 +35,13 @@ members = [
     # Closed-loop auth probe — emits a tatara-receipt/v1 envelope to a
     # ConfigMap; consumed by tatara-reconciler's ClosedLoopAuth evaluator.
     "tatara-closed-loop-probe",
+    # Export worker — runs one declared ExportSpec from an ephemeral
+    # Process. Reads the artifact (ConfigMap key / Process snapshot /
+    # run-marker), ships it through the chosen VectorChannel (Vector
+    # HTTP ingest / NATS JetStream / stdout), emits a typed
+    # ReceiptEnvelope of the export action so it chains into the
+    # Process's BLAKE3 attestation tree.
+    "tatara-export-worker",
     "ro-cli",
 ]
 resolver = "2"

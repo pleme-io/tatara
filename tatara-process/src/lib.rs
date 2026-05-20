@@ -14,6 +14,7 @@ pub mod identity;
 pub mod intent;
 pub mod lifetime;
 pub mod phase;
+pub mod receipt;
 pub mod signal;
 pub mod spec;
 pub mod status;
@@ -38,6 +39,7 @@ pub mod prelude {
         EphemeralLifetime, Lifetime, LifetimeVariant, PermanentLifetime, TeardownPolicy,
     };
     pub use crate::phase::ProcessPhase;
+    pub use crate::receipt::{ReceiptEnvelope, ReceiptError, RECEIPT_VERSION};
     pub use crate::signal::{ProcessSignal, SighupStrategy};
     pub use crate::spec::{DependsOn, IdentitySpec, MustReachPhase, SignalPolicy};
     pub use crate::status::{

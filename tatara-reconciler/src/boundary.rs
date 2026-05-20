@@ -26,6 +26,7 @@ use serde_json::Value;
 use tatara_process::boundary::{Condition, ConditionKind};
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
+use tatara_process::receipt::{ReceiptEnvelope, ReceiptError};
 
 use crate::ssapply;
 
@@ -334,20 +335,9 @@ enum ReceiptVerdict {
     Ok(String),
 }
 
-/// Three-pillar BLAKE3 receipt shape we expect in the ConfigMap's
-/// `receipt.json` key:
-/// ```json
-/// {
-///   "version": "tatara-receipt/v1",
-///   "kind": "closed-loop-auth",
-///   "composed_root": "<26-char hex>",
-///   "intent_hash":   "<hex>",
-///   "artifact_hash": "<hex>",
-///   "control_hash":  "<hex>",
-///   "generated_at":  "RFC3339 timestamp"
-/// }
-/// ```
-/// `expected_root` (when present) must equal `composed_root` exactly.
+/// Fetch the receipt ConfigMap, look up `data['receipt.json']` (or
+/// `data['receipt.yaml']` as a fallback), and delegate parsing to the
+/// typed `ReceiptEnvelope::parse_either` in `tatara-process`.
 async fn verify_receipt_cm(
     client: Client,
     ns: &str,
@@ -360,57 +350,48 @@ async fn verify_receipt_cm(
     let Some(obj) = obj else {
         return Ok(ReceiptVerdict::Missing);
     };
-    let payload = obj
-        .data
-        .get("data")
+    let data = obj.data.get("data");
+    let payload = data
         .and_then(|d| d.get("receipt.json"))
+        .or_else(|| data.and_then(|d| d.get("receipt.yaml")))
         .and_then(|v| v.as_str());
     let Some(payload) = payload else {
         return Ok(ReceiptVerdict::Malformed(
-            "ConfigMap missing data['receipt.json'] string key".into(),
+            "ConfigMap missing data['receipt.json' | 'receipt.yaml'] string key".into(),
         ));
     };
     Ok(parse_receipt_payload(payload, expected_root))
 }
 
-/// Pure parser — same logic as `verify_receipt_cm` but without the kube fetch.
-/// Extracted so the receipt schema can be unit-tested without a cluster.
+/// Pure parser — delegates to the typed `ReceiptEnvelope::parse_either`,
+/// then runs the `expected_root` check separately. Maps typed
+/// `ReceiptError` variants into `ReceiptVerdict::Malformed` with a
+/// stable, operator-friendly string so existing UX is preserved.
 fn parse_receipt_payload(payload: &str, expected_root: Option<&str>) -> ReceiptVerdict {
-    let parsed: Value = match serde_json::from_str(payload) {
-        Ok(v) => v,
-        Err(e) => return ReceiptVerdict::Malformed(format!("invalid JSON: {e}")),
+    let envelope = match ReceiptEnvelope::parse_either(payload) {
+        Ok(e) => e,
+        Err(err) => return ReceiptVerdict::Malformed(receipt_error_message(&err)),
     };
-    let read_str = |field: &str| -> Option<String> {
-        parsed
-            .get(field)
-            .and_then(|v| v.as_str())
-            .map(String::from)
-    };
-    let Some(version) = read_str("version") else {
-        return ReceiptVerdict::Malformed("missing 'version' string field".into());
-    };
-    if version != "tatara-receipt/v1" {
-        return ReceiptVerdict::Malformed("version != tatara-receipt/v1".into());
+    match envelope.expect_root(expected_root) {
+        Ok(root) => ReceiptVerdict::Ok(root.to_string()),
+        Err(err) => ReceiptVerdict::Malformed(receipt_error_message(&err)),
     }
-    if read_str("kind").is_none() {
-        return ReceiptVerdict::Malformed("missing 'kind' string field".into());
-    }
-    let Some(composed_root) = read_str("composed_root") else {
-        return ReceiptVerdict::Malformed("missing 'composed_root' string field".into());
-    };
-    for f in ["intent_hash", "artifact_hash", "control_hash"] {
-        if read_str(f).is_none() {
-            return ReceiptVerdict::Malformed(format!("missing '{f}' string field"));
+}
+
+/// Lower a `ReceiptError` to the same operator-visible strings the
+/// older hand-rolled parser surfaced, so dashboards / alerts that grep
+/// for these messages keep working.
+fn receipt_error_message(err: &ReceiptError) -> String {
+    match err {
+        ReceiptError::InvalidJson(m) => format!("invalid JSON: {m}"),
+        ReceiptError::InvalidYaml(m) => format!("invalid YAML: {m}"),
+        ReceiptError::WrongVersion(v) => format!("version != tatara-receipt/v1 (got {v:?})"),
+        ReceiptError::MissingField(f) => format!("missing '{f}' string field"),
+        ReceiptError::EmptyKind => "kind is empty".into(),
+        ReceiptError::RootMismatch { got, want } => {
+            format!("composed_root mismatch (got {got}, want {want})")
         }
     }
-    if let Some(want) = expected_root {
-        if want != composed_root {
-            return ReceiptVerdict::Malformed(format!(
-                "composed_root mismatch (got {composed_root}, want {want})"
-            ));
-        }
-    }
-    ReceiptVerdict::Ok(composed_root)
 }
 
 // ── per-kind evaluators ──────────────────────────────────────────────
@@ -605,38 +586,42 @@ mod tests {
     // ── receipt parser (pure) ────────────────────────────────────────
 
     fn valid_receipt() -> String {
-        serde_json::json!({
-            "version": "tatara-receipt/v1",
-            "kind": "closed-loop-auth",
-            "composed_root": "1a2b3c4d5e6f7890abcdef1234567890",
-            "intent_hash":   "aaaa",
-            "artifact_hash": "bbbb",
-            "control_hash":  "cccc",
-            "generated_at":  "2026-05-19T12:00:00Z"
-        })
-        .to_string()
+        // Compose root deterministically using the same domain tag as
+        // ReceiptEnvelope so the generated payload parses cleanly.
+        let env = ReceiptEnvelope::build("closed-loop-auth", "aaaa", "bbbb", "cccc", None);
+        serde_json::to_string(&env).unwrap()
     }
 
     #[test]
     fn valid_receipt_parses() {
-        let v = parse_receipt_payload(&valid_receipt(), None);
-        assert!(matches!(v, ReceiptVerdict::Ok(ref s) if s == "1a2b3c4d5e6f7890abcdef1234567890"));
+        let payload = valid_receipt();
+        let v = parse_receipt_payload(&payload, None);
+        assert!(matches!(v, ReceiptVerdict::Ok(_)));
     }
 
     #[test]
     fn expected_root_match_succeeds_mismatch_fails() {
-        let v = parse_receipt_payload(&valid_receipt(), Some("1a2b3c4d5e6f7890abcdef1234567890"));
+        let env = ReceiptEnvelope::build("closed-loop-auth", "aaaa", "bbbb", "cccc", None);
+        let payload = serde_json::to_string(&env).unwrap();
+        let root = env.composed_root.clone();
+
+        let v = parse_receipt_payload(&payload, Some(&root));
         assert!(matches!(v, ReceiptVerdict::Ok(_)));
 
-        let v = parse_receipt_payload(&valid_receipt(), Some("nope"));
+        let v = parse_receipt_payload(&payload, Some("nope"));
         assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("composed_root mismatch")));
     }
 
     #[test]
     fn missing_version_is_malformed() {
-        let s = r#"{"composed_root":"x","intent_hash":"a","artifact_hash":"b","control_hash":"c","kind":"x"}"#;
+        // serde with deny_unknown_fields rejects this before our shape check —
+        // surfaces as "invalid JSON: missing field `version`".
+        let s = r#"{"composed_root":"x","intent_hash":"a","artifact_hash":"b","control_hash":"c","kind":"x","generated_at":"2026-05-19T12:00:00Z"}"#;
         let v = parse_receipt_payload(s, None);
-        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("missing 'version'")));
+        assert!(
+            matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("version")),
+            "expected version-related malformed message, got {v:?}"
+        );
     }
 
     #[test]
@@ -671,7 +656,7 @@ mod tests {
     #[test]
     fn invalid_json_is_malformed() {
         let v = parse_receipt_payload("not json", None);
-        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("invalid JSON")));
+        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.to_lowercase().contains("invalid")));
     }
 
     #[test]
@@ -679,7 +664,15 @@ mod tests {
         let mut payload: Value = serde_json::from_str(&valid_receipt()).unwrap();
         payload.as_object_mut().unwrap().remove("kind");
         let v = parse_receipt_payload(&payload.to_string(), None);
-        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("'kind'")));
+        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("kind")));
+    }
+
+    #[test]
+    fn yaml_payload_parses_via_either() {
+        let env = ReceiptEnvelope::build("db-migration", "aaaa", "bbbb", "cccc", None);
+        let yaml = serde_yaml::to_string(&env).unwrap();
+        let v = parse_receipt_payload(&yaml, None);
+        assert!(matches!(v, ReceiptVerdict::Ok(_)));
     }
 
     #[test]

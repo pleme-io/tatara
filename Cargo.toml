@@ -30,6 +30,9 @@ members = [
     "tatara-mcp",
     "tatara-net",
     "tatara-testing",
+    # Closed-loop auth probe — emits a tatara-receipt/v1 envelope to a
+    # ConfigMap; consumed by tatara-reconciler's ClosedLoopAuth evaluator.
+    "tatara-closed-loop-probe",
     "ro-cli",
 ]
 resolver = "2"

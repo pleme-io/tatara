@@ -1,0 +1,45 @@
+[package]
+name = "tatara-closed-loop-probe"
+description = "Closed-loop authentication probe — emits a tatara-receipt/v1 BLAKE3 envelope to a ConfigMap after verifying a system's bundled issuer authenticates its bundled consumer"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "closed-loop-probe"
+path = "src/main.rs"
+
+[dependencies]
+# Typed receipt envelope + Process types
+tatara-process = { path = "../tatara-process" }
+
+# K8s API for ConfigMap PATCH (no shell wrapping kubectl)
+kube = { version = "0.99", features = ["runtime", "client"] }
+k8s-openapi = { version = "0.24", features = ["latest"] }
+
+# Async runtime
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# HTTP client for the issuer/consumer/JWKS endpoints
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Hashing + serialization
+blake3 = "1"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+humantime = "2"
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Errors + logging
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }

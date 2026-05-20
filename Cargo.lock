@@ -5764,6 +5764,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "tatara-closed-loop-probe"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "chrono",
+ "clap",
+ "hex",
+ "humantime",
+ "k8s-openapi",
+ "kube",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tatara-process",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tatara-core"
 version = "0.2.0"
 dependencies = [

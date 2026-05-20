@@ -68,6 +68,12 @@ manifesto + anti-patterns for the pattern.
 | `tatara-testing` | Test fixtures and helpers |
 | `ro-cli` | Read-only CLI |
 
+### Attestation tooling
+
+| Crate | Purpose |
+|-------|---------|
+| `tatara-closed-loop-probe` | Closed-loop auth probe binary — verifies a system's bundled identity issuer authenticates its own bundled consumer, then emits a typed `tatara-receipt/v1` envelope to a ConfigMap. Pure Rust (reqwest + blake3 + kube-rs), NO SHELL. Consumed by `akeyless-closed-loop-probe-pleme` Helm chart; substrate primitive that any future closed-loop-testable consumer (databases, identity providers, message brokers) can shape their probe binary around. |
+
 ### Deprecated
 
 | Crate | Replaced by |

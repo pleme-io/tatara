@@ -42,15 +42,18 @@
   "examples/process/observability-stack.lisp"
   "examples/process/observability-stack.nix")
 
-;; ─── Ephemeral env reference form ─────────────────────────────────
-;; (defephemeral …) compiles via tatara-process's typed EphemeralSpec
-;; surface. The `:domain ephemeral` switch selects compile_ephemeral_source
-;; in tatara-check. `:requires` tags are ephemeral-specific.
+;; ─── Ephemeral env reference form (four-surfaces twin) ───────────
+;; Both Lisp and YAML files describe the SAME ProcessSpec. The Lisp
+;; compiles via `:domain ephemeral` (EphemeralSpec → ProcessSpec via
+;; typed From). The YAML parses as a Process — same wire format the
+;; reconciler reads from kubectl.
 (lisp-compiles
   "examples/process/akeyless-ephemeral.lisp"
   :domain ephemeral
   :min-definitions 1
   :requires (aplicacao ttl teardown postconditions closed-loop-auth))
+
+(yaml-parses-as Process "examples/process/akeyless-ephemeral.yaml")
 
 ;; ─── Tier 1 registry demo ─────────────────────────────────────────
 ;; These keywords aren't built-in — they're `#[derive(TataraDomain)]`

@@ -4,6 +4,7 @@
 //! Clusters, HelmReleases, migrations, tests — all are Processes.
 //! The reconciliation loop *is* Unix: fork → exec → wait → exit → reap.
 
+pub mod allocation;
 pub mod attestation;
 pub mod boundary;
 pub mod classification;
@@ -15,6 +16,7 @@ pub mod intent;
 pub mod lifetime;
 pub mod lifetime_clock;
 pub mod phase;
+pub mod pool;
 pub mod receipt;
 pub mod signal;
 pub mod spec;
@@ -22,6 +24,10 @@ pub mod status;
 pub mod table;
 
 pub mod prelude {
+    pub use crate::allocation::{
+        AllocationCondition, AllocationPhase, AllocationSpec, AllocationStatus,
+        EphemeralAllocation, Requestor,
+    };
     pub use crate::attestation::ProcessAttestation;
     pub use crate::boundary::{Boundary, Condition, ConditionKind};
     pub use crate::classification::{
@@ -41,6 +47,10 @@ pub mod prelude {
     };
     pub use crate::lifetime_clock::{evaluate as lifetime_clock_evaluate, AutoTerminate};
     pub use crate::phase::ProcessPhase;
+    pub use crate::pool::{
+        AllocationRef, EphemeralPool, MatchKey, MemberState, PoolCondition, PoolMember,
+        PoolPhase, PoolSelector, PoolSpec, PoolStatus, ReturnPolicy,
+    };
     pub use crate::receipt::{ReceiptEnvelope, ReceiptError, RECEIPT_VERSION};
     pub use crate::signal::{ProcessSignal, SighupStrategy};
     pub use crate::spec::{DependsOn, IdentitySpec, MustReachPhase, SignalPolicy};

@@ -42,6 +42,11 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
         // the reconciler emits no K8s resources for them. Intent bytes
         // still feed the three-pillar attestation chain.
         IntentVariant::Guest(g) => (vec![], serde_json::to_vec(g).unwrap_or_default()),
+        // Aplicacao intents render to a FluxCD HelmRelease — full emission
+        // lands in P2 of the ephemeral-env destination. For now the intent
+        // bytes are captured so the three-pillar attestation chain still
+        // closes over the chart+profile+overlay identity.
+        IntentVariant::Aplicacao(a) => (vec![], serde_json::to_vec(a).unwrap_or_default()),
     };
 
     let artifact_bytes = canonical_bytes(&resources);

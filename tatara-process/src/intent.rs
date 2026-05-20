@@ -2,15 +2,19 @@
 //!
 //! Exactly one field on `Intent` must be set. The reconciler's RENDER phase
 //! selects a driver based on which variant is present:
-//!   - `nix`:       tatara-engine `nix_eval` → resources
-//!   - `flux`:      pass through an existing `GitRepository`
-//!   - `lisp`:      tatara-lisp reader + macroexpander → resources
-//!   - `container`: emit Deployment/StatefulSet/etc directly (no Helm)
-//!   - `guest`:     tatara-hospedeiro supervises a Linux VM or WASM
-//!                  component. See `tatara/docs/declarative-guests.md`.
-//!                  The GuestSpec itself is type-erased here (JSON value)
-//!                  so tatara-process stays decoupled from tatara-vm;
-//!                  hospedeiro re-parses the value as GuestSpec on boot.
+//!   - `nix`:        tatara-engine `nix_eval` → resources
+//!   - `flux`:       pass through an existing `GitRepository`
+//!   - `lisp`:       tatara-lisp reader + macroexpander → resources
+//!   - `container`:  emit Deployment/StatefulSet/etc directly (no Helm)
+//!   - `aplicacao`:  emit a FluxCD `HelmRelease` for a pleme-io typed
+//!                   Aplicacao chart (e.g. `lareira-akeyless-deployment`).
+//!                   This is the canonical handoff from caixa-shaped
+//!                   declarations to in-cluster reconciliation.
+//!   - `guest`:      tatara-hospedeiro supervises a Linux VM or WASM
+//!                   component. See `tatara/docs/declarative-guests.md`.
+//!                   The GuestSpec itself is type-erased here (JSON value)
+//!                   so tatara-process stays decoupled from tatara-vm;
+//!                   hospedeiro re-parses the value as GuestSpec on boot.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -29,6 +33,8 @@ pub struct Intent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub container: Option<ContainerIntent>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aplicacao: Option<AplicacaoIntent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub guest: Option<GuestIntent>,
 }
 
@@ -39,12 +45,15 @@ pub enum IntentVariant<'a> {
     Flux(&'a FluxIntent),
     Lisp(&'a LispIntent),
     Container(&'a ContainerIntent),
+    Aplicacao(&'a AplicacaoIntent),
     Guest(&'a GuestIntent),
 }
 
 #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum IntentError {
-    #[error("intent has no variant set (one of nix/flux/lisp/container/guest required)")]
+    #[error(
+        "intent has no variant set (one of nix/flux/lisp/container/aplicacao/guest required)"
+    )]
     Empty,
     #[error("intent has multiple variants set; exactly one required")]
     Ambiguous,
@@ -58,6 +67,7 @@ impl Intent {
             self.flux.is_some(),
             self.lisp.is_some(),
             self.container.is_some(),
+            self.aplicacao.is_some(),
             self.guest.is_some(),
         ]
         .into_iter()
@@ -73,6 +83,8 @@ impl Intent {
                 IntentVariant::Lisp(l)
             } else if let Some(c) = &self.container {
                 IntentVariant::Container(c)
+            } else if let Some(a) = &self.aplicacao {
+                IntentVariant::Aplicacao(a)
             } else if let Some(g) = &self.guest {
                 IntentVariant::Guest(g)
             } else {
@@ -156,6 +168,52 @@ fn default_reader() -> String {
 }
 fn default_version() -> String {
     "v1".to_string()
+}
+
+/// Aplicacao intent — emit a FluxCD `HelmRelease` for a pleme-io
+/// typed Aplicacao chart. The chart owns its own sub-chart DAG;
+/// the reconciler only watches `HelmRelease.status.conditions[type=Ready]`.
+///
+/// This is the canonical handoff from caixa `(defaplicacao …)` declarations
+/// (which the typescape renders to this Intent) into in-cluster
+/// reconciliation. Closed-loop ephemeral test environments use this
+/// variant with `:lifetime :ephemeral` on the surrounding ProcessSpec.
+///
+/// Example (Lisp):
+/// ```lisp
+/// :intent (:aplicacao
+///           (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+///            :version "0.5.5"
+///            :profile "gateway-with-internal-saas"
+///            :values-overlay (:cluster (:name "ephemeral-test-01")
+///                             :persistence false
+///                             :compliance (:overlays []))))
+/// ```
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AplicacaoIntent {
+    /// Helm chart reference. OCI (`oci://…`) or repo-relative (`pleme-io/lareira-akeyless-deployment`).
+    pub chart_ref: String,
+    /// Chart version (Helm semver constraint; `">=0.5.5"` allowed).
+    pub version: String,
+    /// Architecture profile from the chart's `values/*.yaml` family
+    /// (e.g. `gateway-with-internal-saas`, `saas-internal`).
+    /// Leave empty to use chart defaults.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub profile: String,
+    /// Typed values overlay merged on top of the profile.
+    /// Free-form JSON to keep tatara-process decoupled from chart schemas.
+    #[serde(default)]
+    pub values_overlay: serde_json::Value,
+    /// HelmRelease name override. Defaults to the Process's PID-derived name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_name: Option<String>,
+    /// Target namespace for the chart. Defaults to the Process's namespace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_namespace: Option<String>,
+    /// Install timeout (`humantime` duration). Empty = chart-controller default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub install_timeout: Option<String>,
 }
 
 /// Container intent — direct Deployment/StatefulSet/etc, no Helm.
@@ -305,6 +363,56 @@ mod tests {
                 spec: serde_json::json!({"name": "x"}),
                 state_dir: None,
                 allow_remote_build: None,
+            }),
+            ..Intent::default()
+        };
+        assert_eq!(i.variant().unwrap_err(), IntentError::Ambiguous);
+    }
+
+    #[test]
+    fn aplicacao_intent_selects_its_variant() {
+        let i = Intent {
+            aplicacao: Some(AplicacaoIntent {
+                chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment".into(),
+                version: "0.5.5".into(),
+                profile: "gateway-with-internal-saas".into(),
+                values_overlay: serde_json::json!({ "cluster": { "name": "test-01" } }),
+                release_name: None,
+                target_namespace: None,
+                install_timeout: Some("25m".into()),
+            }),
+            ..Intent::default()
+        };
+        match i.variant().unwrap() {
+            IntentVariant::Aplicacao(a) => {
+                assert_eq!(a.profile, "gateway-with-internal-saas");
+                assert_eq!(a.version, "0.5.5");
+                assert_eq!(a.install_timeout.as_deref(), Some("25m"));
+            }
+            other => panic!("expected Aplicacao, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn aplicacao_plus_flux_is_ambiguous() {
+        let i = Intent {
+            aplicacao: Some(AplicacaoIntent {
+                chart_ref: "x".into(),
+                version: "1".into(),
+                profile: String::new(),
+                values_overlay: serde_json::Value::Null,
+                release_name: None,
+                target_namespace: None,
+                install_timeout: None,
+            }),
+            flux: Some(FluxIntent {
+                git_repository: "g".into(),
+                path: "p".into(),
+                git_repository_namespace: None,
+                target_namespace: None,
+                decrypt_sops: true,
+                helm_chart: None,
+                helm_values: None,
             }),
             ..Intent::default()
         };

@@ -9,8 +9,10 @@ pub mod boundary;
 pub mod classification;
 pub mod compliance;
 pub mod crd;
+pub mod ephemeral;
 pub mod identity;
 pub mod intent;
+pub mod lifetime;
 pub mod phase;
 pub mod signal;
 pub mod spec;
@@ -26,10 +28,14 @@ pub mod prelude {
     };
     pub use crate::compliance::{ComplianceBinding, ComplianceSpec, VerificationPhase};
     pub use crate::crd::{Process, ProcessSpec, ProcessStatus};
+    pub use crate::ephemeral::{compile_ephemeral_source, EphemeralSpec};
     pub use crate::identity::{content_hash, derive_identity, format_process_address, Identity};
     pub use crate::intent::{
-        ContainerIntent, FluxIntent, GuestIntent, Intent, IntentVariant, LispIntent, NixIntent,
-        WorkloadKind,
+        AplicacaoIntent, ContainerIntent, FluxIntent, GuestIntent, Intent, IntentVariant,
+        LispIntent, NixIntent, WorkloadKind,
+    };
+    pub use crate::lifetime::{
+        EphemeralLifetime, Lifetime, LifetimeVariant, PermanentLifetime, TeardownPolicy,
     };
     pub use crate::phase::ProcessPhase;
     pub use crate::signal::{ProcessSignal, SighupStrategy};
@@ -178,5 +184,69 @@ mod compile_tests {
         assert!(d.spec.boundary.postconditions.is_empty());
         assert!(d.spec.compliance.bindings.is_empty());
         assert!(!d.spec.suspended);
+        // Lifetime defaults to Permanent (no variant set, resolver still works).
+        assert!(d.spec.lifetime.is_default());
+        assert!(!d.spec.lifetime.is_ephemeral());
+    }
+
+    /// End-to-end: a `(defpoint …)` form may carry the full ephemeral
+    /// shape directly — `:intent (:aplicacao …)` + `:lifetime (:ephemeral …)`.
+    /// This is what the `(defephemeral …)` sugar lowers to via `From`.
+    #[test]
+    fn defpoint_with_aplicacao_intent_and_ephemeral_lifetime() {
+        use crate::intent::IntentVariant;
+        use crate::lifetime::{LifetimeVariant, TeardownPolicy};
+        let src = r#"
+            (defpoint akeyless-closed-loop-attest
+              :classification (:point-type Gate :substrate Compute)
+              :intent (:aplicacao
+                        (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+                         :version "0.5.5"
+                         :profile "gateway-with-internal-saas"
+                         :values-overlay (:cluster (:name "ephemeral-test-01"))
+                         :target-namespace "akeyless-test"))
+              :boundary (:postconditions
+                          ((:kind HelmReleaseReleased
+                            :params (:name "akeyless-saas-consolidated"
+                                     :namespace "akeyless-test"))
+                           (:kind ClosedLoopAuth
+                            :params (:issuer (:service "akeyless-saas-akeyless-gator" :port 8080)
+                                     :consumer (:service "akeyless-saas-akeyless-gateway" :port 8000)
+                                     :probeImage "ghcr.io/pleme-io/closed-loop-probe:0.1.0"))))
+              :lifetime (:ephemeral (:ttl "1h"
+                                     :teardown-policy OnAttested
+                                     :max-concurrent 1)))
+        "#;
+        let defs = compile_source(src).expect("compile");
+        assert_eq!(defs.len(), 1);
+        let d = &defs[0];
+
+        // Aplicacao intent landed.
+        match d.spec.intent.variant().unwrap() {
+            IntentVariant::Aplicacao(a) => {
+                assert_eq!(a.profile, "gateway-with-internal-saas");
+                assert_eq!(a.version, "0.5.5");
+                assert_eq!(a.target_namespace.as_deref(), Some("akeyless-test"));
+                assert_eq!(a.values_overlay["cluster"]["name"], "ephemeral-test-01");
+            }
+            other => panic!("expected Aplicacao, got {other:?}"),
+        }
+
+        // Ephemeral lifetime landed with the right teardown policy.
+        match d.spec.lifetime.variant().unwrap() {
+            LifetimeVariant::Ephemeral(e) => {
+                assert_eq!(e.ttl, "1h");
+                assert_eq!(e.teardown_policy, TeardownPolicy::OnAttested);
+                assert_eq!(e.max_concurrent, 1);
+            }
+            other => panic!("expected ephemeral, got {other:?}"),
+        }
+
+        // Two typed postconditions including ClosedLoopAuth.
+        assert_eq!(d.spec.boundary.postconditions.len(), 2);
+        assert_eq!(
+            d.spec.boundary.postconditions[1].kind,
+            crate::boundary::ConditionKind::ClosedLoopAuth
+        );
     }
 }

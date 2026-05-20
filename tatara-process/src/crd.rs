@@ -12,6 +12,7 @@ use crate::classification::Classification;
 use crate::compliance::ComplianceSpec;
 use crate::identity::Identity;
 use crate::intent::Intent;
+use crate::lifetime::Lifetime;
 use crate::phase::ProcessPhase;
 use crate::signal::ProcessSignal;
 use crate::spec::{DependsOn, IdentitySpec, SignalPolicy};
@@ -88,6 +89,11 @@ pub struct ProcessSpec {
     /// Signal policy (grace, SIGHUP strategy, start-suspended).
     #[serde(default)]
     pub signals: SignalPolicy,
+
+    /// Lifetime — `Permanent` (default, re-converging) or `Ephemeral`
+    /// (auto-SIGTERM per `teardown_policy` + TTL clock).
+    #[serde(default, skip_serializing_if = "Lifetime::is_default")]
+    pub lifetime: Lifetime,
 
     /// Soft-suspend marker — reconciler treats as SIGSTOP.
     /// Same effect as delivering SIGSTOP, but persistent across restarts.
@@ -188,6 +194,7 @@ mod tests {
             compliance: Default::default(),
             depends_on: vec![],
             signals: Default::default(),
+            lifetime: Default::default(),
             suspended: false,
         };
         let yaml = serde_yaml::to_string(&spec).unwrap();

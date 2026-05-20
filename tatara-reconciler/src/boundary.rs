@@ -106,6 +106,12 @@ pub async fn evaluate(
         ConditionKind::NixEval => Ok(Satisfaction::Unknown(
             "NixEval evaluator not yet implemented".into(),
         )),
+        ConditionKind::JobAttested => Ok(Satisfaction::Unknown(
+            "JobAttested evaluator pending P3 (kenshi-runner lift)".into(),
+        )),
+        ConditionKind::ClosedLoopAuth => Ok(Satisfaction::Unknown(
+            "ClosedLoopAuth evaluator pending P4 (closed-loop probe handler)".into(),
+        )),
     }
 }
 

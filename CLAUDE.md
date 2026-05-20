@@ -51,7 +51,7 @@ manifesto + anti-patterns for the pattern.
 
 | Crate | Purpose |
 |-------|---------|
-| `tatara-process` | **Process + ProcessTable CRDs** — K8s-as-Unix-processes wire format (`tatara.pleme.io/v1alpha1`). `ProcessSpec` derives `TataraDomain` so `(defpoint …)` in Lisp is a first-class authoring surface. Houses `compile_source` + `tatara-lispc` binary. Absorbs `ConvergenceProcess`, `ConvergenceService`, `NixBuild`. |
+| `tatara-process` | **Process + ProcessTable CRDs** — K8s-as-Unix-processes wire format (`tatara.pleme.io/v1alpha1`). `ProcessSpec` derives `TataraDomain` so `(defpoint …)` in Lisp is a first-class authoring surface. Houses `compile_source` + `tatara-lispc` binary. Absorbs `ConvergenceProcess`, `ConvergenceService`, `NixBuild`. **Ephemeral surface** (P0, 2026-05): adds `Intent::Aplicacao`, `Lifetime::Ephemeral`, `ConditionKind::{JobAttested,ClosedLoopAuth}`, and a typed `EphemeralSpec` sugar (`(defephemeral …)`) that lowers to `ProcessSpec` via `From`. |
 | `tatara-lattice` | Lattice algebra over `Classification` — `meet` / `join` / `leq` / `Baseline`. Replaces `qualities_match`. |
 | `tatara-lisp` | **Homoiconic S-expression surface.** Reader, AST, macroexpander (quasi-quote + unquote + splice + `&rest`), `TataraDomain` trait, domain registry, `TypedRewriter` (self-optimization primitive), generic `compile_typed`/`compile_named`, iac-forge canonical-form interop (feature-gated). |
 | `tatara-lisp-derive` | **`#[derive(TataraDomain)]`** — proc macro that auto-generates a Lisp compiler for any struct with `serde::Deserialize`. Universal-Deserialize fallthrough handles enums, nested structs, `Vec<Nested>`. Honors `#[serde(default)]`. |
@@ -99,15 +99,25 @@ A single `Process` carries:
    Content-addressable BLAKE3 (128-bit, 26-char base32) — ported from
    `convergence-controller/src/identity.rs`.
 2. **Classification** — 6-axis lattice position (re-exports from `tatara-core`).
-3. **Intent** — one of `nix` / `flux` / `lisp` / `container`. The RENDER phase
-   dispatches on the variant.
+3. **Intent** — one of `nix` / `flux` / `lisp` / `container` / `aplicacao` /
+   `guest`. The RENDER phase dispatches on the variant. `aplicacao` emits a
+   FluxCD `HelmRelease` for a pleme-io typed Aplicacao chart — the canonical
+   handoff from caixa `(defaplicacao …)` declarations.
 4. **Boundary** — `preconditions` gate Running; `postconditions` gate Attested.
    `ConditionKind`: `ProcessPhase`, `KustomizationHealthy`, `HelmReleaseReleased`,
-   `PromQL`, `Cel`, `NixEval`.
+   `PromQL`, `Cel`, `NixEval`, `JobAttested`, `ClosedLoopAuth`. The
+   `ClosedLoopAuth` kind turns "the gateway↔SaaS loop holds" from an
+   assertion into a theorem provable on every ephemeral run.
 5. **Compliance bindings** — verified at `PlanTime` | `AtBoundary` |
    `PostConvergence`.
 6. **Signals** — `SIGHUP | SIGTERM | SIGKILL | SIGUSR1 | SIGUSR2 | SIGSTOP |
    SIGCONT` delivered via `tatara.pleme.io/signal` annotation.
+7. **Lifetime** — `Permanent` (default; SIGHUP re-converges) or `Ephemeral`
+   (auto-SIGTERM on `Attested` / `Failed` per `TeardownPolicy`, with TTL).
+   Ephemeral envs are a `Process` with `:intent (:aplicacao …)` plus
+   `:lifetime (:ephemeral …)` — no new CRD, no new controller. The
+   `(defephemeral …)` keyword is sugar that `From<EphemeralSpec>` lowers
+   into a `ProcessSpec` of this exact shape.
 
 ### FluxCD is `exec(2)`
 

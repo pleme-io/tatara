@@ -340,6 +340,7 @@ mod tests {
                 ttl: "1h".into(),
                 teardown_policy: tatara_process::lifetime::TeardownPolicy::Always,
                 max_concurrent: 0,
+                exports: vec![],
             }),
             ..Default::default()
         };

@@ -136,6 +136,11 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                     ttl: ttl.clone(),
                     teardown_policy: TeardownPolicy::Always,
                     max_concurrent: 0,
+                    // Allocation-patch path doesn't add new exports;
+                    // any :exports on the underlying pool template
+                    // are already on spec.lifetime.ephemeral when
+                    // the pool reconciler materialized the Process.
+                    exports: vec![],
                 }),
             };
             let proc_patch = json!({

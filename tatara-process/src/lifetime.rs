@@ -17,6 +17,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::export::ExportSpec;
+
 /// Lifetime slot on `ProcessSpec`. Exactly one variant should be populated;
 /// when both are unset the resolver returns `Permanent`.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
@@ -101,6 +103,18 @@ pub struct EphemeralLifetime {
     /// of `Pending`.
     #[serde(default = "default_max_concurrent")]
     pub max_concurrent: u32,
+
+    /// Declared exports — what artifacts survive teardown and where
+    /// they flow. Empty (default) = nothing survives, matching the
+    /// "ephemeral leaves no trace" posture. Each `ExportSpec` is
+    /// independently triggered during the reconciler's `Releasing`
+    /// phase against the terminal `ProcessPhase` reached.
+    ///
+    /// See [`crate::export`] for the full type. All exports flow
+    /// through the pleme-io Vector + NATS layer — there is no
+    /// per-spec ad-hoc sink.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exports: Vec<ExportSpec>,
 }
 
 impl Default for EphemeralLifetime {
@@ -109,6 +123,7 @@ impl Default for EphemeralLifetime {
             ttl: default_ttl(),
             teardown_policy: TeardownPolicy::default(),
             max_concurrent: default_max_concurrent(),
+            exports: Vec::new(),
         }
     }
 }
@@ -206,13 +221,57 @@ mod tests {
                 ttl: "30m".into(),
                 teardown_policy: TeardownPolicy::OnAttested,
                 max_concurrent: 4,
+                exports: vec![],
             }),
             ..Lifetime::default()
         };
         let yaml = serde_yaml::to_string(&l).unwrap();
         assert!(yaml.contains("ttl: 30m"));
         assert!(yaml.contains("teardownPolicy: OnAttested"));
+        // Empty exports skip-serialize — explicit zero-trace default.
+        assert!(!yaml.contains("exports"));
         let back: Lifetime = serde_yaml::from_str(&yaml).unwrap();
         assert!(back.is_ephemeral());
+        assert!(back.ephemeral.unwrap().exports.is_empty());
+    }
+
+    #[test]
+    fn exports_round_trip_through_lifetime() {
+        use crate::export::{
+            ArtifactSource, ExportSpec, ExportTrigger, HttpEventChannel, ReceiptsSource,
+            VectorChannel,
+        };
+        let l = Lifetime {
+            ephemeral: Some(EphemeralLifetime {
+                ttl: "30m".into(),
+                teardown_policy: TeardownPolicy::OnAttested,
+                max_concurrent: 1,
+                exports: vec![ExportSpec {
+                    source: ArtifactSource {
+                        receipts: Some(ReceiptsSource::default()),
+                        ..ArtifactSource::default()
+                    },
+                    channel: VectorChannel {
+                        http_event: Some(HttpEventChannel {
+                            endpoint: None,
+                            signal_type: "receipt".into(),
+                        }),
+                        ..VectorChannel::default()
+                    },
+                    when: ExportTrigger::OnAttested,
+                    experiment_id_override: None,
+                }],
+            }),
+            ..Lifetime::default()
+        };
+        let yaml = serde_yaml::to_string(&l).unwrap();
+        assert!(yaml.contains("exports:"));
+        assert!(yaml.contains("receipts: {}"));
+        assert!(yaml.contains("signalType: receipt"));
+        let back: Lifetime = serde_yaml::from_str(&yaml).unwrap();
+        let e = back.ephemeral.unwrap();
+        assert_eq!(e.exports.len(), 1);
+        assert!(e.exports[0].source.receipts.is_some());
+        assert!(e.exports[0].channel.http_event.is_some());
     }
 }

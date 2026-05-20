@@ -11,6 +11,7 @@ pub mod classification;
 pub mod compliance;
 pub mod crd;
 pub mod ephemeral;
+pub mod export;
 pub mod identity;
 pub mod intent;
 pub mod lifetime;
@@ -37,6 +38,12 @@ pub mod prelude {
     pub use crate::compliance::{ComplianceBinding, ComplianceSpec, VerificationPhase};
     pub use crate::crd::{Process, ProcessSpec, ProcessStatus};
     pub use crate::ephemeral::{compile_ephemeral_source, EphemeralSpec};
+    pub use crate::export::{
+        ArtifactError, ArtifactSource, ArtifactVariant, ChannelError, ChannelVariant, ExportSpec,
+        ExportTrigger, HttpEventChannel, NatsSubjectChannel, ProcessSnapshotSource, ReceiptsSource,
+        ReportFormat, RunMarkerSource, StdoutChannel, TestReportSource, VectorChannel,
+        DEFAULT_NATS_URL, DEFAULT_VECTOR_INGEST,
+    };
     pub use crate::identity::{content_hash, derive_identity, format_process_address, Identity};
     pub use crate::intent::{
         AplicacaoIntent, ContainerIntent, FluxIntent, GuestIntent, Intent, IntentVariant,

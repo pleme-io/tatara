@@ -158,6 +158,7 @@ mod tests {
                     ttl: ttl.into(),
                     teardown_policy: teardown,
                     max_concurrent: 1,
+                    exports: vec![],
                 }),
                 ..Lifetime::default()
             },

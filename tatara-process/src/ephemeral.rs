@@ -37,6 +37,7 @@ use crate::classification::{
     Classification, ConvergencePointType, DataClassification, Horizon, SubstrateType,
 };
 use crate::crd::ProcessSpec;
+use crate::export::ExportSpec;
 use crate::intent::{AplicacaoIntent, Intent};
 use crate::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
 
@@ -90,6 +91,13 @@ pub struct EphemeralSpec {
     /// Optional parent PID path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+
+    /// Declared exports — sugar that propagates through to
+    /// `lifetime.ephemeral.exports` on the lowered `ProcessSpec`.
+    /// Default empty = zero-trace ephemeral (nothing survives
+    /// teardown). See [`crate::export`] for the full type.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exports: Vec<ExportSpec>,
 }
 
 fn default_ttl() -> String {
@@ -125,6 +133,7 @@ impl From<EphemeralSpec> for ProcessSpec {
                     ttl: e.ttl,
                     teardown_policy: e.teardown,
                     max_concurrent: e.max_concurrent,
+                    exports: e.exports,
                 }),
                 ..Lifetime::default()
             },
@@ -192,6 +201,7 @@ mod tests {
             verify_timeout: None,
             classification: None,
             parent: None,
+            exports: vec![],
         };
         let ps: ProcessSpec = e.into();
         // Intent must resolve to Aplicacao.
@@ -296,6 +306,102 @@ mod tests {
         assert_eq!(ps.boundary.postconditions.len(), 2);
     }
 
+    /// End-to-end: the `:exports` slot on `(defephemeral …)` compiles
+    /// into typed `ExportSpec` values via the Universal-Deserialize
+    /// fallthrough — no per-domain keyword handlers needed.
+    ///
+    /// Receipts (empty-body source) is exercised via the Rust serde
+    /// path only (see `export::tests::export_spec_serde_round_trip`).
+    /// tatara-lisp's empty-kw-form `(:)` currently parses as a single-
+    /// element array rather than a JSON `{}`; the same limitation
+    /// affects `(:permanent)` on Lifetime. Tracked: extend the reader
+    /// to accept `(:foo (:))` ⇒ `{"foo": {}}` as a typed-empty form,
+    /// then re-enable Receipts here.
+    #[test]
+    fn exports_lisp_round_trip() {
+        use crate::export::{ArtifactVariant, ChannelVariant, ExportTrigger, ReportFormat};
+        let src = r#"
+            (defephemeral akeyless-closed-loop-attest
+              :aplicacao (:chart-ref "oci://x"
+                          :version "1.0.0"
+                          :profile "minimal"
+                          :values-overlay ())
+              :ttl "30m"
+              :teardown OnAttested
+              :exports
+                ((:source  (:test-report (:configmap "junit-results"
+                                          :key       "junit.xml"
+                                          :format    Junit))
+                  :channel (:nats-subject (:subject "pleme.pleme-dev.ephemeral.r1.test-report"
+                                           :stream  "EPHEMERAL_TEST_REPORTS"))
+                  :when    OnAttested)
+                 (:source  (:test-report (:configmap "junit-results"
+                                          :key       "junit.xml"
+                                          :format    Junit))
+                  :channel (:http-event (:signal-type "test-report"))
+                  :when    Always)
+                 (:source  (:run-marker (:labels (:run-id "r1" :phase "end")))
+                  :channel (:http-event (:signal-type "ephemeral-marker"))
+                  :when    Always)))
+        "#;
+        let defs = compile_ephemeral_source(src).expect("compile");
+        assert_eq!(defs.len(), 1);
+        let d = &defs[0];
+        assert_eq!(d.spec.exports.len(), 3);
+
+        // First export — TestReport → NATS subject + OnAttested
+        let r = &d.spec.exports[0];
+        match r.source.variant().unwrap() {
+            ArtifactVariant::TestReport(tr) => {
+                assert_eq!(tr.configmap, "junit-results");
+                assert_eq!(tr.format, ReportFormat::Junit);
+            }
+            other => panic!("expected TestReport, got {other:?}"),
+        }
+        match r.channel.variant().unwrap() {
+            ChannelVariant::NatsSubject(n) => {
+                assert_eq!(n.subject, "pleme.pleme-dev.ephemeral.r1.test-report");
+                assert_eq!(n.stream, "EPHEMERAL_TEST_REPORTS");
+            }
+            other => panic!("expected NatsSubject, got {other:?}"),
+        }
+        assert_eq!(r.when, ExportTrigger::OnAttested);
+
+        // Second export — TestReport → HTTP + Always
+        let t = &d.spec.exports[1];
+        match t.channel.variant().unwrap() {
+            ChannelVariant::HttpEvent(h) => assert_eq!(h.signal_type, "test-report"),
+            other => panic!("expected HttpEvent, got {other:?}"),
+        }
+        assert_eq!(t.when, ExportTrigger::Always);
+
+        // Third export — RunMarker (BTreeMap<String,String> round-trip).
+        // tatara-lisp lowercases + normalizes keyword keys before
+        // handing off to serde_json — kebab `:run-id` may land as
+        // either `run-id` or `runId` depending on the reader path.
+        // Accept either; the round-trip property under test is
+        // "label survives compile" not "exact case-form".
+        let m = &d.spec.exports[2];
+        match m.source.variant().unwrap() {
+            ArtifactVariant::RunMarker(rm) => {
+                assert_eq!(rm.labels.len(), 2);
+                let run_id = rm
+                    .labels
+                    .get("run-id")
+                    .or_else(|| rm.labels.get("runId"))
+                    .or_else(|| rm.labels.get("run_id"))
+                    .expect("run-id label present under some normalization");
+                assert_eq!(run_id, "r1");
+                assert_eq!(rm.labels.get("phase").map(String::as_str), Some("end"));
+            }
+            other => panic!("expected RunMarker, got {other:?}"),
+        }
+
+        // Lowered ProcessSpec carries the exports through unchanged.
+        let ps: ProcessSpec = d.spec.clone().into();
+        assert_eq!(ps.lifetime.ephemeral.as_ref().unwrap().exports.len(), 3);
+    }
+
     #[test]
     fn from_impl_clears_other_intent_variants() {
         // Even if someone constructs an EphemeralSpec by hand and the
@@ -311,6 +417,7 @@ mod tests {
             verify_timeout: None,
             classification: None,
             parent: Some("seph.1".into()),
+            exports: vec![],
         };
         let ps: ProcessSpec = e.into();
         assert!(ps.intent.nix.is_none());

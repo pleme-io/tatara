@@ -165,6 +165,7 @@ mod tests {
             verify_timeout: None,
             classification: None,
             parent: None,
+            exports: vec![],
         }
     }
 

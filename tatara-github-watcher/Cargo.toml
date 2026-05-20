@@ -1,0 +1,53 @@
+[package]
+name = "tatara-github-watcher"
+description = "GitHub webhook receiver — translates org-wide PR + push + branch events into EphemeralAllocation CRs the pool reconciler then routes to a matching EphemeralPool."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "tatara-github-watcher"
+path = "src/main.rs"
+
+[lib]
+name = "tatara_github_watcher"
+path = "src/lib.rs"
+
+[dependencies]
+tatara-process = { path = "../tatara-process" }
+
+# HTTP server
+axum = { version = "0.8", features = ["json", "macros"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["trace"] }
+
+# Kubernetes
+kube = { version = "0.99", features = ["runtime", "derive", "client"] }
+k8s-openapi = { version = "0.24", features = ["latest"] }
+
+# HMAC signature verification
+hmac = "0.12"
+sha2 = "0.10"
+subtle = "2"
+hex = "0.4"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Errors + logging
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+humantime = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "macros"] }

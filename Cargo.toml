@@ -23,6 +23,7 @@ members = [
     "tatara-ui",          # Nord-themed CLI UX — typed palette/sigils/UiEvent stream with BLAKE3 run hashes
     "tatara-reconciler",  # FluxCD-adjacent controller — replaces tatara-kube
     "tatara-pool-reconciler", # EphemeralPool + EphemeralAllocation controller — pool population mgmt
+    "tatara-github-watcher",  # GitHub webhook receiver — PR events → EphemeralAllocation CRs
     # ── existing surfaces ──────────────────────────────────────────────
     "tatara-api",
     "tatara-cli",

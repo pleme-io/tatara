@@ -5883,6 +5883,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "tatara-github-watcher"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "axum 0.8.8",
+ "chrono",
+ "clap",
+ "hex",
+ "hmac",
+ "humantime",
+ "k8s-openapi",
+ "kube",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "tatara-process",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tatara-hospedeiro"
 version = "0.2.0"
 dependencies = [

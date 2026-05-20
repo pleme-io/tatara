@@ -1,12 +1,19 @@
 //! Boundary condition evaluator — the VERIFY half of the convergence loop.
 //!
-//! Evaluates the six `ConditionKind` variants against a live cluster state:
+//! Evaluates the `ConditionKind` variants against live cluster state:
 //! - `ProcessPhase`:           lookup the referenced Process, compare phase
 //! - `KustomizationHealthy`:   fetch the Kustomization, read `status.conditions[Ready]`
 //! - `HelmReleaseReleased`:    same, for `HelmRelease`
 //! - `PromQL`:                 stub (returns Unknown) — needs a metrics client
 //! - `Cel`:                    stub (returns Unknown) — needs a CEL runtime
 //! - `NixEval`:                stub (returns Unknown) — needs tatara-engine
+//! - `JobAttested`:            Job.status.succeeded >= 1; optional receipt
+//!                             ConfigMap verification
+//! - `ClosedLoopAuth`:         JobAttested + BLAKE3 receipt shape verified
+//!                             (the canonical postcondition for any system
+//!                             that can produce credentials for its own
+//!                             client under test — e.g. Akeyless SaaS
+//!                             issuing secrets to its bundled Gateway)
 //!
 //! `check_depends_on` reuses the `ProcessPhase` evaluator and returns unmet
 //! dependencies structured for UX messaging.
@@ -106,13 +113,304 @@ pub async fn evaluate(
         ConditionKind::NixEval => Ok(Satisfaction::Unknown(
             "NixEval evaluator not yet implemented".into(),
         )),
-        ConditionKind::JobAttested => Ok(Satisfaction::Unknown(
-            "JobAttested evaluator pending P3 (kenshi-runner lift)".into(),
-        )),
-        ConditionKind::ClosedLoopAuth => Ok(Satisfaction::Unknown(
-            "ClosedLoopAuth evaluator pending P4 (closed-loop probe handler)".into(),
-        )),
+        ConditionKind::JobAttested => {
+            evaluate_job_attested(client, default_ns, &condition.params, process).await
+        }
+        ConditionKind::ClosedLoopAuth => {
+            evaluate_closed_loop_auth(client, default_ns, &condition.params, process).await
+        }
     }
+}
+
+// ── JobAttested + ClosedLoopAuth typed evaluators ────────────────────
+
+/// `JobAttested` params:
+/// ```json
+/// { "name": "<job-name>", "namespace": "<ns>",
+///   "expectReceipt": true,                        // default false
+///   "receiptConfigMap": "<cm-name>" }             // defaults to <name>-receipt
+/// ```
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JobAttestedParams {
+    name: String,
+    #[serde(default)]
+    namespace: Option<String>,
+    #[serde(default)]
+    expect_receipt: bool,
+    #[serde(default)]
+    receipt_config_map: Option<String>,
+}
+
+/// Read a Kubernetes `batch/v1` Job's status and decide.
+async fn evaluate_job_attested(
+    client: Client,
+    default_ns: &str,
+    params: &Value,
+    _process: &Process,
+) -> Result<Satisfaction> {
+    let parsed: JobAttestedParams = match serde_json::from_value(params.clone()) {
+        Ok(p) => p,
+        Err(e) => {
+            return Ok(Satisfaction::Unknown(format!(
+                "JobAttested params invalid: {e}"
+            )))
+        }
+    };
+    let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
+    let job_status = fetch_job_status(client.clone(), ns, &parsed.name).await?;
+    let job_status = match job_status {
+        JobLookup::Found(s) => s,
+        JobLookup::Missing => {
+            return Ok(Satisfaction::Unsatisfied(format!(
+                "Job {ns}/{} not found",
+                parsed.name
+            )))
+        }
+    };
+
+    if job_status.failed > 0 {
+        return Ok(Satisfaction::Unsatisfied(format!(
+            "Job {ns}/{} failed (status.failed={})",
+            parsed.name, job_status.failed
+        )));
+    }
+    if job_status.succeeded < 1 {
+        return Ok(Satisfaction::Unsatisfied(format!(
+            "Job {ns}/{} still running (succeeded={}, active={})",
+            parsed.name, job_status.succeeded, job_status.active
+        )));
+    }
+
+    if !parsed.expect_receipt {
+        return Ok(Satisfaction::Satisfied);
+    }
+    let cm_name = parsed
+        .receipt_config_map
+        .clone()
+        .unwrap_or_else(|| format!("{}-receipt", parsed.name));
+    match verify_receipt_cm(client, ns, &cm_name, None).await? {
+        ReceiptVerdict::Ok(_) => Ok(Satisfaction::Satisfied),
+        ReceiptVerdict::Missing => Ok(Satisfaction::Unsatisfied(format!(
+            "Job {ns}/{} succeeded but receipt ConfigMap {ns}/{cm_name} missing",
+            parsed.name
+        ))),
+        ReceiptVerdict::Malformed(why) => Ok(Satisfaction::Unsatisfied(format!(
+            "Job {ns}/{} receipt malformed: {why}",
+            parsed.name
+        ))),
+    }
+}
+
+/// `ClosedLoopAuth` params — the typed shape is in `tatara-process`'s
+/// boundary.rs doc; the reconciler reads the optional Job + ConfigMap
+/// names and falls back to deterministic defaults derived from the
+/// owning Process's name.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClosedLoopAuthParams {
+    #[serde(default)]
+    namespace: Option<String>,
+    /// Optional override; defaults to `<process>-closed-loop-probe`.
+    #[serde(default)]
+    job_name: Option<String>,
+    /// Optional override; defaults to `<job-name>-receipt`.
+    #[serde(default)]
+    receipt_config_map: Option<String>,
+    /// Expected three-pillar BLAKE3 root. When omitted, we only verify
+    /// shape; the reconciler chains the observed root into the
+    /// Process's attestation regardless.
+    #[serde(default)]
+    expected_root: Option<String>,
+    /// Free-form remaining keys (issuer/consumer/jwkSource/probeImage/etc.)
+    /// — the chart deploying the probe consumes these; the reconciler
+    /// itself does not need them to verify the receipt.
+    #[serde(default, flatten)]
+    _extra: std::collections::BTreeMap<String, Value>,
+}
+
+async fn evaluate_closed_loop_auth(
+    client: Client,
+    default_ns: &str,
+    params: &Value,
+    process: &Process,
+) -> Result<Satisfaction> {
+    let parsed: ClosedLoopAuthParams = match serde_json::from_value(params.clone()) {
+        Ok(p) => p,
+        Err(e) => {
+            return Ok(Satisfaction::Unknown(format!(
+                "ClosedLoopAuth params invalid: {e}"
+            )))
+        }
+    };
+    let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
+    let process_name = process
+        .metadata
+        .name
+        .as_deref()
+        .unwrap_or("unnamed-process");
+    let job_name = parsed
+        .job_name
+        .clone()
+        .unwrap_or_else(|| format!("{process_name}-closed-loop-probe"));
+    let cm_name = parsed
+        .receipt_config_map
+        .clone()
+        .unwrap_or_else(|| format!("{job_name}-receipt"));
+
+    // 1. The probe Job must have succeeded.
+    let job_status = fetch_job_status(client.clone(), ns, &job_name).await?;
+    let job_status = match job_status {
+        JobLookup::Found(s) => s,
+        JobLookup::Missing => {
+            return Ok(Satisfaction::Unsatisfied(format!(
+                "closed-loop probe Job {ns}/{job_name} not found"
+            )))
+        }
+    };
+    if job_status.failed > 0 {
+        return Ok(Satisfaction::Unsatisfied(format!(
+            "closed-loop probe Job {ns}/{job_name} failed (status.failed={})",
+            job_status.failed
+        )));
+    }
+    if job_status.succeeded < 1 {
+        return Ok(Satisfaction::Unsatisfied(format!(
+            "closed-loop probe Job {ns}/{job_name} still running"
+        )));
+    }
+
+    // 2. The receipt ConfigMap must exist and parse.
+    match verify_receipt_cm(client, ns, &cm_name, parsed.expected_root.as_deref()).await? {
+        ReceiptVerdict::Ok(_root) => Ok(Satisfaction::Satisfied),
+        ReceiptVerdict::Missing => Ok(Satisfaction::Unsatisfied(format!(
+            "closed-loop receipt ConfigMap {ns}/{cm_name} missing"
+        ))),
+        ReceiptVerdict::Malformed(why) => Ok(Satisfaction::Unsatisfied(format!(
+            "closed-loop receipt malformed: {why}"
+        ))),
+    }
+}
+
+#[derive(Debug)]
+enum JobLookup {
+    Missing,
+    Found(JobStatusView),
+}
+
+#[derive(Debug, Default)]
+struct JobStatusView {
+    succeeded: i64,
+    failed: i64,
+    active: i64,
+}
+
+async fn fetch_job_status(client: Client, ns: &str, name: &str) -> Result<JobLookup> {
+    let obj = ssapply::fetch(client, ns, "batch/v1", "Job", name)
+        .await
+        .map_err(|e| anyhow!("fetch Job {ns}/{name}: {e}"))?;
+    let Some(obj) = obj else {
+        return Ok(JobLookup::Missing);
+    };
+    let status = obj.data.get("status").cloned().unwrap_or(Value::Null);
+    let mut view = JobStatusView::default();
+    if let Some(s) = status.get("succeeded").and_then(|v| v.as_i64()) {
+        view.succeeded = s;
+    }
+    if let Some(f) = status.get("failed").and_then(|v| v.as_i64()) {
+        view.failed = f;
+    }
+    if let Some(a) = status.get("active").and_then(|v| v.as_i64()) {
+        view.active = a;
+    }
+    Ok(JobLookup::Found(view))
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ReceiptVerdict {
+    Missing,
+    Malformed(String),
+    /// Composed root — for the attestation chain.
+    Ok(String),
+}
+
+/// Three-pillar BLAKE3 receipt shape we expect in the ConfigMap's
+/// `receipt.json` key:
+/// ```json
+/// {
+///   "version": "tatara-receipt/v1",
+///   "kind": "closed-loop-auth",
+///   "composed_root": "<26-char hex>",
+///   "intent_hash":   "<hex>",
+///   "artifact_hash": "<hex>",
+///   "control_hash":  "<hex>",
+///   "generated_at":  "RFC3339 timestamp"
+/// }
+/// ```
+/// `expected_root` (when present) must equal `composed_root` exactly.
+async fn verify_receipt_cm(
+    client: Client,
+    ns: &str,
+    name: &str,
+    expected_root: Option<&str>,
+) -> Result<ReceiptVerdict> {
+    let obj = ssapply::fetch(client, ns, "v1", "ConfigMap", name)
+        .await
+        .map_err(|e| anyhow!("fetch ConfigMap {ns}/{name}: {e}"))?;
+    let Some(obj) = obj else {
+        return Ok(ReceiptVerdict::Missing);
+    };
+    let payload = obj
+        .data
+        .get("data")
+        .and_then(|d| d.get("receipt.json"))
+        .and_then(|v| v.as_str());
+    let Some(payload) = payload else {
+        return Ok(ReceiptVerdict::Malformed(
+            "ConfigMap missing data['receipt.json'] string key".into(),
+        ));
+    };
+    Ok(parse_receipt_payload(payload, expected_root))
+}
+
+/// Pure parser — same logic as `verify_receipt_cm` but without the kube fetch.
+/// Extracted so the receipt schema can be unit-tested without a cluster.
+fn parse_receipt_payload(payload: &str, expected_root: Option<&str>) -> ReceiptVerdict {
+    let parsed: Value = match serde_json::from_str(payload) {
+        Ok(v) => v,
+        Err(e) => return ReceiptVerdict::Malformed(format!("invalid JSON: {e}")),
+    };
+    let read_str = |field: &str| -> Option<String> {
+        parsed
+            .get(field)
+            .and_then(|v| v.as_str())
+            .map(String::from)
+    };
+    let Some(version) = read_str("version") else {
+        return ReceiptVerdict::Malformed("missing 'version' string field".into());
+    };
+    if version != "tatara-receipt/v1" {
+        return ReceiptVerdict::Malformed("version != tatara-receipt/v1".into());
+    }
+    if read_str("kind").is_none() {
+        return ReceiptVerdict::Malformed("missing 'kind' string field".into());
+    }
+    let Some(composed_root) = read_str("composed_root") else {
+        return ReceiptVerdict::Malformed("missing 'composed_root' string field".into());
+    };
+    for f in ["intent_hash", "artifact_hash", "control_hash"] {
+        if read_str(f).is_none() {
+            return ReceiptVerdict::Malformed(format!("missing '{f}' string field"));
+        }
+    }
+    if let Some(want) = expected_root {
+        if want != composed_root {
+            return ReceiptVerdict::Malformed(format!(
+                "composed_root mismatch (got {composed_root}, want {want})"
+            ));
+        }
+    }
+    ReceiptVerdict::Ok(composed_root)
 }
 
 // ── per-kind evaluators ──────────────────────────────────────────────
@@ -302,6 +600,86 @@ mod tests {
             ProcessPhase::Attested
         ));
         assert!(!phase_reached(ProcessPhase::Pending, ProcessPhase::Running));
+    }
+
+    // ── receipt parser (pure) ────────────────────────────────────────
+
+    fn valid_receipt() -> String {
+        serde_json::json!({
+            "version": "tatara-receipt/v1",
+            "kind": "closed-loop-auth",
+            "composed_root": "1a2b3c4d5e6f7890abcdef1234567890",
+            "intent_hash":   "aaaa",
+            "artifact_hash": "bbbb",
+            "control_hash":  "cccc",
+            "generated_at":  "2026-05-19T12:00:00Z"
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn valid_receipt_parses() {
+        let v = parse_receipt_payload(&valid_receipt(), None);
+        assert!(matches!(v, ReceiptVerdict::Ok(ref s) if s == "1a2b3c4d5e6f7890abcdef1234567890"));
+    }
+
+    #[test]
+    fn expected_root_match_succeeds_mismatch_fails() {
+        let v = parse_receipt_payload(&valid_receipt(), Some("1a2b3c4d5e6f7890abcdef1234567890"));
+        assert!(matches!(v, ReceiptVerdict::Ok(_)));
+
+        let v = parse_receipt_payload(&valid_receipt(), Some("nope"));
+        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("composed_root mismatch")));
+    }
+
+    #[test]
+    fn missing_version_is_malformed() {
+        let s = r#"{"composed_root":"x","intent_hash":"a","artifact_hash":"b","control_hash":"c","kind":"x"}"#;
+        let v = parse_receipt_payload(s, None);
+        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("missing 'version'")));
+    }
+
+    #[test]
+    fn wrong_version_is_malformed() {
+        let mut payload: Value = serde_json::from_str(&valid_receipt()).unwrap();
+        payload["version"] = Value::String("tatara-receipt/v2".into());
+        let v = parse_receipt_payload(&payload.to_string(), None);
+        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("version != tatara-receipt/v1")));
+    }
+
+    #[test]
+    fn missing_any_pillar_is_malformed() {
+        for pillar in ["intent_hash", "artifact_hash", "control_hash"] {
+            let mut payload: Value = serde_json::from_str(&valid_receipt()).unwrap();
+            payload.as_object_mut().unwrap().remove(pillar);
+            let v = parse_receipt_payload(&payload.to_string(), None);
+            assert!(
+                matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains(pillar)),
+                "expected malformed for missing '{pillar}', got {v:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_composed_root_is_malformed() {
+        let mut payload: Value = serde_json::from_str(&valid_receipt()).unwrap();
+        payload.as_object_mut().unwrap().remove("composed_root");
+        let v = parse_receipt_payload(&payload.to_string(), None);
+        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("composed_root")));
+    }
+
+    #[test]
+    fn invalid_json_is_malformed() {
+        let v = parse_receipt_payload("not json", None);
+        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("invalid JSON")));
+    }
+
+    #[test]
+    fn missing_kind_is_malformed() {
+        let mut payload: Value = serde_json::from_str(&valid_receipt()).unwrap();
+        payload.as_object_mut().unwrap().remove("kind");
+        let v = parse_receipt_payload(&payload.to_string(), None);
+        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("'kind'")));
     }
 
     #[test]

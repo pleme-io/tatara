@@ -184,7 +184,7 @@ pub struct PoolMember {
 }
 
 /// Light reference to an `EphemeralAllocation`.
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AllocationRef {
     pub name: String,

@@ -1,0 +1,49 @@
+[package]
+name = "tatara-pool-reconciler"
+description = "Reconciler for EphemeralPool + EphemeralAllocation CRDs — population manager that maintains warm pools of pre-attested ephemeral Processes and allocates them to requestors (GitHub PRs, CI runs, manual operators)."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "tatara-pool-reconciler"
+path = "src/main.rs"
+
+[dependencies]
+tatara-core = { path = "../tatara-core" }
+tatara-process = { path = "../tatara-process" }
+
+# Kubernetes
+kube = { version = "0.99", features = ["runtime", "derive", "client"] }
+k8s-openapi = { version = "0.24", features = ["latest"] }
+schemars = { version = "0.8", features = ["chrono"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Errors + logging
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+humantime = "2"
+
+# CLI + observability endpoint
+clap = { version = "4", features = ["derive", "env"] }
+axum = { version = "0.8", features = ["json"] }
+prometheus = "0.13"
+
+# Pool member naming — deterministic short IDs.
+blake3 = "1"
+hex = "0.4"

@@ -6080,6 +6080,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "tatara-pool-reconciler"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.8",
+ "blake3",
+ "chrono",
+ "clap",
+ "futures",
+ "hex",
+ "humantime",
+ "k8s-openapi",
+ "kube",
+ "prometheus",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tatara-core",
+ "tatara-process",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tatara-process"
 version = "0.2.0"
 dependencies = [

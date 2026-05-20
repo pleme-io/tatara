@@ -79,6 +79,21 @@
       env = [];
     };
 
+    # closed-loop-probe Docker image — the typed Rust binary consumed by
+    # the akeyless-closed-loop-probe-pleme Helm chart. Emits a
+    # tatara-receipt/v1 envelope after verifying a system's bundled
+    # issuer authenticates its bundled consumer.
+    closedLoopProbeOutputs = (import "${substrate}/lib/rust-tool-image-flake.nix" {
+      inherit nixpkgs crate2nix flake-utils forge devenv;
+    }) {
+      toolName = "closed-loop-probe";
+      packageName = "tatara-closed-loop-probe";
+      src = self;
+      repo = "pleme-io/closed-loop-probe";
+      architectures = [ "amd64" ];
+      env = [];
+    };
+
     # tatara-init — PID 1 for tatara-os Linux guests. 4-target release build
     # per substrate convention so every guest arch (aarch64-linux,
     # x86_64-linux) gets a matching init binary.
@@ -183,6 +198,10 @@
             reconciler-image-amd64 = rc.dockerImage-amd64 or null;
             reconciler = rc.tatara-reconciler or rc.default or null;
           })
+          // (let cp = closedLoopProbeOutputs.packages.${system} or {}; in {
+            closed-loop-probe-image-amd64 = cp.dockerImage-amd64 or null;
+            closed-loop-probe = cp.closed-loop-probe or cp.default or null;
+          })
           // (let it = initOutputs.packages.${system} or {}; in {
             init = it.tatara-init or it.default or null;
           })
@@ -210,6 +229,10 @@
             release-reconciler = (reconcilerOutputs.apps.${system} or {}).release or {
               type = "app";
               program = "echo 'reconciler release not available on ${system}'";
+            };
+            release-closed-loop-probe = (closedLoopProbeOutputs.apps.${system} or {}).release or {
+              type = "app";
+              program = "echo 'closed-loop-probe release not available on ${system}'";
             };
           }
         );

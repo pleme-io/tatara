@@ -62,6 +62,8 @@ spec:
                           - PromQL
                           - Cel
                           - NixEval
+                          - JobAttested
+                          - ClosedLoopAuth
                           type: string
                         params:
                           description: Kind-specific payload (free-form JSON).
@@ -82,6 +84,8 @@ spec:
                           - PromQL
                           - Cel
                           - NixEval
+                          - JobAttested
+                          - ClosedLoopAuth
                           type: string
                         params:
                           description: Kind-specific payload (free-form JSON).
@@ -254,6 +258,42 @@ spec:
               intent:
                 description: Where rendered artifacts come from. Exactly one variant must be set.
                 properties:
+                  aplicacao:
+                    description: |-
+                      Aplicacao intent — emit a FluxCD `HelmRelease` for a pleme-io typed Aplicacao chart. The chart owns its own sub-chart DAG; the reconciler only watches `HelmRelease.status.conditions[type=Ready]`.
+
+                      This is the canonical handoff from caixa `(defaplicacao …)` declarations (which the typescape renders to this Intent) into in-cluster reconciliation. Closed-loop ephemeral test environments use this variant with `:lifetime :ephemeral` on the surrounding ProcessSpec.
+
+                      Example (Lisp): ```lisp :intent (:aplicacao (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment" :version "0.5.5" :profile "gateway-with-internal-saas" :values-overlay (:cluster (:name "ephemeral-test-01") :persistence false :compliance (:overlays [])))) ```
+                    nullable: true
+                    properties:
+                      chartRef:
+                        description: Helm chart reference. OCI (`oci://…`) or repo-relative (`pleme-io/lareira-akeyless-deployment`).
+                        type: string
+                      installTimeout:
+                        description: Install timeout (`humantime` duration). Empty = chart-controller default.
+                        nullable: true
+                        type: string
+                      profile:
+                        description: Architecture profile from the chart's `values/*.yaml` family (e.g. `gateway-with-internal-saas`, `saas-internal`). Leave empty to use chart defaults.
+                        type: string
+                      releaseName:
+                        description: HelmRelease name override. Defaults to the Process's PID-derived name.
+                        nullable: true
+                        type: string
+                      targetNamespace:
+                        description: Target namespace for the chart. Defaults to the Process's namespace.
+                        nullable: true
+                        type: string
+                      valuesOverlay:
+                        description: Typed values overlay merged on top of the profile. Free-form JSON to keep tatara-process decoupled from chart schemas.
+                      version:
+                        description: Chart version (Helm semver constraint; `">=0.5.5"` allowed).
+                        type: string
+                    required:
+                    - chartRef
+                    - version
+                    type: object
                   container:
                     description: Container intent — direct Deployment/StatefulSet/etc, no Helm.
                     nullable: true
@@ -325,6 +365,26 @@ spec:
                     - gitRepository
                     - path
                     type: object
+                  guest:
+                    description: |-
+                      Guest intent — the Process is a Linux VM or WASM component supervised by `tatara-hospedeiro`. See `tatara/docs/declarative-guests.md`.
+
+                      The actual `GuestSpec` is stored as a serde JSON value to keep `tatara-process` decoupled from `tatara-vm`. Hospedeiro re-parses the value as the concrete `tatara_vm::GuestSpec` at boot time; a round-trip test on the tatara-vm side guarantees the shape.
+                    nullable: true
+                    properties:
+                      allowRemoteBuild:
+                        description: Whether hospedeiro is allowed to pull guest artifacts from a remote transport (Attic, ssh-ng) if not already present locally. The default is taken from the GuestSpec's `buildOn` field; setting this explicitly overrides at the intent layer.
+                        nullable: true
+                        type: boolean
+                      spec:
+                        description: The (defguest …) spec as JSON. Shape matches `tatara_vm::GuestSpec`.
+                      stateDir:
+                        description: Where to write per-guest state on the host (logs, socket, PID file). Defaults to `~/.local/state/tatara/guests/<name>/`.
+                        nullable: true
+                        type: string
+                    required:
+                    - spec
+                    type: object
                   lisp:
                     description: Lisp-sourced intent — tatara-lisp reader + macroexpander produces resources.
                     nullable: true
@@ -379,6 +439,41 @@ spec:
                     required:
                     - attribute
                     - flakeRef
+                    type: object
+                type: object
+              lifetime:
+                description: Lifetime — `Permanent` (default, re-converging) or `Ephemeral` (auto-SIGTERM per `teardown_policy` + TTL clock).
+                properties:
+                  ephemeral:
+                    description: |-
+                      Ephemeral lifetime — Process auto-terminates per `teardown_policy`.
+
+                      Phase semantics: - On `Attested` with `teardown_policy ∈ {OnAttested, Always}`: reconciler delivers SIGTERM, Process drives Exiting → Zombie → Reaped. - On `Failed`  with `teardown_policy ∈ {OnFailed,   Always}`: same. Otherwise Process stays at Failed for forensic inspection. - `ttl` is a `humantime` duration (`"1h"`, `"30m"`) checked at every reconcile loop tick. TTL expiry while in any non-terminal phase forces SIGTERM regardless of `teardown_policy`.
+                    nullable: true
+                    properties:
+                      maxConcurrent:
+                        default: 1
+                        description: Cluster-wide concurrency budget across ephemeral Processes that share the same `spec.identity.name_override` / chart_ref. `0` = no cap. Enforced by the reconciler before transitioning out of `Pending`.
+                        format: uint32
+                        minimum: 0.0
+                        type: integer
+                      teardownPolicy:
+                        default: Always
+                        description: When the Process auto-terminates.
+                        enum:
+                        - Always
+                        - OnAttested
+                        - OnFailed
+                        - Never
+                        type: string
+                      ttl:
+                        default: 1h
+                        description: '`humantime`-parseable duration from `phaseSince(Forking)` after which the Process is force-SIGTERM''d.'
+                        type: string
+                    type: object
+                  permanent:
+                    description: Permanent lifetime — the existing Process behavior. SIGHUP re-converges; SIGTERM terminates only on explicit operator action.
+                    nullable: true
                     type: object
                 type: object
               signals:
@@ -485,6 +580,8 @@ spec:
                           - PromQL
                           - Cel
                           - NixEval
+                          - JobAttested
+                          - ClosedLoopAuth
                           type: string
                         lastCheck:
                           format: date-time
@@ -515,6 +612,8 @@ spec:
                           - PromQL
                           - Cel
                           - NixEval
+                          - JobAttested
+                          - ClosedLoopAuth
                           type: string
                         lastCheck:
                           format: date-time

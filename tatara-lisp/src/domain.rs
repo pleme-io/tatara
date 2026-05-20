@@ -14,7 +14,7 @@ use std::sync::{Mutex, OnceLock};
 use serde::de::DeserializeOwned;
 
 use crate::ast::{Atom, Sexp};
-use crate::error::{KwargPath, LispError, Result};
+use crate::error::{ExpectedKwargShape, KwargPath, LispError, Result};
 
 /// A Rust type compilable from a Lisp form.
 pub trait TataraDomain: Sized {
@@ -186,9 +186,9 @@ pub fn parse_kwargs(args: &[Sexp]) -> Result<Kwargs<'_>> {
     let mut kw = HashMap::new();
     let mut i = 0;
     while i + 1 < args.len() {
-        let key = args[i]
-            .as_keyword()
-            .ok_or_else(|| type_mismatch(kwargs_pos_form(i), "keyword", &args[i]))?;
+        let key = args[i].as_keyword().ok_or_else(|| {
+            type_mismatch(kwargs_pos_form(i), ExpectedKwargShape::Keyword, &args[i])
+        })?;
         if kw.insert(key.to_string(), &args[i + 1]).is_some() {
             return Err(duplicate_kwarg(key));
         }
@@ -615,7 +615,7 @@ pub fn missing_kwarg(key: &str) -> LispError {
 #[must_use]
 pub fn type_mismatch(
     form: crate::error::KwargPath,
-    expected: &'static str,
+    expected: ExpectedKwargShape,
     got: &Sexp,
 ) -> LispError {
     LispError::TypeMismatch {
@@ -625,7 +625,7 @@ pub fn type_mismatch(
     }
 }
 
-fn type_err(key: &str, expected: &'static str, got: &Sexp) -> LispError {
+fn type_err(key: &str, expected: ExpectedKwargShape, got: &Sexp) -> LispError {
     type_mismatch(kwarg_form(key), expected, got)
 }
 
@@ -635,7 +635,7 @@ fn type_err(key: &str, expected: &'static str, got: &Sexp) -> LispError {
 /// Used by `extract_string_list`'s per-item path; future per-item type-mismatch
 /// sites (e.g. typed enums-of-strings, typed numeric vecs) bind here
 /// rather than re-inlining the shape.
-fn type_err_at(key: &str, idx: usize, expected: &'static str, got: &Sexp) -> LispError {
+fn type_err_at(key: &str, idx: usize, expected: ExpectedKwargShape, got: &Sexp) -> LispError {
     type_mismatch(kwarg_item_form(key, idx), expected, got)
 }
 
@@ -691,7 +691,7 @@ fn type_err_at(key: &str, idx: usize, expected: &'static str, got: &Sexp) -> Lis
 fn extract_atom<'a, T, F>(
     kw: &'a Kwargs<'a>,
     key: &str,
-    expected: &'static str,
+    expected: ExpectedKwargShape,
     project: F,
 ) -> Result<T>
 where
@@ -726,7 +726,7 @@ where
 fn extract_optional_atom<'a, T, F>(
     kw: &'a Kwargs<'a>,
     key: &str,
-    expected: &'static str,
+    expected: ExpectedKwargShape,
     project: F,
 ) -> Result<Option<T>>
 where
@@ -741,11 +741,11 @@ where
 }
 
 pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
-    extract_atom(kw, key, "string", Sexp::as_string)
+    extract_atom(kw, key, ExpectedKwargShape::String, Sexp::as_string)
 }
 
 pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<&'a str>> {
-    extract_optional_atom(kw, key, "string", Sexp::as_string)
+    extract_optional_atom(kw, key, ExpectedKwargShape::String, Sexp::as_string)
 }
 
 pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
@@ -754,39 +754,39 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
     };
     let list = v
         .as_list()
-        .ok_or_else(|| type_err(key, "list of strings", v))?;
+        .ok_or_else(|| type_err(key, ExpectedKwargShape::ListOfStrings, v))?;
     list.iter()
         .enumerate()
         .map(|(idx, s)| {
             s.as_string()
                 .map(String::from)
-                .ok_or_else(|| type_err_at(key, idx, "string", s))
+                .ok_or_else(|| type_err_at(key, idx, ExpectedKwargShape::String, s))
         })
         .collect()
 }
 
 pub fn extract_int(kw: &Kwargs<'_>, key: &str) -> Result<i64> {
-    extract_atom(kw, key, "int", Sexp::as_int)
+    extract_atom(kw, key, ExpectedKwargShape::Int, Sexp::as_int)
 }
 
 pub fn extract_optional_int(kw: &Kwargs<'_>, key: &str) -> Result<Option<i64>> {
-    extract_optional_atom(kw, key, "int", Sexp::as_int)
+    extract_optional_atom(kw, key, ExpectedKwargShape::Int, Sexp::as_int)
 }
 
 pub fn extract_float(kw: &Kwargs<'_>, key: &str) -> Result<f64> {
-    extract_atom(kw, key, "number", Sexp::as_float)
+    extract_atom(kw, key, ExpectedKwargShape::Number, Sexp::as_float)
 }
 
 pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>> {
-    extract_optional_atom(kw, key, "number", Sexp::as_float)
+    extract_optional_atom(kw, key, ExpectedKwargShape::Number, Sexp::as_float)
 }
 
 pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
-    extract_atom(kw, key, "bool", Sexp::as_bool)
+    extract_atom(kw, key, ExpectedKwargShape::Bool, Sexp::as_bool)
 }
 
 pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>> {
-    extract_optional_atom(kw, key, "bool", Sexp::as_bool)
+    extract_optional_atom(kw, key, ExpectedKwargShape::Bool, Sexp::as_bool)
 }
 
 // ── Universal serde-Deserialize fallthrough (enums, nested structs, …) ──
@@ -919,7 +919,9 @@ pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) ->
     let Some(sexp) = kw.get(key).copied() else {
         return Ok(Vec::new());
     };
-    let list = sexp.as_list().ok_or_else(|| type_err(key, "list", sexp))?;
+    let list = sexp
+        .as_list()
+        .ok_or_else(|| type_err(key, ExpectedKwargShape::List, sexp))?;
     list.iter()
         .enumerate()
         .map(|(idx, item)| {
@@ -2390,11 +2392,11 @@ mod tests {
                 err,
                 LispError::TypeMismatch {
                     form: crate::error::KwargPath::Slot(0),
-                    expected: "keyword",
+                    expected: ExpectedKwargShape::Keyword,
                     got: "string",
                 }
             ),
-            "expected TypeMismatch {{ form: KwargPath::Slot(0), expected: \"keyword\", got: \"string\" }}, got {err:?}"
+            "expected TypeMismatch {{ form: KwargPath::Slot(0), expected: Keyword, got: \"string\" }}, got {err:?}"
         );
     }
 
@@ -2411,7 +2413,7 @@ mod tests {
                 err,
                 LispError::TypeMismatch {
                     form: crate::error::KwargPath::Slot(2),
-                    expected: "keyword",
+                    expected: ExpectedKwargShape::Keyword,
                     got: "string",
                 }
             ),
@@ -2478,7 +2480,7 @@ mod tests {
                 err,
                 LispError::TypeMismatch {
                     form: crate::error::KwargPath::Slot(0),
-                    expected: "keyword",
+                    expected: ExpectedKwargShape::Keyword,
                     got: "string",
                 }
             ),
@@ -2525,11 +2527,12 @@ mod tests {
 
     #[test]
     fn type_mismatch_helper_emits_structured_variant() {
-        // `type_mismatch` now takes a typed `KwargPath` for `form` — pin
-        // the structural identity of every slot, including that the
-        // typed enum is threaded into the variant byte-identically (not
+        // `type_mismatch` now takes a typed `KwargPath` for `form` AND
+        // a typed `ExpectedKwargShape` for `expected` — pin the
+        // structural identity of every slot, including that BOTH typed
+        // enums are threaded into the variant byte-identically (not
         // coerced through a String round-trip).
-        let err = type_mismatch(kwarg_form("ctx"), "string", &Sexp::int(7));
+        let err = type_mismatch(kwarg_form("ctx"), ExpectedKwargShape::String, &Sexp::int(7));
         match err {
             LispError::TypeMismatch {
                 form,
@@ -2537,7 +2540,7 @@ mod tests {
                 got,
             } => {
                 assert_eq!(form, crate::error::KwargPath::Named("ctx".into()));
-                assert_eq!(expected, "string");
+                assert_eq!(expected, ExpectedKwargShape::String);
                 assert_eq!(got, "int");
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
@@ -2551,7 +2554,11 @@ mod tests {
         // rendering. Authoring surfaces that pattern-match on the message
         // text continue to work; tools that pattern-match on the variant
         // gain structural binding.
-        let err = type_mismatch(kwarg_form("threshold"), "number", &Sexp::string("tight"));
+        let err = type_mismatch(
+            kwarg_form("threshold"),
+            ExpectedKwargShape::Number,
+            &Sexp::string("tight"),
+        );
         assert_eq!(
             format!("{err}"),
             "compile error in :threshold: expected number, got string"
@@ -2572,11 +2579,11 @@ mod tests {
                 &err,
                 LispError::TypeMismatch {
                     form,
-                    expected: "string",
+                    expected: ExpectedKwargShape::String,
                     got: "int",
                 } if matches!(form, crate::error::KwargPath::Named(k) if k == "name")
             ),
-            "expected TypeMismatch {{ form: KwargPath::Named(\"name\"), expected: \"string\", got: \"int\" }}, got {err:?}"
+            "expected TypeMismatch {{ form: KwargPath::Named(\"name\"), expected: String, got: \"int\" }}, got {err:?}"
         );
         assert_eq!(
             format!("{err}"),
@@ -2598,7 +2605,7 @@ mod tests {
                 &err,
                 LispError::TypeMismatch {
                     form,
-                    expected: "string",
+                    expected: ExpectedKwargShape::String,
                     got: "int",
                 } if matches!(form, crate::error::KwargPath::Item { key, idx: 1 } if key == "tags")
             ),
@@ -2622,7 +2629,7 @@ mod tests {
                 &err,
                 LispError::TypeMismatch {
                     form,
-                    expected: "list",
+                    expected: ExpectedKwargShape::List,
                     got: "string",
                 } if matches!(form, crate::error::KwargPath::Named(k) if k == "steps")
             ),
@@ -2645,7 +2652,7 @@ mod tests {
                 &err,
                 LispError::TypeMismatch {
                     form,
-                    expected: "list of strings",
+                    expected: ExpectedKwargShape::ListOfStrings,
                     got: "string",
                 } if matches!(form, crate::error::KwargPath::Named(k) if k == "tags")
             ),
@@ -2660,7 +2667,7 @@ mod tests {
         // through to single-line rendering, no caret emitted. Pinning
         // this contract means a future run that adds `pos: Option<usize>`
         // does so deliberately, with a fail-before/pass-after delta.
-        let err = type_mismatch(kwarg_form("x"), "string", &Sexp::int(0));
+        let err = type_mismatch(kwarg_form("x"), ExpectedKwargShape::String, &Sexp::int(0));
         assert_eq!(err.position(), None);
     }
 
@@ -2677,7 +2684,7 @@ mod tests {
                 &err,
                 LispError::TypeMismatch {
                     form,
-                    expected: "number",
+                    expected: ExpectedKwargShape::Number,
                     got: "string",
                 } if matches!(form, crate::error::KwargPath::Named(k) if k == "threshold")
             ),
@@ -4239,7 +4246,7 @@ mod tests {
         // `extract_atom_emits_type_mismatch_for_wrong_type` — that
         // pins the second gate.
         let kw: Kwargs<'_> = HashMap::new();
-        let err = extract_atom(&kw, "missing", "int", Sexp::as_int)
+        let err = extract_atom(&kw, "missing", ExpectedKwargShape::Int, Sexp::as_int)
             .expect_err("absent required kwarg must error");
         match err {
             LispError::MissingKwarg { key } => assert_eq!(key, "missing"),
@@ -4260,7 +4267,7 @@ mod tests {
         let string_sexp = Sexp::string("not-an-int");
         let mut kw: Kwargs<'_> = HashMap::new();
         kw.insert("wrongkey".to_string(), &string_sexp);
-        let err = extract_atom(&kw, "wrongkey", "int", Sexp::as_int)
+        let err = extract_atom(&kw, "wrongkey", ExpectedKwargShape::Int, Sexp::as_int)
             .expect_err("present-but-wrong-type kwarg must error");
         match err {
             LispError::TypeMismatch {
@@ -4269,7 +4276,7 @@ mod tests {
                 got,
             } => {
                 assert_eq!(form, crate::error::KwargPath::Named("wrongkey".into()));
-                assert_eq!(expected, "int");
+                assert_eq!(expected, ExpectedKwargShape::Int);
                 assert_eq!(got, "string");
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
@@ -4285,7 +4292,7 @@ mod tests {
         let int_sexp = Sexp::int(42);
         let mut kw: Kwargs<'_> = HashMap::new();
         kw.insert("count".to_string(), &int_sexp);
-        let v = extract_atom(&kw, "count", "int", Sexp::as_int)
+        let v = extract_atom(&kw, "count", ExpectedKwargShape::Int, Sexp::as_int)
             .expect("present-and-correct kwarg must succeed");
         assert_eq!(v, 42);
     }
@@ -4301,8 +4308,9 @@ mod tests {
         // absent arm through `required` would surface here as an
         // `Err(MissingKwarg)` instead of `Ok(None)`.
         let kw: Kwargs<'_> = HashMap::new();
-        let v = extract_optional_atom::<i64, _>(&kw, "absent", "int", Sexp::as_int)
-            .expect("absent optional kwarg must succeed with None");
+        let v =
+            extract_optional_atom::<i64, _>(&kw, "absent", ExpectedKwargShape::Int, Sexp::as_int)
+                .expect("absent optional kwarg must succeed with None");
         assert!(v.is_none());
     }
 
@@ -4320,8 +4328,9 @@ mod tests {
         let string_sexp = Sexp::string("not-a-bool");
         let mut kw: Kwargs<'_> = HashMap::new();
         kw.insert("flag".to_string(), &string_sexp);
-        let err = extract_optional_atom::<bool, _>(&kw, "flag", "bool", Sexp::as_bool)
-            .expect_err("present-but-wrong-type optional kwarg must error");
+        let err =
+            extract_optional_atom::<bool, _>(&kw, "flag", ExpectedKwargShape::Bool, Sexp::as_bool)
+                .expect_err("present-but-wrong-type optional kwarg must error");
         match err {
             LispError::TypeMismatch {
                 form,
@@ -4329,7 +4338,7 @@ mod tests {
                 got,
             } => {
                 assert_eq!(form, crate::error::KwargPath::Named("flag".into()));
-                assert_eq!(expected, "bool");
+                assert_eq!(expected, ExpectedKwargShape::Bool);
                 assert_eq!(got, "string");
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
@@ -4346,7 +4355,7 @@ mod tests {
         let float_sexp = Sexp::float(3.5);
         let mut kw: Kwargs<'_> = HashMap::new();
         kw.insert("ratio".to_string(), &float_sexp);
-        let v = extract_optional_atom(&kw, "ratio", "number", Sexp::as_float)
+        let v = extract_optional_atom(&kw, "ratio", ExpectedKwargShape::Number, Sexp::as_float)
             .expect("present-and-correct optional kwarg must succeed");
         assert_eq!(v, Some(3.5));
     }
@@ -4370,38 +4379,41 @@ mod tests {
     #[test]
     fn public_extract_delegates_inherit_canonical_type_labels() {
         // Path-uniformity across all four public typed-name labels —
-        // `extract_int` ("int"), `extract_float` ("number"),
-        // `extract_bool` ("bool"), `extract_string` ("string"). Each
+        // `extract_int` (`Int`), `extract_float` (`Number`),
+        // `extract_bool` (`Bool`), `extract_string` (`String`). Each
         // delegate must route through `extract_atom` with the
-        // canonical label intact; a regression that drifts a label
-        // (e.g. `extract_float`'s "number" → "float", or
-        // `extract_int`'s "int" → "integer") would surface as a
-        // `TypeMismatch.expected` field-value drift when the
-        // extractor is fed a wrong-typed kwarg.
+        // canonical typed `ExpectedKwargShape` variant intact; a
+        // regression that drifts a label (e.g. `extract_float`'s
+        // `Number` → `Int`, or `extract_int`'s `Int` → `Number`)
+        // would surface as a `TypeMismatch.expected` variant-identity
+        // drift when the extractor is fed a wrong-typed kwarg. After
+        // the closed-set lift the typed-enum check is a rustc-enforced
+        // contract — a typo in any label literal is unreachable
+        // because the variants are the literals.
         let s = Sexp::string("not-typed");
         let mut kw: Kwargs<'_> = HashMap::new();
         kw.insert("x".to_string(), &s);
-        for (extractor_name, expected_label, err) in [
+        for (extractor_name, expected_shape, err) in [
             (
                 "extract_int",
-                "int",
+                ExpectedKwargShape::Int,
                 extract_int(&kw, "x").expect_err("must error"),
             ),
             (
                 "extract_float",
-                "number",
+                ExpectedKwargShape::Number,
                 extract_float(&kw, "x").expect_err("must error"),
             ),
             (
                 "extract_bool",
-                "bool",
+                ExpectedKwargShape::Bool,
                 extract_bool(&kw, "x").expect_err("must error"),
             ),
         ] {
             match err {
                 LispError::TypeMismatch { expected, .. } => assert_eq!(
-                    expected, expected_label,
-                    "{extractor_name} must thread the canonical label {expected_label:?}",
+                    expected, expected_shape,
+                    "{extractor_name} must thread the canonical shape {expected_shape:?}",
                 ),
                 other => panic!("{extractor_name}: expected TypeMismatch, got {other:?}"),
             }
@@ -4415,7 +4427,9 @@ mod tests {
         kw2.insert("x".to_string(), &kw_sexp);
         let err = extract_string(&kw2, "x").expect_err("must error");
         match err {
-            LispError::TypeMismatch { expected, .. } => assert_eq!(expected, "string"),
+            LispError::TypeMismatch { expected, .. } => {
+                assert_eq!(expected, ExpectedKwargShape::String);
+            }
             other => panic!("extract_string: expected TypeMismatch, got {other:?}"),
         }
     }

@@ -36,18 +36,37 @@ pub enum LispError {
     /// substring-matching the rendered prefix. The Display projection
     /// flows through `KwargPath::Display`, so the user-facing
     /// `"compile error in {form}: …"` rendering matches the legacy
-    /// `String`-shaped diagnostic byte-for-byte. `expected` is
-    /// `&'static str` so a typo can never drift into the diagnostic at
-    /// runtime; `got` is `&'static str` because it is always the output
-    /// of `crate::domain::sexp_type_name`, whose match is exhaustive
-    /// over `Sexp` at compile time. When a future run gives `Sexp`
-    /// source spans, `pos: Option<usize>` lands here in ONE place and
-    /// every type-mismatch site picks up positional rendering via
+    /// `String`-shaped diagnostic byte-for-byte.
+    ///
+    /// `expected` is the typed closed-set `ExpectedKwargShape` enum —
+    /// the seven reachable expected-shape labels the typed-entry kwarg
+    /// gate emits (`Keyword` ⊎ `String` ⊎ `Int` ⊎ `Number` ⊎ `Bool` ⊎
+    /// `List` ⊎ `ListOfStrings`) encoded as a TYPE so a typo in any
+    /// label literal can never drift into the diagnostic at runtime;
+    /// consumers (REPL, LSP, `tatara-check`) pattern-match on
+    /// `ExpectedKwargShape::Number` etc. directly instead of
+    /// substring-matching `expected == "number"`. Same posture as
+    /// `LispError::Defmacro*.head: MacroDefHead`,
+    /// `LispError::UnboundTemplateVar.prefix: UnquoteForm`,
+    /// `LispError::CompilerSpecIo.stage: CompilerSpecIoStage`,
+    /// `LispError::TemplateInvariant.kind: TemplateInvariantKind`, and
+    /// `LispError::TypeMismatch.form: KwargPath`: the closed set
+    /// becomes a TYPE rather than a `&'static str` projection at the
+    /// helper boundary. The Display projection flows through
+    /// `ExpectedKwargShape::Display`, so the user-facing
+    /// `"... expected {expected}, ..."` rendering matches the legacy
+    /// `&'static str`-shaped diagnostic byte-for-byte.
+    ///
+    /// `got` is `&'static str` because it is always the output of
+    /// `crate::domain::sexp_type_name`, whose match is exhaustive over
+    /// `Sexp` at compile time. When a future run gives `Sexp` source
+    /// spans, `pos: Option<usize>` lands here in ONE place and every
+    /// type-mismatch site picks up positional rendering via
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {form}: expected {expected}, got {got}")]
     TypeMismatch {
         form: KwargPath,
-        expected: &'static str,
+        expected: ExpectedKwargShape,
         got: &'static str,
     },
     /// Structural head-mismatch — the `(head ...)` of a top-level form
@@ -1611,6 +1630,144 @@ impl std::fmt::Display for KwargPath {
     }
 }
 
+/// Closed-set identifier for the `expected:` slot of a
+/// `LispError::TypeMismatch` diagnostic — the seven reachable
+/// expected-shape labels the typed-entry kwarg gate emits:
+/// `Keyword` (the `parse_kwargs` slot-must-be-a-keyword gate),
+/// `String` / `Int` / `Number` / `Bool` (the typed-atom extractors —
+/// `extract_string`, `extract_int`, `extract_float`, `extract_bool`,
+/// and their `Option` siblings, plus `extract_string_list`'s per-item
+/// `string` gate), `List` (the `extract_vec_via_serde` outer-shape
+/// gate), and `ListOfStrings` (the `extract_string_list` outer-shape
+/// gate). Encoded as a typed enum so the closed set becomes
+/// load-bearing data on `LispError::TypeMismatch.expected` rather than
+/// a `&'static str` literal scattered across eleven call sites in
+/// `domain.rs`.
+///
+/// Mirror at the expected-shape boundary of the prior-run `KwargPath`
+/// (kwargs-path-shape closed set), `MacroDefHead` (macro-definition-
+/// head closed set), `CompilerSpecIoStage` (disk-persistence surface),
+/// `TemplateInvariantKind` (bytecode-runtime surface), and
+/// `UnquoteForm` (template-marker syntactic forms) closed-set lifts:
+/// those enums key their respective rejection variants on a typed
+/// identity carried inside the variant's data shape; this enum keys
+/// the SECOND slot (`expected`) of every `LispError::TypeMismatch`
+/// site on a typed expected-shape identity, alongside the
+/// already-typed `form: KwargPath`. After this lift the type-mismatch
+/// variant's identity is fully closed-set typed in TWO of its three
+/// slots — only `got: &'static str` remains as a `&'static str`
+/// projection, and that slot's compile-time guarantee is sourced from
+/// `crate::domain::sexp_type_name`'s exhaustive `Sexp` match.
+///
+/// Adding a future expected-shape (e.g. `Float` once `extract_float`
+/// stops accepting integers, `Symbol` if a future extractor accepts
+/// only `Sexp::Atom(Symbol)`, or a parameterized `ListOf(Box<Self>)`
+/// for nested-typed-vec extractors) requires extending this enum,
+/// which rustc-enforces matching at every projection site
+/// (`label()`).
+///
+/// `label(self) -> &'static str` projects the typed `ExpectedKwargShape`
+/// back to the canonical literal for `LispError::Display` rendering.
+/// The `&'static str` lifetime is load-bearing: it lets the variant
+/// project through this method into the `expected {expected}` slot of
+/// the `#[error(...)]` annotation without an allocation, parallel to
+/// how `MacroDefHead::keyword()`, `UnquoteForm::marker()`, and
+/// `CompilerSpecIoStage::operation()` / `label()` feed their
+/// respective `LispError::*` Display impls.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// of expected-shape labels becomes a TYPE rather than eleven
+/// `&'static str` literal call sites scattered across the kwarg
+/// extractors. A typo in any literal can never drift into the
+/// diagnostic at runtime; a regression that drifts the expected-shape
+/// label (e.g. a typo `"strin"` for `"string"`) becomes a type error
+/// at the call site, not a runtime substring drift. THEORY.md §VI.1 —
+/// generation over composition; the typed enum lands the structural-
+/// completeness floor for the expected-shape surface, parallel to how
+/// `KwargPath` lands it for the kwargs-path surface, `MacroDefHead`
+/// for the macro-definition-head surface, `UnquoteForm` for the
+/// template-marker surface, `CompilerSpecIoStage` for the disk-
+/// persistence surface, and `TemplateInvariantKind` for the bytecode-
+/// runtime surface. THEORY.md §II.1 invariant 1 — typed entry; the
+/// expected-shape identity is part of the proof of WHICH typed-entry
+/// kwarg gate fired, and the typed enum makes that identity first-
+/// class as load-bearing data on the variant rather than as a
+/// projection-to-String at the helper boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpectedKwargShape {
+    /// `"keyword"` — emitted by `parse_kwargs`'s
+    /// "this-position-must-be-a-keyword" gate when an even-position
+    /// slot in the kwargs slice isn't a `Sexp::Atom(Keyword(_))`.
+    Keyword,
+    /// `"string"` — emitted by `extract_string` /
+    /// `extract_optional_string` (the kwarg's value isn't a
+    /// `Sexp::Atom(Str(_))`) AND by `extract_string_list`'s per-item
+    /// gate (an item inside a list-typed kwarg isn't a string).
+    String,
+    /// `"int"` — emitted by `extract_int` / `extract_optional_int`
+    /// when the kwarg's value isn't a `Sexp::Atom(Int(_))`.
+    Int,
+    /// `"number"` — emitted by `extract_float` /
+    /// `extract_optional_float` when the kwarg's value isn't a
+    /// numeric atom. Wider than `Int`: `extract_float` accepts both
+    /// `Sexp::Atom(Float(_))` and `Sexp::Atom(Int(_))` via
+    /// `Sexp::as_float`, so the expected-shape label is the union
+    /// "number" rather than the narrower "float".
+    Number,
+    /// `"bool"` — emitted by `extract_bool` / `extract_optional_bool`
+    /// when the kwarg's value isn't a `Sexp::Atom(Bool(_))`.
+    Bool,
+    /// `"list"` — emitted by `extract_vec_via_serde`'s outer-shape
+    /// gate when the kwarg's value isn't a `Sexp::List(_)`. Used by
+    /// the universal-Deserialize fallthrough for any `Vec<T>` field.
+    List,
+    /// `"list of strings"` — emitted by `extract_string_list`'s
+    /// outer-shape gate when the kwarg's value isn't a
+    /// `Sexp::List(_)`. Wider than `List`: names the expected
+    /// element-type so the diagnostic reads `expected list of
+    /// strings, got string` instead of the bare `expected list, got
+    /// string`. The per-item gate fires `String` (the narrower
+    /// expected-shape for the element-type failure).
+    ListOfStrings,
+}
+
+impl ExpectedKwargShape {
+    /// Project the typed `ExpectedKwargShape` to the canonical
+    /// `&'static str` literal — feeds the `LispError::TypeMismatch`
+    /// Display rendering via the `#[error(...)]` annotation. The
+    /// `&'static str` lifetime is load-bearing: it lets the variant
+    /// project through this method into the `expected {expected}` slot
+    /// of the `#[error(...)]` annotation without an allocation,
+    /// parallel to how `MacroDefHead::keyword()`,
+    /// `UnquoteForm::marker()`, and `CompilerSpecIoStage::operation()`
+    /// / `label()` feed their respective `LispError::*` Display impls.
+    ///
+    /// The bidirectional contract is anchored by tests:
+    /// `label_renders_canonical_string_for_every_variant` pins each
+    /// variant's canonical literal so a typo in any arm fails-loudly,
+    /// and `display_matches_label_for_every_variant` pins
+    /// Display-equals-label so the `#[error(...)]` annotation's
+    /// `{expected}` slot projects byte-for-byte through this method.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Keyword => "keyword",
+            Self::String => "string",
+            Self::Int => "int",
+            Self::Number => "number",
+            Self::Bool => "bool",
+            Self::List => "list",
+            Self::ListOfStrings => "list of strings",
+        }
+    }
+}
+
+impl std::fmt::Display for ExpectedKwargShape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 fn unbound_hint_suffix(prefix: UnquoteForm, hint: Option<&str>) -> String {
     match hint {
         Some(h) => format!("; did you mean {}{h}?", prefix.marker()),
@@ -1710,7 +1867,7 @@ impl LispError {
 
 #[cfg(test)]
 mod tests {
-    use super::{KwargPath, LispError, MacroDefHead, UnquoteForm};
+    use super::{ExpectedKwargShape, KwargPath, LispError, MacroDefHead, UnquoteForm};
 
     #[test]
     fn position_extracts_offset_from_positional_variants() {
@@ -1752,7 +1909,7 @@ mod tests {
         assert_eq!(
             LispError::TypeMismatch {
                 form: KwargPath::named("x"),
-                expected: "string",
+                expected: ExpectedKwargShape::String,
                 got: "int",
             }
             .position(),
@@ -4699,7 +4856,7 @@ mod tests {
         // enum back into a free-form label) fails-loudly here.
         let err = LispError::TypeMismatch {
             form: KwargPath::named("threshold"),
-            expected: "number",
+            expected: ExpectedKwargShape::Number,
             got: "string",
         };
         match &err {
@@ -4722,7 +4879,7 @@ mod tests {
         // bracketed `:<key>[<idx>]` rendering is unchanged.
         let err = LispError::TypeMismatch {
             form: KwargPath::item("steps", 3),
-            expected: "string",
+            expected: ExpectedKwargShape::String,
             got: "int",
         };
         match &err {
@@ -4754,7 +4911,7 @@ mod tests {
         // `KwargPath::Named`'s `:<key>` shape.
         let err = LispError::TypeMismatch {
             form: KwargPath::Slot(2),
-            expected: "keyword",
+            expected: ExpectedKwargShape::Keyword,
             got: "string",
         };
         match &err {
@@ -4767,5 +4924,127 @@ mod tests {
             format!("{err}"),
             "compile error in kwargs[2]: expected keyword, got string"
         );
+    }
+
+    // ── ExpectedKwargShape closed-set lift ──────────────────────────────
+    //
+    // The `LispError::TypeMismatch.expected` slot was promoted from
+    // `&'static str` to the typed closed-set `ExpectedKwargShape` enum.
+    // The seven reachable expected-shape labels — `Keyword` /
+    // `String` / `Int` / `Number` / `Bool` / `List` / `ListOfStrings`
+    // — are now encoded as variant identities so authoring tools (REPL,
+    // LSP, `tatara-check`) bind on `ExpectedKwargShape::Number` etc.
+    // directly rather than substring-matching `expected == "number"`.
+    // Same posture as `KwargPath`, `MacroDefHead`, `UnquoteForm`,
+    // `CompilerSpecIoStage`, and `TemplateInvariantKind`.
+
+    #[test]
+    fn label_renders_canonical_string_for_every_variant() {
+        // Pin every variant's canonical `&'static str` projection — a
+        // regression that drifts any label (typo in `"strin"` for
+        // `"string"`, swap of `"int"` ↔ `"number"`) fails-loudly here.
+        // The seven labels are byte-for-byte identical to the pre-lift
+        // `&'static str` literals scattered across `domain.rs` so
+        // existing `format!("{err}").contains("expected string")`
+        // / `expected int` / `expected number` / etc. assertions in
+        // consumer crates pass unchanged across the lift.
+        assert_eq!(ExpectedKwargShape::Keyword.label(), "keyword");
+        assert_eq!(ExpectedKwargShape::String.label(), "string");
+        assert_eq!(ExpectedKwargShape::Int.label(), "int");
+        assert_eq!(ExpectedKwargShape::Number.label(), "number");
+        assert_eq!(ExpectedKwargShape::Bool.label(), "bool");
+        assert_eq!(ExpectedKwargShape::List.label(), "list");
+        assert_eq!(ExpectedKwargShape::ListOfStrings.label(), "list of strings");
+    }
+
+    #[test]
+    fn display_matches_label_for_every_variant() {
+        // Pin Display-equals-label: the `#[error("... expected
+        // {expected}, ...")]` annotation on `LispError::TypeMismatch`
+        // projects through Display, and Display delegates to `label()`.
+        // A regression that introduces a Display impl that deviates from
+        // `label()` (e.g. capitalizing one variant) would drift the
+        // diagnostic surface; this test pins the contract.
+        assert_eq!(format!("{}", ExpectedKwargShape::Keyword), "keyword");
+        assert_eq!(format!("{}", ExpectedKwargShape::String), "string");
+        assert_eq!(format!("{}", ExpectedKwargShape::Int), "int");
+        assert_eq!(format!("{}", ExpectedKwargShape::Number), "number");
+        assert_eq!(format!("{}", ExpectedKwargShape::Bool), "bool");
+        assert_eq!(format!("{}", ExpectedKwargShape::List), "list");
+        assert_eq!(
+            format!("{}", ExpectedKwargShape::ListOfStrings),
+            "list of strings"
+        );
+    }
+
+    #[test]
+    fn type_mismatch_expected_carries_typed_shape_through_variant_slot() {
+        // After the typed-slot promotion, `LispError::TypeMismatch.expected`
+        // is `ExpectedKwargShape` — the closed-set typed enum.
+        // Consumers (REPL, LSP, `tatara-check`) pattern-match on the
+        // variant identity `ExpectedKwargShape::Number` directly rather
+        // than substring-matching a rendered `"expected number"` prefix.
+        // Pin the structural binding AND the Display projection so the
+        // byte-for-byte rendering contract is anchored from both
+        // angles. A regression that re-introduces a `&'static str`-
+        // shaped expected slot (collapsing the typed enum back into a
+        // free-form label) fails-loudly here.
+        let err = LispError::TypeMismatch {
+            form: KwargPath::named("threshold"),
+            expected: ExpectedKwargShape::Number,
+            got: "string",
+        };
+        match &err {
+            LispError::TypeMismatch { expected, .. } => {
+                assert_eq!(*expected, ExpectedKwargShape::Number);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in :threshold: expected number, got string"
+        );
+    }
+
+    #[test]
+    fn type_mismatch_expected_list_of_strings_bifurcates_from_list() {
+        // The `extract_string_list` outer-shape gate emits
+        // `ExpectedKwargShape::ListOfStrings` (`"list of strings"`),
+        // bifurcating structurally from `extract_vec_via_serde`'s
+        // outer-shape gate which emits `ExpectedKwargShape::List`
+        // (`"list"`). Two related-but-distinct gates, two distinct
+        // variant identities; the typed enum makes that bifurcation
+        // load-bearing. A regression that collapses them into one
+        // variant (e.g. `ExpectedKwargShape::AnyList`) would drift the
+        // diagnostic message; this test pins both shapes.
+        let list_of_strings = LispError::TypeMismatch {
+            form: KwargPath::named("tags"),
+            expected: ExpectedKwargShape::ListOfStrings,
+            got: "string",
+        };
+        let list = LispError::TypeMismatch {
+            form: KwargPath::named("steps"),
+            expected: ExpectedKwargShape::List,
+            got: "string",
+        };
+        assert_eq!(
+            format!("{list_of_strings}"),
+            "compile error in :tags: expected list of strings, got string"
+        );
+        assert_eq!(
+            format!("{list}"),
+            "compile error in :steps: expected list, got string"
+        );
+        match (&list_of_strings, &list) {
+            (
+                LispError::TypeMismatch { expected: a, .. },
+                LispError::TypeMismatch { expected: b, .. },
+            ) => {
+                assert_ne!(a, b);
+                assert_eq!(*a, ExpectedKwargShape::ListOfStrings);
+                assert_eq!(*b, ExpectedKwargShape::List);
+            }
+            _ => panic!("both must be TypeMismatch"),
+        }
     }
 }

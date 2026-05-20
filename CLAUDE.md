@@ -140,6 +140,155 @@ A single `Process` carries:
 > breaks `serde_json::Value` fields expecting bool. Use `#t`/`#f` in
 > every `:values-overlay` payload.
 
+### Ephemeral story — destination state (2026-05)
+
+End-to-end loop, all on `main`, all tested:
+
+```
+(defephemeral …) Lisp form            (tatara-process / examples)
+  → EphemeralSpec via TataraDomain    (tatara-process)
+  → ProcessSpec via typed From        (tatara-process)
+  → reconciler render::render_aplicacao emits:
+       OCIRepository + FluxCD HelmRelease
+  → chart deploys SaaS + Gateway + closed-loop-probe Job
+       (helmworks-akeyless / akeyless-closed-loop-probe-pleme)
+  → tatara-closed-loop-probe binary runs the 5-step probe:
+       1. POST creds → issuer → JWT
+       2. blake3(JWT)                                   → artifact_hash
+       3. GET issuer JWKS → blake3(body)                → intent_hash
+       4. POST JWT → consumer → verify                  → verdict
+       5. blake3(verdict) ⊕ rest → composed_root
+       Writes ReceiptEnvelope (tatara-receipt/v1) to ConfigMap.
+  → tatara-reconciler ClosedLoopAuth evaluator reads ConfigMap,
+       deserializes as typed ReceiptEnvelope, verifies shape + root.
+  → Process → Attested
+  → lifetime_clock fires teardown_policy=OnAttested
+  → Exiting → Zombie → Reaped → ownerRefs cascade-delete
+```
+
+Reusable substrate primitives produced (NOT Akeyless-specific):
+
+| Primitive | Crate | Who else uses it |
+|-----------|-------|------------------|
+| `Intent::Aplicacao` | tatara-process | any Helm-chart-driven Process |
+| `Lifetime::{Permanent,Ephemeral}` + `TeardownPolicy` | tatara-process | any timed Process; shared decision via `lifetime_clock::evaluate` |
+| `ConditionKind::JobAttested` | tatara-process | any Job-based postcondition |
+| `ConditionKind::ClosedLoopAuth` | tatara-process | any self-testing system (DBs, IdPs, brokers) |
+| `EphemeralSpec` + `(defephemeral …)` | tatara-process | typed authoring sugar |
+| `ReceiptEnvelope` (`tatara-receipt/v1`) | tatara-process | every Job receipt — shinka, kenshi, nix-build, probes |
+| `lifetime_clock::evaluate` | tatara-process | any controller respecting `Lifetime::Ephemeral` |
+| `tatara_process::register_all()` | tatara-process | any binary using the Lisp dispatcher |
+| `lisp-compiles :domain` | tatara-check | any new typed-domain coherence check |
+| `render::render_aplicacao` | tatara-reconciler | the canonical Aplicacao→Flux emitter |
+| `tatara-closed-loop-probe` binary | this workspace | any closed-loop probe; takes typed flags |
+| `akeyless-closed-loop-probe-pleme` chart | helmworks-akeyless | Job + RBAC for the probe |
+
+### Ephemeral story — deferred milestones + migration plans
+
+These are NOT done; they're documented here so future agents pick up
+exactly where this lands. Each can ship as a standalone session.
+
+#### P1 — caixa-tatara renderer (arch-synthesizer)
+
+**What:** `(defaplicacao …)` caixa Aplicacao with `:lifetime :ephemeral`
+slot renders mechanically to a `Process` CR with `Intent::Aplicacao` +
+`Lifetime::Ephemeral`. Today: operators author `(defephemeral …)`
+directly. Destination: the higher-level Aplicacao surface lowers to
+the same ProcessSpec via a typed renderer.
+
+**Migration path:**
+1. arch-synthesizer's caixa-mesh renderer already emits cluster
+   artifacts for Aplicacao membros. Add a peer `caixa-tatara` renderer.
+2. Input: `Aplicacao { lifetime: Ephemeral { ttl, teardown }, ... }`.
+3. Output: a `Process` YAML with `intent.aplicacao` pointing at the
+   chart caixa-helm emitted, `lifetime.ephemeral` populated, and
+   `boundary.postconditions` derived from `:contratos` (typed
+   ClosedLoopAuth/JobAttested per membro contract).
+4. Snapshot test: render same Aplicacao through caixa-tatara, parse
+   the YAML via `serde_yaml::from_str::<ProcessSpec>`, assert
+   structural equality with a hand-authored reference Process.
+
+**Not blocked on anything** — every typed primitive it needs already
+exists. Estimated ~300 LoC of Ruby renderer + 1 RSpec synthesis test.
+
+#### P3 — kenshi-runner library lift (kenshi)
+
+**What:** `src/ephemeral/test_runner.rs` (772 LoC, tightly coupled to
+kenshi's `TestEnvironment` CRD) becomes a reusable library crate
+`kenshi-runner`. tatara-reconciler's `ConditionKind::JobAttested`
+evaluator gains the option to *create* the test Job (not just verify
+it) by calling into kenshi-runner.
+
+**Migration path:**
+1. Convert kenshi from single-crate to 2-crate workspace
+   (`kenshi-runner` lib + `kenshi` bin that depends on it).
+2. Move `src/ephemeral/test_runner.rs` to `kenshi-runner/src/lib.rs`.
+3. Decouple from CRD types: replace `TestEnvironment` / `TestSuiteEntry`
+   parameters with a `TestSuiteSpec` struct in kenshi-runner whose
+   shape kenshi's CRD types convert into via `From`. tatara-reconciler
+   can construct the same `TestSuiteSpec` from
+   `boundary.Condition.params` JSON for `JobAttested`.
+4. kenshi binary continues to work unchanged via the From bridge.
+5. Mark kenshi's TestEnvironment CRD as deprecated alias for
+   `Process { lifetime: Ephemeral, postconditions: [JobAttested...] }`
+   per the destination-state design.
+
+**Not blocked on anything.** Estimated ~500 LoC of refactoring +
+~100 LoC of new From impls. The 9-state machine in kenshi maps
+cleanly onto the existing 10-phase Process lifecycle.
+
+#### P5 — shigoto Dag refactor of reconciler internal pipeline
+
+**What:** Replace the hand-rolled `phase_machine.rs` enum dispatch
+with a `shigoto::Dag` of typed `RecordingJob`s. Each phase becomes a
+Job with Budget/Retry/Gate; the reconciler delegates wave execution
+to `shigoto-scheduler::InProcessScheduler`. Satisfies criterion 1 for
+shigoto's ★★ promotion (second production consumer after tend).
+
+**Migration path:**
+1. Add `shigoto-types`, `shigoto-scheduler`, `shigoto-emit` workspace
+   deps to tatara-reconciler.
+2. Wrap each existing `handle_*` function as a `RecordingJob` impl
+   producing typed outputs (phase transitions are the output sink).
+3. Compose the Dag: pending → forking → execing → running → attested
+   with conditional edges for reconverging / exiting / failed.
+4. Replace `kube::runtime::controller::Action::requeue(...)` with
+   shigoto's typed retry/budget tree. SIGSTOP/SIGCONT map to
+   `Scheduler::pause`/`resume`.
+5. Audit emitter: write transitions to a typed `AuditFileEmitter`
+   under `~/.local/state/tatara-reconciler/`.
+
+**Largest of the three.** ~1500 LoC of refactor + extensive test
+parity work. Cannot half-ship without leaving the FSM in two
+implementations. Treat as its own focused milestone.
+
+#### P6-remainder — shikumi defaults + HM/NixOS/Darwin module trio
+
+**What:** The CLI half (`feira ephemeral graph|plan`) shipped. The
+remaining typed-config + module trio lives in shikumi.
+
+**Migration path:**
+1. Define `shikumi::EphemeralDefaults { ttl, max_concurrent_per_cluster,
+   registry, root_ca_name, default_chart_ref }` schema.
+2. Three module surfaces: HM (`services.tatara-reconciler.ephemeral`),
+   NixOS (`services.tatara-reconciler.ephemeral`), Darwin
+   (operator-facing dev defaults only).
+3. saguão `vigia` policy: auto-issue per-namespace Issuer when a
+   namespace carries label `tatara.pleme.io/ephemeral=true`. Reuses
+   existing saguão PKI; no new CA root.
+
+**Not blocked on anything.** Estimated ~200 LoC of typed schema +
+~150 LoC of module wiring.
+
+#### Probe binary image — Nix builder wired, image not yet published
+
+The substrate `rust-tool-image-flake.nix` build path is wired for
+`tatara-closed-loop-probe`; `nix build .#closed-loop-probe-image-amd64`
+produces the OCI tarball. To complete: run the substrate's release
+pipeline (`nix run .#release-closed-loop-probe`) once and push the
+result to `ghcr.io/pleme-io/closed-loop-probe:0.1.0`. That's a CI/CD
+step, not a source-code change.
+
 ### FluxCD is `exec(2)`
 
 `tatara-reconciler` does **not** replace source-controller /

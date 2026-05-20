@@ -18,6 +18,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::export::ExportSpec;
+use crate::phase::ProcessPhase;
 
 /// Lifetime slot on `ProcessSpec`. Exactly one variant should be populated;
 /// when both are unset the resolver returns `Permanent`.
@@ -115,6 +116,38 @@ pub struct EphemeralLifetime {
     /// per-spec ad-hoc sink.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exports: Vec<ExportSpec>,
+}
+
+impl EphemeralLifetime {
+    /// True iff any declared export's [`crate::export::ExportTrigger`]
+    /// fires for the given terminal-reached phase. The reconciler
+    /// uses this to decide whether to route `Attested`/`Failed`
+    /// through `Releasing` (the export window) or skip straight to
+    /// `Exiting`/`Zombie`.
+    ///
+    /// Returns `false` when the export list is empty or no trigger
+    /// matches — both cases collapse to the existing teardown path.
+    pub fn has_applicable_exports(&self, phase: ProcessPhase) -> bool {
+        self.exports.iter().any(|e| match phase {
+            ProcessPhase::Attested => e.when.fires_on_attested(),
+            ProcessPhase::Failed => e.when.fires_on_failed(),
+            _ => false,
+        })
+    }
+
+    /// Iterate over the exports whose trigger fires on `phase`.
+    /// The reconciler's `handle_releasing` consumes this to emit
+    /// one tatara-export-worker Job per surviving spec.
+    pub fn applicable_exports(
+        &self,
+        phase: ProcessPhase,
+    ) -> impl Iterator<Item = &ExportSpec> + '_ {
+        self.exports.iter().filter(move |e| match phase {
+            ProcessPhase::Attested => e.when.fires_on_attested(),
+            ProcessPhase::Failed => e.when.fires_on_failed(),
+            _ => false,
+        })
+    }
 }
 
 impl Default for EphemeralLifetime {
@@ -233,6 +266,75 @@ mod tests {
         let back: Lifetime = serde_yaml::from_str(&yaml).unwrap();
         assert!(back.is_ephemeral());
         assert!(back.ephemeral.unwrap().exports.is_empty());
+    }
+
+    #[test]
+    fn applicable_exports_filters_by_trigger() {
+        use crate::export::{
+            ArtifactSource, ExportSpec, ExportTrigger, HttpEventChannel, ReceiptsSource,
+            VectorChannel,
+        };
+        let spec_attested = ExportSpec {
+            source: ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            channel: VectorChannel {
+                http_event: Some(HttpEventChannel {
+                    endpoint: None,
+                    signal_type: "receipt".into(),
+                }),
+                ..VectorChannel::default()
+            },
+            when: ExportTrigger::OnAttested,
+            experiment_id_override: None,
+        };
+        let spec_failed = ExportSpec {
+            when: ExportTrigger::OnFailed,
+            ..spec_attested.clone()
+        };
+        let spec_always = ExportSpec {
+            when: ExportTrigger::Always,
+            ..spec_attested.clone()
+        };
+
+        let lt = EphemeralLifetime {
+            ttl: "1h".into(),
+            teardown_policy: TeardownPolicy::OnAttested,
+            max_concurrent: 1,
+            exports: vec![spec_attested, spec_failed, spec_always],
+        };
+
+        // Attested gate fires OnAttested + Always — 2 of 3.
+        assert!(lt.has_applicable_exports(ProcessPhase::Attested));
+        assert_eq!(lt.applicable_exports(ProcessPhase::Attested).count(), 2);
+
+        // Failed gate fires OnFailed + Always — 2 of 3.
+        assert!(lt.has_applicable_exports(ProcessPhase::Failed));
+        assert_eq!(lt.applicable_exports(ProcessPhase::Failed).count(), 2);
+
+        // Other phases never route through Releasing.
+        for p in [
+            ProcessPhase::Pending,
+            ProcessPhase::Forking,
+            ProcessPhase::Execing,
+            ProcessPhase::Running,
+            ProcessPhase::Reconverging,
+            ProcessPhase::Releasing,
+            ProcessPhase::Exiting,
+            ProcessPhase::Zombie,
+            ProcessPhase::Reaped,
+        ] {
+            assert!(!lt.has_applicable_exports(p));
+            assert_eq!(lt.applicable_exports(p).count(), 0);
+        }
+    }
+
+    #[test]
+    fn no_exports_means_no_applicable_exports() {
+        let lt = EphemeralLifetime::default();
+        assert!(!lt.has_applicable_exports(ProcessPhase::Attested));
+        assert!(!lt.has_applicable_exports(ProcessPhase::Failed));
     }
 
     #[test]

@@ -373,6 +373,12 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
     if let AutoTerminate::Now { reason } =
         lifetime_clock::evaluate(p, ProcessPhase::Attested, chrono::Utc::now())
     {
+        // Route through Releasing iff applicable exports declared.
+        // Empty exports / no-trigger-match → fall through to the
+        // existing Attested → Exiting path (zero-trace ephemeral).
+        if has_applicable_exports(p, ProcessPhase::Attested) {
+            return transition_to_releasing(ctx, &ns, &name, &reason).await;
+        }
         return transition_to_exiting(ctx, &ns, &name, &reason).await;
     }
 
@@ -623,10 +629,16 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
     if let AutoTerminate::Now { reason } =
         lifetime_clock::evaluate(p, ProcessPhase::Failed, chrono::Utc::now())
     {
-        // Failed → Exiting is not in the canonical FSM transition table
-        // (phase.rs marks Failed → Zombie as the only legal next step).
-        // Honor the FSM and let the cascade happen at Zombie via the
-        // existing finalizer-driven owner GC, while still recording the
+        // Route through Releasing iff applicable post-mortem exports
+        // declared. Without any, Failed → Zombie directly (no export
+        // window to run).
+        if has_applicable_exports(p, ProcessPhase::Failed) {
+            return transition_to_releasing(ctx, &ns, &name, &reason).await;
+        }
+        // Phase.rs marks Failed → Zombie as the only legal next step
+        // when no exports route through Releasing. Honor the FSM and
+        // let the cascade happen at Zombie via the existing
+        // finalizer-driven owner GC, while still recording the
         // teardown reason so the operator sees why cleanup happened
         // automatically.
         let body = json!({
@@ -649,6 +661,49 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
         .await
         .map_err(|e| anyhow!("patch (failed→zombie): {e}"))?;
     info!(namespace = %ns, name = %name, "failed → zombie");
+    Ok(Action::requeue(Duration::from_secs(TICK_RETRY)))
+}
+
+/// True iff the Process has at least one ephemeral export whose
+/// trigger fires for `phase`. Wraps the typed
+/// [`tatara_process::lifetime::EphemeralLifetime::has_applicable_exports`]
+/// helper so the reconciler reads through the same predicate the
+/// pool-reconciler + caixa renderer will when they grow their own
+/// export awareness.
+fn has_applicable_exports(p: &Process, phase: ProcessPhase) -> bool {
+    p.spec
+        .lifetime
+        .ephemeral
+        .as_ref()
+        .map(|e| e.has_applicable_exports(phase))
+        .unwrap_or(false)
+}
+
+/// Transition Attested/Failed → Releasing with an operator-visible
+/// reason. The actual export-worker Job emission lives in
+/// `handle_releasing` (Phase 4c); this helper only flips the phase
+/// + records why so the operator sees the routing decision.
+async fn transition_to_releasing(
+    ctx: &Context,
+    ns: &str,
+    name: &str,
+    reason: &str,
+) -> Result<Action> {
+    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), ns);
+    let body = json!({
+        "phase": ProcessPhase::Releasing,
+        "phaseSince": chrono::Utc::now(),
+        "message": format!("releasing exports — {reason}"),
+    });
+    patch::patch_process_status(&api, name, body)
+        .await
+        .map_err(|e| anyhow!("patch (→releasing): {e}"))?;
+    info!(
+        namespace = %ns,
+        name = %name,
+        reason = %reason,
+        "→ releasing (export window opens)"
+    );
     Ok(Action::requeue(Duration::from_secs(TICK_RETRY)))
 }
 

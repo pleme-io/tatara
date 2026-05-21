@@ -14,7 +14,7 @@ use std::sync::{Mutex, OnceLock};
 use serde::de::DeserializeOwned;
 
 use crate::ast::{Atom, Sexp};
-use crate::error::{ExpectedKwargShape, KwargPath, LispError, Result, SexpShape};
+use crate::error::{ExpectedKwargShape, KwargPath, LispError, Result, SexpShape, SexpWitness};
 
 /// A Rust type compilable from a Lisp form.
 pub trait TataraDomain: Sized {
@@ -442,6 +442,40 @@ pub fn sexp_shape(s: &Sexp) -> SexpShape {
 #[must_use]
 pub fn sexp_type_name(s: &Sexp) -> &'static str {
     sexp_shape(s).label()
+}
+
+/// Typed projection of a `Sexp` into a `SexpWitness` — the joint
+/// identity (structural `SexpShape` + renderable `Sexp::Display`
+/// projection) the offending-value side of a typed-entry rejection
+/// owes the operator. Pairs `sexp_shape(_)` with `Sexp::to_string()`
+/// in ONE projection so every error-builder helper that previously
+/// projected `&Sexp → String` via `to_string()` at the variant
+/// boundary — discarding the `SexpShape` — now lifts to ONE primitive
+/// that carries both halves of the identity through the variant slot
+/// directly.
+///
+/// Sibling of `sexp_shape(&Sexp) -> SexpShape` (the shape-only
+/// projection feeding `TypeMismatch.got` / `NamedFormNonSymbolName.got`)
+/// and `sexp_type_name(&Sexp) -> &'static str` (the `&'static str`-only
+/// projection feeding legacy substring-grep consumers). `sexp_witness`
+/// is the typed JOINT projection — both halves of the identity bundled
+/// into ONE owned `SexpWitness` value so the variant lives independent
+/// of the call frame and crosses thread boundaries cleanly.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// diagnostics. An error that names only the shape leaves the operator
+/// to guess what they wrote; an error that names only the literal
+/// withholds the structural identity tools want to pattern-match on.
+/// The witness names both. THEORY.md §VI.1 — generation over
+/// composition; the seven `got: <sexp>.to_string()` projections at
+/// error-builder boundaries (six in `macro_expand.rs`, one in
+/// `domain.rs::missing_head_err`'s caller) collapse into ONE primitive
+/// parameterized by `&Sexp`. THEORY.md §II.1 invariant 1 — typed
+/// entry; the offending Sexp's identity is part of the proof of WHAT
+/// the typed-entry gate rejected.
+#[must_use]
+pub fn sexp_witness(s: &Sexp) -> SexpWitness {
+    SexpWitness::new(sexp_shape(s), s.to_string())
 }
 
 /// Suggest the candidate closest to `needle` by Levenshtein distance,
@@ -1941,6 +1975,65 @@ mod tests {
                 "sexp_type_name and sexp_shape(_).label() must agree for {s:?}"
             );
         }
+    }
+
+    #[test]
+    fn sexp_witness_pairs_typed_shape_with_display_projection() {
+        // Pin the typed joint-identity contract: `sexp_witness(&sexp)`
+        // produces a `SexpWitness` whose `shape` is `sexp_shape(&sexp)`
+        // AND whose `display` is `sexp.to_string()`. The helper is the
+        // single primitive that bundles both halves of the offending-
+        // value identity into one owned typed value — every variant
+        // slot that takes a `SexpWitness` (currently
+        // `SpliceOutsideList.got`; future moves: `NonSymbolUnquoteTarget`,
+        // `NonSymbolParam`, `RestParamMissingName`, `DefmacroNonSymbolName`,
+        // `DefmacroNonListParams`, `MissingHeadSymbol`) routes through
+        // this primitive at the helper boundary. A regression that
+        // drops either projection (shape or display) at the helper
+        // boundary fails-loudly here.
+        let w = sexp_witness(&Sexp::int(5));
+        assert_eq!(w.shape, SexpShape::Int);
+        assert_eq!(w.display, "5");
+
+        let w = sexp_witness(&Sexp::symbol("notify-ref"));
+        assert_eq!(w.shape, SexpShape::Symbol);
+        assert_eq!(w.display, "notify-ref");
+
+        let w = sexp_witness(&Sexp::keyword("foo"));
+        assert_eq!(w.shape, SexpShape::Keyword);
+        assert_eq!(w.display, ":foo");
+
+        let w = sexp_witness(&Sexp::List(vec![
+            Sexp::symbol("list"),
+            Sexp::int(1),
+            Sexp::int(2),
+        ]));
+        assert_eq!(w.shape, SexpShape::List);
+        assert_eq!(w.display, "(list 1 2)");
+
+        let w = sexp_witness(&Sexp::Nil);
+        assert_eq!(w.shape, SexpShape::Nil);
+        assert_eq!(w.display, "()");
+    }
+
+    #[test]
+    fn sexp_witness_distinguishes_int_atom_from_symbol_with_same_display() {
+        // Pin the structural bifurcation between two `Sexp`s whose
+        // `Display` projection is the same string but whose typed
+        // `SexpShape` differs. `Sexp::int(5).to_string() == "5"`
+        // AND `Sexp::symbol("5").to_string() == "5"` (the reader
+        // would reject the symbol `5`, but the AST allows it — the
+        // bifurcation here pins that `sexp_witness` carries the
+        // structural shape so tools can distinguish them even when
+        // the rendered literal is identical). A regression that
+        // drops the typed shape from `SexpWitness` would collapse
+        // this distinction.
+        let w_int = sexp_witness(&Sexp::int(5));
+        let w_sym = sexp_witness(&Sexp::symbol("5"));
+        assert_eq!(w_int.display, w_sym.display);
+        assert_ne!(w_int.shape, w_sym.shape);
+        assert_eq!(w_int.shape, SexpShape::Int);
+        assert_eq!(w_sym.shape, SexpShape::Symbol);
     }
 
     fn type_err_message(err: LispError) -> String {

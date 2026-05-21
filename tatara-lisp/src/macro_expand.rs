@@ -695,7 +695,7 @@ fn non_symbol_unquote_target(prefix: UnquoteForm, got: &Sexp) -> LispError {
 /// successfully has the same expansion behavior under either strategy.
 fn splice_outside_list(inner: &Sexp) -> LispError {
     LispError::SpliceOutsideList {
-        got: inner.to_string(),
+        got: crate::domain::sexp_witness(inner),
     }
 }
 
@@ -1500,7 +1500,7 @@ mod tests {
     /// legibility. Sibling of `unbound_var` and `non_symbol_target`.
     fn splice_outside_list_got(err: &LispError) -> &str {
         match err {
-            LispError::SpliceOutsideList { got } => got.as_str(),
+            LispError::SpliceOutsideList { got } => got.display.as_str(),
             other => panic!("expected SpliceOutsideList, got: {other:?}"),
         }
     }

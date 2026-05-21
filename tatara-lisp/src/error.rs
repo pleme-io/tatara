@@ -345,14 +345,36 @@ pub enum LispError {
     /// marker, parallel to how `OddKwargs` names ONE failure mode (odd-length
     /// kwargs slice) without a syntactic-marker slot.
     ///
-    /// `got` is `String` because it comes from arbitrary source via
-    /// `Sexp::Display` (the offending inner — `xs`, `(list 1 2)`, `5`,
-    /// `:foo`, etc.). Naming both the failure mode AND the offending element
-    /// is the typed-entry gate's structural-completeness floor (THEORY.md
-    /// §V.1) — without it the operator must re-read the source to find what
-    /// actually misfired. When a future run gives `Sexp` source spans, `pos:
-    /// Option<usize>` lands here in ONE place and every splice-outside-list
-    /// site picks up positional rendering via
+    /// `got` is `SexpWitness` — the closed-set typed joint identity
+    /// pairing the offending inner's `SexpShape` (the twelve reachable
+    /// outermost shapes the reader can produce) with its
+    /// `Sexp::Display` projection (the literal value the author wrote
+    /// — `xs`, `(list 1 2)`, `5`, `:foo`, etc.). Promotes the legacy
+    /// `got: String` shape to a typed witness so authoring tools (REPL,
+    /// LSP, `tatara-check`) bind to BOTH `got.shape` (structurally
+    /// pattern-matchable on `SexpShape::List` etc.) AND `got.display`
+    /// (the literal value, renderable verbatim) without losing either
+    /// side. Naming both the failure mode AND the offending element
+    /// is the typed-entry gate's structural-completeness floor
+    /// (THEORY.md §V.1) — without it the operator must re-read the
+    /// source to find what actually misfired. After this lift the
+    /// structural identity is part of the variant's typed data shape;
+    /// a regression that re-collapses `got` to a free-form `String`
+    /// loses the rustc-enforced closed-set guarantee on shape
+    /// identity.
+    ///
+    /// First consumer of the `SexpWitness` primitive — sibling lifts
+    /// of `NonSymbolUnquoteTarget.got`, `NonSymbolParam.got`,
+    /// `RestParamMissingName.got`, `DefmacroNonSymbolName.got`,
+    /// `DefmacroNonListParams.got`, and `MissingHeadSymbol.got` are
+    /// the next moves in the same trajectory: every `got: String`
+    /// (or `Option<String>`) slot whose source is `Sexp::Display`
+    /// picks up the typed witness mechanically once the variant's
+    /// data shape is bumped.
+    ///
+    /// When a future run gives `Sexp` source spans, `pos: Option<usize>`
+    /// lands on `SexpWitness` ONCE and every splice-outside-list site
+    /// picks up positional rendering via
     /// `crate::diagnostic::format_diagnostic` mechanically.
     ///
     /// Display renders `"compile error in ,@: \`,@\` may only appear inside
@@ -362,9 +384,11 @@ pub enum LispError {
     /// parenthetical `(got ,@{got})` names the offending form so an LSP
     /// quick-fix that surfaces "the splice has no containing list; you
     /// wrote `,@xs`" gains the literal value as data, no message re-parsing
-    /// required.
+    /// required. The `{got}` slot flows through `SexpWitness::Display`,
+    /// which writes only the `display` field, so the rendering is
+    /// byte-for-byte identical to the legacy `got: String` shape.
     #[error("compile error in ,@: `,@` may only appear inside a list (got ,@{got})")]
-    SpliceOutsideList { got: String },
+    SpliceOutsideList { got: SexpWitness },
     /// A macro was called with fewer arguments than its required-param arity:
     /// `(defmacro f (a b) `(,a ,b)) (f 1)` — `b` has no arg. Both the failing
     /// macro's name AND the un-bound param are first-class structural fields,
@@ -1909,6 +1933,118 @@ impl std::fmt::Display for SexpShape {
     }
 }
 
+/// Typed witness of an offending `Sexp` at a typed-entry rejection
+/// boundary — the joint identity (shape + literal) the substrate's
+/// diagnostic surface owes the operator. Pairs the closed-set
+/// `SexpShape` projection (the twelve reachable Sexp outermost shapes
+/// the reader can produce) with the `Sexp::Display` projection (the
+/// literal value the operator wrote: `5`, `:foo`, `(list 1 2)`,
+/// `notify-ref`, etc.).
+///
+/// Mirror at the offending-value boundary of the prior-run
+/// `SexpShape` (typed-shape closed set), `ExpectedKwargShape`
+/// (expected-shape closed set), `KwargPath` (kwargs-path shapes),
+/// `MacroDefHead` (macro-definition-head closed set), `UnquoteForm`
+/// (template-marker syntactic forms), `CompilerSpecIoStage`
+/// (disk-persistence surface), and `TemplateInvariantKind`
+/// (bytecode-runtime surface) closed-set lifts: those enums key
+/// rejection variants on a typed identity carried inside the
+/// variant's data shape; `SexpWitness` keys the OFFENDING-VALUE side
+/// (the `got: String` Sexp::Display slots on `NonSymbolUnquoteTarget`,
+/// `SpliceOutsideList`, `NonSymbolParam`, `RestParamMissingName`,
+/// `DefmacroNonSymbolName`, `DefmacroNonListParams`,
+/// `MissingHeadSymbol`, and any future variant taking a `&Sexp` at
+/// the helper boundary) on a typed joint identity so authoring tools
+/// (REPL, LSP, `tatara-check`) bind to BOTH `witness.shape` (the
+/// structural identity — pattern-matchable on `SexpShape::List` etc.)
+/// AND `witness.display` (the literal value — renderable verbatim)
+/// without losing either side.
+///
+/// Before this struct landed, the six error-builder helpers in
+/// `macro_expand.rs` (`non_symbol_unquote_target`, `splice_outside_list`,
+/// `non_symbol_param`, `rest_param_missing_name`,
+/// `defmacro_non_symbol_name`, `defmacro_non_list_params`) and one
+/// in `domain.rs` (`missing_head_err`'s caller) each projected `&Sexp
+/// → String` via `Sexp::to_string()` at the boundary — the structural
+/// `SexpShape` was lost. After this primitive lands, every offending-
+/// value variant slot that takes a `SexpWitness` carries the typed
+/// shape AND the literal jointly in ONE owned value the variant lives
+/// independent of the call frame on.
+///
+/// The byte-for-byte rendering contract is preserved: `Display` for
+/// `SexpWitness` writes only the `display` field, so a variant whose
+/// `#[error(...)]` annotation projects through `{got}` renders
+/// byte-identically to the legacy `got: String` shape — every
+/// downstream substring-grep consumer (`tatara-check`, REPL) passes
+/// unchanged. The gain is structural: tools that pattern-match on
+/// `witness.shape == SexpShape::List` now bind to the typed identity
+/// directly instead of substring-parsing the rendered literal.
+///
+/// `Clone + Debug + PartialEq + Eq` are retained (same posture as
+/// every other owned-data `LispError` field); `Copy` is dropped
+/// because the `display: String` is not `Copy`. When a future run
+/// gives `Sexp` source spans, `pos: Option<usize>` lands here in ONE
+/// place and every offending-value site picks up positional rendering
+/// with no per-variant edit — the same future-proofing posture
+/// `KwargPath`, `SexpShape`, and `ExpectedKwargShape` already carry.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the offending-
+/// value's joint identity (structural shape + renderable literal)
+/// becomes a TYPE rather than a `String` projection at the helper
+/// boundary that discards the shape. After this primitive lands the
+/// substrate's understanding of "the offending Sexp at a typed-entry
+/// rejection" lives in ONE typed struct the diagnostic promotions
+/// hang off of. THEORY.md §VI.1 — generation over composition; seven
+/// inline `got.to_string()` projections at error-builder boundaries
+/// (six in `macro_expand.rs`, one in `domain.rs::missing_head_err`'s
+/// caller) is past the three-times-rule trigger. THEORY.md §II.1
+/// invariant 1 — typed entry; the offending Sexp's identity is part
+/// of the proof of WHAT the typed-entry gate rejected, and the typed
+/// witness makes both halves of that identity (shape + literal)
+/// load-bearing data on the variant rather than the literal-only
+/// `String` projection the legacy shape carried.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SexpWitness {
+    /// Structural identity — the typed-shape projection (`SexpShape::Int`,
+    /// `SexpShape::List`, etc.). Pattern-matchable; future `pos: Option<usize>`
+    /// promotions land alongside this field once `Sexp` carries spans.
+    pub shape: SexpShape,
+    /// Renderable identity — the `Sexp::Display` projection (`"5"`,
+    /// `"(list 1 2)"`, `":foo"`, etc.). Owned so the witness lives
+    /// independent of the call frame and crosses thread boundaries
+    /// cleanly. Feeds the `#[error(...)]` annotation's `{got}` slot
+    /// via `SexpWitness`'s `Display` impl.
+    pub display: String,
+}
+
+impl SexpWitness {
+    /// Owned constructor — pairs a typed `SexpShape` with an owned
+    /// `String` projection of the offending `Sexp::Display`. Used by
+    /// the `sexp_witness(&Sexp)` projection helper in `domain.rs`;
+    /// hand-written `TataraDomain` impls that need to construct a
+    /// witness at their own call boundary route through this
+    /// constructor.
+    #[must_use]
+    pub fn new(shape: SexpShape, display: impl Into<String>) -> Self {
+        Self {
+            shape,
+            display: display.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for SexpWitness {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Render the literal only — the byte-for-byte legacy rendering
+        // of every `got: String` variant slot that projected through
+        // `Sexp::Display`. Authoring tools that substring-grep on the
+        // rendered diagnostic see no drift; tools that pattern-match
+        // on the variant's `SexpWitness`-shaped `got` slot bind to
+        // `witness.shape` directly.
+        f.write_str(&self.display)
+    }
+}
+
 fn unbound_hint_suffix(prefix: UnquoteForm, hint: Option<&str>) -> String {
     match hint {
         Some(h) => format!("; did you mean {}{h}?", prefix.marker()),
@@ -2008,7 +2144,9 @@ impl LispError {
 
 #[cfg(test)]
 mod tests {
-    use super::{ExpectedKwargShape, KwargPath, LispError, MacroDefHead, SexpShape, UnquoteForm};
+    use super::{
+        ExpectedKwargShape, KwargPath, LispError, MacroDefHead, SexpShape, SexpWitness, UnquoteForm,
+    };
 
     #[test]
     fn position_extracts_offset_from_positional_variants() {
@@ -2133,12 +2271,15 @@ mod tests {
             None
         );
         assert_eq!(
-            LispError::SpliceOutsideList { got: "xs".into() }.position(),
+            LispError::SpliceOutsideList {
+                got: SexpWitness::new(SexpShape::Symbol, "xs"),
+            }
+            .position(),
             None
         );
         assert_eq!(
             LispError::SpliceOutsideList {
-                got: "(list 1 2)".into(),
+                got: SexpWitness::new(SexpShape::List, "(list 1 2)"),
             }
             .position(),
             None
@@ -2813,11 +2954,16 @@ mod tests {
     fn splice_outside_list_display_renders_legacy_substring_with_offending_form() {
         // `,@xs` at the body's top level — there is no containing list to
         // splice into. The variant names the offending inner (`xs`) as a
-        // first-class field so authoring tools (REPL, LSP, `tatara-check`)
-        // gain structural binding; tools that substring-match on the
-        // rendered diagnostic still see the legacy `"\`,@\` may only appear
-        // inside a list"` substring verbatim.
-        let err = LispError::SpliceOutsideList { got: "xs".into() };
+        // first-class typed witness so authoring tools (REPL, LSP,
+        // `tatara-check`) gain structural binding to BOTH `got.shape`
+        // (typed `SexpShape::Symbol` here) AND `got.display` (the literal
+        // `"xs"`); tools that substring-match on the rendered diagnostic
+        // still see the legacy `"\`,@\` may only appear inside a list"`
+        // substring verbatim because `SexpWitness::Display` writes only
+        // the `display` field.
+        let err = LispError::SpliceOutsideList {
+            got: SexpWitness::new(SexpShape::Symbol, "xs"),
+        };
         assert_eq!(
             format!("{err}"),
             "compile error in ,@: `,@` may only appear inside a list (got ,@xs)"
@@ -2828,9 +2974,12 @@ mod tests {
     fn splice_outside_list_display_carries_list_literal_unchanged() {
         // The offending inner is a list literal — `,@(list 1 2)` — so the
         // operator sees the literal value they wrote in the parenthetical,
-        // not just a type-name. Round-trips through `Sexp::Display`.
+        // not just a type-name. The typed `SexpShape::List` rides the
+        // variant slot alongside the `Sexp::Display` projection; tools
+        // can now pattern-match on `got.shape == SexpShape::List`
+        // without re-parsing the rendered diagnostic.
         let err = LispError::SpliceOutsideList {
-            got: "(list 1 2)".into(),
+            got: SexpWitness::new(SexpShape::List, "(list 1 2)"),
         };
         assert_eq!(
             format!("{err}"),
@@ -2841,11 +2990,11 @@ mod tests {
     #[test]
     fn splice_outside_list_display_carries_kebab_case_symbol_unchanged() {
         // `,@notify-ref` — kebab-cased symbol round-trips through the
-        // variant's `got` slot unchanged. Pinning this contract means a
-        // regression that camelCases or lowercases the offending form fails
-        // -loudly here.
+        // variant's `got.display` slot unchanged. Pinning this contract
+        // means a regression that camelCases or lowercases the offending
+        // form fails-loudly here.
         let err = LispError::SpliceOutsideList {
-            got: "notify-ref".into(),
+            got: SexpWitness::new(SexpShape::Symbol, "notify-ref"),
         };
         assert_eq!(
             format!("{err}"),
@@ -2860,7 +3009,9 @@ mod tests {
         // containing list") fails-loudly here even if the parenthetical
         // changes shape. The substring is what consumers downstream
         // (tatara-check, the REPL) substring-match on today.
-        let err = LispError::SpliceOutsideList { got: "xs".into() };
+        let err = LispError::SpliceOutsideList {
+            got: SexpWitness::new(SexpShape::Symbol, "xs"),
+        };
         let msg = format!("{err}");
         assert!(
             msg.contains("`,@` may only appear inside a list"),
@@ -2870,6 +3021,131 @@ mod tests {
             msg.contains("(got ,@xs)"),
             "expected offending-form parenthetical in message, got: {msg}"
         );
+    }
+
+    // ── SexpWitness: typed joint-identity lift for offending-Sexp slots ──
+    //
+    // The `SexpWitness { shape: SexpShape, display: String }` typed
+    // primitive lands as the first promotion of a `got: String`
+    // Sexp::Display-projection slot to a typed joint identity. Pins:
+    // (a) `SexpWitness::Display` writes only the `display` field
+    // (byte-for-byte legacy rendering preserved); (b) the struct's
+    // `shape` field is pattern-matchable for tooling that wants
+    // structural binding without re-parsing the literal; (c) the
+    // `SpliceOutsideList.got` slot's typed shape is now load-bearing
+    // — a regression that re-collapses `got` to a free-form `String`
+    // loses the rustc-enforced typed-shape guarantee.
+
+    #[test]
+    fn sexp_witness_display_writes_only_the_display_field() {
+        // Pin the byte-for-byte rendering contract: `SexpWitness`'s
+        // `Display` impl writes ONLY the `display` field, NOT the
+        // shape label. This is the load-bearing posture for the
+        // `#[error("...(got ,@{got})")]` annotation on
+        // `SpliceOutsideList` — the parenthetical reads `(got ,@xs)`
+        // verbatim, not `(got ,@symbol xs)`. A regression that adds
+        // a shape prefix to Display fails-loudly here AND at every
+        // legacy-rendering test downstream.
+        let w = SexpWitness::new(SexpShape::Symbol, "xs");
+        assert_eq!(format!("{w}"), "xs");
+        let w = SexpWitness::new(SexpShape::List, "(list 1 2)");
+        assert_eq!(format!("{w}"), "(list 1 2)");
+        let w = SexpWitness::new(SexpShape::Int, "5");
+        assert_eq!(format!("{w}"), "5");
+        let w = SexpWitness::new(SexpShape::Keyword, ":foo");
+        assert_eq!(format!("{w}"), ":foo");
+    }
+
+    #[test]
+    fn sexp_witness_carries_both_shape_and_display_jointly() {
+        // Pin the joint-identity contract: `SexpWitness` carries BOTH
+        // halves of the offending-value identity (typed `SexpShape`
+        // AND literal `Sexp::Display` projection) in ONE owned value.
+        // Tools that pattern-match on `witness.shape` bind to the
+        // structural identity; tools that render via `{witness}` get
+        // the literal value. Neither half is recoverable from the
+        // other (a `Sexp::Display` projection of `"5"` could be Int
+        // or Symbol — substring parsing can't recover the structural
+        // identity reliably), so the typed witness is the canonical
+        // source for both.
+        let w = SexpWitness::new(SexpShape::Int, "5");
+        assert_eq!(w.shape, SexpShape::Int);
+        assert_eq!(w.display, "5");
+        // The literal `"5"` would substring-grep the same as a hand-
+        // written symbol named `5`, but the typed shape distinguishes
+        // them structurally — a regression that drops the shape slot
+        // would collapse this distinction.
+        let w_sym = SexpWitness::new(SexpShape::Symbol, "5");
+        assert_eq!(w_sym.shape, SexpShape::Symbol);
+        assert_eq!(w_sym.display, "5");
+        assert_ne!(
+            w, w_sym,
+            "Witnesses with same display but different shape must NOT be equal — typed shape is load-bearing data",
+        );
+    }
+
+    #[test]
+    fn splice_outside_list_got_carries_typed_witness_through_variant_slot() {
+        // Pin the structural binding on `LispError::SpliceOutsideList.got`
+        // — a regression that re-introduces a `String`-shaped got slot
+        // (collapsing the typed witness back into a free-form literal)
+        // fails-loudly here. After this lift the variant's typed slot
+        // is the joint `SexpWitness` identity; the Display projection
+        // through `SexpWitness::Display` writes only the `display`
+        // field so the rendered `(got ,@<display>)` parenthetical is
+        // byte-for-byte identical to the legacy `got: String` shape.
+        let err = LispError::SpliceOutsideList {
+            got: SexpWitness::new(SexpShape::List, "(list 1 2)"),
+        };
+        match &err {
+            LispError::SpliceOutsideList { got } => {
+                assert_eq!(got.shape, SexpShape::List);
+                assert_eq!(got.display, "(list 1 2)");
+            }
+            other => panic!("expected SpliceOutsideList, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,@: `,@` may only appear inside a list (got ,@(list 1 2))"
+        );
+    }
+
+    #[test]
+    fn splice_outside_list_got_distinguishes_symbol_from_list_at_variant_slot() {
+        // Pin the typed-shape bifurcation at the variant slot: a
+        // `,@xs` (symbol unquote-splice outside list) and a `,@(list 1 2)`
+        // (list-literal unquote-splice outside list) BOTH route to
+        // `SpliceOutsideList`, but the typed `got.shape` slot
+        // distinguishes them structurally — `SexpShape::Symbol` vs.
+        // `SexpShape::List`. A regression that erases the typed
+        // shape (e.g., reverts to `got: String`) would lose this
+        // distinction — tooling that wants to surface "you wrote a
+        // symbol `,@xs` outside a list; bind `xs` to a list first"
+        // vs. "you wrote a list literal `,@(list 1 2)` outside a
+        // list; nest it inside `(outer ,@(...))`" would have to
+        // substring-grep the `display` field, brittle.
+        let err_sym = LispError::SpliceOutsideList {
+            got: SexpWitness::new(SexpShape::Symbol, "xs"),
+        };
+        let err_list = LispError::SpliceOutsideList {
+            got: SexpWitness::new(SexpShape::List, "(list 1 2)"),
+        };
+        let (sym_shape, list_shape) = (
+            match &err_sym {
+                LispError::SpliceOutsideList { got } => got.shape,
+                _ => unreachable!(),
+            },
+            match &err_list {
+                LispError::SpliceOutsideList { got } => got.shape,
+                _ => unreachable!(),
+            },
+        );
+        assert_ne!(
+            sym_shape, list_shape,
+            "Symbol and List witnesses must remain structurally distinct at the variant slot",
+        );
+        assert_eq!(sym_shape, SexpShape::Symbol);
+        assert_eq!(list_shape, SexpShape::List);
     }
 
     #[test]

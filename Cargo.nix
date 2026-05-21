@@ -6708,7 +6708,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/egaku";
           rev = "a6dc7913a0690ff4c6a24636ce58baac7ae16cba";
-          sha256 = "0sdr8mg3rq9r8nhg7wm77v7nh2z4vx3j5p3qswkgfacgpbvkalqa";
+          sha256 = "sha256-6I8KsEQgxrFYpGY/PnvpcxXO6XY91oAx7i5Ej0vQPsM=";
         };
         dependencies = [
           {

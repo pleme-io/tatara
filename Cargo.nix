@@ -6700,7 +6700,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/egaku";
           rev = "a6dc7913a0690ff4c6a24636ce58baac7ae16cba";
-          sha256 = "0sdr8mg3rq9r8nhg7wm77v7nh2z4vx3j5p3qswkgfacgpbvkalqa";
+          sha256 = "1hrys15qyi1fxqqq1mixfvlww5bkx5xkwgv6licb3ii08jq0m3z8";
         };
         dependencies = [
           {
@@ -9533,7 +9533,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/iac-forge";
           rev = "a9d52c124d2c1bb2ee59d162baecc870d114a946";
-          sha256 = "13vcl1m13fjpwhv9syalcz49g3jyymshj928gpl2ld33s10400z9";
+          sha256 = "14pp3c858w784m5p15yfmqx068v6171j34wa9rvxiv4xnmkgia7c";
         };
         libName = "iac_forge";
         dependencies = [
@@ -10626,7 +10626,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/kasou";
           rev = "be7fb2f803379318a23a6db6daa772e7eb59d12f";
-          sha256 = "0c34mkzjrwmdli83sard5rn8fsgjrzgrnzprn767rfm6p6fk2zgf";
+          sha256 = "197c24nfc3jvkdw0ki4s6izf0dgmpi43zqzk16lxzg2s5q0fa903";
         };
         dependencies = [
           {
@@ -11704,7 +11704,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/meimei";
           rev = "419190adc489a1da8ff89aea6ef2a6fe399b0e92";
-          sha256 = "1zqlb51idmprjy411fgw4xhj4r3zqqyi20vbp78pbz80pgrdz9my";
+          sha256 = "1mn417sljhpy03faal04lkz81vcmzsg9yrvybwjsbka0sshsizfl";
         };
 
       };
@@ -13278,7 +13278,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/openapi-forge";
           rev = "8e3aeb281650430c215d2a6283660a980a292e35";
-          sha256 = "00rd9nfgj3x4mr1yc1d7f3jigw0qkyi0hil0r57hkapw1l62jn6i";
+          sha256 = "0l6sf49wqhcywk6w8317fhmla6kwnqgwdfw5xld6hj1wp32xpwg3";
         };
         libName = "openapi_forge";
         dependencies = [
@@ -17787,7 +17787,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/sekkei";
           rev = "f76a1be65b4ca542e8c9f4ff21dc56d3fd5ff752";
-          sha256 = "08faq46xbpngdm3whmkn2342zq2abf467xbibgksi3cdjd9wi6sb";
+          sha256 = "1wyyx0maz6dajlz138ca3rbfvax5iwx7509imimgq1rnvhzdmpqv";
         };
         dependencies = [
           {
@@ -19183,7 +19183,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/takumi";
           rev = "ff9088035117675fc1d0562e2e16a7fd13ace9a6";
-          sha256 = "10w46fjaddbrch5i1s0swj3an95m0mdp0klf10r9qq86rq4vdslw";
+          sha256 = "1v09rk4qk7ab857jwsm3758zxjd6aqq919llklgrirj53wx2wwf5";
         };
         dependencies = [
           {

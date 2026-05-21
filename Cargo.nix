@@ -10634,7 +10634,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/kasou";
           rev = "be7fb2f803379318a23a6db6daa772e7eb59d12f";
-          sha256 = "0c34mkzjrwmdli83sard5rn8fsgjrzgrnzprn767rfm6p6fk2zgf";
+          sha256 = "sha256-AyTlAC5avN+pCfPjP0i89TXgfjSaxAl4m1sO5iwR7KQ=";
         };
         dependencies = [
           {

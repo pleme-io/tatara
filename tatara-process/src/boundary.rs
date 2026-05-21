@@ -25,6 +25,7 @@ pub struct Condition {
     pub kind: ConditionKind,
     /// Kind-specific payload (free-form JSON).
     #[serde(default)]
+    #[schemars(schema_with = "crate::schema_helpers::preserve_unknown_object")]
     pub params: serde_json::Value,
 }
 

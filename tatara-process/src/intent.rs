@@ -204,6 +204,7 @@ pub struct AplicacaoIntent {
     /// Typed values overlay merged on top of the profile.
     /// Free-form JSON to keep tatara-process decoupled from chart schemas.
     #[serde(default)]
+    #[schemars(schema_with = "crate::schema_helpers::preserve_unknown_object")]
     pub values_overlay: serde_json::Value,
     /// HelmRelease name override. Defaults to the Process's PID-derived name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -255,6 +256,7 @@ pub enum WorkloadKind {
 #[serde(rename_all = "camelCase")]
 pub struct GuestIntent {
     /// The (defguest …) spec as JSON. Shape matches `tatara_vm::GuestSpec`.
+    #[schemars(schema_with = "crate::schema_helpers::preserve_unknown_object")]
     pub spec: serde_json::Value,
 
     /// Where to write per-guest state on the host (logs, socket, PID file).

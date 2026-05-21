@@ -100,6 +100,27 @@ pub mod annotations {
 /// Standard finalizer for the Process reconciler.
 pub const PROCESS_FINALIZER: &str = "tatara.pleme.io/process-finalizer";
 
+/// Shared schemars helpers — emit OpenAPI schemas Kubernetes accepts.
+/// Free-form `serde_json::Value` fields default to an *empty* schema
+/// in schemars, which the K8s API server rejects with "type: Required
+/// value: must not be empty for specified object fields". The typed
+/// workaround is to emit `{type: object, x-kubernetes-preserve-unknown-
+/// fields: true}` — same shape kube-rs's own helpers produce.
+pub mod schema_helpers {
+    use schemars::{gen::SchemaGenerator, schema::Schema};
+    /// Schema for a free-form JSON object field. Apply via
+    /// `#[schemars(schema_with = "tatara_process::schema_helpers::preserve_unknown_object")]`
+    /// on any `serde_json::Value` / `BTreeMap<String, serde_json::Value>`
+    /// field exposed through a CRD.
+    pub fn preserve_unknown_object(_g: &mut SchemaGenerator) -> Schema {
+        serde_json::from_value(serde_json::json!({
+            "type": "object",
+            "x-kubernetes-preserve-unknown-fields": true
+        }))
+        .expect("static JSON literal parses as Schema")
+    }
+}
+
 // ── Lisp → ProcessSpec compile bridge ──────────────────────────────────
 //
 // `(defpoint NAME :k v …)` compiles to a `NamedDefinition<ProcessSpec>`.

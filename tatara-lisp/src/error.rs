@@ -320,13 +320,29 @@ pub enum LispError {
     /// `UnquoteForm::Splice` etc. directly instead of substring-matching
     /// `prefix == ",@"`. Same typed-slot posture as `UnboundTemplateVar`'s
     /// `prefix` slot, parallel to `LispError::Defmacro*.head:
-    /// MacroDefHead`. `got` is `String` because it comes from arbitrary
-    /// source via `Sexp::Display`. When a future run gives `Sexp` source
-    /// spans, `pos: Option<usize>` lands here in ONE place and every
-    /// non-symbol-unquote-target site picks up positional rendering via
-    /// `crate::diagnostic::format_diagnostic` mechanically.
+    /// MacroDefHead`. `got` is `SexpWitness` — the closed-set typed
+    /// joint identity pairing the offending inner's `SexpShape` (the
+    /// twelve reachable outermost shapes the reader can produce) with
+    /// its `Sexp::Display` projection (the literal value the author
+    /// wrote — `(list 1 2)`, `5`, `:foo`, etc.). Same typed-witness
+    /// posture as `SpliceOutsideList.got: SexpWitness`: authoring
+    /// tools (REPL, LSP, `tatara-check`) bind to BOTH `got.shape`
+    /// (structurally pattern-matchable on `SexpShape::List` etc.) AND
+    /// `got.display` (the literal value, renderable verbatim) without
+    /// losing either side. The two template-gate `,X/,@X` rejection
+    /// variants (`NonSymbolUnquoteTarget` AND `SpliceOutsideList`)
+    /// now share ONE typed witness identity at their `got` slot —
+    /// every Sexp-display-source `got` slot on the template-gate's
+    /// distinct rejection variants carries the SAME typed primitive.
+    /// When a future run gives `Sexp` source spans, `pos:
+    /// Option<usize>` lands here in ONE place and every
+    /// non-symbol-unquote-target site picks up positional rendering
+    /// via `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {prefix}: expected symbol, got {got}")]
-    NonSymbolUnquoteTarget { prefix: UnquoteForm, got: String },
+    NonSymbolUnquoteTarget {
+        prefix: UnquoteForm,
+        got: SexpWitness,
+    },
     /// A `,@X` (unquote-splice) appeared at a syntactic position where there
     /// is no containing list to splice into — i.e. the splice is the entire
     /// macro-template body, not nested inside a `(... ,@xs ...)` list. Splice
@@ -2257,7 +2273,7 @@ mod tests {
         assert_eq!(
             LispError::NonSymbolUnquoteTarget {
                 prefix: UnquoteForm::Unquote,
-                got: "(list 1 2)".into(),
+                got: SexpWitness::new(SexpShape::List, "(list 1 2)"),
             }
             .position(),
             None
@@ -2265,7 +2281,7 @@ mod tests {
         assert_eq!(
             LispError::NonSymbolUnquoteTarget {
                 prefix: UnquoteForm::Splice,
-                got: "5".into(),
+                got: SexpWitness::new(SexpShape::Int, "5"),
             }
             .position(),
             None
@@ -2912,7 +2928,7 @@ mod tests {
         // stable shape parallel to the existing `TypeMismatch` variant.
         let err = LispError::NonSymbolUnquoteTarget {
             prefix: UnquoteForm::Unquote,
-            got: "(list 1 2)".into(),
+            got: SexpWitness::new(SexpShape::List, "(list 1 2)"),
         };
         assert_eq!(
             format!("{err}"),
@@ -2927,7 +2943,7 @@ mod tests {
         // `,` ↔ `,@` mentally — same posture as `UnboundTemplateVar`.
         let err = LispError::NonSymbolUnquoteTarget {
             prefix: UnquoteForm::Splice,
-            got: "5".into(),
+            got: SexpWitness::new(SexpShape::Int, "5"),
         };
         assert_eq!(
             format!("{err}"),
@@ -2938,11 +2954,15 @@ mod tests {
     #[test]
     fn non_symbol_unquote_target_display_carries_keyword_atom_unchanged() {
         // `,:foo` — the inner is a keyword atom. The `:foo` form
-        // round-trips through `Sexp::Display` into the variant's `got`
-        // slot unchanged, so the operator sees what they wrote.
+        // round-trips through `SexpWitness::Display` (writing the
+        // `display` field verbatim) into the variant's `got` slot
+        // unchanged, so the operator sees what they wrote. The typed
+        // `got.shape` slot independently carries `SexpShape::Keyword`
+        // so tooling that wants the structural identity binds without
+        // re-parsing.
         let err = LispError::NonSymbolUnquoteTarget {
             prefix: UnquoteForm::Unquote,
-            got: ":foo".into(),
+            got: SexpWitness::new(SexpShape::Keyword, ":foo"),
         };
         assert_eq!(
             format!("{err}"),
@@ -3146,6 +3166,116 @@ mod tests {
         );
         assert_eq!(sym_shape, SexpShape::Symbol);
         assert_eq!(list_shape, SexpShape::List);
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_got_carries_typed_witness_through_variant_slot() {
+        // Sibling pin to
+        // `splice_outside_list_got_carries_typed_witness_through_variant_slot`
+        // for the template-gate's OTHER `,X/,@X` rejection variant.
+        // After this lift `LispError::NonSymbolUnquoteTarget.got` is
+        // the typed joint `SexpWitness` identity — the same
+        // primitive `SpliceOutsideList.got` already carries. The two
+        // template-gate `,X/,@X` rejection variants now share ONE
+        // typed witness identity at their `got` slot; authoring tools
+        // bind on `got.shape` AND `got.display` jointly across both
+        // sites rather than substring-grepping a free-form String on
+        // each. A regression that re-collapses `got` to `String` loses
+        // the rustc-enforced closed-set guarantee on shape identity
+        // here.
+        let err = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Unquote,
+            got: SexpWitness::new(SexpShape::List, "(list 1 2)"),
+        };
+        match &err {
+            LispError::NonSymbolUnquoteTarget { prefix, got } => {
+                assert_eq!(*prefix, UnquoteForm::Unquote);
+                assert_eq!(got.shape, SexpShape::List);
+                assert_eq!(got.display, "(list 1 2)");
+            }
+            other => panic!("expected NonSymbolUnquoteTarget, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in ,: expected symbol, got (list 1 2)"
+        );
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_got_distinguishes_int_from_keyword_at_variant_slot() {
+        // Pin the typed-shape bifurcation at the variant slot — `,5`
+        // (int atom in unquote slot) and `,:foo` (keyword atom in
+        // unquote slot) BOTH route to `NonSymbolUnquoteTarget`, but
+        // the typed `got.shape` slot distinguishes them structurally
+        // — `SexpShape::Int` vs. `SexpShape::Keyword`. Sibling pin
+        // for the same structural-shape-bifurcation property
+        // `splice_outside_list_got_distinguishes_symbol_from_list_at_variant_slot`
+        // pins on `SpliceOutsideList`. A regression that erases the
+        // typed shape (e.g., reverts to `got: String`) would lose
+        // this distinction — tooling that wants to surface "you wrote
+        // an int `,5` where a symbol was expected; only symbols are
+        // substitutable in templates" vs. "you wrote a keyword `,:foo`
+        // where a symbol was expected; keywords aren't substitutable
+        // (did you mean `,foo`?)" would have to substring-grep the
+        // `display` field, brittle.
+        let err_int = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Unquote,
+            got: SexpWitness::new(SexpShape::Int, "5"),
+        };
+        let err_kw = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Unquote,
+            got: SexpWitness::new(SexpShape::Keyword, ":foo"),
+        };
+        let (int_shape, kw_shape) = (
+            match &err_int {
+                LispError::NonSymbolUnquoteTarget { got, .. } => got.shape,
+                _ => unreachable!(),
+            },
+            match &err_kw {
+                LispError::NonSymbolUnquoteTarget { got, .. } => got.shape,
+                _ => unreachable!(),
+            },
+        );
+        assert_ne!(
+            int_shape, kw_shape,
+            "Int and Keyword witnesses must remain structurally distinct at the variant slot",
+        );
+        assert_eq!(int_shape, SexpShape::Int);
+        assert_eq!(kw_shape, SexpShape::Keyword);
+    }
+
+    #[test]
+    fn non_symbol_unquote_target_and_splice_outside_list_share_one_witness_primitive() {
+        // Pin that BOTH template-gate `,X/,@X` rejection variants
+        // (`NonSymbolUnquoteTarget` AND `SpliceOutsideList`) carry
+        // the SAME typed `SexpWitness` primitive at their `got` slot
+        // — the closed set of "offending inner Sexp" identities is
+        // bound by ONE typed primitive across both rejection
+        // surfaces. A regression that diverges the slot type on one
+        // variant (e.g., re-collapses NonSymbolUnquoteTarget.got to
+        // String while leaving SpliceOutsideList.got as
+        // SexpWitness) fails-loudly here because the assignment
+        // round-trips the witness across both slot types.
+        let same_witness = SexpWitness::new(SexpShape::List, "(list 1 2)");
+        let non_symbol_target = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Splice,
+            got: same_witness.clone(),
+        };
+        let splice_outside = LispError::SpliceOutsideList {
+            got: same_witness.clone(),
+        };
+        match (&non_symbol_target, &splice_outside) {
+            (
+                LispError::NonSymbolUnquoteTarget { got: lhs_got, .. },
+                LispError::SpliceOutsideList { got: rhs_got },
+            ) => {
+                assert_eq!(lhs_got.shape, rhs_got.shape);
+                assert_eq!(lhs_got.display, rhs_got.display);
+                assert_eq!(*lhs_got, same_witness);
+                assert_eq!(*rhs_got, same_witness);
+            }
+            _ => unreachable!(),
+        }
     }
 
     #[test]
@@ -5054,12 +5184,13 @@ mod tests {
         // share ONE typed marker identity.
         let err = LispError::NonSymbolUnquoteTarget {
             prefix: UnquoteForm::Splice,
-            got: "(list 1 2)".into(),
+            got: SexpWitness::new(SexpShape::List, "(list 1 2)"),
         };
         match err {
             LispError::NonSymbolUnquoteTarget { prefix, got } => {
                 assert_eq!(prefix, UnquoteForm::Splice);
-                assert_eq!(got, "(list 1 2)");
+                assert_eq!(got.shape, SexpShape::List);
+                assert_eq!(got.display, "(list 1 2)");
             }
             other => panic!("expected NonSymbolUnquoteTarget, got {other:?}"),
         }
@@ -5128,7 +5259,7 @@ mod tests {
         // variants of `UnquoteForm`.
         let unquote = LispError::NonSymbolUnquoteTarget {
             prefix: UnquoteForm::Unquote,
-            got: "(list 1 2)".into(),
+            got: SexpWitness::new(SexpShape::List, "(list 1 2)"),
         };
         assert_eq!(
             format!("{unquote}"),
@@ -5137,7 +5268,7 @@ mod tests {
 
         let splice = LispError::NonSymbolUnquoteTarget {
             prefix: UnquoteForm::Splice,
-            got: "5".into(),
+            got: SexpWitness::new(SexpShape::Int, "5"),
         };
         assert_eq!(
             format!("{splice}"),

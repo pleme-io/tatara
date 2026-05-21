@@ -634,11 +634,15 @@ fn unbound_template_var(prefix: UnquoteForm, name: &str, candidates: &[&str]) ->
 /// (`Unquote` ⊎ `Splice`). Threading the typed marker through the helper
 /// boundary (rather than `&'static str`) lands the same compile-time
 /// closed-set guarantee `unbound_template_var` carries: the closed set is
-/// encoded in the type system. The inner is the offending `Sexp` projected
-/// through `Display` so the operator sees the literal value they wrote —
-/// `(list 1 2)`, `5`, `:foo` — instead of just a type-name. Naming both the
-/// syntactic context AND the offending value is the typed-entry gate's
-/// structural-completeness floor.
+/// encoded in the type system. The inner is the offending `Sexp` routed
+/// through `crate::domain::sexp_witness` — the typed joint projection
+/// pairing `SexpShape` (structural shape) with `Sexp::Display`
+/// (renderable literal) at ONE call boundary. Authoring tools bind to
+/// BOTH `got.shape` (e.g. `SexpShape::List`) AND `got.display` (e.g.
+/// `"(list 1 2)"`) jointly — same posture as `splice_outside_list`
+/// after its prior-run promotion to `SexpWitness`. The two template-
+/// gate `,X/,@X` rejection variants now share ONE typed witness
+/// identity at their `got` slot.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; four
 /// inline copies in one module is past the three-times rule. THEORY.md
@@ -651,7 +655,7 @@ fn unbound_template_var(prefix: UnquoteForm, name: &str, candidates: &[&str]) ->
 fn non_symbol_unquote_target(prefix: UnquoteForm, got: &Sexp) -> LispError {
     LispError::NonSymbolUnquoteTarget {
         prefix,
-        got: got.to_string(),
+        got: crate::domain::sexp_witness(got),
     }
 }
 
@@ -1411,10 +1415,13 @@ mod tests {
 
     /// Helper for the non-symbol-unquote-target tests — pins the variant
     /// shape and carries any error context up to the assert site for
-    /// legibility. Sibling of `unbound_var`.
+    /// legibility. Sibling of `unbound_var` and `splice_outside_list_got`;
+    /// returns the `display` projection of the typed `SexpWitness` so the
+    /// existing call sites stay byte-for-byte comparable to the legacy
+    /// `got: String` shape.
     fn non_symbol_target(err: &LispError) -> (UnquoteForm, &str) {
         match err {
-            LispError::NonSymbolUnquoteTarget { prefix, got } => (*prefix, got.as_str()),
+            LispError::NonSymbolUnquoteTarget { prefix, got } => (*prefix, got.display.as_str()),
             other => panic!("expected NonSymbolUnquoteTarget, got: {other:?}"),
         }
     }

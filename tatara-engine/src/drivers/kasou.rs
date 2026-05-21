@@ -81,11 +81,15 @@ impl Driver for KasouDriver {
             id: kasou::VmId::from(task.name.as_str()),
             cpus: *cpus,
             memory_mib: *memory_mib,
-            boot: kasou::BootConfig {
-                kernel: PathBuf::from(kernel),
-                initrd: PathBuf::from(initrd),
-                cmdline: cmdline.clone(),
-            },
+            // kasou's BootConfig went struct → enum (Linux/Efi variants)
+            // in a recent release. tatara always uses the Linux variant
+            // for its kernel+initrd VMs; EFI boot is reserved for kasou
+            // consumers like brasa.
+            boot: kasou::BootConfig::linux(
+                PathBuf::from(kernel),
+                PathBuf::from(initrd),
+                cmdline.clone(),
+            ),
             disks: disk_configs,
             network: kasou::NetworkConfig { mac_address: mac },
             serial: Some(kasou::SerialConfig {

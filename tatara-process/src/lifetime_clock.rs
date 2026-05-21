@@ -162,6 +162,8 @@ mod tests {
                 }),
                 ..Lifetime::default()
             },
+            routing: None,
+            encapsulates: None,
             suspended: false,
         };
         let mut p = Process::new("e", spec);
@@ -198,6 +200,8 @@ mod tests {
             depends_on: vec![],
             signals: Default::default(),
             lifetime: Lifetime::default(),
+            routing: None,
+            encapsulates: None,
             suspended: false,
         };
         Process::new("e", spec)

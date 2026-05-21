@@ -10,8 +10,10 @@ pub mod boundary;
 pub mod classification;
 pub mod compliance;
 pub mod crd;
+pub mod encapsulates;
 pub mod ephemeral;
 pub mod export;
+pub mod hostname;
 pub mod identity;
 pub mod intent;
 pub mod lifetime;
@@ -19,6 +21,7 @@ pub mod lifetime_clock;
 pub mod phase;
 pub mod pool;
 pub mod receipt;
+pub mod routing;
 pub mod signal;
 pub mod spec;
 pub mod status;
@@ -37,7 +40,15 @@ pub mod prelude {
     };
     pub use crate::compliance::{ComplianceBinding, ComplianceSpec, VerificationPhase};
     pub use crate::crd::{Process, ProcessSpec, ProcessStatus};
+    pub use crate::encapsulates::{
+        BareWorkload, EncapsulatesSpec, EncapsulationKind, EncapsulationKindError,
+        EncapsulationKindVariant, EncapsulationMode, ExistingHelmRelease, ExistingKustomization,
+    };
     pub use crate::ephemeral::{compile_ephemeral_source, EphemeralSpec};
+    pub use crate::hostname::{
+        ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameError,
+        EPHEMERAL_ID_HASH_LEN,
+    };
     pub use crate::export::{
         ArtifactError, ArtifactSource, ArtifactVariant, ChannelError, ChannelVariant, ExportSpec,
         ExportTrigger, HttpEventChannel, NatsSubjectChannel, ProcessSnapshotSource, ReceiptsSource,
@@ -59,12 +70,15 @@ pub mod prelude {
         PoolPhase, PoolSelector, PoolSpec, PoolStatus, ReturnPolicy,
     };
     pub use crate::receipt::{ReceiptEnvelope, ReceiptError, RECEIPT_VERSION};
+    pub use crate::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
     pub use crate::signal::{ProcessSignal, SighupStrategy};
     pub use crate::spec::{DependsOn, IdentitySpec, MustReachPhase, SignalPolicy};
     pub use crate::status::{
         BoundaryStatus, CheckedCondition, ComplianceStatus, FluxResourceRef, ProcessCondition,
     };
-    pub use crate::table::{ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus};
+    pub use crate::table::{
+        ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,
+    };
 }
 
 /// CRD API group for every tatara CRD.

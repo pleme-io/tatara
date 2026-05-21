@@ -56,6 +56,24 @@ struct Cli {
         default_value = "tatara-export-worker"
     )]
     export_worker_service_account: String,
+
+    /// **R9 fleet routing** — cluster name stamped into every emitted
+    /// FQDN (`${app}.${eph_id}.${cluster}.${location}.${domain}`).
+    /// Overrides per-cluster via the reconciler Helm chart.
+    #[arg(long, env = "TATARA_FLEET_CLUSTER", default_value = "pleme-dev")]
+    fleet_cluster: String,
+
+    #[arg(long, env = "TATARA_FLEET_LOCATION", default_value = "use1")]
+    fleet_location: String,
+
+    #[arg(long, env = "TATARA_FLEET_DOMAIN", default_value = "quero.lol")]
+    fleet_domain: String,
+
+    /// External-dns CNAME target — when set, the reconciler emits
+    /// DNSEndpoint resources for every Process routing entry.
+    /// None/empty ⇒ Ingress still emits but DNS skipped.
+    #[arg(long, env = "TATARA_DNS_LB_TARGET", default_value = "")]
+    dns_lb_target: String,
 }
 
 #[tokio::main]
@@ -82,6 +100,14 @@ async fn main() -> Result<()> {
         process_table_name: "proc".into(),
         export_worker_image: cli.export_worker_image,
         export_worker_service_account: cli.export_worker_service_account,
+        cluster: cli.fleet_cluster,
+        location: cli.fleet_location,
+        domain: cli.fleet_domain,
+        dns_lb_target: if cli.dns_lb_target.is_empty() {
+            None
+        } else {
+            Some(cli.dns_lb_target)
+        },
     });
     let ctx = Arc::new(Context {
         kube: kube.clone(),

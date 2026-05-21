@@ -30,6 +30,20 @@ pub struct ReconcilerConfig {
     /// ConfigMaps + get on Processes) via the same Helm chart that
     /// ships the reconciler.
     pub export_worker_service_account: String,
+
+    /// **R9 fleet routing config** — cluster + location + domain
+    /// segments stamped into every emitted FQDN. Matches the
+    /// `nix/lib/fleet-domains.nix mkHostname` pattern.
+    /// Per-cluster overrides via the reconciler Helm chart.
+    pub cluster: String,
+    pub location: String,
+    pub domain: String,
+
+    /// External-dns target — the cluster's ingress loadbalancer
+    /// hostname (or CNAME-able equivalent). When set, the
+    /// reconciler emits DNSEndpoint resources pointing all FQDNs
+    /// at this target. None ⇒ Ingress emits but DNS does not.
+    pub dns_lb_target: Option<String>,
 }
 
 impl Default for ReconcilerConfig {
@@ -41,6 +55,10 @@ impl Default for ReconcilerConfig {
             process_table_name: "proc".into(),
             export_worker_image: "ghcr.io/pleme-io/tatara-export-worker:0.2.0".into(),
             export_worker_service_account: "tatara-export-worker".into(),
+            cluster: "pleme-dev".into(),
+            location: "use1".into(),
+            domain: "quero.lol".into(),
+            dns_lb_target: None,
         }
     }
 }

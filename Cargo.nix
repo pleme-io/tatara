@@ -21166,6 +21166,10 @@ rec {
             packageId = "serde_yaml";
           }
           {
+            name = "shikumi";
+            packageId = "shikumi";
+          }
+          {
             name = "tatara-core";
             packageId = "tatara-core";
           }

@@ -4864,7 +4864,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "shikumi 0.1.0 (git+https://github.com/pleme-io/shikumi)",
+ "shikumi",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5410,38 +5410,6 @@ dependencies = [
 [[package]]
 name = "shikumi"
 version = "0.1.0"
-dependencies = [
- "arc-swap",
- "async-trait",
- "figment",
- "notify",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror 2.0.18",
- "tracing",
-]
-
-[[package]]
-name = "shikumi"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/shikumi?branch=main#5db7873c9a109f619474228cbea15d64b4825b8a"
-dependencies = [
- "arc-swap",
- "async-trait",
- "clap",
- "figment",
- "notify",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror 2.0.18",
- "tracing",
-]
-
-[[package]]
-name = "shikumi"
-version = "0.1.0"
 source = "git+https://github.com/pleme-io/shikumi#15c4e5484d80717ff2256f098378baaeab18b971"
 dependencies = [
  "arc-swap",
@@ -5817,7 +5785,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "shikumi 0.1.0 (git+https://github.com/pleme-io/shikumi?branch=main)",
  "tatara-api",
  "tatara-core",
  "tatara-engine",
@@ -5869,7 +5836,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shikumi 0.1.0 (git+https://github.com/pleme-io/shikumi?branch=main)",
  "thiserror 2.0.18",
  "toml",
  "tracing",
@@ -6253,7 +6219,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "shikumi 0.1.0",
+ "shikumi",
  "tatara-core",
  "tatara-domains",
  "tatara-lattice",

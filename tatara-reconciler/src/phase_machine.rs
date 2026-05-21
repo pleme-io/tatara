@@ -213,6 +213,34 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
         refs.push(flux_ref_from_json(res)?);
     }
 
+    // R9 — emit routing edges (Ingress + DNSEndpoint per declared
+    // hostname) alongside the Intent-driven resources. The stable-
+    // claim form is gated on the claim arbiter's decision; until
+    // R10's controller loop lands, holds_stable_claim is computed
+    // here as a placeholder: a Process holding the claim has its
+    // pid/name stamped on `status.attestation.composed_root` already,
+    // but the actual cluster-wide arbiter hasn't run yet. Default
+    // false ⇒ instance-form only emits on first render.
+    let routing_resources = if let Some(routing) = &p.spec.routing {
+        let dns_lb = ctx.config.dns_lb_target.as_deref();
+        let routes = render::render_routing(
+            p,
+            routing,
+            false, // claim arbiter wires this in a follow-up — instance-form only for now
+            &ctx.config.cluster,
+            &ctx.config.location,
+            &ctx.config.domain,
+            dns_lb,
+        )
+        .map_err(|e| anyhow!("render routing: {e}"))?;
+        for res in &routes {
+            ssapply::apply_owned(ctx.kube.clone(), p, &ns, res.clone()).await?;
+        }
+        routes.len()
+    } else {
+        0
+    };
+
     let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
     let body = json!({
         "phase": ProcessPhase::Running,
@@ -227,6 +255,7 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
         namespace = %ns,
         name = %name,
         resources = refs.len(),
+        routing = routing_resources,
         "execing → running (RENDER)"
     );
     Ok(Action::requeue(Duration::from_secs(SHORT_RETRY)))

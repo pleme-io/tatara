@@ -94,6 +94,23 @@
       env = [];
     };
 
+    # tatara-export-worker Docker image — the typed Rust binary the
+    # reconciler emits as a Job per declared ExportSpec during the
+    # Releasing phase. Reads the artifact source (TestReport ConfigMap,
+    # Receipts annotation-scan, ProcessSnapshot), ships via the chosen
+    # VectorChannel (HTTP/NATS/stdout), writes a typed receipt back
+    # to a ConfigMap.
+    exportWorkerOutputs = (import "${substrate}/lib/rust-tool-image-flake.nix" {
+      inherit nixpkgs crate2nix flake-utils forge devenv;
+    }) {
+      toolName = "tatara-export-worker";
+      packageName = "tatara-export-worker";
+      src = self;
+      repo = "pleme-io/tatara-export-worker";
+      architectures = [ "amd64" ];
+      env = [];
+    };
+
     # tatara-init — PID 1 for tatara-os Linux guests. 4-target release build
     # per substrate convention so every guest arch (aarch64-linux,
     # x86_64-linux) gets a matching init binary.
@@ -202,6 +219,10 @@
             closed-loop-probe-image-amd64 = cp.dockerImage-amd64 or null;
             closed-loop-probe = cp.closed-loop-probe or cp.default or null;
           })
+          // (let ew = exportWorkerOutputs.packages.${system} or {}; in {
+            export-worker-image-amd64 = ew.dockerImage-amd64 or null;
+            export-worker = ew.tatara-export-worker or ew.default or null;
+          })
           // (let it = initOutputs.packages.${system} or {}; in {
             init = it.tatara-init or it.default or null;
           })
@@ -233,6 +254,10 @@
             release-closed-loop-probe = (closedLoopProbeOutputs.apps.${system} or {}).release or {
               type = "app";
               program = "echo 'closed-loop-probe release not available on ${system}'";
+            };
+            release-export-worker = (exportWorkerOutputs.apps.${system} or {}).release or {
+              type = "app";
+              program = "echo 'export-worker release not available on ${system}'";
             };
           }
         );

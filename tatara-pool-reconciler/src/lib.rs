@@ -22,6 +22,7 @@
 //! decisions are the algebra.
 
 pub mod context;
+pub mod desired;
 pub mod naming;
 pub mod return_policy;
 pub mod router;

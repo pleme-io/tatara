@@ -13,8 +13,10 @@
 //! `ProcessPhase`, all side-effect-free w.r.t. Flux until the RENDER step.
 
 pub mod boundary;
+pub mod claim;
 pub mod context;
 pub mod controller;
+pub mod edges;
 pub mod ephemeral_defaults;
 pub mod lifetime_clock;
 pub mod patch;

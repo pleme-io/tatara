@@ -117,6 +117,60 @@ pub struct PoolSpec {
     /// independent of the allocation's own TTL. Default `"4h"`.
     #[serde(default = "default_max_allocation_ttl")]
     pub max_allocation_ttl: String,
+
+    /// **R5 desired-count loop** — when set non-zero, the pool
+    /// reconciler maintains exactly this many *healthy* (Running or
+    /// Attested) Processes regardless of allocation pressure. Drives
+    /// the "always seeking stability" property: failed members are
+    /// replaced per `replacement_policy`. `0` keeps the legacy
+    /// allocation-driven sizing (desired = floor of free + allocated).
+    ///
+    /// Operator usage: `desired: 5` means "always have 5 of these
+    /// running"; failures auto-replace.
+    #[serde(default)]
+    pub desired: u32,
+
+    /// **R5** — what the pool reconciler does when a member reaches
+    /// `Failed` phase.
+    #[serde(default)]
+    pub replacement_policy: ReplacementPolicy,
+
+    /// **R5** — when true, exactly one healthy member of the pool
+    /// holds the unprefixed-form DNS hostnames declared in
+    /// `template.routing` at any moment. The claim arbiter (see
+    /// `tatara-reconciler::claim`) transfers atomically when the
+    /// holder fails.
+    #[serde(default)]
+    pub stable_name_claim: bool,
+}
+
+/// What the pool reconciler does when a member reaches `Failed`.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
+pub enum ReplacementPolicy {
+    /// **Default** — Failed member is reaped + replaced immediately
+    /// (pool stays at `desired` count). Most production-like.
+    #[default]
+    ReplaceImmediate,
+    /// Failed member stays for inspection; pool runs short until the
+    /// operator manually reaps it. Useful for debugging.
+    HoldFailed,
+    /// Failed member triggers pool-wide pause: `desired` is
+    /// effectively 0 until the operator manually resumes via a
+    /// pool-status patch. Used for "halt on any failure" workflows.
+    PausePool,
+}
+
+impl ReplacementPolicy {
+    /// Should the pool auto-spawn a replacement for a Failed member?
+    pub fn replaces_failed(self) -> bool {
+        matches!(self, Self::ReplaceImmediate)
+    }
+
+    /// Should reaching Failed on any member pause the whole pool?
+    pub fn pauses_on_failure(self) -> bool {
+        matches!(self, Self::PausePool)
+    }
 }
 
 fn default_free_ttl() -> String {

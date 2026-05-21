@@ -40,6 +40,7 @@ use crate::crd::ProcessSpec;
 use crate::export::ExportSpec;
 use crate::intent::{AplicacaoIntent, Intent};
 use crate::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
+use crate::routing::RoutingSpec;
 
 /// `EphemeralSpec` — typed wrapper that authors `(defephemeral …)`.
 ///
@@ -98,6 +99,15 @@ pub struct EphemeralSpec {
     /// teardown). See [`crate::export`] for the full type.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exports: Vec<ExportSpec>,
+
+    /// Routing template — DNS + Ingress declarations inherited by
+    /// the materialized `ProcessSpec`. When set on a pool's
+    /// `template`, every member receives the same shape; each
+    /// member's content-hash form differs by its own canonical
+    /// spec (which differs across members by slot index).
+    /// See [`crate::routing`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing: Option<RoutingSpec>,
 }
 
 fn default_ttl() -> String {
@@ -137,6 +147,12 @@ impl From<EphemeralSpec> for ProcessSpec {
                 }),
                 ..Lifetime::default()
             },
+            // R5 — propagate routing template (None = no edges).
+            routing: e.routing,
+            // EncapsulatesSpec isn't exposed via EphemeralSpec sugar;
+            // operators wanting Adopt/Observe author the full
+            // (defpoint …) form. Sugar path stays greenfield-Manage.
+            encapsulates: None,
             suspended: false,
         };
         // Belt-and-suspenders: make sure exactly-one Intent invariant holds.
@@ -202,6 +218,7 @@ mod tests {
             classification: None,
             parent: None,
             exports: vec![],
+            routing: None,
         };
         let ps: ProcessSpec = e.into();
         // Intent must resolve to Aplicacao.
@@ -418,6 +435,7 @@ mod tests {
             classification: None,
             parent: Some("seph.1".into()),
             exports: vec![],
+            routing: None,
         };
         let ps: ProcessSpec = e.into();
         assert!(ps.intent.nix.is_none());

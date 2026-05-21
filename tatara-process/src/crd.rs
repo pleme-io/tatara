@@ -10,10 +10,12 @@ use crate::attestation::ProcessAttestation;
 use crate::boundary::Boundary;
 use crate::classification::Classification;
 use crate::compliance::ComplianceSpec;
+use crate::encapsulates::EncapsulatesSpec;
 use crate::identity::Identity;
 use crate::intent::Intent;
 use crate::lifetime::Lifetime;
 use crate::phase::ProcessPhase;
+use crate::routing::RoutingSpec;
 use crate::signal::ProcessSignal;
 use crate::spec::{DependsOn, IdentitySpec, SignalPolicy};
 use crate::status::{BoundaryStatus, ComplianceStatus, FluxResourceRef, ProcessCondition};
@@ -94,6 +96,19 @@ pub struct ProcessSpec {
     /// (auto-SIGTERM per `teardown_policy` + TTL clock).
     #[serde(default, skip_serializing_if = "Lifetime::is_default")]
     pub lifetime: Lifetime,
+
+    /// External edges — DNS + Ingress. When `None`, the Process is
+    /// internal-only (matches today's default). See
+    /// [`crate::routing`] for the full shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing: Option<RoutingSpec>,
+
+    /// Pre-existing in-cluster state this Process wraps. When `None`,
+    /// the Process is greenfield (Manage mode implicitly applied to
+    /// nothing pre-existing). See [`crate::encapsulates`] for the
+    /// three modes (Manage / Adopt / Observe).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encapsulates: Option<EncapsulatesSpec>,
 
     /// Soft-suspend marker — reconciler treats as SIGSTOP.
     /// Same effect as delivering SIGSTOP, but persistent across restarts.
@@ -195,6 +210,8 @@ mod tests {
             depends_on: vec![],
             signals: Default::default(),
             lifetime: Default::default(),
+            routing: None,
+            encapsulates: None,
             suspended: false,
         };
         let yaml = serde_yaml::to_string(&spec).unwrap();

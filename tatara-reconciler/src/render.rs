@@ -6,11 +6,15 @@ use serde_json::{json, Value};
 
 use tatara_process::annotations;
 use tatara_process::export::ExportSpec;
+use tatara_process::hostname::{ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id};
 use tatara_process::intent::{
     AplicacaoIntent, FluxIntent, Intent, IntentVariant, LispIntent, NixIntent,
 };
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
+use tatara_process::routing::RoutingSpec;
+
+use crate::edges::{DnsEndpointEdge, Edge, EdgeContext, IngressEdge};
 
 /// Produced resources from a render pass.
 #[derive(Debug, Clone)]
@@ -37,16 +41,63 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
         .clone()
         .unwrap_or_else(|| "default".into());
 
-    let (resources, intent_bytes) = match variant {
-        IntentVariant::Flux(f) => render_flux(&owner_name, &owner_ns, f),
-        IntentVariant::Nix(n) => render_nix(&owner_name, &owner_ns, n),
-        IntentVariant::Lisp(l) => render_lisp(&owner_name, &owner_ns, l)?,
-        IntentVariant::Container(_) => (vec![], vec![]),
-        // Guest intents (HVF / VZ / WASM) are owned by tatara-hospedeiro —
-        // the reconciler emits no K8s resources for them. Intent bytes
-        // still feed the three-pillar attestation chain.
-        IntentVariant::Guest(g) => (vec![], serde_json::to_vec(g).unwrap_or_default()),
-        IntentVariant::Aplicacao(a) => render_aplicacao(&owner_name, &owner_ns, a),
+    // R12 — Encapsulation mode dispatch.
+    //
+    // Process.encapsulates.mode controls how Intent renders:
+    //   * Manage (default / None)  → emit greenfield resources
+    //   * Adopt                    → emit HR with releaseName matching
+    //                                the pre-existing release; helm-
+    //                                controller adopts it in place
+    //   * Observe                  → emit NOTHING here; the Process
+    //                                only watches + adds routing/
+    //                                exports/attestation
+    use tatara_process::encapsulates::EncapsulationMode;
+    let mode = process
+        .spec
+        .encapsulates
+        .as_ref()
+        .map(|e| e.mode)
+        .unwrap_or(EncapsulationMode::Manage);
+
+    let (resources, intent_bytes) = if mode == EncapsulationMode::Observe {
+        // Observe mode — no Intent-driven workload emission.
+        // Intent bytes still go into the attestation pillar so the
+        // typed shape the Process declares is recorded.
+        let bytes = match &variant {
+            IntentVariant::Flux(f) => serde_json::to_vec(f).unwrap_or_default(),
+            IntentVariant::Nix(n) => serde_json::to_vec(n).unwrap_or_default(),
+            IntentVariant::Lisp(l) => serde_json::to_vec(l).unwrap_or_default(),
+            IntentVariant::Container(c) => serde_json::to_vec(c).unwrap_or_default(),
+            IntentVariant::Guest(g) => serde_json::to_vec(g).unwrap_or_default(),
+            IntentVariant::Aplicacao(a) => serde_json::to_vec(a).unwrap_or_default(),
+        };
+        (vec![], bytes)
+    } else {
+        match variant {
+            IntentVariant::Flux(f) => render_flux(&owner_name, &owner_ns, f),
+            IntentVariant::Nix(n) => render_nix(&owner_name, &owner_ns, n),
+            IntentVariant::Lisp(l) => render_lisp(&owner_name, &owner_ns, l)?,
+            IntentVariant::Container(_) => (vec![], vec![]),
+            // Guest intents (HVF / VZ / WASM) are owned by tatara-hospedeiro —
+            // the reconciler emits no K8s resources for them. Intent bytes
+            // still feed the three-pillar attestation chain.
+            IntentVariant::Guest(g) => (vec![], serde_json::to_vec(g).unwrap_or_default()),
+            IntentVariant::Aplicacao(a) => {
+                // Adopt mode is implicit: render_aplicacao already uses
+                // `a.release_name` as the HelmRelease releaseName when
+                // set; in Adopt mode the operator sets release_name to
+                // match the pre-existing release, helm-controller does
+                // the rest. R12 adds an adoption annotation so the
+                // operator can see at-a-glance which HRs are adopting.
+                let (resources, bytes) = render_aplicacao(&owner_name, &owner_ns, a);
+                let resources = if mode == EncapsulationMode::Adopt {
+                    mark_resources_as_adopting(resources, process)
+                } else {
+                    resources
+                };
+                (resources, bytes)
+            }
+        }
     };
 
     let artifact_bytes = canonical_bytes(&resources);
@@ -286,6 +337,152 @@ fn canonical_bytes(resources: &[Value]) -> Vec<u8> {
 /// Compute the `artifact_hash` pillar from canonical resource bytes.
 pub fn artifact_hash(bytes: &[u8]) -> String {
     hex::encode(blake3::hash(bytes).as_bytes())
+}
+
+/// Stamp every emitted resource with a `tatara.pleme.io/encapsulation-mode`
+/// annotation (= "Adopt") + a back-reference annotation pointing at
+/// the existing HR's `releaseName` so operators can see at-a-glance
+/// which HRs are adopting which pre-existing releases.
+fn mark_resources_as_adopting(resources: Vec<Value>, process: &Process) -> Vec<Value> {
+    use tatara_process::encapsulates::{EncapsulationKindVariant, ExistingHelmRelease};
+    let adoption_ref: Option<&ExistingHelmRelease> = process
+        .spec
+        .encapsulates
+        .as_ref()
+        .and_then(|e| match e.kind.variant().ok() {
+            Some(EncapsulationKindVariant::ExistingHelmRelease(h)) => Some(h),
+            _ => None,
+        });
+    resources
+        .into_iter()
+        .map(|mut r| {
+            if let Some(meta) = r.as_object_mut().and_then(|o| o.get_mut("metadata")) {
+                if let Some(meta_obj) = meta.as_object_mut() {
+                    let anns = meta_obj
+                        .entry("annotations")
+                        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+                    if let Some(anns_obj) = anns.as_object_mut() {
+                        anns_obj.insert(
+                            "tatara.pleme.io/encapsulation-mode".into(),
+                            Value::String("Adopt".into()),
+                        );
+                        if let Some(adopt) = adoption_ref {
+                            anns_obj.insert(
+                                "tatara.pleme.io/adopted-release".into(),
+                                Value::String(format!(
+                                    "{}/{}",
+                                    adopt.namespace, adopt.release_name
+                                )),
+                            );
+                        }
+                    }
+                }
+            }
+            r
+        })
+        .collect()
+}
+
+// ─── R8: Routing emission ──────────────────────────────────────────
+
+/// Render the routing edges declared on a Process. One call =
+/// every Ingress + DNSEndpoint the Process should own.
+///
+/// For each `RoutingSpec.hostnames` entry, emits resources via
+/// every registered [`Edge`]:
+///
+/// * Always: per-instance form FQDN.
+/// * When `stable_name_claim && holds_stable_claim`: ALSO the
+///   stable form (no `ephemeral_id` segment).
+///
+/// `holds_stable_claim` is computed by the claim arbiter (R10) and
+/// passed in by the caller — `render_routing` itself is pure on
+/// `(process, routing, claim_state, dns_lb_target)`.
+pub fn render_routing(
+    process: &Process,
+    routing: &RoutingSpec,
+    holds_stable_claim: bool,
+    cluster: &str,
+    location: &str,
+    domain: &str,
+    dns_lb_target: Option<&str>,
+) -> Result<Vec<Value>> {
+    let process_name = process
+        .metadata
+        .name
+        .as_deref()
+        .unwrap_or("unnamed");
+    let process_namespace = process
+        .metadata
+        .namespace
+        .as_deref()
+        .unwrap_or("default");
+    let process_uid = process.metadata.uid.as_deref().unwrap_or("");
+    let process_ref = format!("{process_namespace}/{process_name}");
+
+    // Content-hash form of ephemeral_id — derived once per Process,
+    // reused across every hostname on this Process.
+    let fallback_hash = ephemeral_id_from_spec(&process.spec)
+        .map_err(|e| anyhow::anyhow!("ephemeral_id_from_spec: {e}"))?;
+
+    // Per-Edge handlers — the trait object list is the substrate
+    // extension point. New edge target ⇒ one new impl + one entry.
+    let edges: Vec<Box<dyn Edge>> = vec![
+        Box::new(IngressEdge),
+        Box::new(DnsEndpointEdge {
+            ingress_lb_target: dns_lb_target.map(String::from),
+            ttl_seconds: 60,
+        }),
+    ];
+
+    let mut out: Vec<Value> = Vec::new();
+    for hostname in &routing.hostnames {
+        let host_cluster = hostname.cluster.as_deref().unwrap_or(cluster);
+        let eph_id = resolve_ephemeral_id(hostname, &fallback_hash);
+
+        // (1) Per-instance form — always emitted.
+        let fqdn = fmt_fqdn(&hostname.app, eph_id, host_cluster, location, domain)
+            .map_err(|e| anyhow::anyhow!("fmt_fqdn (per-instance): {e}"))?;
+        let ctx = EdgeContext {
+            process_name,
+            process_namespace,
+            process_uid,
+            process_ref: &process_ref,
+            hostname,
+            ephemeral_id: eph_id,
+            backend: &routing.backend,
+            fqdn: &fqdn,
+            is_stable: false,
+        };
+        for edge in &edges {
+            if let Some(v) = edge.render(&ctx)? {
+                out.push(v);
+            }
+        }
+
+        // (2) Stable form — emitted iff Process holds the claim.
+        if routing.stable_name_claim && holds_stable_claim {
+            let fqdn_stable = fmt_fqdn_stable(&hostname.app, host_cluster, location, domain)
+                .map_err(|e| anyhow::anyhow!("fmt_fqdn_stable: {e}"))?;
+            let ctx = EdgeContext {
+                process_name,
+                process_namespace,
+                process_uid,
+                process_ref: &process_ref,
+                hostname,
+                ephemeral_id: eph_id,
+                backend: &routing.backend,
+                fqdn: &fqdn_stable,
+                is_stable: true,
+            };
+            for edge in &edges {
+                if let Some(v) = edge.render(&ctx)? {
+                    out.push(v);
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 
 // ─── Export-worker Job rendering ───────────────────────────────────
@@ -634,6 +831,8 @@ mod aplicacao_tests {
             depends_on: vec![],
             signals: Default::default(),
             lifetime: Default::default(),
+            routing: None,
+            encapsulates: None,
             suspended: false,
         };
         let mut proc = Process::new("ephemeral-akeyless", spec);
@@ -748,6 +947,8 @@ mod export_job_tests {
                 }),
                 ..Lifetime::default()
             },
+            routing: None,
+            encapsulates: None,
             suspended: false,
         };
         let mut p = Process::new("r1", spec);
@@ -906,5 +1107,185 @@ mod export_job_tests {
     #[test]
     fn export_receipt_configmap_name_is_deterministic() {
         assert_eq!(export_receipt_configmap_name("r1", 0), "r1-export-0-receipt");
+    }
+}
+
+#[cfg(test)]
+mod routing_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+    use tatara_process::classification::{
+        Classification, ConvergencePointType, SubstrateType,
+    };
+    use tatara_process::crd::ProcessSpec;
+    use tatara_process::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
+
+    fn akeyless_process(routing: Option<RoutingSpec>) -> Process {
+        let spec = ProcessSpec {
+            identity: Default::default(),
+            classification: Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Default::default(),
+                calm: Default::default(),
+                data_classification: Default::default(),
+            },
+            intent: Default::default(),
+            boundary: Default::default(),
+            compliance: Default::default(),
+            depends_on: vec![],
+            signals: Default::default(),
+            lifetime: Default::default(),
+            routing,
+            encapsulates: None,
+            suspended: false,
+        };
+        let mut p = Process::new("akeyless-prod", spec);
+        p.metadata.namespace = Some("akeyless".into());
+        p.metadata.uid = Some("uid-1".into());
+        p
+    }
+
+    fn two_hostname_routing(stable: bool) -> RoutingSpec {
+        RoutingSpec {
+            hostnames: vec![
+                RoutingHostname {
+                    app: "gator".into(),
+                    instance: Some("akeyless-prod".into()),
+                    cluster: None,
+                },
+                RoutingHostname {
+                    app: "gateway".into(),
+                    instance: Some("akeyless-prod".into()),
+                    cluster: None,
+                },
+            ],
+            backend: RoutingBackend {
+                service: "akeyless-saas-akeyless-gateway".into(),
+                port: 8000,
+                tls_issuer: None,
+                ingress_annotations: BTreeMap::new(),
+            },
+            stable_name_claim: stable,
+            priority: 100,
+        }
+    }
+
+    #[test]
+    fn emits_ingress_plus_dns_per_hostname() {
+        let r = two_hostname_routing(false);
+        let p = akeyless_process(Some(r.clone()));
+        let out = render_routing(
+            &p,
+            &r,
+            false,
+            "pleme-dev",
+            "use1",
+            "quero.lol",
+            Some("pleme-dev.use1.quero.lol"),
+        )
+        .unwrap();
+        // 2 hostnames × 2 edges = 4 resources.
+        assert_eq!(out.len(), 4);
+        let kinds: Vec<_> = out.iter().map(|v| v["kind"].as_str().unwrap()).collect();
+        assert!(kinds.contains(&"Ingress"));
+        assert!(kinds.contains(&"DNSEndpoint"));
+    }
+
+    #[test]
+    fn stable_claim_doubles_emission() {
+        let r = two_hostname_routing(true);
+        let p = akeyless_process(Some(r.clone()));
+        // Without holding the claim → 4 resources (per-instance only).
+        let without = render_routing(
+            &p,
+            &r,
+            false,
+            "pleme-dev",
+            "use1",
+            "quero.lol",
+            Some("pleme-dev.use1.quero.lol"),
+        )
+        .unwrap();
+        assert_eq!(without.len(), 4);
+
+        // Holding the claim → 8 resources (per-instance + stable).
+        let with = render_routing(
+            &p,
+            &r,
+            true,
+            "pleme-dev",
+            "use1",
+            "quero.lol",
+            Some("pleme-dev.use1.quero.lol"),
+        )
+        .unwrap();
+        assert_eq!(with.len(), 8);
+        let stable_count = with
+            .iter()
+            .filter(|v| {
+                v["metadata"]["annotations"]["tatara.pleme.io/routing-form"] == "stable"
+                    || v["metadata"]["labels"]["tatara.pleme.io/routing-form"] == "stable"
+            })
+            .count();
+        assert_eq!(stable_count, 4); // 2 hostnames × 2 edges in stable form
+    }
+
+    #[test]
+    fn omits_dns_when_lb_target_absent() {
+        let r = two_hostname_routing(false);
+        let p = akeyless_process(Some(r.clone()));
+        let out = render_routing(&p, &r, false, "pleme-dev", "use1", "quero.lol", None).unwrap();
+        // 2 hostnames × 1 edge (Ingress only — DNSEndpoint skipped) = 2.
+        assert_eq!(out.len(), 2);
+        for v in &out {
+            assert_eq!(v["kind"], "Ingress");
+        }
+    }
+
+    #[test]
+    fn empty_hostnames_emits_nothing() {
+        let r = RoutingSpec {
+            hostnames: vec![],
+            backend: RoutingBackend {
+                service: "svc".into(),
+                port: 80,
+                tls_issuer: None,
+                ingress_annotations: BTreeMap::new(),
+            },
+            stable_name_claim: false,
+            priority: 0,
+        };
+        let p = akeyless_process(Some(r.clone()));
+        let out = render_routing(&p, &r, false, "pleme-dev", "use1", "quero.lol", None).unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn anonymous_hostname_uses_content_hash() {
+        let r = RoutingSpec {
+            hostnames: vec![RoutingHostname {
+                app: "smoke".into(),
+                instance: None, // ⇒ content-hash form
+                cluster: None,
+            }],
+            backend: RoutingBackend {
+                service: "svc".into(),
+                port: 80,
+                tls_issuer: None,
+                ingress_annotations: BTreeMap::new(),
+            },
+            stable_name_claim: false,
+            priority: 0,
+        };
+        let p = akeyless_process(Some(r.clone()));
+        let out = render_routing(&p, &r, false, "pleme-dev", "use1", "quero.lol", None).unwrap();
+        let host = out[0]["spec"]["rules"][0]["host"].as_str().unwrap();
+        // Shape: smoke.<8-hex>.pleme-dev.use1.quero.lol
+        assert!(host.starts_with("smoke."));
+        assert!(host.ends_with(".pleme-dev.use1.quero.lol"));
+        let middle: Vec<_> = host.split('.').collect();
+        assert_eq!(middle[1].len(), 8); // BLAKE3:8 hex
+        assert!(middle[1].chars().all(|c| c.is_ascii_hexdigit()));
     }
 }

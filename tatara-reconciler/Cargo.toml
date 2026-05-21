@@ -26,7 +26,11 @@ tatara-lisp = { path = "../tatara-lisp" }
 tatara-domains = { path = "../tatara-domains" }
 
 # Typed config + hot-reload (XDG discovery + env override + ArcSwap).
-shikumi = { path = "../../shikumi" }
+# Git-sourced rather than path — the substrate's Nix image build
+# sandbox uses tatara/src as the root context, so external path deps
+# can't resolve. Use a path override during local-only iteration via
+# `[patch."https://github.com/pleme-io/shikumi"]` in this file.
+shikumi = { git = "https://github.com/pleme-io/shikumi" }
 
 # For tatara-check — CustomResourceExt + serde_yaml come from deps above.
 

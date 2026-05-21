@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::phase::ProcessPhase;
 
@@ -86,6 +87,43 @@ pub struct ProcessTableStatus {
     pub processes: Vec<ProcessEntry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_reconciled: Option<DateTime<Utc>>,
+
+    /// **R6** — Stable-name claim registry. Key:
+    /// `${cluster}/${app}` (e.g., `pleme-dev/gator`). Value: the
+    /// Process currently holding the unprefixed-form DNS for that
+    /// (cluster, app) tuple. At most one Process per key; transfer
+    /// is atomic on the holder's Failed/Zombie/Reaped transition.
+    ///
+    /// The reconciler's claim arbiter (`tatara-reconciler::claim`)
+    /// is the sole writer; every other actor reads.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub claims: BTreeMap<String, ClaimRecord>,
+}
+
+/// One stable-name claim record. Cited by holder Process's
+/// namespace/name + content-hash PID + when granted + priority that
+/// won the arbitration. Used by [`ProcessTableStatus::claims`].
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaimRecord {
+    /// `${namespace}/${name}` of the holder Process. Reconciler uses
+    /// this to resolve the holder during render — every emitted
+    /// stable-form Ingress carries an ownerRef back to this Process.
+    pub holder: String,
+
+    /// PID path of the holder (mirror of the Process's
+    /// `status.pid`). Lets observers detect a stale claim if the
+    /// holder is reaped but the registry update lags.
+    pub pid: String,
+
+    /// When the claim was granted to the current holder. Operator-
+    /// visible "how long has this been the claim holder?" metric.
+    pub granted_at: DateTime<Utc>,
+
+    /// Priority the holder declared (from `RoutingSpec.priority`).
+    /// Stamped so a new candidate-Process can compare without
+    /// reading the holder's spec.
+    pub priority: i32,
 }
 
 /// One row of `/proc`.

@@ -306,6 +306,8 @@ mod tests {
                 depends_on: vec![],
                 signals: Default::default(),
                 lifetime: Default::default(),
+                routing: None,
+                encapsulates: None,
                 suspended: false,
             },
         );
@@ -333,6 +335,8 @@ mod tests {
             depends_on: vec![],
             signals: Default::default(),
             lifetime: Default::default(),
+            routing: None,
+            encapsulates: None,
             suspended: false,
         };
         spec.lifetime = Lifetime {
@@ -368,6 +372,8 @@ mod tests {
             depends_on: vec![],
             signals: Default::default(),
             lifetime: Default::default(),
+            routing: None,
+            encapsulates: None,
             suspended: false,
         }
     }

@@ -76,6 +76,7 @@ mod tests {
             classification: None,
             parent: None,
             exports: vec![],
+            routing: None,
         }
     }
 
@@ -89,6 +90,9 @@ mod tests {
             template: empty_template(),
             free_ttl: "24h".into(),
             max_allocation_ttl: "4h".into(),
+            desired: 0,
+            replacement_policy: Default::default(),
+            stable_name_claim: false,
         };
         let mut p = EphemeralPool::new(name, spec);
         p.meta_mut().namespace = Some("ephemeral-pools".into());

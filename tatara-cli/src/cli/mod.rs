@@ -130,6 +130,9 @@ pub enum Commands {
         command: SourceCmd,
     },
 
+    /// Show the materialized config at a tier (bare/default/discovered/custom/env).
+    ConfigShow(shikumi::cli::ConfigShowCommand),
+
     // ── Backwards-compatible aliases ──
     /// Submit a job (alias for `job run`)
     #[command(hide = true)]

@@ -8209,6 +8209,12 @@ rec {
             packageId = "async-trait";
           }
           {
+            name = "clap";
+            packageId = "clap";
+            optional = true;
+            features = [ "derive" ];
+          }
+          {
             name = "figment";
             packageId = "figment";
             features = [ "env" "yaml" "toml" ];
@@ -8258,7 +8264,7 @@ rec {
           "op-native" = [ "dep:reqwest" "dep:tokio" ];
           "vault-native" = [ "dep:reqwest" "dep:tokio" ];
         };
-        resolvedDefaultFeatures = [ "default" ];
+        resolvedDefaultFeatures = [ "cli" "default" ];
       };
       "glob" = rec {
         crateName = "glob";
@@ -19398,6 +19404,11 @@ rec {
           {
             name = "futures-core";
             packageId = "futures-core";
+          }
+          {
+            name = "shikumi";
+            packageId = "git+https://github.com/pleme-io/shikumi?branch=main#0.1.0";
+            features = [ "cli" ];
           }
           {
             name = "hostname";

@@ -18,6 +18,14 @@ tatara-api = { path = "../tatara-api" }
 # CLI
 clap = { version = "4.5", features = ["derive"] }
 
+# Shikumi — pulls in the `cli` feature so the binary can consume the
+# reusable `shikumi::cli::ConfigShowCommand` clap subcommand factory
+# (Pillar 12: one Subcommand variant replaces every hand-rolled
+# `config-show` surface fleet-wide). The branch=main pin matches
+# tatara-core's pin and keeps the workspace on a single shikumi
+# source.
+shikumi = { git = "https://github.com/pleme-io/shikumi", branch = "main", features = ["cli"] }
+
 # Error handling
 anyhow = "1.0"
 

@@ -155,6 +155,11 @@ async fn main() -> anyhow::Result<()> {
             }
         },
 
+        // ── Config introspection (shikumi-canonical) ──
+        Commands::ConfigShow(cmd) => cmd
+            .run::<tatara_core::config::ServerConfig>("TATARA_TIER")
+            .map_err(|e| anyhow::anyhow!("config-show failed: {e}")),
+
         // ── Backwards-compatible aliases ──
         Commands::Run {
             job_file,

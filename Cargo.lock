@@ -5429,6 +5429,7 @@ source = "git+https://github.com/pleme-io/shikumi?branch=main#5db7873c9a109f6194
 dependencies = [
  "arc-swap",
  "async-trait",
+ "clap",
  "figment",
  "notify",
  "serde",
@@ -5816,6 +5817,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "shikumi 0.1.0 (git+https://github.com/pleme-io/shikumi?branch=main)",
  "tatara-api",
  "tatara-core",
  "tatara-engine",

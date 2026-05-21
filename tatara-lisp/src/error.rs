@@ -467,21 +467,31 @@ pub enum LispError {
     /// respectively — call-site malformed vs. definition-site malformed.
     ///
     /// `position` is `usize` because it is always the loop index inside
-    /// `parse_params`; `got` is `String` because it comes from arbitrary
-    /// source via `Sexp::Display`. Display preserves the legacy
-    /// `"compile error in defmacro params: expected symbol"` prefix
-    /// byte-for-byte so authoring tools that substring-grep on the
-    /// rendered diagnostic see no drift; the structural detail (`at
-    /// position {position}, got {got}`) is appended. When a future run
-    /// gives `Sexp` source spans, `pos: Option<usize>` lands here in ONE
-    /// place and every non-symbol-param site picks up positional
-    /// rendering via `crate::diagnostic::format_diagnostic`
-    /// mechanically.
+    /// `parse_params`; `got` is `SexpWitness` — the closed-set typed
+    /// joint identity (structural `SexpShape` + renderable
+    /// `Sexp::Display` projection) the offending-value side of the
+    /// typed-entry rejection owes the operator. Third consumer of the
+    /// `SexpWitness` primitive (after `SpliceOutsideList.got` and
+    /// `NonSymbolUnquoteTarget.got`); same posture — authoring tools
+    /// (REPL, LSP, `tatara-check`) bind to BOTH `got.shape`
+    /// (`SexpShape::Int`, `SexpShape::Keyword`, `SexpShape::List`, etc.)
+    /// AND `got.display` (the literal value, renderable verbatim)
+    /// jointly across the variant slot rather than substring-grepping
+    /// a free-form `String`. Display projects the witness's `display`
+    /// field verbatim into the `#[error(... got {got})]` annotation's
+    /// `{got}` slot, so the rendered `"compile error in defmacro params:
+    /// expected symbol at position {position}, got <display>"` shape is
+    /// byte-for-byte identical to the pre-lift `got: String` rendering;
+    /// authoring tools that substring-grep on the rendered diagnostic
+    /// see no drift. When a future run gives `Sexp` source spans, `pos:
+    /// Option<usize>` lands inside `SexpWitness` in ONE place and every
+    /// non-symbol-param site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error(
         "compile error in defmacro params: expected symbol at position \
          {position}, got {got}"
     )]
-    NonSymbolParam { position: usize, got: String },
+    NonSymbolParam { position: usize, got: SexpWitness },
     /// A `&rest` marker in a `defmacro` / `defpoint-template` / `defcheck`
     /// param list was followed by no element at all (`(&rest)`,
     /// `(a &rest)`) OR by a non-symbol element (`(&rest 5)`,
@@ -2319,7 +2329,7 @@ mod tests {
         assert_eq!(
             LispError::NonSymbolParam {
                 position: 0,
-                got: "5".into(),
+                got: SexpWitness::new(SexpShape::Int, "5"),
             }
             .position(),
             None
@@ -2327,7 +2337,7 @@ mod tests {
         assert_eq!(
             LispError::NonSymbolParam {
                 position: 2,
-                got: "(nested)".into(),
+                got: SexpWitness::new(SexpShape::List, "(nested)"),
             }
             .position(),
             None
@@ -3279,6 +3289,128 @@ mod tests {
     }
 
     #[test]
+    fn non_symbol_param_got_carries_typed_witness_through_variant_slot() {
+        // Pin the structural binding AND the Display projection on
+        // `LispError::NonSymbolParam.got`. After this lift the variant's
+        // typed slot is the joint `SexpWitness` identity — the same
+        // primitive `SpliceOutsideList.got` and
+        // `NonSymbolUnquoteTarget.got` already carry. A regression that
+        // re-collapses `got` to `String` (losing the rustc-enforced
+        // closed-set guarantee on shape identity) fails-loudly here.
+        // The Display projection through `SexpWitness::Display` writes
+        // only the `display` field so the rendered `at position X, got
+        // <display>` clause is byte-for-byte identical to the legacy
+        // `got: String` shape; downstream substring-grep consumers
+        // (`tatara-check`, REPL) see no drift.
+        let err = LispError::NonSymbolParam {
+            position: 1,
+            got: SexpWitness::new(SexpShape::Int, "5"),
+        };
+        match &err {
+            LispError::NonSymbolParam { position, got } => {
+                assert_eq!(*position, 1);
+                assert_eq!(got.shape, SexpShape::Int);
+                assert_eq!(got.display, "5");
+            }
+            other => panic!("expected NonSymbolParam, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: expected symbol at \
+             position 1, got 5"
+        );
+    }
+
+    #[test]
+    fn non_symbol_param_got_distinguishes_int_from_keyword_at_variant_slot() {
+        // Pin the typed-shape bifurcation at the variant slot — `5`
+        // (int atom at a param-list position) and `:foo` (keyword atom
+        // at a param-list position) BOTH route to `NonSymbolParam`, but
+        // the typed `got.shape` slot distinguishes them structurally —
+        // `SexpShape::Int` vs. `SexpShape::Keyword`. Sibling pin for
+        // the same structural-shape-bifurcation property
+        // `non_symbol_unquote_target_got_distinguishes_int_from_keyword_at_variant_slot`
+        // pins on `NonSymbolUnquoteTarget`. A regression that erases
+        // the typed shape (e.g., reverts to `got: String`) would lose
+        // this distinction — tooling that wants to surface "you wrote
+        // an int `5` where a symbol was expected at param-list position
+        // 0" vs. "you wrote a keyword `:foo` where a symbol was expected
+        // at param-list position 0 (did you mean `foo`?)" would have to
+        // substring-grep the `display` field, brittle.
+        let err_int = LispError::NonSymbolParam {
+            position: 0,
+            got: SexpWitness::new(SexpShape::Int, "5"),
+        };
+        let err_kw = LispError::NonSymbolParam {
+            position: 0,
+            got: SexpWitness::new(SexpShape::Keyword, ":foo"),
+        };
+        let (int_shape, kw_shape) = (
+            match &err_int {
+                LispError::NonSymbolParam { got, .. } => got.shape,
+                _ => unreachable!(),
+            },
+            match &err_kw {
+                LispError::NonSymbolParam { got, .. } => got.shape,
+                _ => unreachable!(),
+            },
+        );
+        assert_ne!(
+            int_shape, kw_shape,
+            "Int and Keyword witnesses must remain structurally distinct at the variant slot",
+        );
+        assert_eq!(int_shape, SexpShape::Int);
+        assert_eq!(kw_shape, SexpShape::Keyword);
+    }
+
+    #[test]
+    fn non_symbol_param_and_template_gate_share_one_witness_primitive() {
+        // Pin that ALL THREE Sexp-display-source `got` slots in the
+        // substrate (`NonSymbolParam`, `NonSymbolUnquoteTarget`,
+        // `SpliceOutsideList`) carry the SAME typed `SexpWitness`
+        // primitive — the closed set of "offending inner Sexp"
+        // identities is bound by ONE typed primitive across the three
+        // rejection surfaces (the defmacro-syntax-gate's `parse_params`
+        // walker AND the template-gate's `,X/,@X` pair). A regression
+        // that diverges the slot type on any one variant (e.g.,
+        // re-collapses `NonSymbolParam.got` to `String` while leaving
+        // the template-gate variants typed) fails-loudly here because
+        // the assignment round-trips the witness across all three slot
+        // types. Sibling pin to
+        // `non_symbol_unquote_target_and_splice_outside_list_share_one_witness_primitive`
+        // — extending the typed-identity unification contract from
+        // two slots to three.
+        let same_witness = SexpWitness::new(SexpShape::List, "(nested)");
+        let non_symbol_param = LispError::NonSymbolParam {
+            position: 0,
+            got: same_witness.clone(),
+        };
+        let non_symbol_target = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Unquote,
+            got: same_witness.clone(),
+        };
+        let splice_outside = LispError::SpliceOutsideList {
+            got: same_witness.clone(),
+        };
+        match (&non_symbol_param, &non_symbol_target, &splice_outside) {
+            (
+                LispError::NonSymbolParam { got: a, .. },
+                LispError::NonSymbolUnquoteTarget { got: b, .. },
+                LispError::SpliceOutsideList { got: c },
+            ) => {
+                assert_eq!(a.shape, b.shape);
+                assert_eq!(b.shape, c.shape);
+                assert_eq!(a.display, b.display);
+                assert_eq!(b.display, c.display);
+                assert_eq!(*a, same_witness);
+                assert_eq!(*b, same_witness);
+                assert_eq!(*c, same_witness);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
     fn missing_macro_arg_display_matches_legacy_compile_shape() {
         // The variant renders byte-for-byte the same string the legacy
         // `Compile { form: format!("call to {macro_name}"), message:
@@ -3344,7 +3476,7 @@ mod tests {
         // either field from the rendered diagnostic fails-loudly here.
         let err = LispError::NonSymbolParam {
             position: 1,
-            got: "5".into(),
+            got: SexpWitness::new(SexpShape::Int, "5"),
         };
         assert_eq!(
             format!("{err}"),
@@ -3364,7 +3496,7 @@ mod tests {
         // symbol" }` byte-for-byte.
         let err = LispError::NonSymbolParam {
             position: 0,
-            got: "(nested)".into(),
+            got: SexpWitness::new(SexpShape::List, "(nested)"),
         };
         let msg = format!("{err}");
         assert!(
@@ -3386,7 +3518,7 @@ mod tests {
         // re-parsing required.
         let err = LispError::NonSymbolParam {
             position: 2,
-            got: ":k".into(),
+            got: SexpWitness::new(SexpShape::Keyword, ":k"),
         };
         assert_eq!(
             format!("{err}"),

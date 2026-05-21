@@ -780,7 +780,7 @@ fn missing_macro_arg(macro_name: &str, param: &str) -> LispError {
 fn non_symbol_param(position: usize, got: &Sexp) -> LispError {
     LispError::NonSymbolParam {
         position,
-        got: got.to_string(),
+        got: crate::domain::sexp_witness(got),
     }
 }
 
@@ -1803,7 +1803,7 @@ mod tests {
     /// site for legibility. Sibling of `missing_macro_arg_fields`.
     fn non_symbol_param_fields(err: &LispError) -> (usize, &str) {
         match err {
-            LispError::NonSymbolParam { position, got } => (*position, got.as_str()),
+            LispError::NonSymbolParam { position, got } => (*position, got.display.as_str()),
             other => panic!("expected NonSymbolParam, got: {other:?}"),
         }
     }

@@ -5417,6 +5417,23 @@ dependencies = [
  "notify",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
+name = "shikumi"
+version = "0.1.0"
+source = "git+https://github.com/pleme-io/shikumi?branch=main#5db7873c9a109f619474228cbea15d64b4825b8a"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "figment",
+ "notify",
+ "serde",
+ "serde_json",
+ "serde_yaml",
  "thiserror 2.0.18",
  "tracing",
 ]
@@ -5850,6 +5867,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "shikumi 0.1.0 (git+https://github.com/pleme-io/shikumi?branch=main)",
  "thiserror 2.0.18",
  "toml",
  "tracing",

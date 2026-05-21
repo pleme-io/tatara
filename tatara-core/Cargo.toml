@@ -34,5 +34,11 @@ hostname = "0.4"
 # Logging
 tracing = "0.1"
 
+# Configuration prime directive — ServerConfig + ClientConfig +
+# every sub-config impls shikumi::TieredConfig (bare/discovered/
+# prescribed_default). Operators reach via `tatara config-show
+# <tier>` + TATARA_TIER env var. Pillar 12.
+shikumi = { git = "https://github.com/pleme-io/shikumi", branch = "main" }
+
 # Raft types (for cluster types: NodeId, BasicNode)
 openraft = { version = "0.9", features = ["serde", "storage-v2"] }

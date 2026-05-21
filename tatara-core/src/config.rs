@@ -507,3 +507,184 @@ fn default_volume_dir() -> PathBuf {
         .join("tatara")
         .join("volumes")
 }
+
+// ── shikumi::TieredConfig — prime directive ────────────────
+//
+// Operators reach via:
+//   tatara config-show bare           # zero-opinion floor
+//   tatara config-show default        # prescribed defaults
+//   TATARA_TIER=bare tatara server    # explicit tier override
+//
+// bare() = empty addrs, zero intervals, false flags. The documented
+// minimum that doesn't bind any port, gossip, raft, or NATS endpoint.
+// prescribed_default() = current Default impl (curated tatara server
+// + client defaults).
+
+impl shikumi::TieredConfig for ServerConfig {
+    fn bare() -> Self {
+        Self {
+            http_addr: String::new(),
+            grpc_addr: String::new(),
+            log_level: String::new(),
+            state: <StateConfig as shikumi::TieredConfig>::bare(),
+            scheduler: <SchedulerConfig as shikumi::TieredConfig>::bare(),
+            cluster: <ClusterConfig as shikumi::TieredConfig>::bare(),
+            p2p: <P2pConfig as shikumi::TieredConfig>::bare(),
+            kindling: <KindlingConfig as shikumi::TieredConfig>::bare(),
+            reconciler: <ReconcilerConfig as shikumi::TieredConfig>::bare(),
+            nats: <NatsConfig as shikumi::TieredConfig>::bare(),
+            sui: <SuiConfig as shikumi::TieredConfig>::bare(),
+            ports: <PortConfig as shikumi::TieredConfig>::bare(),
+            volumes: <VolumeConfig as shikumi::TieredConfig>::bare(),
+        }
+    }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for ClientConfig {
+    fn bare() -> Self {
+        Self {
+            server_addr: String::new(),
+            log_level: String::new(),
+            alloc_dir: PathBuf::new(),
+            resources: ResourceConfig::default(),
+            drivers: <DriverConfig as shikumi::TieredConfig>::bare(),
+        }
+    }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for StateConfig {
+    fn bare() -> Self { Self { dir: PathBuf::new() } }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for SchedulerConfig {
+    fn bare() -> Self { Self { eval_interval_secs: 0, heartbeat_grace_secs: 0 } }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for ReconcilerConfig {
+    fn bare() -> Self {
+        Self {
+            reconcile_interval_secs: 0,
+            reeval_every_n_ticks: 0,
+            max_concurrent_evals: 0,
+            drift_detection: false,
+            source_reconciliation: false,
+            source_reeval_every_n_ticks: 0,
+            flake_metadata_timeout_secs: 0,
+        }
+    }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for ClusterConfig {
+    fn bare() -> Self {
+        Self {
+            cluster_id: String::new(),
+            gossip_addr: String::new(),
+            raft_addr: String::new(),
+            seed_peers: Vec::new(),
+            mdns_discovery: false,
+            kindling_fleet_seeds: false,
+            roles: RoleConfig::default(),
+            auto_bootstrap: false,
+        }
+    }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for P2pConfig {
+    fn bare() -> Self {
+        Self {
+            cache_dir: PathBuf::new(),
+            max_cache_mb: 0,
+            eager_replication: false,
+        }
+    }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for KindlingConfig {
+    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for DriverConfig {
+    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for NatsConfig {
+    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for SuiConfig {
+    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for PortConfig {
+    fn bare() -> Self { <Self as shikumi::TieredConfig>::prescribed_default() }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+impl shikumi::TieredConfig for VolumeConfig {
+    fn bare() -> Self { Self { dir: PathBuf::new() } }
+    fn prescribed_default() -> Self { Self::default() }
+}
+
+#[cfg(test)]
+mod tiered_tests {
+    use super::*;
+    use shikumi::{ConfigTier, TieredConfig};
+
+    #[test]
+    fn server_config_bare_is_zero_opinion() {
+        let b = <ServerConfig as TieredConfig>::bare();
+        assert_eq!(b.http_addr, "");
+        assert_eq!(b.grpc_addr, "");
+        assert_eq!(b.log_level, "");
+        assert!(b.state.dir.as_os_str().is_empty());
+        assert_eq!(b.scheduler.eval_interval_secs, 0);
+        assert!(!b.cluster.mdns_discovery);
+        assert!(!b.reconciler.drift_detection);
+    }
+
+    #[test]
+    fn server_config_prescribed_matches_default() {
+        let p = <ServerConfig as TieredConfig>::prescribed_default();
+        let d = ServerConfig::default();
+        assert_eq!(p.http_addr, d.http_addr);
+        assert_eq!(p.log_level, d.log_level);
+    }
+
+    #[test]
+    fn server_config_diff_bare_vs_default_is_non_empty() {
+        let b = <ServerConfig as TieredConfig>::bare();
+        let d = <ServerConfig as TieredConfig>::prescribed_default();
+        let diff = d.diff_against(&b);
+        assert!(!diff.is_empty_diff(), "bare and prescribed_default must differ");
+    }
+
+    #[test]
+    fn server_config_resolve_tier_dispatches_correctly() {
+        assert_eq!(
+            <ServerConfig as TieredConfig>::resolve_tier(ConfigTier::Bare).http_addr,
+            ""
+        );
+        assert!(!<ServerConfig as TieredConfig>::resolve_tier(ConfigTier::Default)
+            .http_addr
+            .is_empty());
+    }
+
+    #[test]
+    fn client_config_bare_is_zero_opinion() {
+        let b = <ClientConfig as TieredConfig>::bare();
+        assert_eq!(b.server_addr, "");
+        assert_eq!(b.log_level, "");
+        assert!(b.alloc_dir.as_os_str().is_empty());
+    }
+}

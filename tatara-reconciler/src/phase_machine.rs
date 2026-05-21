@@ -214,19 +214,19 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
     }
 
     // R9 — emit routing edges (Ingress + DNSEndpoint per declared
-    // hostname) alongside the Intent-driven resources. The stable-
-    // claim form is gated on the claim arbiter's decision; until
-    // R10's controller loop lands, holds_stable_claim is computed
-    // here as a placeholder: a Process holding the claim has its
-    // pid/name stamped on `status.attestation.composed_root` already,
-    // but the actual cluster-wide arbiter hasn't run yet. Default
-    // false ⇒ instance-form only emits on first render.
+    // hostname) alongside the Intent-driven resources.
+    //
+    // R10 wiring: holds_stable_claim is read from ProcessTable.status.
+    // claims. If any claim record holder == "${ns}/${name}", this
+    // Process holds the claim for at least one (cluster, app) tuple
+    // and emits the stable-form Ingress + DNSEndpoint additionally.
     let routing_resources = if let Some(routing) = &p.spec.routing {
+        let holds_stable = process_holds_any_claim(ctx, p).await;
         let dns_lb = ctx.config.dns_lb_target.as_deref();
         let routes = render::render_routing(
             p,
             routing,
-            false, // claim arbiter wires this in a follow-up — instance-form only for now
+            holds_stable,
             &ctx.config.cluster,
             &ctx.config.location,
             &ctx.config.domain,
@@ -493,6 +493,31 @@ async fn advance_to_attested(
         "running → attested (ATTEST)"
     );
     Ok(Action::requeue(Duration::from_secs(HEARTBEAT)))
+}
+
+/// Read the cluster-scoped ProcessTable + check if any entry in
+/// `status.claims` points at this Process. Used by handle_execing
+/// to gate stable-form Ingress emission. Failures (table missing,
+/// API error) default to `false` — the claim arbiter will catch up
+/// next ProcessTable reconcile.
+async fn process_holds_any_claim(ctx: &Context, p: &Process) -> bool {
+    let ns = p.metadata.namespace.as_deref().unwrap_or("default");
+    let name = p.metadata.name.as_deref().unwrap_or("");
+    if name.is_empty() {
+        return false;
+    }
+    let process_ref = format!("{ns}/{name}");
+    let table_api: kube::Api<tatara_process::prelude::ProcessTable> =
+        kube::Api::all(ctx.kube.clone());
+    let table = match table_api.get(&ctx.config.process_table_name).await {
+        Ok(t) => t,
+        Err(_) => return false,
+    };
+    let claims = match &table.status {
+        Some(s) => &s.claims,
+        None => return false,
+    };
+    claims.values().any(|c| c.holder == process_ref)
 }
 
 /// Stable hash of the Intent — canonical serde JSON → BLAKE3.

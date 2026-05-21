@@ -25,6 +25,7 @@ use tatara_process::pool::{
 use tatara_process::prelude::{Process, ProcessSpec};
 
 use crate::context::PoolContext;
+use crate::desired::{decide_pool_convergence, ConvergenceAction, PoolMemberSnapshot};
 use crate::naming::member_process_name;
 use crate::pool_decide::{decide_pool_reconcile, PoolDecision};
 
@@ -79,7 +80,66 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
         }
     }
 
-    // 2. Decide.
+    // 2a. **R11 — desired-count loop gate.** When the operator
+    //     declares `spec.desired > 0`, the pool seeks a stable
+    //     healthy count and the legacy allocation-driven decision
+    //     is bypassed. Snapshots come from observed Process
+    //     phases (Running/Attested = healthy; Failed/Zombie/Reaped
+    //     = failed; everything else = transient).
+    if pool.spec.desired > 0 {
+        let snapshots: Vec<PoolMemberSnapshot> = owned
+            .iter()
+            .map(|p| PoolMemberSnapshot {
+                process_name: p.metadata.name.clone().unwrap_or_default(),
+                phase: p
+                    .status
+                    .as_ref()
+                    .map(|s| s.phase)
+                    .unwrap_or(tatara_process::phase::ProcessPhase::Pending),
+                created_at: p
+                    .metadata
+                    .creation_timestamp
+                    .as_ref()
+                    .map(|t| t.0)
+                    .unwrap_or_else(Utc::now),
+            })
+            .collect();
+        let actions = decide_pool_convergence(&pool, &snapshots, Utc::now());
+        info!(
+            namespace = %ns,
+            pool = %name,
+            desired = pool.spec.desired,
+            actions = actions.len(),
+            "pool desired-count loop"
+        );
+        apply_convergence_actions(&pool, &process_api, &ns, &name, &members, actions)
+            .await?;
+
+        // Update status from the same observations + skip the
+        // legacy decision step.
+        let phase = pool_phase_from_members(&pool, &members);
+        let status_patch = json!({
+            "status": PoolStatus {
+                phase,
+                phase_since: Some(Utc::now()),
+                ready_count: count_state(&members, MemberState::Free),
+                allocated_count: count_state(&members, MemberState::Allocated),
+                spawning_count: count_state(&members, MemberState::Spawning),
+                returning_count: count_state(&members, MemberState::Returning),
+                members: members.clone(),
+                message: None,
+                conditions: vec![],
+            },
+        });
+        let _ = pool_api
+            .patch_status(&name, &PatchParams::default(), &Patch::Merge(&status_patch))
+            .await;
+        return Ok(Action::requeue(Duration::from_secs(
+            ctx.config.heartbeat_seconds,
+        )));
+    }
+
+    // 2b. Legacy allocation-driven decision (desired == 0 path).
     let decision = decide_pool_reconcile(&pool, &members, Utc::now());
 
     info!(
@@ -214,6 +274,105 @@ fn pool_phase_from_members(pool: &EphemeralPool, members: &[PoolMember]) -> Pool
         return PoolPhase::ScalingDown;
     }
     PoolPhase::Steady
+}
+
+/// **R11 desired-count action applier.** Translates a
+/// `Vec<ConvergenceAction>` from `decide_pool_convergence` into
+/// kube-rs create/delete calls. Pure separation: the decision is
+/// upstream, this is the I/O glue.
+async fn apply_convergence_actions(
+    pool: &EphemeralPool,
+    process_api: &Api<Process>,
+    ns: &str,
+    name: &str,
+    members: &[PoolMember],
+    actions: Vec<ConvergenceAction>,
+) -> Result<()> {
+    if actions.is_empty() {
+        return Ok(());
+    }
+
+    let pool_uid = pool
+        .metadata
+        .uid
+        .clone()
+        .unwrap_or_else(|| name.to_string());
+    let occupied_names: std::collections::HashSet<_> =
+        members.iter().map(|m| m.process_name.clone()).collect();
+
+    // Track the next free slot index per call so multiple
+    // CreateMember actions in one tick spawn distinct names.
+    let mut next_slot: u32 = 0;
+
+    for action in actions {
+        match action {
+            ConvergenceAction::CreateMember => {
+                // Find the next available slot name not currently in
+                // use by another member.
+                let proc_name = loop {
+                    let candidate = member_process_name(name, &pool_uid, next_slot);
+                    next_slot += 1;
+                    if !occupied_names.contains(&candidate) {
+                        break candidate;
+                    }
+                    if next_slot > u32::MAX / 2 {
+                        return Err(anyhow!("pool {name} exhausted slot space"));
+                    }
+                };
+                let proc = build_member_process(pool, &proc_name, next_slot - 1, name)?;
+                match process_api.create(&PostParams::default(), &proc).await {
+                    Ok(_) => {
+                        info!(namespace = %ns, pool = %name, process = %proc_name, "desired-loop spawned");
+                    }
+                    Err(kube::Error::Api(e)) if e.code == 409 => {
+                        // already exists — race with another reconcile; OK.
+                    }
+                    Err(e) => {
+                        warn!(error = %e, pool = %name, "spawn failed; will retry next tick");
+                        return Ok(());
+                    }
+                }
+            }
+            ConvergenceAction::SignalSigterm { process_name } => {
+                // Delete the Process — the reconciler's finalizer +
+                // SIGTERM cascade unfolds via the standard exit path.
+                let _ = process_api
+                    .delete(&process_name, &DeleteParams::default())
+                    .await;
+                info!(
+                    namespace = %ns,
+                    pool = %name,
+                    process = %process_name,
+                    "desired-loop scale-down (SIGTERM oldest excess)"
+                );
+            }
+            ConvergenceAction::ReapFailed { process_name } => {
+                let _ = process_api
+                    .delete(&process_name, &DeleteParams::default())
+                    .await;
+                info!(
+                    namespace = %ns,
+                    pool = %name,
+                    process = %process_name,
+                    "desired-loop reaped failed member"
+                );
+            }
+            ConvergenceAction::Pause { reason } => {
+                // Pool-wide pause is operator-visible via the
+                // PoolStatus message; we don't apply further actions
+                // this tick. Operator unpauses by acknowledging the
+                // failed member (HoldFailed + manual reap) OR by
+                // changing replacement_policy.
+                warn!(
+                    pool = %name,
+                    reason = %reason,
+                    "desired-loop paused — operator action required"
+                );
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
 }
 
 fn process_belongs_to_pool(p: &Process, pool_name: &str) -> bool {

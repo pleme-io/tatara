@@ -379,14 +379,15 @@ pub enum LispError {
     /// loses the rustc-enforced closed-set guarantee on shape
     /// identity.
     ///
-    /// First consumer of the `SexpWitness` primitive — sibling lifts
-    /// of `NonSymbolUnquoteTarget.got`, `NonSymbolParam.got`,
-    /// `RestParamMissingName.got`, `DefmacroNonSymbolName.got`,
-    /// `DefmacroNonListParams.got`, and `MissingHeadSymbol.got` are
-    /// the next moves in the same trajectory: every `got: String`
-    /// (or `Option<String>`) slot whose source is `Sexp::Display`
-    /// picks up the typed witness mechanically once the variant's
-    /// data shape is bumped.
+    /// First consumer of the `SexpWitness` primitive. Sibling lifts
+    /// landed for `NonSymbolUnquoteTarget.got`, `NonSymbolParam.got`,
+    /// and `DefmacroNonSymbolName.got`; the remaining trajectory —
+    /// `RestParamMissingName.got: Option<String>`,
+    /// `DefmacroNonListParams.got: String`, and
+    /// `MissingHeadSymbol.got: Option<String>` — is the next set of
+    /// moves: every `got: String` (or `Option<String>`) slot whose
+    /// source is `Sexp::Display` picks up the typed witness
+    /// mechanically once the variant's data shape is bumped.
     ///
     /// When a future run gives `Sexp` source spans, `pos: Option<usize>`
     /// lands on `SexpWitness` ONCE and every splice-outside-list site
@@ -652,19 +653,36 @@ pub enum LispError {
     /// (`Defmacro` ⊎ `DefpointTemplate` ⊎ `Defcheck`) are encoded as
     /// a TYPE so consumers pattern-match on variant identity rather
     /// than substring-comparing the rendered `head` literal.
-    /// `got` is `String` because it comes from arbitrary source via
-    /// `Sexp::Display` (e.g. `5`, `:foo`, `"name"`, `(nested)`).
+    /// `got` is `SexpWitness` — the closed-set typed joint identity
+    /// pairing the offending name-slot element's `SexpShape` (the
+    /// twelve reachable outermost shapes the reader can produce) with
+    /// its `Sexp::Display` projection (`5`, `:foo`, `"name"`,
+    /// `(nested)`, etc.). Fourth consumer of the `SexpWitness`
+    /// primitive (after `SpliceOutsideList.got`,
+    /// `NonSymbolUnquoteTarget.got`, and `NonSymbolParam.got`):
+    /// authoring tools (REPL, LSP, `tatara-check`) bind to BOTH
+    /// `got.shape` (structurally pattern-matchable on `SexpShape::Int`,
+    /// `SexpShape::Keyword`, `SexpShape::List`, etc.) AND `got.display`
+    /// (the literal value, renderable verbatim) jointly across the
+    /// variant slot.
     ///
     /// Display preserves the legacy `"expected name symbol"` substring
     /// byte-for-byte: the prefix `compile error in {head}:` matches
     /// the legacy `Compile { form: head.to_string(), message:
     /// "expected name symbol" }` shape; the structural detail (`,
-    /// got {got}`) is appended. When a future run gives `Sexp` source
-    /// spans, `pos: Option<usize>` lands here in ONE place and every
-    /// non-symbol-name site picks up positional rendering via
-    /// `crate::diagnostic::format_diagnostic` mechanically.
+    /// got {got}`) is appended. `{got}` flows through
+    /// `SexpWitness::Display`, which writes only the `display` field,
+    /// so the rendering is byte-for-byte identical to the legacy
+    /// `got: String` shape. When a future run gives `Sexp` source
+    /// spans, `pos: Option<usize>` lands inside `SexpWitness` in ONE
+    /// place and every non-symbol-name site picks up positional
+    /// rendering via `crate::diagnostic::format_diagnostic`
+    /// mechanically.
     #[error("compile error in {head}: expected name symbol, got {got}")]
-    DefmacroNonSymbolName { head: MacroDefHead, got: String },
+    DefmacroNonSymbolName {
+        head: MacroDefHead,
+        got: SexpWitness,
+    },
     /// A `defmacro` / `defpoint-template` / `defcheck` form passed both
     /// the arity gate (≥4 elements) AND the name-symbol gate (list[1]
     /// is a symbol) but its param-list slot — `list[2]`, the third
@@ -2377,7 +2395,7 @@ mod tests {
         assert_eq!(
             LispError::DefmacroNonSymbolName {
                 head: MacroDefHead::Defmacro,
-                got: "5".into(),
+                got: SexpWitness::new(SexpShape::Int, "5"),
             }
             .position(),
             None
@@ -2401,7 +2419,7 @@ mod tests {
         assert_eq!(
             LispError::DefmacroNonSymbolName {
                 head: MacroDefHead::DefpointTemplate,
-                got: ":foo".into(),
+                got: SexpWitness::new(SexpShape::Keyword, ":foo"),
             }
             .position(),
             None
@@ -3411,6 +3429,147 @@ mod tests {
     }
 
     #[test]
+    fn defmacro_non_symbol_name_got_carries_typed_witness_through_variant_slot() {
+        // Pin the structural binding AND the Display projection on
+        // `LispError::DefmacroNonSymbolName.got`. After this lift the
+        // variant's typed slot is the joint `SexpWitness` identity —
+        // the same primitive `SpliceOutsideList.got`,
+        // `NonSymbolUnquoteTarget.got`, and `NonSymbolParam.got`
+        // already carry. A regression that re-collapses `got` to
+        // `String` (losing the rustc-enforced closed-set guarantee on
+        // shape identity at the defmacro-syntax-gate's name-slot
+        // rejection variant) fails-loudly here. The Display projection
+        // through `SexpWitness::Display` writes only the `display`
+        // field so the rendered `compile error in {head}: expected
+        // name symbol, got <display>` clause is byte-for-byte
+        // identical to the legacy `got: String` shape; downstream
+        // substring-grep consumers (`tatara-check`, REPL) see no
+        // drift.
+        let err = LispError::DefmacroNonSymbolName {
+            head: MacroDefHead::Defmacro,
+            got: SexpWitness::new(SexpShape::Int, "5"),
+        };
+        match &err {
+            LispError::DefmacroNonSymbolName { head, got } => {
+                assert_eq!(*head, MacroDefHead::Defmacro);
+                assert_eq!(got.shape, SexpShape::Int);
+                assert_eq!(got.display, "5");
+            }
+            other => panic!("expected DefmacroNonSymbolName, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro: expected name symbol, got 5"
+        );
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_got_distinguishes_int_from_keyword_at_variant_slot() {
+        // Pin the typed-shape bifurcation at the variant slot — `5`
+        // (int atom at the defmacro name slot) and `:foo` (keyword
+        // atom at the defmacro name slot) BOTH route to
+        // `DefmacroNonSymbolName`, but the typed `got.shape` slot
+        // distinguishes them structurally — `SexpShape::Int`
+        // vs. `SexpShape::Keyword`. Sibling pin for the same
+        // structural-shape-bifurcation property
+        // `non_symbol_param_got_distinguishes_int_from_keyword_at_variant_slot`
+        // pins on `NonSymbolParam` and
+        // `non_symbol_unquote_target_got_distinguishes_int_from_keyword_at_variant_slot`
+        // pins on `NonSymbolUnquoteTarget`. A regression that erases
+        // the typed shape (e.g., reverts to `got: String`) would lose
+        // this distinction — tooling that wants to surface "you wrote
+        // an int `5` where a name symbol was expected" vs. "you wrote
+        // a keyword `:foo` where a name symbol was expected (did you
+        // mean `foo`?)" would have to substring-grep the `display`
+        // field, brittle.
+        let err_int = LispError::DefmacroNonSymbolName {
+            head: MacroDefHead::Defmacro,
+            got: SexpWitness::new(SexpShape::Int, "5"),
+        };
+        let err_kw = LispError::DefmacroNonSymbolName {
+            head: MacroDefHead::Defmacro,
+            got: SexpWitness::new(SexpShape::Keyword, ":foo"),
+        };
+        let (int_shape, kw_shape) = (
+            match &err_int {
+                LispError::DefmacroNonSymbolName { got, .. } => got.shape,
+                _ => unreachable!(),
+            },
+            match &err_kw {
+                LispError::DefmacroNonSymbolName { got, .. } => got.shape,
+                _ => unreachable!(),
+            },
+        );
+        assert_ne!(
+            int_shape, kw_shape,
+            "Int and Keyword witnesses must remain structurally distinct at the variant slot",
+        );
+        assert_eq!(int_shape, SexpShape::Int);
+        assert_eq!(kw_shape, SexpShape::Keyword);
+    }
+
+    #[test]
+    fn defmacro_non_symbol_name_and_param_gate_share_one_witness_primitive() {
+        // Pin that ALL FOUR Sexp-display-source `got` slots in the
+        // substrate (`SpliceOutsideList`, `NonSymbolUnquoteTarget`,
+        // `NonSymbolParam`, `DefmacroNonSymbolName`) carry the SAME
+        // typed `SexpWitness` primitive — the closed set of
+        // "offending inner Sexp" identities is bound by ONE typed
+        // primitive across FOUR rejection surfaces: the
+        // template-gate's `,X/,@X` pair, the defmacro-syntax-gate's
+        // `parse_params` walker, AND the defmacro-syntax-gate's
+        // outer name-slot rejection. A regression that diverges the
+        // slot type on any one variant (e.g., re-collapses
+        // `DefmacroNonSymbolName.got` to `String` while leaving the
+        // others typed) fails-loudly here because the assignment
+        // round-trips the witness across all four slot types. Sibling
+        // pin to `non_symbol_param_and_template_gate_share_one_witness_primitive`
+        // — extending the typed-identity unification contract from
+        // three slots to four.
+        let same_witness = SexpWitness::new(SexpShape::List, "(nested)");
+        let defmacro_non_symbol_name = LispError::DefmacroNonSymbolName {
+            head: MacroDefHead::Defmacro,
+            got: same_witness.clone(),
+        };
+        let non_symbol_param = LispError::NonSymbolParam {
+            position: 0,
+            got: same_witness.clone(),
+        };
+        let non_symbol_target = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Unquote,
+            got: same_witness.clone(),
+        };
+        let splice_outside = LispError::SpliceOutsideList {
+            got: same_witness.clone(),
+        };
+        match (
+            &defmacro_non_symbol_name,
+            &non_symbol_param,
+            &non_symbol_target,
+            &splice_outside,
+        ) {
+            (
+                LispError::DefmacroNonSymbolName { got: a, .. },
+                LispError::NonSymbolParam { got: b, .. },
+                LispError::NonSymbolUnquoteTarget { got: c, .. },
+                LispError::SpliceOutsideList { got: d },
+            ) => {
+                assert_eq!(a.shape, b.shape);
+                assert_eq!(b.shape, c.shape);
+                assert_eq!(c.shape, d.shape);
+                assert_eq!(a.display, b.display);
+                assert_eq!(b.display, c.display);
+                assert_eq!(c.display, d.display);
+                assert_eq!(*a, same_witness);
+                assert_eq!(*b, same_witness);
+                assert_eq!(*c, same_witness);
+                assert_eq!(*d, same_witness);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
     fn missing_macro_arg_display_matches_legacy_compile_shape() {
         // The variant renders byte-for-byte the same string the legacy
         // `Compile { form: format!("call to {macro_name}"), message:
@@ -3706,7 +3865,7 @@ mod tests {
         // either field from the rendered diagnostic fails-loudly here.
         let err = LispError::DefmacroNonSymbolName {
             head: MacroDefHead::Defmacro,
-            got: "5".into(),
+            got: SexpWitness::new(SexpShape::Int, "5"),
         };
         assert_eq!(
             format!("{err}"),
@@ -3725,7 +3884,7 @@ mod tests {
         // as data.
         let err = LispError::DefmacroNonSymbolName {
             head: MacroDefHead::DefpointTemplate,
-            got: ":foo".into(),
+            got: SexpWitness::new(SexpShape::Keyword, ":foo"),
         };
         assert_eq!(
             format!("{err}"),
@@ -3741,7 +3900,7 @@ mod tests {
         // head literal in the prefix).
         let err = LispError::DefmacroNonSymbolName {
             head: MacroDefHead::Defcheck,
-            got: "(nested)".into(),
+            got: SexpWitness::new(SexpShape::List, "(nested)"),
         };
         assert_eq!(
             format!("{err}"),
@@ -3758,7 +3917,7 @@ mod tests {
         // literal value as data, no re-parsing required.
         let err = LispError::DefmacroNonSymbolName {
             head: MacroDefHead::Defmacro,
-            got: "\"name\"".into(),
+            got: SexpWitness::new(SexpShape::String, "\"name\""),
         };
         assert_eq!(
             format!("{err}"),
@@ -3778,7 +3937,7 @@ mod tests {
         // message: "expected name symbol" }` byte-for-byte.
         let err = LispError::DefmacroNonSymbolName {
             head: MacroDefHead::Defmacro,
-            got: "5".into(),
+            got: SexpWitness::new(SexpShape::Int, "5"),
         };
         let msg = format!("{err}");
         assert!(
@@ -5138,12 +5297,13 @@ mod tests {
         // instead of substring-matching the rendered diagnostic.
         let err = LispError::DefmacroNonSymbolName {
             head: MacroDefHead::DefpointTemplate,
-            got: "5".into(),
+            got: SexpWitness::new(SexpShape::Int, "5"),
         };
         match err {
             LispError::DefmacroNonSymbolName { head, got } => {
                 assert_eq!(head, MacroDefHead::DefpointTemplate);
-                assert_eq!(got, "5");
+                assert_eq!(got.shape, SexpShape::Int);
+                assert_eq!(got.display, "5");
             }
             other => panic!("expected DefmacroNonSymbolName, got {other:?}"),
         }
@@ -5219,7 +5379,7 @@ mod tests {
         // `"defpoint-template"`) fails-loudly here.
         let err = LispError::DefmacroNonSymbolName {
             head: MacroDefHead::DefpointTemplate,
-            got: ":foo".into(),
+            got: SexpWitness::new(SexpShape::Keyword, ":foo"),
         };
         assert_eq!(
             format!("{err}"),

@@ -903,9 +903,14 @@ fn defmacro_arity(head: MacroDefHead, arity: usize) -> LispError {
 /// variant's typed `head: MacroDefHead` slot — same posture as
 /// `defmacro_arity` after the typed-slot promotion. `got` is `&Sexp`
 /// at the call site (a borrow into the form's name slot); the helper
-/// projects through `to_string()` so the variant's `got` slot stays
-/// lifetime-free, parallel to how `non_symbol_param` and
-/// `non_symbol_unquote_target` project their `&Sexp` arguments.
+/// projects through `crate::domain::sexp_witness` — the typed joint
+/// projection (`SexpShape` + `Sexp::Display`) — so the variant's
+/// `got: SexpWitness` slot carries BOTH structural shape AND
+/// renderable literal across the boundary, parallel to how
+/// `non_symbol_param` and `non_symbol_unquote_target` project their
+/// `&Sexp` arguments. The fourth consumer of the typed `SexpWitness`
+/// primitive on the substrate's Sexp-display-source rejection
+/// surface.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; one
 /// inline copy still earns a named primitive once the structural
@@ -928,7 +933,7 @@ fn defmacro_arity(head: MacroDefHead, arity: usize) -> LispError {
 fn defmacro_non_symbol_name(head: MacroDefHead, got: &Sexp) -> LispError {
     LispError::DefmacroNonSymbolName {
         head,
-        got: got.to_string(),
+        got: crate::domain::sexp_witness(got),
     }
 }
 
@@ -2310,8 +2315,13 @@ mod tests {
         // Sibling of the `defmacro_arity` threading test — pins that
         // `defmacro_non_symbol_name` accepts a typed `MacroDefHead`
         // and threads it through to the variant's typed `head` slot
-        // unchanged. The `got: &Sexp` parameter rides through via
-        // `to_string()`.
+        // unchanged. The `got: &Sexp` parameter rides through
+        // `crate::domain::sexp_witness` into the variant's typed
+        // `got: SexpWitness` slot so BOTH the structural shape AND
+        // the rendered literal are preserved across the helper
+        // boundary, parallel to how `non_symbol_param` and
+        // `non_symbol_unquote_target` project their `&Sexp` arguments
+        // through the same typed joint primitive.
         let got = parse("5");
         for head in [
             MacroDefHead::Defmacro,
@@ -2322,7 +2332,8 @@ mod tests {
             match err {
                 LispError::DefmacroNonSymbolName { head: h, got: g } => {
                     assert_eq!(h, head);
-                    assert_eq!(g, "5");
+                    assert_eq!(g.shape, crate::error::SexpShape::Int);
+                    assert_eq!(g.display, "5");
                 }
                 other => panic!("expected DefmacroNonSymbolName, got: {other:?}"),
             }
@@ -2536,7 +2547,7 @@ mod tests {
     /// `non_symbol_param_fields`, and `rest_param_missing_name_fields`.
     fn defmacro_non_symbol_name_fields(err: &LispError) -> (MacroDefHead, &str) {
         match err {
-            LispError::DefmacroNonSymbolName { head, got } => (*head, got.as_str()),
+            LispError::DefmacroNonSymbolName { head, got } => (*head, got.display.as_str()),
             other => panic!("expected DefmacroNonSymbolName, got: {other:?}"),
         }
     }

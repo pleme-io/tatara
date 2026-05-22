@@ -973,10 +973,14 @@ fn defmacro_non_symbol_name(head: MacroDefHead, got: &Sexp) -> LispError {
 /// `defmacro_arity` and `defmacro_non_symbol_name` after the
 /// typed-slot promotion. `got` is `&Sexp` at the call site (a
 /// borrow into the form's param-list slot); the helper projects
-/// through `to_string()` so the variant's `got` slot stays
-/// lifetime-free, parallel to how `non_symbol_param`,
-/// `non_symbol_unquote_target`, and `defmacro_non_symbol_name`
-/// project their `&Sexp` arguments.
+/// through `crate::domain::sexp_witness(_)` — the typed joint
+/// primitive that pairs the offending `Sexp`'s `SexpShape` with its
+/// `Sexp::Display` projection in ONE owned `SexpWitness` value, so
+/// authoring tools bind to both the structural shape AND the rendered
+/// literal across the variant slot. Same posture as `non_symbol_param`,
+/// `non_symbol_unquote_target`, `splice_outside_list`, and
+/// `defmacro_non_symbol_name`'s helpers after the typed-witness
+/// promotion of their `got` slots.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; one
 /// inline copy still earns a named primitive once the structural
@@ -1000,7 +1004,7 @@ fn defmacro_non_symbol_name(head: MacroDefHead, got: &Sexp) -> LispError {
 fn defmacro_non_list_params(head: MacroDefHead, got: &Sexp) -> LispError {
     LispError::DefmacroNonListParams {
         head,
-        got: got.to_string(),
+        got: crate::domain::sexp_witness(got),
     }
 }
 
@@ -2350,7 +2354,14 @@ mod tests {
         // typed-enum lift across all three error helpers — every
         // call site that constructs a `LispError::Defmacro*` variant
         // takes its `head` from a `MacroDefHead`, never from a `&str`
-        // match.
+        // match. The `got: &Sexp` parameter rides through
+        // `crate::domain::sexp_witness` into the variant's typed
+        // `got: SexpWitness` slot so BOTH the structural shape AND
+        // the rendered literal are preserved across the helper
+        // boundary, parallel to how `defmacro_non_symbol_name`,
+        // `non_symbol_param`, and `non_symbol_unquote_target` project
+        // their `&Sexp` arguments through the same typed joint
+        // primitive.
         let got = parse("x");
         for head in [
             MacroDefHead::Defmacro,
@@ -2361,7 +2372,8 @@ mod tests {
             match err {
                 LispError::DefmacroNonListParams { head: h, got: g } => {
                     assert_eq!(h, head);
-                    assert_eq!(g, "x");
+                    assert_eq!(g.shape, crate::error::SexpShape::Symbol);
+                    assert_eq!(g.display, "x");
                 }
                 other => panic!("expected DefmacroNonListParams, got: {other:?}"),
             }
@@ -2771,7 +2783,7 @@ mod tests {
     /// and `rest_param_missing_name_fields`.
     fn defmacro_non_list_params_fields(err: &LispError) -> (MacroDefHead, &str) {
         match err {
-            LispError::DefmacroNonListParams { head, got } => (*head, got.as_str()),
+            LispError::DefmacroNonListParams { head, got } => (*head, got.display.as_str()),
             other => panic!("expected DefmacroNonListParams, got: {other:?}"),
         }
     }

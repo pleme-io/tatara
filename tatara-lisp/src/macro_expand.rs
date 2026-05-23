@@ -823,7 +823,7 @@ fn non_symbol_param(position: usize, got: &Sexp) -> LispError {
 fn rest_param_missing_name(rest_position: usize, got: Option<&Sexp>) -> LispError {
     LispError::RestParamMissingName {
         rest_position,
-        got: got.map(Sexp::to_string),
+        got: got.map(crate::domain::sexp_witness),
     }
 }
 
@@ -1979,7 +1979,7 @@ mod tests {
     fn rest_param_missing_name_fields(err: &LispError) -> (usize, Option<&str>) {
         match err {
             LispError::RestParamMissingName { rest_position, got } => {
-                (*rest_position, got.as_deref())
+                (*rest_position, got.as_ref().map(|w| w.display.as_str()))
             }
             other => panic!("expected RestParamMissingName, got: {other:?}"),
         }
@@ -2174,7 +2174,10 @@ mod tests {
         assert_eq!(err_missing.position(), None);
         let err_got = LispError::RestParamMissingName {
             rest_position: 0,
-            got: Some("5".into()),
+            got: Some(crate::error::SexpWitness::new(
+                crate::error::SexpShape::Int,
+                "5",
+            )),
         };
         assert_eq!(err_got.position(), None);
     }

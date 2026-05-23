@@ -507,14 +507,16 @@ pub enum LispError {
     /// where the rest-name should have been. The structural variant
     /// names both: `rest_position` is the 0-based index of the `&rest`
     /// marker within the param list, `got` is the offending follower's
-    /// `Sexp::Display` projection (`Some("5")`, `Some(":foo")`,
-    /// `Some("(nested)")`) or `None` when the marker was the last
-    /// element in the list and nothing followed at all. Naming both
-    /// the marker position AND the offending follower (or its absence)
-    /// is the typed-entry gate's structural-completeness floor
-    /// (THEORY.md §V.1) — without both, an LSP that wants to surface
-    /// "your `&rest` at param-list position 1 has no name; you wrote
-    /// `5` instead of a symbol" must re-parse the source.
+    /// typed witness (`Some(SexpWitness::new(SexpShape::Int, "5"))`,
+    /// `Some(SexpWitness::new(SexpShape::Keyword, ":foo"))`,
+    /// `Some(SexpWitness::new(SexpShape::List, "(nested)"))`) or
+    /// `None` when the marker was the last element in the list and
+    /// nothing followed at all. Naming both the marker position AND
+    /// the offending follower (or its absence) is the typed-entry
+    /// gate's structural-completeness floor (THEORY.md §V.1) —
+    /// without both, an LSP that wants to surface "your `&rest` at
+    /// param-list position 1 has no name; you wrote `5` instead of
+    /// a symbol" must re-parse the source.
     ///
     /// Sibling of `NonSymbolParam { position, got }` for the
     /// defmacro-syntax-gate's other definition-site failure mode —
@@ -522,7 +524,7 @@ pub enum LispError {
     /// position isn't a symbol; this variant fires specifically on the
     /// post-`&rest` follower slot, where the failure mode bifurcates
     /// into "missing entirely" vs. "present but not a symbol". Both
-    /// modes share ONE structural variant via `got: Option<String>`
+    /// modes share ONE structural variant via `got: Option<SexpWitness>`
     /// (parallel to how `UnboundTemplateVar` and `UnknownKwarg` carry
     /// `hint: Option<String>` for a present-or-absent secondary slot)
     /// rather than splitting into two near-identical variants — the
@@ -536,26 +538,33 @@ pub enum LispError {
     ///
     /// `rest_position` is `usize` because it is always the loop index
     /// inside `parse_params` at which the `&rest` marker was matched;
-    /// `got` is `Option<String>` because the follower comes from
-    /// arbitrary source via `Sexp::Display` (when present) or doesn't
-    /// exist at all (when the marker was the param list's last
-    /// element). Display preserves the legacy `"compile error in
-    /// defmacro params: &rest needs a name"` prefix byte-for-byte so
-    /// authoring tools that substring-grep on the rendered diagnostic
-    /// see no drift; the structural detail (`(rest marker at position
+    /// `got` is `Option<SexpWitness>` — the SIXTH consumer of the typed
+    /// `SexpWitness` primitive (after `SpliceOutsideList.got`,
+    /// `NonSymbolUnquoteTarget.got`, `NonSymbolParam.got`,
+    /// `DefmacroNonSymbolName.got`, and `DefmacroNonListParams.got`).
+    /// The `Option`-shape bifurcates structurally into "missing
+    /// entirely" (`None`, when the marker was the param list's last
+    /// element) and "present but malformed" (`Some(SexpWitness)`, when
+    /// a non-symbol follower came from arbitrary source via
+    /// `Sexp::Display`); the typed witness lands on the `Some` arm
+    /// only. Display preserves the legacy `"compile error in defmacro
+    /// params: &rest needs a name"` prefix byte-for-byte so authoring
+    /// tools that substring-grep on the rendered diagnostic see no
+    /// drift; the structural detail (`(rest marker at position
     /// {rest_position}, got {got})` when present, `(rest marker at
     /// position {rest_position}, none provided)` when absent) is
     /// appended. When a future run gives `Sexp` source spans, `pos:
-    /// Option<usize>` lands here in ONE place and every
-    /// rest-param-missing-name site picks up positional rendering via
-    /// `crate::diagnostic::format_diagnostic` mechanically.
+    /// Option<usize>` lands inside `SexpWitness` in ONE place and
+    /// every rest-param-missing-name site picks up positional
+    /// rendering via `crate::diagnostic::format_diagnostic`
+    /// mechanically.
     #[error(
         "compile error in defmacro params: &rest needs a name{}",
-        rest_param_missing_name_suffix(*rest_position, got.as_deref())
+        rest_param_missing_name_suffix(*rest_position, got.as_ref().map(|w| w.display.as_str()))
     )]
     RestParamMissingName {
         rest_position: usize,
-        got: Option<String>,
+        got: Option<SexpWitness>,
     },
     /// A `defmacro` / `defpoint-template` / `defcheck` form had fewer
     /// than 4 list elements: the head keyword must be followed by a
@@ -2400,7 +2409,7 @@ mod tests {
         assert_eq!(
             LispError::RestParamMissingName {
                 rest_position: 0,
-                got: Some("5".into()),
+                got: Some(SexpWitness::new(SexpShape::Int, "5")),
             }
             .position(),
             None
@@ -3762,6 +3771,180 @@ mod tests {
     }
 
     #[test]
+    fn rest_param_missing_name_got_carries_typed_witness_through_variant_slot() {
+        // Pin the structural binding AND the Display projection on
+        // `LispError::RestParamMissingName.got`. After this lift the
+        // variant's typed slot is `Option<SexpWitness>` — the joint
+        // `SexpWitness` identity (the same primitive `SpliceOutsideList.got`,
+        // `NonSymbolUnquoteTarget.got`, `NonSymbolParam.got`,
+        // `DefmacroNonSymbolName.got`, and `DefmacroNonListParams.got`
+        // already carry) wrapped in `Option` because the post-`&rest`
+        // follower slot bifurcates structurally between "missing
+        // entirely" (`None`) and "present but malformed"
+        // (`Some(SexpWitness)`). The typed witness lands on the `Some`
+        // arm only. A regression that re-collapses to a free-form
+        // `Option<String>` got slot (losing the rustc-enforced
+        // closed-set guarantee on shape identity at the
+        // `parse_params` walker's `&rest`-follower rejection variant)
+        // fails-loudly here. The Display projection through
+        // `SexpWitness::Display` writes only the `display` field so
+        // the rendered `(rest marker at position {rest_position}, got
+        // <display>)` clause is byte-for-byte identical to the
+        // pre-lift `Option<String>` shape; downstream substring-grep
+        // consumers (`tatara-check`, REPL) see no drift.
+        let err = LispError::RestParamMissingName {
+            rest_position: 1,
+            got: Some(SexpWitness::new(SexpShape::Int, "5")),
+        };
+        match &err {
+            LispError::RestParamMissingName { rest_position, got } => {
+                assert_eq!(*rest_position, 1);
+                let witness = got.as_ref().expect("got must be Some");
+                assert_eq!(witness.shape, SexpShape::Int);
+                assert_eq!(witness.display, "5");
+            }
+            other => panic!("expected RestParamMissingName, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: &rest needs a name \
+             (rest marker at position 1, got 5)"
+        );
+    }
+
+    #[test]
+    fn rest_param_missing_name_got_distinguishes_int_from_keyword_at_variant_slot() {
+        // Pin the typed-shape bifurcation at the variant slot — `5`
+        // (int atom at the post-`&rest` follower slot) and `:foo`
+        // (keyword atom at the post-`&rest` follower slot) BOTH route
+        // to `RestParamMissingName` on the `Some` arm, but the typed
+        // `got.shape` slot distinguishes them structurally —
+        // `SexpShape::Int` vs. `SexpShape::Keyword`. Sibling pin for
+        // the same structural-shape-bifurcation property
+        // `non_symbol_param_got_distinguishes_int_from_keyword_at_variant_slot`
+        // pins on `NonSymbolParam` and
+        // `defmacro_non_symbol_name_got_distinguishes_int_from_keyword_at_variant_slot`
+        // pins on `DefmacroNonSymbolName`. A regression that erases
+        // the typed shape (e.g., reverts to `got: Option<String>`)
+        // would lose this distinction — tooling that wants to surface
+        // "you wrote an int `5` where a rest-name was expected" vs.
+        // "you wrote a keyword `:foo` where a rest-name was expected
+        // (did you mean `foo`?)" would have to substring-grep the
+        // `display` field, brittle.
+        let err_int = LispError::RestParamMissingName {
+            rest_position: 0,
+            got: Some(SexpWitness::new(SexpShape::Int, "5")),
+        };
+        let err_kw = LispError::RestParamMissingName {
+            rest_position: 0,
+            got: Some(SexpWitness::new(SexpShape::Keyword, ":foo")),
+        };
+        let (int_shape, kw_shape) = (
+            match &err_int {
+                LispError::RestParamMissingName { got: Some(w), .. } => w.shape,
+                _ => unreachable!(),
+            },
+            match &err_kw {
+                LispError::RestParamMissingName { got: Some(w), .. } => w.shape,
+                _ => unreachable!(),
+            },
+        );
+        assert_ne!(
+            int_shape, kw_shape,
+            "Int and Keyword witnesses must remain structurally distinct at the variant slot",
+        );
+        assert_eq!(int_shape, SexpShape::Int);
+        assert_eq!(kw_shape, SexpShape::Keyword);
+    }
+
+    #[test]
+    fn rest_param_missing_name_and_macro_def_gate_share_one_witness_primitive() {
+        // Pin that ALL SIX Sexp-display-source `got` slots in the
+        // substrate (`SpliceOutsideList`, `NonSymbolUnquoteTarget`,
+        // `NonSymbolParam`, `DefmacroNonSymbolName`,
+        // `DefmacroNonListParams`, `RestParamMissingName`) carry the
+        // SAME typed `SexpWitness` primitive — the closed set of
+        // "offending inner Sexp" identities is bound by ONE typed
+        // primitive across SIX rejection surfaces: the template-gate's
+        // `,X/,@X` pair, the defmacro-syntax-gate's `parse_params`
+        // walker (BOTH non-symbol-param AND post-`&rest`-non-symbol-
+        // follower rejection points), AND BOTH of the
+        // defmacro-syntax-gate's outer `macro_def_from` rejection
+        // points (name-symbol AND param-list). The `Option`-wrap on
+        // `RestParamMissingName.got` is the bifurcation between
+        // "missing entirely" and "present but malformed"; the typed
+        // witness rides on the `Some` arm and is structurally identical
+        // to the other five variants' got slots. A regression that
+        // diverges the slot type on any one variant (e.g., re-collapses
+        // `RestParamMissingName.got` to `Option<String>` while leaving
+        // the others typed) fails-loudly here because the assignment
+        // round-trips the witness across all six slot types. Sibling
+        // pin to
+        // `defmacro_non_list_params_and_name_gate_share_one_witness_primitive`
+        // — extending the typed-identity unification contract from
+        // five slots to six.
+        let same_witness = SexpWitness::new(SexpShape::List, "(nested)");
+        let rest_param_missing_name = LispError::RestParamMissingName {
+            rest_position: 0,
+            got: Some(same_witness.clone()),
+        };
+        let defmacro_non_list_params = LispError::DefmacroNonListParams {
+            head: MacroDefHead::Defmacro,
+            got: same_witness.clone(),
+        };
+        let defmacro_non_symbol_name = LispError::DefmacroNonSymbolName {
+            head: MacroDefHead::Defmacro,
+            got: same_witness.clone(),
+        };
+        let non_symbol_param = LispError::NonSymbolParam {
+            position: 0,
+            got: same_witness.clone(),
+        };
+        let non_symbol_target = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Unquote,
+            got: same_witness.clone(),
+        };
+        let splice_outside = LispError::SpliceOutsideList {
+            got: same_witness.clone(),
+        };
+        match (
+            &rest_param_missing_name,
+            &defmacro_non_list_params,
+            &defmacro_non_symbol_name,
+            &non_symbol_param,
+            &non_symbol_target,
+            &splice_outside,
+        ) {
+            (
+                LispError::RestParamMissingName { got: Some(a), .. },
+                LispError::DefmacroNonListParams { got: b, .. },
+                LispError::DefmacroNonSymbolName { got: c, .. },
+                LispError::NonSymbolParam { got: d, .. },
+                LispError::NonSymbolUnquoteTarget { got: e, .. },
+                LispError::SpliceOutsideList { got: f },
+            ) => {
+                assert_eq!(a.shape, b.shape);
+                assert_eq!(b.shape, c.shape);
+                assert_eq!(c.shape, d.shape);
+                assert_eq!(d.shape, e.shape);
+                assert_eq!(e.shape, f.shape);
+                assert_eq!(a.display, b.display);
+                assert_eq!(b.display, c.display);
+                assert_eq!(c.display, d.display);
+                assert_eq!(d.display, e.display);
+                assert_eq!(e.display, f.display);
+                assert_eq!(*a, same_witness);
+                assert_eq!(*b, same_witness);
+                assert_eq!(*c, same_witness);
+                assert_eq!(*d, same_witness);
+                assert_eq!(*e, same_witness);
+                assert_eq!(*f, same_witness);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
     fn missing_macro_arg_display_matches_legacy_compile_shape() {
         // The variant renders byte-for-byte the same string the legacy
         // `Compile { form: format!("call to {macro_name}"), message:
@@ -3888,7 +4071,7 @@ mod tests {
         // rendered diagnostic fails-loudly here.
         let err = LispError::RestParamMissingName {
             rest_position: 1,
-            got: Some("5".into()),
+            got: Some(SexpWitness::new(SexpShape::Int, "5")),
         };
         assert_eq!(
             format!("{err}"),
@@ -3949,7 +4132,7 @@ mod tests {
         // re-parsing required.
         let err = LispError::RestParamMissingName {
             rest_position: 2,
-            got: Some(":foo".into()),
+            got: Some(SexpWitness::new(SexpShape::Keyword, ":foo")),
         };
         assert_eq!(
             format!("{err}"),

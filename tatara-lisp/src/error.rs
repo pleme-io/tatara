@@ -880,10 +880,21 @@ pub enum LispError {
     /// in the keyword can never drift into the diagnostic at runtime —
     /// the type system is the floor, same posture as
     /// `NotAListForm.keyword`, `HeadMismatch.keyword`, and the
-    /// `Defmacro*.head` family). `got` is `Option<String>` because
-    /// the offending head comes from arbitrary source via
-    /// `Sexp::Display` (when present) or doesn't exist at all (when
-    /// the list is empty).
+    /// `Defmacro*.head` family). `got` is `Option<SexpWitness>` — the
+    /// SEVENTH consumer of the typed `SexpWitness` primitive (after
+    /// `SpliceOutsideList.got`, `NonSymbolUnquoteTarget.got`,
+    /// `NonSymbolParam.got`, `DefmacroNonSymbolName.got`,
+    /// `DefmacroNonListParams.got`, and `RestParamMissingName.got`).
+    /// The `Option`-wrap bifurcates structurally between "missing
+    /// entirely" (`None`, when the list is empty) and "present but
+    /// malformed" (`Some(SexpWitness)`, when the head exists but
+    /// isn't a symbol); the typed witness lands on the `Some` arm
+    /// only — same posture as `RestParamMissingName.got:
+    /// Option<SexpWitness>`. With this lift EVERY Sexp-display-source
+    /// `got` slot in the substrate carries ONE typed identity:
+    /// the typed-entry / template-gate / defmacro-syntax-gate
+    /// rejection surface is structurally unified end-to-end across
+    /// ALL `got: <T>` slots where `<T>` projects from `Sexp::Display`.
     ///
     /// Display preserves the legacy `"missing head symbol"` substring
     /// AND the `"compile error in {keyword}:"` prefix byte-for-byte —
@@ -893,18 +904,21 @@ pub enum LispError {
     /// parenthetical, parallel to how `RestParamMissingName` appends
     /// `(rest marker at position {n}, got {g})` /
     /// `(rest marker at position {n}, none provided)` and how
-    /// `SpliceOutsideList` appends `(got ,@{got})`. When a future
-    /// run gives `Sexp` source spans, `pos: Option<usize>` lands
-    /// here in ONE place and every missing-head-symbol site picks up
-    /// positional rendering via `crate::diagnostic::format_diagnostic`
-    /// mechanically.
+    /// `SpliceOutsideList` appends `(got ,@{got})`. The `{g}` slot
+    /// flows through `SexpWitness::Display`, which writes only the
+    /// `display` field, so the rendering is byte-for-byte identical
+    /// to the pre-lift `Option<String>` shape. When a future run
+    /// gives `Sexp` source spans, `pos: Option<usize>` lands inside
+    /// `SexpWitness` in ONE place and every missing-head-symbol site
+    /// picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error(
         "compile error in {keyword}: missing head symbol{}",
-        missing_head_symbol_suffix(got.as_deref())
+        missing_head_symbol_suffix(got.as_ref().map(|w| w.display.as_str()))
     )]
     MissingHeadSymbol {
         keyword: &'static str,
-        got: Option<String>,
+        got: Option<SexpWitness>,
     },
     /// `compile_named_from_forms::<T>` — driving every `(KEYWORD NAME …)`
     /// positional-name surface (`(defpoint NAME …)`, `(defalertpolicy
@@ -2487,7 +2501,7 @@ mod tests {
         assert_eq!(
             LispError::MissingHeadSymbol {
                 keyword: "defpoint",
-                got: Some("5".into()),
+                got: Some(SexpWitness::new(SexpShape::Int, "5")),
             }
             .position(),
             None
@@ -2612,7 +2626,7 @@ mod tests {
         // structural detail (`(got 5)`) is appended.
         let err = LispError::MissingHeadSymbol {
             keyword: "defmonitor",
-            got: Some("5".into()),
+            got: Some(SexpWitness::new(SexpShape::Int, "5")),
         };
         assert_eq!(
             format!("{err}"),
@@ -2630,7 +2644,7 @@ mod tests {
         // re-parsing required.
         let err = LispError::MissingHeadSymbol {
             keyword: "defalertpolicy",
-            got: Some(":foo".into()),
+            got: Some(SexpWitness::new(SexpShape::Keyword, ":foo")),
         };
         assert_eq!(
             format!("{err}"),
@@ -2647,7 +2661,7 @@ mod tests {
         // no re-parsing required.
         let err = LispError::MissingHeadSymbol {
             keyword: "defmonitor",
-            got: Some("\"name\"".into()),
+            got: Some(SexpWitness::new(SexpShape::String, "\"name\"")),
         };
         assert_eq!(
             format!("{err}"),
@@ -2662,7 +2676,7 @@ mod tests {
         // slot unchanged so the operator sees what they wrote.
         let err = LispError::MissingHeadSymbol {
             keyword: "defmonitor",
-            got: Some("(nested)".into()),
+            got: Some(SexpWitness::new(SexpShape::List, "(nested)")),
         };
         assert_eq!(
             format!("{err}"),
@@ -2694,6 +2708,190 @@ mod tests {
             msg.contains("compile error in defmonitor:"),
             "expected legacy form-label prefix in message, got: {msg}"
         );
+    }
+
+    #[test]
+    fn missing_head_symbol_got_carries_typed_witness_through_variant_slot() {
+        // Pin the structural binding AND the Display projection on
+        // `LispError::MissingHeadSymbol.got`. After this lift the
+        // variant's typed slot is `Option<SexpWitness>` — the joint
+        // `SexpWitness` identity (the same primitive `SpliceOutsideList.got`,
+        // `NonSymbolUnquoteTarget.got`, `NonSymbolParam.got`,
+        // `DefmacroNonSymbolName.got`, `DefmacroNonListParams.got`,
+        // and `RestParamMissingName.got` already carry) wrapped in
+        // `Option` because the head slot bifurcates structurally
+        // between "missing entirely" (`None`, empty list) and
+        // "present but malformed" (`Some(SexpWitness)`, non-symbol
+        // head). The typed witness lands on the `Some` arm only. A
+        // regression that re-collapses to a free-form `Option<String>`
+        // got slot (losing the rustc-enforced closed-set guarantee
+        // on shape identity at the outer typed-entry gate's
+        // non-symbol-head rejection variant) fails-loudly here.
+        // Display via `SexpWitness::Display` writes only the `display`
+        // field so the rendered `(got <display>)` clause is
+        // byte-for-byte identical to the pre-lift `Option<String>`
+        // shape; downstream substring-grep consumers (`tatara-check`,
+        // REPL) see no drift.
+        let err = LispError::MissingHeadSymbol {
+            keyword: "defmonitor",
+            got: Some(SexpWitness::new(SexpShape::Int, "5")),
+        };
+        match &err {
+            LispError::MissingHeadSymbol { keyword, got } => {
+                assert_eq!(*keyword, "defmonitor");
+                let witness = got.as_ref().expect("got must be Some");
+                assert_eq!(witness.shape, SexpShape::Int);
+                assert_eq!(witness.display, "5");
+            }
+            other => panic!("expected MissingHeadSymbol, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: missing head symbol (got 5)"
+        );
+    }
+
+    #[test]
+    fn missing_head_symbol_got_distinguishes_int_from_keyword_at_variant_slot() {
+        // Pin the typed-shape bifurcation at the variant slot — `5`
+        // (int atom at the head slot) and `:foo` (keyword atom at
+        // the head slot) BOTH route to `MissingHeadSymbol` on the
+        // `Some` arm, but the typed `got.shape` slot distinguishes
+        // them structurally — `SexpShape::Int` vs.
+        // `SexpShape::Keyword`. Sibling pin for the same structural-
+        // shape-bifurcation property
+        // `rest_param_missing_name_got_distinguishes_int_from_keyword_at_variant_slot`
+        // pins on `RestParamMissingName`. A regression that erases
+        // the typed shape (e.g., reverts to `got: Option<String>`)
+        // would lose this distinction — tooling that wants to surface
+        // "you wrote an int `5` where a head symbol was expected" vs.
+        // "you wrote a keyword `:foo` where a head symbol was
+        // expected (did you mean `foo`?)" would have to substring-
+        // grep the `display` field, brittle.
+        let err_int = LispError::MissingHeadSymbol {
+            keyword: "defmonitor",
+            got: Some(SexpWitness::new(SexpShape::Int, "5")),
+        };
+        let err_kw = LispError::MissingHeadSymbol {
+            keyword: "defalertpolicy",
+            got: Some(SexpWitness::new(SexpShape::Keyword, ":foo")),
+        };
+        let (int_shape, kw_shape) = (
+            match &err_int {
+                LispError::MissingHeadSymbol { got: Some(w), .. } => w.shape,
+                _ => unreachable!(),
+            },
+            match &err_kw {
+                LispError::MissingHeadSymbol { got: Some(w), .. } => w.shape,
+                _ => unreachable!(),
+            },
+        );
+        assert_ne!(
+            int_shape, kw_shape,
+            "Int and Keyword witnesses must remain structurally distinct at the variant slot",
+        );
+        assert_eq!(int_shape, SexpShape::Int);
+        assert_eq!(kw_shape, SexpShape::Keyword);
+    }
+
+    #[test]
+    fn missing_head_symbol_and_rest_param_gate_share_one_witness_primitive() {
+        // Pin that ALL SEVEN Sexp-display-source `got` slots in the
+        // substrate (`SpliceOutsideList`, `NonSymbolUnquoteTarget`,
+        // `NonSymbolParam`, `DefmacroNonSymbolName`,
+        // `DefmacroNonListParams`, `RestParamMissingName`,
+        // `MissingHeadSymbol`) carry the SAME typed `SexpWitness`
+        // primitive — the closed set of "offending inner Sexp"
+        // identities is bound by ONE typed primitive across SEVEN
+        // rejection surfaces: the template-gate's `,X/,@X` pair, the
+        // defmacro-syntax-gate's `parse_params` walker (BOTH
+        // non-symbol-param AND post-`&rest`-non-symbol-follower
+        // rejection points), BOTH of the defmacro-syntax-gate's outer
+        // `macro_def_from` rejection points (name-symbol AND
+        // param-list), AND the outer `compile_from_sexp` typed-entry
+        // gate's non-symbol-head rejection point. With this lift
+        // EVERY `Sexp::Display`-source `got` slot in the substrate is
+        // structurally unified end-to-end. The `Option`-wrap on
+        // `MissingHeadSymbol.got` and `RestParamMissingName.got` is
+        // the bifurcation between "missing entirely" and "present but
+        // malformed"; the typed witness rides on the `Some` arm and
+        // is structurally identical to the other five variants' got
+        // slots. A regression that diverges the slot type on any one
+        // variant (e.g., re-collapses `MissingHeadSymbol.got` to
+        // `Option<String>` while leaving the others typed) fails-
+        // loudly here because the assignment round-trips the witness
+        // across all seven slot types. Sibling pin to
+        // `rest_param_missing_name_and_macro_def_gate_share_one_witness_primitive`
+        // — extending the typed-identity unification contract from
+        // six slots to seven, closing the contract.
+        let same_witness = SexpWitness::new(SexpShape::List, "(nested)");
+        let missing_head = LispError::MissingHeadSymbol {
+            keyword: "defmonitor",
+            got: Some(same_witness.clone()),
+        };
+        let rest_param_missing_name = LispError::RestParamMissingName {
+            rest_position: 0,
+            got: Some(same_witness.clone()),
+        };
+        let defmacro_non_list_params = LispError::DefmacroNonListParams {
+            head: MacroDefHead::Defmacro,
+            got: same_witness.clone(),
+        };
+        let defmacro_non_symbol_name = LispError::DefmacroNonSymbolName {
+            head: MacroDefHead::Defmacro,
+            got: same_witness.clone(),
+        };
+        let non_symbol_param = LispError::NonSymbolParam {
+            position: 0,
+            got: same_witness.clone(),
+        };
+        let non_symbol_target = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Unquote,
+            got: same_witness.clone(),
+        };
+        let splice_outside = LispError::SpliceOutsideList {
+            got: same_witness.clone(),
+        };
+        match (
+            &missing_head,
+            &rest_param_missing_name,
+            &defmacro_non_list_params,
+            &defmacro_non_symbol_name,
+            &non_symbol_param,
+            &non_symbol_target,
+            &splice_outside,
+        ) {
+            (
+                LispError::MissingHeadSymbol { got: Some(a), .. },
+                LispError::RestParamMissingName { got: Some(b), .. },
+                LispError::DefmacroNonListParams { got: c, .. },
+                LispError::DefmacroNonSymbolName { got: d, .. },
+                LispError::NonSymbolParam { got: e, .. },
+                LispError::NonSymbolUnquoteTarget { got: f, .. },
+                LispError::SpliceOutsideList { got: g },
+            ) => {
+                assert_eq!(a.shape, b.shape);
+                assert_eq!(b.shape, c.shape);
+                assert_eq!(c.shape, d.shape);
+                assert_eq!(d.shape, e.shape);
+                assert_eq!(e.shape, f.shape);
+                assert_eq!(f.shape, g.shape);
+                assert_eq!(a.display, b.display);
+                assert_eq!(b.display, c.display);
+                assert_eq!(c.display, d.display);
+                assert_eq!(d.display, e.display);
+                assert_eq!(e.display, f.display);
+                assert_eq!(f.display, g.display);
+                assert_eq!(*a, same_witness);
+                assert_eq!(*b, same_witness);
+                assert_eq!(*c, same_witness);
+                assert_eq!(*d, same_witness);
+                assert_eq!(*e, same_witness);
+                assert_eq!(*f, same_witness);
+                assert_eq!(*g, same_witness);
+            }
+            _ => unreachable!(),
+        }
     }
 
     #[test]

@@ -43,7 +43,7 @@ pub trait TataraDomain: Sized {
             .ok_or_else(|| missing_head_err(Self::KEYWORD, None))?;
         let head = head_sexp
             .as_symbol()
-            .ok_or_else(|| missing_head_err(Self::KEYWORD, Some(head_sexp.to_string())))?;
+            .ok_or_else(|| missing_head_err(Self::KEYWORD, Some(sexp_witness(head_sexp))))?;
         if head != Self::KEYWORD {
             return Err(head_mismatch(Self::KEYWORD, head.to_string()));
         }
@@ -108,11 +108,17 @@ pub fn not_a_list_form_err(keyword: &'static str) -> LispError {
 /// surfaces (REPL, LSP, `tatara-check`) bind to the first-class
 /// `keyword` and `got` fields instead of substring-parsing the
 /// rendered message. `got: None` for the empty-list case (`()`),
-/// `got: Some(<sexp display>)` for the present-but-not-symbol case
+/// `got: Some(SexpWitness)` for the present-but-not-symbol case
 /// (`(5 …)`, `(:foo …)`, `("x" …)`, `((nested) …)`) — the legacy
 /// `Compile`-shaped diagnostic collapsed both into one message; this
 /// builder bifurcates them structurally so the renderable detail
-/// names which sub-mode fired.
+/// names which sub-mode fired. The `Some` arm carries the typed
+/// joint identity (`SexpShape` + `Sexp::Display`) routed through
+/// `sexp_witness(_)` so authoring tools that want to surface a
+/// structural autofix — "you wrote `:foo` at the head slot where a
+/// symbol was expected (did you mean `foo`?)" — bind on
+/// `got.shape == SexpShape::Keyword` directly, no substring-grep on
+/// the rendered display required.
 ///
 /// Display matches the legacy `Compile`-shaped diagnostic byte-for-
 /// byte for the prefix (`"compile error in {keyword}: missing head
@@ -120,8 +126,10 @@ pub fn not_a_list_form_err(keyword: &'static str) -> LispError {
 /// (`(empty list)` for `None`, `(got {g})` for `Some(g)`), parallel
 /// to how `RestParamMissingName` appends `(rest marker at position
 /// {n}, {got|none provided})` and how `SpliceOutsideList` appends
-/// `(got ,@{got})`. Existing `format!("{err}").contains("missing
-/// head symbol")` assertions pass unchanged.
+/// `(got ,@{got})`. The `{g}` slot flows through `SexpWitness::Display`,
+/// which writes only the `display` field, so existing
+/// `format!("{err}").contains("missing head symbol")` assertions pass
+/// unchanged.
 ///
 /// Theory anchor: THEORY.md §V.1 — knowable platform. The legacy
 /// `Compile { form, message }` shape required consumers to
@@ -137,7 +145,7 @@ pub fn not_a_list_form_err(keyword: &'static str) -> LispError {
 /// failure mode the typed-entry gate exists to reject, and the
 /// gate's identity is now load-bearing in the type system.
 #[must_use]
-pub fn missing_head_err(keyword: &'static str, got: Option<String>) -> LispError {
+pub fn missing_head_err(keyword: &'static str, got: Option<SexpWitness>) -> LispError {
     LispError::MissingHeadSymbol { keyword, got }
 }
 
@@ -3073,22 +3081,24 @@ mod tests {
     fn missing_head_err_with_got_returns_missing_head_symbol_for_non_symbol_head() {
         // The present-but-not-symbol case (`(5 …)`, `(:foo …)`) —
         // `list.first()` returns `Some(non-symbol-sexp)`, so the
-        // call site passes `got: Some(<sexp display>)`. The builder
+        // call site passes `got: Some(SexpWitness)`. The builder
         // returns `LispError::MissingHeadSymbol { keyword, got:
         // Some(_) }` structurally so the renderable detail names
         // the offending head, parallel to how
         // `RestParamMissingName.got: Some(_)` names the offending
-        // post-`&rest` follower.
-        let err = missing_head_err("defmonitor", Some("5".into()));
+        // post-`&rest` follower. The typed witness carries the
+        // joint (`SexpShape::Int`, "5") identity so authoring tools
+        // bind to `got.shape` directly across the rejection slot.
+        let err = missing_head_err("defmonitor", Some(SexpWitness::new(SexpShape::Int, "5")));
         assert!(
             matches!(
                 err,
                 LispError::MissingHeadSymbol {
                     keyword: "defmonitor",
                     ref got,
-                } if got.as_deref() == Some("5")
+                } if got.as_ref().map(|w| (w.shape, w.display.as_str())) == Some((SexpShape::Int, "5"))
             ),
-            "expected MissingHeadSymbol {{ got: Some(\"5\") }}, got {err:?}"
+            "expected MissingHeadSymbol {{ got: Some(SexpWitness {{ Int, \"5\" }}) }}, got {err:?}"
         );
     }
 
@@ -3190,12 +3200,14 @@ mod tests {
         // `(5 :name "x")` — list[0] is `5`, an int, not a symbol. The
         // gate fires AFTER the `as_list` projection succeeds and BEFORE
         // the keyword-equality check; the variant carries `got:
-        // Some("5")` so an authoring tool that wants to surface "your
-        // form's head is `5`, not a symbol" gains the literal value as
-        // data, no re-parsing required. The two sub-modes (`()` →
-        // `got: None`, `(5 …)` → `got: Some("5")`) bind to ONE
-        // structural variant — same posture as
-        // `RestParamMissingName.got: Option<String>`.
+        // Some(SexpWitness { SexpShape::Int, "5" })` so an authoring
+        // tool that wants to surface "your form's head is `5`, an int,
+        // not a symbol" gains BOTH the typed shape (pattern-matchable)
+        // AND the literal value as data, no re-parsing required. The
+        // two sub-modes (`()` → `got: None`, `(5 …)` →
+        // `got: Some(SexpWitness)`) bind to ONE structural variant —
+        // same posture as `RestParamMissingName.got:
+        // Option<SexpWitness>`.
         let forms = read(r#"(5 :name "x")"#).unwrap();
         let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
         assert!(
@@ -3204,20 +3216,21 @@ mod tests {
                 LispError::MissingHeadSymbol {
                     keyword: "defmonitor",
                     ref got,
-                } if got.as_deref() == Some("5")
+                } if got.as_ref().map(|w| (w.shape, w.display.as_str())) == Some((SexpShape::Int, "5"))
             ),
-            "expected MissingHeadSymbol {{ got: Some(\"5\") }}, got {err:?}"
+            "expected MissingHeadSymbol {{ got: Some(SexpWitness {{ Int, \"5\" }}) }}, got {err:?}"
         );
     }
 
     #[test]
     fn compile_from_sexp_emits_missing_head_symbol_for_keyword_atom_head() {
         // `(:foo :name "x")` — list[0] is the keyword atom `:foo`, not
-        // a symbol. The variant's `got` slot carries `Sexp::Display`'s
+        // a symbol. The variant's `got` slot carries the typed witness
+        // pairing `SexpShape::Keyword` with `Sexp::Display`'s
         // projection of the offending atom (`":foo"`) so the operator
-        // sees what they wrote. Pinning across atom kinds (int,
-        // keyword) demonstrates that the structural binding is uniform
-        // for every non-symbol head.
+        // sees what they wrote AND tools bind on the typed shape.
+        // Pinning across atom kinds (int, keyword) demonstrates that
+        // the structural binding is uniform for every non-symbol head.
         let forms = read(r#"(:foo :name "x")"#).unwrap();
         let err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
         assert!(
@@ -3226,9 +3239,9 @@ mod tests {
                 LispError::MissingHeadSymbol {
                     keyword: "defmonitor",
                     ref got,
-                } if got.as_deref() == Some(":foo")
+                } if got.as_ref().map(|w| (w.shape, w.display.as_str())) == Some((SexpShape::Keyword, ":foo"))
             ),
-            "expected MissingHeadSymbol {{ got: Some(\":foo\") }}, got {err:?}"
+            "expected MissingHeadSymbol {{ got: Some(SexpWitness {{ Keyword, \":foo\" }}) }}, got {err:?}"
         );
     }
 

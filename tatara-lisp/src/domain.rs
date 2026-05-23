@@ -1346,35 +1346,59 @@ fn serialize_to_json_err<T: TataraDomain>(e: serde_json::Error) -> LispError {
 /// `NamedFormMissingName.keyword`, `MissingHeadSymbol.keyword`,
 /// `HeadMismatch.keyword`, `NotAListForm.keyword`, and the
 /// `Defmacro*.head` family. The helper takes `got: &Sexp` and projects
-/// to `got.to_string()` at the boundary so the variant's `got: String`
-/// slot carries the rewriter's offending output verbatim — value-
-/// rendering (not just shape-name), same posture as
-/// `HeadMismatch.got: String` and `MissingHeadSymbol.got:
-/// Option<String>`; the value (not just its sexp-type) is the
-/// actionable diagnostic detail for a typed-exit rejection.
+/// it through `sexp_witness(got)` at the boundary so the variant's
+/// `got: SexpWitness` slot carries the rewriter's offending output as
+/// the typed joint identity — BOTH the structural `SexpShape` AND the
+/// `Sexp::Display` literal in ONE owned value, parallel to the seven
+/// typed-ENTRY-side lifts (`SpliceOutsideList.got: SexpWitness`,
+/// `NonSymbolUnquoteTarget.got: SexpWitness`,
+/// `NonSymbolParam.got: SexpWitness`,
+/// `DefmacroNonSymbolName.got: SexpWitness`,
+/// `DefmacroNonListParams.got: SexpWitness`,
+/// `RestParamMissingName.got: Option<SexpWitness>`,
+/// `MissingHeadSymbol.got: Option<SexpWitness>`). This is the EIGHTH
+/// `SexpWitness` consumer and the FIRST on the typed-EXIT boundary —
+/// before this lift the typed-exit-side `got` slot projected through
+/// `Sexp::to_string()`, discarding the `SexpShape` identity at the
+/// variant boundary the way the seven entry-side slots used to. The
+/// value (not just its sexp-type) is the actionable diagnostic detail
+/// for a typed-exit rejection — authoring a rewriter that returns the
+/// wrong value is the failure mode being named — AND the structural
+/// shape is now load-bearing alongside it.
 ///
 /// Display preserves the legacy `"compile error in {keyword}: rewriter
 /// must return a list; got {got}"` shape byte-for-byte so authoring
 /// tools that pattern-matched on the pre-lift rendered string see no
 /// drift across the lift; tools that pattern-match on the variant
-/// gain structural binding to `keyword` AND `got`.
+/// gain structural binding to `keyword` AND `got` (BOTH the typed
+/// shape via `got.shape` AND the literal via `got.display`). The
+/// `{got}` slot flows through `SexpWitness::Display`, which writes
+/// only the `display` field, so the rendering is byte-for-byte
+/// identical to the pre-lift `got: String` shape.
 ///
 /// Theory anchor: THEORY.md §II.1 invariant 3 (typed exit) —
 /// `rewrite_typed` IS the typed-exit gate of the self-optimization
 /// primitive; any rewrite that survives the gate is well-typed by
-/// construction, AND now the rejection mode is itself structurally
-/// typed. THEORY.md §V.1 — knowable platform; the structural variant
-/// exposes `keyword` / `got` as first-class fields so authoring tools
-/// bind to the data shape instead of substring-parsing the rendered
-/// diagnostic. THEORY.md §VI.1 — generation over composition; the
-/// helper boundary lands the structural-variant promotion (parallel to
-/// how `MissingHeadSymbol` / `HeadMismatch` / `NamedFormMissingName` /
-/// `NamedFormNonSymbolName` promoted prior `Compile`-shaped sites into
-/// structural variants).
+/// construction, AND now the rejection mode's offending-value identity
+/// is itself structurally typed at the variant slot, the same posture
+/// the seven typed-ENTRY-side lifts established for invariant 1.
+/// THEORY.md §V.1 — knowable platform; the typed witness exposes BOTH
+/// `got.shape` AND `got.display` as first-class fields so authoring
+/// tools bind to the joint identity instead of substring-parsing the
+/// rendered diagnostic to recover the shape. THEORY.md §VI.1 —
+/// generation over composition; the one inline `got.to_string()`
+/// projection at the helper boundary collapses into
+/// `sexp_witness(got)` — the typed joint primitive — extending the
+/// typed-identity unification contract from the seven entry-side
+/// `Sexp::Display`-source `got` slots to the eighth (exit-side) slot.
+/// After this lift EVERY `Sexp::Display`-source `got` slot in the
+/// substrate, ENTRY-side OR EXIT-side, carries the SAME typed
+/// `SexpWitness` primitive — the typed-identity unification contract
+/// is closed across BOTH boundaries of the typed-IR algebra.
 fn rewriter_non_list_err<T: TataraDomain>(got: &Sexp) -> LispError {
     LispError::RewriterNonList {
         keyword: T::KEYWORD,
-        got: got.to_string(),
+        got: sexp_witness(got),
     }
 }
 
@@ -4303,21 +4327,23 @@ mod tests {
     #[test]
     fn rewriter_non_list_err_produces_structural_variant() {
         // Post-lift the helper emits the structural
-        // `LispError::RewriterNonList { keyword, got }` variant, not the
-        // `Compile`-shaped triple it used to. Fail-before-pass-after:
-        // pre-lift this same input emitted `LispError::Compile { form:
-        // "defmonitor", message: "rewriter must return a list; got 42" }`
-        // and authoring tools had to substring-grep the rendered
-        // diagnostic to recognize this specific gate; post-lift the
-        // gate IS its variant identity. `got` carries the `Sexp::Display`
-        // projection verbatim (value-rendering, not just shape name) —
-        // same posture as `HeadMismatch.got: String`.
+        // `LispError::RewriterNonList { keyword, got: SexpWitness }`
+        // variant. `got` is the typed joint identity (`SexpShape` +
+        // `Sexp::Display`) — the EIGHTH consumer of the `SexpWitness`
+        // primitive, and the FIRST on the typed-EXIT boundary. Tools
+        // pattern-match on `got.shape` (structurally) AND read
+        // `got.display` (literal) jointly. A regression that re-
+        // collapses `got` to a free-form `String` fails-loudly here.
         let got = Sexp::int(42);
         let err = rewriter_non_list_err::<MonitorSpec>(&got);
         match err {
             LispError::RewriterNonList { keyword, got } => {
                 assert_eq!(keyword, "defmonitor", "keyword must be T::KEYWORD verbatim");
-                assert_eq!(got, "42", "got must preserve the Sexp::Display projection");
+                assert_eq!(
+                    (got.shape, got.display.as_str()),
+                    (SexpShape::Int, "42"),
+                    "got must carry the typed (SexpShape, Sexp::Display) joint identity",
+                );
             }
             other => panic!("expected LispError::RewriterNonList, got {other:?}"),
         }
@@ -4360,7 +4386,7 @@ mod tests {
                 other => panic!("expected LispError::RewriterNonList, got {other:?}"),
             };
             assert_eq!(
-                got, *want_render,
+                got.display, *want_render,
                 "Sexp Display projection must thread through unchanged for {sexp:?}"
             );
         }
@@ -4388,7 +4414,7 @@ mod tests {
         match err {
             LispError::RewriterNonList { keyword, got } => {
                 assert_eq!(keyword, "defmonitor");
-                assert_eq!(got, "42");
+                assert_eq!((got.shape, got.display.as_str()), (SexpShape::Int, "42"));
             }
             other => panic!("expected LispError::RewriterNonList, got {other:?}"),
         }
@@ -4429,11 +4455,16 @@ mod tests {
                 enabled: input.enabled,
             };
             let bad_disp = format!("{bad}");
+            let bad_shape = sexp_shape(&bad);
             let err = rewrite_typed(clone, |_sexp| Ok(bad.clone())).unwrap_err();
             match err {
                 LispError::RewriterNonList { keyword, got } => {
                     assert_eq!(keyword, "defmonitor");
-                    assert_eq!(got, bad_disp);
+                    assert_eq!(got.display, bad_disp);
+                    assert_eq!(
+                        got.shape, bad_shape,
+                        "typed SexpShape must thread through for {bad:?}",
+                    );
                 }
                 other => panic!("expected LispError::RewriterNonList, got {other:?}"),
             }

@@ -1060,26 +1060,56 @@ pub enum LispError {
     /// into the diagnostic at runtime, the type system is the floor, same
     /// posture as `NotAListForm.keyword`, `MissingHeadSymbol.keyword`,
     /// `HeadMismatch.keyword`, `NamedFormMissingName.keyword`, and
-    /// `NamedFormNonSymbolName.keyword`. `got` is `String` because it
-    /// carries the offending Sexp's `Display` projection — the value the
-    /// rewriter actually produced, not just its outermost shape name —
-    /// parallel to `HeadMismatch.got: String` and `MissingHeadSymbol.got:
-    /// Option<String>`; for a typed-exit-side rejection the value (not
-    /// just its shape) is the actionable diagnostic detail, since
-    /// authoring a rewriter that returns the wrong value is the failure
-    /// mode being named.
+    /// `NamedFormNonSymbolName.keyword`.
+    ///
+    /// `got` is `SexpWitness` — the closed-set typed joint identity
+    /// pairing the offending rewriter output's `SexpShape` (the twelve
+    /// reachable Sexp outermost shapes the rewriter closure can produce)
+    /// with its `Sexp::Display` projection (the literal value the rewriter
+    /// actually returned — `42`, `:foo`, `"bad"`, `notify-ref`, `()`,
+    /// etc.). EIGHTH consumer of the typed `SexpWitness` primitive
+    /// introduced in `error.rs`'s `SpliceOutsideList.got` lift, and the
+    /// FIRST consumer on the typed-EXIT boundary — sibling lifts of
+    /// `SpliceOutsideList.got: SexpWitness`, `NonSymbolUnquoteTarget.got:
+    /// SexpWitness`, `NonSymbolParam.got: SexpWitness`,
+    /// `DefmacroNonSymbolName.got: SexpWitness`,
+    /// `DefmacroNonListParams.got: SexpWitness`,
+    /// `RestParamMissingName.got: Option<SexpWitness>`, and
+    /// `MissingHeadSymbol.got: Option<SexpWitness>` close the typed-ENTRY
+    /// rejection surface across the substrate's seven entry-side gates.
+    /// This eighth lift extends the typed-identity unification contract
+    /// across BOTH boundaries of the typed-IR algebra
+    /// (THEORY.md §II.1 invariant 1 + invariant 3) — every
+    /// `Sexp::Display`-source `got` slot in the substrate, regardless of
+    /// whether the rejection fires at typed-ENTRY (compile_from_sexp
+    /// chain, template-gate, defmacro-syntax-gate, parse_params walker)
+    /// or typed-EXIT (rewrite_typed's `Sexp::List`-contract gate), now
+    /// shares ONE typed witness identity at the variant slot. Authoring
+    /// tools (REPL, LSP, `tatara-check`) bind to BOTH `got.shape`
+    /// (structurally pattern-matchable on `SexpShape::Int` etc.) AND
+    /// `got.display` (the literal value, renderable verbatim) jointly
+    /// for a typed-exit-side rejection too — no projection-to-`String`
+    /// at the helper boundary loses the structural identity. Promotes
+    /// the legacy `got: String` shape parallel to how the seven entry-
+    /// side lifts promoted theirs.
     ///
     /// Display matches the legacy `Compile`-shaped diagnostic byte-for-
     /// byte — `"compile error in {keyword}: rewriter must return a list;
     /// got {got}"` — so existing consumer assertions (`tatara-check`'s
     /// diagnostic capture, REPL substring-greps that match on `"rewriter
-    /// must return a list; got "`) pass unchanged across the lift. When
-    /// a future run gives `Sexp` source spans, `pos: Option<usize>`
-    /// lands here in ONE place and every rewriter-non-list site picks up
-    /// positional rendering via `crate::diagnostic::format_diagnostic`
-    /// mechanically.
+    /// must return a list; got "`) pass unchanged across the lift. The
+    /// `{got}` slot flows through `SexpWitness::Display`, which writes
+    /// only the `display` field, so the rendering is byte-for-byte
+    /// identical to the pre-lift `got: String` shape. When a future run
+    /// gives `Sexp` source spans, `pos: Option<usize>` lands inside
+    /// `SexpWitness` in ONE place and every rewriter-non-list site
+    /// picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in {keyword}: rewriter must return a list; got {got}")]
-    RewriterNonList { keyword: &'static str, got: String },
+    RewriterNonList {
+        keyword: &'static str,
+        got: SexpWitness,
+    },
     /// `serde_json::to_value` of a typed `T` value (any registered
     /// `TataraDomain`) errored. Two sites share this failure mode:
     /// `register::<T>`'s registry-dispatch closure (the registered
@@ -2539,7 +2569,7 @@ mod tests {
         assert_eq!(
             LispError::RewriterNonList {
                 keyword: "defmonitor",
-                got: "42".into(),
+                got: SexpWitness::new(SexpShape::Int, "42"),
             }
             .position(),
             None
@@ -4856,7 +4886,7 @@ mod tests {
         // as the pre-lift `Compile`-shaped triple.
         let err = LispError::RewriterNonList {
             keyword: "defmonitor",
-            got: "42".into(),
+            got: SexpWitness::new(SexpShape::Int, "42"),
         };
         assert_eq!(
             format!("{err}"),
@@ -4868,11 +4898,12 @@ mod tests {
     fn rewriter_non_list_display_carries_symbol_got_unchanged() {
         // `Sexp::symbol("not-a-list")` projects to `"not-a-list"`. Pin
         // path-uniformity across distinct `Sexp::Display` outputs: the
-        // `got` slot threads the value-rendering into the diagnostic
-        // unchanged.
+        // typed `got` slot threads the value-rendering into the
+        // diagnostic unchanged via `SexpWitness::Display` (which writes
+        // only the `display` field).
         let err = LispError::RewriterNonList {
             keyword: "defmonitor",
-            got: "not-a-list".into(),
+            got: SexpWitness::new(SexpShape::Symbol, "not-a-list"),
         };
         assert_eq!(
             format!("{err}"),
@@ -4888,7 +4919,7 @@ mod tests {
         // before reaching the rewriter end-to-end test.
         let err = LispError::RewriterNonList {
             keyword: "defmonitor",
-            got: "()".into(),
+            got: SexpWitness::new(SexpShape::Nil, "()"),
         };
         assert_eq!(
             format!("{err}"),
@@ -4904,7 +4935,7 @@ mod tests {
         // A regression that camelCases the keyword fails-loudly here.
         let err = LispError::RewriterNonList {
             keyword: "defprocess-spec",
-            got: "7".into(),
+            got: SexpWitness::new(SexpShape::Int, "7"),
         };
         assert_eq!(
             format!("{err}"),
@@ -4924,7 +4955,7 @@ mod tests {
         // return a list; got {other}") }` byte-for-byte.
         let err = LispError::RewriterNonList {
             keyword: "defmonitor",
-            got: "42".into(),
+            got: SexpWitness::new(SexpShape::Int, "42"),
         };
         let msg = format!("{err}");
         assert!(
@@ -4941,15 +4972,206 @@ mod tests {
     fn rewriter_non_list_position_is_none_today() {
         // Until `Sexp` carries source positions, the variant's
         // `position()` returns `None`. Pin the contract: a future run
-        // that adds `pos: Option<usize>` does so deliberately —
-        // `rewrite_typed`'s rewriter-output rejection picks up the
-        // span automatically because it routes through one helper
-        // (`rewriter_non_list_err`).
+        // that adds `pos: Option<usize>` lands inside `SexpWitness` in
+        // ONE place and `rewrite_typed`'s rewriter-output rejection
+        // picks up the span automatically because it routes through
+        // one helper (`rewriter_non_list_err`).
         let err = LispError::RewriterNonList {
             keyword: "defmonitor",
-            got: "42".into(),
+            got: SexpWitness::new(SexpShape::Int, "42"),
         };
         assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn rewriter_non_list_got_carries_typed_witness_through_variant_slot() {
+        // Pin the structural binding on `LispError::RewriterNonList.got`
+        // — a regression that re-introduces a `String`-shaped got slot
+        // (collapsing the typed witness back into a free-form literal at
+        // the typed-EXIT boundary) fails-loudly here. After this lift the
+        // variant's typed slot is the joint `SexpWitness` identity — the
+        // SAME primitive the SEVEN typed-ENTRY-side `got` slots already
+        // carry (`SpliceOutsideList`, `NonSymbolUnquoteTarget`,
+        // `NonSymbolParam`, `DefmacroNonSymbolName`,
+        // `DefmacroNonListParams`, `RestParamMissingName`,
+        // `MissingHeadSymbol`). This is the EIGHTH consumer and the FIRST
+        // on the typed-EXIT boundary; the typed-identity unification
+        // contract is now closed across BOTH boundaries of the typed-IR
+        // algebra. The Display projection through `SexpWitness::Display`
+        // writes only the `display` field so the rendered `got {display}`
+        // suffix is byte-for-byte identical to the legacy `got: String`
+        // shape.
+        let err = LispError::RewriterNonList {
+            keyword: "defmonitor",
+            got: SexpWitness::new(SexpShape::Int, "42"),
+        };
+        match &err {
+            LispError::RewriterNonList { keyword, got } => {
+                assert_eq!(*keyword, "defmonitor");
+                assert_eq!(got.shape, SexpShape::Int);
+                assert_eq!(got.display, "42");
+            }
+            other => panic!("expected RewriterNonList, got {other:?}"),
+        }
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmonitor: rewriter must return a list; got 42"
+        );
+    }
+
+    #[test]
+    fn rewriter_non_list_got_distinguishes_int_from_keyword_at_variant_slot() {
+        // Pin the typed-shape bifurcation at the variant slot's `got`
+        // slot — `42` (int) and `:foo` (keyword) BOTH route to
+        // `RewriterNonList` (the rewriter returned a non-list typed-exit
+        // rejection), but the typed `got.shape` slot distinguishes them
+        // structurally as `SexpShape::Int` vs. `SexpShape::Keyword`.
+        // Sibling pin for the same structural-shape-bifurcation property
+        // `splice_outside_list_got_distinguishes_symbol_from_list_at_variant_slot`
+        // pins on the typed-ENTRY-side `SpliceOutsideList` variant — the
+        // same posture applied to the typed-EXIT-side rejection variant.
+        // A regression that erases the typed shape (e.g., reverts to
+        // `got: String`) would lose this distinction — tooling that
+        // wants to surface "your rewriter returned the int `42` where a
+        // kwargs list was expected" vs. "your rewriter returned the
+        // keyword `:foo` where a kwargs list was expected" would have to
+        // substring-grep the `display` field, brittle.
+        let err_int = LispError::RewriterNonList {
+            keyword: "defmonitor",
+            got: SexpWitness::new(SexpShape::Int, "42"),
+        };
+        let err_kw = LispError::RewriterNonList {
+            keyword: "defmonitor",
+            got: SexpWitness::new(SexpShape::Keyword, ":foo"),
+        };
+        let (int_shape, kw_shape) = (
+            match &err_int {
+                LispError::RewriterNonList { got, .. } => got.shape,
+                _ => unreachable!(),
+            },
+            match &err_kw {
+                LispError::RewriterNonList { got, .. } => got.shape,
+                _ => unreachable!(),
+            },
+        );
+        assert_ne!(
+            int_shape, kw_shape,
+            "Int and Keyword witnesses must remain structurally distinct at the variant slot",
+        );
+        assert_eq!(int_shape, SexpShape::Int);
+        assert_eq!(kw_shape, SexpShape::Keyword);
+    }
+
+    #[test]
+    fn rewriter_non_list_and_typed_entry_gates_share_one_witness_primitive() {
+        // Pin that ALL EIGHT Sexp-display-source `got` slots in the
+        // substrate carry the SAME typed `SexpWitness` primitive — the
+        // closed set of "offending inner Sexp" identities is bound by
+        // ONE typed primitive across EIGHT rejection surfaces spanning
+        // BOTH boundaries of the typed-IR algebra: the typed-ENTRY side
+        // (seven slots — the template-gate's `,X/,@X` pair, the
+        // defmacro-syntax-gate's `parse_params` walker (BOTH
+        // non-symbol-param AND post-`&rest`-non-symbol-follower rejection
+        // points), BOTH of the defmacro-syntax-gate's outer
+        // `macro_def_from` rejection points (name-symbol AND
+        // param-list), AND the outer `compile_from_sexp` typed-entry
+        // gate's non-symbol-head rejection point) AND the typed-EXIT
+        // side (ONE slot — `rewrite_typed`'s `Sexp::List`-contract gate
+        // for the rewriter's output). With this lift EVERY
+        // `Sexp::Display`-source `got` slot in the substrate is
+        // structurally unified end-to-end across BOTH typed boundaries.
+        // The `Option`-wrap on `MissingHeadSymbol.got` and
+        // `RestParamMissingName.got` is the bifurcation between "missing
+        // entirely" and "present but malformed"; the typed witness
+        // rides on the `Some` arm and is structurally identical to the
+        // other six variants' got slots. A regression that diverges the
+        // slot type on any one variant (e.g., re-collapses
+        // `RewriterNonList.got` to `String` while leaving the others
+        // typed) fails-loudly here because the assignment round-trips
+        // the witness across all eight slot types. Sibling pin to
+        // `missing_head_symbol_and_rest_param_gate_share_one_witness_primitive`
+        // — extending the typed-identity unification contract from
+        // seven slots (typed-ENTRY only) to eight slots (typed-ENTRY +
+        // typed-EXIT), CLOSING the contract across BOTH boundaries of
+        // the typed-IR algebra (THEORY.md §II.1 invariant 1 +
+        // invariant 3).
+        let same_witness = SexpWitness::new(SexpShape::Int, "42");
+        let rewriter_non_list = LispError::RewriterNonList {
+            keyword: "defmonitor",
+            got: same_witness.clone(),
+        };
+        let missing_head = LispError::MissingHeadSymbol {
+            keyword: "defmonitor",
+            got: Some(same_witness.clone()),
+        };
+        let rest_param_missing_name = LispError::RestParamMissingName {
+            rest_position: 0,
+            got: Some(same_witness.clone()),
+        };
+        let defmacro_non_list_params = LispError::DefmacroNonListParams {
+            head: MacroDefHead::Defmacro,
+            got: same_witness.clone(),
+        };
+        let defmacro_non_symbol_name = LispError::DefmacroNonSymbolName {
+            head: MacroDefHead::Defmacro,
+            got: same_witness.clone(),
+        };
+        let non_symbol_param = LispError::NonSymbolParam {
+            position: 0,
+            got: same_witness.clone(),
+        };
+        let non_symbol_target = LispError::NonSymbolUnquoteTarget {
+            prefix: UnquoteForm::Unquote,
+            got: same_witness.clone(),
+        };
+        let splice_outside = LispError::SpliceOutsideList {
+            got: same_witness.clone(),
+        };
+        match (
+            &rewriter_non_list,
+            &missing_head,
+            &rest_param_missing_name,
+            &defmacro_non_list_params,
+            &defmacro_non_symbol_name,
+            &non_symbol_param,
+            &non_symbol_target,
+            &splice_outside,
+        ) {
+            (
+                LispError::RewriterNonList { got: a, .. },
+                LispError::MissingHeadSymbol { got: Some(b), .. },
+                LispError::RestParamMissingName { got: Some(c), .. },
+                LispError::DefmacroNonListParams { got: d, .. },
+                LispError::DefmacroNonSymbolName { got: e, .. },
+                LispError::NonSymbolParam { got: f, .. },
+                LispError::NonSymbolUnquoteTarget { got: g, .. },
+                LispError::SpliceOutsideList { got: h },
+            ) => {
+                assert_eq!(a.shape, b.shape);
+                assert_eq!(b.shape, c.shape);
+                assert_eq!(c.shape, d.shape);
+                assert_eq!(d.shape, e.shape);
+                assert_eq!(e.shape, f.shape);
+                assert_eq!(f.shape, g.shape);
+                assert_eq!(g.shape, h.shape);
+                assert_eq!(a.display, b.display);
+                assert_eq!(b.display, c.display);
+                assert_eq!(c.display, d.display);
+                assert_eq!(d.display, e.display);
+                assert_eq!(e.display, f.display);
+                assert_eq!(f.display, g.display);
+                assert_eq!(g.display, h.display);
+                assert_eq!(*a, same_witness);
+                assert_eq!(*b, same_witness);
+                assert_eq!(*c, same_witness);
+                assert_eq!(*d, same_witness);
+                assert_eq!(*e, same_witness);
+                assert_eq!(*f, same_witness);
+                assert_eq!(*g, same_witness);
+                assert_eq!(*h, same_witness);
+            }
+            _ => unreachable!(),
+        }
     }
 
     // ── DomainSerialize: typed-exit `to_value` structural-variant lift ──

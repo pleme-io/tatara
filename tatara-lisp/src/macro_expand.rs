@@ -296,13 +296,11 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
     }
     match node {
         Sexp::Unquote(inner) => {
-            let name = unquote_target_symbol(inner, UnquoteForm::Unquote)?;
-            let idx = resolve_param_index(name, params, UnquoteForm::Unquote)?;
+            let idx = resolve_unquote_in_params(inner, params, UnquoteForm::Unquote)?;
             ops.push(TemplateOp::Subst(idx));
         }
         Sexp::UnquoteSplice(inner) => {
-            let name = unquote_target_symbol(inner, UnquoteForm::Splice)?;
-            let idx = resolve_param_index(name, params, UnquoteForm::Splice)?;
+            let idx = resolve_unquote_in_params(inner, params, UnquoteForm::Splice)?;
             ops.push(TemplateOp::Splice(idx));
         }
         Sexp::List(items) => {
@@ -535,16 +533,14 @@ fn bind_args(macro_name: &str, params: &[Param], args: &[Sexp]) -> Result<HashMa
 fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
     match form {
         Sexp::Unquote(inner) => {
-            let sym = unquote_target_symbol(inner, UnquoteForm::Unquote)?;
-            resolve_binding(bindings, sym, UnquoteForm::Unquote).cloned()
+            resolve_unquote_in_bindings(inner, bindings, UnquoteForm::Unquote).cloned()
         }
         Sexp::UnquoteSplice(inner) => Err(splice_outside_list(inner)),
         Sexp::List(items) => {
             let mut out: Vec<Sexp> = Vec::with_capacity(items.len());
             for item in items {
                 if let Sexp::UnquoteSplice(inner) = item {
-                    let sym = unquote_target_symbol(inner, UnquoteForm::Splice)?;
-                    let val = resolve_binding(bindings, sym, UnquoteForm::Splice)?;
+                    let val = resolve_unquote_in_bindings(inner, bindings, UnquoteForm::Splice)?;
                     match val {
                         Sexp::List(children) => out.extend(children.iter().cloned()),
                         Sexp::Nil => {}
@@ -817,6 +813,114 @@ fn resolve_binding<'a>(
     bindings
         .get(name)
         .ok_or_else(|| unbound_template_var(form, name, &bound_names(bindings)))
+}
+
+/// Compose gate-1 + gate-2 for the bytecode-template compile path into ONE
+/// named primitive: project the unquote `inner` to a symbol name
+/// (gate-1, via `unquote_target_symbol`) THEN resolve the name to its
+/// index inside the macro's static param list (gate-2, via
+/// `resolve_param_index`). Sibling of `resolve_unquote_in_bindings`: the
+/// same gate-1+gate-2 composition on the substitute expansion path.
+///
+/// Before this lift, the two `compile_node` arms (`Sexp::Unquote(_)` and
+/// `Sexp::UnquoteSplice(_)`) threaded `form: UnquoteForm` through TWO
+/// helper calls each — once into `unquote_target_symbol(inner, form)?`
+/// (gate-1) AND once into `resolve_param_index(name, params, form)?`
+/// (gate-2). The marker's typed identity was re-asserted at the call site
+/// twice per arm — four `UnquoteForm::Unquote` / `UnquoteForm::Splice`
+/// literal occurrences across the two arms, for what is structurally ONE
+/// marker-identity per syntactic-marker arm. After this lift each arm
+/// threads the marker ONCE through ONE call, and the gate-1-then-gate-2
+/// sequencing lives in the helper body, not at the call site.
+///
+/// The composition is load-bearing: gate-1 (must-be-a-symbol) MUST fire
+/// before gate-2 (must-be-bound-in-scope) — a non-symbol inner is
+/// structurally a different failure mode (`LispError::NonSymbolUnquoteTarget`,
+/// which carries the offending `SexpWitness`) than an unbound symbol
+/// (`LispError::UnboundTemplateVar`, which carries a `name: String` plus
+/// a `crate::domain::suggest`-driven hint over the candidate set). A
+/// regression that reorders or skips gate-1 would emit
+/// `LispError::UnboundTemplateVar { name: "(list 1 2)", ... }` for a
+/// non-symbol inner (re-treating the rendered list literal as a bound-
+/// name lookup key), which is exactly the diagnostic-confusion this
+/// composition exists to rule out. Naming the composition as one
+/// primitive makes the sequencing structural — the helper body IS the
+/// proof that gate-1 ran before gate-2.
+///
+/// `form` is `UnquoteForm` — the closed-set typed enum threaded through
+/// the composition once and passed onward to both gate-1 and gate-2's
+/// rejection-builders. Same posture as `unquote_target_symbol`,
+/// `resolve_param_index`, `resolve_binding`, `non_symbol_unquote_target`,
+/// and `unbound_template_var` — a regression that drifts the marker
+/// becomes a type error at the helper boundary, not a runtime substring
+/// drift, AND the marker can no longer drift BETWEEN gate-1 and gate-2
+/// at a single call site (which the prior pre-lift shape allowed:
+/// `unquote_target_symbol(inner, UnquoteForm::Unquote)?` followed by
+/// `resolve_param_index(name, params, UnquoteForm::Splice)?` would
+/// type-check but render a misleading diagnostic).
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// gate-1+gate-2 SEQUENCE is itself a named primitive once both halves
+/// have been named (two prior runs landed the halves; this run lands the
+/// composition). THEORY.md §V.1 — knowable platform; the gate's
+/// composition is now load-bearing in the type system — gate-1 cannot be
+/// silently skipped, gate-2 cannot be silently reordered before gate-1,
+/// and the marker cannot drift between the two halves. THEORY.md §II.1
+/// invariant 1 — typed entry; the typed-entry template gate's full
+/// rejection chain (non-symbol → unbound-symbol) is now ONE primitive.
+/// THEORY.md §II.1 invariant 2 — free middle; both expansion strategies
+/// expose the gate's identity as ONE primitive per path, so a macro that
+/// passes the gate under one strategy passes under the other (no per-
+/// strategy composition drift can creep in).
+fn resolve_unquote_in_params(inner: &Sexp, params: &[&str], form: UnquoteForm) -> Result<usize> {
+    let name = unquote_target_symbol(inner, form)?;
+    resolve_param_index(name, params, form)
+}
+
+/// Compose gate-1 + gate-2 for the substitute expansion path into ONE
+/// named primitive: project the unquote `inner` to a symbol name
+/// (gate-1, via `unquote_target_symbol`) THEN resolve the name to its
+/// bound `Sexp` value inside the runtime bindings map (gate-2, via
+/// `resolve_binding`). Sibling of `resolve_unquote_in_params`: the same
+/// gate-1+gate-2 composition on the bytecode-template compile path.
+///
+/// Before this lift, the substitute walker's two unquote sites (the
+/// top-level `Sexp::Unquote(_)` arm and the list-inner
+/// `Sexp::UnquoteSplice(_)` arm) threaded `form: UnquoteForm` through
+/// TWO helper calls each — once into `unquote_target_symbol(inner,
+/// form)?` (gate-1) AND once into `resolve_binding(bindings, name,
+/// form)?` (gate-2). After this lift each site threads the marker
+/// ONCE through ONE call. Same composition contract as
+/// `resolve_unquote_in_params` — gate-1 fires before gate-2 by the
+/// helper body's `?`-then-call sequencing, NOT by call-site discipline.
+///
+/// The returned `&'a Sexp` borrows from `bindings` so the list-inner
+/// caller feeds it straight into the `Sexp::List`/`Sexp::Nil`/other
+/// splice-expansion match without an intermediate allocation; the
+/// top-level caller's owned-Sexp obligation is satisfied by a
+/// `.cloned()` projection at the call site (one typed `Sexp::clone`,
+/// no redundant lookup).
+///
+/// `form` is `UnquoteForm` — same closed-set typed enum threading as
+/// `resolve_unquote_in_params` and all the helpers it composes. After
+/// this lift, the marker's identity flows through the substitute path's
+/// typed-entry template gate via ONE explicit pass per call site, not
+/// two; the gate's gate-1+gate-2 sequencing is structural across both
+/// expansion strategies.
+///
+/// Theory anchor: same as `resolve_unquote_in_params`. THEORY.md §VI.1
+/// (generation over composition; named composition of named gates),
+/// THEORY.md §V.1 (knowable platform; gate composition is type-system
+/// load-bearing), THEORY.md §II.1 invariant 1 (typed entry; the full
+/// rejection chain is ONE primitive), THEORY.md §II.1 invariant 2
+/// (free middle; both strategies share the same composition shape).
+fn resolve_unquote_in_bindings<'a>(
+    inner: &Sexp,
+    bindings: &'a HashMap<String, Sexp>,
+    form: UnquoteForm,
+) -> Result<&'a Sexp> {
+    let name = unquote_target_symbol(inner, form)?;
+    resolve_binding(bindings, name, form)
 }
 
 /// Lift the lone `LispError::Compile { form: "unquote-splice", message:
@@ -2080,6 +2184,195 @@ mod tests {
                 }
                 other => panic!(
                     "expected UnboundTemplateVar for {}, got: {other:?}",
+                    case.src
+                ),
+            }
+        }
+    }
+
+    // ── resolve_unquote_in_params / _in_bindings: gate-1+gate-2 composition ─
+
+    #[test]
+    fn resolve_unquote_in_params_returns_index_for_symbol_inner_under_unquote() {
+        // Ok-arm composition under `UnquoteForm::Unquote`: gate-1 projects
+        // the symbol-inner to "x"; gate-2 looks "x" up in `params` and
+        // returns its index. The combined helper returns the gate-2
+        // result directly — pins that gate-1's Ok-arm threads into
+        // gate-2's input without intermediate state.
+        let inner = Sexp::symbol("x");
+        let params = ["x", "y"];
+        let idx = resolve_unquote_in_params(&inner, &params, UnquoteForm::Unquote)
+            .expect("symbol-inner bound at index 0 must resolve");
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn resolve_unquote_in_params_returns_index_for_symbol_inner_under_splice() {
+        // Sibling Ok-arm under `UnquoteForm::Splice`: pins that the
+        // marker doesn't change the projection — only the rejection
+        // path's `prefix` slot.
+        let inner = Sexp::symbol("args");
+        let params = ["f", "args"];
+        let idx = resolve_unquote_in_params(&inner, &params, UnquoteForm::Splice)
+            .expect("symbol-inner bound at index 1 must resolve");
+        assert_eq!(idx, 1);
+    }
+
+    #[test]
+    fn resolve_unquote_in_params_rejects_non_symbol_inner_at_gate_1() {
+        // Err-arm at gate-1 (must-be-a-symbol): the inner is a list, not
+        // a symbol, so gate-1 rejects via `non_symbol_unquote_target`
+        // BEFORE gate-2's param lookup runs. Pins that the composition's
+        // sequencing is gate-1-then-gate-2: a regression that runs
+        // gate-2 first would attempt to look up "(list 1 2)" as a param
+        // name and emit `LispError::UnboundTemplateVar { name: "(list 1
+        // 2)", ... }` — a confusing diagnostic that would substring-grep
+        // "unbound" instead of "expected symbol". This test pins the
+        // structural floor: a non-symbol inner is rejected as a non-
+        // symbol, never re-treated as a bound-name lookup key.
+        let inner = Sexp::List(vec![Sexp::symbol("list"), Sexp::int(1), Sexp::int(2)]);
+        let params = ["x"];
+        let err = resolve_unquote_in_params(&inner, &params, UnquoteForm::Unquote)
+            .expect_err("non-symbol inner must reject at gate-1");
+        match err {
+            LispError::NonSymbolUnquoteTarget { prefix, got } => {
+                assert_eq!(prefix, UnquoteForm::Unquote);
+                assert_eq!(got.display, "(list 1 2)");
+            }
+            other => panic!("expected NonSymbolUnquoteTarget (gate-1), got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_unquote_in_params_rejects_unbound_symbol_at_gate_2() {
+        // Err-arm at gate-2 (must-be-bound-in-scope): the inner IS a
+        // symbol (gate-1 passes) but the name isn't in `params`, so
+        // gate-2 rejects via `unbound_template_var`. Pins that gate-1
+        // forwards its Ok-arm `&str` borrow into gate-2's lookup, and
+        // that the marker `prefix` is threaded into gate-2's rejection
+        // unchanged (a regression that hard-codes `UnquoteForm::Unquote`
+        // at the composition boundary would fail this Splice-marker
+        // assertion).
+        let inner = Sexp::symbol("missing");
+        let params = ["x", "y"];
+        let err = resolve_unquote_in_params(&inner, &params, UnquoteForm::Splice)
+            .expect_err("unbound symbol must reject at gate-2");
+        match err {
+            LispError::UnboundTemplateVar { prefix, name, .. } => {
+                assert_eq!(prefix, UnquoteForm::Splice);
+                assert_eq!(name, "missing");
+            }
+            other => panic!("expected UnboundTemplateVar (gate-2), got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_unquote_in_bindings_returns_borrow_for_symbol_inner_under_unquote() {
+        // Substitute-path sibling of `resolve_unquote_in_params_returns_
+        // index_for_symbol_inner_under_unquote`. The combined helper
+        // composes gate-1 (project inner to symbol) THEN gate-2 (look
+        // up name in bindings). The returned `&Sexp` borrows from
+        // `bindings` so the list-inner caller threads it straight into
+        // the splice-expansion match without an intermediate allocation.
+        let mut bindings: HashMap<String, Sexp> = HashMap::new();
+        bindings.insert("v".to_string(), Sexp::int(42));
+        let inner = Sexp::symbol("v");
+        let val = resolve_unquote_in_bindings(&inner, &bindings, UnquoteForm::Unquote)
+            .expect("symbol-inner bound to 42 must resolve");
+        assert_eq!(val, &Sexp::int(42));
+    }
+
+    #[test]
+    fn resolve_unquote_in_bindings_rejects_non_symbol_inner_at_gate_1() {
+        // Substitute-path sibling of `resolve_unquote_in_params_rejects_
+        // non_symbol_inner_at_gate_1`. Pins the gate-1-then-gate-2
+        // sequencing on the substitute path: a non-symbol inner is
+        // rejected as a non-symbol BEFORE the bindings map is consulted.
+        let bindings: HashMap<String, Sexp> = HashMap::new();
+        let inner = Sexp::int(5);
+        let err = resolve_unquote_in_bindings(&inner, &bindings, UnquoteForm::Splice)
+            .expect_err("non-symbol inner must reject at gate-1");
+        match err {
+            LispError::NonSymbolUnquoteTarget { prefix, got } => {
+                assert_eq!(prefix, UnquoteForm::Splice);
+                assert_eq!(got.display, "5");
+            }
+            other => panic!("expected NonSymbolUnquoteTarget (gate-1), got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_unquote_in_bindings_rejects_unbound_symbol_at_gate_2() {
+        // Substitute-path sibling of `resolve_unquote_in_params_rejects_
+        // unbound_symbol_at_gate_2`. Pins the gate-2 rejection on the
+        // substitute path with the marker threaded into the rejection's
+        // `prefix` slot.
+        let mut bindings: HashMap<String, Sexp> = HashMap::new();
+        bindings.insert("known".to_string(), Sexp::Nil);
+        let inner = Sexp::symbol("missing");
+        let err = resolve_unquote_in_bindings(&inner, &bindings, UnquoteForm::Unquote)
+            .expect_err("unbound symbol must reject at gate-2");
+        match err {
+            LispError::UnboundTemplateVar { prefix, name, .. } => {
+                assert_eq!(prefix, UnquoteForm::Unquote);
+                assert_eq!(name, "missing");
+            }
+            other => panic!("expected UnboundTemplateVar (gate-2), got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_unquote_helpers_consolidate_four_inline_gate12_sites() {
+        // End-to-end pin: all FOUR call sites of the gate-1+gate-2
+        // composition (compile_node Unquote, compile_node UnquoteSplice,
+        // substitute Unquote, substitute list-inner UnquoteSplice) now
+        // share TWO composed primitives — `resolve_unquote_in_params`
+        // on the bytecode path, `resolve_unquote_in_bindings` on the
+        // substitute path — and ALL four reject gate-1 failures (non-
+        // symbol inner) with the SAME `LispError::NonSymbolUnquoteTarget`
+        // variant carrying the expected `prefix` slot. Before the lift,
+        // each site threaded `form` twice through two helper calls; this
+        // test pins that the lift preserves the gate's rejection-shape
+        // identity across all four sites for a non-symbol inner — i.e.
+        // gate-1 fires identically across both expansion strategies.
+        struct Case {
+            src: &'static str,
+            expander: fn() -> Expander,
+            expected_form: UnquoteForm,
+        }
+        let cases: &[Case] = &[
+            Case {
+                src: "(defmacro w (x) `,(list 1 2)) (w 1)",
+                expander: Expander::new,
+                expected_form: UnquoteForm::Unquote,
+            },
+            Case {
+                src: "(defmacro w (x) `(outer ,@5)) (w 1)",
+                expander: Expander::new,
+                expected_form: UnquoteForm::Splice,
+            },
+            Case {
+                src: "(defmacro w (x) `,(list 1 2)) (w 1)",
+                expander: Expander::new_substitute_only,
+                expected_form: UnquoteForm::Unquote,
+            },
+            Case {
+                src: "(defmacro w (x) `(outer ,@(list 1 2))) (w 1)",
+                expander: Expander::new_substitute_only,
+                expected_form: UnquoteForm::Splice,
+            },
+        ];
+        for case in cases {
+            let mut e = (case.expander)();
+            let err = e
+                .expand_program(read(case.src).unwrap())
+                .expect_err("non-symbol inner must error end-to-end");
+            match err {
+                LispError::NonSymbolUnquoteTarget { prefix, .. } => {
+                    assert_eq!(prefix, case.expected_form, "for src: {}", case.src);
+                }
+                other => panic!(
+                    "expected NonSymbolUnquoteTarget for {}, got: {other:?}",
                     case.src
                 ),
             }

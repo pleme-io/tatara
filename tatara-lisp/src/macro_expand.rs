@@ -296,9 +296,7 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
     }
     match node {
         Sexp::Unquote(inner) => {
-            let name = inner
-                .as_symbol()
-                .ok_or_else(|| non_symbol_unquote_target(UnquoteForm::Unquote, inner))?;
+            let name = unquote_target_symbol(inner, UnquoteForm::Unquote)?;
             let idx = params
                 .iter()
                 .position(|p| *p == name)
@@ -306,9 +304,7 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
             ops.push(TemplateOp::Subst(idx));
         }
         Sexp::UnquoteSplice(inner) => {
-            let name = inner
-                .as_symbol()
-                .ok_or_else(|| non_symbol_unquote_target(UnquoteForm::Splice, inner))?;
+            let name = unquote_target_symbol(inner, UnquoteForm::Splice)?;
             let idx = params
                 .iter()
                 .position(|p| *p == name)
@@ -545,9 +541,7 @@ fn bind_args(macro_name: &str, params: &[Param], args: &[Sexp]) -> Result<HashMa
 fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
     match form {
         Sexp::Unquote(inner) => {
-            let sym = inner
-                .as_symbol()
-                .ok_or_else(|| non_symbol_unquote_target(UnquoteForm::Unquote, inner))?;
+            let sym = unquote_target_symbol(inner, UnquoteForm::Unquote)?;
             bindings.get(sym).cloned().ok_or_else(|| {
                 unbound_template_var(UnquoteForm::Unquote, sym, &bound_names(bindings))
             })
@@ -557,9 +551,7 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
             let mut out: Vec<Sexp> = Vec::with_capacity(items.len());
             for item in items {
                 if let Sexp::UnquoteSplice(inner) = item {
-                    let sym = inner
-                        .as_symbol()
-                        .ok_or_else(|| non_symbol_unquote_target(UnquoteForm::Splice, inner))?;
+                    let sym = unquote_target_symbol(inner, UnquoteForm::Splice)?;
                     let val = bindings.get(sym).ok_or_else(|| {
                         unbound_template_var(UnquoteForm::Splice, sym, &bound_names(bindings))
                     })?;
@@ -657,6 +649,69 @@ fn non_symbol_unquote_target(prefix: UnquoteForm, got: &Sexp) -> LispError {
         prefix,
         got: crate::domain::sexp_witness(got),
     }
+}
+
+/// Project the inner of a `,X` / `,@X` form to its bound symbol name, or
+/// raise the structural `LispError::NonSymbolUnquoteTarget` rejection at
+/// the typed-entry template-gate boundary. ONE named primitive every
+/// `,X` / `,@X` resolution site in the substrate shares — the inline
+/// `inner.as_symbol().ok_or_else(|| non_symbol_unquote_target(form,
+/// inner))?` pattern appeared four times across `compile_node`
+/// (bytecode-path Unquote / UnquoteSplice arms) AND `substitute`
+/// (substitute-path Unquote / list-inner UnquoteSplice arms), well past
+/// the three-times-rule trigger. After this lift the four sites collapse
+/// to a single `unquote_target_symbol(inner, form)?` call, and the
+/// substrate's understanding of "an unquote target's first gate is `must
+/// be a symbol`" lives in ONE function — a regression that drifts the
+/// gate's posture (e.g. accepts non-symbol targets at the bytecode path
+/// but not the substitute path) becomes a type-level change at this
+/// helper, not a silent four-site divergence.
+///
+/// Sibling of `non_symbol_unquote_target` (the error builder this gate
+/// calls on failure) and `unbound_template_var` (the typed-entry
+/// template-gate's SECOND gate — fires once `unquote_target_symbol`
+/// projects the symbol successfully but the symbol isn't bound in the
+/// in-scope name set). Together the three close the substrate's
+/// understanding of the two-step typed-entry template-gate: gate-1 is
+/// `must-be-a-symbol`, gate-2 is `must-be-bound-in-scope`. With this
+/// lift, gate-1 lives at ONE call boundary across all four template-
+/// gate sites — bytecode path AND substitute path AND both `,X` and
+/// `,@X` forms.
+///
+/// `form` is `UnquoteForm` — the closed-set typed enum whose two
+/// variants are EXACTLY the two reachable syntactic markers
+/// (`Unquote` ⊎ `Splice`). Threading the typed marker through the
+/// helper boundary (rather than `&'static str`) lands the same
+/// compile-time closed-set guarantee `non_symbol_unquote_target` and
+/// `unbound_template_var` get from their `UnquoteForm` slots — a
+/// regression that drifts the marker (e.g. a third pseudo-marker call
+/// site) becomes a type error at the call site, not a runtime
+/// substring drift. The returned `&'a str` borrows from `inner` — the
+/// caller feeds it directly into `params.iter().position(|p| *p ==
+/// name)` (`compile_node`) or `bindings.get(name)` (`substitute`)
+/// without an intermediate allocation.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; four
+/// inline copies of the gate-1 projection (`compile_node`
+/// Unquote/UnquoteSplice + `substitute` Unquote + `substitute`
+/// list-inner UnquoteSplice) is past the three-times rule. THEORY.md
+/// §V.1 — knowable platform; the gate's identity becomes a NAMED
+/// primitive consumer-binding rather than a four-times-inlined
+/// match-and-reject snippet — authoring surfaces (REPL, LSP,
+/// `tatara-check`) that want to surface "the typed-entry template-gate
+/// rejected your form because the unquote target wasn't a symbol" bind
+/// to ONE function. THEORY.md §II.1 invariant 1 — typed entry; an
+/// unquote target that isn't a symbol is exactly the failure mode the
+/// typed-entry template-gate exists to reject. THEORY.md §II.1
+/// invariant 2 — free middle; both bytecode AND substitute expansion
+/// paths now project through the SAME gate-1 primitive, so a macro
+/// that compiles under one strategy compiles under the other (the
+/// gate's posture is uniform across the two strategies, no
+/// per-strategy drift can creep in).
+fn unquote_target_symbol(inner: &Sexp, form: UnquoteForm) -> Result<&str> {
+    inner
+        .as_symbol()
+        .ok_or_else(|| non_symbol_unquote_target(form, inner))
 }
 
 /// Lift the lone `LispError::Compile { form: "unquote-splice", message:
@@ -1507,6 +1562,192 @@ mod tests {
             .expand_program(read("(defmacro w (x) `,(list 1 2)) (w 1)").unwrap())
             .expect_err("non-symbol target must error");
         assert_eq!(err.position(), None);
+    }
+
+    // ── unquote_target_symbol: typed gate-1 primitive for ,X / ,@X ──────
+    //
+    // The `unquote_target_symbol(inner, form)?` primitive lifts the
+    // inline `inner.as_symbol().ok_or_else(|| non_symbol_unquote_target(
+    // form, inner))?` pattern that previously appeared at four call
+    // sites (`compile_node` Unquote/UnquoteSplice + `substitute` Unquote
+    // + `substitute` list-inner UnquoteSplice) behind ONE named
+    // primitive. The tests below pin: (a) the Ok-arm borrows the
+    // symbol name from `inner` for both UnquoteForm variants; (b) the
+    // Err-arm routes through `non_symbol_unquote_target` and emits the
+    // structural `LispError::NonSymbolUnquoteTarget` variant carrying
+    // the typed `SexpWitness` (joint shape + display identity) for the
+    // closed set of reachable non-symbol shapes (int / keyword / list /
+    // nil); (c) the helper is path-uniform — the same Ok / Err
+    // contracts hold regardless of which call site invokes it. A
+    // regression that re-inlines the gate-1 projection at any of the
+    // four call sites can no longer drift independent of the others —
+    // the helper IS the gate.
+
+    #[test]
+    fn unquote_target_symbol_returns_symbol_for_symbol_inner_under_unquote() {
+        // Positive control for the Ok-arm: `inner = Sexp::Symbol("xs")`
+        // under `UnquoteForm::Unquote` projects through `as_symbol()`
+        // to the borrowed `&str`. The returned slice's lifetime is
+        // tied to `inner` so the caller can feed it directly into
+        // `params.iter().position(...)` (`compile_node`) or
+        // `bindings.get(...)` (`substitute`) without an intermediate
+        // allocation. Fail-before/pass-after: this assert is meaningless
+        // pre-lift because the helper does not exist; post-lift it
+        // pins the typed gate-1 contract at the named primitive.
+        let inner = Sexp::symbol("xs");
+        let name = unquote_target_symbol(&inner, UnquoteForm::Unquote)
+            .expect("symbol inner must project to Ok");
+        assert_eq!(name, "xs");
+    }
+
+    #[test]
+    fn unquote_target_symbol_returns_symbol_for_symbol_inner_under_splice() {
+        // Sibling positive control: `UnquoteForm::Splice` shares the
+        // gate-1 contract with `Unquote`. The helper is path-uniform
+        // across both syntactic markers — a regression that bifurcates
+        // the two arms (e.g., accepting non-symbols for `,@X` but not
+        // `,X`) fails-loudly here. Pins that the closed-set
+        // `UnquoteForm` enum's two variants share ONE projection
+        // posture across the gate-1 boundary.
+        let inner = Sexp::symbol("rest");
+        let name = unquote_target_symbol(&inner, UnquoteForm::Splice)
+            .expect("symbol inner must project to Ok under Splice");
+        assert_eq!(name, "rest");
+    }
+
+    #[test]
+    fn unquote_target_symbol_rejects_int_inner_under_unquote() {
+        // Negative control for the Err-arm: `inner = Sexp::Int(5)` is
+        // NOT a symbol — the gate-1 projection fires and routes through
+        // `non_symbol_unquote_target` to the structural
+        // `LispError::NonSymbolUnquoteTarget` variant. Pin the variant
+        // identity AND the typed `SexpWitness` joint identity (shape +
+        // display literal): a regression that drops the witness shape
+        // or display fails-loudly here.
+        let inner = Sexp::int(5);
+        let err = unquote_target_symbol(&inner, UnquoteForm::Unquote)
+            .expect_err("int inner must error at gate-1");
+        match err {
+            LispError::NonSymbolUnquoteTarget { prefix, got } => {
+                assert_eq!(prefix, UnquoteForm::Unquote);
+                assert_eq!(got.shape, crate::error::SexpShape::Int);
+                assert_eq!(got.display, "5");
+            }
+            other => panic!("expected NonSymbolUnquoteTarget, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unquote_target_symbol_rejects_list_inner_under_splice() {
+        // Sibling negative control: `inner = (list 1 2)` is a list, not
+        // a symbol — the gate-1 projection fires AND routes through
+        // `non_symbol_unquote_target(UnquoteForm::Splice, inner)`. Pins
+        // both the variant identity AND the typed witness's joint
+        // shape (`SexpShape::List`) + display (`"(list 1 2)"`) so a
+        // future shape drift fails-loudly. Sibling of the Int / Unquote
+        // pin: closes the gate-1 contract across the closed-set
+        // product of {Int, List, Keyword, …} × {Unquote, Splice}.
+        let inner = Sexp::List(vec![Sexp::symbol("list"), Sexp::int(1), Sexp::int(2)]);
+        let err = unquote_target_symbol(&inner, UnquoteForm::Splice)
+            .expect_err("list inner must error at gate-1");
+        match err {
+            LispError::NonSymbolUnquoteTarget { prefix, got } => {
+                assert_eq!(prefix, UnquoteForm::Splice);
+                assert_eq!(got.shape, crate::error::SexpShape::List);
+                assert_eq!(got.display, "(list 1 2)");
+            }
+            other => panic!("expected NonSymbolUnquoteTarget, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unquote_target_symbol_rejects_keyword_inner_with_typed_witness() {
+        // Pin a third reachable non-symbol shape: `Sexp::Keyword(":foo")`.
+        // The gate-1 projection rejects keywords AS WELL as ints and
+        // lists — closes the closed-set of "non-symbol shapes the gate
+        // rejects" across one more reachable variant. The typed witness
+        // carries `SexpShape::Keyword` + display `:foo` jointly so
+        // authoring tools (REPL, LSP) bind on the structural shape
+        // directly.
+        let inner = Sexp::keyword("foo");
+        let err = unquote_target_symbol(&inner, UnquoteForm::Unquote)
+            .expect_err("keyword inner must error at gate-1");
+        match err {
+            LispError::NonSymbolUnquoteTarget { prefix, got } => {
+                assert_eq!(prefix, UnquoteForm::Unquote);
+                assert_eq!(got.shape, crate::error::SexpShape::Keyword);
+                assert_eq!(got.display, ":foo");
+            }
+            other => panic!("expected NonSymbolUnquoteTarget, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unquote_target_symbol_consolidates_four_inline_callsites_into_one_helper() {
+        // Path-uniformity pin: end-to-end through ALL FOUR call sites
+        // (`compile_node` Unquote, `compile_node` UnquoteSplice,
+        // `substitute` Unquote, `substitute` list-inner UnquoteSplice)
+        // every non-symbol unquote target now routes through the SAME
+        // `unquote_target_symbol(inner, form)?` helper. The four
+        // end-to-end expansions below all reject with the SAME variant
+        // (`NonSymbolUnquoteTarget`) — pins that the lift preserves the
+        // path-uniform rejection contract `non_symbol_unquote_target`'s
+        // prior lift established (and that drove the bytecode-vs-
+        // substitute reunification in 0e9c… and successors). A
+        // regression that re-inlines the gate-1 projection at one of
+        // the four sites can drift the four call sites independent of
+        // each other — this test would catch that drift.
+        let cases: &[(&str, UnquoteForm)] = &[
+            // compile_node Unquote (bytecode-path)
+            ("(defmacro w (x) `,(list 1 2)) (w 1)", UnquoteForm::Unquote),
+            // compile_node UnquoteSplice (bytecode-path)
+            ("(defmacro w (x) `(list ,@5)) (w 1)", UnquoteForm::Splice),
+        ];
+        for (src, expected_form) in cases {
+            let mut e = Expander::new();
+            let err = e
+                .expand_program(read(src).unwrap())
+                .expect_err("non-symbol unquote target must error end-to-end");
+            match err {
+                LispError::NonSymbolUnquoteTarget { prefix, .. } => {
+                    assert_eq!(prefix, *expected_form, "for src: {src}");
+                }
+                other => panic!("expected NonSymbolUnquoteTarget for {src}, got: {other:?}"),
+            }
+        }
+        // substitute Unquote (substitute-only path) — sibling pin to
+        // `non_symbol_unquote_in_substitute_emits_structural_variant`.
+        let mut e_subst = Expander::new_substitute_only();
+        let err = e_subst
+            .expand_program(read("(defmacro w (x) `,(list 1 2)) (w 1)").unwrap())
+            .expect_err("substitute Unquote must error end-to-end");
+        assert!(
+            matches!(
+                err,
+                LispError::NonSymbolUnquoteTarget {
+                    prefix: UnquoteForm::Unquote,
+                    ..
+                }
+            ),
+            "expected NonSymbolUnquoteTarget at substitute Unquote, got: {err:?}"
+        );
+        // substitute list-inner UnquoteSplice (substitute-only path) —
+        // sibling pin to
+        // `non_symbol_unquote_splice_inside_list_in_substitute_emits_…`.
+        let mut e_subst2 = Expander::new_substitute_only();
+        let err = e_subst2
+            .expand_program(read("(defmacro w (x) `(outer ,@(list 1 2))) (w 1)").unwrap())
+            .expect_err("substitute UnquoteSplice-in-list must error end-to-end");
+        assert!(
+            matches!(
+                err,
+                LispError::NonSymbolUnquoteTarget {
+                    prefix: UnquoteForm::Splice,
+                    ..
+                }
+            ),
+            "expected NonSymbolUnquoteTarget at substitute UnquoteSplice-in-list, got: {err:?}"
+        );
     }
 
     // ── Splice outside list: structural variant + path-uniform rejection ─

@@ -297,18 +297,12 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
     match node {
         Sexp::Unquote(inner) => {
             let name = unquote_target_symbol(inner, UnquoteForm::Unquote)?;
-            let idx = params
-                .iter()
-                .position(|p| *p == name)
-                .ok_or_else(|| unbound_template_var(UnquoteForm::Unquote, name, params))?;
+            let idx = resolve_param_index(name, params, UnquoteForm::Unquote)?;
             ops.push(TemplateOp::Subst(idx));
         }
         Sexp::UnquoteSplice(inner) => {
             let name = unquote_target_symbol(inner, UnquoteForm::Splice)?;
-            let idx = params
-                .iter()
-                .position(|p| *p == name)
-                .ok_or_else(|| unbound_template_var(UnquoteForm::Splice, name, params))?;
+            let idx = resolve_param_index(name, params, UnquoteForm::Splice)?;
             ops.push(TemplateOp::Splice(idx));
         }
         Sexp::List(items) => {
@@ -542,9 +536,7 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
     match form {
         Sexp::Unquote(inner) => {
             let sym = unquote_target_symbol(inner, UnquoteForm::Unquote)?;
-            bindings.get(sym).cloned().ok_or_else(|| {
-                unbound_template_var(UnquoteForm::Unquote, sym, &bound_names(bindings))
-            })
+            resolve_binding(bindings, sym, UnquoteForm::Unquote).cloned()
         }
         Sexp::UnquoteSplice(inner) => Err(splice_outside_list(inner)),
         Sexp::List(items) => {
@@ -552,9 +544,7 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
             for item in items {
                 if let Sexp::UnquoteSplice(inner) = item {
                     let sym = unquote_target_symbol(inner, UnquoteForm::Splice)?;
-                    let val = bindings.get(sym).ok_or_else(|| {
-                        unbound_template_var(UnquoteForm::Splice, sym, &bound_names(bindings))
-                    })?;
+                    let val = resolve_binding(bindings, sym, UnquoteForm::Splice)?;
                     match val {
                         Sexp::List(children) => out.extend(children.iter().cloned()),
                         Sexp::Nil => {}
@@ -712,6 +702,121 @@ fn unquote_target_symbol(inner: &Sexp, form: UnquoteForm) -> Result<&str> {
     inner
         .as_symbol()
         .ok_or_else(|| non_symbol_unquote_target(form, inner))
+}
+
+/// Gate-2 for the bytecode-template compile path: resolve a template
+/// variable name to its index inside the macro's static param list, or
+/// raise the structural `LispError::UnboundTemplateVar` rejection. ONE
+/// named primitive that the two `compile_node` sites — `Sexp::Unquote(_)`
+/// and `Sexp::UnquoteSplice(_)` arms — share. Before this lift the same
+/// `params.iter().position(|p| *p == name).ok_or_else(|| unbound_template_var(
+/// FORM, name, params))?` projection was inlined twice in one match
+/// block; after this lift the two sites collapse to a single
+/// `resolve_param_index(name, params, form)?` call and the
+/// `Subst(idx)` / `Splice(idx)` ops push from a uniform projection
+/// boundary.
+///
+/// Sibling of `resolve_binding`: the same gate-2 contract on the
+/// substitute path. Together the two close the typed-entry template
+/// gate's gate-2 (must-be-bound-in-scope) primitive across BOTH
+/// expansion strategies — gate-1 (`unquote_target_symbol`) projects the
+/// inner to a symbol name; gate-2 looks the name up in the in-scope
+/// candidate set. The two paths' candidate sets differ structurally
+/// (compile path: `&[&str]` of macro params, returning `usize`;
+/// substitute path: `&HashMap<String, Sexp>` of live bindings, returning
+/// `&Sexp`), so the gate-2 primitive bifurcates by path — but the
+/// rejection shape (`LispError::UnboundTemplateVar { prefix, name, hint }`
+/// with `crate::domain::suggest`-driven hint) is identical across both
+/// paths. A regression that drifts gate-2's posture (e.g., accepts an
+/// unbound `,name` at the bytecode path but not the substitute path) is
+/// now a type-level change at this helper, not a silent four-site
+/// divergence.
+///
+/// `form` is `UnquoteForm` — the closed-set typed enum whose two
+/// variants are EXACTLY the two reachable syntactic markers
+/// (`Unquote` ⊎ `Splice`). Threading the typed marker through the
+/// helper boundary (rather than `&'static str`) lands the same
+/// compile-time closed-set guarantee `unquote_target_symbol`,
+/// `unbound_template_var`, and `non_symbol_unquote_target` carry — a
+/// regression that drifts the marker becomes a type error at the call
+/// site, not a runtime substring drift.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// inline copies of the gate-2 projection in one match block, paired
+/// with the two substitute-path inline copies, is four copies in two
+/// functions — past the three-times rule once the structural shape is
+/// named. THEORY.md §V.1 — knowable platform; the gate's identity
+/// becomes a NAMED primitive consumer-binding rather than a
+/// twice-inlined position-and-reject snippet — authoring surfaces
+/// (REPL, LSP, `tatara-check`) that want to surface "the typed-entry
+/// template-gate rejected your form because the name isn't bound in
+/// scope" bind to ONE function per path. THEORY.md §II.1 invariant 1 —
+/// typed entry; an unbound template variable is exactly the failure
+/// mode the typed-entry template-gate exists to reject. THEORY.md
+/// §II.1 invariant 2 — free middle; both expansion strategies'
+/// gate-2 emit the SAME structural variant, so a macro that compiles
+/// under one strategy compiles under the other.
+fn resolve_param_index(name: &str, params: &[&str], form: UnquoteForm) -> Result<usize> {
+    params
+        .iter()
+        .position(|p| *p == name)
+        .ok_or_else(|| unbound_template_var(form, name, params))
+}
+
+/// Gate-2 for the substitute expansion path: resolve a template
+/// variable name to its bound `Sexp` value inside the runtime bindings
+/// map, or raise the structural `LispError::UnboundTemplateVar`
+/// rejection. ONE named primitive that the two `substitute` sites —
+/// the top-level `Sexp::Unquote(_)` arm and the list-inner
+/// `Sexp::UnquoteSplice(_)` arm — share. Before this lift the same
+/// `bindings.get(sym).<cloned>?.ok_or_else(|| unbound_template_var(
+/// FORM, sym, &bound_names(bindings)))` projection was inlined twice
+/// across the substitute walker; after this lift the two sites
+/// collapse to a single `resolve_binding(bindings, sym, form)?` call
+/// (with a trailing `.cloned()` at the top-level arm because that arm
+/// returns an owned `Sexp` while the list-inner arm consumes the
+/// `&Sexp` borrow directly).
+///
+/// Sibling of `resolve_param_index`: the same gate-2 contract on the
+/// bytecode-template compile path. Together the two close the
+/// typed-entry template gate's gate-2 (must-be-bound-in-scope)
+/// primitive across BOTH expansion strategies. The candidate set on
+/// the substitute path is the live bindings' keys (built fresh per
+/// call via `bound_names`) — never a stale snapshot, so the
+/// suggest-driven hint is always drawn from the actual in-scope name
+/// set the operator sees.
+///
+/// The returned `&'a Sexp` borrows from `bindings` — the list-inner
+/// caller feeds it straight into the `Sexp::List`/`Sexp::Nil`/other
+/// splice-expansion match without an intermediate allocation. The
+/// top-level caller's owned-Sexp obligation is satisfied by the
+/// `.cloned()` projection at the call site, which is a single typed
+/// `Sexp::clone` and not a redundant lookup.
+///
+/// `form` is `UnquoteForm` — same closed-set typed enum threading as
+/// `resolve_param_index` and `unquote_target_symbol`. A regression
+/// that drifts the marker becomes a type error at the call site, not
+/// a runtime substring drift.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// inline copies of the gate-2 projection in the substitute walker,
+/// paired with the two compile-path inline copies, is four copies in
+/// two functions — past the three-times rule once the structural
+/// shape is named. THEORY.md §V.1 — knowable platform; the gate's
+/// identity becomes a NAMED primitive consumer-binding rather than a
+/// twice-inlined lookup-and-reject snippet. THEORY.md §II.1
+/// invariant 1 — typed entry; an unbound template variable is exactly
+/// the failure mode the typed-entry template-gate exists to reject.
+/// THEORY.md §II.1 invariant 2 — free middle; both expansion
+/// strategies' gate-2 emit the SAME structural variant.
+fn resolve_binding<'a>(
+    bindings: &'a HashMap<String, Sexp>,
+    name: &str,
+    form: UnquoteForm,
+) -> Result<&'a Sexp> {
+    bindings
+        .get(name)
+        .ok_or_else(|| unbound_template_var(form, name, &bound_names(bindings)))
 }
 
 /// Lift the lone `LispError::Compile { form: "unquote-splice", message:
@@ -1748,6 +1853,237 @@ mod tests {
             ),
             "expected NonSymbolUnquoteTarget at substitute UnquoteSplice-in-list, got: {err:?}"
         );
+    }
+
+    // ── Gate-2 (must-be-bound-in-scope) typed primitives ──────────────
+    // Pins the contract of the two gate-2 helpers — `resolve_param_index`
+    // (bytecode-template compile path) and `resolve_binding`
+    // (substitute path) — that the four inline `<lookup>.ok_or_else(||
+    // unbound_template_var(FORM, name, candidates))` projections at
+    // `compile_node` Unquote/UnquoteSplice AND `substitute` Unquote/
+    // UnquoteSplice-inside-list collapse behind. Tests pin: (a) Ok-arm
+    // projection under both `UnquoteForm` variants — the helper returns
+    // the resolved `usize` (compile path) or `&Sexp` (substitute path)
+    // for in-scope names; (b) Err-arm projection routes through
+    // `unbound_template_var` to the typed `LispError::UnboundTemplateVar`
+    // variant with the correct `prefix` AND the suggest-driven `hint`;
+    // (c) the helpers are path-uniform — both compile-path arms share
+    // ONE `resolve_param_index`; both substitute-path arms share ONE
+    // `resolve_binding`. A regression that re-inlines the gate-2
+    // projection at any of the four call sites can no longer drift
+    // independent of the others — the two helpers ARE the gate.
+
+    #[test]
+    fn resolve_param_index_returns_position_for_bound_name_under_unquote() {
+        // Positive control for the Ok-arm: `name = "x"` against
+        // `params = ["a", "x", "rest"]` projects through
+        // `params.iter().position(|p| *p == name)` to `Some(1)`, which
+        // the helper unwraps to `Ok(1)`. The returned index feeds
+        // directly into `TemplateOp::Subst(idx)` at the compile site.
+        let params = ["a", "x", "rest"];
+        let idx = resolve_param_index("x", &params, UnquoteForm::Unquote)
+            .expect("bound name must project to Ok at gate-2");
+        assert_eq!(idx, 1);
+    }
+
+    #[test]
+    fn resolve_param_index_returns_position_for_bound_name_under_splice() {
+        // Sibling positive control: `UnquoteForm::Splice` shares the
+        // gate-2 contract with `Unquote`. The helper is path-uniform
+        // across both syntactic markers on the compile path — a
+        // regression that bifurcates the two arms fails-loudly here.
+        let params = ["a", "x", "rest"];
+        let idx = resolve_param_index("rest", &params, UnquoteForm::Splice)
+            .expect("bound name must project to Ok at gate-2 under Splice");
+        assert_eq!(idx, 2);
+    }
+
+    #[test]
+    fn resolve_param_index_rejects_unbound_name_with_hint_under_unquote() {
+        // Negative control for the Err-arm: `name = "xs"` against
+        // `params = ["x"]` — distance 1, bound 1 — routes through
+        // `unbound_template_var` to the structural
+        // `LispError::UnboundTemplateVar` variant with `hint = Some("x")`.
+        // Pin the variant identity AND the prefix AND the suggest-driven
+        // hint: a regression that drops the suggestion fails-loudly here.
+        let params = ["x"];
+        let err = resolve_param_index("xs", &params, UnquoteForm::Unquote)
+            .expect_err("unbound name must error at gate-2");
+        match err {
+            LispError::UnboundTemplateVar { prefix, name, hint } => {
+                assert_eq!(prefix, UnquoteForm::Unquote);
+                assert_eq!(name, "xs");
+                assert_eq!(hint.as_deref(), Some("x"));
+            }
+            other => panic!("expected UnboundTemplateVar, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_param_index_rejects_unbound_name_without_hint_under_splice() {
+        // Sibling negative control: `name = "wholly-unrelated"` against
+        // `params = ["x"]` — past the bounded edit distance, so no hint.
+        // Pin that the suggest-driven hint stays empty under Splice when
+        // the substrate isn't confident — a wrong hint is worse than no
+        // hint. Closes the closed-set product of {hint, no-hint} ×
+        // {Unquote, Splice} on the compile-path gate-2.
+        let params = ["x"];
+        let err = resolve_param_index("wholly-unrelated", &params, UnquoteForm::Splice)
+            .expect_err("unrelated unbound must error at gate-2");
+        match err {
+            LispError::UnboundTemplateVar { prefix, name, hint } => {
+                assert_eq!(prefix, UnquoteForm::Splice);
+                assert_eq!(name, "wholly-unrelated");
+                assert_eq!(hint, None);
+            }
+            other => panic!("expected UnboundTemplateVar, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_binding_returns_value_for_bound_name_under_unquote() {
+        // Positive control for the substitute-path Ok-arm: `name = "x"`
+        // against a bindings map `{x: 42, y: "hi"}` projects through
+        // `bindings.get(name)` to `Some(&Sexp::Int(42))`, which the
+        // helper unwraps to `Ok(&Sexp::Int(42))`. The returned
+        // `&Sexp` borrows from the bindings map — the top-level
+        // `Sexp::Unquote(_)` substitute caller adds a single
+        // `.cloned()` to satisfy its owned-`Sexp` return obligation.
+        let mut bindings: HashMap<String, Sexp> = HashMap::new();
+        bindings.insert("x".to_string(), Sexp::int(42));
+        bindings.insert("y".to_string(), Sexp::string("hi"));
+        let val = resolve_binding(&bindings, "x", UnquoteForm::Unquote)
+            .expect("bound name must project to Ok at gate-2 (substitute)");
+        assert_eq!(val, &Sexp::int(42));
+    }
+
+    #[test]
+    fn resolve_binding_returns_value_for_bound_name_under_splice() {
+        // Sibling positive control: `UnquoteForm::Splice` shares the
+        // gate-2 contract with `Unquote` on the substitute path too.
+        // The bound value is a `Sexp::List` because the splice arm's
+        // caller match expression expects `Sexp::List(items)` — but
+        // the helper itself doesn't inspect the value's shape; it
+        // just hands back the borrow. A regression that gate-checks
+        // the value's shape inside `resolve_binding` (instead of at
+        // the caller match arm) fails-loudly here.
+        let mut bindings: HashMap<String, Sexp> = HashMap::new();
+        bindings.insert(
+            "args".to_string(),
+            Sexp::List(vec![Sexp::int(1), Sexp::int(2)]),
+        );
+        let val = resolve_binding(&bindings, "args", UnquoteForm::Splice)
+            .expect("bound name must project to Ok at gate-2 under Splice");
+        assert_eq!(val, &Sexp::List(vec![Sexp::int(1), Sexp::int(2)]));
+    }
+
+    #[test]
+    fn resolve_binding_rejects_unbound_name_with_hint_under_unquote() {
+        // Negative control for the substitute-path Err-arm: `name =
+        // "xs"` against bindings `{x: 1}` — distance 1, bound 1 —
+        // routes through `unbound_template_var` to the structural
+        // `LispError::UnboundTemplateVar` variant with `hint =
+        // Some("x")`. The candidate set is drawn from
+        // `bound_names(bindings)` — the live bindings' keys, never a
+        // stale snapshot.
+        let mut bindings: HashMap<String, Sexp> = HashMap::new();
+        bindings.insert("x".to_string(), Sexp::int(1));
+        let err = resolve_binding(&bindings, "xs", UnquoteForm::Unquote)
+            .expect_err("unbound name must error at gate-2 (substitute)");
+        match err {
+            LispError::UnboundTemplateVar { prefix, name, hint } => {
+                assert_eq!(prefix, UnquoteForm::Unquote);
+                assert_eq!(name, "xs");
+                assert_eq!(hint.as_deref(), Some("x"));
+            }
+            other => panic!("expected UnboundTemplateVar, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_binding_rejects_unbound_name_without_hint_under_splice() {
+        // Sibling negative control on the substitute path: past-bound
+        // distance → no hint. Closes the closed-set product of
+        // {hint, no-hint} × {Unquote, Splice} on the substitute-path
+        // gate-2.
+        let mut bindings: HashMap<String, Sexp> = HashMap::new();
+        bindings.insert("args".to_string(), Sexp::Nil);
+        let err = resolve_binding(&bindings, "wholly-unrelated", UnquoteForm::Splice)
+            .expect_err("unrelated unbound must error at gate-2");
+        match err {
+            LispError::UnboundTemplateVar { prefix, name, hint } => {
+                assert_eq!(prefix, UnquoteForm::Splice);
+                assert_eq!(name, "wholly-unrelated");
+                assert_eq!(hint, None);
+            }
+            other => panic!("expected UnboundTemplateVar, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn gate_2_consolidates_four_inline_callsites_into_two_helpers() {
+        // Path-uniformity pin: end-to-end through ALL FOUR call sites
+        // (`compile_node` Unquote, `compile_node` UnquoteSplice,
+        // `substitute` Unquote, `substitute` list-inner UnquoteSplice)
+        // every unbound-template-var rejection now routes through one
+        // of the TWO `resolve_param_index` / `resolve_binding` helpers
+        // — `Expander::new()` runs the compile path, so its two arms
+        // share `resolve_param_index`; `Expander::new_substitute_only()`
+        // runs the substitute path, so its two arms share
+        // `resolve_binding`. The four end-to-end expansions below all
+        // reject with the SAME variant (`UnboundTemplateVar`) with the
+        // expected `prefix` — pins that the lift preserves the
+        // path-uniform rejection contract `unbound_template_var`'s
+        // prior naming established. A regression that re-inlines the
+        // gate-2 projection at one of the four sites can drift the
+        // four call sites independent of each other — this test would
+        // catch that drift.
+        struct Case {
+            src: &'static str,
+            expander: fn() -> Expander,
+            expected_form: UnquoteForm,
+        }
+        let cases: &[Case] = &[
+            // compile_node Unquote (bytecode path) — uses resolve_param_index
+            Case {
+                src: "(defmacro w (x) `(list ,xs)) (w 1)",
+                expander: Expander::new,
+                expected_form: UnquoteForm::Unquote,
+            },
+            // compile_node UnquoteSplice (bytecode path) — uses resolve_param_index
+            Case {
+                src: "(defmacro call (f &rest args) `(,f ,@argz)) (call foo a b)",
+                expander: Expander::new,
+                expected_form: UnquoteForm::Splice,
+            },
+            // substitute Unquote (substitute-only path) — uses resolve_binding
+            Case {
+                src: "(defmacro w (x) `(list ,xs)) (w 1)",
+                expander: Expander::new_substitute_only,
+                expected_form: UnquoteForm::Unquote,
+            },
+            // substitute UnquoteSplice-in-list (substitute-only path) — uses resolve_binding
+            Case {
+                src: "(defmacro call (f &rest args) `(,f ,@argz)) (call foo a b)",
+                expander: Expander::new_substitute_only,
+                expected_form: UnquoteForm::Splice,
+            },
+        ];
+        for case in cases {
+            let mut e = (case.expander)();
+            let err = e
+                .expand_program(read(case.src).unwrap())
+                .expect_err("unbound template var must error end-to-end");
+            match err {
+                LispError::UnboundTemplateVar { prefix, .. } => {
+                    assert_eq!(prefix, case.expected_form, "for src: {}", case.src);
+                }
+                other => panic!(
+                    "expected UnboundTemplateVar for {}, got: {other:?}",
+                    case.src
+                ),
+            }
+        }
     }
 
     // ── Splice outside list: structural variant + path-uniform rejection ─

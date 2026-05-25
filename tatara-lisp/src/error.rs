@@ -2178,16 +2178,35 @@ fn unbound_hint_suffix(prefix: UnquoteForm, hint: Option<&str>) -> String {
     }
 }
 
+/// Renders the parenthetical "unknown X among a known set" suffix shared by
+/// the kwarg gate (`UnknownKwarg`) and the registry gate
+/// (`UnknownDomainKeyword`). `hint` is the already-formatted near-miss
+/// suggestion (`:foo` for kwargs, `(foo ...)` for registry keywords); `body`
+/// is the already-formatted candidate clause (`allowed: :a, :b` /
+/// `registered: x, y` / `no domains registered`).
+///
+/// The wrapping skeleton — the leading space, the parens, and the
+/// `did you mean {hint}?; ` prefix when a hint is present — is owned HERE so
+/// the two gates whose docs declare they "share ONE structural shape" cannot
+/// drift apart in that wrapping. Each gate keeps only its own hint-formatting
+/// and body-construction; the parenthetical skeleton is one primitive.
+fn unknown_among_suffix(hint: Option<&str>, body: &str) -> String {
+    match hint {
+        Some(h) => format!(" (did you mean {h}?; {body})"),
+        None => format!(" ({body})"),
+    }
+}
+
 fn unknown_kwarg_suffix(hint: Option<&str>, allowed: &[String]) -> String {
     let allowed_list = allowed
         .iter()
         .map(|s| format!(":{s}"))
         .collect::<Vec<_>>()
         .join(", ");
-    match hint {
-        Some(h) => format!(" (did you mean :{h}?; allowed: {allowed_list})"),
-        None => format!(" (allowed: {allowed_list})"),
-    }
+    unknown_among_suffix(
+        hint.map(|h| format!(":{h}")).as_deref(),
+        &format!("allowed: {allowed_list}"),
+    )
 }
 
 fn rest_param_missing_name_suffix(rest_position: usize, got: Option<&str>) -> String {
@@ -2205,17 +2224,12 @@ fn missing_head_symbol_suffix(got: Option<&str>) -> String {
 }
 
 fn unknown_domain_keyword_suffix(hint: Option<&str>, registered: &[String]) -> String {
-    if registered.is_empty() {
-        return match hint {
-            Some(h) => format!(" (did you mean ({h} ...)?; no domains registered)"),
-            None => " (no domains registered)".into(),
-        };
-    }
-    let registered_list = registered.join(", ");
-    match hint {
-        Some(h) => format!(" (did you mean ({h} ...)?; registered: {registered_list})"),
-        None => format!(" (registered: {registered_list})"),
-    }
+    let body = if registered.is_empty() {
+        "no domains registered".to_string()
+    } else {
+        format!("registered: {}", registered.join(", "))
+    };
+    unknown_among_suffix(hint.map(|h| format!("({h} ...)")).as_deref(), &body)
 }
 
 impl LispError {
@@ -2271,7 +2285,9 @@ impl LispError {
 #[cfg(test)]
 mod tests {
     use super::{
-        ExpectedKwargShape, KwargPath, LispError, MacroDefHead, SexpShape, SexpWitness, UnquoteForm,
+        unknown_among_suffix, unknown_domain_keyword_suffix, unknown_kwarg_suffix,
+        ExpectedKwargShape, KwargPath, LispError, MacroDefHead, SexpShape, SexpWitness,
+        UnquoteForm,
     };
 
     #[test]
@@ -3208,6 +3224,57 @@ mod tests {
             "unknown domain keyword: (defalert-policiy ...) \
              (did you mean (defalert-policy ...)?; \
              registered: defalert-policy, defprocess-spec)"
+        );
+    }
+
+    #[test]
+    fn unknown_among_suffix_owns_the_parenthetical_wrapping_skeleton() {
+        // The Some-arm owns the leading space, the parens, and the
+        // `did you mean {hint}?; {body}` join; the None-arm owns the leading
+        // space and the parens around the body alone. Both gates whose docs
+        // declare they "share ONE structural shape" wrap through this
+        // skeleton, so a regression that drifts the wrapping fails here.
+        assert_eq!(
+            unknown_among_suffix(Some(":threshold"), "allowed: :name, :threshold"),
+            " (did you mean :threshold?; allowed: :name, :threshold)"
+        );
+        assert_eq!(
+            unknown_among_suffix(None, "allowed: :name, :threshold"),
+            " (allowed: :name, :threshold)"
+        );
+    }
+
+    #[test]
+    fn unknown_kwarg_and_domain_suffixes_share_one_wrapping_primitive() {
+        // Both gates delegate their parenthetical wrapping to
+        // `unknown_among_suffix`; only the hint-formatting (`:foo` vs
+        // `(foo ...)`) and the body-construction (`allowed:` vs `registered:`
+        // / `no domains registered`) stay gate-specific. Pinning that each
+        // gate's output EQUALS the primitive applied with that gate's
+        // formatted hint + body means a re-inlined divergent skeleton in
+        // either gate fails-loudly. Covers all four arms: kwarg-with-hint,
+        // kwarg-without-hint, domain-with-hint, domain-empty-registry.
+        let allowed = vec!["name".to_string(), "threshold".to_string()];
+        assert_eq!(
+            unknown_kwarg_suffix(Some("threshold"), &allowed),
+            unknown_among_suffix(Some(":threshold"), "allowed: :name, :threshold")
+        );
+        assert_eq!(
+            unknown_kwarg_suffix(None, &allowed),
+            unknown_among_suffix(None, "allowed: :name, :threshold")
+        );
+
+        let registered = vec!["defmonitor".to_string(), "defnotify".to_string()];
+        assert_eq!(
+            unknown_domain_keyword_suffix(Some("defmonitor"), &registered),
+            unknown_among_suffix(
+                Some("(defmonitor ...)"),
+                "registered: defmonitor, defnotify"
+            )
+        );
+        assert_eq!(
+            unknown_domain_keyword_suffix(None, &[]),
+            unknown_among_suffix(None, "no domains registered")
         );
     }
 

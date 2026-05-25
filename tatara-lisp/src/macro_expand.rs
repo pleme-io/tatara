@@ -324,6 +324,62 @@ fn contains_unquote(node: &Sexp) -> bool {
     }
 }
 
+/// Splice a resolved template value into an in-progress list builder —
+/// the SHARED coercion both expansion strategies apply once `,@name`'s
+/// gate-1 (must-be-a-symbol) and gate-2 (must-be-bound-in-scope) have
+/// resolved the bound value. ONE named primitive the bytecode path
+/// (`apply_compiled`'s `TemplateOp::Splice` arm) AND the substitute path
+/// (`substitute`'s list-inner `Sexp::UnquoteSplice` arm) share. Before
+/// this lift the three-arm coercion —
+///
+/// ```ignore
+/// match value {
+///     Sexp::List(items) => builder.extend(items.iter().cloned()),
+///     Sexp::Nil         => {}
+///     other             => builder.push(other.clone()),
+/// }
+/// ```
+///
+/// — was inlined at BOTH sites; the splice RESULT semantics (the last
+/// inline-duplicated piece of the splice path after the prior runs lifted
+/// gate-1, gate-2, and their composition) lived in two places that MUST
+/// agree. After this lift the coercion lives in ONE function, so a
+/// regression that drifts one strategy's splice posture from the other —
+/// e.g. changing the `Sexp::Nil` arm to push an empty list at the
+/// bytecode path but not the substitute path, or coercing a non-list
+/// scalar differently across the two strategies — becomes structurally
+/// impossible: there is exactly one implementation both strategies call.
+///
+/// The coercion's three arms ARE the no-evaluator template language's
+/// splice contract: a bound LIST flattens its elements into the builder
+/// (the canonical splice), a bound NIL contributes nothing (splicing the
+/// empty list), and any other bound value splices as a single element (a
+/// scalar `,@x` degrades to `,x` rather than erroring — invariant 2's
+/// "free middle" lets the macro author rely on this without a
+/// mid-rewrite type check; the typed-exit gate re-validates the
+/// assembled form). Naming the contract once gives a future gate-3
+/// (typed-shape enforcement on bound splice targets) ONE site to wrap
+/// rather than two inline arms to keep in lockstep.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the two
+/// expansion strategies MUST produce identical output for the same
+/// (macro, args) pair, and naming the splice coercion once makes that
+/// per-strategy agreement structural rather than a two-site discipline
+/// the `expansion_layers_agree_on_output_and_cache_wins` benchmark only
+/// observes after the fact. THEORY.md §V.1 — knowable platform; the
+/// splice RESULT semantics becomes a NAMED primitive authoring tools and
+/// future runs bind to. THEORY.md §VI.1 — generation over composition;
+/// the two-site coercion is lifted to ONE function, closing the last
+/// inline-duplicated piece of the splice path the prior runs' gate lifts
+/// (02173dc gate-1, 68da647 gate-2, b456f1f composition) left behind.
+fn splice_value_into(builder: &mut Vec<Sexp>, value: &Sexp) {
+    match value {
+        Sexp::List(items) => builder.extend(items.iter().cloned()),
+        Sexp::Nil => {}
+        other => builder.push(other.clone()),
+    }
+}
+
 /// Promote the previously `LispError::Compile`-shaped helper into the
 /// structural `LispError::TemplateInvariant { macro_name, kind }` variant.
 /// The four reachable bytecode-runtime invariant violations in
@@ -416,11 +472,7 @@ fn apply_compiled(
                         TemplateInvariantKind::SpliceBadIndex(*idx),
                     )
                 })?;
-                match v {
-                    Sexp::List(items) => stack.last_mut().unwrap().extend(items.iter().cloned()),
-                    Sexp::Nil => {}
-                    other => stack.last_mut().unwrap().push(other.clone()),
-                }
+                splice_value_into(stack.last_mut().unwrap(), v);
             }
             TemplateOp::BeginList => stack.push(Vec::new()),
             TemplateOp::EndList => {
@@ -541,11 +593,7 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
             for item in items {
                 if let Sexp::UnquoteSplice(inner) = item {
                     let val = resolve_unquote_in_bindings(inner, bindings, UnquoteForm::Splice)?;
-                    match val {
-                        Sexp::List(children) => out.extend(children.iter().cloned()),
-                        Sexp::Nil => {}
-                        other => out.push(other.clone()),
-                    }
+                    splice_value_into(&mut out, val);
                 } else {
                     out.push(substitute(item, bindings)?);
                 }
@@ -2517,6 +2565,70 @@ mod tests {
         let out_byte = bytecode.expand_program(read(src).unwrap()).unwrap();
         assert_eq!(out_subst, out_byte);
         assert_eq!(out_subst[0], parse("(outer 1 2)"));
+    }
+
+    // ── splice_value_into: the shared splice-result coercion ──
+
+    #[test]
+    fn splice_value_into_list_flattens_elements_into_builder() {
+        // The canonical splice arm: a bound LIST contributes its elements
+        // in order, preserving anything already in the builder.
+        let mut builder = vec![Sexp::symbol("outer")];
+        splice_value_into(&mut builder, &Sexp::List(vec![Sexp::int(1), Sexp::int(2)]));
+        assert_eq!(
+            builder,
+            vec![Sexp::symbol("outer"), Sexp::int(1), Sexp::int(2)]
+        );
+    }
+
+    #[test]
+    fn splice_value_into_nil_is_a_noop() {
+        // Splicing the empty list (`Sexp::Nil`) contributes nothing —
+        // the builder is unchanged.
+        let mut builder = vec![Sexp::symbol("outer")];
+        splice_value_into(&mut builder, &Sexp::Nil);
+        assert_eq!(builder, vec![Sexp::symbol("outer")]);
+    }
+
+    #[test]
+    fn splice_value_into_scalar_pushes_single_element() {
+        // A non-list, non-nil bound value degrades `,@x` to `,x`: it
+        // splices as exactly one element. Pins the "free middle" coercion
+        // every scalar shape (int, keyword, …) shares.
+        let mut builder = vec![Sexp::symbol("outer")];
+        splice_value_into(&mut builder, &Sexp::int(5));
+        assert_eq!(builder, vec![Sexp::symbol("outer"), Sexp::int(5)]);
+        let mut other: Vec<Sexp> = vec![];
+        splice_value_into(&mut other, &Sexp::keyword("k"));
+        assert_eq!(other, vec![Sexp::keyword("k")]);
+    }
+
+    #[test]
+    fn splice_of_non_list_value_coerces_identically_under_both_paths() {
+        // The point of the lift: the NON-list splice arms (scalar → single
+        // element, nil → nothing) coerce identically under the substitute
+        // AND bytecode strategies. Before the coercion was lifted to ONE
+        // primitive these two arms lived inline at two sites; this test
+        // pins that the two strategies cannot drift on the non-list arms.
+        let scalar = "(defmacro f (x) `(outer ,@x)) (f 5)";
+        let empty = "(defmacro g (x) `(outer ,@x)) (g ())";
+        for src in [scalar, empty] {
+            let mut subst = Expander::new_substitute_only();
+            let mut bytecode = Expander::new();
+            let out_subst = subst.expand_program(read(src).unwrap()).unwrap();
+            let out_byte = bytecode.expand_program(read(src).unwrap()).unwrap();
+            assert_eq!(out_subst, out_byte, "strategies must agree for {src}");
+        }
+        let mut e = Expander::new();
+        assert_eq!(
+            e.expand_program(read(scalar).unwrap()).unwrap()[0],
+            parse("(outer 5)")
+        );
+        let mut e2 = Expander::new();
+        assert_eq!(
+            e2.expand_program(read(empty).unwrap()).unwrap()[0],
+            parse("(outer)")
+        );
     }
 
     // ── Missing macro arg: structural variant + path-uniform rejection ──

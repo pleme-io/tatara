@@ -2178,6 +2178,29 @@ fn unbound_hint_suffix(prefix: UnquoteForm, hint: Option<&str>) -> String {
     }
 }
 
+/// Renders the bare parenthetical suffix shared by EVERY `*_suffix`
+/// diagnostic helper: a single leading space, an open paren, the
+/// already-formatted `body`, and a close paren — ` ({body})`.
+///
+/// This is the lowest layer of the suffix-wrapping algebra. Four helpers
+/// append a parenthetical structural-detail clause to a `#[error(...)]`
+/// prefix and ALL FOUR share this exact skeleton — the leading space and the
+/// parens:
+///   * `unknown_among_suffix` wraps a `did you mean …?; …` / bare candidate
+///     clause (the kwarg + registry gates);
+///   * `rest_param_missing_name_suffix` wraps the `rest marker at position …`
+///     clause;
+///   * `missing_head_symbol_suffix` wraps the `got …` / `empty list` clause.
+///
+/// Owning the leading-space-and-parens HERE means it cannot drift across the
+/// four renderers: a regression that drops the leading space at one site,
+/// moves a paren, or doubles a space is structurally impossible because there
+/// is exactly ONE wrapping implementation. Each helper keeps ONLY its own
+/// body-construction and binds it to this primitive.
+fn paren_suffix(body: &str) -> String {
+    format!(" ({body})")
+}
+
 /// Renders the parenthetical "unknown X among a known set" suffix shared by
 /// the kwarg gate (`UnknownKwarg`) and the registry gate
 /// (`UnknownDomainKeyword`). `hint` is the already-formatted near-miss
@@ -2185,15 +2208,15 @@ fn unbound_hint_suffix(prefix: UnquoteForm, hint: Option<&str>) -> String {
 /// is the already-formatted candidate clause (`allowed: :a, :b` /
 /// `registered: x, y` / `no domains registered`).
 ///
-/// The wrapping skeleton — the leading space, the parens, and the
-/// `did you mean {hint}?; ` prefix when a hint is present — is owned HERE so
-/// the two gates whose docs declare they "share ONE structural shape" cannot
-/// drift apart in that wrapping. Each gate keeps only its own hint-formatting
-/// and body-construction; the parenthetical skeleton is one primitive.
+/// This layer owns ONLY the `did you mean {hint}?; ` join when a hint is
+/// present, so the two gates whose docs declare they "share ONE structural
+/// shape" cannot drift apart in that join. The bare-parenthetical wrapping —
+/// the leading space and the parens — is delegated to `paren_suffix`, the one
+/// skeleton every `*_suffix` helper binds to.
 fn unknown_among_suffix(hint: Option<&str>, body: &str) -> String {
     match hint {
-        Some(h) => format!(" (did you mean {h}?; {body})"),
-        None => format!(" ({body})"),
+        Some(h) => paren_suffix(&format!("did you mean {h}?; {body}")),
+        None => paren_suffix(body),
     }
 }
 
@@ -2210,17 +2233,19 @@ fn unknown_kwarg_suffix(hint: Option<&str>, allowed: &[String]) -> String {
 }
 
 fn rest_param_missing_name_suffix(rest_position: usize, got: Option<&str>) -> String {
-    match got {
-        Some(g) => format!(" (rest marker at position {rest_position}, got {g})"),
-        None => format!(" (rest marker at position {rest_position}, none provided)"),
-    }
+    let body = match got {
+        Some(g) => format!("rest marker at position {rest_position}, got {g}"),
+        None => format!("rest marker at position {rest_position}, none provided"),
+    };
+    paren_suffix(&body)
 }
 
 fn missing_head_symbol_suffix(got: Option<&str>) -> String {
-    match got {
-        Some(g) => format!(" (got {g})"),
-        None => " (empty list)".into(),
-    }
+    let body = match got {
+        Some(g) => format!("got {g}"),
+        None => "empty list".to_string(),
+    };
+    paren_suffix(&body)
 }
 
 fn unknown_domain_keyword_suffix(hint: Option<&str>, registered: &[String]) -> String {
@@ -2285,6 +2310,7 @@ impl LispError {
 #[cfg(test)]
 mod tests {
     use super::{
+        missing_head_symbol_suffix, paren_suffix, rest_param_missing_name_suffix,
         unknown_among_suffix, unknown_domain_keyword_suffix, unknown_kwarg_suffix,
         ExpectedKwargShape, KwargPath, LispError, MacroDefHead, SexpShape, SexpWitness,
         UnquoteForm,
@@ -3229,11 +3255,12 @@ mod tests {
 
     #[test]
     fn unknown_among_suffix_owns_the_parenthetical_wrapping_skeleton() {
-        // The Some-arm owns the leading space, the parens, and the
-        // `did you mean {hint}?; {body}` join; the None-arm owns the leading
-        // space and the parens around the body alone. Both gates whose docs
-        // declare they "share ONE structural shape" wrap through this
-        // skeleton, so a regression that drifts the wrapping fails here.
+        // The Some-arm owns the `did you mean {hint}?; {body}` join; both arms
+        // delegate the bare leading-space-and-parens to `paren_suffix`. Both
+        // gates whose docs declare they "share ONE structural shape" wrap
+        // through this skeleton, so a regression that drifts the join fails
+        // here; one that drifts the bare wrapping fails in
+        // `every_suffix_helper_wraps_through_one_paren_primitive`.
         assert_eq!(
             unknown_among_suffix(Some(":threshold"), "allowed: :name, :threshold"),
             " (did you mean :threshold?; allowed: :name, :threshold)"
@@ -3242,6 +3269,49 @@ mod tests {
             unknown_among_suffix(None, "allowed: :name, :threshold"),
             " (allowed: :name, :threshold)"
         );
+    }
+
+    #[test]
+    fn paren_suffix_owns_the_bare_parenthetical_skeleton() {
+        // The lowest layer of the suffix-wrapping algebra: one leading space,
+        // open paren, body, close paren. A regression that drops the leading
+        // space, doubles it, or moves a paren fails here.
+        assert_eq!(paren_suffix("got 5"), " (got 5)");
+        assert_eq!(paren_suffix(""), " ()");
+    }
+
+    #[test]
+    fn every_suffix_helper_wraps_through_one_paren_primitive() {
+        // All four `*_suffix` helpers delegate their bare ` (…)` wrapping to
+        // `paren_suffix`; only their body-construction stays helper-specific.
+        // Pinning that each helper's output EQUALS `paren_suffix` applied with
+        // that helper's body means a re-inlined divergent skeleton in ANY of
+        // the four (e.g. a dropped leading space, a moved paren) fails-loudly.
+        // Covers both arms of all four helpers.
+
+        // unknown_among_suffix — the `did you mean …?; …` join layer.
+        assert_eq!(
+            unknown_among_suffix(Some(":t"), "allowed: :name"),
+            paren_suffix("did you mean :t?; allowed: :name")
+        );
+        assert_eq!(
+            unknown_among_suffix(None, "allowed: :name"),
+            paren_suffix("allowed: :name")
+        );
+
+        // rest_param_missing_name_suffix — the `rest marker at position …` body.
+        assert_eq!(
+            rest_param_missing_name_suffix(1, Some("5")),
+            paren_suffix("rest marker at position 1, got 5")
+        );
+        assert_eq!(
+            rest_param_missing_name_suffix(1, None),
+            paren_suffix("rest marker at position 1, none provided")
+        );
+
+        // missing_head_symbol_suffix — the `got …` / `empty list` body.
+        assert_eq!(missing_head_symbol_suffix(Some("5")), paren_suffix("got 5"));
+        assert_eq!(missing_head_symbol_suffix(None), paren_suffix("empty list"));
     }
 
     #[test]

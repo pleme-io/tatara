@@ -802,6 +802,78 @@ where
     }
 }
 
+/// List-typed kwarg extractor — fronts every public `extract_*` helper
+/// that reads a kwarg as a `Sexp::List` and projects each element to an
+/// owned `T`. The two byte-identical inline skeletons —
+///
+/// ```ignore
+/// let Some(v) = kw.get(key).copied() else { return Ok(Vec::new()) };
+/// let list = v.as_list().ok_or_else(|| type_err(key, <list-shape>, v))?;
+/// list.iter().enumerate().map(<per-item>).collect()
+/// ```
+///
+/// — `extract_string_list` (each item projected via `as_string`, per-item
+/// failure via `type_err_at`) and `extract_vec_via_serde` (each item via
+/// `from_value_with_path`, per-item failure carrying `KwargPath::item`) —
+/// collapse to ONE generic primitive parameterized by the outer-shape
+/// label `list_shape: ExpectedKwargShape` and the per-element projection
+/// `item: FnMut(usize, &Sexp) -> Result<T>`. The skeleton owns the three
+/// fixed decisions both extractors share: absent kwarg → `Ok(Vec::new())`
+/// (an absent list kwarg is the empty list, never an error — same posture
+/// `extract_optional_atom` takes for absent atoms); present-but-not-a-list
+/// → `type_err(key, list_shape, v)` (the outer-shape gate, labeled by the
+/// caller-supplied `list_shape` so `ListOfStrings` vs. `List` stays a
+/// per-caller decision, not baked into the skeleton); and the
+/// `iter().enumerate().map(item).collect()` per-element walk that threads
+/// the element index into the projection so per-item diagnostics can name
+/// `:<key>[<idx>]` without re-counting from the source.
+///
+/// This is the list-family sibling of `extract_atom` / `extract_optional_atom`
+/// (the atom-family generic projection primitives). Together the three close
+/// every distinct typed-kwarg extractor's outer skeleton: required atom,
+/// optional atom, and list. The per-element projection is `FnMut(usize,
+/// &Sexp) -> Result<T>` — generic over `T` so it handles both the owned-
+/// `String` (`extract_string_list`) and `DeserializeOwned`-`T`
+/// (`extract_vec_via_serde`) element shapes uniformly, and threading the
+/// `usize` index lets the projection construct the item-keyed
+/// `KwargPath::Item { key, idx }` / `type_err_at` path the per-item gate
+/// reports through.
+///
+/// Future structural promotion of the outer not-a-list diagnostic, or a
+/// move to a fallible-streaming collect that short-circuits on the first
+/// bad element with its position, lands at ONE site inside this helper —
+/// both public list extractors pick up the upgrade mechanically, same
+/// property `extract_atom` gives the four atom extractors.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// list-typed extractor skeleton recurs at two sites (the PRIME-DIRECTIVE
+/// ≥2 trigger) and is lifted to one owner, exactly as the atom skeleton was.
+/// THEORY.md §V.1 — knowable platform; the list-kwarg outer gate + per-item
+/// path live in ONE primitive so authoring surfaces (`tatara-check`, REPL,
+/// LSP) pick up diagnostic-shape promotions once, not per-extractor.
+/// THEORY.md §II.1 invariant 1 — typed entry; the list extractor IS the
+/// rust-level typed-entry gate for list-shaped kwargs, and naming its single
+/// skeleton lifts the gate from two-site duplication to one function the
+/// substrate's diagnostic promotions hang off of.
+fn extract_list<T, F>(
+    kw: &Kwargs<'_>,
+    key: &str,
+    list_shape: ExpectedKwargShape,
+    mut item: F,
+) -> Result<Vec<T>>
+where
+    F: FnMut(usize, &Sexp) -> Result<T>,
+{
+    let Some(v) = kw.get(key).copied() else {
+        return Ok(Vec::new());
+    };
+    let list = v.as_list().ok_or_else(|| type_err(key, list_shape, v))?;
+    list.iter()
+        .enumerate()
+        .map(|(idx, e)| item(idx, e))
+        .collect()
+}
+
 pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
     extract_atom(kw, key, ExpectedKwargShape::String, Sexp::as_string)
 }
@@ -811,20 +883,11 @@ pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Opti
 }
 
 pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
-    let Some(v) = kw.get(key).copied() else {
-        return Ok(vec![]);
-    };
-    let list = v
-        .as_list()
-        .ok_or_else(|| type_err(key, ExpectedKwargShape::ListOfStrings, v))?;
-    list.iter()
-        .enumerate()
-        .map(|(idx, s)| {
-            s.as_string()
-                .map(String::from)
-                .ok_or_else(|| type_err_at(key, idx, ExpectedKwargShape::String, s))
-        })
-        .collect()
+    extract_list(kw, key, ExpectedKwargShape::ListOfStrings, |idx, s| {
+        s.as_string()
+            .map(String::from)
+            .ok_or_else(|| type_err_at(key, idx, ExpectedKwargShape::String, s))
+    })
 }
 
 pub fn extract_int(kw: &Kwargs<'_>, key: &str) -> Result<i64> {
@@ -981,16 +1044,9 @@ pub fn extract_optional_via_serde<T: DeserializeOwned>(
 /// with a `KwargPath::Item { key, idx }` path slot, naming both the outer
 /// kwarg AND the failing item index in any per-item rejection.
 pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Result<Vec<T>> {
-    let Some(sexp) = kw.get(key).copied() else {
-        return Ok(Vec::new());
-    };
-    let list = sexp
-        .as_list()
-        .ok_or_else(|| type_err(key, ExpectedKwargShape::List, sexp))?;
-    list.iter()
-        .enumerate()
-        .map(|(idx, item)| from_value_with_path(item, KwargPath::item(key, idx)))
-        .collect()
+    extract_list(kw, key, ExpectedKwargShape::List, |idx, item| {
+        from_value_with_path(item, KwargPath::item(key, idx))
+    })
 }
 
 // ── Domain registry (runtime-registered, callable by keyword) ───────
@@ -4814,5 +4870,145 @@ mod tests {
         assert_eq!(spec.threshold, 0.99);
         assert_eq!(spec.window_seconds, Some(300));
         assert_eq!(spec.enabled, Some(true));
+    }
+
+    // ── extract_list: list-typed-kwarg dedup lift ────────────────────
+    //
+    // `extract_string_list` (each item via `as_string` + `type_err_at`)
+    // and `extract_vec_via_serde` (each item via `from_value_with_path`
+    // carrying `KwargPath::item`) used to inline the SAME list-extractor
+    // skeleton — absent → empty vec, present-but-not-a-list → `type_err`,
+    // `iter().enumerate().map(per-item).collect()`. The lift collapses
+    // both to ONE generic primitive (`extract_list`) parameterized by the
+    // outer-shape label + the per-element projection, the list-family
+    // sibling of `extract_atom` / `extract_optional_atom`.
+    //
+    // The tests below pin the three fixed decisions the skeleton owns:
+    // (a) absent kwarg short-circuits to `Ok(Vec::new())` BEFORE any
+    // per-item work (the projection is a `panic!` proving it never runs);
+    // (b) present-but-not-a-list routes through `type_err` with the
+    // CALLER-supplied `list_shape` (tested with `ListOfStrings`, NOT the
+    // skeleton-baked `List`, so a regression hardcoding the shape fails
+    // loudly) and the per-item projection again never runs; (c) the
+    // per-element walk threads the 0-based `enumerate` index into the
+    // projection in order; (d) a per-item rejection short-circuits the
+    // collect at the FIRST failing element with that element's index in
+    // the `KwargPath::Item` slot. The existing `extract_string_list` /
+    // `extract_vec_via_serde` suites are the path-uniformity guards
+    // proving both public extractors route through it with zero drift.
+
+    #[test]
+    fn extract_list_returns_empty_vec_for_absent_kwarg() {
+        // Absent list kwarg is the empty list, never an error — same
+        // posture `extract_optional_atom` takes for absent atoms. The
+        // `panic!` projection proves the absent arm short-circuits
+        // BEFORE any per-item work: a regression that walked a (missing)
+        // list before the absent check would fire the panic.
+        let kw: Kwargs<'_> = HashMap::new();
+        let out: Vec<i64> = extract_list(&kw, "absent", ExpectedKwargShape::List, |_, _| {
+            panic!("per-item projection must not run for an absent list kwarg")
+        })
+        .expect("absent list kwarg must succeed with an empty vec");
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn extract_list_emits_type_err_with_caller_supplied_list_shape() {
+        // Present-but-not-a-list routes through the outer-shape gate with
+        // the CALLER's `list_shape` (`ListOfStrings`), not a skeleton-baked
+        // `List` — a regression hardcoding the shape fails here. The
+        // `panic!` projection also proves the per-item walk never starts
+        // when the outer gate rejects.
+        let scalar = Sexp::int(5);
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("tags".to_string(), &scalar);
+        let err =
+            extract_list::<String, _>(&kw, "tags", ExpectedKwargShape::ListOfStrings, |_, _| {
+                panic!("per-item projection must not run when the outer shape gate fails")
+            })
+            .expect_err("present-but-not-a-list kwarg must error");
+        match err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, crate::error::KwargPath::Named("tags".into()));
+                assert_eq!(expected, ExpectedKwargShape::ListOfStrings);
+                assert_eq!(got, SexpShape::Int);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn extract_list_threads_enumerate_index_into_projection_in_order() {
+        // The per-element walk threads the 0-based `enumerate` index into
+        // the projection and collects results in order. Pin both the index
+        // sequence (0, 1, 2) and the element order so a regression that
+        // dropped `.enumerate()` or reordered the walk fails loudly.
+        let items = Sexp::List(vec![
+            Sexp::string("a"),
+            Sexp::string("b"),
+            Sexp::string("c"),
+        ]);
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("xs".to_string(), &items);
+        let out: Vec<(usize, String)> =
+            extract_list(&kw, "xs", ExpectedKwargShape::List, |idx, e| {
+                Ok((
+                    idx,
+                    e.as_string().expect("test items are strings").to_string(),
+                ))
+            })
+            .expect("well-formed list must collect");
+        assert_eq!(
+            out,
+            vec![
+                (0, "a".to_string()),
+                (1, "b".to_string()),
+                (2, "c".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn extract_list_short_circuits_at_first_failing_item_with_its_index() {
+        // A per-item rejection short-circuits the collect at the FIRST
+        // failing element, carrying that element's index in the
+        // `KwargPath::Item` slot. The third element (`"never"`) is a valid
+        // string but must never be reached — index 1 (the int) fails first.
+        let items = Sexp::List(vec![
+            Sexp::string("ok"),
+            Sexp::int(9),
+            Sexp::string("never"),
+        ]);
+        let mut kw: Kwargs<'_> = HashMap::new();
+        kw.insert("xs".to_string(), &items);
+        let err =
+            extract_list::<String, _>(&kw, "xs", ExpectedKwargShape::ListOfStrings, |idx, e| {
+                e.as_string()
+                    .map(String::from)
+                    .ok_or_else(|| type_err_at("xs", idx, ExpectedKwargShape::String, e))
+            })
+            .expect_err("a non-string item must error");
+        match err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(
+                    form,
+                    crate::error::KwargPath::Item {
+                        key: "xs".into(),
+                        idx: 1,
+                    }
+                );
+                assert_eq!(expected, ExpectedKwargShape::String);
+                assert_eq!(got, SexpShape::Int);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
     }
 }

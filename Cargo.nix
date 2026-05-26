@@ -6708,7 +6708,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/egaku";
           rev = "a6dc7913a0690ff4c6a24636ce58baac7ae16cba";
-          sha256 = "sha256-6I8KsEQgxrFYpGY/PnvpcxXO6XY91oAx7i5Ej0vQPsM=";
+          sha256 = "1hrys15qyi1fxqqq1mixfvlww5bkx5xkwgv6licb3ii08jq0m3z8";
         };
         dependencies = [
           {
@@ -8244,7 +8244,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/shikumi";
           rev = "22f29fd7f7c10326cafdb583f9c5f3e7d0425cc1";
-          sha256 = "sha256-TQFT66F2O9AH1MjdkaQsrbDAS1qARzDpe8lemWhba/4=";
+          sha256 = "1zkbbdl9jpn9gglk0iw0b95w1c5d5jj93pf8sh3x0fvnl7mm60ad";
         };
         dependencies = [
           {
@@ -8315,7 +8315,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/shikumi";
           rev = "22f29fd7f7c10326cafdb583f9c5f3e7d0425cc1";
-          sha256 = "sha256-TQFT66F2O9AH1MjdkaQsrbDAS1qARzDpe8lemWhba/4=";
+          sha256 = "1zkbbdl9jpn9gglk0iw0b95w1c5d5jj93pf8sh3x0fvnl7mm60ad";
         };
         dependencies = [
           {
@@ -9541,7 +9541,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/iac-forge";
           rev = "a9d52c124d2c1bb2ee59d162baecc870d114a946";
-          sha256 = "13vcl1m13fjpwhv9syalcz49g3jyymshj928gpl2ld33s10400z9";
+          sha256 = "14pp3c858w784m5p15yfmqx068v6171j34wa9rvxiv4xnmkgia7c";
         };
         libName = "iac_forge";
         dependencies = [
@@ -10634,7 +10634,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/kasou";
           rev = "be7fb2f803379318a23a6db6daa772e7eb59d12f";
-          sha256 = "sha256-AyTlAC5avN+pCfPjP0i89TXgfjSaxAl4m1sO5iwR7KQ=";
+          sha256 = "197c24nfc3jvkdw0ki4s6izf0dgmpi43zqzk16lxzg2s5q0fa903";
         };
         dependencies = [
           {
@@ -11712,7 +11712,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/meimei";
           rev = "419190adc489a1da8ff89aea6ef2a6fe399b0e92";
-          sha256 = "1zqlb51idmprjy411fgw4xhj4r3zqqyi20vbp78pbz80pgrdz9my";
+          sha256 = "1mn417sljhpy03faal04lkz81vcmzsg9yrvybwjsbka0sshsizfl";
         };
 
       };
@@ -13286,7 +13286,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/openapi-forge";
           rev = "8e3aeb281650430c215d2a6283660a980a292e35";
-          sha256 = "00rd9nfgj3x4mr1yc1d7f3jigw0qkyi0hil0r57hkapw1l62jn6i";
+          sha256 = "0l6sf49wqhcywk6w8317fhmla6kwnqgwdfw5xld6hj1wp32xpwg3";
         };
         libName = "openapi_forge";
         dependencies = [
@@ -16566,7 +16566,7 @@ rec {
       };
       "ro" = rec {
         crateName = "ro";
-        version = "0.1.0";
+        version = "0.1.1";
         edition = "2024";
         crateBin = [
           {
@@ -17795,7 +17795,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/sekkei";
           rev = "f76a1be65b4ca542e8c9f4ff21dc56d3fd5ff752";
-          sha256 = "08faq46xbpngdm3whmkn2342zq2abf467xbibgksi3cdjd9wi6sb";
+          sha256 = "1wyyx0maz6dajlz138ca3rbfvax5iwx7509imimgq1rnvhzdmpqv";
         };
         dependencies = [
           {
@@ -19191,7 +19191,7 @@ rec {
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/takumi";
           rev = "ff9088035117675fc1d0562e2e16a7fd13ace9a6";
-          sha256 = "10w46fjaddbrch5i1s0swj3an95m0mdp0klf10r9qq86rq4vdslw";
+          sha256 = "1v09rk4qk7ab857jwsm3758zxjd6aqq919llklgrirj53wx2wwf5";
         };
         dependencies = [
           {
@@ -19289,7 +19289,7 @@ rec {
       };
       "tatara-api" = rec {
         crateName = "tatara-api";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-api; };
         libName = "tatara_api";
@@ -19379,7 +19379,7 @@ rec {
       };
       "tatara-build-remote" = rec {
         crateName = "tatara-build-remote";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-build-remote; };
         libName = "tatara_build_remote";
@@ -19415,7 +19415,7 @@ rec {
       };
       "tatara-cli" = rec {
         crateName = "tatara-cli";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -19580,7 +19580,7 @@ rec {
       };
       "tatara-closed-loop-probe" = rec {
         crateName = "tatara-closed-loop-probe";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -19676,7 +19676,7 @@ rec {
       };
       "tatara-core" = rec {
         crateName = "tatara-core";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-core; };
         libName = "tatara_core";
@@ -19753,7 +19753,7 @@ rec {
       };
       "tatara-domains" = rec {
         crateName = "tatara-domains";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-domains; };
         libName = "tatara_domains";
@@ -19779,7 +19779,7 @@ rec {
       };
       "tatara-engine" = rec {
         crateName = "tatara-engine";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-engine; };
         libName = "tatara_engine";
@@ -19954,7 +19954,7 @@ rec {
       };
       "tatara-eval" = rec {
         crateName = "tatara-eval";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-eval; };
         libName = "tatara_eval";
@@ -19999,7 +19999,7 @@ rec {
       };
       "tatara-export-worker" = rec {
         crateName = "tatara-export-worker";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -20096,7 +20096,7 @@ rec {
       };
       "tatara-github-watcher" = rec {
         crateName = "tatara-github-watcher";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -20208,7 +20208,7 @@ rec {
       };
       "tatara-hospedeiro" = rec {
         crateName = "tatara-hospedeiro";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-hospedeiro; };
         libName = "tatara_hospedeiro";
@@ -20268,7 +20268,7 @@ rec {
       };
       "tatara-hvf" = rec {
         crateName = "tatara-hvf";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-hvf; };
         libName = "tatara_hvf";
@@ -20299,7 +20299,7 @@ rec {
       };
       "tatara-init" = rec {
         crateName = "tatara-init";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -20355,7 +20355,7 @@ rec {
       };
       "tatara-kube" = rec {
         crateName = "tatara-kube";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -20459,7 +20459,7 @@ rec {
       };
       "tatara-lattice" = rec {
         crateName = "tatara-lattice";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-lattice; };
         libName = "tatara_lattice";
@@ -20496,7 +20496,7 @@ rec {
       };
       "tatara-lisp" = rec {
         crateName = "tatara-lisp";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-lisp; };
         libName = "tatara_lisp";
@@ -20538,7 +20538,7 @@ rec {
       };
       "tatara-lisp-derive" = rec {
         crateName = "tatara-lisp-derive";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-lisp-derive; };
         procMacro = true;
@@ -20565,7 +20565,7 @@ rec {
       };
       "tatara-mcp" = rec {
         crateName = "tatara-mcp";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-mcp; };
         libName = "tatara_mcp";
@@ -20600,7 +20600,7 @@ rec {
       };
       "tatara-net" = rec {
         crateName = "tatara-net";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-net; };
         libName = "tatara_net";
@@ -20680,7 +20680,7 @@ rec {
       };
       "tatara-nix" = rec {
         crateName = "tatara-nix";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-nix; };
         libName = "tatara_nix";
@@ -20730,7 +20730,7 @@ rec {
       };
       "tatara-operator" = rec {
         crateName = "tatara-operator";
-        version = "0.1.0";
+        version = "0.1.1";
         edition = "2024";
         crateBin = [
           {
@@ -20843,7 +20843,7 @@ rec {
       };
       "tatara-os" = rec {
         crateName = "tatara-os";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-os; };
         libName = "tatara_os";
@@ -20899,7 +20899,7 @@ rec {
       };
       "tatara-pkgs" = rec {
         crateName = "tatara-pkgs";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-pkgs; };
         libName = "tatara_pkgs";
@@ -20943,7 +20943,7 @@ rec {
       };
       "tatara-pool-reconciler" = rec {
         crateName = "tatara-pool-reconciler";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -21060,7 +21060,7 @@ rec {
       };
       "tatara-process" = rec {
         crateName = "tatara-process";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -21149,7 +21149,7 @@ rec {
       };
       "tatara-reconciler" = rec {
         crateName = "tatara-reconciler";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -21292,7 +21292,7 @@ rec {
       };
       "tatara-terreiro" = rec {
         crateName = "tatara-terreiro";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -21364,7 +21364,7 @@ rec {
       };
       "tatara-testing" = rec {
         crateName = "tatara-testing";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-testing; };
         libName = "tatara_testing";
@@ -21423,7 +21423,7 @@ rec {
       };
       "tatara-ui" = rec {
         crateName = "tatara-ui";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-ui; };
         libName = "tatara_ui";
@@ -21474,7 +21474,7 @@ rec {
       };
       "tatara-vm" = rec {
         crateName = "tatara-vm";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         crateBin = [
           {
@@ -21549,7 +21549,7 @@ rec {
       };
       "tatara-wasm" = rec {
         crateName = "tatara-wasm";
-        version = "0.2.0";
+        version = "0.2.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./tatara-wasm; };
         libName = "tatara_wasm";

@@ -159,7 +159,7 @@ impl Expander {
         let Some(list) = form.as_list() else {
             return Ok(form.clone());
         };
-        if let Some(head) = list.first().and_then(|s| s.as_symbol()) {
+        if let Some(head) = form.head_symbol() {
             if let Some(def) = self.macros.get(head) {
                 let expanded = self.apply(def, &list[1..])?;
                 // Recurse — the expansion itself may contain more macro calls.
@@ -512,7 +512,7 @@ fn macro_def_from(form: &Sexp) -> Result<Option<MacroDef>> {
     let Some(list) = form.as_list() else {
         return Ok(None);
     };
-    let Some(head_str) = list.first().and_then(|s| s.as_symbol()) else {
+    let Some(head_str) = form.head_symbol() else {
         return Ok(None);
     };
     let Some(head) = MacroDefHead::from_keyword(head_str) else {

@@ -178,6 +178,36 @@ impl Sexp {
     pub fn as_symbol_or_string(&self) -> Option<&str> {
         self.as_symbol().or_else(|| self.as_string())
     }
+
+    /// The symbol in operator position — `Some(s)` iff this is a non-empty
+    /// list whose first element is a symbol (`(defpoint …)` → `Some("defpoint")`).
+    /// `None` for every other shape: a non-list (`foo`, `5`, `:kw`), the
+    /// empty list `()`, and a list whose head is not a symbol (`(5 …)`,
+    /// `(:kw …)`, `((nested) …)`).
+    ///
+    /// This is the *operator-position projection* — the structural query
+    /// every form-dispatch site in the substrate keys on: "what operator
+    /// does this form invoke?" Macroexpansion (`Expander::expand` looks up
+    /// the head against the macro table; `macro_def_from` reads it to
+    /// recognize a `defmacro` head) and the typed compilers
+    /// (`compile_typed` / `compile_named_from_forms` match it against
+    /// `T::KEYWORD`) all asked the same `self.as_list()?.first()?.as_symbol()`
+    /// question inline. Naming it once makes "operator position" a primitive
+    /// of the `Sexp` algebra rather than four byte-identical inline chains.
+    ///
+    /// This is the SOFT face of operator-position dispatch — it answers
+    /// "is this form an invocation of some operator?" and yields `None`
+    /// (skip / fall through) for everything that isn't, with no diagnostic.
+    /// Its STRICT sibling is `TataraDomain::compile_from_sexp`, which on a
+    /// matched-arity form distinguishes the empty-list and
+    /// present-but-not-a-symbol head sub-modes to emit a rich
+    /// `MissingHeadSymbol` rejection. The two are the dispatch (`head_symbol`)
+    /// and the gate (`compile_from_sexp`) faces of the same projection;
+    /// keeping both lets a site choose "skip silently" or "reject loudly"
+    /// without re-deriving the head.
+    pub fn head_symbol(&self) -> Option<&str> {
+        self.as_list()?.first()?.as_symbol()
+    }
 }
 
 impl fmt::Display for Sexp {
@@ -208,5 +238,103 @@ impl fmt::Display for Sexp {
             Self::Unquote(inner) => write!(f, ",{inner}"),
             Self::UnquoteSplice(inner) => write!(f, ",@{inner}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── head_symbol: the operator-position projection ───────────────────
+    //
+    // `head_symbol` lifts the `self.as_list()?.first()?.as_symbol()` chain
+    // that recurred at four soft-dispatch sites (compile.rs `compile_typed`
+    // + `compile_named_from_forms`, macro_expand.rs `Expander::expand` +
+    // `macro_def_from`) into ONE named query on the Sexp algebra. These
+    // tests pin its contract directly; the existing dispatch tests in
+    // compile.rs / macro_expand.rs are the path-uniformity guards proving
+    // the four sites route through it without behavior drift.
+
+    #[test]
+    fn head_symbol_returns_operator_for_list_form() {
+        // `(defpoint obs :class x)` — the operator is the head symbol.
+        let form = Sexp::List(vec![
+            Sexp::symbol("defpoint"),
+            Sexp::symbol("obs"),
+            Sexp::keyword("class"),
+            Sexp::symbol("x"),
+        ]);
+        assert_eq!(form.head_symbol(), Some("defpoint"));
+    }
+
+    #[test]
+    fn head_symbol_none_for_non_list_shapes() {
+        // A bare atom is not an invocation — there is no operator position.
+        assert_eq!(Sexp::symbol("foo").head_symbol(), None);
+        assert_eq!(Sexp::int(5).head_symbol(), None);
+        assert_eq!(Sexp::keyword("k").head_symbol(), None);
+        assert_eq!(Sexp::string("s").head_symbol(), None);
+        assert_eq!(Sexp::boolean(true).head_symbol(), None);
+        assert_eq!(Sexp::float(1.5).head_symbol(), None);
+        assert_eq!(Sexp::Nil.head_symbol(), None);
+        // Quote-family wrappers are not lists at the outer layer either.
+        assert_eq!(Sexp::Quote(Box::new(Sexp::symbol("x"))).head_symbol(), None);
+    }
+
+    #[test]
+    fn head_symbol_none_for_empty_list() {
+        // `()` has no first element to read an operator from.
+        assert_eq!(Sexp::List(vec![]).head_symbol(), None);
+    }
+
+    #[test]
+    fn head_symbol_none_for_non_symbol_head() {
+        // A list whose head is present but not a symbol is not a dispatchable
+        // invocation — the soft projection yields None (the STRICT sibling
+        // `compile_from_sexp` is the one that rejects these loudly).
+        assert_eq!(
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]).head_symbol(),
+            None
+        );
+        assert_eq!(
+            Sexp::List(vec![Sexp::keyword("kw"), Sexp::symbol("a")]).head_symbol(),
+            None
+        );
+        assert_eq!(
+            Sexp::List(vec![Sexp::string("s"), Sexp::symbol("a")]).head_symbol(),
+            None
+        );
+        assert_eq!(
+            Sexp::List(vec![
+                Sexp::List(vec![Sexp::symbol("nested")]),
+                Sexp::symbol("a")
+            ])
+            .head_symbol(),
+            None
+        );
+        assert_eq!(
+            Sexp::List(vec![Sexp::Nil, Sexp::symbol("a")]).head_symbol(),
+            None
+        );
+    }
+
+    #[test]
+    fn head_symbol_reads_singleton_list_operator() {
+        // `(defcompiler)` — a keyword-only form still has an operator head;
+        // this is exactly the arity-gate input compile_named dispatches on
+        // before rejecting the missing NAME.
+        assert_eq!(
+            Sexp::List(vec![Sexp::symbol("defcompiler")]).head_symbol(),
+            Some("defcompiler")
+        );
+    }
+
+    #[test]
+    fn head_symbol_borrows_the_actual_head_string() {
+        // The returned &str borrows the head atom's contents verbatim — no
+        // copy, no normalization. Pin that a multi-segment symbol round-trips
+        // unchanged so the dispatch comparison against `T::KEYWORD` is exact.
+        let form = Sexp::List(vec![Sexp::symbol("defalert-policy"), Sexp::symbol("p")]);
+        assert_eq!(form.head_symbol(), Some("defalert-policy"));
     }
 }

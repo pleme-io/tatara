@@ -94,7 +94,7 @@ pub fn compile_typed<T: TataraDomain>(src: &str) -> Result<Vec<T>> {
     let mut out = Vec::new();
     for form in &expanded {
         if let Some(list) = form.as_list() {
-            if list.first().and_then(|s| s.as_symbol()) == Some(T::KEYWORD) {
+            if form.head_symbol() == Some(T::KEYWORD) {
                 out.push(T::compile_from_args(&list[1..])?);
             }
         }
@@ -120,7 +120,7 @@ pub fn compile_named_from_forms<T: TataraDomain>(
     let mut out = Vec::new();
     for form in &expanded {
         let Some(list) = form.as_list() else { continue };
-        if list.first().and_then(|s| s.as_symbol()) != Some(T::KEYWORD) {
+        if form.head_symbol() != Some(T::KEYWORD) {
             continue;
         }
         if list.len() < 2 {

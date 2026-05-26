@@ -205,8 +205,46 @@ impl Sexp {
     /// and the gate (`compile_from_sexp`) faces of the same projection;
     /// keeping both lets a site choose "skip silently" or "reject loudly"
     /// without re-deriving the head.
+    ///
+    /// `head_symbol` is the operator projection of [`Sexp::as_call`]: it
+    /// keeps the head and discards the argument tail. The
+    /// `as_list()?.first()?.as_symbol()` chain lives in ONE place
+    /// (`as_call`); this is its first component.
     pub fn head_symbol(&self) -> Option<&str> {
-        self.as_list()?.first()?.as_symbol()
+        self.as_call().map(|(head, _)| head)
+    }
+
+    /// Decompose a call form into its operator and argument tail —
+    /// `Some((op, args))` iff this is a non-empty list whose first element
+    /// is a symbol, where `op` is that head symbol and `args` is the
+    /// remaining elements (`&self[1..]`, possibly empty). `None` for every
+    /// shape `head_symbol` rejects: a non-list, the empty list, and a list
+    /// whose head is present but not a symbol.
+    ///
+    /// This is the *call-form decomposition* — the structural shape of a
+    /// Lisp invocation: an operator applied to an argument tail. It pairs
+    /// the operator-position projection (`head_symbol`) with the argument
+    /// tail every dispatch site reads immediately after matching the
+    /// operator. Macroexpansion (`Expander::expand`) applies the matched
+    /// macro to `&list[1..]`; the typed compilers (`compile_typed`,
+    /// `compile_named_from_forms`) feed `&list[1..]` into
+    /// `T::compile_from_args`. Before this query each site bound
+    /// `as_list()` for the tail AND independently called `head_symbol()`
+    /// (which itself re-derives `as_list().first()`) for the operator —
+    /// two traversals of the same list, two projections. `as_call` yields
+    /// both from one match, so the operator and its arguments can never
+    /// drift out of agreement at a dispatch site.
+    ///
+    /// Soft face, like `head_symbol`: it answers "is this an invocation of
+    /// some operator, and what are its arguments?" and yields `None` (skip
+    /// / fall through) for everything that isn't, with no diagnostic. The
+    /// strict gate sibling is `TataraDomain::compile_from_sexp`, which
+    /// distinguishes the empty-list and non-symbol-head sub-modes to reject
+    /// loudly.
+    pub fn as_call(&self) -> Option<(&str, &[Sexp])> {
+        let list = self.as_list()?;
+        let head = list.first()?.as_symbol()?;
+        Some((head, &list[1..]))
     }
 }
 
@@ -336,5 +374,114 @@ mod tests {
         // unchanged so the dispatch comparison against `T::KEYWORD` is exact.
         let form = Sexp::List(vec![Sexp::symbol("defalert-policy"), Sexp::symbol("p")]);
         assert_eq!(form.head_symbol(), Some("defalert-policy"));
+    }
+
+    // ── as_call: the call-form decomposition ────────────────────────────
+    //
+    // `as_call` pairs `head_symbol` (the operator projection) with the
+    // argument tail every dispatch site reads right after matching the
+    // operator — `Some((op, &args))` for a symbol-headed list, `None` for
+    // everything else. It lifts the `as_list()`-for-the-tail +
+    // `head_symbol()`-for-the-operator pairing that recurred at the three
+    // soft-dispatch sites (compile.rs `compile_typed` + `compile_named_
+    // from_forms`, macro_expand.rs `Expander::expand`) into ONE match.
+    // `head_symbol` now delegates to it, so the `as_list()?.first()?.
+    // as_symbol()` chain lives in exactly one place. These tests pin the
+    // decomposition's contract directly; the existing dispatch tests in
+    // compile.rs / macro_expand.rs are the path-uniformity guards proving
+    // the three sites route through it without behavior drift.
+
+    #[test]
+    fn as_call_decomposes_list_form_into_operator_and_args() {
+        // `(defpoint obs :class x)` — the operator is the head symbol and
+        // the args are everything after it.
+        let args = [
+            Sexp::symbol("obs"),
+            Sexp::keyword("class"),
+            Sexp::symbol("x"),
+        ];
+        let form = Sexp::List(
+            std::iter::once(Sexp::symbol("defpoint"))
+                .chain(args.iter().cloned())
+                .collect(),
+        );
+        assert_eq!(form.as_call(), Some(("defpoint", &args[..])));
+    }
+
+    #[test]
+    fn as_call_none_for_non_call_shapes() {
+        // Every shape `head_symbol` rejects, `as_call` rejects identically:
+        // non-lists, the empty list, and non-symbol heads have no operator
+        // to apply, hence no call decomposition.
+        assert_eq!(Sexp::symbol("foo").as_call(), None);
+        assert_eq!(Sexp::int(5).as_call(), None);
+        assert_eq!(Sexp::keyword("k").as_call(), None);
+        assert_eq!(Sexp::string("s").as_call(), None);
+        assert_eq!(Sexp::Nil.as_call(), None);
+        assert_eq!(Sexp::Quote(Box::new(Sexp::symbol("x"))).as_call(), None);
+        assert_eq!(Sexp::List(vec![]).as_call(), None);
+        assert_eq!(
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]).as_call(),
+            None
+        );
+        assert_eq!(
+            Sexp::List(vec![Sexp::keyword("kw"), Sexp::symbol("a")]).as_call(),
+            None
+        );
+    }
+
+    #[test]
+    fn as_call_yields_empty_args_for_singleton_list() {
+        // `(defcompiler)` — a keyword-only form decomposes to its operator
+        // with an EMPTY argument tail. This is exactly the arity-gate input
+        // `compile_named_from_forms` dispatches on before rejecting the
+        // missing NAME via `rest.split_first()` returning `None`.
+        assert_eq!(
+            Sexp::List(vec![Sexp::symbol("defcompiler")]).as_call(),
+            Some(("defcompiler", &[][..]))
+        );
+    }
+
+    #[test]
+    fn as_call_args_are_exactly_the_tail_after_the_operator() {
+        // The args slice borrows `&list[1..]` verbatim — the head is
+        // excluded, every following element is included in order.
+        let form = Sexp::List(vec![
+            Sexp::symbol("defmonitor"),
+            Sexp::symbol("cpu"),
+            Sexp::keyword("threshold"),
+            Sexp::int(90),
+        ]);
+        let (op, args) = form.as_call().expect("symbol-headed list decomposes");
+        assert_eq!(op, "defmonitor");
+        assert_eq!(args.len(), 3);
+        assert_eq!(args[0], Sexp::symbol("cpu"));
+        assert_eq!(args[2], Sexp::int(90));
+    }
+
+    #[test]
+    fn head_symbol_is_the_operator_projection_of_as_call() {
+        // The structural relationship the lift establishes: `head_symbol`
+        // is `as_call().map(|(h, _)| h)`. Pin it across every shape so a
+        // regression that drifts one query's head-recognition from the
+        // other — e.g. `as_call` accepting a keyword head that `head_symbol`
+        // still rejects — fails loudly. The two share ONE chain.
+        let shapes = [
+            Sexp::symbol("foo"),
+            Sexp::int(5),
+            Sexp::keyword("k"),
+            Sexp::Nil,
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::symbol("defpoint"), Sexp::symbol("p")]),
+            Sexp::List(vec![Sexp::symbol("solo")]),
+        ];
+        for s in &shapes {
+            assert_eq!(
+                s.head_symbol(),
+                s.as_call().map(|(h, _)| h),
+                "head_symbol must equal the operator component of as_call for {s}"
+            );
+        }
     }
 }

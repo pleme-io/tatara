@@ -159,9 +159,9 @@ impl Expander {
         let Some(list) = form.as_list() else {
             return Ok(form.clone());
         };
-        if let Some(head) = form.head_symbol() {
+        if let Some((head, args)) = form.as_call() {
             if let Some(def) = self.macros.get(head) {
-                let expanded = self.apply(def, &list[1..])?;
+                let expanded = self.apply(def, args)?;
                 // Recurse — the expansion itself may contain more macro calls.
                 return self.expand(&expanded);
             }

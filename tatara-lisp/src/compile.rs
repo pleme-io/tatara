@@ -93,9 +93,9 @@ pub fn compile_typed<T: TataraDomain>(src: &str) -> Result<Vec<T>> {
     let expanded = exp.expand_program(forms)?;
     let mut out = Vec::new();
     for form in &expanded {
-        if let Some(list) = form.as_list() {
-            if form.head_symbol() == Some(T::KEYWORD) {
-                out.push(T::compile_from_args(&list[1..])?);
+        if let Some((head, args)) = form.as_call() {
+            if head == T::KEYWORD {
+                out.push(T::compile_from_args(args)?);
             }
         }
     }
@@ -119,20 +119,22 @@ pub fn compile_named_from_forms<T: TataraDomain>(
     let expanded = exp.expand_program(forms)?;
     let mut out = Vec::new();
     for form in &expanded {
-        let Some(list) = form.as_list() else { continue };
-        if form.head_symbol() != Some(T::KEYWORD) {
+        let Some((head, rest)) = form.as_call() else {
+            continue;
+        };
+        if head != T::KEYWORD {
             continue;
         }
-        if list.len() < 2 {
+        let Some((name_form, spec_args)) = rest.split_first() else {
             return Err(LispError::NamedFormMissingName {
                 keyword: T::KEYWORD,
             });
-        }
-        let name = list[1]
+        };
+        let name = name_form
             .as_symbol_or_string()
-            .ok_or_else(|| named_form_non_symbol_name::<T>(&list[1]))?
+            .ok_or_else(|| named_form_non_symbol_name::<T>(name_form))?
             .to_string();
-        let spec = T::compile_from_args(&list[2..])?;
+        let spec = T::compile_from_args(spec_args)?;
         out.push(NamedDefinition { name, spec });
     }
     Ok(out)

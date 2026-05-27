@@ -566,6 +566,52 @@ pub enum LispError {
         rest_position: usize,
         got: Option<SexpWitness>,
     },
+    /// A `&rest <name>` param was followed by one or more further tokens —
+    /// `(defmacro f (a &rest xs extra) …)`. The `&rest` name binds every
+    /// remaining call arg into a list, so it is structurally the LAST thing
+    /// a param list can name: nothing can follow it. Before this variant
+    /// `parse_params` returned the moment it bound the rest name, SILENTLY
+    /// DROPPING any trailing tokens — `extra` above vanished with no error,
+    /// so an author who fat-fingered a stray param (or wrote `&rest xs
+    /// &optional y` expecting a feature that doesn't exist yet) got no
+    /// signal that their text was ignored. This variant turns that silent
+    /// drop into a loud rejection at the typed-entry gate.
+    ///
+    /// Sibling of `NonSymbolParam` and `RestParamMissingName` — the third
+    /// and final `parse_params` definition-site failure mode. The earlier
+    /// two fire on a param SLOT (a non-symbol where a name was expected) and
+    /// on the post-`&rest` follower (missing-or-malformed name); this one
+    /// fires once the rest name is bound and the walker discovers the param
+    /// list does not end there. Together the three now genuinely close the
+    /// `parse_params` walker — every shape it accepts is a well-formed
+    /// `MacroParams`, and every shape it rejects is a structural variant of
+    /// `LispError`, not a silently-truncated `Vec` nor a `Compile`-shaped
+    /// substring.
+    ///
+    /// `rest_position` is the loop index at which the `&rest` marker was
+    /// matched (parallel to `RestParamMissingName.rest_position`), so an LSP
+    /// quick-fix can point at the `&rest` form whose name must be last.
+    /// `extra` is the count of trailing tokens (always ≥ 1) and `first` is
+    /// the typed witness of the first of them — the SEVENTH consumer of the
+    /// `SexpWitness` primitive. `first` is a non-`Option` witness (unlike
+    /// `RestParamMissingName.got`) because the trailing run is non-empty by
+    /// construction: this variant is only built when `list[rest_position +
+    /// 2..]` has a first element. Display appends `(rest marker at position
+    /// {rest_position}, {extra} trailing after name, first: {first})` via
+    /// `rest_param_trailing_tokens_suffix`, which delegates the bare
+    /// parenthetical to the shared `paren_suffix`. When a future run gives
+    /// `Sexp` source spans, `pos: Option<usize>` lands inside `SexpWitness`
+    /// in ONE place and this site picks up positional rendering
+    /// mechanically — exactly as its two siblings do.
+    #[error(
+        "compile error in defmacro params: &rest name must be last{}",
+        rest_param_trailing_tokens_suffix(*rest_position, *extra, &first.display)
+    )]
+    RestParamTrailingTokens {
+        rest_position: usize,
+        extra: usize,
+        first: SexpWitness,
+    },
     /// A `defmacro` / `defpoint-template` / `defcheck` form had fewer
     /// than 4 list elements: the head keyword must be followed by a
     /// name symbol, a param list, and a body — three required slots
@@ -2240,6 +2286,12 @@ fn rest_param_missing_name_suffix(rest_position: usize, got: Option<&str>) -> St
     paren_suffix(&body)
 }
 
+fn rest_param_trailing_tokens_suffix(rest_position: usize, extra: usize, first: &str) -> String {
+    paren_suffix(&format!(
+        "rest marker at position {rest_position}, {extra} trailing after name, first: {first}"
+    ))
+}
+
 fn missing_head_symbol_suffix(got: Option<&str>) -> String {
     let body = match got {
         Some(g) => format!("got {g}"),
@@ -2291,6 +2343,7 @@ impl LispError {
             | Self::MissingMacroArg { .. }
             | Self::NonSymbolParam { .. }
             | Self::RestParamMissingName { .. }
+            | Self::RestParamTrailingTokens { .. }
             | Self::DefmacroArity { .. }
             | Self::DefmacroNonSymbolName { .. }
             | Self::DefmacroNonListParams { .. }
@@ -2311,9 +2364,9 @@ impl LispError {
 mod tests {
     use super::{
         missing_head_symbol_suffix, paren_suffix, rest_param_missing_name_suffix,
-        unknown_among_suffix, unknown_domain_keyword_suffix, unknown_kwarg_suffix,
-        ExpectedKwargShape, KwargPath, LispError, MacroDefHead, SexpShape, SexpWitness,
-        UnquoteForm,
+        rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
+        unknown_kwarg_suffix, ExpectedKwargShape, KwargPath, LispError, MacroDefHead, SexpShape,
+        SexpWitness, UnquoteForm,
     };
 
     #[test]
@@ -3282,12 +3335,12 @@ mod tests {
 
     #[test]
     fn every_suffix_helper_wraps_through_one_paren_primitive() {
-        // All four `*_suffix` helpers delegate their bare ` (…)` wrapping to
+        // All five `*_suffix` helpers delegate their bare ` (…)` wrapping to
         // `paren_suffix`; only their body-construction stays helper-specific.
         // Pinning that each helper's output EQUALS `paren_suffix` applied with
         // that helper's body means a re-inlined divergent skeleton in ANY of
-        // the four (e.g. a dropped leading space, a moved paren) fails-loudly.
-        // Covers both arms of all four helpers.
+        // them (e.g. a dropped leading space, a moved paren) fails-loudly.
+        // Covers both arms of the multi-arm helpers.
 
         // unknown_among_suffix — the `did you mean …?; …` join layer.
         assert_eq!(
@@ -3307,6 +3360,12 @@ mod tests {
         assert_eq!(
             rest_param_missing_name_suffix(1, None),
             paren_suffix("rest marker at position 1, none provided")
+        );
+
+        // rest_param_trailing_tokens_suffix — the `… trailing after name` body.
+        assert_eq!(
+            rest_param_trailing_tokens_suffix(1, 2, "extra"),
+            paren_suffix("rest marker at position 1, 2 trailing after name, first: extra")
         );
 
         // missing_head_symbol_suffix — the `got …` / `empty list` body.

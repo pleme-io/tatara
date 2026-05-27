@@ -594,6 +594,10 @@ fn parse_params(list: &[Sexp]) -> Result<MacroParams> {
             let Some(name) = next.as_symbol() else {
                 return Err(rest_param_missing_name(i, Some(next)));
             };
+            let trailing = &list[i + 2..];
+            if !trailing.is_empty() {
+                return Err(rest_param_trailing_tokens(i, trailing));
+            }
             return Ok(MacroParams {
                 required,
                 rest: Some(name.to_string()),
@@ -1181,6 +1185,39 @@ fn rest_param_missing_name(rest_position: usize, got: Option<&Sexp>) -> LispErro
     LispError::RestParamMissingName {
         rest_position,
         got: got.map(crate::domain::sexp_witness),
+    }
+}
+
+/// The third and final `parse_params` definition-site rejection — a
+/// `&rest <name>` followed by further tokens. Sibling of `non_symbol_param`
+/// (a param slot that isn't a symbol) and `rest_param_missing_name` (the
+/// post-`&rest` follower is missing or malformed): this helper fires once
+/// the rest name is bound and the walker finds the param list does not end
+/// there. The `&rest` name absorbs every remaining call arg, so it is
+/// structurally the LAST param a list can name; trailing tokens are
+/// unrepresentable in `MacroParams` and were previously dropped silently.
+///
+/// `rest_position` is the loop index of the `&rest` marker (parallel to
+/// `rest_param_missing_name`); `trailing` is the non-empty token run after
+/// the bound rest name — the helper records its length and the typed
+/// witness of its first element. The caller guarantees `trailing` is
+/// non-empty (it is only built when `list[i + 2..].first()` is `Some`), so
+/// `trailing[0]` does not panic.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// unrepresentable"; a param list with tokens after `&rest <name>` is
+/// nonsense `MacroParams` cannot hold, so the gate must REJECT it rather
+/// than truncate to the representable prefix. THEORY.md §II.1 invariant 1 —
+/// typed entry; the gate rejects malformed DEFINITIONS as readily as
+/// malformed calls. THEORY.md §VI.1 — generation over composition; this
+/// closes the `parse_params` walker's last uncovered failure mode, making
+/// the sibling docs' "every distinct failure mode is a structural variant"
+/// claim finally true.
+fn rest_param_trailing_tokens(rest_position: usize, trailing: &[Sexp]) -> LispError {
+    LispError::RestParamTrailingTokens {
+        rest_position,
+        extra: trailing.len(),
+        first: crate::domain::sexp_witness(&trailing[0]),
     }
 }
 
@@ -3210,6 +3247,143 @@ mod tests {
             )),
         };
         assert_eq!(err_got.position(), None);
+    }
+
+    // --- RestParamTrailingTokens: the parse_params gate's third (and
+    // final) definition-site failure mode ---
+    //
+    // A `&rest <name>` absorbs every remaining call arg, so it is the LAST
+    // thing a param list can name. Before this variant `parse_params`
+    // returned the moment it bound the rest name, SILENTLY DROPPING any
+    // trailing tokens — `(a &rest xs extra)` parsed as if `extra` weren't
+    // there. These tests pin the loud rejection that replaces the silent
+    // drop; the symbol `RestParamTrailingTokens` exists only after this
+    // change, so the whole block is fail-before/pass-after by construction
+    // (compile-time edge) and the end-to-end regression guard below pins
+    // that the malformed defmacro no longer expands cleanly.
+
+    /// Helper mirroring `rest_param_missing_name_fields` — pins the variant
+    /// shape and lifts the marker position, trailing count, and first
+    /// offender's display up to the assert site.
+    fn rest_param_trailing_tokens_fields(err: &LispError) -> (usize, usize, &str) {
+        match err {
+            LispError::RestParamTrailingTokens {
+                rest_position,
+                extra,
+                first,
+            } => (*rest_position, *extra, first.display.as_str()),
+            other => panic!("expected RestParamTrailingTokens, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_params_rejects_single_trailing_token_after_rest_name() {
+        // `(a &rest c extra)` — `&rest c` is well-formed, but `extra`
+        // follows. The rest name is bound at position 2, the marker at 1;
+        // the lone trailing token `extra` is reported (extra == 1, first ==
+        // "extra"). Before this variant `parse_params` returned at the rest
+        // name and `extra` vanished.
+        let err = parse_params(&read("a &rest c extra").unwrap())
+            .expect_err("a trailing token after the rest name must error");
+        assert_eq!(rest_param_trailing_tokens_fields(&err), (1, 1, "extra"));
+    }
+
+    #[test]
+    fn rest_param_trailing_tokens_counts_the_whole_trailing_run() {
+        // `(&rest c x y z)` — three tokens follow the rest name. `extra`
+        // counts ALL of them (3), `first` is the first (`x`), and the
+        // marker is at position 0. A regression that reports only the
+        // first trailing token's presence (extra hard-coded to 1) fails
+        // loudly here.
+        let err = parse_params(&read("&rest c x y z").unwrap())
+            .expect_err("multiple trailing tokens must error");
+        assert_eq!(rest_param_trailing_tokens_fields(&err), (0, 3, "x"));
+    }
+
+    #[test]
+    fn rest_param_trailing_tokens_first_witness_carries_non_symbol_display() {
+        // `(a &rest c 5)` — the rest NAME `c` is a valid symbol, so this is
+        // NOT a `RestParamMissingName`; the integer `5` is a trailing token
+        // AFTER a well-formed `&rest c`. Pins that the two sibling failure
+        // modes don't collide: a malformed rest-name is `RestParamMissingName`,
+        // a well-formed rest-name followed by junk is
+        // `RestParamTrailingTokens`. `first` round-trips `5` via the typed
+        // witness's `Sexp::Display` projection.
+        let err = parse_params(&read("a &rest c 5").unwrap())
+            .expect_err("a trailing non-symbol after the rest name must error");
+        assert_eq!(rest_param_trailing_tokens_fields(&err), (1, 1, "5"));
+    }
+
+    #[test]
+    fn rest_param_trailing_tokens_no_longer_silently_dropped_end_to_end() {
+        // The fidelity fix, end-to-end through `expand_program`: a defmacro
+        // whose param list carries a stray token after `&rest <name>` now
+        // ERRORS at the typed-entry gate instead of expanding as though the
+        // stray token weren't there. This is the regression guard for the
+        // silent-drop bug — before this change the same source expanded
+        // cleanly and `extra` was discarded with no signal.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a &rest xs extra) `(,a))").unwrap())
+            .expect_err("trailing token after &rest name must error");
+        assert_eq!(rest_param_trailing_tokens_fields(&err), (1, 1, "extra"));
+    }
+
+    #[test]
+    fn rest_param_trailing_tokens_substitute_and_bytecode_paths_agree() {
+        // Path-uniform rejection: the gate fires inside `macro_def_from` →
+        // `parse_params`, BEFORE either expansion strategy runs, so both
+        // `Expander::new()` (bytecode) and `Expander::new_substitute_only()`
+        // (substitute) reject the SAME malformed defmacro at the SAME gate.
+        // Sibling of `rest_param_missing_name_substitute_and_bytecode_paths_agree`.
+        let src = "(defmacro f (a &rest xs extra) `(,a))";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let err_subst = subst
+            .expand_program(read(src).unwrap())
+            .expect_err("substitute must error");
+        let err_byte = bytecode
+            .expand_program(read(src).unwrap())
+            .expect_err("bytecode must error");
+        assert_eq!(
+            rest_param_trailing_tokens_fields(&err_subst),
+            (1, 1, "extra")
+        );
+        assert_eq!(
+            rest_param_trailing_tokens_fields(&err_byte),
+            (1, 1, "extra")
+        );
+    }
+
+    #[test]
+    fn rest_param_trailing_tokens_message_renders_legacy_style_prefix_and_suffix() {
+        // End-to-end through Display — pins the rendered diagnostic AND the
+        // new `(rest marker at position {n}, {extra} trailing after name,
+        // first: {first})` clause. The `compile error in defmacro params:`
+        // prefix matches the sibling `&rest needs a name` rendering's shape.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a &rest xs extra) `(,a))").unwrap())
+            .expect_err("trailing token after &rest name must error");
+        assert_eq!(
+            format!("{err}"),
+            "compile error in defmacro params: &rest name must be last \
+             (rest marker at position 1, 1 trailing after name, first: extra)"
+        );
+    }
+
+    #[test]
+    fn rest_param_trailing_tokens_position_is_none_today() {
+        // Pins `position() == None` so the future `pos: Option<usize>` add
+        // (once `Sexp` carries source spans) lands as a deliberate
+        // fail-before/pass-after delta. Parallel to
+        // `rest_param_missing_name_position_is_none_today`.
+        let err = LispError::RestParamTrailingTokens {
+            rest_position: 1,
+            extra: 1,
+            first: crate::error::SexpWitness::new(crate::error::SexpShape::Symbol, "extra"),
+        };
+        assert_eq!(err.position(), None);
     }
 
     // --- MacroDefHead enum (the closed-set lift) ---

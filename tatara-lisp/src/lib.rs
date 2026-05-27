@@ -53,5 +53,5 @@ pub use error::{
     CompilerSpecIoStage, ExpectedKwargShape, KwargPath, LispError, MacroDefHead, Result, SexpShape,
     TemplateInvariantKind, UnquoteForm,
 };
-pub use macro_expand::{Expander, MacroDef, Param};
+pub use macro_expand::{Expander, MacroDef, MacroParams};
 pub use reader::read;

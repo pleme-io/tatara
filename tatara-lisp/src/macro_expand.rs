@@ -37,15 +37,85 @@ type CacheKey = (String, u64);
 #[derive(Debug, Clone)]
 pub struct MacroDef {
     pub name: String,
-    pub params: Vec<Param>,
+    pub params: MacroParams,
     /// The template body (usually a Quasiquote).
     pub body: Sexp,
 }
 
-#[derive(Debug, Clone)]
-pub enum Param {
-    Required(String),
-    Rest(String),
+/// A macro's parameter list — structurally "zero or more required
+/// positional params, then an OPTIONAL single `&rest` param."
+///
+/// This shape promotes the two invariants the reader ([`parse_params`])
+/// previously upheld only by construction — `&rest` is LAST, and there is
+/// AT MOST ONE of it — from *unobserved discipline* to *unrepresentable
+/// state*. The prior representation `Vec<Param>` admitted `[Rest, Required]`
+/// (a `&rest` in the middle) and `[Rest, Rest]` (two of them); both are
+/// nonsense the binder cannot honor, yet the type permitted them. The flat
+/// param INDEX that the bytecode references (`Subst(idx)` / `Splice(idx)`)
+/// and the positional binder both walk would silently misalign on such a
+/// `Vec` — a `Rest` at index 0 of `[Rest, Required]` makes the binder grab
+/// every arg, then fail to bind the trailing `Required`, mapping the
+/// template's index-1 substitution onto the wrong value. `MacroParams`
+/// cannot express either shape: `rest` is exactly one `Option<String>`,
+/// always conceptually after every `required` name.
+///
+/// The flat-index contract the template bytecode depends on is preserved by
+/// [`MacroParams::names`]: index `0..required.len()` are the required names
+/// in order, and index `required.len()` (if present) is the rest name —
+/// exactly the order the old `Vec<Param>` iterated, since `&rest` was always
+/// last. [`MacroParams::bind`] produces the per-index bound values in that
+/// same order, so the name-keyed (`bind_args` → `substitute`) and
+/// index-keyed (`apply_compiled`) expansion strategies share ONE binder and
+/// can never drift.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// unrepresentable"; the rest-is-last + at-most-one invariants become
+/// structural. THEORY.md §VI.1 — generation over composition; the positional
+/// binding loop (verbatim in both `bind_args` and `apply_compiled`, the ≥2
+/// PRIME-DIRECTIVE trigger) is lifted to ONE owner, `bind`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MacroParams {
+    pub required: Vec<String>,
+    pub rest: Option<String>,
+}
+
+impl MacroParams {
+    /// The flat, ordered param-name list the template bytecode indexes into:
+    /// every `required` name in order, then the `rest` name if present.
+    /// `names()[i]` is the param `Subst(i)` / `Splice(i)` reference.
+    #[must_use]
+    pub fn names(&self) -> Vec<&str> {
+        self.required
+            .iter()
+            .map(String::as_str)
+            .chain(self.rest.as_deref())
+            .collect()
+    }
+
+    /// Bind call args to params positionally, returning the per-index bound
+    /// values parallel to [`names`](Self::names): each required name takes
+    /// the arg at its position (a missing one is
+    /// [`missing_macro_arg`](self::missing_macro_arg)), and a present `rest`
+    /// collects every remaining arg into a `Sexp::List` (the empty list when
+    /// none remain). Args beyond a rest-less param list are ignored, matching
+    /// the prior binder. This is the single binding loop both expansion
+    /// strategies share — `apply_compiled` consumes the index vec directly,
+    /// `bind_args` zips it against `names()` into the name-keyed map.
+    fn bind(&self, macro_name: &str, args: &[Sexp]) -> Result<Vec<Sexp>> {
+        let mut out = Vec::with_capacity(self.required.len() + usize::from(self.rest.is_some()));
+        for (i, name) in self.required.iter().enumerate() {
+            let arg = args
+                .get(i)
+                .cloned()
+                .ok_or_else(|| missing_macro_arg(macro_name, name))?;
+            out.push(arg);
+        }
+        if self.rest.is_some() {
+            let rest = args.get(self.required.len()..).unwrap_or(&[]).to_vec();
+            out.push(Sexp::List(rest));
+        }
+        Ok(out)
+    }
 }
 
 /// Macro environment. Collects `defmacro` forms and rewrites callers.
@@ -274,15 +344,9 @@ pub fn compile_template(def: &MacroDef) -> Result<CompiledTemplate> {
     if let Sexp::UnquoteSplice(inner) = body {
         return Err(splice_outside_list(inner));
     }
-    let params: Vec<&str> = def
-        .params
-        .iter()
-        .map(|p| match p {
-            Param::Required(n) | Param::Rest(n) => n.as_str(),
-        })
-        .collect();
+    let names = def.params.names();
     let mut ops = Vec::new();
-    compile_node(body, &params, &mut ops)?;
+    compile_node(body, &names, &mut ops)?;
     Ok(CompiledTemplate { ops })
 }
 
@@ -422,30 +486,13 @@ fn template_invariant_violation(macro_name: &str, kind: TemplateInvariantKind) -
 /// Execute a pre-compiled template against the macro's argument list.
 fn apply_compiled(
     macro_name: &str,
-    params: &[Param],
+    params: &MacroParams,
     tmpl: &CompiledTemplate,
     args: &[Sexp],
 ) -> Result<Sexp> {
-    // Resolve args by param index (same binding semantics as `bind_args`).
-    let mut args_by_index: Vec<Sexp> = Vec::with_capacity(params.len());
-    let mut cursor = 0;
-    for param in params {
-        match param {
-            Param::Required(name) => {
-                let arg = args
-                    .get(cursor)
-                    .cloned()
-                    .ok_or_else(|| missing_macro_arg(macro_name, name))?;
-                args_by_index.push(arg);
-                cursor += 1;
-            }
-            Param::Rest(_) => {
-                let rest = args.get(cursor..).unwrap_or(&[]).to_vec();
-                args_by_index.push(Sexp::List(rest));
-                cursor = args.len();
-            }
-        }
-    }
+    // Resolve args by param index through the shared positional binder —
+    // identical semantics to the `bind_args` (substitute) path by construction.
+    let args_by_index = params.bind(macro_name, args)?;
 
     // Run the bytecode against a stack of in-progress list builders. The
     // outermost frame accumulates the single result the template yields.
@@ -533,8 +580,8 @@ fn macro_def_from(form: &Sexp) -> Result<Option<MacroDef>> {
     Ok(Some(MacroDef { name, params, body }))
 }
 
-fn parse_params(list: &[Sexp]) -> Result<Vec<Param>> {
-    let mut out = Vec::new();
+fn parse_params(list: &[Sexp]) -> Result<MacroParams> {
+    let mut required = Vec::new();
     let mut i = 0;
     while i < list.len() {
         let s = list[i]
@@ -547,36 +594,34 @@ fn parse_params(list: &[Sexp]) -> Result<Vec<Param>> {
             let Some(name) = next.as_symbol() else {
                 return Err(rest_param_missing_name(i, Some(next)));
             };
-            out.push(Param::Rest(name.to_string()));
-            return Ok(out);
+            return Ok(MacroParams {
+                required,
+                rest: Some(name.to_string()),
+            });
         }
-        out.push(Param::Required(s.to_string()));
+        required.push(s.to_string());
         i += 1;
     }
-    Ok(out)
+    Ok(MacroParams {
+        required,
+        rest: None,
+    })
 }
 
-fn bind_args(macro_name: &str, params: &[Param], args: &[Sexp]) -> Result<HashMap<String, Sexp>> {
-    let mut bindings: HashMap<String, Sexp> = HashMap::new();
-    let mut i = 0;
-    for param in params {
-        match param {
-            Param::Required(name) => {
-                let arg = args
-                    .get(i)
-                    .cloned()
-                    .ok_or_else(|| missing_macro_arg(macro_name, name))?;
-                bindings.insert(name.clone(), arg);
-                i += 1;
-            }
-            Param::Rest(name) => {
-                let rest = args.get(i..).unwrap_or(&[]).to_vec();
-                bindings.insert(name.clone(), Sexp::List(rest));
-                i = args.len();
-            }
-        }
-    }
-    Ok(bindings)
+fn bind_args(
+    macro_name: &str,
+    params: &MacroParams,
+    args: &[Sexp],
+) -> Result<HashMap<String, Sexp>> {
+    // Zip the shared positional binding (parallel to `names()`) into the
+    // name-keyed map the `substitute` path looks substitutions up in.
+    let vals = params.bind(macro_name, args)?;
+    Ok(params
+        .names()
+        .into_iter()
+        .map(String::from)
+        .zip(vals)
+        .collect())
 }
 
 /// Substitute `,name` and `,@name` within a template.
@@ -1466,7 +1511,10 @@ mod tests {
         // a single Literal op.
         let def = MacroDef {
             name: "label".into(),
-            params: vec![Param::Required("x".into())],
+            params: MacroParams {
+                required: vec!["x".into()],
+                rest: None,
+            },
             body: Sexp::Quasiquote(Box::new(parse(
                 "(observed (at timestamp) (in region) (value ,x) (tags (one two three)))",
             ))),
@@ -4137,7 +4185,8 @@ mod tests {
         let tmpl = CompiledTemplate {
             ops: vec![TemplateOp::Subst(99)],
         };
-        let err = apply_compiled("test-macro", &[], &tmpl, &[]).expect_err("bad idx must error");
+        let err = apply_compiled("test-macro", &MacroParams::default(), &tmpl, &[])
+            .expect_err("bad idx must error");
         match err {
             LispError::TemplateInvariant { macro_name, kind } => {
                 assert_eq!(macro_name, "test-macro");
@@ -4156,8 +4205,8 @@ mod tests {
         let tmpl = CompiledTemplate {
             ops: vec![TemplateOp::Splice(42)],
         };
-        let err =
-            apply_compiled("call-macro", &[], &tmpl, &[]).expect_err("bad splice idx must error");
+        let err = apply_compiled("call-macro", &MacroParams::default(), &tmpl, &[])
+            .expect_err("bad splice idx must error");
         match err {
             LispError::TemplateInvariant { macro_name, kind } => {
                 assert_eq!(macro_name, "call-macro");
@@ -4180,7 +4229,8 @@ mod tests {
         let tmpl = CompiledTemplate {
             ops: vec![TemplateOp::Subst(99)],
         };
-        let err = apply_compiled("test-macro", &[], &tmpl, &[]).expect_err("bad idx must error");
+        let err = apply_compiled("test-macro", &MacroParams::default(), &tmpl, &[])
+            .expect_err("bad idx must error");
         assert_eq!(
             format!("{err}"),
             "compile error in test-macro: compiled template referenced bad param index 99"
@@ -4196,8 +4246,8 @@ mod tests {
         let tmpl = CompiledTemplate {
             ops: vec![TemplateOp::Splice(42)],
         };
-        let err =
-            apply_compiled("call-macro", &[], &tmpl, &[]).expect_err("bad splice idx must error");
+        let err = apply_compiled("call-macro", &MacroParams::default(), &tmpl, &[])
+            .expect_err("bad splice idx must error");
         assert_eq!(
             format!("{err}"),
             "compile error in call-macro: compiled template referenced bad splice index 42"
@@ -4225,8 +4275,9 @@ mod tests {
 
     #[test]
     fn apply_compiled_missing_required_arg_does_not_route_through_template_invariant_violation() {
-        // Negative control: the `missing_macro_arg` gate at the
-        // `Param::Required` arm fires BEFORE the bytecode loop runs,
+        // Negative control: the `missing_macro_arg` gate in the shared
+        // positional binder (`MacroParams::bind`) fires BEFORE the bytecode
+        // loop runs,
         // so a missing required arg routes through
         // `LispError::MissingMacroArg`, NOT through
         // `template_invariant_violation`. Pins the helper is
@@ -4244,5 +4295,127 @@ mod tests {
             matches!(err, LispError::MissingMacroArg { .. }),
             "expected MissingMacroArg, got: {err:?}"
         );
+    }
+
+    // ── MacroParams: the typed param-list primitive ─────────────────────
+    //
+    // `parse_params` now yields a `MacroParams { required, rest }` whose
+    // shape makes "&rest is last + at-most-one" structural rather than a
+    // construction discipline a `Vec<Param>` only happened to uphold. These
+    // tests pin the parser's mapping into the typed shape, the flat-index
+    // contract `names()` exposes to the template bytecode, and the single
+    // positional binder `bind()` both expansion strategies now route
+    // through. The end-to-end `rest_param_splices_with_at` and
+    // `compiled_template_matches_substitute_path` tests above are the
+    // path-uniformity guards proving both strategies still agree.
+
+    #[test]
+    fn parse_params_maps_required_then_rest_into_typed_shape() {
+        // `(a b &rest c)` — two required, one rest. The rest name lands in
+        // the `Option`, never in `required`.
+        let params = parse_params(&read("a b &rest c").unwrap()).unwrap();
+        assert_eq!(
+            params,
+            MacroParams {
+                required: vec!["a".into(), "b".into()],
+                rest: Some("c".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_params_rest_absent_leaves_none() {
+        // `(x y)` — no `&rest`, so `rest` is structurally `None`. There is
+        // no representation in which a rest-less list carries a stray rest.
+        let params = parse_params(&read("x y").unwrap()).unwrap();
+        assert_eq!(
+            params,
+            MacroParams {
+                required: vec!["x".into(), "y".into()],
+                rest: None,
+            }
+        );
+    }
+
+    #[test]
+    fn names_are_required_then_rest_in_flat_index_order() {
+        // The flat-index contract the bytecode `Subst(idx)`/`Splice(idx)`
+        // depends on: required names in order at 0.., then the rest name at
+        // index `required.len()`.
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into()],
+            rest: Some("c".into()),
+        };
+        assert_eq!(params.names(), vec!["a", "b", "c"]);
+        assert_eq!(params.names()[params.required.len()], "c");
+    }
+
+    #[test]
+    fn bind_threads_required_positionally_and_collects_rest_as_list() {
+        // `(a b &rest c)` bound to `1 2 3 4`: a=1, b=2, c=(3 4). The bound
+        // vec is parallel to `names()`, so the rest list sits at the rest's
+        // flat index.
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into()],
+            rest: Some("c".into()),
+        };
+        let vals = params
+            .bind(
+                "m",
+                &[Sexp::int(1), Sexp::int(2), Sexp::int(3), Sexp::int(4)],
+            )
+            .unwrap();
+        assert_eq!(
+            vals,
+            vec![
+                Sexp::int(1),
+                Sexp::int(2),
+                Sexp::List(vec![Sexp::int(3), Sexp::int(4)]),
+            ]
+        );
+    }
+
+    #[test]
+    fn bind_rest_with_no_remaining_args_is_the_empty_list() {
+        // Exactly-saturated required args + a rest that captures nothing →
+        // the rest binds to the empty list, never errors. Mirrors the
+        // splice contract `,@()` contributes nothing.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            rest: Some("c".into()),
+        };
+        let vals = params.bind("m", &[Sexp::int(1)]).unwrap();
+        assert_eq!(vals, vec![Sexp::int(1), Sexp::List(vec![])]);
+    }
+
+    #[test]
+    fn bind_missing_required_errors_before_any_rest_collection() {
+        // A required name with no arg at its position is a
+        // `MissingMacroArg` — the gate fires during the required walk,
+        // before the rest is ever collected.
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into()],
+            rest: Some("c".into()),
+        };
+        let err = params
+            .bind("m", &[Sexp::int(1)])
+            .expect_err("missing required `b` must error");
+        assert!(
+            matches!(err, LispError::MissingMacroArg { .. }),
+            "expected MissingMacroArg, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn bind_rest_less_params_ignore_surplus_args() {
+        // Parity with the prior `Vec<Param>` binder: a rest-less param list
+        // binds only its required slots; surplus call args are dropped, not
+        // an error.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            rest: None,
+        };
+        let vals = params.bind("m", &[Sexp::int(1), Sexp::int(2)]).unwrap();
+        assert_eq!(vals, vec![Sexp::int(1)]);
     }
 }

@@ -33954,6 +33954,7 @@
         "sha256": "1zkbbdl9jpn9gglk0iw0b95w1c5d5jj93pf8sh3x0fvnl7mm60ad"
       },
       "features": [
+        "cli",
         "default"
       ],
       "proc_macro": false,

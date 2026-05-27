@@ -612,6 +612,39 @@ pub enum LispError {
         extra: usize,
         first: SexpWitness,
     },
+    /// A `defmacro` / `defpoint-template` / `defcheck` param list carried a
+    /// SECOND `&optional` marker — `(defmacro f (a &optional b &optional c)
+    /// …)`. The canonical Lisp lambda-list (`(req* &optional opt* &rest r)`,
+    /// the shape [`MacroParams`](crate::macro_expand::MacroParams) makes a
+    /// type) has exactly ONE optional section, between the required run and
+    /// the rest. A second `&optional` is unrepresentable: `MacroParams.optional`
+    /// is one flat `Vec`, not a sequence of sections. Without this gate the
+    /// walker would treat the second `&optional` as an optional param literally
+    /// NAMED `&optional`, binding call args to a marker symbol — the precise
+    /// silent misalignment the typed param-list shape exists to forbid (a
+    /// sibling of the index-misalignment `MacroParams` ruled out when it
+    /// replaced `Vec<Param>`).
+    ///
+    /// Sibling of `RestParamTrailingTokens` — both fire INSIDE `parse_params`
+    /// once a marker is matched and the walker finds the surrounding param
+    /// list's marker structure is one the canonical lambda-list ordering
+    /// cannot represent (tokens after `&rest <name>`; a repeated `&optional`).
+    /// `first_position` is the loop index of the first `&optional` marker,
+    /// `second_position` the index of the offending second one — naming both
+    /// lets an LSP quick-fix point at the redundant marker to delete. Neither
+    /// is a `SexpWitness`: both elements ARE the `&optional` symbol by
+    /// construction (the variant is only built when `s == "&optional"` twice),
+    /// so there is nothing to witness — only the two positions carry
+    /// information. When a future run gives `Sexp` source spans, the marker
+    /// positions gain editor-ready rendering by threading spans here.
+    #[error(
+        "compile error in defmacro params: &optional may appear at most once{}",
+        optional_marker_repeated_suffix(*first_position, *second_position)
+    )]
+    OptionalMarkerRepeated {
+        first_position: usize,
+        second_position: usize,
+    },
     /// A `defmacro` / `defpoint-template` / `defcheck` form had fewer
     /// than 4 list elements: the head keyword must be followed by a
     /// name symbol, a param list, and a body — three required slots
@@ -2292,6 +2325,12 @@ fn rest_param_trailing_tokens_suffix(rest_position: usize, extra: usize, first: 
     ))
 }
 
+fn optional_marker_repeated_suffix(first_position: usize, second_position: usize) -> String {
+    paren_suffix(&format!(
+        "first &optional at position {first_position}, second at position {second_position}"
+    ))
+}
+
 fn missing_head_symbol_suffix(got: Option<&str>) -> String {
     let body = match got {
         Some(g) => format!("got {g}"),
@@ -2344,6 +2383,7 @@ impl LispError {
             | Self::NonSymbolParam { .. }
             | Self::RestParamMissingName { .. }
             | Self::RestParamTrailingTokens { .. }
+            | Self::OptionalMarkerRepeated { .. }
             | Self::DefmacroArity { .. }
             | Self::DefmacroNonSymbolName { .. }
             | Self::DefmacroNonListParams { .. }
@@ -2363,10 +2403,10 @@ impl LispError {
 #[cfg(test)]
 mod tests {
     use super::{
-        missing_head_symbol_suffix, paren_suffix, rest_param_missing_name_suffix,
-        rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
-        unknown_kwarg_suffix, ExpectedKwargShape, KwargPath, LispError, MacroDefHead, SexpShape,
-        SexpWitness, UnquoteForm,
+        missing_head_symbol_suffix, optional_marker_repeated_suffix, paren_suffix,
+        rest_param_missing_name_suffix, rest_param_trailing_tokens_suffix, unknown_among_suffix,
+        unknown_domain_keyword_suffix, unknown_kwarg_suffix, ExpectedKwargShape, KwargPath,
+        LispError, MacroDefHead, SexpShape, SexpWitness, UnquoteForm,
     };
 
     #[test]
@@ -3335,7 +3375,7 @@ mod tests {
 
     #[test]
     fn every_suffix_helper_wraps_through_one_paren_primitive() {
-        // All five `*_suffix` helpers delegate their bare ` (…)` wrapping to
+        // All six `*_suffix` helpers delegate their bare ` (…)` wrapping to
         // `paren_suffix`; only their body-construction stays helper-specific.
         // Pinning that each helper's output EQUALS `paren_suffix` applied with
         // that helper's body means a re-inlined divergent skeleton in ANY of
@@ -3371,6 +3411,12 @@ mod tests {
         // missing_head_symbol_suffix — the `got …` / `empty list` body.
         assert_eq!(missing_head_symbol_suffix(Some("5")), paren_suffix("got 5"));
         assert_eq!(missing_head_symbol_suffix(None), paren_suffix("empty list"));
+
+        // optional_marker_repeated_suffix — the two-marker-position body.
+        assert_eq!(
+            optional_marker_repeated_suffix(1, 3),
+            paren_suffix("first &optional at position 1, second at position 3")
+        );
     }
 
     #[test]

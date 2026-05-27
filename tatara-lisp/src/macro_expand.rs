@@ -10,6 +10,7 @@
 //!
 //! Supported:
 //!   - Required params:      `(name a b c)`
+//!   - Optional params:      `(name a &optional b c)` — unsupplied bind to `()`
 //!   - Rest param:           `(name a &rest rest)`
 //!   - Quasi-quote body:     `` `(…) ``
 //!   - Unquote substitution: `,x`
@@ -43,11 +44,14 @@ pub struct MacroDef {
 }
 
 /// A macro's parameter list — structurally "zero or more required
-/// positional params, then an OPTIONAL single `&rest` param."
+/// positional params, then zero or more `&optional` params, then an OPTIONAL
+/// single `&rest` param." This is the canonical Lisp lambda-list ordering
+/// (Common Lisp `(req* &optional opt* &rest r)`), made a TYPE.
 ///
-/// This shape promotes the two invariants the reader ([`parse_params`])
-/// previously upheld only by construction — `&rest` is LAST, and there is
-/// AT MOST ONE of it — from *unobserved discipline* to *unrepresentable
+/// This shape promotes the invariants the reader ([`parse_params`])
+/// previously upheld only by construction — `&rest` is LAST, there is AT MOST
+/// ONE of it, and (now) `&optional` params sit strictly between the required
+/// run and the rest — from *unobserved discipline* to *unrepresentable
 /// state*. The prior representation `Vec<Param>` admitted `[Rest, Required]`
 /// (a `&rest` in the middle) and `[Rest, Rest]` (two of them); both are
 /// nonsense the binder cannot honor, yet the type permitted them. The flat
@@ -57,36 +61,52 @@ pub struct MacroDef {
 /// every arg, then fail to bind the trailing `Required`, mapping the
 /// template's index-1 substitution onto the wrong value. `MacroParams`
 /// cannot express either shape: `rest` is exactly one `Option<String>`,
-/// always conceptually after every `required` name.
+/// always conceptually after every `required` then every `optional` name,
+/// and the three kinds live in distinct fields whose order is fixed by the
+/// struct, not by a discipline the binder trusts a `Vec` to have upheld.
+///
+/// `optional` differs from `required` in the binder, not the index contract:
+/// a required name with no arg at its position is a `MissingMacroArg`
+/// rejection; an optional name with no arg binds to `Sexp::Nil` — exactly
+/// Common Lisp's default for an `&optional` param with no supplied
+/// default-form. (Per-param default-forms — `&optional (x 5)` — are the next
+/// extension: they promote `optional: Vec<String>` to a `Vec` of
+/// name-plus-default the binder consults when the arg is absent, hanging off
+/// THIS field rather than smearing more positional discipline across a flat
+/// `Vec`.)
 ///
 /// The flat-index contract the template bytecode depends on is preserved by
 /// [`MacroParams::names`]: index `0..required.len()` are the required names
-/// in order, and index `required.len()` (if present) is the rest name —
-/// exactly the order the old `Vec<Param>` iterated, since `&rest` was always
-/// last. [`MacroParams::bind`] produces the per-index bound values in that
+/// in order, the next `optional.len()` indices are the optional names, and
+/// the final index (if present) is the rest name — the canonical lambda-list
+/// order. [`MacroParams::bind`] produces the per-index bound values in that
 /// same order, so the name-keyed (`bind_args` → `substitute`) and
 /// index-keyed (`apply_compiled`) expansion strategies share ONE binder and
 /// can never drift.
 ///
 /// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
-/// unrepresentable"; the rest-is-last + at-most-one invariants become
-/// structural. THEORY.md §VI.1 — generation over composition; the positional
-/// binding loop (verbatim in both `bind_args` and `apply_compiled`, the ≥2
-/// PRIME-DIRECTIVE trigger) is lifted to ONE owner, `bind`.
+/// unrepresentable"; the lambda-list ordering (required → optional → rest,
+/// rest-is-last, at-most-one-rest) becomes structural. THEORY.md §VI.1 —
+/// generation over composition; the positional binding loop (verbatim in
+/// both `bind_args` and `apply_compiled`, the ≥2 PRIME-DIRECTIVE trigger) is
+/// lifted to ONE owner, `bind`, which the optional arm extends in one place.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct MacroParams {
     pub required: Vec<String>,
+    pub optional: Vec<String>,
     pub rest: Option<String>,
 }
 
 impl MacroParams {
     /// The flat, ordered param-name list the template bytecode indexes into:
-    /// every `required` name in order, then the `rest` name if present.
-    /// `names()[i]` is the param `Subst(i)` / `Splice(i)` reference.
+    /// every `required` name in order, then every `optional` name in order,
+    /// then the `rest` name if present. `names()[i]` is the param `Subst(i)`
+    /// / `Splice(i)` reference.
     #[must_use]
     pub fn names(&self) -> Vec<&str> {
         self.required
             .iter()
+            .chain(self.optional.iter())
             .map(String::as_str)
             .chain(self.rest.as_deref())
             .collect()
@@ -95,14 +115,19 @@ impl MacroParams {
     /// Bind call args to params positionally, returning the per-index bound
     /// values parallel to [`names`](Self::names): each required name takes
     /// the arg at its position (a missing one is
-    /// [`missing_macro_arg`](self::missing_macro_arg)), and a present `rest`
-    /// collects every remaining arg into a `Sexp::List` (the empty list when
-    /// none remain). Args beyond a rest-less param list are ignored, matching
-    /// the prior binder. This is the single binding loop both expansion
-    /// strategies share — `apply_compiled` consumes the index vec directly,
-    /// `bind_args` zips it against `names()` into the name-keyed map.
+    /// [`missing_macro_arg`](self::missing_macro_arg)); each optional name
+    /// takes the arg at its position, or `Sexp::Nil` when the call ran out of
+    /// args (CL's default for an `&optional` with no supplied default-form);
+    /// and a present `rest` collects every arg beyond the required+optional
+    /// run into a `Sexp::List` (the empty list when none remain). Args beyond
+    /// a rest-less param list are ignored, matching the prior binder. This is
+    /// the single binding loop both expansion strategies share —
+    /// `apply_compiled` consumes the index vec directly, `bind_args` zips it
+    /// against `names()` into the name-keyed map.
     fn bind(&self, macro_name: &str, args: &[Sexp]) -> Result<Vec<Sexp>> {
-        let mut out = Vec::with_capacity(self.required.len() + usize::from(self.rest.is_some()));
+        let mut out = Vec::with_capacity(
+            self.required.len() + self.optional.len() + usize::from(self.rest.is_some()),
+        );
         for (i, name) in self.required.iter().enumerate() {
             let arg = args
                 .get(i)
@@ -110,8 +135,14 @@ impl MacroParams {
                 .ok_or_else(|| missing_macro_arg(macro_name, name))?;
             out.push(arg);
         }
+        let opt_start = self.required.len();
+        for j in 0..self.optional.len() {
+            let arg = args.get(opt_start + j).cloned().unwrap_or(Sexp::Nil);
+            out.push(arg);
+        }
         if self.rest.is_some() {
-            let rest = args.get(self.required.len()..).unwrap_or(&[]).to_vec();
+            let rest_start = self.required.len() + self.optional.len();
+            let rest = args.get(rest_start..).unwrap_or(&[]).to_vec();
             out.push(Sexp::List(rest));
         }
         Ok(out)
@@ -582,6 +613,8 @@ fn macro_def_from(form: &Sexp) -> Result<Option<MacroDef>> {
 
 fn parse_params(list: &[Sexp]) -> Result<MacroParams> {
     let mut required = Vec::new();
+    let mut optional = Vec::new();
+    let mut optional_marker: Option<usize> = None;
     let mut i = 0;
     while i < list.len() {
         let s = list[i]
@@ -600,14 +633,28 @@ fn parse_params(list: &[Sexp]) -> Result<MacroParams> {
             }
             return Ok(MacroParams {
                 required,
+                optional,
                 rest: Some(name.to_string()),
             });
         }
-        required.push(s.to_string());
+        if s == "&optional" {
+            if let Some(first) = optional_marker {
+                return Err(optional_marker_repeated(first, i));
+            }
+            optional_marker = Some(i);
+            i += 1;
+            continue;
+        }
+        if optional_marker.is_some() {
+            optional.push(s.to_string());
+        } else {
+            required.push(s.to_string());
+        }
         i += 1;
     }
     Ok(MacroParams {
         required,
+        optional,
         rest: None,
     })
 }
@@ -1221,6 +1268,33 @@ fn rest_param_trailing_tokens(rest_position: usize, trailing: &[Sexp]) -> LispEr
     }
 }
 
+/// A `&optional` marker appeared a SECOND time in one param list —
+/// `(defmacro f (a &optional b &optional c) …)`. The lambda-list has exactly
+/// ONE optional section (between the required run and the rest); a second
+/// `&optional` is nonsense `MacroParams` cannot hold (its `optional` field is
+/// one flat run, not a sequence of sections). Without this gate the parser
+/// would otherwise treat the second `&optional` as an optional param literally
+/// NAMED `&optional`, binding call args to a marker symbol — exactly the kind
+/// of silent misalignment the typed shape exists to forbid.
+///
+/// Sibling of `rest_param_trailing_tokens` (the rest-section ordering gate):
+/// both reject a param list whose marker structure the canonical lambda-list
+/// ordering cannot represent. `first_position` is the loop index of the
+/// first `&optional`, `second_position` the second — naming both lets an LSP
+/// quick-fix point at the redundant marker to delete.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// unrepresentable"; a param list with two `&optional` sections is nonsense
+/// `MacroParams` cannot hold, so the gate must REJECT rather than bind args
+/// to a marker symbol. THEORY.md §II.1 invariant 1 — typed entry; the gate
+/// rejects malformed DEFINITIONS as readily as malformed calls.
+fn optional_marker_repeated(first_position: usize, second_position: usize) -> LispError {
+    LispError::OptionalMarkerRepeated {
+        first_position,
+        second_position,
+    }
+}
+
 /// Lift the lone `LispError::Compile { form: head.to_string(), message:
 /// "(defmacro name (params) body) required" }` triple in
 /// `macro_def_from` behind ONE named primitive. Sibling of
@@ -1550,6 +1624,7 @@ mod tests {
             name: "label".into(),
             params: MacroParams {
                 required: vec!["x".into()],
+                optional: Vec::new(),
                 rest: None,
             },
             body: Sexp::Quasiquote(Box::new(parse(
@@ -4473,14 +4548,15 @@ mod tests {
 
     // ── MacroParams: the typed param-list primitive ─────────────────────
     //
-    // `parse_params` now yields a `MacroParams { required, rest }` whose
-    // shape makes "&rest is last + at-most-one" structural rather than a
-    // construction discipline a `Vec<Param>` only happened to uphold. These
-    // tests pin the parser's mapping into the typed shape, the flat-index
-    // contract `names()` exposes to the template bytecode, and the single
-    // positional binder `bind()` both expansion strategies now route
-    // through. The end-to-end `rest_param_splices_with_at` and
-    // `compiled_template_matches_substitute_path` tests above are the
+    // `parse_params` now yields a `MacroParams { required, optional, rest }`
+    // whose shape makes the canonical lambda-list ordering (required →
+    // optional → rest, "&rest is last + at-most-one", "&optional at most
+    // once") structural rather than a construction discipline a `Vec<Param>`
+    // only happened to uphold. These tests pin the parser's mapping into the
+    // typed shape, the flat-index contract `names()` exposes to the template
+    // bytecode, and the single positional binder `bind()` both expansion
+    // strategies now route through. The end-to-end `rest_param_splices_with_at`
+    // and `compiled_template_matches_substitute_path` tests above are the
     // path-uniformity guards proving both strategies still agree.
 
     #[test]
@@ -4492,6 +4568,7 @@ mod tests {
             params,
             MacroParams {
                 required: vec!["a".into(), "b".into()],
+                optional: Vec::new(),
                 rest: Some("c".into()),
             }
         );
@@ -4506,22 +4583,96 @@ mod tests {
             params,
             MacroParams {
                 required: vec!["x".into(), "y".into()],
+                optional: Vec::new(),
                 rest: None,
             }
         );
     }
 
     #[test]
-    fn names_are_required_then_rest_in_flat_index_order() {
+    fn parse_params_maps_optional_section_between_required_and_rest() {
+        // `(a &optional b c &rest d)` — the canonical lambda-list order. `a`
+        // is required, `b`/`c` are optional, `d` is rest. The `&optional`
+        // marker switches collection from `required` to `optional`; `&rest`
+        // remains terminal.
+        let params = parse_params(&read("a &optional b c &rest d").unwrap()).unwrap();
+        assert_eq!(
+            params,
+            MacroParams {
+                required: vec!["a".into()],
+                optional: vec!["b".into(), "c".into()],
+                rest: Some("d".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_params_optional_with_no_rest_leaves_rest_none() {
+        // `(&optional x)` — a leading `&optional` (zero required) with no
+        // rest. `required` is empty, `x` is the sole optional, `rest` None.
+        let params = parse_params(&read("&optional x").unwrap()).unwrap();
+        assert_eq!(
+            params,
+            MacroParams {
+                required: Vec::new(),
+                optional: vec!["x".into()],
+                rest: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_params_rejects_repeated_optional_marker() {
+        // `(a &optional b &optional c)` — a second `&optional` is
+        // unrepresentable (one flat optional section), so the gate REJECTS
+        // rather than binding args to a marker symbol named `&optional`. The
+        // two marker positions (1 and 3) are named.
+        let err = parse_params(&read("a &optional b &optional c").unwrap())
+            .expect_err("repeated &optional must error");
+        assert!(
+            matches!(
+                err,
+                LispError::OptionalMarkerRepeated {
+                    first_position: 1,
+                    second_position: 3,
+                }
+            ),
+            "expected OptionalMarkerRepeated {{1, 3}}, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_params_rejects_optional_after_rest_as_trailing_tokens() {
+        // `(&rest xs &optional y)` — `&rest <name>` is terminal, so the
+        // `&optional y` tail is REJECTED as trailing tokens (not silently
+        // dropped, and not a repeated-optional error: the rest gate fires
+        // first). Pins the interaction the prior run (3627426) signposted.
+        let err = parse_params(&read("&rest xs &optional y").unwrap())
+            .expect_err("tokens after &rest <name> must error");
+        assert!(
+            matches!(err, LispError::RestParamTrailingTokens { .. }),
+            "expected RestParamTrailingTokens, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn names_are_required_then_optional_then_rest_in_flat_index_order() {
         // The flat-index contract the bytecode `Subst(idx)`/`Splice(idx)`
-        // depends on: required names in order at 0.., then the rest name at
-        // index `required.len()`.
+        // depends on: required names at 0.., then optional names, then the
+        // rest name last.
         let params = MacroParams {
             required: vec!["a".into(), "b".into()],
-            rest: Some("c".into()),
+            optional: vec!["c".into()],
+            rest: Some("d".into()),
         };
-        assert_eq!(params.names(), vec!["a", "b", "c"]);
+        assert_eq!(params.names(), vec!["a", "b", "c", "d"]);
+        // Optional names occupy the indices immediately after the required run.
         assert_eq!(params.names()[params.required.len()], "c");
+        // The rest name is last, after required + optional.
+        assert_eq!(
+            params.names()[params.required.len() + params.optional.len()],
+            "d"
+        );
     }
 
     #[test]
@@ -4531,6 +4682,7 @@ mod tests {
         // flat index.
         let params = MacroParams {
             required: vec!["a".into(), "b".into()],
+            optional: Vec::new(),
             rest: Some("c".into()),
         };
         let vals = params
@@ -4550,12 +4702,82 @@ mod tests {
     }
 
     #[test]
+    fn bind_supplied_optional_takes_its_positional_arg() {
+        // `(a &optional b)` bound to `1 2`: a=1, b=2. A supplied optional
+        // behaves exactly like a positional — only its ABSENCE differs.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            optional: vec!["b".into()],
+            rest: None,
+        };
+        let vals = params.bind("m", &[Sexp::int(1), Sexp::int(2)]).unwrap();
+        assert_eq!(vals, vec![Sexp::int(1), Sexp::int(2)]);
+    }
+
+    #[test]
+    fn bind_unsupplied_optional_defaults_to_nil() {
+        // `(a &optional b c)` bound to just `1`: a=1, then b and c run out of
+        // args and bind to `Sexp::Nil` — CL's default for an `&optional` with
+        // no supplied default-form. The bound vec is still parallel to
+        // `names()`, so the template's `,b` / `,c` resolve to nil, not a
+        // missing-arg error.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            optional: vec!["b".into(), "c".into()],
+            rest: None,
+        };
+        let vals = params.bind("m", &[Sexp::int(1)]).unwrap();
+        assert_eq!(vals, vec![Sexp::int(1), Sexp::Nil, Sexp::Nil]);
+    }
+
+    #[test]
+    fn bind_rest_collects_args_beyond_required_and_optional() {
+        // `(a &optional b &rest c)` bound to `1 2 3 4`: a=1, b=2 (supplied),
+        // c=(3 4). The rest starts AFTER the required+optional run, so the
+        // optional's supplied arg is not swept into the rest.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            optional: vec!["b".into()],
+            rest: Some("c".into()),
+        };
+        let vals = params
+            .bind(
+                "m",
+                &[Sexp::int(1), Sexp::int(2), Sexp::int(3), Sexp::int(4)],
+            )
+            .unwrap();
+        assert_eq!(
+            vals,
+            vec![
+                Sexp::int(1),
+                Sexp::int(2),
+                Sexp::List(vec![Sexp::int(3), Sexp::int(4)]),
+            ]
+        );
+    }
+
+    #[test]
+    fn bind_unsupplied_optional_then_empty_rest() {
+        // `(a &optional b &rest c)` bound to just `1`: a=1, b=nil (absent),
+        // c=() (nothing left). Both the optional default AND the empty-rest
+        // contract hold in the same bind.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            optional: vec!["b".into()],
+            rest: Some("c".into()),
+        };
+        let vals = params.bind("m", &[Sexp::int(1)]).unwrap();
+        assert_eq!(vals, vec![Sexp::int(1), Sexp::Nil, Sexp::List(vec![])]);
+    }
+
+    #[test]
     fn bind_rest_with_no_remaining_args_is_the_empty_list() {
         // Exactly-saturated required args + a rest that captures nothing →
         // the rest binds to the empty list, never errors. Mirrors the
         // splice contract `,@()` contributes nothing.
         let params = MacroParams {
             required: vec!["a".into()],
+            optional: Vec::new(),
             rest: Some("c".into()),
         };
         let vals = params.bind("m", &[Sexp::int(1)]).unwrap();
@@ -4569,11 +4791,32 @@ mod tests {
         // before the rest is ever collected.
         let params = MacroParams {
             required: vec!["a".into(), "b".into()],
+            optional: Vec::new(),
             rest: Some("c".into()),
         };
         let err = params
             .bind("m", &[Sexp::int(1)])
             .expect_err("missing required `b` must error");
+        assert!(
+            matches!(err, LispError::MissingMacroArg { .. }),
+            "expected MissingMacroArg, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn bind_missing_required_errors_even_with_optional_present() {
+        // An absent REQUIRED arg errors even when the param list has an
+        // optional section: the required walk fires `MissingMacroArg` before
+        // the optional arm (which would otherwise default to nil) is reached.
+        // Required absence is an error; optional absence is a nil default.
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into()],
+            optional: vec!["c".into()],
+            rest: None,
+        };
+        let err = params
+            .bind("m", &[Sexp::int(1)])
+            .expect_err("missing required `b` must error before optional defaulting");
         assert!(
             matches!(err, LispError::MissingMacroArg { .. }),
             "expected MissingMacroArg, got: {err:?}"
@@ -4587,9 +4830,41 @@ mod tests {
         // an error.
         let params = MacroParams {
             required: vec!["a".into()],
+            optional: Vec::new(),
             rest: None,
         };
         let vals = params.bind("m", &[Sexp::int(1), Sexp::int(2)]).unwrap();
         assert_eq!(vals, vec![Sexp::int(1)]);
+    }
+
+    #[test]
+    fn optional_macro_expands_end_to_end_under_both_strategies() {
+        // The end-to-end path: a macro with an `&optional` param expands
+        // correctly whether the optional is supplied or defaulted, and the
+        // bytecode and substitute strategies agree (invariant 2 — free
+        // middle). `,b` resolves to the supplied arg when present, to
+        // `Sexp::Nil` when absent (CL's `&optional` default).
+        let src = "(defmacro pair (a &optional b) `(cons ,a ,b)) (pair 1 2) (pair 3)";
+        // (cons 1 2) — optional supplied; (cons 3 <Nil>) — optional defaulted.
+        // The defaulted slot is the canonical `Sexp::Nil`, distinct in the AST
+        // from a reader-produced empty list `()` even though both Display as
+        // `()`.
+        let expected = vec![
+            Sexp::List(vec![Sexp::symbol("cons"), Sexp::int(1), Sexp::int(2)]),
+            Sexp::List(vec![Sexp::symbol("cons"), Sexp::int(3), Sexp::Nil]),
+        ];
+        let bytecode = Expander::new().expand_program(read(src).unwrap()).unwrap();
+        let substitute = Expander::new_substitute_only()
+            .expand_program(read(src).unwrap())
+            .unwrap();
+        assert_eq!(bytecode, expected, "bytecode optional expansion drifted");
+        assert_eq!(
+            substitute, expected,
+            "substitute optional expansion drifted"
+        );
+        assert_eq!(
+            bytecode, substitute,
+            "the two strategies disagree on optional expansion"
+        );
     }
 }

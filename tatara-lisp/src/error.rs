@@ -447,6 +447,63 @@ pub enum LispError {
     /// `crate::diagnostic::format_diagnostic` mechanically.
     #[error("compile error in call to {macro_name}: missing required arg: {param}")]
     MissingMacroArg { macro_name: String, param: String },
+    /// A macro was called with MORE arguments than its declared
+    /// required+optional arity, on a param list with NO `&rest` slot to
+    /// collect the surplus: `(defmacro f (a b) `(,a ,b)) (f 1 2 3)` — `3`
+    /// has nowhere to bind. The mirror at the call-site of
+    /// `RestParamTrailingTokens` (the definition-site rejection that
+    /// surfaces tokens trailing a `&rest <name>` clause, lifted in the
+    /// prior-run typed-promotion lineage): that variant rejects malformed
+    /// DEFINITIONS that the typed `MacroParams` shape cannot hold (a
+    /// `&rest` clause is structurally LAST); this variant rejects
+    /// malformed CALLS that the typed `bind` cannot honor (a rest-less
+    /// param list has a FIXED maximum arity equal to
+    /// `required.len() + optional.len()`). Together with
+    /// `MissingMacroArg`, the macro-call-gate's positional-arity surface
+    /// is now structurally complete in both directions — too-few AND
+    /// too-many — closing the asymmetry where the typed-entry gate
+    /// rejected too-few-args loudly but silently truncated too-many to
+    /// the slice `bind` could consume.
+    ///
+    /// A rest-PRESENT param list has no maximum arity (the `&rest` slot
+    /// collects every trailing arg into a `Sexp::List`), so this
+    /// rejection fires ONLY when `MacroParams.rest` is `None`. The
+    /// `expected` slot is `required.len() + optional.len()` — the maximum
+    /// number of args the rest-less binder can consume; `got` is
+    /// `args.len()` — the actual number supplied. Surfacing both lets
+    /// authoring tools (REPL, LSP, `tatara-check`) name the
+    /// "you supplied {got} args but the macro takes at most {expected}"
+    /// quick-fix without re-deriving either count from the source.
+    ///
+    /// The leftmost-priority discipline is preserved: `MissingMacroArg`
+    /// for a missing REQUIRED arg fires BEFORE this too-many gate
+    /// (`bind` iterates the required walk first and bails on the first
+    /// missing slot), so `(defmacro f (a b c) …) (f 1)` is
+    /// `MissingMacroArg { param: "b" }`, NOT `TooManyMacroArgs`. The two
+    /// failure modes are structurally disjoint: too-few-required vs.
+    /// too-many-with-no-rest.
+    ///
+    /// `macro_name` is `String` because it comes from arbitrary source
+    /// (the call-site head symbol); `expected` and `got` are `usize`
+    /// arities. Display matches the legacy `Compile`-shaped diagnostic
+    /// style — `"compile error in call to {macro_name}: too many args:
+    /// expected at most {expected}, got {got}"` — so the same
+    /// `"compile error in call to {macro_name}:"` substring authoring
+    /// tools' assertions key on stays unchanged across the new
+    /// rejection mode. When a future run gives `Sexp` source spans,
+    /// `pos: Option<usize>` lands here in ONE place and every
+    /// too-many-macro-args site picks up positional rendering via
+    /// `crate::diagnostic::format_diagnostic` mechanically — same
+    /// posture as `MissingMacroArg`.
+    #[error(
+        "compile error in call to {macro_name}: too many args: \
+         expected at most {expected}, got {got}"
+    )]
+    TooManyMacroArgs {
+        macro_name: String,
+        expected: usize,
+        got: usize,
+    },
     /// A non-symbol element appeared in a `defmacro` / `defpoint-template`
     /// / `defcheck` param list at the named position. The legacy
     /// `LispError::Compile { form: "defmacro params", message: "expected
@@ -2540,6 +2597,7 @@ impl LispError {
             | Self::NonSymbolUnquoteTarget { .. }
             | Self::SpliceOutsideList { .. }
             | Self::MissingMacroArg { .. }
+            | Self::TooManyMacroArgs { .. }
             | Self::NonSymbolParam { .. }
             | Self::RestParamMissingName { .. }
             | Self::RestParamTrailingTokens { .. }
@@ -2719,6 +2777,24 @@ mod tests {
             LispError::MissingMacroArg {
                 macro_name: "call".into(),
                 param: "f".into(),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::TooManyMacroArgs {
+                macro_name: "pair".into(),
+                expected: 2,
+                got: 3,
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::TooManyMacroArgs {
+                macro_name: "wrap".into(),
+                expected: 1,
+                got: 5,
             }
             .position(),
             None

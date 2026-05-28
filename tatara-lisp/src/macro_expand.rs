@@ -201,10 +201,23 @@ impl MacroParams {
                 .unwrap_or_else(|| param.default.clone().unwrap_or(Sexp::Nil));
             out.push(arg);
         }
-        if self.rest.is_some() {
+        if let Some(_rest_name) = self.rest.as_ref() {
             let rest_start = self.required.len() + self.optional.len();
             let rest = args.get(rest_start..).unwrap_or(&[]).to_vec();
             out.push(Sexp::List(rest));
+        } else {
+            // No `&rest` slot — the param list has a FIXED maximum arity
+            // of `required.len() + optional.len()`. Surplus args have
+            // nowhere to bind; reject rather than silently truncate.
+            // Closes the call-site mirror of `RestParamTrailingTokens`
+            // (the definition-site rejection lifted by the prior-run
+            // typed-promotion lineage), so the typed-entry macro-call-gate
+            // is now structurally complete in both directions: too-few
+            // (`MissingMacroArg`) AND too-many (`TooManyMacroArgs`).
+            let expected = self.required.len() + self.optional.len();
+            if args.len() > expected {
+                return Err(too_many_macro_args(macro_name, expected, args.len()));
+            }
         }
         Ok(out)
     }
@@ -1267,6 +1280,49 @@ fn missing_macro_arg(macro_name: &str, param: &str) -> LispError {
     LispError::MissingMacroArg {
         macro_name: macro_name.to_string(),
         param: param.to_string(),
+    }
+}
+
+/// Mirror at the call-site of `missing_macro_arg`: that helper fires when
+/// the macro CALL supplies TOO FEW args for the required arity (a required
+/// slot has no arg); this helper fires when the macro CALL supplies TOO
+/// MANY args for a rest-less param list (the surplus has nowhere to bind).
+/// Together they close the typed-entry macro-call-gate's positional-arity
+/// surface in both directions; together with the definition-site
+/// `RestParamTrailingTokens` (lifted by the prior-run typed-promotion
+/// lineage at the parse_params boundary), every distinct way a macro
+/// definition + call pair can MISCOUNT args is now a named structural
+/// rejection.
+///
+/// `expected` is the rest-less binder's fixed maximum arity
+/// (`required.len() + optional.len()`); `got` is the actual call-site arg
+/// count. Both are surfaced at the variant boundary so authoring tools
+/// (REPL, LSP, `tatara-check`) name the "you supplied {got} args but the
+/// macro takes at most {expected}" quick-fix from one structural projection
+/// rather than re-deriving either count from the source. `macro_name` is
+/// `&str` borrowed from the call-site; the variant's owned `String` is
+/// formed at the boundary so `LispError` stays lifetime-free — same posture
+/// as `missing_macro_arg`.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// rest-less surplus-args gate is a SINGLE-OWNER named rejection, not a
+/// silent truncation re-asserted at every consumer that walks the bound
+/// values. THEORY.md §V.1 — knowable platform; the structural variant
+/// exposes `macro_name` / `expected` / `got` as first-class fields so
+/// authoring tools bind to the data shape instead of substring-parsing
+/// the rendered diagnostic. THEORY.md §II.1 invariant 1 — typed entry; a
+/// macro call with too many args (and no `&rest` slot to absorb them) is
+/// exactly the failure mode the typed-entry gate exists to reject —
+/// silently dropping `args[expected..]` is structurally indistinguishable
+/// from honoring them, the asymmetry this gate closes. THEORY.md §II.1
+/// invariant 2 — free middle; both expansion strategies route through the
+/// SHARED `MacroParams::bind`, so the new rejection lands once and the
+/// substitute + bytecode paths inherit it unable to drift.
+fn too_many_macro_args(macro_name: &str, expected: usize, got: usize) -> LispError {
+    LispError::TooManyMacroArgs {
+        macro_name: macro_name.to_string(),
+        expected,
+        got,
     }
 }
 
@@ -3099,6 +3155,219 @@ mod tests {
         let out_byte = bytecode.expand_program(read(src).unwrap()).unwrap();
         assert_eq!(out_subst, out_byte);
         assert_eq!(out_subst[0], parse("(list)"));
+    }
+
+    // ── TooManyMacroArgs: call-site mirror of RestParamTrailingTokens ──
+    //
+    // A rest-less param list has a FIXED maximum arity equal to
+    // `required.len() + optional.len()`. Surplus call args have nowhere to
+    // bind. Before this gate the surplus was silently truncated to the
+    // slice the binder could consume — the typed-entry macro-call-gate
+    // rejected too-few-args loudly (`MissingMacroArg`) but accepted
+    // too-many silently, an asymmetry the definition-side `&rest <name>
+    // extra` rejection (`RestParamTrailingTokens`) had no call-side dual.
+    // After this gate the call-site arity surface is structurally
+    // complete in both directions; the substitute + bytecode paths share
+    // `MacroParams::bind`, so both inherit the rejection without drift.
+
+    /// Helper for the too-many-args tests — projects to (macro_name,
+    /// expected, got) for legibility. Sibling of `missing_macro_arg_fields`.
+    fn too_many_macro_args_fields(err: &LispError) -> (&str, usize, usize) {
+        match err {
+            LispError::TooManyMacroArgs {
+                macro_name,
+                expected,
+                got,
+            } => (macro_name.as_str(), *expected, *got),
+            other => panic!("expected TooManyMacroArgs, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn too_many_macro_args_required_only_rejected_with_expected_and_got() {
+        // `(defmacro f (a b) ...)` called as `(f 1 2 3)` — `3` has
+        // nowhere to bind. The rest-less binder rejects via
+        // `TooManyMacroArgs { macro_name: "f", expected: 2, got: 3 }`,
+        // NOT silently drops `3`. Pins both the variant identity AND the
+        // structural fields the typed gate exposes for authoring-tool
+        // quick-fixes ("you supplied 3 args; the macro takes at most
+        // 2").
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a b) `(list ,a ,b)) (f 1 2 3)").unwrap())
+            .expect_err("surplus arg on rest-less call must error");
+        let (macro_name, expected, got) = too_many_macro_args_fields(&err);
+        assert_eq!(macro_name, "f");
+        assert_eq!(expected, 2);
+        assert_eq!(got, 3);
+    }
+
+    #[test]
+    fn too_many_macro_args_required_plus_optional_capacity_includes_optional() {
+        // The rest-less binder's fixed maximum arity is `required.len() +
+        // optional.len()` — the optional section CONTRIBUTES to capacity.
+        // `(defmacro f (a &optional b) ...)` accepts 1 OR 2 args; 3
+        // args rejects with `expected: 2` (required + optional, NOT just
+        // required). Pins the optional-counts-in-capacity contract so a
+        // regression that omits optionals from the expected calculation
+        // (and erroneously rejects 2-arg calls) fails-loudly here.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a &optional b) `(list ,a ,b)) (f 1 2 3)").unwrap())
+            .expect_err("surplus arg beyond required+optional must error");
+        let (macro_name, expected, got) = too_many_macro_args_fields(&err);
+        assert_eq!(macro_name, "f");
+        assert_eq!(expected, 2);
+        assert_eq!(got, 3);
+    }
+
+    #[test]
+    fn too_many_macro_args_required_plus_two_optionals_arity_three() {
+        // Larger optional section (capacity 1 + 2 = 3). 4 args rejects
+        // with `expected: 3`. Pins that the capacity calculation scales
+        // with optional.len(), not just at-most-one. Mixes a bare
+        // optional with an optional carrying a default form — both shapes
+        // contribute identically to capacity (the typed `OptionalParam`
+        // entry's `default: Option<Sexp>` is irrelevant to the arity gate).
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(
+                read("(defmacro f (a &optional b (c 5)) `(list ,a ,b ,c)) (f 1 2 3 4)").unwrap(),
+            )
+            .expect_err("surplus arg beyond required+two-optional must error");
+        let (macro_name, expected, got) = too_many_macro_args_fields(&err);
+        assert_eq!(macro_name, "f");
+        assert_eq!(expected, 3);
+        assert_eq!(got, 4);
+    }
+
+    #[test]
+    fn too_many_macro_args_does_not_fire_when_rest_is_present() {
+        // Negative control: a rest-PRESENT param list has no maximum
+        // arity — the `&rest` slot collects every trailing arg into a
+        // `Sexp::List`. `(defmacro f (a &rest xs) ...)` called as
+        // `(f 1 2 3 4)` MUST succeed; the new gate fires ONLY when
+        // `MacroParams.rest` is `None`. Pins the rest-present-path
+        // remains permissive — a regression that wrongly fires the
+        // too-many gate for any surplus (including the rest-collecting
+        // path) would break every `&rest`-using macro.
+        let src = "(defmacro f (a &rest xs) `(list ,a ,@xs)) (f 1 2 3 4)";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let out_subst = subst.expand_program(read(src).unwrap()).unwrap();
+        let out_byte = bytecode.expand_program(read(src).unwrap()).unwrap();
+        assert_eq!(out_subst, out_byte);
+        assert_eq!(out_subst[0], parse("(list 1 2 3 4)"));
+    }
+
+    #[test]
+    fn too_many_macro_args_does_not_fire_at_exact_max_arity() {
+        // Negative control: the rest-less gate fires STRICTLY when
+        // `args.len() > expected` — at exact arity the binder accepts.
+        // `(defmacro f (a &optional b) ...)` called as `(f 1 2)` binds
+        // a=1, b=2 successfully (the optional takes its supplied arg,
+        // not the default). Pins the boundary condition so a regression
+        // that flips the comparison to `>=` (rejecting exact-arity
+        // calls) fails-loudly here.
+        let src = "(defmacro f (a &optional b) `(list ,a ,b)) (f 1 2)";
+        let mut e = Expander::new();
+        let out = e.expand_program(read(src).unwrap()).unwrap();
+        assert_eq!(out[0], parse("(list 1 2)"));
+    }
+
+    #[test]
+    fn too_many_macro_args_substitute_and_bytecode_paths_agree() {
+        // Path-uniform rejection: the SAME source emits the SAME
+        // structural variant under both expansion strategies. The
+        // shared `MacroParams::bind` makes the rejection lands once and
+        // both paths inherit it. Mirror of
+        // `missing_macro_arg_substitute_and_bytecode_paths_agree` —
+        // both close `THEORY.md §II.1 invariant 2 — free middle` for
+        // one failure mode each.
+        let src = "(defmacro pair (a b) `(cons ,a ,b)) (pair 1 2 3)";
+        let mut subst = Expander::new_substitute_only();
+        let mut bytecode = Expander::new();
+        let err_subst = subst
+            .expand_program(read(src).unwrap())
+            .expect_err("substitute must error");
+        let err_byte = bytecode
+            .expand_program(read(src).unwrap())
+            .expect_err("bytecode must error");
+        assert_eq!(too_many_macro_args_fields(&err_subst), ("pair", 2, 3));
+        assert_eq!(too_many_macro_args_fields(&err_byte), ("pair", 2, 3));
+    }
+
+    #[test]
+    fn too_many_macro_args_fires_after_missing_required_priority_held() {
+        // Priority discipline: the required walk fires
+        // `MissingMacroArg` BEFORE the rest-less surplus gate is
+        // reached. `(defmacro f (a b c) …) (f 1)` is `MissingMacroArg
+        // { param: "b" }`, NOT `TooManyMacroArgs` (and certainly not a
+        // collision). The two failure modes are structurally disjoint:
+        // too-few-required vs. too-many-with-no-rest. Pins the bail-on-
+        // first-missing-required contract so a regression that swaps
+        // the two gates' order would emit the wrong variant.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f (a b c) `(list ,a ,b ,c)) (f 1)").unwrap())
+            .expect_err("missing required must error");
+        assert!(
+            matches!(err, LispError::MissingMacroArg { .. }),
+            "expected MissingMacroArg (priority), got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn too_many_macro_args_zero_required_zero_optional_rejects_any_args() {
+        // Degenerate case: a nullary macro `(defmacro f () ...)` has
+        // capacity 0; ANY supplied arg rejects with `expected: 0`. Pins
+        // the gate fires even when the rest-less max-arity is zero —
+        // i.e. the rejection is structural, not conditional on a
+        // non-empty required+optional.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro f () `(list)) (f 1)").unwrap())
+            .expect_err("nullary macro called with arg must error");
+        let (macro_name, expected, got) = too_many_macro_args_fields(&err);
+        assert_eq!(macro_name, "f");
+        assert_eq!(expected, 0);
+        assert_eq!(got, 1);
+    }
+
+    #[test]
+    fn too_many_macro_args_display_renders_legacy_compile_substring() {
+        // The rendered Display matches the legacy `Compile`-shaped
+        // diagnostic style — `"compile error in call to {macro_name}:
+        // too many args: expected at most {expected}, got {got}"` — so
+        // the existing `"compile error in call to"` substring authoring
+        // tools' assertions key on stays unchanged. Pins the byte-level
+        // rendered shape so a regression that drifts the prefix /
+        // separator / labels fails-loudly here.
+        let err = LispError::TooManyMacroArgs {
+            macro_name: "pair".into(),
+            expected: 2,
+            got: 5,
+        };
+        assert_eq!(
+            err.to_string(),
+            "compile error in call to pair: too many args: expected at most 2, got 5"
+        );
+    }
+
+    #[test]
+    fn too_many_macro_args_position_is_none_today() {
+        // Negative control for the future-spans move: until `Sexp`
+        // carries source positions, `position()` returns `None` for
+        // this variant. A future run that gives `Sexp` source spans
+        // adds `pos: Option<usize>` to ONE place; this test gives that
+        // change a deliberate fail-before/pass-after delta. Parallel to
+        // `missing_macro_arg_position_is_none_today`.
+        let err = LispError::TooManyMacroArgs {
+            macro_name: "pair".into(),
+            expected: 2,
+            got: 3,
+        };
+        assert_eq!(err.position(), None);
     }
 
     /// Helper for the non-symbol-param tests — pins the variant shape and
@@ -4976,17 +5245,37 @@ mod tests {
     }
 
     #[test]
-    fn bind_rest_less_params_ignore_surplus_args() {
-        // Parity with the prior `Vec<Param>` binder: a rest-less param list
-        // binds only its required slots; surplus call args are dropped, not
-        // an error.
+    fn bind_rest_less_params_reject_surplus_args() {
+        // The rest-less binder REJECTS surplus call args via the
+        // structural `TooManyMacroArgs { macro_name, expected, got }`
+        // rejection — the call-site mirror of `RestParamTrailingTokens`
+        // (the definition-site rejection lifted at the parse_params
+        // boundary). Closes the asymmetry where the typed-entry
+        // macro-call-gate rejected too-few-args loudly
+        // (`MissingMacroArg`) but silently truncated too-many. `expected`
+        // is the rest-less binder's fixed maximum arity
+        // (`required.len() + optional.len()`); `got` is the actual
+        // call-site arg count.
         let params = MacroParams {
             required: vec!["a".into()],
             optional: Vec::new(),
             rest: None,
         };
-        let vals = params.bind("m", &[Sexp::int(1), Sexp::int(2)]).unwrap();
-        assert_eq!(vals, vec![Sexp::int(1)]);
+        let err = params
+            .bind("m", &[Sexp::int(1), Sexp::int(2)])
+            .expect_err("rest-less surplus must error");
+        match err {
+            LispError::TooManyMacroArgs {
+                macro_name,
+                expected,
+                got,
+            } => {
+                assert_eq!(macro_name, "m");
+                assert_eq!(expected, 1);
+                assert_eq!(got, 2);
+            }
+            other => panic!("expected TooManyMacroArgs, got: {other:?}"),
+        }
     }
 
     // ── OptionalParam: per-param default forms — `&optional (x DEFAULT)` ──

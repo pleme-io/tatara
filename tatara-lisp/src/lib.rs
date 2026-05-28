@@ -50,8 +50,8 @@ pub use compile::{compile_named, compile_named_from_forms, compile_typed, NamedD
 pub use diagnostic::{format_diagnostic, line_col, LineCol};
 pub use env::Env;
 pub use error::{
-    CompilerSpecIoStage, ExpectedKwargShape, KwargPath, LispError, MacroDefHead, Result, SexpShape,
-    TemplateInvariantKind, UnquoteForm,
+    CompilerSpecIoStage, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
+    OptionalParamMalformedReason, Result, SexpShape, TemplateInvariantKind, UnquoteForm,
 };
-pub use macro_expand::{Expander, MacroDef, MacroParams};
+pub use macro_expand::{Expander, MacroDef, MacroParams, OptionalParam};
 pub use reader::read;

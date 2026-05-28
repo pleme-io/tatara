@@ -645,6 +645,70 @@ pub enum LispError {
         first_position: usize,
         second_position: usize,
     },
+    /// A `defmacro` / `defpoint-template` / `defcheck` `&optional` section
+    /// carried a list-form entry that did not match the only admissible
+    /// shape `(NAME DEFAULT)` — exactly two elements with a symbol head.
+    /// Per-param default forms are the typed promotion of `optional:
+    /// Vec<String>` to `optional: Vec<OptionalParam>` that the prior
+    /// `&optional` run signposted, and this variant is the gate that
+    /// admits only the canonical `(NAME DEFAULT)` shape into the typed
+    /// `OptionalParam.default` slot. Four distinct list shapes are
+    /// rejected, named via the closed-set typed `reason`
+    /// ([`OptionalParamMalformedReason`]):
+    ///
+    ///   * `()`              — empty list spec.
+    ///   * `(name)`          — one element, no default form supplied.
+    ///   * `(name d e …)`    — three or more elements (CL's
+    ///     `(name default supplied-p)` shape is not yet supported — no
+    ///     `supplied-p` variable binding without an evaluator).
+    ///   * `(5 default)`     — first element isn't a symbol.
+    ///
+    /// Sibling of `OptionalMarkerRepeated` (the `&optional`-section
+    /// marker gate) and `NonSymbolParam` (the bare-symbol gate): together
+    /// the three close every distinct typed-entry rejection the optional
+    /// section can emit. The bare-symbol form `&optional x` is still
+    /// admitted through the bare-symbol path; the list form `&optional
+    /// (x default)` is admitted iff this gate accepts the spec.
+    ///
+    /// `position` is the loop index of the offending list inside
+    /// `parse_params`, parallel to `OptionalMarkerRepeated.first_position`
+    /// / `RestParamTrailingTokens.rest_position` — naming the position
+    /// lets an LSP quick-fix point at the spec to repair. `got` is
+    /// `SexpWitness` — the closed-set typed joint identity pairing the
+    /// offending list's `SexpShape::List` with its `Sexp::Display`
+    /// projection, so consumers (REPL, LSP, `tatara-check`) bind to
+    /// BOTH the structural shape AND the renderable literal jointly,
+    /// same posture as `NonSymbolParam.got` / `OptionalMarkerRepeated`'s
+    /// SexpWitness siblings. `reason` is `OptionalParamMalformedReason`
+    /// — the closed-set typed enum whose four variants are EXACTLY the
+    /// four reachable list-spec rejection modes, encoded as a TYPE so a
+    /// future fifth reason (e.g. supplied-p once an evaluator lands)
+    /// becomes a type-level extension rather than a substring drift.
+    /// Mirror at the `parse_params` optional-section boundary of the
+    /// prior-run `MacroDefHead` / `UnquoteForm` / `TemplateInvariantKind`
+    /// / `CompilerSpecIoStage` closed-set lifts.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid
+    /// states unrepresentable"; the four malformed list-spec shapes are
+    /// nonsense `MacroParams` cannot hold, so the gate must REJECT
+    /// rather than bind args to a marker symbol or drop the extras
+    /// silently. THEORY.md §II.1 invariant 1 — typed entry; a malformed
+    /// default-form spec is exactly the failure mode the typed-entry
+    /// gate exists to reject — and the gate must reject DEFINITIONS as
+    /// readily as it rejects CALLS. THEORY.md §II.1 invariant 2 — free
+    /// middle; the gate fires inside `parse_params` BEFORE either
+    /// expansion strategy runs, so both `Expander::new()` (bytecode) and
+    /// `Expander::new_substitute_only()` (substitute) reject the SAME
+    /// malformed spec at the SAME gate.
+    #[error(
+        "compile error in defmacro params: malformed &optional spec, got {got}{}",
+        optional_param_malformed_suffix(*position, *reason)
+    )]
+    OptionalParamMalformed {
+        position: usize,
+        got: SexpWitness,
+        reason: OptionalParamMalformedReason,
+    },
     /// A `defmacro` / `defpoint-template` / `defcheck` form had fewer
     /// than 4 list elements: the head keyword must be followed by a
     /// name symbol, a param list, and a body — three required slots
@@ -1690,6 +1754,95 @@ impl std::fmt::Display for MacroDefHead {
     }
 }
 
+/// Closed-set identifier for the way a `Sexp::List` entry in a macro's
+/// `&optional` section failed to match the canonical `(NAME DEFAULT)`
+/// shape. Carried as a typed slot on `LispError::OptionalParamMalformed`
+/// so authoring tools (REPL, LSP, `tatara-check`) bind to variant identity
+/// rather than substring-matching the rendered suffix.
+///
+/// Mirror at the `parse_params` optional-section boundary of the prior-run
+/// `MacroDefHead` (macro-definition-head closed set), `UnquoteForm`
+/// (template-marker closed set), `CompilerSpecIoStage` (disk-persistence
+/// surface), and `TemplateInvariantKind` (bytecode-runtime surface)
+/// closed-set lifts: those enums key their respective rejection variants
+/// on a typed identity; this enum keys the four reachable list-spec
+/// rejection modes the optional-section gate can emit on a typed identity.
+/// Adding a new mode (e.g., `SuppliedPNotYetSupported` once an evaluator
+/// lands and the three-element `(name default supplied-p)` shape is
+/// admitted) requires extending this enum, which rustc-enforces matching
+/// at every projection site (`label()`).
+///
+/// `label(self) -> String` projects the typed reason to a short
+/// human-readable clause (`"empty list"` / `"missing default"` / `"3
+/// elements (need 2)"` / `"name not a symbol"`) that the
+/// `LispError::OptionalParamMalformed` Display rendering threads through
+/// `optional_param_malformed_suffix` into the parenthetical suffix —
+/// parallel to how `TemplateInvariantKind::message()` feeds
+/// `LispError::TemplateInvariant`'s Display.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// optional-spec malformed shapes becomes a TYPE rather than a runtime
+/// string-comparison-and-format dance. A typo like `reason: "empty list
+/// "` (trailing space) is structurally unrepresentable; the four shapes
+/// are an exhaustive `match`. THEORY.md §VI.1 — generation over
+/// composition; the typed enum lands the structural-completeness floor
+/// for the optional-section-malformed surface, parallel to how
+/// `TemplateInvariantKind` lands it for the bytecode-runtime surface and
+/// `MacroDefHead` for the macro-definition-head surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OptionalParamMalformedReason {
+    /// `&optional ()` — the spec is a list of length zero, with no name
+    /// and no default form.
+    EmptyList,
+    /// `&optional (x)` — the spec is a list of length one, naming an
+    /// optional but supplying no default form. This is REJECTED rather
+    /// than reinterpreted as `&optional x` because a bare-symbol spec
+    /// IS the canonical "no default" shape; a parenthesized
+    /// single-element spec is ambiguous and would silently DROP the
+    /// extra parens at the surface.
+    MissingDefault,
+    /// `&optional (x default extra …)` — the spec is a list of length
+    /// three or more. CL's `(name default supplied-p)` shape is NOT
+    /// supported in v0 (no evaluator → no `supplied-p` variable
+    /// binding), so any third element is structurally surplus. `length`
+    /// is the actual element count (≥3).
+    ExtraElements { length: usize },
+    /// `&optional (5 default)` — the spec is a list of length two but
+    /// the first element isn't a symbol. The name slot must be a symbol
+    /// (the same gate the bare-symbol path enforces); a non-symbol head
+    /// is rejected here so the `OptionalParam.name: String` slot cannot
+    /// be populated from a `5` / `:foo` / `(nested)` value.
+    NonSymbolName,
+}
+
+impl OptionalParamMalformedReason {
+    /// Short human-readable clause for the parenthetical suffix of
+    /// `LispError::OptionalParamMalformed`'s Display. The variants
+    /// project to:
+    ///
+    ///   * `EmptyList`          → `"empty list"`
+    ///   * `MissingDefault`     → `"missing default"`
+    ///   * `ExtraElements{N}`   → `"N elements (need 2)"`
+    ///   * `NonSymbolName`      → `"name not a symbol"`
+    ///
+    /// `label` returns `String` (rather than `&'static str`) because the
+    /// `ExtraElements` arm formats its `length` payload — the other three
+    /// arms produce literal `&'static str` values which `.to_string()`
+    /// projects through. Mirror of `TemplateInvariantKind::message()`:
+    /// both return `String`, both project the closed-set typed reason
+    /// into the `LispError::Display` rendering via the variant's
+    /// `#[error(...)]` annotation.
+    #[must_use]
+    pub fn label(self) -> String {
+        match self {
+            Self::EmptyList => "empty list".to_string(),
+            Self::MissingDefault => "missing default".to_string(),
+            Self::ExtraElements { length } => format!("{length} elements (need 2)"),
+            Self::NonSymbolName => "name not a symbol".to_string(),
+        }
+    }
+}
+
 /// Closed-set identifier for the syntactic marker of a macro-template
 /// unquote (`,`) or unquote-splice (`,@`). Carried as a typed slot on
 /// `LispError::UnboundTemplateVar` and `LispError::NonSymbolUnquoteTarget`
@@ -2331,6 +2484,13 @@ fn optional_marker_repeated_suffix(first_position: usize, second_position: usize
     ))
 }
 
+fn optional_param_malformed_suffix(
+    position: usize,
+    reason: OptionalParamMalformedReason,
+) -> String {
+    paren_suffix(&format!("position {position}, {}", reason.label()))
+}
+
 fn missing_head_symbol_suffix(got: Option<&str>) -> String {
     let body = match got {
         Some(g) => format!("got {g}"),
@@ -2384,6 +2544,7 @@ impl LispError {
             | Self::RestParamMissingName { .. }
             | Self::RestParamTrailingTokens { .. }
             | Self::OptionalMarkerRepeated { .. }
+            | Self::OptionalParamMalformed { .. }
             | Self::DefmacroArity { .. }
             | Self::DefmacroNonSymbolName { .. }
             | Self::DefmacroNonListParams { .. }
@@ -2403,10 +2564,11 @@ impl LispError {
 #[cfg(test)]
 mod tests {
     use super::{
-        missing_head_symbol_suffix, optional_marker_repeated_suffix, paren_suffix,
-        rest_param_missing_name_suffix, rest_param_trailing_tokens_suffix, unknown_among_suffix,
-        unknown_domain_keyword_suffix, unknown_kwarg_suffix, ExpectedKwargShape, KwargPath,
-        LispError, MacroDefHead, SexpShape, SexpWitness, UnquoteForm,
+        missing_head_symbol_suffix, optional_marker_repeated_suffix,
+        optional_param_malformed_suffix, paren_suffix, rest_param_missing_name_suffix,
+        rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
+        unknown_kwarg_suffix, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
+        OptionalParamMalformedReason, SexpShape, SexpWitness, UnquoteForm,
     };
 
     #[test]
@@ -2589,6 +2751,24 @@ mod tests {
             LispError::RestParamMissingName {
                 rest_position: 0,
                 got: Some(SexpWitness::new(SexpShape::Int, "5")),
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::OptionalParamMalformed {
+                position: 1,
+                got: SexpWitness::new(SexpShape::List, "()"),
+                reason: OptionalParamMalformedReason::EmptyList,
+            }
+            .position(),
+            None
+        );
+        assert_eq!(
+            LispError::OptionalParamMalformed {
+                position: 3,
+                got: SexpWitness::new(SexpShape::List, "(x 1 2)"),
+                reason: OptionalParamMalformedReason::ExtraElements { length: 3 },
             }
             .position(),
             None
@@ -3365,6 +3545,54 @@ mod tests {
     }
 
     #[test]
+    fn optional_param_malformed_display_renders_typed_reason_in_suffix() {
+        // The variant's Display threads BOTH the offending list literal
+        // (`got` via SexpWitness's Display projection) AND the typed
+        // `reason`'s label into the rendered message — the prefix names
+        // the malformed-spec failure mode, the parenthetical suffix names
+        // position + reason. Authoring tools (REPL, LSP, `tatara-check`)
+        // pattern-match on the variant for structural binding; tools that
+        // substring-match see a stable shape parallel to the existing
+        // `OptionalMarkerRepeated` Display.
+        let empty = LispError::OptionalParamMalformed {
+            position: 1,
+            got: SexpWitness::new(SexpShape::List, "()"),
+            reason: OptionalParamMalformedReason::EmptyList,
+        };
+        assert_eq!(
+            format!("{empty}"),
+            "compile error in defmacro params: malformed &optional spec, got () (position 1, empty list)"
+        );
+        let missing = LispError::OptionalParamMalformed {
+            position: 2,
+            got: SexpWitness::new(SexpShape::List, "(x)"),
+            reason: OptionalParamMalformedReason::MissingDefault,
+        };
+        assert_eq!(
+            format!("{missing}"),
+            "compile error in defmacro params: malformed &optional spec, got (x) (position 2, missing default)"
+        );
+        let extra = LispError::OptionalParamMalformed {
+            position: 3,
+            got: SexpWitness::new(SexpShape::List, "(x 1 2)"),
+            reason: OptionalParamMalformedReason::ExtraElements { length: 3 },
+        };
+        assert_eq!(
+            format!("{extra}"),
+            "compile error in defmacro params: malformed &optional spec, got (x 1 2) (position 3, 3 elements (need 2))"
+        );
+        let nonsym = LispError::OptionalParamMalformed {
+            position: 0,
+            got: SexpWitness::new(SexpShape::List, "(5 default)"),
+            reason: OptionalParamMalformedReason::NonSymbolName,
+        };
+        assert_eq!(
+            format!("{nonsym}"),
+            "compile error in defmacro params: malformed &optional spec, got (5 default) (position 0, name not a symbol)"
+        );
+    }
+
+    #[test]
     fn paren_suffix_owns_the_bare_parenthetical_skeleton() {
         // The lowest layer of the suffix-wrapping algebra: one leading space,
         // open paren, body, close paren. A regression that drops the leading
@@ -3375,7 +3603,7 @@ mod tests {
 
     #[test]
     fn every_suffix_helper_wraps_through_one_paren_primitive() {
-        // All six `*_suffix` helpers delegate their bare ` (…)` wrapping to
+        // All seven `*_suffix` helpers delegate their bare ` (…)` wrapping to
         // `paren_suffix`; only their body-construction stays helper-specific.
         // Pinning that each helper's output EQUALS `paren_suffix` applied with
         // that helper's body means a re-inlined divergent skeleton in ANY of
@@ -3416,6 +3644,22 @@ mod tests {
         assert_eq!(
             optional_marker_repeated_suffix(1, 3),
             paren_suffix("first &optional at position 1, second at position 3")
+        );
+
+        // optional_param_malformed_suffix — the position+reason-label body.
+        // Both `&'static` (the three string-only arms) and formatted
+        // (the `ExtraElements{length}` arm) cases route through the same
+        // `paren_suffix` wrapping.
+        assert_eq!(
+            optional_param_malformed_suffix(1, OptionalParamMalformedReason::EmptyList),
+            paren_suffix("position 1, empty list")
+        );
+        assert_eq!(
+            optional_param_malformed_suffix(
+                2,
+                OptionalParamMalformedReason::ExtraElements { length: 3 }
+            ),
+            paren_suffix("position 2, 3 elements (need 2)")
         );
     }
 

@@ -67,13 +67,12 @@ pub struct MacroDef {
 ///
 /// `optional` differs from `required` in the binder, not the index contract:
 /// a required name with no arg at its position is a `MissingMacroArg`
-/// rejection; an optional name with no arg binds to `Sexp::Nil` — exactly
-/// Common Lisp's default for an `&optional` param with no supplied
-/// default-form. (Per-param default-forms — `&optional (x 5)` — are the next
-/// extension: they promote `optional: Vec<String>` to a `Vec` of
-/// name-plus-default the binder consults when the arg is absent, hanging off
-/// THIS field rather than smearing more positional discipline across a flat
-/// `Vec`.)
+/// rejection; an optional name with no arg binds to its declared default form
+/// — `Sexp::Nil` when none was given, the parsed default literal when one was.
+/// Both shapes — `&optional x` and `&optional (x 5)` — are now structural in
+/// the typed [`OptionalParam`] entry rather than smeared across a flat
+/// `Vec<String>` the binder would have had to discover the default for
+/// elsewhere.
 ///
 /// The flat-index contract the template bytecode depends on is preserved by
 /// [`MacroParams::names`]: index `0..required.len()` are the required names
@@ -93,8 +92,66 @@ pub struct MacroDef {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct MacroParams {
     pub required: Vec<String>,
-    pub optional: Vec<String>,
+    pub optional: Vec<OptionalParam>,
     pub rest: Option<String>,
+}
+
+/// One entry in a macro's `&optional` section — a name plus an optional
+/// default form. The two surface shapes the reader admits collapse into this
+/// single typed shape:
+///
+///   * `&optional x`        ⇒ `OptionalParam { name: "x", default: None }`
+///   * `&optional (x 5)`    ⇒ `OptionalParam { name: "x", default: Some(Int(5)) }`
+///
+/// The `default: Option<Sexp>` slot makes the per-param default-form a
+/// FIELD on each optional entry, not a discipline a sibling `Vec<Sexp>` would
+/// have had to maintain in lock-step with `Vec<String>`. Without this shape
+/// the binder cannot tell "no arg supplied, no default declared → bind nil"
+/// from "no arg supplied, default `5` declared → bind `5`": both would
+/// collapse onto `Sexp::Nil`, the precise silent misalignment the typed
+/// shape exists to forbid.
+///
+/// The default is the LITERAL `Sexp` — there is no evaluator in v0, so a
+/// `(x (foo 1))` spec parks `(foo 1)` verbatim as the bound value when `x`'s
+/// arg is absent. This is the no-evaluator floor of CL semantics: any
+/// arbitrary form is admitted at the gate, what it MEANS is the next layer's
+/// concern. The default is parsed exactly once at `defmacro`/
+/// `defpoint-template`/`defcheck` time (inside `parse_params`); every call
+/// to that macro consumes the same parsed `Sexp` via `Clone`, never re-
+/// reading the source.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// unrepresentable"; the (name, default?) pair is one entry rather than two
+/// parallel `Vec`s a regression could desynchronize. THEORY.md §VI.1 —
+/// generation over composition; the binder's optional arm consults
+/// `param.default` in ONE place, so the substitute and bytecode strategies
+/// inherit identical default-resolution semantics from the shared `bind`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionalParam {
+    pub name: String,
+    pub default: Option<Sexp>,
+}
+
+impl OptionalParam {
+    /// `&optional x` — a bare optional name with no default. An absent
+    /// argument binds to `Sexp::Nil` (the no-default-form floor).
+    #[must_use]
+    pub fn bare(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            default: None,
+        }
+    }
+
+    /// `&optional (x DEFAULT)` — an optional with a default form. An absent
+    /// argument binds to `default.clone()`.
+    #[must_use]
+    pub fn with_default(name: impl Into<String>, default: Sexp) -> Self {
+        Self {
+            name: name.into(),
+            default: Some(default),
+        }
+    }
 }
 
 impl MacroParams {
@@ -106,8 +163,8 @@ impl MacroParams {
     pub fn names(&self) -> Vec<&str> {
         self.required
             .iter()
-            .chain(self.optional.iter())
             .map(String::as_str)
+            .chain(self.optional.iter().map(|p| p.name.as_str()))
             .chain(self.rest.as_deref())
             .collect()
     }
@@ -116,14 +173,15 @@ impl MacroParams {
     /// values parallel to [`names`](Self::names): each required name takes
     /// the arg at its position (a missing one is
     /// [`missing_macro_arg`](self::missing_macro_arg)); each optional name
-    /// takes the arg at its position, or `Sexp::Nil` when the call ran out of
-    /// args (CL's default for an `&optional` with no supplied default-form);
-    /// and a present `rest` collects every arg beyond the required+optional
-    /// run into a `Sexp::List` (the empty list when none remain). Args beyond
-    /// a rest-less param list are ignored, matching the prior binder. This is
-    /// the single binding loop both expansion strategies share —
-    /// `apply_compiled` consumes the index vec directly, `bind_args` zips it
-    /// against `names()` into the name-keyed map.
+    /// takes the arg at its position, or — when the call ran out of args —
+    /// its declared default form (`Sexp::Nil` when none was declared,
+    /// matching CL's `&optional` floor); and a present `rest` collects every
+    /// arg beyond the required+optional run into a `Sexp::List` (the empty
+    /// list when none remain). Args beyond a rest-less param list are
+    /// ignored, matching the prior binder. This is the single binding loop
+    /// both expansion strategies share — `apply_compiled` consumes the index
+    /// vec directly, `bind_args` zips it against `names()` into the
+    /// name-keyed map.
     fn bind(&self, macro_name: &str, args: &[Sexp]) -> Result<Vec<Sexp>> {
         let mut out = Vec::with_capacity(
             self.required.len() + self.optional.len() + usize::from(self.rest.is_some()),
@@ -136,8 +194,11 @@ impl MacroParams {
             out.push(arg);
         }
         let opt_start = self.required.len();
-        for j in 0..self.optional.len() {
-            let arg = args.get(opt_start + j).cloned().unwrap_or(Sexp::Nil);
+        for (j, param) in self.optional.iter().enumerate() {
+            let arg = args
+                .get(opt_start + j)
+                .cloned()
+                .unwrap_or_else(|| param.default.clone().unwrap_or(Sexp::Nil));
             out.push(arg);
         }
         if self.rest.is_some() {
@@ -613,10 +674,21 @@ fn macro_def_from(form: &Sexp) -> Result<Option<MacroDef>> {
 
 fn parse_params(list: &[Sexp]) -> Result<MacroParams> {
     let mut required = Vec::new();
-    let mut optional = Vec::new();
+    let mut optional: Vec<OptionalParam> = Vec::new();
     let mut optional_marker: Option<usize> = None;
     let mut i = 0;
     while i < list.len() {
+        // In the optional section a `(name default)` LIST form is a valid spec
+        // alongside a bare-symbol spec. The list form is only meaningful here,
+        // so the dispatch fires before the `as_symbol()` gate that would
+        // otherwise reject it as `NonSymbolParam`.
+        if optional_marker.is_some() {
+            if let Sexp::List(items) = &list[i] {
+                optional.push(parse_optional_list_spec(i, &list[i], items)?);
+                i += 1;
+                continue;
+            }
+        }
         let s = list[i]
             .as_symbol()
             .ok_or_else(|| non_symbol_param(i, &list[i]))?;
@@ -646,7 +718,7 @@ fn parse_params(list: &[Sexp]) -> Result<MacroParams> {
             continue;
         }
         if optional_marker.is_some() {
-            optional.push(s.to_string());
+            optional.push(OptionalParam::bare(s));
         } else {
             required.push(s.to_string());
         }
@@ -657,6 +729,52 @@ fn parse_params(list: &[Sexp]) -> Result<MacroParams> {
         optional,
         rest: None,
     })
+}
+
+/// Project a `Sexp::List` in the `&optional` section to a typed
+/// [`OptionalParam`]. The only admissible shape is `(NAME DEFAULT)` — a
+/// list of exactly TWO elements whose first element is a symbol. Every
+/// other list shape is the structural rejection
+/// [`LispError::OptionalParamMalformed`], with a typed `reason`
+/// ([`OptionalParamMalformedReason`]) naming WHICH way the spec is
+/// malformed — empty, missing-default, extra-elements, or non-symbol name.
+///
+/// `position` is the loop index inside `parse_params`, mirroring the
+/// `position`/`rest_position`/`first_position` slots on the sibling
+/// `parse_params` rejection variants. `list_form` is the offending
+/// `Sexp::List` itself, projected through `crate::domain::sexp_witness` so
+/// the variant carries BOTH `SexpShape::List` AND the rendered form (for
+/// LSP / REPL / `tatara-check` consumption). `items` is the list body,
+/// avoiding a re-`as_list()` at the call boundary.
+fn parse_optional_list_spec(
+    position: usize,
+    list_form: &Sexp,
+    items: &[Sexp],
+) -> Result<OptionalParam> {
+    use crate::error::OptionalParamMalformedReason as R;
+    match items.len() {
+        0 => Err(optional_param_malformed(position, list_form, R::EmptyList)),
+        1 => Err(optional_param_malformed(
+            position,
+            list_form,
+            R::MissingDefault,
+        )),
+        2 => {
+            let Some(name) = items[0].as_symbol() else {
+                return Err(optional_param_malformed(
+                    position,
+                    list_form,
+                    R::NonSymbolName,
+                ));
+            };
+            Ok(OptionalParam::with_default(name, items[1].clone()))
+        }
+        length => Err(optional_param_malformed(
+            position,
+            list_form,
+            R::ExtraElements { length },
+        )),
+    }
 }
 
 fn bind_args(
@@ -1292,6 +1410,40 @@ fn optional_marker_repeated(first_position: usize, second_position: usize) -> Li
     LispError::OptionalMarkerRepeated {
         first_position,
         second_position,
+    }
+}
+
+/// An `&optional` section entry that's a `Sexp::List` did NOT match the only
+/// admissible shape `(NAME DEFAULT)` — exactly two elements with a symbol
+/// head. This helper builds the structural rejection from the loop position,
+/// the offending list form (projected through `crate::domain::sexp_witness`
+/// to carry both `SexpShape::List` and the literal display), and the typed
+/// `OptionalParamMalformedReason` naming which of the four malformed shapes
+/// fired (empty list / missing default / extra elements / non-symbol name).
+///
+/// Sibling of `optional_marker_repeated` (the `&optional`-section marker
+/// gate) and `non_symbol_param` (the bare-symbol gate): the three together
+/// close every distinct typed-entry rejection the optional section can
+/// emit. The bare-symbol form `&optional x` is still routed through
+/// `non_symbol_param`'s sibling acceptance path; the list form `&optional
+/// (x default)` is admitted iff this gate accepts the spec.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid states
+/// unrepresentable"; an `&optional` list spec of any other shape is
+/// nonsense `MacroParams` cannot hold, so the gate must REJECT rather than
+/// bind args to a marker symbol or drop the extras silently. THEORY.md
+/// §II.1 invariant 1 — typed entry; a malformed default-form spec is
+/// exactly the failure mode the typed-entry gate exists to reject — and
+/// the gate must reject DEFINITIONS as readily as it rejects CALLS.
+fn optional_param_malformed(
+    position: usize,
+    got: &Sexp,
+    reason: crate::error::OptionalParamMalformedReason,
+) -> LispError {
+    LispError::OptionalParamMalformed {
+        position,
+        got: crate::domain::sexp_witness(got),
+        reason,
     }
 }
 
@@ -4600,7 +4752,7 @@ mod tests {
             params,
             MacroParams {
                 required: vec!["a".into()],
-                optional: vec!["b".into(), "c".into()],
+                optional: vec![OptionalParam::bare("b"), OptionalParam::bare("c")],
                 rest: Some("d".into()),
             }
         );
@@ -4615,7 +4767,7 @@ mod tests {
             params,
             MacroParams {
                 required: Vec::new(),
-                optional: vec!["x".into()],
+                optional: vec![OptionalParam::bare("x")],
                 rest: None,
             }
         );
@@ -4662,7 +4814,7 @@ mod tests {
         // rest name last.
         let params = MacroParams {
             required: vec!["a".into(), "b".into()],
-            optional: vec!["c".into()],
+            optional: vec![OptionalParam::bare("c")],
             rest: Some("d".into()),
         };
         assert_eq!(params.names(), vec!["a", "b", "c", "d"]);
@@ -4707,7 +4859,7 @@ mod tests {
         // behaves exactly like a positional — only its ABSENCE differs.
         let params = MacroParams {
             required: vec!["a".into()],
-            optional: vec!["b".into()],
+            optional: vec![OptionalParam::bare("b")],
             rest: None,
         };
         let vals = params.bind("m", &[Sexp::int(1), Sexp::int(2)]).unwrap();
@@ -4723,7 +4875,7 @@ mod tests {
         // missing-arg error.
         let params = MacroParams {
             required: vec!["a".into()],
-            optional: vec!["b".into(), "c".into()],
+            optional: vec![OptionalParam::bare("b"), OptionalParam::bare("c")],
             rest: None,
         };
         let vals = params.bind("m", &[Sexp::int(1)]).unwrap();
@@ -4737,7 +4889,7 @@ mod tests {
         // optional's supplied arg is not swept into the rest.
         let params = MacroParams {
             required: vec!["a".into()],
-            optional: vec!["b".into()],
+            optional: vec![OptionalParam::bare("b")],
             rest: Some("c".into()),
         };
         let vals = params
@@ -4763,7 +4915,7 @@ mod tests {
         // contract hold in the same bind.
         let params = MacroParams {
             required: vec!["a".into()],
-            optional: vec!["b".into()],
+            optional: vec![OptionalParam::bare("b")],
             rest: Some("c".into()),
         };
         let vals = params.bind("m", &[Sexp::int(1)]).unwrap();
@@ -4811,7 +4963,7 @@ mod tests {
         // Required absence is an error; optional absence is a nil default.
         let params = MacroParams {
             required: vec!["a".into(), "b".into()],
-            optional: vec!["c".into()],
+            optional: vec![OptionalParam::bare("c")],
             rest: None,
         };
         let err = params
@@ -4835,6 +4987,275 @@ mod tests {
         };
         let vals = params.bind("m", &[Sexp::int(1), Sexp::int(2)]).unwrap();
         assert_eq!(vals, vec![Sexp::int(1)]);
+    }
+
+    // ── OptionalParam: per-param default forms — `&optional (x DEFAULT)` ──
+    //
+    // The `&optional` section now admits both bare-symbol entries (`x`) AND
+    // list-form entries (`(x DEFAULT)`). The typed `OptionalParam.default:
+    // Option<Sexp>` slot makes the per-param default a FIELD on each
+    // optional entry, not a discipline a sibling `Vec<Sexp>` would have had
+    // to maintain in lock-step with `Vec<String>`. These tests pin: the
+    // parser admits both shapes side-by-side; the four malformed list-spec
+    // shapes (empty / missing-default / extra-elements / non-symbol-name)
+    // are rejected via `OptionalParamMalformed` with the typed
+    // `OptionalParamMalformedReason`; the binder consults the default form
+    // when the arg is absent and ignores it when supplied; and the end-to-
+    // end expansion agrees between the bytecode and substitute strategies
+    // (invariant 2 — free middle).
+
+    #[test]
+    fn parse_params_admits_optional_list_spec_with_default() {
+        // `(a &optional (b 5))` — one bare optional becomes
+        // `OptionalParam { name: "b", default: Some(Int(5)) }`. The
+        // surrounding `MacroParams` shape is otherwise identical.
+        let params = parse_params(&read("a &optional (b 5)").unwrap()).unwrap();
+        assert_eq!(
+            params,
+            MacroParams {
+                required: vec!["a".into()],
+                optional: vec![OptionalParam::with_default("b", Sexp::int(5))],
+                rest: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_params_mixes_bare_and_list_optional_specs_side_by_side() {
+        // `(a &optional b (c "x") d (e 9) &rest r)` — the optional section
+        // interleaves bare and list-form specs. Each lands in its own
+        // `OptionalParam` entry; `names()` still yields the flat
+        // required-then-optional-then-rest order.
+        let params =
+            parse_params(&read("a &optional b (c \"x\") d (e 9) &rest r").unwrap()).unwrap();
+        assert_eq!(
+            params,
+            MacroParams {
+                required: vec!["a".into()],
+                optional: vec![
+                    OptionalParam::bare("b"),
+                    OptionalParam::with_default("c", Sexp::string("x")),
+                    OptionalParam::bare("d"),
+                    OptionalParam::with_default("e", Sexp::int(9)),
+                ],
+                rest: Some("r".into()),
+            }
+        );
+        assert_eq!(params.names(), vec!["a", "b", "c", "d", "e", "r"]);
+    }
+
+    #[test]
+    fn parse_params_admits_arbitrary_sexp_as_optional_default_form() {
+        // `(&optional (x (list 1 2)))` — the default form is itself a list.
+        // Without an evaluator, the literal Sexp is parked verbatim into
+        // `default`; the binder produces it for any absent call.
+        let params = parse_params(&read("&optional (x (list 1 2))").unwrap()).unwrap();
+        let want_default = Sexp::List(vec![Sexp::symbol("list"), Sexp::int(1), Sexp::int(2)]);
+        assert_eq!(
+            params,
+            MacroParams {
+                required: Vec::new(),
+                optional: vec![OptionalParam::with_default("x", want_default)],
+                rest: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_params_rejects_empty_list_optional_spec() {
+        // `(&optional ())` — a zero-element list is the empty-list rejection.
+        // Without the gate the loop would `as_symbol()` on a `Sexp::List` and
+        // fall through to `NonSymbolParam`, which mis-classifies the failure
+        // (this is a malformed DEFAULT-FORM spec, not a "param must be a
+        // symbol" rejection).
+        let err = parse_params(&read("&optional ()").unwrap())
+            .expect_err("empty list optional spec must error");
+        assert!(
+            matches!(
+                err,
+                LispError::OptionalParamMalformed {
+                    position: 1,
+                    reason: crate::error::OptionalParamMalformedReason::EmptyList,
+                    ..
+                }
+            ),
+            "expected OptionalParamMalformed{{EmptyList, position: 1}}, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_params_rejects_one_element_optional_list_as_missing_default() {
+        // `(&optional (x))` — a one-element list. REJECTED with reason
+        // `MissingDefault` rather than reinterpreted as `&optional x`, because
+        // a parenthesized single-element spec is structurally ambiguous and
+        // the bare-symbol form `x` IS the canonical "no default" shape.
+        let err = parse_params(&read("&optional (x)").unwrap())
+            .expect_err("one-element list optional spec must error");
+        assert!(
+            matches!(
+                err,
+                LispError::OptionalParamMalformed {
+                    position: 1,
+                    reason: crate::error::OptionalParamMalformedReason::MissingDefault,
+                    ..
+                }
+            ),
+            "expected OptionalParamMalformed{{MissingDefault, position: 1}}, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_params_rejects_three_or_more_element_optional_list_as_extra_elements() {
+        // `(&optional (x 5 6))` — a three-element list. CL's `(name default
+        // supplied-p)` shape is not yet supported (no evaluator → no
+        // supplied-p variable binding), so the third element is structurally
+        // surplus. REJECTED with reason `ExtraElements{length: 3}`.
+        let err = parse_params(&read("&optional (x 5 6)").unwrap())
+            .expect_err("three-element list optional spec must error");
+        assert!(
+            matches!(
+                err,
+                LispError::OptionalParamMalformed {
+                    position: 1,
+                    reason: crate::error::OptionalParamMalformedReason::ExtraElements { length: 3 },
+                    ..
+                }
+            ),
+            "expected OptionalParamMalformed{{ExtraElements{{3}}, position: 1}}, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_params_rejects_non_symbol_name_in_optional_list_spec() {
+        // `(&optional (5 default))` — the name slot must be a symbol; a
+        // numeric literal is REJECTED with reason `NonSymbolName`. Without
+        // this branch the gate would silently populate
+        // `OptionalParam.name` from a stringified non-symbol value (`"5"`),
+        // breaking the invariant that param names are symbols.
+        let err = parse_params(&read("&optional (5 default)").unwrap())
+            .expect_err("non-symbol-name optional spec must error");
+        assert!(
+            matches!(
+                err,
+                LispError::OptionalParamMalformed {
+                    position: 1,
+                    reason: crate::error::OptionalParamMalformedReason::NonSymbolName,
+                    ..
+                }
+            ),
+            "expected OptionalParamMalformed{{NonSymbolName, position: 1}}, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn parse_params_rejects_list_in_required_section_as_non_symbol_param() {
+        // `((a 5))` — a list in the REQUIRED section is NOT a default-form
+        // spec; default forms are an optional-section affordance. The gate
+        // must fall through to `NonSymbolParam` (parity with the prior
+        // behavior on lists in the required section), not silently admit
+        // the list as a default-form spec.
+        let err =
+            parse_params(&read("(a 5)").unwrap()).expect_err("list in required section must error");
+        assert!(
+            matches!(err, LispError::NonSymbolParam { position: 0, .. }),
+            "expected NonSymbolParam{{position: 0}}, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn bind_unsupplied_optional_with_default_takes_the_default() {
+        // `(a &optional (b 5))` bound to just `1`: a=1, b=5 (the declared
+        // default), not nil. The default form is consulted ONLY when the
+        // call ran out of args.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            optional: vec![OptionalParam::with_default("b", Sexp::int(5))],
+            rest: None,
+        };
+        let vals = params.bind("m", &[Sexp::int(1)]).unwrap();
+        assert_eq!(vals, vec![Sexp::int(1), Sexp::int(5)]);
+    }
+
+    #[test]
+    fn bind_supplied_optional_with_default_takes_the_arg_not_the_default() {
+        // `(&optional (b 5))` bound to `42`: b=42, NOT the default. A
+        // supplied optional ALWAYS takes its arg; the default is the
+        // absence-only fallback. Pins that the default form does not
+        // shadow a supplied call arg.
+        let params = MacroParams {
+            required: Vec::new(),
+            optional: vec![OptionalParam::with_default("b", Sexp::int(5))],
+            rest: None,
+        };
+        let vals = params.bind("m", &[Sexp::int(42)]).unwrap();
+        assert_eq!(vals, vec![Sexp::int(42)]);
+    }
+
+    #[test]
+    fn bind_mixes_supplied_unsupplied_default_and_nil_floor() {
+        // `(a &optional (b 5) c (d "z"))` bound to just `1`: a=1, b=5
+        // (default), c=nil (bare floor), d="z" (default). The three
+        // absence cases coexist in one bind: per-default fill, nil floor,
+        // and a tail with a literal-string default.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            optional: vec![
+                OptionalParam::with_default("b", Sexp::int(5)),
+                OptionalParam::bare("c"),
+                OptionalParam::with_default("d", Sexp::string("z")),
+            ],
+            rest: None,
+        };
+        let vals = params.bind("m", &[Sexp::int(1)]).unwrap();
+        assert_eq!(
+            vals,
+            vec![Sexp::int(1), Sexp::int(5), Sexp::Nil, Sexp::string("z")]
+        );
+    }
+
+    #[test]
+    fn optional_default_macro_expands_end_to_end_under_both_strategies() {
+        // The end-to-end path: a macro with `&optional (g "hi")` expands to
+        // the default literal when unsupplied, and to the supplied arg when
+        // present. Both the bytecode and substitute strategies must agree
+        // (invariant 2 — free middle); they share `MacroParams::bind`, so
+        // the default arm lands once in `bind` and both strategies inherit
+        // it unable to drift. This is the test the prior run (611a682)
+        // signposted as the next-change-that-benefits.
+        let src = r#"
+            (defmacro greet (n &optional (g "hi"))
+              `(list ,g ,n))
+            (greet world)
+            (greet world there)
+        "#;
+        let expected = vec![
+            Sexp::List(vec![
+                Sexp::symbol("list"),
+                Sexp::string("hi"),
+                Sexp::symbol("world"),
+            ]),
+            Sexp::List(vec![
+                Sexp::symbol("list"),
+                Sexp::symbol("there"),
+                Sexp::symbol("world"),
+            ]),
+        ];
+        let bytecode = Expander::new().expand_program(read(src).unwrap()).unwrap();
+        let substitute = Expander::new_substitute_only()
+            .expand_program(read(src).unwrap())
+            .unwrap();
+        assert_eq!(
+            bytecode, expected,
+            "bytecode optional-default expansion drifted"
+        );
+        assert_eq!(
+            substitute, expected,
+            "substitute optional-default expansion drifted"
+        );
+        assert_eq!(
+            bytecode, substitute,
+            "the two strategies disagree on optional-default expansion"
+        );
     }
 
     #[test]

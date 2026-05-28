@@ -3,7 +3,12 @@
 use serde::{Deserialize, Serialize};
 use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize,
+         gen_platform::TypedDispatcher,
+         gen_platform::Discriminant,
+         gen_platform::IsVariant,
+         gen_platform::FromStrKind)]
+#[discriminant(also_display)]
 #[serde(tag = "kind")]
 pub enum Hypervisor {
     /// Apple Virtualization.framework via the `vfkit` CLI — Linux guests.
@@ -25,6 +30,13 @@ impl Default for Hypervisor {
         Self::Vfkit
     }
 }
+
+// Fleet-wide dispatcher-catalog registration. Tatara becomes
+// the TENTH consumer class adopting gen-platform's typed-
+// dispatcher catamorphism (after gen / caixa / wasm-platform /
+// cofre / shigoto / engenho / magma / kura / pangea). See
+// theory/UNIFIED-COMPUTING-MODEL.md §VI.
+gen_platform::register_dispatcher!("tatara.hypervisor", Hypervisor);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]

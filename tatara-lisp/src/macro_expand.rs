@@ -43,6 +43,58 @@ pub struct MacroDef {
     pub body: Sexp,
 }
 
+impl MacroDef {
+    /// Project the macro body to its substitution-walked form: the inner of
+    /// the outer `Sexp::Quasiquote` when `(defmacro NAME (PARAMS) `(...))`
+    /// authored the body through the canonical quasi-quote affordance, OR
+    /// `&self.body` verbatim when authored without one. The two expansion
+    /// strategies — bytecode (`compile_template`) and substitute (`apply`'s
+    /// substitute fallback) — both walk this projection, never the raw
+    /// `body`, because the outer quasi-quote is the syntactic "you're
+    /// inside a template" marker and the substitution semantics operate on
+    /// what's INSIDE it. Naming the projection lifts the inline
+    /// `match &def.body { Sexp::Quasiquote(inner) => inner.as_ref(),
+    /// other => other }` peel that appeared verbatim at BOTH sites — well
+    /// past the ≥2 PRIME-DIRECTIVE trigger — into ONE function the two
+    /// strategies share, so a regression that drifts ONE strategy's
+    /// body-projection from the other (e.g. one path peels twice and the
+    /// other peels once, or one path treats `Sexp::Quote(...)` as a
+    /// template marker and the other doesn't) becomes structurally
+    /// impossible: there is exactly one implementation both strategies
+    /// call.
+    ///
+    /// Single-level peel by design: a nested `` ``form `` body unwraps to
+    /// `` `form `` (the inner quasi-quote stays as-is), matching the v0
+    /// "no nested quasi-quotes" scope the module preamble declares. A
+    /// non-quasi-quote body — `(defmacro NAME (PARAMS) BODY)` where BODY
+    /// is a plain `Sexp::List` / `Sexp::Atom` — returns `&self.body`
+    /// verbatim, the "other" arm of the legacy match. The borrow is
+    /// strictly `&'a Sexp` rooted in `&'a self.body` (no clone, no
+    /// allocation); both `compile_node` (bytecode path) and `substitute`
+    /// (substitute path) consume the projection immediately and never
+    /// outlive the borrow.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+    /// inline copies of the body-peel match is the ≥2 trigger, and the
+    /// substrate names the projection ONCE so authoring surfaces and
+    /// future expansion strategies (a third interpreter? a JIT? a
+    /// debugger that wants to render the body without the outer
+    /// quasi-quote marker?) bind to ONE primitive. THEORY.md §II.1
+    /// invariant 2 — free middle; the two expansion strategies emit
+    /// IDENTICAL output for the same (macro, args) pair, and sharing one
+    /// body-projection makes that per-strategy agreement structural at
+    /// the entry to the walker, not a two-site discipline the
+    /// `expansion_layers_agree_on_output_and_cache_wins` benchmark only
+    /// observes after the fact.
+    #[must_use]
+    pub fn template_body(&self) -> &Sexp {
+        match &self.body {
+            Sexp::Quasiquote(inner) => inner.as_ref(),
+            other => other,
+        }
+    }
+}
+
 /// A macro's parameter list — structurally "zero or more required
 /// positional params, then zero or more `&optional` params, then an OPTIONAL
 /// single `&rest` param." This is the canonical Lisp lambda-list ordering
@@ -372,13 +424,12 @@ impl Expander {
         let result = if let Some(tmpl) = self.templates.get(&def.name) {
             apply_compiled(&def.name, &def.params, tmpl, args)?
         } else {
-            // Layer 3: substitute fallback.
+            // Layer 3: substitute fallback. Walk the body's substitution
+            // projection — the inner of the outer quasi-quote when present,
+            // the body verbatim otherwise — through the shared
+            // `MacroDef::template_body` primitive both strategies route on.
             let bindings = bind_args(&def.name, &def.params, args)?;
-            let body = match &def.body {
-                Sexp::Quasiquote(inner) => inner.as_ref(),
-                other => other,
-            };
-            substitute(body, &bindings)?
+            substitute(def.template_body(), &bindings)?
         };
 
         // Populate cache on miss.
@@ -442,10 +493,11 @@ pub struct CompiledTemplate {
 /// gate every `,@-outside-list` body is rejected at registration time on
 /// both paths with ONE structural variant (`LispError::SpliceOutsideList`).
 pub fn compile_template(def: &MacroDef) -> Result<CompiledTemplate> {
-    let body = match &def.body {
-        Sexp::Quasiquote(inner) => inner.as_ref(),
-        other => other,
-    };
+    // Walk the body's substitution projection — the inner of the outer
+    // quasi-quote when present, the body verbatim otherwise — through the
+    // shared `MacroDef::template_body` primitive the substitute path also
+    // routes on. Same projection, both strategies, by construction.
+    let body = def.template_body();
     if let Sexp::UnquoteSplice(inner) = body {
         return Err(splice_outside_list(inner));
     }
@@ -5575,6 +5627,146 @@ mod tests {
         assert_eq!(
             bytecode, substitute,
             "the two strategies disagree on optional expansion"
+        );
+    }
+
+    // ── MacroDef::template_body: the shared body-projection primitive ──
+    //
+    // `template_body` lifts the `match &def.body { Sexp::Quasiquote(inner)
+    // => inner.as_ref(), other => other }` inline peel — present
+    // byte-identically at the bytecode (`compile_template`) AND substitute
+    // (`apply`'s fallback) path entries — into ONE named projection both
+    // strategies share. The existing `compiled_template_matches_substitute
+    // _path` and `expansion_layers_agree_on_output_and_cache_wins` tests
+    // are the path-uniformity guards covering the SHARED-PROJECTION shape;
+    // the four tests below pin the projection's contract DIRECTLY:
+    // (a) a quasi-quoted body unwraps to the inner; (b) a non-quasi-quoted
+    // body returns the body verbatim; (c) the borrow is rooted in the
+    // body field (single-level peel); (d) the projection is the same
+    // `&Sexp` both strategies route on (so a regression that drifts the
+    // body-peel from one strategy to the other becomes a type-level
+    // change at this helper, not a silent two-site divergence).
+
+    #[test]
+    fn template_body_unwraps_outer_quasiquote_to_inner() {
+        // The canonical authoring shape: `(defmacro f (a) `(list ,a))` —
+        // the reader wraps the `` ` `` form into `Sexp::Quasiquote(inner)`,
+        // and `template_body` peels the outer marker. The returned `&Sexp`
+        // is the inner walker-payload both expansion strategies consume.
+        let inner = Sexp::List(vec![
+            Sexp::symbol("list"),
+            Sexp::Unquote(Box::new(Sexp::symbol("a"))),
+        ]);
+        let def = MacroDef {
+            name: "f".into(),
+            params: MacroParams::default(),
+            body: Sexp::Quasiquote(Box::new(inner.clone())),
+        };
+        assert_eq!(def.template_body(), &inner);
+    }
+
+    #[test]
+    fn template_body_returns_non_quasiquote_body_verbatim() {
+        // A body authored WITHOUT the outer `` ` `` affordance — a bare
+        // `Sexp::List` body — returns verbatim. The "other" arm of the
+        // legacy match. Pin parity with the pre-lift code path so a
+        // regression that drifts the body-peel into "always peel
+        // something" (which would break literal-body macros) fails here.
+        let body = Sexp::List(vec![Sexp::symbol("list"), Sexp::int(1)]);
+        let def = MacroDef {
+            name: "f".into(),
+            params: MacroParams::default(),
+            body: body.clone(),
+        };
+        assert_eq!(def.template_body(), &body);
+        // Atom bodies too — the projection is a single-arm match, not a
+        // recursive descent. A `Sexp::Atom` body is its own template payload.
+        let atom_def = MacroDef {
+            name: "g".into(),
+            params: MacroParams::default(),
+            body: Sexp::symbol("nil-template"),
+        };
+        assert_eq!(atom_def.template_body(), &Sexp::symbol("nil-template"));
+    }
+
+    #[test]
+    fn template_body_peels_single_level_only() {
+        // A nested `` ``form `` body — `Sexp::Quasiquote(Box::new(
+        // Sexp::Quasiquote(...)))` — unwraps ONE outer quasi-quote and
+        // returns the inner `Sexp::Quasiquote(...)` as-is. The v0 module
+        // preamble declares "Nested quasi-quotes: Not yet supported"; the
+        // single-level peel matches the legacy inline match's posture
+        // (which only matched ONE outer `Sexp::Quasiquote(_)` arm, not a
+        // recursive loop). A regression that drifts to a recursive peel
+        // would project too far and the inner `Sexp::Quasiquote` marker —
+        // which the substitute walker treats as an atomic leaf returned
+        // verbatim (line ~830, `Sexp::Quote(_) | Sexp::Quasiquote(_)
+        // => Ok(form.clone())`) — would silently disappear from the
+        // expansion's emitted form. Pin the single-level contract here.
+        let inner_payload = Sexp::List(vec![Sexp::symbol("list"), Sexp::int(7)]);
+        let inner_qq = Sexp::Quasiquote(Box::new(inner_payload.clone()));
+        let def = MacroDef {
+            name: "nested".into(),
+            params: MacroParams::default(),
+            body: Sexp::Quasiquote(Box::new(inner_qq.clone())),
+        };
+        // Outer peel returns the INNER quasi-quote, NOT its inner payload.
+        assert_eq!(def.template_body(), &inner_qq);
+        assert_ne!(def.template_body(), &inner_payload);
+    }
+
+    #[test]
+    fn template_body_returns_quote_form_verbatim_distinct_from_quasiquote() {
+        // A `Sexp::Quote(_)` body — not a `Sexp::Quasiquote(_)` — returns
+        // verbatim through the "other" arm. The two close-cousin shapes
+        // share an outer-marker character (`'` vs `` ` ``) at the reader
+        // boundary but differ semantically: a `Quote` body is a literal
+        // template (no substitution semantics), a `Quasiquote` body is a
+        // substitution-walker entry. A regression that conflated the two
+        // — peeling Quote as if it were Quasiquote — would silently turn
+        // every quoted-body macro into a template-walked macro. Pin the
+        // discrimination.
+        let inner = Sexp::List(vec![Sexp::symbol("opaque"), Sexp::int(42)]);
+        let body = Sexp::Quote(Box::new(inner.clone()));
+        let def = MacroDef {
+            name: "quoted".into(),
+            params: MacroParams::default(),
+            body: body.clone(),
+        };
+        assert_eq!(def.template_body(), &body);
+        // The inner is NOT what comes back — only Quasiquote-bodied macros
+        // would peel to the inner.
+        assert_ne!(def.template_body(), &inner);
+    }
+
+    #[test]
+    fn template_body_is_the_shared_projection_both_strategies_walk() {
+        // End-to-end path-uniformity at the projection boundary: a macro
+        // authored with the canonical quasi-quoted body expands
+        // IDENTICALLY under bytecode and substitute strategies because
+        // both route their walker's body through `template_body()` — the
+        // SAME `&Sexp` projection. Sibling of
+        // `compiled_template_matches_substitute_path` (which observes
+        // agreement on the EMITTED form); this test pins agreement on
+        // the projection ENTRY: `compile_template` and the substitute
+        // fallback now consume the same `&Sexp` (`def.template_body()`),
+        // never a divergent inline match the two paths could regress
+        // independently.
+        let src = "(defmacro wrap (x) `(list ,x ,x)) (wrap 5)";
+        let expected = vec![Sexp::List(vec![
+            Sexp::symbol("list"),
+            Sexp::int(5),
+            Sexp::int(5),
+        ])];
+        let bytecode = Expander::new().expand_program(read(src).unwrap()).unwrap();
+        let substitute = Expander::new_substitute_only()
+            .expand_program(read(src).unwrap())
+            .unwrap();
+        assert_eq!(bytecode, expected, "bytecode body-projection drifted");
+        assert_eq!(substitute, expected, "substitute body-projection drifted");
+        assert_eq!(
+            bytecode, substitute,
+            "the two strategies disagree on the body-projection's emission"
         );
     }
 }

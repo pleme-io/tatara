@@ -4880,7 +4880,7 @@ dependencies = [
 
 [[package]]
 name = "ro"
-version = "0.1.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -6147,7 +6147,7 @@ dependencies = [
 
 [[package]]
 name = "tatara-operator"
-version = "0.1.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats 0.38.0",

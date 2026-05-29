@@ -1,3 +1,4 @@
 **/target
 /result
 crate-hashes.json
+Cargo.build-spec.json

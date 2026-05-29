@@ -69,8 +69,12 @@ diff = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
-# Raft types (for server.rs Raft endpoint handlers)
-openraft = { version = "0.9", features = ["serde", "storage-v2"] }
+# Raft types (for server.rs Raft endpoint handlers).
+# Pinned at =0.9.22 — 0.9.24 has a trait-inference conflict with newer
+# rkyv's `PartialEq<ArchivedBTreeSet<…>> for BTreeSet<…>` impl
+# (rustc E0283 in openraft/src/metrics/wait.rs:231). Upstream openraft
+# needs an explicit `let got: Vec<_>` annotation; until that ships, pin.
+openraft = { version = "=0.9.22", features = ["serde", "storage-v2"] }
 
 # Logging
 tracing = "0.1"

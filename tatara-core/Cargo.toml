@@ -40,5 +40,7 @@ tracing = "0.1"
 # <tier>` + TATARA_TIER env var. Pillar 12.
 shikumi = { git = "https://github.com/pleme-io/shikumi", branch = "main" }
 
-# Raft types (for cluster types: NodeId, BasicNode)
-openraft = { version = "0.9", features = ["serde", "storage-v2"] }
+# Raft types (for cluster types: NodeId, BasicNode).
+# Pinned at =0.9.22 — see tatara-cli/Cargo.toml for the rationale
+# (rkyv PartialEq inference conflict in openraft 0.9.24).
+openraft = { version = "=0.9.22", features = ["serde", "storage-v2"] }

@@ -221,6 +221,58 @@ impl MacroParams {
             .collect()
     }
 
+    /// The rest-less maximum arity of this param list: `required.len() +
+    /// optional.len()`. Two equivalent readings collapse into ONE primitive
+    /// on the typed `MacroParams`:
+    ///
+    ///   * The **rest-start boundary**: when `self.rest` is `Some`, the
+    ///     `&rest` slot collects `args[fixed_arity()..]` into a
+    ///     `Sexp::List` (the empty slice when the call is exactly
+    ///     saturated). `fixed_arity()` IS that slice's start index.
+    ///   * The **rest-less maximum arity**: when `self.rest` is `None`,
+    ///     `args.len() > fixed_arity()` is the surplus-args rejection
+    ///     boundary [`bind`](Self::bind) checks before raising
+    ///     `LispError::TooManyMacroArgs` (the call-site mirror of
+    ///     `RestParamTrailingTokens`'s definition-site rejection).
+    ///
+    /// Both readings ARE the same arithmetic; [`bind`](Self::bind)
+    /// previously inlined the same `self.required.len() +
+    /// self.optional.len()` expression THREE times — once inside the
+    /// `Vec::with_capacity(required + optional + rest?)` slot, once at
+    /// the `rest_start` site (inside `if let Some(_rest_name) =
+    /// self.rest`), and once at the `expected` site (inside the
+    /// rest-less `else`). The latter two live in mutually-exclusive
+    /// branches yet name ONE structural concept; lifting the arithmetic
+    /// to a single named primitive makes that concept first-class on
+    /// the typed param list.
+    ///
+    /// `fixed_arity()` IGNORES the `rest` slot by construction — a
+    /// `&rest` param has no maximum and is not part of the fixed run.
+    /// `names().len() == fixed_arity() + usize::from(self.rest.is_some())`
+    /// is the structural identity binding this primitive to
+    /// [`names`](Self::names) and to the `Vec::with_capacity` hint
+    /// [`bind`](Self::bind) computes for the bound-values vec.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the structural
+    /// "rest-start boundary / rest-less max arity" concept becomes a
+    /// named `&MacroParams` projection rather than re-derived arithmetic
+    /// at every site that walks the bound run. Authoring tools (REPL,
+    /// LSP, `tatara-check`) that want to render "this macro takes
+    /// between `required.len()` and `fixed_arity()` args (or unbounded
+    /// if `rest.is_some()`)" bind to ONE method on the typed param
+    /// list. THEORY.md §VI.1 — generation over composition; three
+    /// inline copies of the same arithmetic in one function is past
+    /// the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
+    /// named. THEORY.md §II.1 invariant 2 — free middle; both
+    /// expansion strategies route through the SHARED `bind`, so the
+    /// new primitive is exposed to the bytecode and substitute paths
+    /// uniformly — no per-strategy drift in how the boundary is
+    /// computed.
+    #[must_use]
+    pub fn fixed_arity(&self) -> usize {
+        self.required.len() + self.optional.len()
+    }
+
     /// Bind call args to params positionally, returning the per-index bound
     /// values parallel to [`names`](Self::names): each required name takes
     /// the arg at its position (a missing one is
@@ -235,9 +287,7 @@ impl MacroParams {
     /// vec directly, `bind_args` zips it against `names()` into the
     /// name-keyed map.
     fn bind(&self, macro_name: &str, args: &[Sexp]) -> Result<Vec<Sexp>> {
-        let mut out = Vec::with_capacity(
-            self.required.len() + self.optional.len() + usize::from(self.rest.is_some()),
-        );
+        let mut out = Vec::with_capacity(self.fixed_arity() + usize::from(self.rest.is_some()));
         for (i, name) in self.required.iter().enumerate() {
             let arg = args
                 .get(i)
@@ -254,19 +304,21 @@ impl MacroParams {
             out.push(arg);
         }
         if let Some(_rest_name) = self.rest.as_ref() {
-            let rest_start = self.required.len() + self.optional.len();
-            let rest = args.get(rest_start..).unwrap_or(&[]).to_vec();
+            // The `&rest` slot collects args[fixed_arity()..] (the empty
+            // slice when the call is exactly saturated); the boundary is
+            // the typed `fixed_arity()` primitive both branches share.
+            let rest = args.get(self.fixed_arity()..).unwrap_or(&[]).to_vec();
             out.push(Sexp::List(rest));
         } else {
             // No `&rest` slot — the param list has a FIXED maximum arity
-            // of `required.len() + optional.len()`. Surplus args have
-            // nowhere to bind; reject rather than silently truncate.
-            // Closes the call-site mirror of `RestParamTrailingTokens`
-            // (the definition-site rejection lifted by the prior-run
-            // typed-promotion lineage), so the typed-entry macro-call-gate
-            // is now structurally complete in both directions: too-few
-            // (`MissingMacroArg`) AND too-many (`TooManyMacroArgs`).
-            let expected = self.required.len() + self.optional.len();
+            // of `fixed_arity()`. Surplus args have nowhere to bind;
+            // reject rather than silently truncate. Closes the call-site
+            // mirror of `RestParamTrailingTokens` (the definition-site
+            // rejection lifted by the prior-run typed-promotion lineage),
+            // so the typed-entry macro-call-gate is structurally complete
+            // in both directions: too-few (`MissingMacroArg`) AND too-many
+            // (`TooManyMacroArgs`).
+            let expected = self.fixed_arity();
             if args.len() > expected {
                 return Err(too_many_macro_args(macro_name, expected, args.len()));
             }
@@ -5141,11 +5193,214 @@ mod tests {
         assert_eq!(params.names(), vec!["a", "b", "c", "d"]);
         // Optional names occupy the indices immediately after the required run.
         assert_eq!(params.names()[params.required.len()], "c");
-        // The rest name is last, after required + optional.
-        assert_eq!(
-            params.names()[params.required.len() + params.optional.len()],
-            "d"
-        );
+        // The rest name is last, after required + optional — i.e. at the
+        // structural `fixed_arity()` boundary the typed primitive names.
+        assert_eq!(params.names()[params.fixed_arity()], "d");
+    }
+
+    // ── fixed_arity: the rest-start / rest-less max-arity primitive ─────
+    //
+    // `fixed_arity()` lifts the `self.required.len() + self.optional.len()`
+    // arithmetic that recurred three times inside `MacroParams::bind` — at
+    // the `Vec::with_capacity` site (where it adds `usize::from(rest.is_some())`
+    // to get the bound-values count), at the `rest_start` site (inside the
+    // `if let Some(rest)` branch), and at the `expected` site (inside the
+    // rest-less `else`). The latter two sites live in mutually-exclusive
+    // branches yet name ONE structural concept; lifting them collapses the
+    // arithmetic to one named primitive. These tests pin the primitive's
+    // contract directly; the existing `bind_*` tests are the path-uniformity
+    // guards proving `bind`'s sites route through the same value without
+    // behavior drift.
+    //
+    // Fail-before/pass-after: every test below references
+    // `params.fixed_arity()`, which simply did not exist on `MacroParams`
+    // before this lift — every assertion's `expect: ___ == params.fixed_arity()`
+    // line was a compile-time error against the prior surface.
+
+    #[test]
+    fn fixed_arity_is_zero_for_the_empty_param_list() {
+        // `()` — a nullary macro has fixed arity 0, the rest-less binder
+        // boundary at which the FIRST surplus arg already rejects.
+        let params = MacroParams::default();
+        assert_eq!(params.fixed_arity(), 0);
+    }
+
+    #[test]
+    fn fixed_arity_counts_required_only_when_no_optional_or_rest() {
+        // `(a b c)` — three required, no optional, no rest. fixed_arity is
+        // exactly the required length.
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into(), "c".into()],
+            optional: Vec::new(),
+            rest: None,
+        };
+        assert_eq!(params.fixed_arity(), 3);
+    }
+
+    #[test]
+    fn fixed_arity_counts_optional_only_when_no_required_or_rest() {
+        // `(&optional x y)` — two optional, no required. fixed_arity is the
+        // optional length; the optional section participates in the fixed
+        // run because supplied positional args bind to it.
+        let params = MacroParams {
+            required: Vec::new(),
+            optional: vec![OptionalParam::bare("x"), OptionalParam::bare("y")],
+            rest: None,
+        };
+        assert_eq!(params.fixed_arity(), 2);
+    }
+
+    #[test]
+    fn fixed_arity_sums_required_and_optional_in_canonical_lambda_order() {
+        // `(a b &optional c d e)` — two required + three optional, no rest.
+        // fixed_arity is 5: the maximum arity a rest-less call can supply.
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into()],
+            optional: vec![
+                OptionalParam::bare("c"),
+                OptionalParam::bare("d"),
+                OptionalParam::bare("e"),
+            ],
+            rest: None,
+        };
+        assert_eq!(params.fixed_arity(), 5);
+    }
+
+    #[test]
+    fn fixed_arity_ignores_rest_slot_by_construction() {
+        // `(a &optional b &rest r)` and `(a &optional b)` — identical fixed
+        // arity (2). The `&rest` slot has NO maximum and is structurally
+        // excluded from `fixed_arity`. Naming this invariant pins that a
+        // regression that drifts the primitive to "required + optional +
+        // rest.is_some() as usize" fails loudly here — that drift would
+        // collapse `fixed_arity` into `names().len()`, losing the rest-start
+        // vs total-bound-values distinction the typed shape relies on.
+        let with_rest = MacroParams {
+            required: vec!["a".into()],
+            optional: vec![OptionalParam::bare("b")],
+            rest: Some("r".into()),
+        };
+        let without_rest = MacroParams {
+            required: vec!["a".into()],
+            optional: vec![OptionalParam::bare("b")],
+            rest: None,
+        };
+        assert_eq!(with_rest.fixed_arity(), without_rest.fixed_arity());
+        assert_eq!(with_rest.fixed_arity(), 2);
+    }
+
+    #[test]
+    fn fixed_arity_is_the_rest_start_index_in_names_when_rest_present() {
+        // When `rest` is `Some`, `names()[fixed_arity()]` IS the rest name
+        // — the rest-start reading of the primitive. Same arithmetic the
+        // bytecode index would hit (`Subst(fixed_arity())` resolves to the
+        // rest-bound `Sexp::List`).
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into()],
+            optional: vec![OptionalParam::bare("c")],
+            rest: Some("r".into()),
+        };
+        assert_eq!(params.fixed_arity(), 3);
+        assert_eq!(params.names()[params.fixed_arity()], "r");
+    }
+
+    #[test]
+    fn fixed_arity_equals_names_length_when_rest_is_absent() {
+        // When `rest` is `None`, `names().len() == fixed_arity()` — there
+        // is no rest-name slot to extend the flat run past the fixed
+        // boundary. Pins the structural identity
+        // `names().len() == fixed_arity() + usize::from(rest.is_some())`
+        // for the rest-less case; the rest-present case is pinned by the
+        // sibling test above (where the boundary is the rest-name index,
+        // i.e. one short of `names().len()`).
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into()],
+            optional: vec![OptionalParam::bare("c")],
+            rest: None,
+        };
+        assert_eq!(params.names().len(), params.fixed_arity());
+        assert_eq!(params.names().len(), 3);
+    }
+
+    #[test]
+    fn fixed_arity_is_the_rest_less_surplus_rejection_boundary() {
+        // The `expected` field of `TooManyMacroArgs` IS `fixed_arity()` —
+        // the rest-less binder rejects iff `args.len() > fixed_arity()`.
+        // This pin is the path-uniformity guard binding the typed primitive
+        // to the binder's rejection contract: a regression that drifts
+        // `bind`'s `expected` arithmetic from `fixed_arity()` would silently
+        // surface a different boundary in the diagnostic without touching
+        // the primitive — and this assertion fails loudly. Mirror of the
+        // sibling rest-less surplus pin (`bind_rest_less_params_reject_
+        // surplus_args`); this test pins WHAT the `expected` slot's value
+        // structurally IS, that pin checks the variant SHAPE.
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into()],
+            optional: vec![OptionalParam::bare("c")],
+            rest: None,
+        };
+        assert_eq!(params.fixed_arity(), 3);
+        let err = params
+            .bind(
+                "m",
+                &[Sexp::int(1), Sexp::int(2), Sexp::int(3), Sexp::int(4)],
+            )
+            .expect_err("4 args against fixed_arity 3 must reject");
+        match err {
+            LispError::TooManyMacroArgs {
+                expected,
+                got,
+                macro_name,
+            } => {
+                assert_eq!(expected, params.fixed_arity());
+                assert_eq!(got, 4);
+                assert_eq!(macro_name, "m");
+            }
+            other => panic!("expected TooManyMacroArgs, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fixed_arity_is_the_rest_start_index_consumed_by_bind() {
+        // When `rest` is `Some`, `bind` collects `args[fixed_arity()..]`
+        // into the rest's `Sexp::List`. Pin that the rest list contents
+        // are exactly the suffix beginning at `fixed_arity()` — the
+        // primitive's rest-start reading IS the slice index the binder
+        // consumes. A regression that drifts `bind`'s rest-collection
+        // slice from `fixed_arity()` would surface as a misaligned rest
+        // list (off-by-one in either direction) and this assertion fails
+        // loudly. Sibling of `fixed_arity_is_the_rest_less_surplus_
+        // rejection_boundary` on the rest-PRESENT branch.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            optional: vec![OptionalParam::bare("b")],
+            rest: Some("r".into()),
+        };
+        assert_eq!(params.fixed_arity(), 2);
+        let args = [Sexp::int(1), Sexp::int(2), Sexp::int(3), Sexp::int(4)];
+        let vals = params.bind("m", &args).unwrap();
+        // Bound vec: [a=1, b=2, r=(3 4)] — the rest list IS args[fixed_arity()..].
+        let rest_expected: Vec<Sexp> = args[params.fixed_arity()..].to_vec();
+        assert_eq!(vals.last().unwrap(), &Sexp::List(rest_expected));
+    }
+
+    #[test]
+    fn bind_rest_present_at_exact_fixed_arity_yields_empty_rest_list() {
+        // Exactly-saturated rest-present call: `args.len() == fixed_arity()`.
+        // The rest slot collects the empty slice; bind succeeds, never
+        // misaligning to an off-by-one underflow. Pin the boundary on the
+        // rest-PRESENT path — the rest-less mirror is
+        // `too_many_macro_args_does_not_fire_at_exact_max_arity` above.
+        let params = MacroParams {
+            required: vec!["a".into()],
+            optional: vec![OptionalParam::bare("b")],
+            rest: Some("r".into()),
+        };
+        assert_eq!(params.fixed_arity(), 2);
+        let vals = params
+            .bind("m", &[Sexp::int(1), Sexp::int(2)])
+            .expect("rest-present at exact fixed_arity must bind cleanly");
+        assert_eq!(vals, vec![Sexp::int(1), Sexp::int(2), Sexp::List(vec![])]);
     }
 
     #[test]

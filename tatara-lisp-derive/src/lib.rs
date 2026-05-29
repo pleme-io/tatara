@@ -18,7 +18,7 @@
 //! impl TataraDomain for MonitorSpec {
 //!     const KEYWORD: &'static str = "defmonitor";
 //!     fn compile_from_args(args: &[Sexp]) -> Result<Self> {
-//!         let kw = parse_kwargs(args)?;
+//!         let kw = parse_kwargs_strict(args, __TATARA_ALLOWED_KEYWORDS)?;
 //!         Ok(Self {
 //!             name: extract_string(&kw, "name")?.to_string(),
 //!             query: extract_string(&kw, "query")?.to_string(),
@@ -100,8 +100,22 @@ pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {
                 const __TATARA_ALLOWED_KEYWORDS: &[&::core::primitive::str] = &[
                     #(#allowed_lits),*
                 ];
-                let kw = ::tatara_lisp::domain::parse_kwargs(args)?;
-                ::tatara_lisp::domain::reject_unknown_kwargs(&kw, __TATARA_ALLOWED_KEYWORDS)?;
+                // The fused typed-entry kwargs gate: parse `:k v :k v …` AND
+                // assert every key sits in the static allowed-set, in ONE
+                // call. Before this lift the derive emitted the two-call
+                // sequence (`parse_kwargs` + `reject_unknown_kwargs`)
+                // verbatim at every consumer's `compile_from_args` body;
+                // the fused primitive names the composition as ONE
+                // substrate-level operation so a regression that drifts
+                // ONE consumer's gate from the others (e.g. a future
+                // emitter swaps the order, a hand-written impl forgets
+                // the second call) is structurally impossible — every
+                // consumer routes through ONE function, every diagnostic
+                // surfaces from ONE call site.
+                let kw = ::tatara_lisp::domain::parse_kwargs_strict(
+                    args,
+                    __TATARA_ALLOWED_KEYWORDS,
+                )?;
                 Ok(Self {
                     #(#field_inits),*
                 })

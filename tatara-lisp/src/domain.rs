@@ -242,6 +242,79 @@ pub fn reject_unknown_kwargs(kw: &Kwargs<'_>, allowed: &[&str]) -> Result<()> {
     Ok(())
 }
 
+/// Parse `:k v :k v …` AND gate the result against a closed allowed-key set —
+/// the fused typed-entry kwargs gate. ONE named primitive every
+/// `TataraDomain` impl shares for "compile-from-args header": every
+/// `#[derive(TataraDomain)]`-generated `compile_from_args` body emitted by
+/// `tatara-lisp-derive` begins with this single call, and every hand-
+/// written impl in the forge / lattice / tameshi crates that wants the
+/// substrate's closed-set kwargs posture binds to ONE function instead of
+/// remembering to call [`parse_kwargs`] AND [`reject_unknown_kwargs`] in
+/// that order.
+///
+/// Before this lift the derive emitted the two-call sequence
+/// `let kw = parse_kwargs(args)?; reject_unknown_kwargs(&kw, ALLOWED)?;`
+/// verbatim at every consumer's `compile_from_args` body — well past the
+/// ≥2 PRIME-DIRECTIVE trigger once the fleet's seven-plus
+/// `#[derive(TataraDomain)]` consumers (ProcessSpec, EphemeralSpec,
+/// MonitorSpec, NotifySpec, AlertPolicySpec, EscalationStep, CompilerSpec,
+/// and every future derived domain) inline the same two lines through the
+/// proc-macro emitter. The two-call sequence is structurally one
+/// operation — "parse the keyword/value run, then assert every key sits
+/// in the static allowed-set" — and a regression that drifts ONE
+/// consumer's gate from the others (e.g. the derive emits one call but a
+/// hand-written impl emits only the other, or a future emitter swaps the
+/// order so `reject_unknown_kwargs` runs against an unparsed slice) is
+/// the silent typed-entry hole this primitive closes by construction.
+///
+/// The two stages are composed in the canonical order:
+///   1. [`parse_kwargs`] runs first — odd-length input, non-keyword at a
+///      key position, and duplicate keys surface as their structural
+///      variants ([`LispError::OddKwargs`] / [`LispError::TypeMismatch`]
+///      with `form = kwargs_pos_form(i)` / [`LispError::DuplicateKwarg`]).
+///   2. Only on `Ok(kw)` does [`reject_unknown_kwargs`] run — keys
+///      outside `allowed` surface as [`LispError::UnknownKwarg`] with the
+///      typed `hint` / `allowed` slots populated.
+///
+/// This ordering is structural: `reject_unknown_kwargs` cannot inspect
+/// an unparsed `&[Sexp]`, so parse-stage rejection MUST precede
+/// reject-stage rejection. A call with BOTH an odd-length tail AND an
+/// unknown kwarg surfaces as `OddKwargs` (parse-stage), never as
+/// `UnknownKwarg` (reject-stage) — the gate is single-pass and the
+/// stages compose in exactly one order. Naming the composition makes
+/// that order load-bearing data on the substrate, not a discipline the
+/// derive's emit template happens to encode correctly.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 — "Typed entry. Ill-typed
+/// input errors before the value exists." The kwargs gate is the
+/// typed-entry boundary for every derived domain; closing the gate
+/// behind ONE primitive lifts the closed-set posture from the derive's
+/// emit template to the substrate's typed surface. THEORY.md §VI.1 —
+/// generation over composition; the two-call sequence in the derive's
+/// emit template, multiplied across every consumer in the fleet, is
+/// well past the three-times rule once the structural shape is named.
+/// THEORY.md §V.1 — knowable platform; authoring tools (REPL, LSP,
+/// `tatara-check`) that want to surface "this form's kwargs gate
+/// rejected because …" bind to the unified primitive's call site
+/// instead of guessing which of the two component functions the
+/// rejection came from. THEORY.md §II.1 invariant 2 (free middle) —
+/// every consumer routes through the SAME composition, so a regression
+/// that drifts the order or skips a stage on one path can never reach
+/// the substrate's runtime: the type system binds every consumer to
+/// the fused primitive's single emission shape.
+///
+/// Lifetime: the returned [`Kwargs<'a>`] borrows from `args` (the typed
+/// alias is `HashMap<String, &'a Sexp>`), so the call site keeps the
+/// `&[Sexp]` slice alive for the lifetime of the parsed map — same
+/// posture as [`parse_kwargs`]. The fused primitive does not allocate
+/// beyond [`parse_kwargs`]'s map: [`reject_unknown_kwargs`] is a pure
+/// `O(allowed.len() · kw.len())` scan that returns `Ok(())` on success.
+pub fn parse_kwargs_strict<'a>(args: &'a [Sexp], allowed: &[&str]) -> Result<Kwargs<'a>> {
+    let kw = parse_kwargs(args)?;
+    reject_unknown_kwargs(&kw, allowed)?;
+    Ok(kw)
+}
+
 /// Structural unknown-kwarg builder. Returns the dedicated
 /// `LispError::UnknownKwarg` variant so authoring surfaces (REPL, LSP,
 /// `tatara-check`) bind to first-class `key` / `hint` / `allowed`
@@ -4284,6 +4357,295 @@ mod tests {
         let allowed: &[&str] = &["name"];
         let err = unknown_kwarg("xx", allowed);
         assert_eq!(err.position(), None);
+    }
+
+    // ── parse_kwargs_strict: the fused typed-entry kwargs gate ──────────
+    //
+    // `parse_kwargs_strict(args, allowed)` is the substrate-level
+    // composition of `parse_kwargs` + `reject_unknown_kwargs`, the
+    // two-call sequence every `#[derive(TataraDomain)]`-generated
+    // `compile_from_args` emits at its header and every hand-written
+    // impl in the forge / lattice / tameshi crates inlines verbatim.
+    // After this lift the fleet's seven-plus consumers (and every
+    // future derived domain) route through ONE function the substrate
+    // owns, instead of two functions every consumer must remember to
+    // call in the canonical parse-then-reject order.
+    //
+    // The tests below pin the fused primitive's contract: (a) on
+    // well-formed input it produces the same `Kwargs<'_>` map as the
+    // two-step inlined call; (b)-(d) every parse-stage failure mode
+    // surfaces as the same structural variant `parse_kwargs` would
+    // raise (`OddKwargs` / `DuplicateKwarg` / `TypeMismatch`);
+    // (e) every reject-stage failure surfaces as the same `UnknownKwarg`
+    // `reject_unknown_kwargs` would raise; (f)-(g) parse-stage rejection
+    // STRICTLY precedes reject-stage rejection — calls that violate
+    // BOTH stages surface the parse-stage variant, never the reject-
+    // stage variant; (h) an empty allowed-set rejects every parsed
+    // kwarg as unknown (negative control on the closed-set posture);
+    // (i) end-to-end through `MonitorSpec::compile_from_args` — the
+    // derive's emit now routes through `parse_kwargs_strict`, so a
+    // derived domain's diagnostics inherit the fused primitive's
+    // single-call-site identity.
+
+    #[test]
+    fn parse_kwargs_strict_well_formed_input_matches_two_step_path() {
+        // Path-uniformity: on a well-formed kwargs run with every key
+        // in the allowed set, `parse_kwargs_strict` returns the same
+        // map `parse_kwargs` would, with `reject_unknown_kwargs` having
+        // returned `Ok(())` against it. The fused primitive is the
+        // substrate-level composition of the two stages; on the
+        // happy path the composition is observationally identical to
+        // the two-step inlined call.
+        let args = [
+            Sexp::keyword("name"),
+            Sexp::string("x"),
+            Sexp::keyword("query"),
+            Sexp::string("q"),
+            Sexp::keyword("threshold"),
+            Sexp::float(0.5),
+        ];
+        let allowed: &[&str] = &["name", "query", "threshold"];
+
+        let fused = parse_kwargs_strict(&args, allowed).expect("well-formed must parse strictly");
+        let staged = parse_kwargs(&args).expect("well-formed must parse");
+        assert!(reject_unknown_kwargs(&staged, allowed).is_ok());
+
+        // The fused map has the same keys + structurally-equal values
+        // as the two-step map. (We compare via the sorted key list +
+        // per-key Sexp equality because `&Sexp` borrows from `args` on
+        // both sides — same lifetime, same source slice.)
+        let mut fused_keys: Vec<&str> = fused.keys().map(String::as_str).collect();
+        let mut staged_keys: Vec<&str> = staged.keys().map(String::as_str).collect();
+        fused_keys.sort();
+        staged_keys.sort();
+        assert_eq!(fused_keys, staged_keys);
+        for k in fused_keys {
+            assert_eq!(fused.get(k), staged.get(k));
+        }
+    }
+
+    #[test]
+    fn parse_kwargs_strict_routes_odd_length_to_parse_stage_variant() {
+        // Parse-stage rejection: an odd-length kwargs tail must surface
+        // as `LispError::OddKwargs` — the same structural variant
+        // `parse_kwargs` would raise. The reject-stage never runs
+        // because the parse stage short-circuits on `Err`.
+        let args = [
+            Sexp::keyword("name"),
+            Sexp::string("x"),
+            Sexp::keyword("query"),
+        ];
+        let allowed: &[&str] = &["name", "query"];
+        let err = parse_kwargs_strict(&args, allowed)
+            .expect_err("odd-length args must reject at parse stage");
+        match err {
+            LispError::OddKwargs { dangling } => {
+                assert_eq!(dangling, ":query");
+            }
+            other => panic!("expected OddKwargs, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_kwargs_strict_routes_duplicate_key_to_parse_stage_variant() {
+        // Parse-stage rejection: a repeated `:name` key must surface as
+        // `LispError::DuplicateKwarg` — same posture as `parse_kwargs`.
+        let args = [
+            Sexp::keyword("name"),
+            Sexp::string("a"),
+            Sexp::keyword("name"),
+            Sexp::string("b"),
+        ];
+        let allowed: &[&str] = &["name"];
+        let err = parse_kwargs_strict(&args, allowed)
+            .expect_err("duplicate-key args must reject at parse stage");
+        match err {
+            LispError::DuplicateKwarg { key } => {
+                assert_eq!(key, "name");
+            }
+            other => panic!("expected DuplicateKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_kwargs_strict_routes_non_keyword_position_to_type_mismatch_variant() {
+        // Parse-stage rejection: an integer where a keyword was expected
+        // (position 0) must surface as `LispError::TypeMismatch` with
+        // `form = kwargs_pos_form(0)` and `expected = Keyword` — same
+        // posture as `parse_kwargs`'s direct slot-must-be-a-keyword
+        // rejection.
+        let args = [Sexp::int(5), Sexp::string("x")];
+        let allowed: &[&str] = &["name"];
+        let err = parse_kwargs_strict(&args, allowed)
+            .expect_err("non-keyword at key position must reject at parse stage");
+        match err {
+            LispError::TypeMismatch { expected, got, .. } => {
+                assert_eq!(expected, ExpectedKwargShape::Keyword);
+                assert_eq!(got, SexpShape::Int);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_kwargs_strict_routes_unknown_kwarg_to_reject_stage_variant() {
+        // Reject-stage rejection: a well-formed parse with a key
+        // OUTSIDE the allowed set surfaces as `LispError::UnknownKwarg`
+        // with the typed `hint` / `allowed` slots — same posture as
+        // `reject_unknown_kwargs`.
+        let args = [
+            Sexp::keyword("name"),
+            Sexp::string("x"),
+            Sexp::keyword("tthreshold"),
+            Sexp::float(0.99),
+        ];
+        let allowed: &[&str] = &["name", "threshold"];
+        let err = parse_kwargs_strict(&args, allowed)
+            .expect_err("unknown kwarg must reject at reject stage");
+        match err {
+            LispError::UnknownKwarg {
+                key,
+                hint,
+                allowed: alw,
+            } => {
+                assert_eq!(key, "tthreshold");
+                assert_eq!(hint.as_deref(), Some("threshold"));
+                assert_eq!(alw, vec!["name", "threshold"]);
+            }
+            other => panic!("expected UnknownKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_kwargs_strict_parse_stage_fires_before_reject_stage_on_odd_length() {
+        // Stage-ordering: a call whose tail is BOTH odd-length AND
+        // contains an unknown kwarg surfaces as `OddKwargs` (parse
+        // stage), NOT `UnknownKwarg` (reject stage). The fused
+        // primitive's composition order is load-bearing: parse runs
+        // first, reject runs second, and the second stage cannot
+        // observe an `Err` from the first.
+        let args = [
+            Sexp::keyword("ghost"),
+            Sexp::string("boo"),
+            Sexp::keyword("orphan"),
+        ];
+        let allowed: &[&str] = &["name"];
+        let err = parse_kwargs_strict(&args, allowed)
+            .expect_err("odd-length + unknown must reject at parse stage");
+        match err {
+            LispError::OddKwargs { dangling } => {
+                assert_eq!(dangling, ":orphan");
+            }
+            other => panic!("expected OddKwargs (parse stage fires first), got {other:?}",),
+        }
+    }
+
+    #[test]
+    fn parse_kwargs_strict_parse_stage_fires_before_reject_stage_on_duplicate() {
+        // Stage-ordering, sibling case: a duplicate-key kwargs tail with
+        // an extra unknown key still surfaces as `DuplicateKwarg`
+        // (parse stage). The parse-stage walk reaches the duplicate
+        // BEFORE the reject stage ever inspects the keyset.
+        let args = [
+            Sexp::keyword("name"),
+            Sexp::string("a"),
+            Sexp::keyword("ghost"),
+            Sexp::string("boo"),
+            Sexp::keyword("name"),
+            Sexp::string("b"),
+        ];
+        let allowed: &[&str] = &["name"];
+        let err = parse_kwargs_strict(&args, allowed)
+            .expect_err("duplicate + unknown must reject at parse stage");
+        match err {
+            LispError::DuplicateKwarg { key } => {
+                assert_eq!(key, "name");
+            }
+            other => panic!("expected DuplicateKwarg (parse stage fires first), got {other:?}",),
+        }
+    }
+
+    #[test]
+    fn parse_kwargs_strict_empty_allowed_set_rejects_every_parsed_kwarg() {
+        // Closed-set posture floor: an empty `allowed: &[]` means the
+        // domain admits NO kwargs at all. Any well-formed kwarg
+        // parses successfully but the reject stage rejects the first
+        // key it sees as `UnknownKwarg`. The allowed-set lives at
+        // ONE call site (`parse_kwargs_strict`), so a future "domain
+        // with no kwargs" emits `parse_kwargs_strict(args, &[])` and
+        // inherits the rejection posture without re-deriving it.
+        let args = [Sexp::keyword("name"), Sexp::string("x")];
+        let allowed: &[&str] = &[];
+        let err = parse_kwargs_strict(&args, allowed)
+            .expect_err("empty allowed-set must reject any parsed kwarg");
+        match err {
+            LispError::UnknownKwarg {
+                key,
+                hint,
+                allowed: alw,
+            } => {
+                assert_eq!(key, "name");
+                // No allowed candidates → no near-miss hint possible.
+                assert_eq!(hint, None);
+                assert!(
+                    alw.is_empty(),
+                    "empty allowed-set surfaces verbatim, got {alw:?}"
+                );
+            }
+            other => panic!("expected UnknownKwarg, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_kwargs_strict_powers_the_derive_emit_end_to_end() {
+        // End-to-end path-uniformity: `#[derive(TataraDomain)]` on
+        // `MonitorSpec` now emits ONE `parse_kwargs_strict` call in its
+        // `compile_from_args` body in place of the prior two-call
+        // sequence. The diagnostic identity of an unknown-kwarg
+        // rejection from a derived domain MUST equal the diagnostic
+        // identity of a direct `parse_kwargs_strict` call on the same
+        // args — that's the substrate guarantee the lift establishes:
+        // every consumer routes through ONE function. A regression
+        // that drifts the derive's emit to re-inline the two-call
+        // sequence (or worse, swap them) is structurally observable
+        // here as a divergence between the two diagnostic paths.
+        let forms =
+            read(r#"(defmonitor :name "x" :query "q" :threshold 0.5 :tthreshold 0.99)"#).unwrap();
+        let derive_err = MonitorSpec::compile_from_sexp(&forms[0]).unwrap_err();
+
+        let args = forms[0].as_list().unwrap();
+        let allowed: &[&str] = &[
+            "name",
+            "query",
+            "threshold",
+            "window-seconds",
+            "tags",
+            "enabled",
+        ];
+        let strict_err = parse_kwargs_strict(&args[1..], allowed)
+            .expect_err("strict call must reject the unknown kwarg");
+
+        match (derive_err, strict_err) {
+            (
+                LispError::UnknownKwarg {
+                    key: dk,
+                    hint: dh,
+                    allowed: da,
+                },
+                LispError::UnknownKwarg {
+                    key: sk,
+                    hint: sh,
+                    allowed: sa,
+                },
+            ) => {
+                assert_eq!(dk, sk);
+                assert_eq!(dh, sh);
+                assert_eq!(da, sa);
+            }
+            (dother, sother) => panic!(
+                "expected matching UnknownKwarg variants, got derive={dother:?} strict={sother:?}",
+            ),
+        }
     }
 
     // ── domain-keyed serialize / rewriter-output emission shape ────────

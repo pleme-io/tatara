@@ -204,6 +204,61 @@ impl OptionalParam {
             default: Some(default),
         }
     }
+
+    /// The bound value when an absent call leaves this optional slot unfilled:
+    /// the declared default form (cloned) when one was authored, OR the
+    /// canonical `Sexp::Nil` floor when none was — the CL `&optional` no-
+    /// default-form floor. ONE named primitive on the typed [`OptionalParam`]
+    /// every absent-call binder consults; before this lift the same two-arm
+    /// fallback `param.default.clone().unwrap_or(Sexp::Nil)` lived inline at
+    /// [`MacroParams::bind`]'s optional arm, and a future absence-resolver
+    /// (the kwarg-gate's typed-default fill? a future `&supplied-p` slot's
+    /// "was this defaulted?" bit?) would have had to re-derive the same
+    /// two-arm fallback at every site that walks the optional run.
+    ///
+    /// The projection IS the structural identity binding the typed
+    /// `default: Option<Sexp>` slot to its bound-value contract:
+    ///   * `bare(name).resolved_default()` is `Sexp::Nil` (the no-default
+    ///     floor — `default.is_none()`).
+    ///   * `with_default(name, d).resolved_default()` is `d.clone()` (the
+    ///     declared default — `default = Some(d)` projected through Clone).
+    ///
+    /// `resolved_default()` is the typed accessor companion to the
+    /// `bare` / `with_default` constructors: those two constructors define
+    /// the ONLY admissible shapes of the typed `default` slot, and this
+    /// accessor names the BOUND-VALUE projection both shapes yield at the
+    /// binder's absence arm. Together the three close the `OptionalParam`'s
+    /// self-contained typed surface — every authored shape lands through ONE
+    /// of two constructors, and every absent-call binder reads through this
+    /// ONE accessor.
+    ///
+    /// Returns an owned `Sexp` (not `&Sexp`) because the binder pushes the
+    /// resolved default into a fresh `Vec<Sexp>` slot at every absent call;
+    /// the `default.clone()` projection is the same allocation the pre-lift
+    /// inline expression performed, just named at the typed boundary. The
+    /// `Sexp::Nil` floor is a free per-call construction (a unit variant
+    /// with no payload), so the no-default path is free of allocation
+    /// beyond the function return slot.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform / "make invalid
+    /// states unrepresentable"; the "no-default-form floor" structural
+    /// concept becomes a NAMED projection on [`OptionalParam`] rather than
+    /// re-derived `param.default.clone().unwrap_or(Sexp::Nil)` arithmetic
+    /// at every site that walks the bound optional run. Authoring tools
+    /// (REPL, LSP, `tatara-check`) that want to render "this optional
+    /// binds to {default-form|nil} when absent" bind to ONE method on the
+    /// typed param. THEORY.md §VI.1 — generation over composition; the
+    /// constructor pair `bare` / `with_default` defines the typed shapes
+    /// and the `resolved_default` accessor names the symmetric
+    /// bound-value projection — the typed accessor companion. THEORY.md
+    /// §II.1 invariant 2 — free middle; both expansion strategies route
+    /// through the SHARED `MacroParams::bind`, so the new accessor is
+    /// exposed to the bytecode and substitute paths uniformly via that
+    /// shared binder.
+    #[must_use]
+    pub fn resolved_default(&self) -> Sexp {
+        self.default.clone().unwrap_or(Sexp::Nil)
+    }
 }
 
 impl MacroParams {
@@ -297,10 +352,17 @@ impl MacroParams {
         }
         let opt_start = self.required.len();
         for (j, param) in self.optional.iter().enumerate() {
+            // Absent optional slot binds to the typed `resolved_default()`
+            // projection on `OptionalParam`: the declared default form when
+            // one was authored, OR the `Sexp::Nil` no-default floor when
+            // none was. The two-arm fallback `param.default.clone().
+            // unwrap_or(Sexp::Nil)` previously inlined here is now ONE named
+            // accessor on the typed param both expansion strategies share via
+            // `MacroParams::bind`.
             let arg = args
                 .get(opt_start + j)
                 .cloned()
-                .unwrap_or_else(|| param.default.clone().unwrap_or(Sexp::Nil));
+                .unwrap_or_else(|| param.resolved_default());
             out.push(arg);
         }
         if let Some(_rest_name) = self.rest.as_ref() {
@@ -5807,6 +5869,186 @@ mod tests {
             vals,
             vec![Sexp::int(1), Sexp::int(5), Sexp::Nil, Sexp::string("z")]
         );
+    }
+
+    // ── OptionalParam::resolved_default: the absent-call binder accessor ──
+    //
+    // `resolved_default` lifts the `param.default.clone().unwrap_or(Sexp::Nil)`
+    // two-arm fallback that previously inlined at `MacroParams::bind`'s
+    // optional arm into ONE named accessor on the typed `OptionalParam`.
+    // The constructor pair `bare` / `with_default` defines the typed
+    // shapes of the `default` slot; this accessor names the symmetric
+    // bound-value projection both shapes yield at the absence boundary.
+    // Tests pin: (a) `bare(name).resolved_default()` is the `Sexp::Nil`
+    // no-default floor; (b) `with_default(name, d).resolved_default()` is
+    // `d.clone()`; (c) the projection is `Clone`-stable across repeated
+    // calls (the typed `default` field is not consumed); (d) path-
+    // uniformity at the binder — `bind`'s optional arm routes through
+    // `resolved_default` for both shapes; (e) end-to-end through both
+    // expansion strategies, the absent-call binding agrees.
+
+    #[test]
+    fn resolved_default_is_nil_for_bare_optional() {
+        // `OptionalParam::bare(name).default` is `None`, so
+        // `resolved_default()` projects to `Sexp::Nil` — the CL
+        // `&optional` no-default-form floor. Fail-before/pass-after: this
+        // assert is meaningless pre-lift because the helper does not
+        // exist; post-lift it pins the typed accessor's `Sexp::Nil` arm
+        // at the named primitive. Sibling of `bare` itself: the
+        // constructor defines the shape (`default: None`); the accessor
+        // names the bound-value projection of that shape.
+        let p = OptionalParam::bare("x");
+        assert_eq!(p.resolved_default(), Sexp::Nil);
+    }
+
+    #[test]
+    fn resolved_default_clones_declared_default_for_with_default_optional() {
+        // `OptionalParam::with_default(name, d).default` is `Some(d)`, so
+        // `resolved_default()` projects to `d.clone()` — the declared
+        // default form. Sibling of the bare-floor pin: the closed-set
+        // `default: Option<Sexp>` slot's two shapes correspond 1:1 with
+        // the two arms of `resolved_default`. Pins the closed-set
+        // exhaustive coverage of `Option<Sexp>` × `{Some, None}`.
+        let p = OptionalParam::with_default("x", Sexp::int(5));
+        assert_eq!(p.resolved_default(), Sexp::int(5));
+    }
+
+    #[test]
+    fn resolved_default_clones_arbitrary_sexp_default_form() {
+        // The declared default can be any `Sexp` — a literal list, a
+        // keyword, a string, a quasi-quoted form — because v0 has no
+        // evaluator and the typed slot parks the literal verbatim. Pin
+        // that `resolved_default()` is faithful to the parked literal
+        // regardless of shape: a regression that special-cases an arm
+        // (e.g., projecting `Sexp::List(_)` to `Sexp::Nil`, or "normalizing"
+        // a `Sexp::Quote`) fails here. The accessor is exactly
+        // `default.clone()` for the `Some` arm — no shape rewriting.
+        let arbitrary = Sexp::List(vec![Sexp::symbol("list"), Sexp::int(1), Sexp::int(2)]);
+        let p = OptionalParam::with_default("x", arbitrary.clone());
+        assert_eq!(p.resolved_default(), arbitrary);
+    }
+
+    #[test]
+    fn resolved_default_is_clone_stable_across_repeated_calls() {
+        // The accessor takes `&self` and projects through `Clone`, so
+        // repeated calls yield IDENTICAL values — the typed `default`
+        // field is not consumed. Pins that the accessor is idempotent
+        // for the same `OptionalParam`, which is the contract the binder
+        // relies on across multiple `bind` invocations of the same
+        // macro: every call that leaves the optional unfilled yields
+        // the SAME bound value, never a partially-consumed shape. A
+        // regression that converted the accessor to `self.default.take()`
+        // (consuming the field) would still type-check at the call site
+        // but would silently desync repeated absent-call bindings; this
+        // test catches that drift.
+        let p = OptionalParam::with_default("x", Sexp::string("hi"));
+        let first = p.resolved_default();
+        let second = p.resolved_default();
+        assert_eq!(first, second);
+        assert_eq!(first, Sexp::string("hi"));
+    }
+
+    #[test]
+    fn resolved_default_is_the_binders_absent_optional_projection() {
+        // Path-uniformity pin at the binder boundary: `MacroParams::bind`'s
+        // optional arm consults `param.resolved_default()` for any
+        // absent slot. Two-arm coverage: a bare optional (`b`) binds to
+        // `Sexp::Nil` via the `None` arm; a with-default optional
+        // (`(c 5)`) binds to `Sexp::int(5)` via the `Some` arm. The
+        // single bind call exercises both arms in one walk, and the
+        // bound values vec is parallel to `names()` so position
+        // checking pins the arm-to-slot mapping. A regression that
+        // re-inlines the two-arm fallback at the binder, drifting it
+        // independently from the accessor, would still type-check but
+        // a future shape change to `resolved_default` (e.g., adding a
+        // typed `&supplied-p` companion slot) would silently desync
+        // the binder from the accessor — this test catches that drift.
+        let params = MacroParams {
+            required: Vec::new(),
+            optional: vec![
+                OptionalParam::bare("b"),
+                OptionalParam::with_default("c", Sexp::int(5)),
+            ],
+            rest: None,
+        };
+        // Empty args → both optionals are absent → both arms fire.
+        let vals = params.bind("m", &[]).unwrap();
+        assert_eq!(vals.len(), 2);
+        assert_eq!(vals[0], OptionalParam::bare("b").resolved_default());
+        assert_eq!(
+            vals[1],
+            OptionalParam::with_default("c", Sexp::int(5)).resolved_default()
+        );
+        // And the absolute identities pin the projection's arms:
+        assert_eq!(vals[0], Sexp::Nil);
+        assert_eq!(vals[1], Sexp::int(5));
+    }
+
+    #[test]
+    fn resolved_default_is_path_uniform_across_bytecode_and_substitute() {
+        // End-to-end path-uniformity: a macro with both an `&optional
+        // (g "hi")` (with-default) and an `&optional h` (bare) param
+        // expands the same way under bytecode AND substitute
+        // strategies, because both strategies route through the SHARED
+        // `MacroParams::bind` which now consults `resolved_default`
+        // for absent slots. Pins that the accessor's contract is
+        // structurally observable at the strategy boundary — a
+        // regression that bifurcated the accessor's behavior between
+        // the two paths (impossible, since they share `bind`) would
+        // surface here.
+        let src = r#"
+            (defmacro greet (n &optional (g "hi") h)
+              `(list ,g ,n ,h))
+            (greet world)
+        "#;
+        let expected = vec![Sexp::List(vec![
+            Sexp::symbol("list"),
+            Sexp::string("hi"),
+            Sexp::symbol("world"),
+            Sexp::Nil,
+        ])];
+        let bytecode = Expander::new().expand_program(read(src).unwrap()).unwrap();
+        let substitute = Expander::new_substitute_only()
+            .expand_program(read(src).unwrap())
+            .unwrap();
+        assert_eq!(
+            bytecode, expected,
+            "bytecode resolved_default expansion drifted"
+        );
+        assert_eq!(
+            substitute, expected,
+            "substitute resolved_default expansion drifted"
+        );
+        assert_eq!(
+            bytecode, substitute,
+            "the two strategies disagree on resolved_default expansion"
+        );
+    }
+
+    #[test]
+    fn resolved_default_supplied_optional_does_not_consult_accessor() {
+        // A SUPPLIED optional binds to its CALL ARG, never to the
+        // accessor's projection. Pins the contract: `resolved_default`
+        // is the absence-only fallback; a present arg shadows the
+        // accessor at the binder. Sibling negative control to
+        // `resolved_default_is_the_binders_absent_optional_projection`:
+        // that test exercises the absence arm at every slot; this test
+        // exercises the presence arm at every slot and proves the
+        // accessor's `Sexp::int(5)` projection is NOT consulted when
+        // the optional is supplied with `Sexp::int(42)`. A regression
+        // that wired the binder to always consult the accessor (the
+        // wrong direction — the default would shadow supplied args) is
+        // caught here.
+        let params = MacroParams {
+            required: Vec::new(),
+            optional: vec![OptionalParam::with_default("b", Sexp::int(5))],
+            rest: None,
+        };
+        let vals = params.bind("m", &[Sexp::int(42)]).unwrap();
+        assert_eq!(vals, vec![Sexp::int(42)]);
+        // And the accessor's would-be projection IS NOT the bound value:
+        let p = OptionalParam::with_default("b", Sexp::int(5));
+        assert_ne!(vals[0], p.resolved_default());
     }
 
     #[test]

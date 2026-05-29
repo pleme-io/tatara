@@ -47,8 +47,10 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], defau
 # Cluster: Gossip
 chitchat = "0.10"
 
-# Cluster: Raft consensus
-openraft = { version = "0.9", features = ["serde", "storage-v2"] }
+# Cluster: Raft consensus.
+# Pinned at =0.9.22 — see tatara-cli/Cargo.toml for the rationale
+# (rkyv PartialEq inference conflict in openraft 0.9.24).
+openraft = { version = "=0.9.22", features = ["serde", "storage-v2"] }
 
 # Cluster: Persistent storage for Raft
 redb = "3.1"

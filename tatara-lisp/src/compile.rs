@@ -93,10 +93,8 @@ pub fn compile_typed<T: TataraDomain>(src: &str) -> Result<Vec<T>> {
     let expanded = exp.expand_program(forms)?;
     let mut out = Vec::new();
     for form in &expanded {
-        if let Some((head, args)) = form.as_call() {
-            if head == T::KEYWORD {
-                out.push(T::compile_from_args(args)?);
-            }
+        if let Some(args) = form.as_call_to(T::KEYWORD) {
+            out.push(T::compile_from_args(args)?);
         }
     }
     Ok(out)
@@ -119,12 +117,9 @@ pub fn compile_named_from_forms<T: TataraDomain>(
     let expanded = exp.expand_program(forms)?;
     let mut out = Vec::new();
     for form in &expanded {
-        let Some((head, rest)) = form.as_call() else {
+        let Some(rest) = form.as_call_to(T::KEYWORD) else {
             continue;
         };
-        if head != T::KEYWORD {
-            continue;
-        }
         let Some((name_form, spec_args)) = rest.split_first() else {
             return Err(LispError::NamedFormMissingName {
                 keyword: T::KEYWORD,

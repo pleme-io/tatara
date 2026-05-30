@@ -246,6 +246,51 @@ impl Sexp {
         let head = list.first()?.as_symbol()?;
         Some((head, &list[1..]))
     }
+
+    /// Decompose a call form into its argument tail IFF the head matches the
+    /// supplied `keyword` — `Some(args)` iff this is a non-empty list whose
+    /// first element is a symbol equal to `keyword`, where `args` is the
+    /// remaining elements (`&self[1..]`, possibly empty). `None` for every
+    /// shape `as_call` rejects AND for every call whose head is present but
+    /// differs from `keyword`.
+    ///
+    /// This is the *keyword-typed call decomposition* — the natural
+    /// extension of [`Sexp::as_call`] for the "is this a call to ONE
+    /// specific operator?" question every typed-domain dispatch site asks
+    /// after macroexpansion. [`compile_typed`](crate::compile::compile_typed)
+    /// and [`compile_named_from_forms`](crate::compile::compile_named_from_forms)
+    /// both opened the same two-step chain inline —
+    /// `if let Some((head, args)) = form.as_call() { if head == T::KEYWORD { … } }`
+    /// — at every form they walked; the chain IS this projection. Naming
+    /// it lifts "is this form a call to T?" from a two-step inline pattern
+    /// to ONE structural query on the `Sexp` algebra. A regression that
+    /// drifts one consumer's comparison from `==` to `!= `, or that
+    /// compares against a different label than `T::KEYWORD` (e.g.
+    /// substring-grepping the rendered head), becomes structurally
+    /// impossible: there is exactly one implementation both dispatchers
+    /// route through.
+    ///
+    /// Soft face, like the rest of the `as_*` family: it answers "is this
+    /// a call to `keyword`, and what are its arguments?" and yields `None`
+    /// for everything that isn't (skip / fall through), with no
+    /// diagnostic. The strict gate sibling is
+    /// `TataraDomain::compile_from_sexp`, which distinguishes the
+    /// not-a-list / empty-list / non-symbol-head / wrong-keyword
+    /// sub-modes to reject loudly. The two are the dispatch
+    /// (`as_call_to`) and the gate (`compile_from_sexp`) faces of the
+    /// same projection; keeping both lets a site choose "skip silently"
+    /// or "reject loudly" without re-deriving the head.
+    ///
+    /// Structural identity binding it to its siblings:
+    ///   * `as_call_to(keyword) == as_call().and_then(|(h, args)| (h == keyword).then_some(args))`
+    ///   * `as_call_to(keyword).is_some() == (head_symbol() == Some(keyword))`
+    ///
+    /// The returned `&[Sexp]` borrows from the list's tail verbatim — no
+    /// copy, no allocation, same lifetime as [`Sexp::as_call`]'s tail.
+    pub fn as_call_to(&self, keyword: &str) -> Option<&[Sexp]> {
+        let (head, args) = self.as_call()?;
+        (head == keyword).then_some(args)
+    }
 }
 
 impl fmt::Display for Sexp {
@@ -482,6 +527,167 @@ mod tests {
                 s.as_call().map(|(h, _)| h),
                 "head_symbol must equal the operator component of as_call for {s}"
             );
+        }
+    }
+
+    // ── as_call_to: the keyword-typed call decomposition ────────────────
+    //
+    // `as_call_to(keyword)` answers "is this a call to ONE specific
+    // operator, and what are its arguments?" — the keyword-aware sibling
+    // of `as_call`. It lifts the `as_call() + head == T::KEYWORD` two-step
+    // chain that recurred at the two `compile.rs` dispatch sites
+    // (`compile_typed` and `compile_named_from_forms`) into ONE structural
+    // query on the Sexp algebra. The tests below pin its contract
+    // directly; the existing `compile_*` tests are the path-uniformity
+    // guards proving the two production sites route through it without
+    // behavior drift.
+
+    #[test]
+    fn as_call_to_returns_args_for_matching_head() {
+        // `(defmonitor :name "x")` — head is the exact symbol `defmonitor`,
+        // so `as_call_to("defmonitor")` returns `Some(args)` with the tail
+        // after the head verbatim.
+        let form = Sexp::List(vec![
+            Sexp::symbol("defmonitor"),
+            Sexp::keyword("name"),
+            Sexp::string("x"),
+        ]);
+        let args = form
+            .as_call_to("defmonitor")
+            .expect("matching head must yield Some(args)");
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], Sexp::keyword("name"));
+        assert_eq!(args[1], Sexp::string("x"));
+    }
+
+    #[test]
+    fn as_call_to_returns_none_for_mismatched_head() {
+        // `(defmonitor …)` against keyword `"defpoint"` — same form is a
+        // call (so `as_call().is_some()`), but the head doesn't equal the
+        // requested keyword. `as_call_to` is the keyword-typed projection,
+        // so it yields `None` exactly when the head doesn't match. Pin the
+        // gate: the two pre-lift inline sites both rejected this case via
+        // `if head != T::KEYWORD { continue }` / `if head == T::KEYWORD`,
+        // and the lifted primitive must reject identically.
+        let form = Sexp::List(vec![
+            Sexp::symbol("defmonitor"),
+            Sexp::keyword("name"),
+            Sexp::string("x"),
+        ]);
+        assert!(form.as_call().is_some());
+        assert_eq!(form.as_call_to("defpoint"), None);
+        assert_eq!(form.as_call_to(""), None);
+        assert_eq!(form.as_call_to("DEFMONITOR"), None);
+    }
+
+    #[test]
+    fn as_call_to_yields_empty_args_for_singleton_matching_call() {
+        // `(defcompiler)` against keyword `"defcompiler"` — the head
+        // matches and the argument tail is the empty slice. Pin the
+        // empty-tail posture: this is exactly the input
+        // `compile_named_from_forms` dispatches on before rejecting the
+        // missing NAME via `rest.split_first()` returning `None`, so the
+        // lifted primitive must yield `Some(&[])` here (NOT `None`) so
+        // the downstream split-first gate fires structurally.
+        let form = Sexp::List(vec![Sexp::symbol("defcompiler")]);
+        assert_eq!(form.as_call_to("defcompiler"), Some(&[][..]));
+    }
+
+    #[test]
+    fn as_call_to_returns_none_for_non_call_shapes() {
+        // Every shape `as_call` rejects, `as_call_to` rejects identically
+        // regardless of the requested keyword: non-lists, the empty list,
+        // and non-symbol heads have no operator to compare to. Pin
+        // path-uniformity with the `as_call` sibling so a regression that
+        // narrows the keyword-typed projection to admit a shape the bare
+        // soft projection rejected (e.g. accepting a keyword head when
+        // `keyword` matches the keyword's symbol-string projection) fails
+        // here.
+        let shapes = [
+            Sexp::symbol("foo"),
+            Sexp::int(5),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::boolean(true),
+            Sexp::float(1.5),
+            Sexp::Nil,
+            Sexp::Quote(Box::new(Sexp::symbol("foo"))),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::keyword("foo"), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::string("foo"), Sexp::symbol("a")]),
+        ];
+        for s in &shapes {
+            assert_eq!(
+                s.as_call_to("foo"),
+                None,
+                "non-call shape must yield None for any keyword, got Some for {s}"
+            );
+            assert_eq!(s.as_call_to("anything"), None);
+        }
+    }
+
+    #[test]
+    fn as_call_to_args_borrow_is_same_pointer_as_as_call_tail() {
+        // The structural identity binding `as_call_to` to its `as_call`
+        // sibling: on the matching-head path, the returned `args` slice IS
+        // the same `&[Sexp]` slice `as_call` would return as the tail
+        // component. Pin pointer equality so a regression that
+        // re-allocates or copies the tail in the keyword-typed projection
+        // fails loudly — the soft-projection contract is borrow, not
+        // clone, AND `as_call_to` inherits the contract verbatim from
+        // `as_call`.
+        let form = Sexp::List(vec![
+            Sexp::symbol("defmonitor"),
+            Sexp::keyword("name"),
+            Sexp::string("x"),
+        ]);
+        let (_, via_as_call) = form.as_call().expect("call shape");
+        let via_as_call_to = form
+            .as_call_to("defmonitor")
+            .expect("matching keyword shape");
+        assert!(
+            std::ptr::eq(via_as_call.as_ptr(), via_as_call_to.as_ptr()),
+            "as_call_to args must borrow the SAME slice as as_call's tail"
+        );
+        assert_eq!(via_as_call.len(), via_as_call_to.len());
+    }
+
+    #[test]
+    fn as_call_to_is_the_keyword_typed_projection_of_as_call() {
+        // The structural identity the lift establishes:
+        //   `as_call_to(k) == as_call().and_then(|(h, args)| (h == k).then_some(args))`
+        //   `as_call_to(k).is_some() == (head_symbol() == Some(k))`
+        // Pin both across every shape so a regression that drifts the
+        // keyword-typed projection from its closed-form definition fails
+        // loudly. The three soft-projection primitives — `head_symbol`,
+        // `as_call`, `as_call_to` — must agree on operator-position
+        // recognition at every shape they share.
+        let shapes = [
+            Sexp::symbol("foo"),
+            Sexp::int(5),
+            Sexp::keyword("k"),
+            Sexp::Nil,
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::symbol("defpoint"), Sexp::symbol("p")]),
+            Sexp::List(vec![Sexp::symbol("defmonitor"), Sexp::keyword("name")]),
+            Sexp::List(vec![Sexp::symbol("solo")]),
+        ];
+        for s in &shapes {
+            for k in ["defpoint", "defmonitor", "solo", "foo", ""] {
+                let via_chain = s.as_call().and_then(|(h, args)| (h == k).then_some(args));
+                assert_eq!(
+                    s.as_call_to(k),
+                    via_chain,
+                    "as_call_to({k:?}) must equal as_call+filter for {s}"
+                );
+                assert_eq!(
+                    s.as_call_to(k).is_some(),
+                    s.head_symbol() == Some(k),
+                    "as_call_to({k:?}).is_some() must equal (head_symbol() == Some({k:?})) for {s}"
+                );
+            }
         }
     }
 }

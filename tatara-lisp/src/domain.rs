@@ -371,8 +371,80 @@ pub fn unknown_kwarg(key: &str, allowed: &[&str]) -> LispError {
     }
 }
 
+/// The typed-entry kwargs-gate's OPTIONAL lookup primitive — `Some(&Sexp)`
+/// when `key` is present in `kw`, `None` when absent. ONE named projection
+/// on the substrate's `Kwargs<'a>` algebra every optional-kwarg consumer
+/// (`extract_optional_atom`, `extract_list`, `extract_optional_via_serde`)
+/// routes through, and the sibling [`required`](self::required) composes
+/// directly atop it as `optional(kw, key).ok_or_else(|| missing_kwarg(key))`.
+/// Before this lift the same `kw.get(key).copied()` projection — turning
+/// `Option<&&'a Sexp>` (the raw `HashMap::get` return) into the consumer-
+/// shaped `Option<&'a Sexp>` — was inlined verbatim at FOUR sites: once
+/// inside `required`'s composition, and once inside each of the three
+/// optional consumers' absence-handling preludes. After this lift the
+/// projection lives in ONE place; `required` becomes the closed-form
+/// composition `optional + ok_or_else(missing_kwarg)`, and the three
+/// optional consumers read through `optional(kw, key)` without re-stating
+/// the `Option<&&Sexp>` → `Option<&Sexp>` projection at each call site.
+///
+/// Sibling pair with [`required`](self::required): together the two close
+/// the substrate's typed-entry kwargs-LOOKUP surface — `required` is the
+/// mandatory-presence path returning `Result<&Sexp>` (absence → typed
+/// `LispError::MissingKwarg`); `optional` is the may-be-absent path
+/// returning `Option<&Sexp>` (absence → `None`, the consumer decides
+/// what default behavior absence triggers — `None` for atoms, empty `Vec`
+/// for lists, `Sexp::Nil` for params). The TWO primitives between them
+/// cover every consumer's kwargs-lookup posture; a third would be a
+/// structural extension the type system would surface at every call site.
+/// The composition `required = optional + ok_or_else(missing_kwarg)` is
+/// the structural identity binding the two — `required(kw, key)` and
+/// `optional(kw, key).ok_or_else(|| missing_kwarg(key))` are
+/// observationally identical, and naming the composition makes the
+/// identity a substrate-owned theorem rather than a hand-inlined
+/// duplication discipline four sites had to keep in lockstep.
+///
+/// The returned `&'a Sexp` carries the SAME lifetime contract as
+/// [`required`](self::required)'s `Ok(&'a Sexp)` — the projection borrows
+/// from the kwargs map's value slot via `.copied()`, so the optional
+/// consumers can hold the reference through their absence-arm match
+/// without an intermediate clone. `'a` is the outer borrow lifetime
+/// (mirroring `required`); the inner `'_` is free so call sites with
+/// `Kwargs<'a>` (the typical `parse_kwargs` output binding) and
+/// `Kwargs<'static>` (a future static-bound shape) both type-check
+/// uniformly.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; four
+/// inline copies of one structural projection past the three-times rule
+/// once the structural shape is named. THEORY.md §V.1 — knowable
+/// platform; the substrate's typed-entry kwargs-lookup surface is now
+/// the named PAIR `{required, optional}` — authoring tools (REPL, LSP,
+/// `tatara-check`) that want to surface "this domain reads kwarg X as
+/// optional" bind to the `optional` primitive's signature, not the
+/// HashMap-level `get` chain. THEORY.md §II.1 invariant 1 — typed entry;
+/// the kwargs-lookup gate's two postures (required vs. optional) are
+/// now structurally named, so a future fourth posture (e.g. "required
+/// with non-empty constraint") extends the pair as a peer rather than
+/// silently piggybacking on the inlined `get(key).copied()` chain.
+/// THEORY.md §II.1 invariant 2 — free middle; the typed-entry kwargs
+/// gate's lookup shape is uniform across every derived domain (and
+/// every hand-written `TataraDomain` impl), so a future emitter that
+/// wants to instrument the lookup (a span-aware lookup, a debug-mode
+/// lookup logger) wraps ONE function rather than four inline sites.
+#[must_use]
+pub fn optional<'a>(kw: &'a Kwargs<'_>, key: &str) -> Option<&'a Sexp> {
+    kw.get(key).copied()
+}
+
+/// The typed-entry kwargs-gate's REQUIRED lookup primitive — `Ok(&Sexp)`
+/// when `key` is present in `kw`, `Err(LispError::MissingKwarg)` when
+/// absent. Composes [`optional`](self::optional) (the may-be-absent
+/// lookup) with [`missing_kwarg`](self::missing_kwarg) (the canonical
+/// rejection on absence) so the substrate's typed-entry kwargs-lookup
+/// surface is named as the PAIR `{required, optional}` with `required`
+/// expressed as the closed-form composition of its two sibling
+/// primitives. Sibling pair documented in [`optional`](self::optional).
 pub fn required<'a>(kw: &'a Kwargs<'_>, key: &str) -> Result<&'a Sexp> {
-    kw.get(key).copied().ok_or_else(|| missing_kwarg(key))
+    optional(kw, key).ok_or_else(|| missing_kwarg(key))
 }
 
 /// Canonical typed `form:` value for a kwarg-level `LispError::TypeMismatch`.
@@ -867,7 +939,7 @@ fn extract_optional_atom<'a, T, F>(
 where
     F: FnOnce(&'a Sexp) -> Option<T>,
 {
-    match kw.get(key).copied() {
+    match optional(kw, key) {
         None => Ok(None),
         Some(v) => project(v)
             .map(Some)
@@ -937,7 +1009,7 @@ fn extract_list<T, F>(
 where
     F: FnMut(usize, &Sexp) -> Result<T>,
 {
-    let Some(v) = kw.get(key).copied() else {
+    let Some(v) = optional(kw, key) else {
         return Ok(Vec::new());
     };
     let list = v.as_list().ok_or_else(|| type_err(key, list_shape, v))?;
@@ -1106,7 +1178,7 @@ pub fn extract_optional_via_serde<T: DeserializeOwned>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<T>> {
-    let Some(sexp) = kw.get(key).copied() else {
+    let Some(sexp) = optional(kw, key) else {
         return Ok(None);
     };
     from_value_with_path(sexp, KwargPath::named(key)).map(Some)
@@ -4035,6 +4107,158 @@ mod tests {
         assert_eq!(
             format!("{err}"),
             "compile error in :threshold: required but not provided"
+        );
+    }
+
+    // ── optional: the may-be-absent kwargs-lookup primitive ──────────────
+    //
+    // `optional(kw, key)` is the typed-entry kwargs-gate's sibling of
+    // `required`: present → `Some(&Sexp)`, absent → `None`. Before this
+    // lift the same `kw.get(key).copied()` projection was inlined at
+    // FOUR sites — `required` (composed atop `optional + ok_or_else`),
+    // `extract_optional_atom` (absence → `Ok(None)`), `extract_list`
+    // (absence → `Ok(Vec::new())`), and `extract_optional_via_serde`
+    // (absence → `Ok(None)`). The five tests below pin: (a) absent →
+    // `None`; (b) present → `Some(&Sexp)` with value equality; (c) the
+    // returned `&Sexp` borrows from the kwargs map (lifetime contract);
+    // (d) the sibling composition `required = optional + ok_or_else`
+    // is structurally observable; (e) the three optional-path
+    // extractor consumers route through it (path-uniformity across
+    // the lift). Together they pin the named PAIR `{required,
+    // optional}` as the substrate's typed-entry kwargs-lookup
+    // surface.
+
+    #[test]
+    fn optional_returns_none_when_key_absent() {
+        // Negative-control: the kwarg is not in the map, so `optional`
+        // surfaces `None` — the consumer's absence-arm input. No
+        // diagnostic, no allocation, no `Result` indirection.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        assert!(optional(&kw, "level").is_none());
+    }
+
+    #[test]
+    fn optional_returns_some_value_when_key_present() {
+        // Positive-control: the kwarg IS in the map, so `optional`
+        // surfaces `Some(&Sexp)` with the bound value. The returned
+        // reference carries the same value `parse_kwargs` parked at
+        // the key — no copying, no normalization.
+        let args = kwargs_of(r#"(_ :level "info")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let v = optional(&kw, "level").expect("present kwarg must return Some");
+        assert_eq!(v.as_string(), Some("info"));
+    }
+
+    #[test]
+    fn optional_borrow_lifetime_outlives_map_lookup() {
+        // The returned `&'a Sexp` borrows from the kwargs map's value
+        // slot via `.copied()`, so a consumer can hold the reference
+        // through its absence-arm match without an intermediate
+        // clone — same lifetime contract as `required`'s `Ok(&Sexp)`
+        // return. Pin it by reading the value AFTER the
+        // `Option::expect`, against a freshly-bound reference whose
+        // lifetime is tied to the outer `kw` binding.
+        let args = kwargs_of(r#"(_ :name "obs" :threshold 0.99)"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let name_ref: &Sexp = optional(&kw, "name").expect("present");
+        let thr_ref: &Sexp = optional(&kw, "threshold").expect("present");
+        assert_eq!(name_ref.as_string(), Some("obs"));
+        assert_eq!(thr_ref.as_float(), Some(0.99));
+    }
+
+    #[test]
+    fn required_is_optional_composed_with_missing_kwarg() {
+        // The sibling composition `required = optional +
+        // ok_or_else(missing_kwarg)` is structurally observable: on
+        // the absent path, `required(kw, key).unwrap_err()` and
+        // `optional(kw, key).ok_or_else(|| missing_kwarg(key))
+        // .unwrap_err()` must produce structurally-equal errors;
+        // on the present path, both projections name the SAME `&Sexp`
+        // pointer (via `Result::ok` / `Option`). Pin both directions.
+        let args = kwargs_of(r#"(_ :name "obs")"#);
+        let kw = parse_kwargs(&args).unwrap();
+
+        // Present-path identity: required returns the same &Sexp the
+        // optional lookup found.
+        let via_required = required(&kw, "name").expect("present");
+        let via_optional = optional(&kw, "name").expect("present");
+        assert!(
+            std::ptr::eq(via_required, via_optional),
+            "required and optional must surface the SAME &Sexp pointer for a present kwarg"
+        );
+
+        // Absent-path identity: required's error matches the closed-
+        // form composition's error.
+        let err_required = required(&kw, "absent").unwrap_err();
+        let err_composed = optional(&kw, "absent")
+            .ok_or_else(|| missing_kwarg("absent"))
+            .unwrap_err();
+        assert_eq!(format!("{err_required}"), format!("{err_composed}"));
+        assert!(matches!(
+            err_required,
+            LispError::MissingKwarg { ref key } if key == "absent"
+        ));
+    }
+
+    #[test]
+    fn extract_optional_atom_routes_through_optional() {
+        // Path-uniformity: `extract_optional_string` (which fronts
+        // `extract_optional_atom`) now reads the kwarg through
+        // `optional`. Absent → `Ok(None)` (no rejection); present →
+        // `Ok(Some(value))`. Pin both arms so a regression that
+        // re-inlines the `kw.get(key).copied()` projection at the
+        // call site fails loudly here.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            extract_optional_string(&absent_kw, "name").unwrap(),
+            None,
+            "absent optional kwarg must surface as Ok(None)"
+        );
+
+        let present_args = kwargs_of(r#"(_ :name "obs")"#);
+        let present_kw = parse_kwargs(&present_args).unwrap();
+        assert_eq!(
+            extract_optional_string(&present_kw, "name").unwrap(),
+            Some("obs"),
+            "present optional kwarg must surface as Ok(Some(value))"
+        );
+    }
+
+    #[test]
+    fn extract_list_routes_through_optional_on_absent_key() {
+        // Path-uniformity: `extract_string_list` (which fronts
+        // `extract_list`) now reads the kwarg through `optional`.
+        // Absent → `Ok(Vec::new())` (the empty-list absence floor —
+        // never an error, parallel to `extract_optional_atom`'s
+        // `Ok(None)`).
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            extract_string_list(&kw, "tags").unwrap(),
+            Vec::<String>::new(),
+            "absent list kwarg must surface as Ok(Vec::new())"
+        );
+    }
+
+    #[test]
+    fn extract_optional_via_serde_routes_through_optional() {
+        // Path-uniformity: `extract_optional_via_serde` now reads the
+        // kwarg through `optional`. Absent → `Ok(None)`; present →
+        // `Ok(Some(value))` after the canonical-JSON round-trip.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        let absent: Option<i64> = extract_optional_via_serde(&absent_kw, "n").unwrap();
+        assert_eq!(absent, None, "absent serde-fallthrough kwarg → Ok(None)");
+
+        let present_args = kwargs_of("(_ :n 42)");
+        let present_kw = parse_kwargs(&present_args).unwrap();
+        let present: Option<i64> = extract_optional_via_serde(&present_kw, "n").unwrap();
+        assert_eq!(
+            present,
+            Some(42),
+            "present serde-fallthrough kwarg → Ok(Some(value))"
         );
     }
 

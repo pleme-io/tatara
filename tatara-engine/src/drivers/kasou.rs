@@ -96,6 +96,11 @@ impl Driver for KasouDriver {
                 log_path: serial_log,
             }),
             shared_dirs: vec![],
+            // kasou added `machine_identifier_path` to VmConfig — a host
+            // file the VM reads for its stable identifier. tatara doesn't
+            // need a stable identifier per VM (workload identity flows
+            // through tatara's own ID), so None disables the feature.
+            machine_identifier_path: None,
         };
 
         info!(

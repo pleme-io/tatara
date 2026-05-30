@@ -827,27 +827,29 @@ fn args_cache_key(macro_name: &str, args: &[Sexp]) -> Option<CacheKey> {
 }
 
 fn macro_def_from(form: &Sexp) -> Result<Option<MacroDef>> {
-    let Some(list) = form.as_list() else {
+    // Route the typed-macro-definition dispatch surface through the
+    // substrate's typed-decoded call decomposition: `as_call_to_any`
+    // performs the `as_list + head_symbol + MacroDefHead::from_keyword`
+    // three-step chain in ONE structural query on the `Sexp` algebra.
+    // The legacy diagnostic anchors on `list.len()` (the FULL form arity
+    // including the head) — preserved here as `args.len() + 1` so
+    // `LispError::DefmacroArity.arity` carries the same value across the
+    // lift.
+    let Some((head, args)) = form.as_call_to_any(MacroDefHead::from_keyword) else {
         return Ok(None);
     };
-    let Some(head_str) = form.head_symbol() else {
-        return Ok(None);
-    };
-    let Some(head) = MacroDefHead::from_keyword(head_str) else {
-        return Ok(None);
-    };
-    if list.len() < 4 {
-        return Err(defmacro_arity(head, list.len()));
+    if args.len() < 3 {
+        return Err(defmacro_arity(head, args.len() + 1));
     }
-    let name = list[1]
+    let name = args[0]
         .as_symbol()
-        .ok_or_else(|| defmacro_non_symbol_name(head, &list[1]))?
+        .ok_or_else(|| defmacro_non_symbol_name(head, &args[0]))?
         .to_string();
-    let param_list = list[2]
+    let param_list = args[1]
         .as_list()
-        .ok_or_else(|| defmacro_non_list_params(head, &list[2]))?;
+        .ok_or_else(|| defmacro_non_list_params(head, &args[1]))?;
     let params = parse_params(param_list)?;
-    let body = list[3].clone();
+    let body = args[2].clone();
     Ok(Some(MacroDef { name, params, body }))
 }
 

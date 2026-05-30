@@ -291,6 +291,66 @@ impl Sexp {
         let (head, args) = self.as_call()?;
         (head == keyword).then_some(args)
     }
+
+    /// Decompose a call form whose head decodes through a caller-supplied
+    /// classifier — `Some((decoded, args))` iff this is a non-empty list
+    /// whose first element is a symbol AND `decode(head)` returns
+    /// `Some(decoded)`, where `args` is the remaining elements
+    /// (`&self[1..]`, possibly empty). `None` for every shape
+    /// [`Sexp::as_call`] rejects AND for every call whose head is present
+    /// but `decode` rejects.
+    ///
+    /// This is the *typed-decoded call decomposition* — the closure-typed
+    /// extension of [`Sexp::as_call_to`] for the "is this a call whose head
+    /// belongs to a CLOSED SET that decodes to a typed witness?" question.
+    /// Where [`Sexp::as_call_to`] filters by ONE constant keyword,
+    /// `as_call_to_any` filters AND TYPES by a caller-supplied projection —
+    /// every dispatch site that asks "is this form an invocation of any of
+    /// N operators, decoded as a typed enum?" binds to ONE structural query
+    /// on the `Sexp` algebra. The macro-expander's `macro_def_from` is the
+    /// first consumer: pre-lift it opened the same three-step chain inline —
+    /// `let Some(list) = form.as_list()…; let Some(head) =
+    /// form.head_symbol()…; let Some(decoded) = MacroDefHead::from_keyword
+    /// (head)…` — at the typed-macro-definition dispatch surface; the
+    /// chain IS this projection. Naming it lifts "is this form a call to
+    /// any of `Defmacro | DefpointTemplate | Defcheck`, decoded to
+    /// `MacroDefHead`?" from a three-step inline pattern to ONE structural
+    /// query.
+    ///
+    /// Soft face, like the rest of the `as_*` family: it answers "is this
+    /// a call whose head decodes through `F`, and what are its arguments?"
+    /// and yields `None` for everything that isn't (skip / fall through),
+    /// with no diagnostic. The strict gate sibling stays
+    /// `TataraDomain::compile_from_sexp` — that distinguishes the
+    /// not-a-list / empty-list / non-symbol-head / wrong-keyword sub-modes
+    /// to reject loudly for a single-keyword consumer. The two are the
+    /// closed-set-decoded dispatch (`as_call_to_any`) and the
+    /// single-keyword gate (`compile_from_sexp`) faces of the typed-domain
+    /// recognition problem; keeping both lets a site choose "skip
+    /// silently if the head isn't ours" or "reject loudly if the head
+    /// isn't the exact keyword" without re-deriving the head.
+    ///
+    /// Structural identity binding it to its siblings:
+    ///   * `as_call_to_any(decode) == as_call().and_then(|(h, args)| decode(h).map(|d| (d, args)))`
+    ///   * `as_call_to(k) == as_call_to_any(|h| (h == k).then_some(())).map(|(_, a)| a)` (modulo the discarded `()`)
+    ///   * `as_call_to_any(decode).is_some() == as_call().map_or(false, |(h, _)| decode(h).is_some())`
+    ///
+    /// The returned `&[Sexp]` borrows from the list's tail verbatim — no
+    /// copy, no allocation, same lifetime as [`Sexp::as_call`]'s tail.
+    /// `T` is owned because `decode` is `FnOnce(&str) -> Option<T>` and a
+    /// `&'_ str` borrow into the head symbol would not outlive the helper
+    /// boundary; consumers projecting to a typed `Copy` enum (e.g.
+    /// `MacroDefHead`) get the value directly, consumers projecting to a
+    /// borrowed `&'static str` (a closed-set head) project to
+    /// `&'static str` and inherit the static lifetime through the
+    /// classifier.
+    pub fn as_call_to_any<F, T>(&self, decode: F) -> Option<(T, &[Sexp])>
+    where
+        F: FnOnce(&str) -> Option<T>,
+    {
+        let (head, args) = self.as_call()?;
+        decode(head).map(|d| (d, args))
+    }
 }
 
 impl fmt::Display for Sexp {
@@ -686,6 +746,227 @@ mod tests {
                     s.as_call_to(k).is_some(),
                     s.head_symbol() == Some(k),
                     "as_call_to({k:?}).is_some() must equal (head_symbol() == Some({k:?})) for {s}"
+                );
+            }
+        }
+    }
+
+    // ── as_call_to_any: the typed-decoded call decomposition ────────────
+    //
+    // `as_call_to_any(decode)` answers "is this a call whose head decodes
+    // through `decode`, and what are its arguments?" — the closure-typed
+    // sibling of `as_call_to`. It lifts the
+    // `as_list() + head_symbol() + decode(head)` three-step chain that
+    // recurred at the macro-expander's `macro_def_from` site (the typed
+    // `MacroDefHead::from_keyword` dispatch surface) into ONE structural
+    // query on the Sexp algebra. The tests below pin its contract
+    // directly; the existing macro-expansion tests are the path-
+    // uniformity guards proving the production site routes through it
+    // without behavior drift.
+    //
+    // The test classifier `Op::from_keyword` mirrors `MacroDefHead::from_keyword`
+    // — a closed-set typed enum projection from a `&str` head — so the
+    // tests cover the macro-expander's real consumer shape rather than a
+    // synthetic predicate.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Op {
+        Quote,
+        If,
+        Let,
+    }
+    impl Op {
+        fn from_keyword(head: &str) -> Option<Self> {
+            match head {
+                "quote" => Some(Self::Quote),
+                "if" => Some(Self::If),
+                "let" => Some(Self::Let),
+                _ => None,
+            }
+        }
+    }
+
+    #[test]
+    fn as_call_to_any_returns_decoded_head_and_args_for_matching_head() {
+        // `(if c t e)` — head `if` decodes to `Op::If`, args are the
+        // three-element tail verbatim. Pin both halves of the returned
+        // tuple: the decoded typed witness AND the borrowed args slice.
+        let form = Sexp::List(vec![
+            Sexp::symbol("if"),
+            Sexp::symbol("c"),
+            Sexp::symbol("t"),
+            Sexp::symbol("e"),
+        ]);
+        let (op, args) = form
+            .as_call_to_any(Op::from_keyword)
+            .expect("matching head must yield Some((decoded, args))");
+        assert_eq!(op, Op::If);
+        assert_eq!(args.len(), 3);
+        assert_eq!(args[0], Sexp::symbol("c"));
+        assert_eq!(args[2], Sexp::symbol("e"));
+    }
+
+    #[test]
+    fn as_call_to_any_returns_none_when_decoder_rejects_head() {
+        // `(defmonitor :name "x")` — head `defmonitor` is a valid symbol
+        // (so `as_call().is_some()`), but `Op::from_keyword` rejects it
+        // (it's not one of the closed `{quote, if, let}` set). Pin the
+        // gate: `as_call_to_any` yields `None` exactly when the decoder
+        // rejects the head, mirroring how the pre-lift inline chain in
+        // `macro_def_from` returned `Ok(None)` when
+        // `MacroDefHead::from_keyword(head_str)` returned `None`.
+        let form = Sexp::List(vec![
+            Sexp::symbol("defmonitor"),
+            Sexp::keyword("name"),
+            Sexp::string("x"),
+        ]);
+        assert!(form.as_call().is_some());
+        assert!(form.as_call_to_any(Op::from_keyword).is_none());
+    }
+
+    #[test]
+    fn as_call_to_any_yields_empty_args_for_singleton_decoded_call() {
+        // `(quote)` against the classifier — head decodes to `Op::Quote`
+        // and the argument tail is the empty slice. Pin the empty-tail
+        // posture: a downstream arity gate (analogous to
+        // `if list.len() < 4` inside `macro_def_from`) dispatches on
+        // `args.is_empty()` AFTER the decoder accepts the head; the
+        // helper must yield `Some((decoded, &[]))` (NOT `None`) so that
+        // gate fires structurally.
+        let form = Sexp::List(vec![Sexp::symbol("quote")]);
+        let (op, args) = form
+            .as_call_to_any(Op::from_keyword)
+            .expect("singleton matching call must decompose");
+        assert_eq!(op, Op::Quote);
+        assert_eq!(args.len(), 0);
+    }
+
+    #[test]
+    fn as_call_to_any_returns_none_for_non_call_shapes() {
+        // Every shape `as_call` rejects, `as_call_to_any` rejects
+        // identically regardless of the decoder: non-lists, the empty
+        // list, and non-symbol heads have no operator string to feed
+        // the decoder. Pin path-uniformity with the `as_call` sibling so
+        // a regression that admits a non-call shape (e.g. accepting a
+        // bare symbol via a permissive decoder) fails here. Pass
+        // `Some` for every input to prove the call-shape gate fires
+        // BEFORE the decoder runs — the decoder cannot rescue a
+        // non-call.
+        let shapes = [
+            Sexp::symbol("foo"),
+            Sexp::int(5),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::boolean(true),
+            Sexp::float(1.5),
+            Sexp::Nil,
+            Sexp::Quote(Box::new(Sexp::symbol("foo"))),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::keyword("foo"), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::string("foo"), Sexp::symbol("a")]),
+        ];
+        for s in &shapes {
+            // The promiscuous decoder accepts every &str head, so the
+            // only way to see `None` here is if the call-shape gate
+            // rejects the shape upstream of the decoder.
+            assert_eq!(
+                s.as_call_to_any(|h: &str| Some(h.to_string())),
+                None,
+                "non-call shape must yield None even for a promiscuous decoder, got Some for {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn as_call_to_any_args_borrow_is_same_pointer_as_as_call_tail() {
+        // The structural identity binding `as_call_to_any` to its
+        // `as_call` sibling: on the decoded path, the returned `args`
+        // slice IS the same `&[Sexp]` slice `as_call` would return as
+        // the tail component. Pin pointer equality so a regression that
+        // re-allocates or copies the tail in the typed-decoded
+        // projection fails loudly — the soft-projection contract is
+        // borrow, not clone, AND `as_call_to_any` inherits the contract
+        // verbatim from `as_call`. Parallel to the
+        // `as_call_to_args_borrow_is_same_pointer_as_as_call_tail` pin
+        // for `as_call_to`.
+        let form = Sexp::List(vec![
+            Sexp::symbol("if"),
+            Sexp::symbol("c"),
+            Sexp::symbol("t"),
+        ]);
+        let (_, via_as_call) = form.as_call().expect("call shape");
+        let (_, via_as_call_to_any) = form
+            .as_call_to_any(Op::from_keyword)
+            .expect("decoded shape");
+        assert!(
+            std::ptr::eq(via_as_call.as_ptr(), via_as_call_to_any.as_ptr()),
+            "as_call_to_any args must borrow the SAME slice as as_call's tail"
+        );
+        assert_eq!(via_as_call.len(), via_as_call_to_any.len());
+    }
+
+    #[test]
+    fn as_call_to_any_is_the_decoded_projection_of_as_call() {
+        // The structural identity the lift establishes:
+        //   `as_call_to_any(decode) == as_call().and_then(|(h, args)| decode(h).map(|d| (d, args)))`
+        //   `as_call_to_any(decode).is_some() == as_call().map_or(false, |(h, _)| decode(h).is_some())`
+        // Pin both across every shape so a regression that drifts the
+        // typed-decoded projection from its closed-form definition fails
+        // loudly. The four soft-projection primitives — `head_symbol`,
+        // `as_call`, `as_call_to`, `as_call_to_any` — must agree on
+        // operator-position recognition at every shape they share.
+        let shapes = [
+            Sexp::symbol("foo"),
+            Sexp::int(5),
+            Sexp::keyword("k"),
+            Sexp::Nil,
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::symbol("if"), Sexp::symbol("c")]),
+            Sexp::List(vec![Sexp::symbol("quote"), Sexp::symbol("x")]),
+            Sexp::List(vec![Sexp::symbol("let"), Sexp::List(vec![])]),
+            Sexp::List(vec![Sexp::symbol("defpoint"), Sexp::symbol("p")]),
+            Sexp::List(vec![Sexp::symbol("solo")]),
+        ];
+        for s in &shapes {
+            let via_chain = s
+                .as_call()
+                .and_then(|(h, args)| Op::from_keyword(h).map(|d| (d, args)));
+            assert_eq!(
+                s.as_call_to_any(Op::from_keyword),
+                via_chain,
+                "as_call_to_any(Op::from_keyword) must equal as_call+decode for {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn as_call_to_any_subsumes_as_call_to_via_unit_decoder() {
+        // The closed-form composition `as_call_to(k) == as_call_to_any
+        // (|h| (h == k).then_some(())).map(|(_, a)| a)` (modulo the
+        // discarded `()` decoded witness). Pin it across every shape ×
+        // keyword pair so a regression that drifts the typed-decoded
+        // projection from its single-keyword sibling fails loudly. This
+        // makes the family closure: `as_call_to` is the trivial-decoder
+        // instance of `as_call_to_any`, and naming both lets each
+        // consumer pick the projection that fits its call site.
+        let shapes = [
+            Sexp::symbol("foo"),
+            Sexp::Nil,
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::symbol("if"), Sexp::symbol("c")]),
+            Sexp::List(vec![Sexp::symbol("defpoint"), Sexp::symbol("p")]),
+        ];
+        for s in &shapes {
+            for k in ["if", "defpoint", "let", "foo", "", "DEFPOINT"] {
+                let via_unit_decoder = s
+                    .as_call_to_any(|h: &str| (h == k).then_some(()))
+                    .map(|(_, args)| args);
+                assert_eq!(
+                    s.as_call_to(k),
+                    via_unit_decoder,
+                    "as_call_to({k:?}) must equal as_call_to_any+unit-decoder for {s}"
                 );
             }
         }

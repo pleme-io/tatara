@@ -778,6 +778,93 @@ fn template_invariant_violation(macro_name: &str, kind: TemplateInvariantKind) -
     }
 }
 
+/// Look up a bound-arg by its template-bytecode index, or raise the
+/// structural `LispError::TemplateInvariant` rejection with the
+/// caller-supplied `kind` constructor applied to the bad index. ONE
+/// named primitive both bytecode-runtime arms that read a bound arg
+/// by index — [`TemplateOp::Subst`] (single-value push) AND
+/// [`TemplateOp::Splice`] (list-splicing) — route through.
+///
+/// Before this lift the same `args_by_index.get(*idx).ok_or_else(||
+/// template_invariant_violation(macro_name, KIND(*idx)))?` projection
+/// appeared at BOTH arms of [`apply_compiled`], differing only in the
+/// kind constructor: [`TemplateInvariantKind::SubstBadIndex`] at the
+/// `Subst` arm, [`TemplateInvariantKind::SpliceBadIndex`] at the
+/// `Splice` arm. The arms also diverged on what they did with the
+/// returned `&Sexp` — `Subst` cloned and pushed, `Splice` consumed
+/// the borrow through [`splice_value_into`] — but the lookup-and-
+/// reject prelude was byte-identical modulo the kind, well past the
+/// ≥2 PRIME-DIRECTIVE trigger.
+///
+/// After this lift the lookup-and-reject shape lives in ONE function;
+/// the two arms thread the per-call-site kind constructor through the
+/// helper and apply their respective post-lookup verbs at the call
+/// site. The `kind: FnOnce(usize) -> TemplateInvariantKind` parameter
+/// encodes the closed-set bytecode-runtime "this gate has an index"
+/// surface at the type level — only the two
+/// [`TemplateInvariantKind`] variants whose payload IS the bad index
+/// (`SubstBadIndex(usize)` and `SpliceBadIndex(usize)`) construct
+/// directly through `FnOnce(usize) -> TemplateInvariantKind`; the
+/// stack-gate variants ([`TemplateInvariantKind::EndListEmptyStack`]
+/// and [`TemplateInvariantKind::FinalNoValue`]) carry no payload and
+/// would not type-check at this boundary, so the invalid combination
+/// "stack-gate kind reached from an op-index lookup" is structurally
+/// unrepresentable at the helper's call boundary the same way
+/// [`TemplateInvariantKind`]'s closed-set shape makes it
+/// unrepresentable in the variant itself.
+///
+/// Sibling of [`template_invariant_violation`]: that helper builds the
+/// typed [`LispError::TemplateInvariant`] variant from a fully-formed
+/// `kind`; this helper composes the index-keyed lookup with the
+/// variant-builder, so the kind constructor doesn't have to be evaluated
+/// eagerly at the call site (lazy via `FnOnce`, only fires on the bad-
+/// index path). A future fifth bytecode op that reads a bound arg by
+/// index (a hypothetical [`TemplateOp::Conditional`] that branches on a
+/// bound boolean, a [`TemplateOp::Project`] that extracts a sub-field
+/// of a bound `Sexp::List`) extends the family in ONE call to
+/// `resolve_bound_arg` with the new kind constructor (`KIND(usize) ->
+/// TemplateInvariantKind`) — the bytecode-runtime's bound-arg-by-index
+/// projection becomes ONE structural primitive consumers compose with.
+///
+/// The returned `&'a Sexp` borrows from `args_by_index` verbatim —
+/// `Subst`'s arm consumes it through `.clone()` (the consumer pushes
+/// an owned value into the builder); `Splice`'s arm consumes it
+/// through [`splice_value_into`] (the consumer borrows for the
+/// per-arm coercion). The borrow's lifetime `'a` is the unified
+/// lifetime of `args_by_index`, matching the call site's borrow
+/// posture.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// inline copies of the index-lookup-and-reject prelude across the
+/// `apply_compiled` body's `Subst` and `Splice` arms is past the ≥2
+/// PRIME-DIRECTIVE trigger once the structural shape is named.
+/// THEORY.md §V.1 — knowable platform / "make invalid states
+/// unrepresentable"; the bytecode-runtime bound-arg-by-index lookup
+/// becomes a NAMED primitive on the substrate's `&[Sexp]` algebra
+/// rather than a re-derived `get + ok_or_else + template_invariant_
+/// violation` chain at every op-arm that reads by index. A future
+/// authoring tool (REPL, LSP, `tatara-check`) that wants to surface
+/// "this bytecode op's bound-arg lookup misfired at idx N" binds to
+/// ONE function. THEORY.md §II.1 invariant 2 — free middle; both
+/// expansion strategies route through the SHARED `MacroParams::bind`,
+/// AND the bytecode strategy's op-arms route through this SHARED
+/// `resolve_bound_arg` lookup — the bytecode-runtime's
+/// proof-of-well-formedness is now structurally uniform across the
+/// two reachable index-lookup ops, so a regression that drifts ONE
+/// arm's posture (e.g. accepts an out-of-range idx at one arm but
+/// not the other, or swaps the kind constructor at a single arm) is
+/// no longer a silent two-site divergence.
+fn resolve_bound_arg<'a>(
+    args_by_index: &'a [Sexp],
+    idx: usize,
+    macro_name: &str,
+    kind: impl FnOnce(usize) -> TemplateInvariantKind,
+) -> Result<&'a Sexp> {
+    args_by_index
+        .get(idx)
+        .ok_or_else(|| template_invariant_violation(macro_name, kind(idx)))
+}
+
 /// Execute a pre-compiled template against the macro's argument list.
 fn apply_compiled(
     macro_name: &str,
@@ -796,24 +883,30 @@ fn apply_compiled(
         match op {
             TemplateOp::Literal(s) => stack.last_mut().unwrap().push(s.clone()),
             TemplateOp::Subst(idx) => {
-                let v = args_by_index
-                    .get(*idx)
-                    .ok_or_else(|| {
-                        template_invariant_violation(
-                            macro_name,
-                            TemplateInvariantKind::SubstBadIndex(*idx),
-                        )
-                    })?
-                    .clone();
+                // Bound-arg-by-index lookup routes through the shared
+                // `resolve_bound_arg` projection with `SubstBadIndex` as
+                // the per-call-site kind constructor; the post-lookup
+                // verb (clone + push) is the Subst arm's per-op shape.
+                let v = resolve_bound_arg(
+                    &args_by_index,
+                    *idx,
+                    macro_name,
+                    TemplateInvariantKind::SubstBadIndex,
+                )?
+                .clone();
                 stack.last_mut().unwrap().push(v);
             }
             TemplateOp::Splice(idx) => {
-                let v = args_by_index.get(*idx).ok_or_else(|| {
-                    template_invariant_violation(
-                        macro_name,
-                        TemplateInvariantKind::SpliceBadIndex(*idx),
-                    )
-                })?;
+                // Sibling lookup through `resolve_bound_arg` with
+                // `SpliceBadIndex` as the per-call-site kind constructor;
+                // the post-lookup verb (`splice_value_into`) consumes
+                // the borrow directly without an intermediate clone.
+                let v = resolve_bound_arg(
+                    &args_by_index,
+                    *idx,
+                    macro_name,
+                    TemplateInvariantKind::SpliceBadIndex,
+                )?;
                 splice_value_into(stack.last_mut().unwrap(), v);
             }
             TemplateOp::BeginList => stack.push(Vec::new()),
@@ -5156,6 +5249,318 @@ mod tests {
         assert!(
             matches!(err, LispError::MissingMacroArg { .. }),
             "expected MissingMacroArg, got: {err:?}"
+        );
+    }
+
+    // ── resolve_bound_arg: bytecode-runtime bound-arg-by-index lookup ──
+    //
+    // `resolve_bound_arg(args_by_index, idx, macro_name, kind)` lifts the
+    // `args_by_index.get(*idx).ok_or_else(|| template_invariant_violation(
+    // macro_name, KIND(*idx)))?` projection that recurred at BOTH the
+    // `TemplateOp::Subst` and `TemplateOp::Splice` arms inside
+    // `apply_compiled`. The arms differ in the kind constructor
+    // (`SubstBadIndex` vs. `SpliceBadIndex`) and in their post-lookup
+    // verb (clone+push vs. splice-coerce), but the lookup-and-reject
+    // prelude is byte-identical modulo the constructor. These tests
+    // pin the lifted helper's contract directly; the existing
+    // `apply_compiled_*_bad_idx_*` tests are the path-uniformity
+    // guards proving both production arms route through it without
+    // behavior drift.
+
+    #[test]
+    fn resolve_bound_arg_in_range_returns_borrowed_reference_verbatim() {
+        // For an in-range index, the helper returns `Ok(&args[idx])`
+        // borrowed VERBATIM — same pointer as `args_by_index.get(idx)`.
+        // Pins the borrow-not-clone contract: a regression that drifts
+        // the helper to clone+return (`Result<Sexp>` instead of
+        // `Result<&Sexp>`) would allocate per lookup at the production
+        // `Subst`/`Splice` hot path. The kind constructor must NOT
+        // fire on the success path (`FnOnce`'s lazy semantics) — pin
+        // that the test passes a constructor that would panic if
+        // called, asserting the helper short-circuits before invoking
+        // it on the in-range arm.
+        let args = vec![Sexp::int(1), Sexp::int(2), Sexp::int(3)];
+        let got = resolve_bound_arg(&args, 1, "m", |_| {
+            panic!("kind constructor must not fire on the in-range path")
+        })
+        .expect("in-range lookup must succeed");
+        assert!(
+            std::ptr::eq(got, &args[1]),
+            "resolve_bound_arg must return the SAME pointer as args_by_index.get(idx)"
+        );
+        assert_eq!(*got, Sexp::int(2));
+    }
+
+    #[test]
+    fn resolve_bound_arg_out_of_range_with_subst_kind_emits_typed_invariant() {
+        // For an out-of-range index, the helper raises the structural
+        // `LispError::TemplateInvariant` variant with the caller-
+        // supplied `SubstBadIndex` kind constructor applied to the bad
+        // index. Pins the post-lift emission shape (variant identity
+        // + the kind constructor threaded with the actual idx); a
+        // regression that drops the idx payload (e.g., via a `usize ->
+        // ()` projection) or hard-codes a different kind at the helper
+        // boundary fails-loudly here. Fail-before-pass-after: this
+        // assert is contradicted by the pre-lift code path (which
+        // never called `resolve_bound_arg` because it didn't exist),
+        // ratifies the post-lift one.
+        let args: Vec<Sexp> = Vec::new();
+        let err = resolve_bound_arg(&args, 7, "test-macro", TemplateInvariantKind::SubstBadIndex)
+            .expect_err("out-of-range lookup must error");
+        match err {
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "test-macro");
+                assert_eq!(kind, TemplateInvariantKind::SubstBadIndex(7));
+            }
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_bound_arg_threads_kind_constructor_per_call_site() {
+        // Path-uniformity for the per-call-site kind constructor: the
+        // SAME out-of-range idx via the `SpliceBadIndex` constructor
+        // emits `kind: SpliceBadIndex(7)` — distinct from the sibling
+        // `SubstBadIndex(7)` variant. Pins that the constructor is
+        // chosen per call site (not hard-coded at the helper boundary),
+        // closing the structural matrix `{Subst, Splice} × {in-range,
+        // out-of-range}` the two production arms span across the
+        // bytecode-runtime's bound-arg-by-index reads. A regression
+        // that hard-codes a single kind at the helper boundary would
+        // emit the same variant identity for both call sites and
+        // fail-loudly here.
+        let args: Vec<Sexp> = Vec::new();
+        let err = resolve_bound_arg(
+            &args,
+            7,
+            "test-macro",
+            TemplateInvariantKind::SpliceBadIndex,
+        )
+        .expect_err("out-of-range lookup must error");
+        match err {
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "test-macro");
+                assert_eq!(kind, TemplateInvariantKind::SpliceBadIndex(7));
+            }
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_bound_arg_threads_macro_name_verbatim() {
+        // Path-uniformity for the `macro_name` slot: the helper threads
+        // the caller's borrow into the variant's owned `String` slot
+        // verbatim. Pin two distinct macro names route through with no
+        // mutual interference — a regression that hard-codes a single
+        // macro_name at the helper boundary or swaps the parameter
+        // ordering fails-loudly here. Same posture as
+        // `compiler_spec_io_err_threads_each_stage_through_unchanged`
+        // pins the typed `stage` slot in the disk-persistence sibling
+        // lift.
+        let args: Vec<Sexp> = Vec::new();
+        for name in ["wrap", "call-macro", "obs"] {
+            let err = resolve_bound_arg(&args, 0, name, TemplateInvariantKind::SubstBadIndex)
+                .expect_err("out-of-range lookup must error");
+            match err {
+                LispError::TemplateInvariant { macro_name, kind } => {
+                    assert_eq!(macro_name, name, "macro_name slot drifted for {name}");
+                    assert_eq!(kind, TemplateInvariantKind::SubstBadIndex(0));
+                }
+                other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_bound_arg_yields_first_element_when_idx_is_zero() {
+        // Edge case: idx 0 with a single-element args_by_index returns
+        // `Ok(&args[0])`. Pins the lower-bound of the in-range surface
+        // — a regression that off-by-ones the lookup (e.g., `get(idx +
+        // 1)` or `get(idx).filter(|_| idx > 0)`) would fail here.
+        // Sibling to the upper-bound `resolve_bound_arg_out_of_range_
+        // with_subst_kind_emits_typed_invariant` test.
+        let args = vec![Sexp::int(42)];
+        let got = resolve_bound_arg(&args, 0, "m", |_| {
+            panic!("kind constructor must not fire on the in-range path")
+        })
+        .expect("idx-0 lookup must succeed");
+        assert!(std::ptr::eq(got, &args[0]));
+        assert_eq!(*got, Sexp::int(42));
+    }
+
+    #[test]
+    fn resolve_bound_arg_yields_last_element_at_exact_upper_bound() {
+        // Edge case: idx `len - 1` is the highest valid index. Pin
+        // that it routes through the success arm (NOT the error arm),
+        // closing the in-range surface end-to-end with the lower-
+        // bound sibling. A regression that off-by-ones the upper
+        // bound (e.g., `get(idx).filter(|_| idx < args.len() - 1)`)
+        // would fail here.
+        let args = vec![Sexp::int(1), Sexp::int(2), Sexp::int(3)];
+        let got = resolve_bound_arg(&args, args.len() - 1, "m", |_| {
+            panic!("kind constructor must not fire on the in-range path")
+        })
+        .expect("last-element lookup must succeed");
+        assert!(std::ptr::eq(got, args.last().unwrap()));
+        assert_eq!(*got, Sexp::int(3));
+    }
+
+    #[test]
+    fn resolve_bound_arg_at_exact_length_routes_to_error_arm() {
+        // Boundary case: idx EQUAL to `args.len()` is out-of-range
+        // (since `get` is 0-indexed). Pin that this routes through
+        // the error arm with the kind constructor applied to the
+        // EXACT idx that was tried. A regression that off-by-ones
+        // the boundary (e.g., admits `idx == len`) would fail here.
+        // This is the canonical off-by-one trap; the helper's
+        // contract pins it at the variant-construction boundary.
+        let args = vec![Sexp::int(1)];
+        let err = resolve_bound_arg(&args, 1, "m", TemplateInvariantKind::SubstBadIndex)
+            .expect_err("idx == len must error");
+        match err {
+            LispError::TemplateInvariant { kind, .. } => {
+                assert_eq!(kind, TemplateInvariantKind::SubstBadIndex(1));
+            }
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_bound_arg_empty_slice_with_any_idx_routes_to_error_arm() {
+        // Boundary case: an empty `args_by_index` slice rejects every
+        // idx (including 0). Pin that the helper's emission shape is
+        // uniform regardless of which out-of-range idx fires the
+        // rejection — `SubstBadIndex(0)` for an empty slice is the
+        // bytecode-runtime mirror of a zero-arity macro template
+        // referencing the 0-th param.
+        let args: Vec<Sexp> = Vec::new();
+        let err = resolve_bound_arg(&args, 0, "zero-arity", TemplateInvariantKind::SubstBadIndex)
+            .expect_err("empty slice rejects every idx");
+        match err {
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "zero-arity");
+                assert_eq!(kind, TemplateInvariantKind::SubstBadIndex(0));
+            }
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn apply_compiled_subst_bad_idx_routes_through_resolve_bound_arg_with_subst_kind() {
+        // End-to-end path-uniformity: a `Subst(99)` op against a
+        // zero-arity macro routes the bytecode-runtime's bound-arg
+        // lookup through `resolve_bound_arg` with the
+        // `SubstBadIndex` constructor, emitting the structural
+        // variant with `kind: SubstBadIndex(99)`. The pre-lift
+        // sibling test `apply_compiled_subst_bad_idx_routes_through_
+        // template_invariant_violation` pins that the same input
+        // routes through `template_invariant_violation`; this test
+        // pins that BOTH still hold under the post-lift composition
+        // — `resolve_bound_arg` calls `template_invariant_violation`
+        // internally on the rejection arm. A regression that drifts
+        // ONE arm's projection from the other (e.g., swaps the
+        // constructor at one call site, or short-circuits the
+        // composition) would fail here.
+        let tmpl = CompiledTemplate {
+            ops: vec![TemplateOp::Subst(99)],
+        };
+        let err = apply_compiled("test-macro", &MacroParams::default(), &tmpl, &[])
+            .expect_err("bad idx must error");
+        match err {
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "test-macro");
+                assert_eq!(kind, TemplateInvariantKind::SubstBadIndex(99));
+            }
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn apply_compiled_splice_bad_idx_routes_through_resolve_bound_arg_with_splice_kind() {
+        // Sibling end-to-end path-uniformity for the `Splice` arm:
+        // the post-lift composition routes a `Splice(42)` op through
+        // `resolve_bound_arg` with the `SpliceBadIndex` constructor,
+        // emitting `kind: SpliceBadIndex(42)`. Together with the
+        // `Subst` sibling test above, this pins the structural matrix
+        // `{Subst, Splice} × resolve_bound_arg` end-to-end through
+        // the public `apply_compiled` surface, so a regression that
+        // drifts ONE arm's kind constructor (e.g., the `Splice` arm
+        // accidentally emits `SubstBadIndex` after a copy-paste
+        // refactor) fails-loudly here.
+        let tmpl = CompiledTemplate {
+            ops: vec![TemplateOp::Splice(42)],
+        };
+        let err = apply_compiled("call-macro", &MacroParams::default(), &tmpl, &[])
+            .expect_err("bad splice idx must error");
+        match err {
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "call-macro");
+                assert_eq!(kind, TemplateInvariantKind::SpliceBadIndex(42));
+            }
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn apply_compiled_subst_in_range_routes_past_resolve_bound_arg_into_clone_and_push() {
+        // Positive control: a `Subst(0)` op against a one-arg macro
+        // routes through `resolve_bound_arg`'s success arm and the
+        // `Subst` post-lookup verb (clone + push) emits the bound
+        // value verbatim. Pin the post-lift composition's success
+        // path: the clone-and-push semantics live at the call site
+        // (NOT in `resolve_bound_arg`, which only borrows), and a
+        // regression that drifts the borrow contract (e.g., the
+        // helper clones internally + the call site clones again)
+        // would still pass observationally but would regress the
+        // hot-path allocation count.
+        let params = MacroParams {
+            required: vec!["x".into()],
+            optional: Vec::new(),
+            rest: None,
+        };
+        let tmpl = CompiledTemplate {
+            ops: vec![TemplateOp::Subst(0)],
+        };
+        let out = apply_compiled("id", &params, &tmpl, &[Sexp::int(42)])
+            .expect("in-range Subst must succeed");
+        assert_eq!(out, Sexp::int(42));
+    }
+
+    #[test]
+    fn apply_compiled_splice_in_range_routes_past_resolve_bound_arg_into_splice_value_into() {
+        // Positive control for the `Splice` arm: a `&rest` macro that
+        // splices a bound list routes through `resolve_bound_arg`'s
+        // success arm and the `Splice` post-lookup verb
+        // (`splice_value_into`) flattens the bound list into the
+        // builder. Pin the composition's success path end-to-end:
+        // the bound `Sexp::List([1, 2, 3])` at idx 1 flattens into
+        // the outer builder's `(call 1 2 3)` shape — the same output
+        // `rest_param_splices_with_at` pins through the public
+        // surface, here pinned with the bytecode-runtime composition
+        // exposed directly.
+        let params = MacroParams {
+            required: vec!["f".into()],
+            optional: Vec::new(),
+            rest: Some("args".into()),
+        };
+        let tmpl = CompiledTemplate {
+            ops: vec![
+                TemplateOp::BeginList,
+                TemplateOp::Subst(0),
+                TemplateOp::Splice(1),
+                TemplateOp::EndList,
+            ],
+        };
+        let out = apply_compiled(
+            "call",
+            &params,
+            &tmpl,
+            &[Sexp::symbol("foo"), Sexp::int(1), Sexp::int(2)],
+        )
+        .expect("in-range Splice must succeed");
+        assert_eq!(
+            out,
+            Sexp::List(vec![Sexp::symbol("foo"), Sexp::int(1), Sexp::int(2)])
         );
     }
 

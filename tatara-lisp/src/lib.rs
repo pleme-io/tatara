@@ -45,7 +45,7 @@ pub use domain::{DomainHandler, TataraDomain};
 // macros vs. types), so they coexist cleanly under one import.
 pub use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
-pub use ast::{Atom, Sexp};
+pub use ast::{iter_calls_to, Atom, Sexp};
 pub use compile::{compile_named, compile_named_from_forms, compile_typed, NamedDefinition};
 pub use diagnostic::{format_diagnostic, line_col, LineCol};
 pub use env::Env;

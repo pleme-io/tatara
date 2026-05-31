@@ -287,6 +287,13 @@ impl Sexp {
     ///
     /// The returned `&[Sexp]` borrows from the list's tail verbatim — no
     /// copy, no allocation, same lifetime as [`Sexp::as_call`]'s tail.
+    ///
+    /// Slice-side sibling: [`iter_calls_to`] lifts this per-form projection
+    /// onto a `&[Sexp]`, yielding the args slices of every matching form in
+    /// source order — the substrate's typed-keyword filter over a batch of
+    /// forms, structurally bound to this per-form projection via the
+    /// closed-form composition
+    /// `iter_calls_to(forms, k) == forms.iter().filter_map(|f| f.as_call_to(k))`.
     pub fn as_call_to(&self, keyword: &str) -> Option<&[Sexp]> {
         let (head, args) = self.as_call()?;
         (head == keyword).then_some(args)
@@ -367,6 +374,101 @@ impl Sexp {
         let (head, args) = self.as_call()?;
         decode(head).map(|d| (d, args))
     }
+}
+
+/// Iterate over the argument tails of every form in `forms` whose call head
+/// matches `keyword` — the *slice-side* sibling of [`Sexp::as_call_to`].
+/// Where [`Sexp::as_call_to`] answers "is THIS form a call to `K`, and what
+/// are its arguments?" on ONE form, `iter_calls_to` answers "which forms
+/// in this SLICE are calls to `K`, and what are their arguments?" on a
+/// `&[Sexp]`. Yields `&[Sexp]` for each matching form's argument tail
+/// (`&form_list[1..]`, the empty slice for a singleton call like `(K)`);
+/// non-matching forms — every shape [`Sexp::as_call_to`] rejects — are
+/// skipped silently, matching the soft-projection posture the per-form
+/// sibling carries.
+///
+/// Two consumers in [`compile.rs`](crate::compile) route through this
+/// primitive:
+///   * [`compile_typed::<T>`](crate::compile::compile_typed) — walks every
+///     expanded top-level form and compiles every `(T::KEYWORD :k v …)`
+///     form into a typed `T`.
+///   * [`compile_named_from_forms::<T>`](crate::compile::compile_named_from_forms)
+///     — walks every expanded form and compiles every
+///     `(T::KEYWORD NAME :k v …)` form into a [`NamedDefinition<T>`](crate::compile::NamedDefinition).
+///
+/// Before this lift both consumers opened the same `for form in &expanded
+/// { if let Some(args) = form.as_call_to(T::KEYWORD) { … } }` walk inline
+/// — well past the ≥2 PRIME-DIRECTIVE trigger once the per-form sibling
+/// had a name. After this lift the walk lives in ONE function the two
+/// dispatchers route through; a regression that drifts ONE consumer's
+/// walk from the other (a future emitter that inlines a partial filter,
+/// a debug-mode logger that loses track of non-matching forms, a span-
+/// aware walk that threads a borrowed `&Sexp` position alongside the
+/// tail) becomes structurally impossible because there is exactly ONE
+/// implementation both dispatchers consume. A future authoring tool
+/// (LSP / REPL / `tatara-check`) that wants to surface "which forms in
+/// this program invoke `K`?" binds to ONE function on the slice algebra
+/// instead of re-deriving the walk per consumer.
+///
+/// Closes the soft-dispatch family at the slice level: the per-form
+/// projections `{head_symbol, as_call, as_call_to, as_call_to_any}` each
+/// answer "what does THIS form's head say?", and the slice-side
+/// `iter_calls_to` extends them to "what do THESE forms' heads say,
+/// projected through one keyword?". The closed-form composition binding
+/// the slice-side projection to its per-form sibling is the structural
+/// identity every consumer can pin against:
+///
+/// ```ignore
+/// iter_calls_to(forms, k) == forms.iter().filter_map(|f| f.as_call_to(k))
+/// ```
+///
+/// The yielded `&[Sexp]` slices borrow `&forms[i][1..]` verbatim — no
+/// copy, no allocation, same lifetime as [`Sexp::as_call_to`]'s tail.
+/// The iterator's lifetime `'a` is the unified outer lifetime of `forms`
+/// AND `keyword`: the keyword string must outlive the iterator's borrow
+/// of the slice (typical caller passes `T::KEYWORD: &'static str`, which
+/// unifies trivially; a caller passing a locally-allocated `&str` ties
+/// the iterator to that local). The closure captures `keyword` by move
+/// (the `move` keyword on the `filter_map` closure), so each invocation
+/// re-derives the head comparison via [`Sexp::as_call_to`]'s `head ==
+/// keyword` check at every form — no shared-state, fully Iterator-fused.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// two-site `for + as_call_to` inline walk is past the ≥2 PRIME-DIRECTIVE
+/// trigger once the per-form sibling has a name. THEORY.md §V.1 —
+/// knowable platform / "make invalid states unrepresentable"; the
+/// slice-side projection becomes a NAMED primitive on the substrate's
+/// `&[Sexp]` algebra rather than a re-derived for-loop at every consumer
+/// site, so authoring tools (REPL, LSP, `tatara-check`) bind to ONE
+/// function instead of re-implementing the walk. THEORY.md §II.1
+/// invariant 1 — typed entry; the typed-keyword filter on a slice IS the
+/// rust-level typed-entry-batch gate (the batch sibling of `as_call_to`'s
+/// per-form gate), and naming its single shape lifts the gate from
+/// two-site duplication to one rust function the substrate's diagnostic
+/// promotions hang off of. THEORY.md §II.1 invariant 2 — free middle;
+/// both dispatchers route through the SAME projection, so a regression
+/// that drifts one consumer's walk from the other cannot reach the
+/// substrate's runtime: the type system binds every consumer to the
+/// projection's single emission shape.
+///
+/// Frontier inspiration: MLIR's `op.getOps<NamedOp>()` — every rewrite
+/// pattern over a typed-op block binds to ONE typed-filter iterator
+/// regardless of whether it's matching one op kind or batching across a
+/// region's contents; the substrate's `iter_calls_to` is the
+/// unstructured-projection peer of that iterator, lifted onto the
+/// substrate's typed `&[Sexp]` algebra. Racket's `syntax-parse`
+/// `~seq (defmacro id args …) …` ellipsis-form — the slice-level
+/// matched-keyword filter is the closed-form sibling of `~seq`'s
+/// repeated-pattern matcher, translated through pleme-io primitives as
+/// ONE `iter_calls_to(forms, keyword)` projection. Tree-sitter's
+/// `Query::matches` over a node sequence — the same "iterate the
+/// matched forms in a parent" projection, inherited here for the typed
+/// `Sexp` algebra without a new IR layer.
+pub fn iter_calls_to<'a>(
+    forms: &'a [Sexp],
+    keyword: &'a str,
+) -> impl Iterator<Item = &'a [Sexp]> + 'a {
+    forms.iter().filter_map(move |f| f.as_call_to(keyword))
 }
 
 impl fmt::Display for Sexp {
@@ -984,6 +1086,191 @@ mod tests {
                     via_unit_decoder,
                     "as_call_to({k:?}) must equal as_call_to_any+unit-decoder for {s}"
                 );
+            }
+        }
+    }
+
+    // ── iter_calls_to: the slice-side projection of as_call_to ──────────
+    //
+    // `iter_calls_to(forms, keyword)` lifts the per-form projection
+    // `as_call_to` onto a `&[Sexp]`, yielding the args tails of every
+    // matching form in source order — the substrate's typed-keyword
+    // filter over a batch of forms. The two inline `for form in
+    // &expanded { if let Some(args) = form.as_call_to(T::KEYWORD) { … } }`
+    // walks at the `compile_typed` + `compile_named_from_forms` dispatch
+    // sites (compile.rs) collapse to ONE `iter_calls_to(&expanded,
+    // T::KEYWORD)` call. Tests pin the slice-side primitive's contract
+    // directly; the existing dispatch tests in compile.rs are the
+    // path-uniformity guards proving the two consumers route through it
+    // without behavior drift.
+
+    #[test]
+    fn iter_calls_to_yields_args_for_every_matching_form_in_slice() {
+        // Three forms: two match "defmonitor", one matches "defalert".
+        // `iter_calls_to("defmonitor")` yields the two matching args
+        // slices in source order — the matched forms' tails verbatim,
+        // skipping the non-matching `defalert` form silently.
+        let forms = vec![
+            Sexp::List(vec![
+                Sexp::symbol("defmonitor"),
+                Sexp::keyword("name"),
+                Sexp::string("a"),
+            ]),
+            Sexp::List(vec![
+                Sexp::symbol("defalert"),
+                Sexp::keyword("name"),
+                Sexp::string("p"),
+            ]),
+            Sexp::List(vec![
+                Sexp::symbol("defmonitor"),
+                Sexp::keyword("name"),
+                Sexp::string("b"),
+            ]),
+        ];
+        let args: Vec<&[Sexp]> = iter_calls_to(&forms, "defmonitor").collect();
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], &[Sexp::keyword("name"), Sexp::string("a")][..]);
+        assert_eq!(args[1], &[Sexp::keyword("name"), Sexp::string("b")][..]);
+    }
+
+    #[test]
+    fn iter_calls_to_skips_every_non_call_shape_silently() {
+        // Every shape `as_call_to` rejects, `iter_calls_to` skips: non-
+        // lists (atoms across all 6 atom kinds, Nil, quote-family
+        // wrapper), the empty list, and non-symbol-head lists. Pin
+        // path-uniformity with the per-form sibling: passing ANY keyword
+        // against a slice of non-call shapes yields zero items. Closes
+        // the soft-projection posture at the slice level — a regression
+        // that admits a non-call shape (e.g. accepting a bare symbol
+        // whose name matches the keyword) fails here.
+        let forms = vec![
+            Sexp::symbol("foo"),
+            Sexp::int(5),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::boolean(true),
+            Sexp::float(1.5),
+            Sexp::Nil,
+            Sexp::Quote(Box::new(Sexp::symbol("foo"))),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::keyword("foo"), Sexp::symbol("a")]),
+        ];
+        for k in ["foo", "anything", "", "defpoint"] {
+            let args: Vec<&[Sexp]> = iter_calls_to(&forms, k).collect();
+            assert!(
+                args.is_empty(),
+                "non-call slice must yield zero items for keyword {k:?}, got {} items",
+                args.len()
+            );
+        }
+    }
+
+    #[test]
+    fn iter_calls_to_yields_empty_args_slice_for_singleton_matching_call() {
+        // `(defcompiler)` — the head matches and the args tail is the
+        // empty slice. Pin the empty-tail posture: `iter_calls_to` must
+        // yield `Some(&[])` for the matching singleton (NOT skip it),
+        // mirroring `as_call_to`'s contract — the (possibly-empty) args
+        // slice on a match, NOT `None` on an empty tail. This is exactly
+        // the input `compile_named_from_forms` dispatches on before
+        // rejecting the missing NAME via `rest.split_first()`'s `None`.
+        let forms = vec![Sexp::List(vec![Sexp::symbol("defcompiler")])];
+        let args: Vec<&[Sexp]> = iter_calls_to(&forms, "defcompiler").collect();
+        assert_eq!(args.len(), 1);
+        assert_eq!(args[0], &[][..]);
+    }
+
+    #[test]
+    fn iter_calls_to_yields_nothing_for_empty_slice() {
+        // An empty forms slice yields zero items regardless of keyword.
+        // Pin the slice-side primitive's degenerate boundary: empty in,
+        // empty out — the iterator is fused-empty without consulting
+        // `as_call_to` at all.
+        let forms: Vec<Sexp> = vec![];
+        let mut iter = iter_calls_to(&forms, "anything");
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn iter_calls_to_yields_nothing_when_keyword_matches_no_form() {
+        // A slice of valid call forms whose heads none match the
+        // requested keyword yields zero items. Pin path-uniformity with
+        // the per-form sibling: every form's `as_call_to(missing)` is
+        // `None`, so the slice-side iterator yields nothing — the filter
+        // fires uniformly across the batch.
+        let forms = vec![
+            Sexp::List(vec![Sexp::symbol("defmonitor"), Sexp::int(1)]),
+            Sexp::List(vec![Sexp::symbol("defalert"), Sexp::int(2)]),
+            Sexp::List(vec![Sexp::symbol("defpoint"), Sexp::int(3)]),
+        ];
+        let args: Vec<&[Sexp]> = iter_calls_to(&forms, "missing").collect();
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn iter_calls_to_args_borrow_is_same_pointer_as_per_form_as_call_to_tail() {
+        // The structural identity binding `iter_calls_to` to its per-form
+        // sibling: each yielded `&[Sexp]` IS the same slice `as_call_to`
+        // would return as the tail component for the corresponding form
+        // (pinned via `std::ptr::eq` on `as_ptr()`). The soft-projection
+        // contract is borrow, not clone, AND `iter_calls_to` inherits the
+        // contract verbatim from `as_call_to`. Parallel to the
+        // `as_call_to_args_borrow_is_same_pointer_as_as_call_tail` pin
+        // for `as_call_to`.
+        let forms = vec![Sexp::List(vec![
+            Sexp::symbol("defmonitor"),
+            Sexp::keyword("name"),
+            Sexp::string("a"),
+        ])];
+        let via_iter: &[Sexp] = iter_calls_to(&forms, "defmonitor")
+            .next()
+            .expect("one match");
+        let via_per_form: &[Sexp] = forms[0].as_call_to("defmonitor").expect("one match");
+        assert!(
+            std::ptr::eq(via_iter.as_ptr(), via_per_form.as_ptr()),
+            "iter_calls_to args must borrow the SAME slice as as_call_to's tail"
+        );
+        assert_eq!(via_iter.len(), via_per_form.len());
+    }
+
+    #[test]
+    fn iter_calls_to_is_the_slice_side_projection_of_as_call_to() {
+        // The structural identity the lift establishes:
+        //   `iter_calls_to(forms, k) == forms.iter().filter_map(|f| f.as_call_to(k))`
+        // Pin shape AND ordering AND pointer-identity across mixed inputs
+        // and a range of keywords (including matching, non-matching, and
+        // edge-case empty/case-mismatched keywords) so a regression that
+        // drifts the slice-side projection from its closed-form
+        // definition fails loudly. The five soft-projection primitives —
+        // `head_symbol`, `as_call`, `as_call_to`, `as_call_to_any`, AND
+        // `iter_calls_to` — must agree on operator-position recognition
+        // at every shape/slice they share.
+        let forms = vec![
+            Sexp::symbol("foo"),
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(1)]),
+            Sexp::Nil,
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(2)]),
+            Sexp::int(99),
+            Sexp::List(vec![Sexp::symbol("b"), Sexp::int(3)]),
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::keyword("a"), Sexp::int(4)]),
+        ];
+        for k in ["a", "b", "c", "", "A"] {
+            let via_iter: Vec<&[Sexp]> = iter_calls_to(&forms, k).collect();
+            let via_chain: Vec<&[Sexp]> = forms.iter().filter_map(|f| f.as_call_to(k)).collect();
+            assert_eq!(
+                via_iter.len(),
+                via_chain.len(),
+                "len drift for keyword {k:?}"
+            );
+            for (a, b) in via_iter.iter().zip(via_chain.iter()) {
+                assert!(
+                    std::ptr::eq(a.as_ptr(), b.as_ptr()),
+                    "ptr drift at keyword {k:?}: iter slice does not borrow the SAME tail as the per-form chain"
+                );
+                assert_eq!(a.len(), b.len(), "len drift at keyword {k:?}");
             }
         }
     }

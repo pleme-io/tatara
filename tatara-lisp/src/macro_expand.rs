@@ -496,18 +496,42 @@ impl Expander {
 
     /// Expand a single form. Top-level macro calls are rewritten; recurses
     /// into list children.
+    ///
+    /// Routes the macro-call dispatch surface through the substrate's
+    /// typed-decoded call decomposition: `as_call_to_any(|h|
+    /// self.macros.get(h))` answers "is this form an invocation of any
+    /// registered macro, decoded to `(&MacroDef, args)`?" in ONE
+    /// structural query on the `Sexp` algebra. Pre-lift the same site
+    /// opened the three-step chain `as_list() + as_call() + self.macros.
+    /// get(head)` inline — `as_list()` for the children-walk fallthrough,
+    /// `as_call()` for the (head, args) decomposition (which itself
+    /// re-derives `as_list()` internally), and `self.macros.get(head)`
+    /// for the registry lookup; post-lift the call-recognition runs as
+    /// ONE `as_call_to_any` projection with the HashMap lookup as its
+    /// classifier, and the `as_list()` fallthrough fires only on the
+    /// not-a-macro-call path. Sibling consumer to `macro_def_from` — the
+    /// typed-macro-definition dispatcher that routes through
+    /// `as_call_to_any(MacroDefHead::from_keyword)` with the closed-set
+    /// enum classifier. With both in place, BOTH dispatch sites in the
+    /// macro expander (definition-recognition + call-recognition)
+    /// project through the SAME family primitive on the `Sexp` algebra,
+    /// each binding the classifier that fits its candidate set — closed
+    /// enum for the static head-set, HashMap lookup for the live
+    /// registry. A regression that drifts ONE site from the other (a
+    /// future emitter that re-derives `as_list()` + `head.as_symbol()` +
+    /// `self.macros.get(_)` inline rather than routing through the
+    /// family) is no longer a silent two-site divergence.
     pub fn expand(&self, form: &Sexp) -> Result<Sexp> {
+        if let Some((def, args)) = form.as_call_to_any(|h| self.macros.get(h)) {
+            let expanded = self.apply(def, args)?;
+            // Recurse — the expansion itself may contain more macro calls.
+            return self.expand(&expanded);
+        }
+        // Not a macro call — expand children if this is a list; otherwise
+        // (atom / Nil / quote-family wrapper) return the form verbatim.
         let Some(list) = form.as_list() else {
             return Ok(form.clone());
         };
-        if let Some((head, args)) = form.as_call() {
-            if let Some(def) = self.macros.get(head) {
-                let expanded = self.apply(def, args)?;
-                // Recurse — the expansion itself may contain more macro calls.
-                return self.expand(&expanded);
-            }
-        }
-        // Not a macro call — expand children.
         let mut out = Vec::with_capacity(list.len());
         for item in list {
             out.push(self.expand(item)?);
@@ -6267,5 +6291,156 @@ mod tests {
             bytecode, substitute,
             "the two strategies disagree on the body-projection's emission"
         );
+    }
+
+    // ── Expander::expand: macro-call dispatch routes through `as_call_to_any` ──
+    //
+    // `expand` lifts its macro-call recognition to route through the
+    // substrate's typed-decoded call decomposition: `as_call_to_any(|h|
+    // self.macros.get(h))` answers "is this form an invocation of any
+    // registered macro?" in ONE structural query on the Sexp algebra,
+    // and a HashMap-backed lookup as its classifier. Sibling consumer to
+    // `macro_def_from` (the typed-macro-definition dispatcher already
+    // routing through `as_call_to_any(MacroDefHead::from_keyword)` with
+    // a closed-set enum classifier). With both in place, BOTH dispatch
+    // sites in the macro expander project through the SAME family
+    // primitive — each binding the classifier that fits its candidate
+    // set. The tests below pin the consumer's path-uniformity contract
+    // at the new boundary: a hand-rolled `as_call_to_any(|h| macros.get
+    // (h))` dispatch observes the SAME `(def, args)` decomposition the
+    // `Expander::expand` consumer routes through.
+
+    #[test]
+    fn expand_routes_macro_call_dispatch_observably_through_as_call_to_any() {
+        // Structural identity: on a registered-macro call, the consumer's
+        // expansion is observably equivalent to: classify the form via
+        // `as_call_to_any(|h| macros.get(h))` → some `(def, args)` →
+        // apply the def to args. Pin path-uniformity: a hand-rolled
+        // `as_call_to_any` lookup against the same registry the expander
+        // walks produces the SAME `MacroDef` reference for the SAME
+        // input form. A regression that drifts the consumer back to an
+        // inline `as_list + as_call + macros.get` chain (which would
+        // fragment the family adoption) is caught structurally — the
+        // hand-rolled `as_call_to_any` and the consumer's dispatch must
+        // observe the same decomposition.
+        let mut e = Expander::new();
+        e.expand_program(read("(defmacro wrap (x) `(list ,x ,x))").unwrap())
+            .unwrap();
+        let call_form = parse("(wrap 42)");
+
+        // Hand-rolled family-primitive lookup mirrors the lifted consumer.
+        let (def_via_family, args_via_family) = call_form
+            .as_call_to_any(|h| e.macros.get(h))
+            .expect("registered macro call must decompose via as_call_to_any");
+        assert_eq!(def_via_family.name, "wrap");
+        assert_eq!(args_via_family, &[Sexp::int(42)]);
+
+        // Consumer's expand observes the SAME decomposition: the expanded
+        // form is `(list 42 42)`, derived from the SAME def + args the
+        // hand-rolled lookup found. Path-uniform with the family
+        // primitive at the dispatch boundary.
+        let expanded = e.expand(&call_form).unwrap();
+        assert_eq!(
+            expanded,
+            Sexp::List(vec![Sexp::symbol("list"), Sexp::int(42), Sexp::int(42)])
+        );
+    }
+
+    #[test]
+    fn expand_skips_non_macro_call_into_children_walk_via_family_primitive_none() {
+        // Path-uniformity for the non-registered-head path: `as_call_to_any
+        // (|h| macros.get(h))` returns `None` for a call whose head ISN'T
+        // a registered macro, and the consumer falls through to the
+        // children-walk (which expands any nested macro calls). Pin
+        // both halves: the hand-rolled lookup returns `None`, AND the
+        // consumer's expand walks into the children. A regression that
+        // accidentally short-circuits the children-walk for non-macro
+        // calls (e.g. by treating `as_call_to_any` = `None` as
+        // "non-expandable" globally) would fail here.
+        let mut e = Expander::new();
+        e.expand_program(read("(defmacro wrap (x) `(list ,x ,x))").unwrap())
+            .unwrap();
+        let outer = parse("(foo (wrap 5))");
+
+        // Hand-rolled family-primitive lookup rejects the outer head.
+        assert!(outer.as_call_to_any(|h| e.macros.get(h)).is_none());
+
+        // Consumer walks children — the inner `(wrap 5)` IS a macro call
+        // and expands to `(list 5 5)`; the outer `foo` head is preserved.
+        let expanded = e.expand(&outer).unwrap();
+        assert_eq!(
+            expanded,
+            Sexp::List(vec![
+                Sexp::symbol("foo"),
+                Sexp::List(vec![Sexp::symbol("list"), Sexp::int(5), Sexp::int(5)]),
+            ])
+        );
+    }
+
+    #[test]
+    fn expand_non_call_shapes_route_past_family_primitive_into_fallthrough_clone() {
+        // Path-uniformity for the non-call path: every shape `as_call`
+        // rejects (atoms across all 6 kinds, Nil, Quote-family wrappers)
+        // ALSO routes past `as_call_to_any` into the `as_list()`
+        // fallthrough, where the not-a-list arm returns `form.clone()`
+        // verbatim. Pin both halves: the hand-rolled lookup rejects
+        // every non-call shape regardless of decoder, AND the consumer
+        // preserves each shape unchanged. A regression that drifts the
+        // consumer's dispatch order (e.g. checking `as_list()` BEFORE
+        // `as_call_to_any` in a way that mis-handles Quote-family
+        // wrappers) would fail here.
+        let e = Expander::new();
+        let shapes = [
+            Sexp::symbol("foo"),
+            Sexp::int(5),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::boolean(true),
+            Sexp::float(1.5),
+            Sexp::Nil,
+            Sexp::Quote(Box::new(Sexp::symbol("x"))),
+            Sexp::Quasiquote(Box::new(Sexp::symbol("x"))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("x"))),
+        ];
+        for s in &shapes {
+            // Hand-rolled family-primitive lookup rejects non-call shapes
+            // even for a promiscuous decoder — the call-shape gate fires
+            // BEFORE the decoder runs.
+            assert!(
+                s.as_call_to_any(|_h: &str| Some(0_u8)).is_none(),
+                "non-call shape must yield None for as_call_to_any: {s}"
+            );
+            // Consumer preserves the shape verbatim — the not-a-list
+            // arm at the fallthrough returns `form.clone()`.
+            assert_eq!(
+                e.expand(s).unwrap(),
+                s.clone(),
+                "non-call shape must round-trip unchanged through expand: {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn expand_empty_list_routes_past_family_primitive_into_children_walk() {
+        // The empty list `()` has no operator and no children. Pin that
+        // `as_call_to_any` rejects it (no head to feed the decoder), the
+        // consumer falls through to `as_list()` which returns `Some(&[])`,
+        // and the children-walk emits `Sexp::List(vec![])` (an empty
+        // list, not `form.clone()` of `Sexp::List(vec![])` — both happen
+        // to be observationally identical, but the path is the
+        // children-walk arm, NOT the not-a-list arm). Path-uniformity
+        // gate for the singleton-list edge case the `compile_named_from_
+        // forms` rejection chain relies on `as_call_to(KEYWORD)` to yield
+        // `Some(&[])` for — same posture, different family member.
+        let e = Expander::new();
+        let empty = Sexp::List(vec![]);
+
+        // Hand-rolled family-primitive lookup rejects the empty list.
+        assert!(empty.as_call_to_any(|_h: &str| Some(())).is_none());
+
+        // Consumer walks children (zero of them) — output is the empty
+        // list, same as input.
+        assert_eq!(e.expand(&empty).unwrap(), Sexp::List(vec![]));
     }
 }

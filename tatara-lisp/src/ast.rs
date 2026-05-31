@@ -302,20 +302,36 @@ impl Sexp {
     ///
     /// This is the *typed-decoded call decomposition* — the closure-typed
     /// extension of [`Sexp::as_call_to`] for the "is this a call whose head
-    /// belongs to a CLOSED SET that decodes to a typed witness?" question.
-    /// Where [`Sexp::as_call_to`] filters by ONE constant keyword,
-    /// `as_call_to_any` filters AND TYPES by a caller-supplied projection —
-    /// every dispatch site that asks "is this form an invocation of any of
-    /// N operators, decoded as a typed enum?" binds to ONE structural query
-    /// on the `Sexp` algebra. The macro-expander's `macro_def_from` is the
-    /// first consumer: pre-lift it opened the same three-step chain inline —
-    /// `let Some(list) = form.as_list()…; let Some(head) =
-    /// form.head_symbol()…; let Some(decoded) = MacroDefHead::from_keyword
-    /// (head)…` — at the typed-macro-definition dispatch surface; the
-    /// chain IS this projection. Naming it lifts "is this form a call to
-    /// any of `Defmacro | DefpointTemplate | Defcheck`, decoded to
-    /// `MacroDefHead`?" from a three-step inline pattern to ONE structural
-    /// query.
+    /// belongs to a CLOSED SET (or a LIVE REGISTRY) that decodes to a typed
+    /// witness?" question. Where [`Sexp::as_call_to`] filters by ONE
+    /// constant keyword, `as_call_to_any` filters AND TYPES by a caller-
+    /// supplied projection — every dispatch site that asks "is this form
+    /// an invocation of any of N operators, decoded as a typed enum or
+    /// resolved against a runtime table?" binds to ONE structural query
+    /// on the `Sexp` algebra. Two consumers route through it:
+    ///
+    ///   * The macro-expander's `macro_def_from` — closed-set classifier:
+    ///     `as_call_to_any(MacroDefHead::from_keyword)` decides which of
+    ///     `{defmacro, defpoint-template, defcheck}` a top-level form
+    ///     invokes, decoded to the typed `MacroDefHead` enum. Pre-lift the
+    ///     site opened the same three-step chain inline — `let Some(list)
+    ///     = form.as_list()…; let Some(head) = form.head_symbol()…; let
+    ///     Some(decoded) = MacroDefHead::from_keyword(head)…`.
+    ///   * The macro-expander's `Expander::expand` — live-registry
+    ///     classifier: `as_call_to_any(|h| self.macros.get(h))` decides
+    ///     which of the registered macros (a `HashMap<String, MacroDef>`
+    ///     populated by `expand_program`'s `defmacro` recognition) a form
+    ///     invokes, decoded to `&MacroDef`. Pre-lift the site opened the
+    ///     same `as_list() + as_call() + self.macros.get(head)` chain
+    ///     inline — `as_list()` for the children-walk fallthrough,
+    ///     `as_call()` for the (head, args) pair (which itself re-derives
+    ///     `as_list()` internally), and `self.macros.get(head)` for the
+    ///     registry lookup.
+    ///
+    /// Naming the projection lifts "is this form a call to any of N
+    /// operators, decoded to T?" from the three-step inline pattern to
+    /// ONE structural query — closed-set enum classifier OR live-registry
+    /// HashMap classifier, the family primitive is uniform under both.
     ///
     /// Soft face, like the rest of the `as_*` family: it answers "is this
     /// a call whose head decodes through `F`, and what are its arguments?"

@@ -39,6 +39,8 @@ use std::path::Path;
 use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
 use crate::ast::Sexp;
+use crate::compile::{named_form_projection, NamedDefinition};
+use crate::domain::TataraDomain;
 use crate::error::{CompilerSpecIoStage, LispError, Result};
 use crate::macro_expand::Expander;
 use crate::reader::read;
@@ -103,6 +105,137 @@ impl RealizedCompiler {
     /// How many macros the preloaded library registered.
     pub fn macro_count(&self) -> usize {
         self.preloaded.len()
+    }
+
+    /// Compile every `(T::KEYWORD :k v …)` form in `src` into a typed `T`
+    /// through THIS `RealizedCompiler`'s preloaded macro library — the
+    /// preloaded-expander posture of [`crate::compile_typed`].
+    ///
+    /// Routes through the substrate's composed expand-then-keyword-project
+    /// primitive [`Expander::expand_and_collect_calls_to`] on a clone of
+    /// the preloaded expander: source is read, the preloaded clone walks
+    /// every top-level form (expanding macro calls and absorbing any new
+    /// `defmacro` definitions in the source into the per-call clone, not
+    /// the persistent realized compiler), and every expanded form whose
+    /// head matches `T::KEYWORD` flows through `T::compile_from_args` in
+    /// source order. Non-matching forms are skipped silently
+    /// (soft-projection posture inherited from
+    /// [`crate::ast::iter_calls_to`]).
+    ///
+    /// Sibling of the fresh-expander posture
+    /// [`crate::compile_typed`] — both consumers route through the SAME
+    /// `Expander::expand_and_collect_calls_to` primitive, each binding
+    /// the per-form projection `T::compile_from_args` directly, with the
+    /// SAME `T::KEYWORD` constant filtering the expanded forms. They
+    /// differ in expander posture: `compile_typed` uses a fresh
+    /// `Expander::new()` (no preloaded macros, ideal for one-shot typed
+    /// compilation with no macro library); this method uses the
+    /// realized compiler's preloaded `Expander` (the macro library
+    /// authored via the spec's `:macros` slot participates in the
+    /// expansion). A `(defcompiler …)` form in the user's source that
+    /// invokes a preloaded `defmacro` (e.g. `(mk-compiler "name")`
+    /// expanding to `(defcompiler "name" :dialect "standard")`)
+    /// compiles successfully through THIS method and fails silently
+    /// through `compile_typed` (the macro call is unknown to the fresh
+    /// expander, so the form's head is not `T::KEYWORD` and the form
+    /// is skipped).
+    ///
+    /// The preloaded expander is cloned per call so the cache
+    /// (`Arc<Mutex<HashMap>>`) is SHARED across calls (realizations of
+    /// the same `CompilerSpec` benefit from each other's expansion
+    /// cache hits — `Expander::cache` is wrapped in `Arc<Mutex>`
+    /// precisely for this), while the per-call `defmacro` absorption
+    /// (which lands in `self.preloaded.macros`'s clone, not the
+    /// original) stays local to the call. Per-call clone isolation +
+    /// shared cache mirrors the existing [`compile`](Self::compile)
+    /// method's posture verbatim.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the diminishing-returns theorem (`compiler_spec.rs`'s module
+    /// preamble) says optimizing the base compiler pays less than
+    /// producing good generated compilers — and lands as a typed
+    /// dispatcher on `RealizedCompiler` rather than as an inline
+    /// `iter_calls_to + map + collect` walk every consumer re-derives
+    /// after calling `compile(src)?`. THEORY.md §II.1 invariant 1 —
+    /// typed entry; the typed-keyword filter over the preloaded-
+    /// expanded program IS the typed-entry-batch gate, and naming its
+    /// preloaded posture lifts the gate from a per-consumer inline
+    /// derivation to ONE method on `RealizedCompiler` the substrate's
+    /// diagnostic promotions hang off of. THEORY.md §II.1 invariant 2
+    /// — free middle; both the fresh-expander posture and the
+    /// preloaded-expander posture route through the SAME
+    /// `expand_and_collect_calls_to` primitive, so a regression that
+    /// drifts ONE posture's pipeline from the other cannot reach the
+    /// substrate's runtime — the type system binds both consumers to
+    /// the projection's single emission shape.
+    ///
+    /// Frontier inspiration: Racket's `make-compiler` /
+    /// `(eval-syntax stx ns)` against a namespace populated with the
+    /// preloaded compiler's `require`d macros — typed compilation
+    /// inside a NAMESPACE that carries the macro library is the
+    /// Racket idiom; the substrate's preloaded-expander posture is
+    /// the Rust-typed peer of that, lifted onto the `Expander`
+    /// surface with the typed-keyword projection as the per-form
+    /// visitor.
+    pub fn compile_typed<T: TataraDomain>(&self, src: &str) -> Result<Vec<T>> {
+        let forms = read(src)?;
+        self.preloaded
+            .clone()
+            .expand_and_collect_calls_to(forms, T::KEYWORD, T::compile_from_args)
+    }
+
+    /// Compile every `(T::KEYWORD NAME :k v …)` form in `src` into a typed
+    /// [`NamedDefinition<T>`] through THIS `RealizedCompiler`'s preloaded
+    /// macro library — the preloaded-expander posture of
+    /// [`crate::compile_named`].
+    ///
+    /// Routes through the substrate's composed expand-then-keyword-project
+    /// primitive [`Expander::expand_and_collect_calls_to`] on a clone of
+    /// the preloaded expander, binding the per-form projection
+    /// [`named_form_projection::<T>`](crate::compile::named_form_projection)
+    /// — the SAME projection [`crate::compile_named_from_forms`] (the
+    /// fresh-expander posture) routes through. Both consumers thread
+    /// the same NAME-then-`T::compile_from_args` split through ONE named
+    /// projection function, and the structural rejection chain
+    /// (`NamedFormMissingName` for the missing NAME slot,
+    /// `NamedFormNonSymbolName` for the non-symbol NAME slot,
+    /// `T::compile_from_args`'s typed-entry kwargs gate) fires in the
+    /// same order under both postures.
+    ///
+    /// Sibling of [`Self::compile_typed`] — that method compiles
+    /// `(T::KEYWORD :k v …)` forms (no positional NAME slot) into a
+    /// typed `T`; this method compiles `(T::KEYWORD NAME :k v …)` forms
+    /// (positional NAME slot) into a typed [`NamedDefinition<T>`]. The
+    /// two together close the typed-dispatcher family at the
+    /// `RealizedCompiler` boundary, parallel to how
+    /// [`crate::compile_typed`] / [`crate::compile_named`] close the
+    /// family at the fresh-expander boundary. Together with the
+    /// existing [`Self::compile`] (returns expanded `Vec<Sexp>` for
+    /// untyped consumers like `tatara-check`'s per-form dispatcher),
+    /// the three methods name the canonical surfaces a
+    /// `RealizedCompiler` exposes: untyped expansion, typed bare-kwargs
+    /// compilation, typed NAME-then-kwargs compilation.
+    ///
+    /// Per-call posture matches [`Self::compile_typed`]: the preloaded
+    /// expander is cloned per call so cache is shared and per-call
+    /// `defmacro` absorption stays local. The cloned expander's
+    /// `expand_program` step runs FIRST (registering any `defmacro` in
+    /// the source into the clone AND expanding macro calls), THEN the
+    /// typed-keyword filter walks the expanded forms — exactly the
+    /// pipeline `expand_and_collect_calls_to` composes.
+    ///
+    /// Theory anchor: same as [`Self::compile_typed`]. THEORY.md §VI.1
+    /// (diminishing-returns theorem + generation over composition),
+    /// THEORY.md §II.1 invariant 1 (typed entry on the preloaded
+    /// posture), THEORY.md §II.1 invariant 2 (free middle; both
+    /// postures route through the SAME projection).
+    pub fn compile_named<T: TataraDomain>(&self, src: &str) -> Result<Vec<NamedDefinition<T>>> {
+        let forms = read(src)?;
+        self.preloaded.clone().expand_and_collect_calls_to(
+            forms,
+            T::KEYWORD,
+            named_form_projection::<T>,
+        )
     }
 }
 
@@ -496,6 +629,234 @@ mod tests {
         assert!(
             rendered.starts_with("compile error in load_from_disk: deserialize: "),
             "expected legacy operation-and-stage prefix, got: {rendered}"
+        );
+    }
+
+    // ── RealizedCompiler::compile_typed / compile_named ────────────────
+    //
+    // The preloaded-expander posture of the typed-dispatcher family. Both
+    // methods route through the SAME `Expander::expand_and_collect_calls_to`
+    // primitive that the fresh-expander posture (`compile_typed`,
+    // `compile_named_from_forms`) routes through, with two differences:
+    // (1) the expander is a clone of THIS `RealizedCompiler`'s preloaded
+    // expander, not a fresh `Expander::new()`, so the spec's `:macros`
+    // library participates in the expansion; (2) the cache is shared
+    // across calls via `Arc<Mutex<...>>`. Tests below pin both halves:
+    // the bare typed dispatch through the preloaded posture (positive
+    // controls) AND the preloaded-macro participation (the key
+    // compounding property — a macro authored in the spec's `:macros`
+    // slot is invoked in the user's source and the typed dispatcher
+    // resolves it through the SAME preloaded library that powers
+    // `compile`).
+
+    #[test]
+    fn realized_compiler_compile_typed_dispatches_to_typed_t_with_empty_preloaded() {
+        // Positive control: a `RealizedCompiler` with NO preloaded macros
+        // can still compile a `(defcompiler …)` form through the typed
+        // dispatcher — the method is a strict generalization of
+        // `crate::compile_typed::<CompilerSpec>(src)` in the
+        // empty-preloaded posture.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let specs = parent
+            .compile_typed::<CompilerSpec>(r#"(defcompiler :name "child" :dialect "standard")"#)
+            .unwrap();
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].name, "child");
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_routes_preloaded_macros_into_typed_dispatch() {
+        // The key compounding property: the preloaded macro library
+        // participates in the typed dispatch. The parent compiler has a
+        // `(defmacro mk-compiler-spec …)` registered in its preloaded
+        // expander; the user's source invokes the macro, which expands
+        // to a `(defcompiler :name "lifted-by-macro" …)` form; the typed
+        // dispatcher then routes the expanded form through
+        // `CompilerSpec::compile_from_args` and yields the
+        // structurally-named child spec.
+        //
+        // The fresh-expander posture (`crate::compile_typed::<CompilerSpec>`)
+        // sees the SAME user source and yields an EMPTY `Vec<CompilerSpec>`
+        // because the head `mk-compiler-spec` is unknown to the fresh
+        // expander and doesn't match `CompilerSpec::KEYWORD`. The
+        // divergence between the two postures IS the compounding
+        // property: which expansion strategy you picked (the
+        // generation-time `compile_typed` vs. the realization-time
+        // `RealizedCompiler::compile_typed`) changes whether the
+        // preloaded library participates.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![
+                "(defmacro mk-compiler-spec (n) `(defcompiler :name ,n :dialect \"standard\"))"
+                    .into(),
+            ],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = r#"(mk-compiler-spec "lifted-by-macro")"#;
+        let specs = parent.compile_typed::<CompilerSpec>(src).unwrap();
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].name, "lifted-by-macro");
+
+        // Pin the posture divergence: the fresh-expander dispatcher sees
+        // no `(defcompiler …)` form (the unknown macro call survives as
+        // `(mk-compiler-spec "lifted-by-macro")`, whose head doesn't
+        // match `CompilerSpec::KEYWORD`) and yields an empty Vec.
+        let fresh = crate::compile::compile_typed::<CompilerSpec>(src).unwrap();
+        assert!(
+            fresh.is_empty(),
+            "fresh-expander posture must NOT see the preloaded macro, got: {fresh:?}"
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_named_dispatches_to_named_definition() {
+        // Positive control for the named-form posture: a `RealizedCompiler`
+        // with empty preloaded macros can still compile a
+        // `(defcompiler NAME :k v …)` form into a typed
+        // `NamedDefinition<CompilerSpec>` through the preloaded-typed
+        // dispatcher. Same shape as `compile_named::<CompilerSpec>(src)`
+        // in the fresh-expander posture, but routed through THIS
+        // `RealizedCompiler`'s preloaded expander.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let defs = parent
+            .compile_named::<CompilerSpec>(
+                r#"(defcompiler my-compiler :name "x" :dialect "standard")"#,
+            )
+            .unwrap();
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].name, "my-compiler");
+        assert_eq!(defs[0].spec.name, "x");
+    }
+
+    #[test]
+    fn realized_compiler_compile_named_routes_preloaded_macros_into_named_dispatch() {
+        // The named-form sibling of the typed-dispatch participation
+        // test. A preloaded `(defmacro mk-named …)` expands to a
+        // `(defcompiler NAME :k v …)` form, which the typed
+        // dispatcher routes through `named_form_projection::<CompilerSpec>`
+        // to yield `NamedDefinition<CompilerSpec>`. Pins that the
+        // preloaded-expander posture's named-form dispatcher routes
+        // through the SAME `named_form_projection` helper as the
+        // fresh-expander posture's named-form dispatcher
+        // (`compile_named_from_forms`).
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![
+                "(defmacro mk-named (slug) `(defcompiler ,slug :name \"x\" :dialect \"standard\"))"
+                    .into(),
+            ],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let defs = parent
+            .compile_named::<CompilerSpec>("(mk-named child-compiler)")
+            .unwrap();
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].name, "child-compiler");
+        assert_eq!(defs[0].spec.name, "x");
+    }
+
+    #[test]
+    fn realized_compiler_compile_named_rejects_missing_name_through_named_form_projection() {
+        // Path-uniformity with the fresh-expander posture's structural
+        // rejection chain: the preloaded posture goes through the SAME
+        // `named_form_projection<T>` helper as `compile_named_from_forms`,
+        // so the structural `NamedFormMissingName` variant fires
+        // identically here for the missing-NAME case
+        // (`(defcompiler)` — head matches but no NAME slot). A
+        // regression that drifts the preloaded posture's rejection
+        // chain from the fresh posture's (e.g. emits a `Compile`-shaped
+        // diagnostic instead of the structural variant, or fires a
+        // different variant at the missing-NAME gate) fails loudly
+        // here. The structural-completeness floor (every named-form
+        // dispatcher emits the SAME rejection variant at the SAME
+        // gate) extends from the fresh posture to the preloaded
+        // posture through ONE shared projection function.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let err = parent
+            .compile_named::<CompilerSpec>("(defcompiler)")
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormMissingName {
+                    keyword: "defcompiler",
+                }
+            ),
+            "expected NamedFormMissingName, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_does_not_mutate_preloaded_state() {
+        // Per-call clone isolation pin: the preloaded expander is cloned
+        // per call, so a `defmacro` defined in the user's source lands
+        // in the clone, not in the persistent realized compiler's
+        // expander. The SAME `RealizedCompiler` invoked twice must NOT
+        // accumulate macros across calls — each call sees only the
+        // spec's original `:macros` library plus the in-source
+        // `defmacro` forms of THAT call.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        // Call 1: defines `mk-x` in the source, uses it; the clone
+        // absorbs the defmacro for the duration of the call.
+        let specs1 = parent
+            .compile_typed::<CompilerSpec>(
+                r#"(defmacro mk-x (n) `(defcompiler :name ,n :dialect "standard"))
+                   (mk-x "first")"#,
+            )
+            .unwrap();
+        assert_eq!(specs1.len(), 1);
+        assert_eq!(specs1[0].name, "first");
+        // Call 2: the SAME `parent` invoked WITHOUT defining `mk-x` —
+        // the preloaded expander did NOT absorb the previous call's
+        // defmacro, so `(mk-x "second")` is unknown and the form's
+        // head doesn't match `CompilerSpec::KEYWORD`; the result is
+        // empty.
+        let specs2 = parent
+            .compile_typed::<CompilerSpec>(r#"(mk-x "second")"#)
+            .unwrap();
+        assert!(
+            specs2.is_empty(),
+            "per-call defmacro absorption must NOT leak into the realized compiler's preloaded expander, got: {specs2:?}"
         );
     }
 

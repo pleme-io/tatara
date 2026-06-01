@@ -138,17 +138,65 @@ pub fn compile_named<T: TataraDomain>(src: &str) -> Result<Vec<NamedDefinition<T
 pub fn compile_named_from_forms<T: TataraDomain>(
     forms: Vec<Sexp>,
 ) -> Result<Vec<NamedDefinition<T>>> {
-    Expander::new().expand_and_collect_calls_to(forms, T::KEYWORD, |rest| {
-        let (name_form, spec_args) = rest.split_first().ok_or(LispError::NamedFormMissingName {
-            keyword: T::KEYWORD,
-        })?;
-        let name = name_form
-            .as_symbol_or_string()
-            .ok_or_else(|| named_form_non_symbol_name::<T>(name_form))?
-            .to_string();
-        let spec = T::compile_from_args(spec_args)?;
-        Ok(NamedDefinition { name, spec })
-    })
+    Expander::new().expand_and_collect_calls_to(forms, T::KEYWORD, named_form_projection::<T>)
+}
+
+/// Project a `(<T::KEYWORD> NAME :k v …)` form's argument tail to a typed
+/// [`NamedDefinition<T>`] — the per-form NAME-then-`T::compile_from_args`
+/// split lifted out of [`compile_named_from_forms`]'s inline closure into
+/// ONE named primitive on the substrate's per-form projection algebra.
+///
+/// Before this lift the same three-step chain — `rest.split_first()` arity
+/// gate → `as_symbol_or_string()` NAME shape gate → `T::compile_from_args`
+/// typed-entry kwargs gate — lived as an inline closure inside the
+/// fresh-expander dispatcher [`compile_named_from_forms`]. After this lift
+/// the closure becomes a named `pub(crate) fn`, threading `T:
+/// TataraDomain` through its type parameters so EVERY named-form
+/// dispatcher (fresh-expander on a free function, preloaded-expander on a
+/// [`RealizedCompiler`] method) binds to ONE projection function rather
+/// than re-deriving the closure body per posture.
+///
+/// Sibling of [`compile_typed`]'s per-form projection `T::compile_from_args`
+/// — that closure is a single typed-entry kwargs gate, this projection
+/// composes the NAME extraction with it. Both projections feed
+/// [`Expander::expand_and_collect_calls_to`](crate::macro_expand::Expander::expand_and_collect_calls_to)'s
+/// `F: FnMut(&[Sexp]) -> Result<R>` slot; passing a named `fn` (free
+/// function item) coerces to `FnMut` cleanly so the call boundary stays
+/// identical to the closure-form. The `Result::collect` short-circuit
+/// inside `expand_and_collect_calls_to` preserves the pre-lift
+/// `?`-then-return semantics: `NamedFormMissingName` for the missing
+/// NAME slot, `NamedFormNonSymbolName` for the non-symbol NAME slot, and
+/// `T::compile_from_args`'s typed-entry kwargs gate fire in source order.
+///
+/// `pub(crate)` because [`RealizedCompiler::compile_named`](crate::compiler_spec::RealizedCompiler::compile_named)
+/// — the preloaded-expander posture's named-form dispatcher — is the
+/// second consumer; both consumers live inside this crate, and the
+/// public-facing typed-dispatcher surface is the two posture-specific
+/// entry points (`compile_named` for fresh, `RealizedCompiler::compile_named`
+/// for preloaded), not this projection.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// inline closure became a named primitive once a second consumer
+/// (the preloaded-expander posture) arrived. THEORY.md §V.1 — knowable
+/// platform; the named-form NAME-extraction-then-typed-entry sequence is
+/// a NAMED primitive on the substrate's per-form projection algebra,
+/// not a re-derived closure body at every named-form dispatcher.
+/// THEORY.md §II.1 invariant 2 — free middle; both postures (fresh
+/// `Expander::new()` and preloaded `RealizedCompiler.preloaded.clone()`)
+/// route through the SAME projection, so a regression that drifts ONE
+/// posture's NAME-or-spec rejection chain from the other becomes
+/// structurally impossible — there is exactly one implementation both
+/// postures route through.
+pub(crate) fn named_form_projection<T: TataraDomain>(rest: &[Sexp]) -> Result<NamedDefinition<T>> {
+    let (name_form, spec_args) = rest.split_first().ok_or(LispError::NamedFormMissingName {
+        keyword: T::KEYWORD,
+    })?;
+    let name = name_form
+        .as_symbol_or_string()
+        .ok_or_else(|| named_form_non_symbol_name::<T>(name_form))?
+        .to_string();
+    let spec = T::compile_from_args(spec_args)?;
+    Ok(NamedDefinition { name, spec })
 }
 
 #[cfg(test)]

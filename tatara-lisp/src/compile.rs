@@ -12,7 +12,7 @@
 //!     (positional name after keyword) becomes one `NamedDefinition<T>`.
 //!     This is the shape used by ProcessSpec / `(defpoint name …)`.
 
-use crate::ast::{iter_calls_to, Sexp};
+use crate::ast::Sexp;
 use crate::domain::{sexp_shape, TataraDomain};
 use crate::error::{LispError, Result};
 use crate::macro_expand::Expander;
@@ -88,22 +88,22 @@ fn named_form_non_symbol_name<T: TataraDomain>(got: &Sexp) -> LispError {
 
 /// Read + macroexpand + compile every `(T::KEYWORD :k v …)` form into `T`.
 ///
-/// Routes the keyword-matching walk through the substrate's slice-side
-/// projection primitive [`iter_calls_to`]: every expanded form whose head
-/// matches `T::KEYWORD` flows through `T::compile_from_args` in source
-/// order; non-matching forms are skipped silently (soft-projection
-/// posture). Sibling consumer to [`compile_named_from_forms`] — both
-/// dispatchers route through the SAME slice-side projection, each
-/// binding the per-form projection that fits its call site:
-/// `T::compile_from_args(args)` for the bare-kwargs form here, and the
-/// NAME-then-`T::compile_from_args` split inside the named consumer.
+/// Routes the program-level walk through the substrate's composed
+/// expand-then-keyword-project primitive
+/// [`Expander::expand_and_collect_calls_to`]: a fresh `Expander::new()`
+/// expands `forms` and walks every expanded form whose head matches
+/// `T::KEYWORD` through `T::compile_from_args` in source order;
+/// non-matching forms are skipped silently (soft-projection posture
+/// inherited from [`iter_calls_to`](crate::ast::iter_calls_to)).
+/// Sibling consumer to [`compile_named_from_forms`] — both dispatchers
+/// route through the SAME `Expander::expand_and_collect_calls_to`
+/// primitive, each binding the per-form projection that fits its call
+/// site: `T::compile_from_args(args)` for the bare-kwargs form here,
+/// and the NAME-then-`T::compile_from_args` split inside the named
+/// consumer.
 pub fn compile_typed<T: TataraDomain>(src: &str) -> Result<Vec<T>> {
     let forms = read(src)?;
-    let mut exp = Expander::new();
-    let expanded = exp.expand_program(forms)?;
-    iter_calls_to(&expanded, T::KEYWORD)
-        .map(T::compile_from_args)
-        .collect()
+    Expander::new().expand_and_collect_calls_to(forms, T::KEYWORD, T::compile_from_args)
 }
 
 /// Read + macroexpand + compile every `(T::KEYWORD NAME :k v …)` form into
@@ -117,15 +117,18 @@ pub fn compile_named<T: TataraDomain>(src: &str) -> Result<Vec<NamedDefinition<T
 /// the caller has done its own reading (e.g., from a string, a Sexp loaded
 /// from disk, a macro-expanded subform).
 ///
-/// Routes the keyword-matching walk through the substrate's slice-side
-/// projection primitive [`iter_calls_to`]: every expanded form whose head
-/// matches `T::KEYWORD` flows through the NAME-then-`T::compile_from_args`
-/// split in source order; non-matching forms are skipped silently
-/// (soft-projection posture). Sibling consumer to [`compile_typed`] —
-/// both dispatchers route through the SAME slice-side projection, each
-/// binding the per-form projection that fits its call site: the
-/// bare-kwargs `T::compile_from_args(args)` inside `compile_typed`, and
-/// the NAME-then-`T::compile_from_args` split here. The `Result::collect`
+/// Routes the program-level walk through the substrate's composed
+/// expand-then-keyword-project primitive
+/// [`Expander::expand_and_collect_calls_to`]: a fresh `Expander::new()`
+/// expands `forms` and walks every expanded form whose head matches
+/// `T::KEYWORD` through the NAME-then-`T::compile_from_args` split in
+/// source order; non-matching forms are skipped silently (soft-projection
+/// posture inherited from [`iter_calls_to`](crate::ast::iter_calls_to)).
+/// Sibling consumer to [`compile_typed`] — both dispatchers route through
+/// the SAME `Expander::expand_and_collect_calls_to` primitive, each binding
+/// the per-form projection that fits its call site: the bare-kwargs
+/// `T::compile_from_args(args)` inside `compile_typed`, and the
+/// NAME-then-`T::compile_from_args` split here. The `Result::collect`
 /// short-circuits on the first error (mirroring the pre-lift for-loop
 /// `?`-then-return semantics), so the structurally-named rejection
 /// chain — `NamedFormMissingName` for the missing NAME slot,
@@ -135,22 +138,17 @@ pub fn compile_named<T: TataraDomain>(src: &str) -> Result<Vec<NamedDefinition<T
 pub fn compile_named_from_forms<T: TataraDomain>(
     forms: Vec<Sexp>,
 ) -> Result<Vec<NamedDefinition<T>>> {
-    let mut exp = Expander::new();
-    let expanded = exp.expand_program(forms)?;
-    iter_calls_to(&expanded, T::KEYWORD)
-        .map(|rest| {
-            let (name_form, spec_args) =
-                rest.split_first().ok_or(LispError::NamedFormMissingName {
-                    keyword: T::KEYWORD,
-                })?;
-            let name = name_form
-                .as_symbol_or_string()
-                .ok_or_else(|| named_form_non_symbol_name::<T>(name_form))?
-                .to_string();
-            let spec = T::compile_from_args(spec_args)?;
-            Ok(NamedDefinition { name, spec })
-        })
-        .collect()
+    Expander::new().expand_and_collect_calls_to(forms, T::KEYWORD, |rest| {
+        let (name_form, spec_args) = rest.split_first().ok_or(LispError::NamedFormMissingName {
+            keyword: T::KEYWORD,
+        })?;
+        let name = name_form
+            .as_symbol_or_string()
+            .ok_or_else(|| named_form_non_symbol_name::<T>(name_form))?
+            .to_string();
+        let spec = T::compile_from_args(spec_args)?;
+        Ok(NamedDefinition { name, spec })
+    })
 }
 
 #[cfg(test)]

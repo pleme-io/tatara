@@ -494,6 +494,141 @@ impl Expander {
         Ok(out)
     }
 
+    /// Compose the expander's program-level expansion with the substrate's
+    /// slice-side typed-keyword projection ([`iter_calls_to`]) and a
+    /// caller-supplied per-form projection — `expand_program(forms)?` followed
+    /// by `iter_calls_to(&expanded, keyword).map(project).collect()`, in ONE
+    /// method on the `Expander` surface. Both [`compile_typed`](crate::compile::compile_typed)
+    /// and [`compile_named_from_forms`](crate::compile::compile_named_from_forms)
+    /// route through this primitive — they differ only in the per-form
+    /// projection `F`: `T::compile_from_args` for the bare-kwargs form
+    /// (`compile_typed`), and the NAME-then-`T::compile_from_args` split
+    /// (`compile_named_from_forms`).
+    ///
+    /// Before this lift each dispatcher opened the same three-step pipeline
+    /// inline — `let mut exp = Expander::new(); let expanded =
+    /// exp.expand_program(forms)?; iter_calls_to(&expanded, T::KEYWORD)
+    /// .map(<per-site>).collect()` — past the ≥2 PRIME-DIRECTIVE trigger
+    /// once the structural shape is named. After this lift the pipeline
+    /// lives in ONE method on the `Expander` surface and the two
+    /// dispatchers thread their per-site projection through `F`; a
+    /// regression that drifts ONE dispatcher's pipeline from the other (a
+    /// future emitter that re-derives `expand_program + iter_calls_to`
+    /// inline rather than composing through this primitive, a future
+    /// preloaded-expander consumer that wants the same walk but on its
+    /// own `Expander` rather than a fresh one) is no longer a silent
+    /// two-site divergence: the method binds the composition once and
+    /// every consumer threads the per-site projection through `F`.
+    ///
+    /// Method on `Expander` (not a free function) so the primitive
+    /// composes with the broader expander surface: a preloaded expander
+    /// (e.g., one that has already absorbed a set of `defmacro` forms
+    /// via `expand_program` or `with_macros`) can call this method on
+    /// its own state to walk a follow-up program — the
+    /// `compiler_spec`'s realize path is the natural future consumer for
+    /// that shape. `compile_typed` and `compile_named_from_forms`
+    /// instantiate a fresh `Expander::new()` and dispatch through this
+    /// method on it; a future preloaded consumer dispatches through it
+    /// on the preloaded expander directly. ONE primitive, two postures
+    /// (fresh vs. preloaded), no per-posture duplication of the
+    /// `expand_program + iter_calls_to + map + collect` pipeline.
+    ///
+    /// `F` is `FnMut(&[Sexp]) -> Result<R>` — the per-form projection
+    /// that fits the consumer's call site. The standard-library
+    /// `Iterator::map` bound is `FnMut`, so a closure that captures
+    /// mutable state (a future dispatcher that threads a running index
+    /// or a borrowed accumulator into the projection) composes
+    /// naturally. The `Result<R>` projection short-circuits on the
+    /// first error via `Iterator::collect::<Result<Vec<R>, _>>()`, so
+    /// the per-form rejection chain (`compile_named_from_forms`'s
+    /// `NamedFormMissingName` for the missing NAME slot,
+    /// `NamedFormNonSymbolName` for the non-symbol NAME slot,
+    /// `T::compile_from_args`'s typed-entry kwargs gate, AND
+    /// `compile_typed`'s bare-kwargs `T::compile_from_args` rejection)
+    /// fires in the same order under the new shape.
+    ///
+    /// `R` is owned by construction — the iterator's `&[Sexp]` items
+    /// borrow from the local `expanded: Vec<Sexp>` and that borrow
+    /// ends when the `.collect()` consumes the iterator, so a `R`
+    /// that borrowed from `expanded` would fail to compile here. The
+    /// two production consumers (`Vec<T>`, `Vec<NamedDefinition<T>>`)
+    /// are both owned-`R` shapes, matching the borrow's structural
+    /// constraint.
+    ///
+    /// Sibling of [`expand_program`](Self::expand_program) — that
+    /// method names the FIRST step of the pipeline (program-level
+    /// macroexpansion, yielding `Vec<Sexp>`); this method composes it
+    /// with the SECOND step (slice-side typed-keyword projection +
+    /// per-form mapper). The split lets a consumer that wants the
+    /// expanded forms WITHOUT the keyword filter (`tatara-check`'s
+    /// per-form dispatcher walks every form, not just matched
+    /// keywords) bind to `expand_program` directly; a consumer that
+    /// wants both halves composed binds to this method.
+    ///
+    /// Closes the substrate's program-level walk family on the
+    /// `Expander` surface: `expand_program` (yield-all-forms-after-
+    /// expansion), `expand` (per-form recursive expansion), `apply`
+    /// (per-call substitution), AND now `expand_and_collect_calls_to`
+    /// (typed-keyword projection of the expanded forms with a per-form
+    /// mapper). Together the four name the canonical surfaces a
+    /// dispatcher composes with to extract a typed program from a
+    /// post-expansion form set.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// two inline copies of the `Expander::new() + expand_program +
+    /// iter_calls_to(_, T::KEYWORD) + map + collect` pipeline across
+    /// `compile_typed` and `compile_named_from_forms` is past the ≥2
+    /// PRIME-DIRECTIVE trigger once the structural shape is named.
+    /// THEORY.md §V.1 — knowable platform; the program-level walk's
+    /// typed-keyword-projection composition becomes a NAMED primitive
+    /// on the substrate's `Expander` surface rather than a re-derived
+    /// three-step inline pipeline at every consumer. Authoring tools
+    /// (REPL, LSP, `tatara-check`) that want to walk a program by
+    /// typed keyword bind to ONE method on the `Expander` instead of
+    /// re-implementing the composition. THEORY.md §II.1 invariant 1 —
+    /// typed entry; the typed-keyword filter over an expanded program
+    /// IS the rust-level typed-entry-batch gate, and naming its
+    /// single shape lifts the gate from two-site duplication to one
+    /// rust method the substrate's diagnostic promotions hang off of.
+    /// THEORY.md §II.1 invariant 2 — free middle; both consumers
+    /// route through the SAME composition primitive, each binding the
+    /// per-form projection that fits its call site — a regression
+    /// that drifts ONE dispatcher's pipeline shape from the other
+    /// cannot reach the substrate's runtime.
+    ///
+    /// Frontier inspiration: MLIR's `Region::walk<Op>(callback)` —
+    /// every typed rewriter that wants "for every Op of kind K in this
+    /// region, run callback" binds to ONE typed walker that composes
+    /// the kind filter with the per-op visitor; the substrate's
+    /// `expand_and_collect_calls_to` is the unstructured-projection
+    /// peer of that walker, lifted onto the post-expansion `&[Sexp]`
+    /// algebra with the per-form projection as the visitor. Racket's
+    /// `syntax-parse` `~seq (keyword args ...) ...` ellipsis-form —
+    /// the program-level typed-keyword filter with per-match handler
+    /// is the closed-form sibling of `~seq`'s repeated-pattern
+    /// matcher, translated through pleme-io primitives as ONE method
+    /// on `Expander` composing `expand_program` with `iter_calls_to`
+    /// and a per-form mapper. GHC Core's `everything :: forall b. (b
+    /// -> b -> b) -> GenericQ b -> GenericQ b` — the typed-IR rewriter's
+    /// program-level fold over a typed selector is named ONCE and
+    /// every consumer threads the per-node projection; the substrate's
+    /// `expand_and_collect_calls_to` is the keyword-projected sibling
+    /// of that fold on the `&[Sexp]` algebra.
+    pub fn expand_and_collect_calls_to<R, F>(
+        &mut self,
+        forms: Vec<Sexp>,
+        keyword: &str,
+        project: F,
+    ) -> Result<Vec<R>>
+    where
+        F: FnMut(&[Sexp]) -> Result<R>,
+    {
+        let expanded = self.expand_program(forms)?;
+        crate::ast::iter_calls_to(&expanded, keyword)
+            .map(project)
+            .collect()
+    }
+
     /// Expand a single form. Top-level macro calls are rewritten; recurses
     /// into list children.
     ///
@@ -7130,5 +7265,268 @@ mod tests {
         // Consumer walks children (zero of them) — output is the empty
         // list, same as input.
         assert_eq!(e.expand(&empty).unwrap(), Sexp::List(vec![]));
+    }
+
+    // ── Expander::expand_and_collect_calls_to: program-level walk ───────
+    //
+    // `expand_and_collect_calls_to(forms, keyword, project)` composes the
+    // expander's program-level expansion (`expand_program`) with the
+    // substrate's slice-side typed-keyword projection (`iter_calls_to`)
+    // and a caller-supplied per-form mapper into ONE method on the
+    // `Expander` surface. Both `compile_typed::<T>` and
+    // `compile_named_from_forms::<T>` (compile.rs) route through it; the
+    // tests below pin its contract directly. The existing compile.rs
+    // dispatch tests are the path-uniformity guards proving the two
+    // production sites route through it without behavior drift.
+
+    #[test]
+    fn expand_and_collect_calls_to_yields_projection_for_every_matching_form_in_source_order() {
+        // Three forms — two match `defmonitor`, one matches `defalert`.
+        // The mapper records `args.len()` from each matching form's tail.
+        // Pin: only the two `defmonitor` matches flow through `project`,
+        // in source order (so the recorded lengths are 2, 1).
+        let forms = vec![
+            Sexp::List(vec![
+                Sexp::symbol("defmonitor"),
+                Sexp::keyword("name"),
+                Sexp::string("first"),
+            ]),
+            Sexp::List(vec![
+                Sexp::symbol("defalert"),
+                Sexp::keyword("name"),
+                Sexp::string("not-a-match"),
+            ]),
+            Sexp::List(vec![Sexp::symbol("defmonitor"), Sexp::keyword("solo")]),
+        ];
+        let mut e = Expander::new();
+        let lengths: Vec<usize> = e
+            .expand_and_collect_calls_to(forms, "defmonitor", |args| Ok(args.len()))
+            .expect("matching forms must compose");
+        assert_eq!(lengths, vec![2, 1]);
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_skips_non_matching_forms_without_invoking_project() {
+        // Path-uniformity for the soft-projection posture inherited from
+        // `iter_calls_to`: non-matching forms are skipped silently, and
+        // `project` is never invoked on them. Pin via a counter the
+        // closure increments per invocation — the counter is the
+        // observable that distinguishes "skipped silently" from
+        // "projected to a no-op".
+        let forms = vec![
+            Sexp::symbol("bare-atom"),
+            Sexp::List(vec![Sexp::symbol("defalert"), Sexp::int(1)]),
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("not-symbol-head")]),
+            Sexp::List(vec![]),
+            Sexp::Nil,
+        ];
+        let mut count = 0usize;
+        let mut e = Expander::new();
+        let out: Vec<()> = e
+            .expand_and_collect_calls_to(forms, "defmonitor", |_args| {
+                count += 1;
+                Ok(())
+            })
+            .expect("non-matching-only slice must collect to empty Vec");
+        assert!(out.is_empty(), "no matching forms — empty Vec, got {out:?}");
+        assert_eq!(count, 0, "project must never run for non-matching forms");
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_short_circuits_on_project_error_at_first_failure() {
+        // Three matching forms; the closure errors on the SECOND. Pin: the
+        // collect's `Result<Vec<_>, _>` short-circuit fires at the second
+        // form's error, the third form's `project` is NEVER invoked, and
+        // the returned error is exactly the one the closure raised. This
+        // mirrors `compile_named_from_forms`'s short-circuit on the first
+        // `NamedFormMissingName` / `NamedFormNonSymbolName` / typed-entry
+        // kwargs rejection.
+        let forms = vec![
+            Sexp::List(vec![Sexp::symbol("defmonitor"), Sexp::int(1)]),
+            Sexp::List(vec![Sexp::symbol("defmonitor"), Sexp::int(2)]),
+            Sexp::List(vec![Sexp::symbol("defmonitor"), Sexp::int(3)]),
+        ];
+        let mut seen = Vec::new();
+        let mut e = Expander::new();
+        let err = e
+            .expand_and_collect_calls_to::<(), _>(forms, "defmonitor", |args| {
+                let n = args[0].as_int().expect("test args are ints");
+                seen.push(n);
+                if n == 2 {
+                    Err(LispError::Compile {
+                        form: "test".to_string(),
+                        message: "stop at two".to_string(),
+                    })
+                } else {
+                    Ok(())
+                }
+            })
+            .expect_err("project's error must short-circuit collect");
+        // Only the first two forms were ever projected — the third
+        // never reached `project`.
+        assert_eq!(seen, vec![1, 2]);
+        assert!(
+            matches!(err, LispError::Compile { ref message, .. } if message == "stop at two"),
+            "short-circuit must propagate the project's error verbatim, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_short_circuits_on_expand_program_error_before_project_runs() {
+        // The `expand_program` step runs BEFORE `iter_calls_to` walks
+        // anything — so an `expand_program` error (e.g., a malformed
+        // `defmacro` head) must short-circuit the entire composition
+        // and `project` must NEVER run. Pin via the closure-running
+        // counter: an error from the FIRST step never invokes `project`.
+        // `(defmacro 5 (x) `,x)` — the macro NAME slot is an int, not a
+        // symbol; `macro_def_from`'s `defmacro_non_symbol_name` rejection
+        // fires during `expand_program`.
+        let forms = read("(defmacro 5 (x) `,x) (defmonitor :name \"x\")").unwrap();
+        let mut count = 0usize;
+        let mut e = Expander::new();
+        let err = e
+            .expand_and_collect_calls_to::<(), _>(forms, "defmonitor", |_args| {
+                count += 1;
+                Ok(())
+            })
+            .expect_err("expand_program error must short-circuit before project");
+        assert_eq!(
+            count, 0,
+            "project must never run when expand_program errors"
+        );
+        // Sanity: the error IS the expand_program-stage rejection, NOT
+        // a project-stage error (path-uniformity for the ordering).
+        let rendered = format!("{err}");
+        assert!(
+            rendered.contains("NAME") || rendered.contains("symbol"),
+            "error must be the defmacro-NAME-not-a-symbol rejection, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_yields_empty_vec_for_empty_forms_input() {
+        // Boundary: empty forms slice yields zero items regardless of
+        // keyword. Pin the degenerate boundary — empty in, empty out —
+        // and the closure is never invoked. Sibling of
+        // `iter_calls_to_yields_nothing_for_empty_slice` in ast.rs,
+        // one level up the composition: the program-level walk is
+        // fused-empty when `expand_program` yields an empty `Vec<Sexp>`.
+        let mut count = 0usize;
+        let mut e = Expander::new();
+        let out: Vec<()> = e
+            .expand_and_collect_calls_to(Vec::new(), "anything", |_args| {
+                count += 1;
+                Ok(())
+            })
+            .expect("empty forms is not an error");
+        assert!(out.is_empty());
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_expands_macros_before_filtering_by_keyword() {
+        // Critical ordering: `expand_program` runs BEFORE the keyword
+        // filter, so a `defmacro` whose expansion produces a form with
+        // a matching head IS visible to `project`. Pin the pipeline
+        // order: `(defmacro emit-monitor (n) `(defmonitor :name ,n))
+        //         (emit-monitor "alpha") (defmonitor :name "beta")`
+        // expands the macro call to `(defmonitor :name "alpha")` and
+        // the keyword walk then sees TWO `defmonitor` forms (the
+        // macro-emitted one AND the directly-authored one). A
+        // pre-expansion filter would miss the macro-emitted form.
+        let forms = read(
+            "(defmacro emit-monitor (n) `(defmonitor :name ,n))
+             (emit-monitor \"alpha\")
+             (defmonitor :name \"beta\")",
+        )
+        .unwrap();
+        let mut e = Expander::new();
+        let names: Vec<String> = e
+            .expand_and_collect_calls_to(forms, "defmonitor", |args| {
+                // Each defmonitor form's tail is `(:name "X")`; project
+                // the second element's string to capture the name.
+                Ok(args[1].as_string().unwrap().to_string())
+            })
+            .expect("macroexpanded + directly-authored forms must both flow");
+        assert_eq!(names, vec!["alpha".to_string(), "beta".to_string()]);
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_threads_keyword_argument_verbatim_into_filter() {
+        // The `keyword` argument flows straight into `iter_calls_to`'s
+        // head-comparison gate — a regression that drifts the keyword
+        // (e.g., uses `T::KEYWORD` from a different `T` at the helper,
+        // or lowercases / trims the keyword en route) fails here. Pin
+        // by passing TWO different keywords against the SAME forms
+        // input and asserting each picks up only its matching forms.
+        let forms = vec![
+            Sexp::List(vec![Sexp::symbol("defmonitor"), Sexp::int(1)]),
+            Sexp::List(vec![Sexp::symbol("defalert"), Sexp::int(2)]),
+            Sexp::List(vec![Sexp::symbol("defmonitor"), Sexp::int(3)]),
+            Sexp::List(vec![Sexp::symbol("defnotify"), Sexp::int(4)]),
+        ];
+
+        let mut e = Expander::new();
+        let monitors: Vec<i64> = e
+            .expand_and_collect_calls_to(forms.clone(), "defmonitor", |args| {
+                Ok(args[0].as_int().unwrap())
+            })
+            .unwrap();
+        assert_eq!(monitors, vec![1, 3]);
+
+        let mut e2 = Expander::new();
+        let alerts: Vec<i64> = e2
+            .expand_and_collect_calls_to(forms.clone(), "defalert", |args| {
+                Ok(args[0].as_int().unwrap())
+            })
+            .unwrap();
+        assert_eq!(alerts, vec![2]);
+
+        // A keyword nothing matches collects to the empty Vec — same
+        // shape as the empty-forms case at the slice level.
+        let mut e3 = Expander::new();
+        let none: Vec<i64> = e3
+            .expand_and_collect_calls_to(forms, "missing-keyword", |args| {
+                Ok(args[0].as_int().unwrap())
+            })
+            .unwrap();
+        assert!(none.is_empty());
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_matches_inlined_expand_program_plus_iter_calls_to_path() {
+        // Structural identity: for any (forms, keyword, project) triple
+        // whose pieces succeed, the method's result equals the inlined
+        // pre-lift pipeline `expand_program + iter_calls_to + map +
+        // collect`. Pin shape AND ordering on a mixed forms input
+        // (matching + non-matching + macroexpand-emitted matches) so a
+        // regression that drifts the method's pipeline from the inlined
+        // closed-form fails here. This is the lift's load-bearing
+        // path-uniformity gate — the SAME assertion that holds for
+        // both production consumers (compile.rs) holds at the
+        // primitive's contract level.
+        let src = "(defmacro emit-foo (n) `(foo :idx ,n))
+                   (foo :idx 1)
+                   (emit-foo 2)
+                   (bar :idx 99)
+                   (foo :idx 3)";
+        let forms = read(src).unwrap();
+
+        // Inlined pre-lift pipeline.
+        let mut exp_inline = Expander::new();
+        let expanded = exp_inline.expand_program(forms.clone()).unwrap();
+        let via_inline: Vec<i64> = crate::ast::iter_calls_to(&expanded, "foo")
+            .map(|args| -> Result<i64> { Ok(args[1].as_int().unwrap()) })
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+
+        // Method pipeline.
+        let mut exp_method = Expander::new();
+        let via_method: Vec<i64> = exp_method
+            .expand_and_collect_calls_to(forms, "foo", |args| Ok(args[1].as_int().unwrap()))
+            .unwrap();
+
+        assert_eq!(via_inline, via_method);
+        assert_eq!(via_inline, vec![1, 2, 3]);
     }
 }

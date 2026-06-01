@@ -865,6 +865,90 @@ fn resolve_bound_arg<'a>(
         .ok_or_else(|| template_invariant_violation(macro_name, kind(idx)))
 }
 
+/// Project the bytecode-runtime stack to its in-progress builder frame —
+/// the `&mut Vec<Sexp>` every value-emitting op writes into. ONE named
+/// primitive both push-emitting arms (`TemplateOp::Literal` /
+/// `TemplateOp::Subst` / post-`EndList` parent fold) AND the splice-
+/// emitting arm (`TemplateOp::Splice`) route through.
+///
+/// Before this lift the same `stack.last_mut().unwrap()` projection
+/// appeared at FOUR sites inside [`apply_compiled`]'s op-loop:
+///
+///   * `TemplateOp::Literal` — pushes the literal `Sexp` into the
+///     current builder.
+///   * `TemplateOp::Subst` — pushes the cloned bound-arg into the
+///     current builder.
+///   * `TemplateOp::Splice` — splices the bound-arg into the current
+///     builder via [`splice_value_into`].
+///   * `TemplateOp::EndList` — after popping the just-finished list
+///     frame, pushes the folded `Sexp::List(items)` into the parent
+///     builder (the new current frame).
+///
+/// Four byte-identical re-derivations of the same projection, well past
+/// the ≥2 PRIME-DIRECTIVE trigger. After this lift the four sites
+/// collapse to a single `current_builder_mut(&mut stack).{push|extend}`
+/// call, and the bytecode-runtime invariant the projection rests on
+/// — "the op-loop always sees at least one stack frame" — lives in ONE
+/// expect message rather than four silent `.unwrap()` calls.
+///
+/// The expect rationale: [`apply_compiled`] seeds the stack with the
+/// outermost frame at entry (`vec![Vec::with_capacity(1)]`); every
+/// `TemplateOp::BeginList` pushes a NEW frame and every
+/// `TemplateOp::EndList` pops it, so the count stays at OR ABOVE 1
+/// throughout the op-loop. Stack-depleting failure modes are caught
+/// upstream by their own structural variants:
+/// [`TemplateInvariantKind::EndListEmptyStack`] fires inside
+/// [`apply_compiled`]'s `EndList` arm via [`Vec::pop`]'s `Option`
+/// gate, BEFORE the parent-fold push runs against
+/// `current_builder_mut`; [`TemplateInvariantKind::FinalNoValue`]
+/// fires AFTER the op-loop completes, on the outermost `stack.pop()`
+/// that returns the assembled result. So a reachable
+/// `current_builder_mut(&mut stack)` always observes a non-empty
+/// stack, and the `expect` is a structural-invariant marker, not a
+/// load-bearing rejection path.
+///
+/// Sibling of [`resolve_bound_arg`] (the bytecode-runtime bound-arg
+/// lookup primitive lifted in the prior claude-routine run on this
+/// module — 492a235) and [`template_invariant_violation`] (the
+/// structural-variant error builder for the bytecode-runtime's
+/// closed-set invariant-violation surface). Together the three primitives
+/// name the bytecode-runtime's substrate-level operations: lookup-a-
+/// bound-arg ([`resolve_bound_arg`]), build-the-invariant-rejection
+/// ([`template_invariant_violation`]), and project-to-the-current-
+/// builder (this lift). A future bytecode op that emits ONE OR MORE
+/// values into the current builder — a hypothetical
+/// `TemplateOp::SpliceMany(indices: Vec<usize>)` that splices a batch,
+/// a `TemplateOp::PushQuoted(form: Sexp)` that wraps before push, a
+/// span-annotated emit-with-position op — composes with ONE call to
+/// [`current_builder_mut`] and the per-op post-projection verb
+/// (`.push(…)`, `.extend(…)`, `splice_value_into(…, _)`); a future
+/// instrumentation hook that wants to log every op's emit before
+/// it lands in the builder wraps ONE call boundary, not four inline
+/// `stack.last_mut().unwrap()` sites.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; four
+/// inline copies of the top-of-stack projection in one function is
+/// past the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
+/// named. THEORY.md §V.1 — knowable platform; the bytecode-runtime's
+/// current-builder projection becomes a NAMED primitive on the
+/// substrate's `&mut [Vec<Sexp>]` slice algebra rather than a re-derived
+/// `last_mut + unwrap` chain at every op-arm that emits into the
+/// builder. The expect message names the invariant
+/// ("bytecode-runtime invariant: at least one stack frame during
+/// op-loop") so a regression that drifts the loop's frame management
+/// surfaces a NAMED panic, not a silent `unwrap` over `None`.
+/// THEORY.md §II.1 invariant 2 — free middle; both expansion
+/// strategies route through the SHARED `MacroParams::bind` upstream
+/// AND the bytecode strategy's op-arms now route through this SHARED
+/// `current_builder_mut` projection downstream — the bytecode-runtime's
+/// substrate-level surface (lookup + emit) is named in two
+/// composable primitives the op-arms compose with.
+fn current_builder_mut(stack: &mut [Vec<Sexp>]) -> &mut Vec<Sexp> {
+    stack
+        .last_mut()
+        .expect("bytecode-runtime invariant: at least one stack frame during op-loop")
+}
+
 /// Execute a pre-compiled template against the macro's argument list.
 fn apply_compiled(
     macro_name: &str,
@@ -878,15 +962,20 @@ fn apply_compiled(
 
     // Run the bytecode against a stack of in-progress list builders. The
     // outermost frame accumulates the single result the template yields.
+    // Each emit-into-builder arm routes through the shared
+    // `current_builder_mut` projection — the bytecode-runtime invariant
+    // "at least one stack frame during the op-loop" lives in ONE expect
+    // message rather than four silent `.unwrap()` calls.
     let mut stack: Vec<Vec<Sexp>> = vec![Vec::with_capacity(1)];
     for op in &tmpl.ops {
         match op {
-            TemplateOp::Literal(s) => stack.last_mut().unwrap().push(s.clone()),
+            TemplateOp::Literal(s) => current_builder_mut(&mut stack).push(s.clone()),
             TemplateOp::Subst(idx) => {
                 // Bound-arg-by-index lookup routes through the shared
                 // `resolve_bound_arg` projection with `SubstBadIndex` as
                 // the per-call-site kind constructor; the post-lookup
-                // verb (clone + push) is the Subst arm's per-op shape.
+                // verb (clone + push into the current builder) is the
+                // Subst arm's per-op shape.
                 let v = resolve_bound_arg(
                     &args_by_index,
                     *idx,
@@ -894,20 +983,21 @@ fn apply_compiled(
                     TemplateInvariantKind::SubstBadIndex,
                 )?
                 .clone();
-                stack.last_mut().unwrap().push(v);
+                current_builder_mut(&mut stack).push(v);
             }
             TemplateOp::Splice(idx) => {
                 // Sibling lookup through `resolve_bound_arg` with
                 // `SpliceBadIndex` as the per-call-site kind constructor;
-                // the post-lookup verb (`splice_value_into`) consumes
-                // the borrow directly without an intermediate clone.
+                // the post-lookup verb (`splice_value_into` against the
+                // current builder) consumes the borrow directly without
+                // an intermediate clone.
                 let v = resolve_bound_arg(
                     &args_by_index,
                     *idx,
                     macro_name,
                     TemplateInvariantKind::SpliceBadIndex,
                 )?;
-                splice_value_into(stack.last_mut().unwrap(), v);
+                splice_value_into(current_builder_mut(&mut stack), v);
             }
             TemplateOp::BeginList => stack.push(Vec::new()),
             TemplateOp::EndList => {
@@ -917,7 +1007,7 @@ fn apply_compiled(
                         TemplateInvariantKind::EndListEmptyStack,
                     )
                 })?;
-                stack.last_mut().unwrap().push(Sexp::List(items));
+                current_builder_mut(&mut stack).push(Sexp::List(items));
             }
         }
     }
@@ -5524,6 +5614,199 @@ mod tests {
         let out = apply_compiled("id", &params, &tmpl, &[Sexp::int(42)])
             .expect("in-range Subst must succeed");
         assert_eq!(out, Sexp::int(42));
+    }
+
+    // ── current_builder_mut: the bytecode-runtime top-of-stack projection ──
+    //
+    // `current_builder_mut(stack)` lifts the `stack.last_mut().unwrap()`
+    // projection that appeared at FOUR sites inside `apply_compiled`'s
+    // op-loop (Literal, Subst, Splice, post-EndList parent-fold) into ONE
+    // named primitive. The expect message names the bytecode-runtime
+    // invariant ("at least one stack frame during op-loop") so a
+    // regression that drifts the loop's frame management (a new op that
+    // pops without pushing, an early-return that bypasses EndList's
+    // stack-check) surfaces a NAMED panic rather than a silent unwrap.
+    // These tests pin the projection's contract directly; the existing
+    // `apply_compiled_*` tests + the cross-strategy `expansion_layers_
+    // agree_on_output_and_cache_wins` benchmark are the path-uniformity
+    // guards proving the four sites still emit the canonical bytecode-
+    // runtime output across the lift.
+
+    #[test]
+    fn current_builder_mut_returns_the_top_frame_reference() {
+        // The simplest projection: on a single-frame stack, the helper
+        // returns a `&mut Vec<Sexp>` pointing at THAT frame. Pin the
+        // projection's identity end-to-end via a push that mutates
+        // through the borrow and observe the original frame carries the
+        // pushed value back.
+        let mut stack: Vec<Vec<Sexp>> = vec![Vec::new()];
+        current_builder_mut(&mut stack).push(Sexp::int(42));
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack[0], vec![Sexp::int(42)]);
+    }
+
+    #[test]
+    fn current_builder_mut_targets_the_topmost_frame_on_a_multi_frame_stack() {
+        // The projection MUST target the topmost frame, not the bottom
+        // one — every `TemplateOp::BeginList` pushes a fresh frame the
+        // subsequent ops emit into, and a regression that flipped the
+        // projection to `first_mut` (or to a fixed bottom-frame
+        // reference) would silently smear all op output into the
+        // outermost result. Pin path-uniformity with the bytecode-
+        // runtime's mid-list emission posture: with three frames on
+        // the stack (one outer + two pending lists), the helper
+        // returns a borrow into the third frame, leaving frames 0 and
+        // 1 untouched.
+        let mut stack: Vec<Vec<Sexp>> = vec![
+            vec![Sexp::symbol("outer")],
+            vec![Sexp::symbol("inner-a")],
+            vec![Sexp::symbol("inner-b")],
+        ];
+        current_builder_mut(&mut stack).push(Sexp::int(99));
+        assert_eq!(stack[0], vec![Sexp::symbol("outer")]);
+        assert_eq!(stack[1], vec![Sexp::symbol("inner-a")]);
+        assert_eq!(stack[2], vec![Sexp::symbol("inner-b"), Sexp::int(99)]);
+    }
+
+    #[test]
+    fn current_builder_mut_is_pointer_equal_to_last_mut_unwrap() {
+        // Structural identity binding the lift to its pre-lift inline
+        // shape: `current_builder_mut(&mut stack)` IS
+        // `stack.last_mut().unwrap()` — the same `&mut Vec<Sexp>`,
+        // pointing at the same allocation. Pin pointer equality via
+        // `std::ptr::eq` on the projected slice's `as_ptr()` to rule
+        // out any allocation-shape drift across the lift.
+        let mut stack: Vec<Vec<Sexp>> = vec![vec![Sexp::int(1), Sexp::int(2)]];
+        let via_lift_ptr = current_builder_mut(&mut stack).as_ptr();
+        let via_inline_ptr = stack.last_mut().unwrap().as_ptr();
+        assert!(
+            std::ptr::eq(via_lift_ptr, via_inline_ptr),
+            "current_builder_mut must borrow the SAME frame as stack.last_mut().unwrap()"
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "bytecode-runtime invariant: at least one stack frame during op-loop"
+    )]
+    fn current_builder_mut_panics_with_named_invariant_on_empty_stack() {
+        // The bytecode-runtime invariant is encoded in the expect
+        // message: an empty stack at the projection boundary is
+        // structurally unreachable inside `apply_compiled`'s op-loop
+        // (the outermost frame is seeded at entry and every BeginList
+        // / EndList pair preserves the count >= 1). Pin that the
+        // NAMED invariant fires on the failure path so a regression
+        // that drifts the loop's frame management surfaces a
+        // diagnostic-grade panic rather than a silent unwrap over
+        // `None`. Authoring tools / future debug-mode hooks can
+        // pattern-match on the named invariant string instead of
+        // tracking down an unnamed unwrap site.
+        let mut empty: Vec<Vec<Sexp>> = Vec::new();
+        let _ = current_builder_mut(&mut empty);
+    }
+
+    #[test]
+    fn current_builder_mut_routes_apply_compiled_literal_emit() {
+        // End-to-end path-uniformity guard: a single-op program
+        // `TemplateOp::Literal(s)` routes its push through
+        // `current_builder_mut(&mut stack)` and the literal lands in
+        // the outermost frame. After the op-loop completes the outer
+        // `stack.pop().FinalNoValue` gate sees a non-empty top frame
+        // containing exactly one element, which `apply_compiled`'s
+        // tail (`top.len() == 1 { top.remove(0) }`) projects back as
+        // the bound value. Pre-lift the same emission ran through
+        // `stack.last_mut().unwrap().push(s.clone())`; post-lift it
+        // runs through `current_builder_mut(&mut stack).push(s.clone())`
+        // — the byte-identical outcome pins that the Literal arm's
+        // routing through the new projection preserves the bytecode-
+        // runtime's emission shape.
+        let tmpl = CompiledTemplate {
+            ops: vec![TemplateOp::Literal(Sexp::symbol("hello"))],
+        };
+        let out = apply_compiled("id", &MacroParams::default(), &tmpl, &[])
+            .expect("literal-only template must succeed");
+        assert_eq!(out, Sexp::symbol("hello"));
+    }
+
+    #[test]
+    fn current_builder_mut_routes_apply_compiled_end_list_parent_fold() {
+        // End-to-end path-uniformity guard for the post-EndList
+        // parent-fold push: `(BeginList, Literal(a), Literal(b),
+        // EndList)` builds an inner frame `[a, b]`, pops it on
+        // EndList, then pushes `Sexp::List([a, b])` into the parent
+        // (outer) frame via `current_builder_mut`. The outermost
+        // `stack.pop()` then surfaces that list as the bound result.
+        // Pre-lift the parent-fold push ran through
+        // `stack.last_mut().unwrap().push(Sexp::List(items))`; post-
+        // lift it runs through `current_builder_mut(&mut stack).
+        // push(Sexp::List(items))` — pin the byte-identical outcome
+        // so a regression that drifts the parent-fold target (e.g.,
+        // pushes onto the just-popped frame's pointer instead of the
+        // new top) fails loudly here.
+        let tmpl = CompiledTemplate {
+            ops: vec![
+                TemplateOp::BeginList,
+                TemplateOp::Literal(Sexp::symbol("a")),
+                TemplateOp::Literal(Sexp::symbol("b")),
+                TemplateOp::EndList,
+            ],
+        };
+        let out = apply_compiled("id", &MacroParams::default(), &tmpl, &[])
+            .expect("BeginList/EndList template must succeed");
+        assert_eq!(out, Sexp::List(vec![Sexp::symbol("a"), Sexp::symbol("b")]));
+    }
+
+    #[test]
+    fn current_builder_mut_routes_apply_compiled_subst_and_splice_emits() {
+        // End-to-end path-uniformity guard for BOTH index-reading
+        // arms routing through the lifted projection: a one-required +
+        // one-rest macro `(call f &rest args)` with template
+        // `(BeginList, Subst(0), Splice(1), EndList)` exercises both
+        // Subst's clone-and-push AND Splice's splice-value-into
+        // emit-paths against the current builder via
+        // `current_builder_mut(&mut stack)`. The composed result is
+        // `(foo 1 2 3)` — Subst lands the bound `f = foo` and
+        // Splice flattens `args = (1 2 3)` — and the byte-identical
+        // outcome pins that BOTH Subst and Splice arms' emits route
+        // through the SHARED projection. Sibling to
+        // `apply_compiled_splice_in_range_routes_past_resolve_bound
+        // _arg_into_splice_value_into` which already exercises this
+        // shape end-to-end; the addition here is the path-uniformity
+        // anchor for the `current_builder_mut` lift specifically.
+        let params = MacroParams {
+            required: vec!["f".into()],
+            optional: Vec::new(),
+            rest: Some("args".into()),
+        };
+        let tmpl = CompiledTemplate {
+            ops: vec![
+                TemplateOp::BeginList,
+                TemplateOp::Subst(0),
+                TemplateOp::Splice(1),
+                TemplateOp::EndList,
+            ],
+        };
+        let out = apply_compiled(
+            "call",
+            &params,
+            &tmpl,
+            &[
+                Sexp::symbol("foo"),
+                Sexp::int(1),
+                Sexp::int(2),
+                Sexp::int(3),
+            ],
+        )
+        .expect("Subst + Splice template must succeed");
+        assert_eq!(
+            out,
+            Sexp::List(vec![
+                Sexp::symbol("foo"),
+                Sexp::int(1),
+                Sexp::int(2),
+                Sexp::int(3),
+            ])
+        );
     }
 
     #[test]

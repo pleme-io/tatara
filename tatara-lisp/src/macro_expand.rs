@@ -629,6 +629,101 @@ impl Expander {
             .collect()
     }
 
+    /// Read a source string into top-level forms via [`crate::reader::read`],
+    /// then route the forms through
+    /// [`expand_and_collect_calls_to`](Self::expand_and_collect_calls_to) — the
+    /// from-source posture of the program-level walk, in ONE method on the
+    /// `Expander` surface.
+    ///
+    /// Before this lift the same two-step chain — `let forms = read(src)?;
+    /// <expander>.expand_and_collect_calls_to(forms, keyword, project)` — lived
+    /// inline at four sites: the two free-function typed dispatchers
+    /// ([`compile_typed`](crate::compile::compile_typed) and
+    /// [`compile_named`](crate::compile::compile_named) via
+    /// [`compile_named_from_forms`](crate::compile::compile_named_from_forms))
+    /// AND the two preloaded-expander methods on
+    /// [`RealizedCompiler`](crate::compiler_spec::RealizedCompiler)
+    /// (`compile_typed`, `compile_named`). After this lift the read-then-walk
+    /// composition lives in ONE method on the `Expander`; each of the four
+    /// dispatchers binds it with the per-site `(expander posture, projection)`
+    /// pair that fits its call boundary — `Expander::new()` for the
+    /// fresh-expander dispatchers, `self.preloaded.clone()` for the
+    /// preloaded-expander dispatchers; `T::compile_from_args` for the
+    /// bare-kwargs projection, `named_form_projection::<T>` for the
+    /// NAME-then-kwargs projection.
+    ///
+    /// Sibling of [`expand_and_collect_calls_to`](Self::expand_and_collect_calls_to)
+    /// — that method takes a pre-parsed `Vec<Sexp>` (the from-forms posture,
+    /// for callers that have already read or that compose with another
+    /// `Sexp`-producing surface like a macro-expanded subform); this method
+    /// takes a `&str` (the from-source posture, for callers consuming
+    /// authoring-surface source text directly). Both compose with the same
+    /// `expand_program + iter_calls_to + map + collect` pipeline through ONE
+    /// from-forms primitive — the from-source posture stacks one read step on
+    /// top, projecting `crate::reader::read`'s `Result<Vec<Sexp>>` into the
+    /// from-forms primitive via `?`.
+    ///
+    /// `?`-routing through `read` preserves the structural ordering of the
+    /// rejection chain end-to-end: a reader error (lexer / parser /
+    /// unbalanced-paren / unterminated-string) short-circuits BEFORE
+    /// `expand_program` runs; an `expand_program` error
+    /// (`defmacro`-NAME-not-a-symbol, `OptionalParamMalformed`,
+    /// `RestParamMissingName`, et al.) short-circuits BEFORE the keyword
+    /// filter walks anything; a per-form `project` error
+    /// (`NamedFormMissingName`, `NamedFormNonSymbolName`,
+    /// `T::compile_from_args`'s typed-entry kwargs gate) short-circuits at the
+    /// first failing matched form via `Iterator::collect::<Result<Vec<R>, _>>()`.
+    /// Each dispatcher's rejection chain remains exactly what it was pre-lift,
+    /// now sourced from ONE composition point rather than four.
+    ///
+    /// Closes the program-level walk family on the `Expander` surface across
+    /// BOTH the from-forms posture
+    /// ([`expand_and_collect_calls_to`](Self::expand_and_collect_calls_to))
+    /// AND the from-source posture (this method) — together with
+    /// `expand_program` (yield-all-forms-after-expansion), `expand` (per-form
+    /// recursive expansion), and `apply` (per-call substitution), they name
+    /// the canonical surfaces a dispatcher composes with to extract a typed
+    /// program from a post-expansion form set. A future dispatcher that wants
+    /// "read this source, then walk every call to keyword K and project each
+    /// to R" — a debug-mode REPL command, an LSP "find all typed-domain
+    /// definitions in this buffer" handler, a `tatara-check` command that
+    /// dispatches each typed `(defX …)` form in `checks.lisp` to its
+    /// registered domain — binds to ONE method on the `Expander` instead of
+    /// re-deriving the two-step `read + expand_and_collect_calls_to` chain.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; four
+    /// inline copies of the `read(src)? + <expander>.expand_and_collect_calls_to`
+    /// chain across the two fresh-expander dispatchers and the two
+    /// preloaded-expander dispatchers is past the ≥2 PRIME-DIRECTIVE trigger
+    /// once the structural shape is named. THEORY.md §V.1 — knowable
+    /// platform; the read-then-walk composition becomes a NAMED primitive on
+    /// the substrate's `Expander` surface rather than a re-derived two-step
+    /// inline pipeline at every dispatcher. THEORY.md §II.1 invariant 2 —
+    /// free middle; all four dispatchers route through the SAME composition
+    /// primitive, so a regression that drifts ONE dispatcher's read-then-walk
+    /// pipeline from the others cannot reach the substrate's runtime — the
+    /// type system binds all consumers to the from-source primitive's single
+    /// emission shape.
+    ///
+    /// Frontier inspiration: Racket's `(eval-string str ns)` against a
+    /// namespace populated with the preloaded compiler's `require`d macros —
+    /// the from-source-string entry to typed-program evaluation inside a
+    /// namespace that carries the macro library is the Racket idiom; the
+    /// substrate's `expand_source_and_collect_calls_to` is the Rust-typed
+    /// peer of that, with the typed-keyword projection composed in.
+    pub fn expand_source_and_collect_calls_to<R, F>(
+        &mut self,
+        src: &str,
+        keyword: &str,
+        project: F,
+    ) -> Result<Vec<R>>
+    where
+        F: FnMut(&[Sexp]) -> Result<R>,
+    {
+        let forms = crate::reader::read(src)?;
+        self.expand_and_collect_calls_to(forms, keyword, project)
+    }
+
     /// Expand a single form. Top-level macro calls are rewritten; recurses
     /// into list children.
     ///
@@ -7528,5 +7623,273 @@ mod tests {
 
         assert_eq!(via_inline, via_method);
         assert_eq!(via_inline, vec![1, 2, 3]);
+    }
+
+    // ── Expander::expand_source_and_collect_calls_to: from-source walk ──
+    //
+    // The from-source sibling of `expand_and_collect_calls_to`: composes
+    // `crate::reader::read(src)?` with the from-forms primitive in ONE
+    // method on the `Expander` surface. All four typed-program dispatchers
+    // (free-function `compile_typed` / `compile_named`, preloaded-expander
+    // `RealizedCompiler::compile_typed` / `compile_named`) route through
+    // it; the tests below pin its contract directly. The existing
+    // compile.rs + compiler_spec.rs dispatch tests are the path-uniformity
+    // guards proving the four production sites route through it without
+    // behavior drift.
+
+    #[test]
+    fn expand_source_and_collect_calls_to_routes_through_reader_then_expand_and_collect() {
+        // Happy path: a source string with three top-level forms (two
+        // matching `defmonitor`, one matching `defalert`) flows through
+        // `read` then through the from-forms primitive. Pin the SAME
+        // emission shape the from-forms test pins for the matching
+        // sub-set, sourced from a `&str` rather than a `Vec<Sexp>`.
+        let src = r#"(defmonitor :name "first")
+                     (defalert :name "not-a-match")
+                     (defmonitor :solo)"#;
+        let mut e = Expander::new();
+        let lengths: Vec<usize> = e
+            .expand_source_and_collect_calls_to(src, "defmonitor", |args| Ok(args.len()))
+            .expect("matching forms must compose");
+        assert_eq!(lengths, vec![2, 1]);
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_short_circuits_on_reader_error_before_expand_program() {
+        // The reader runs BEFORE `expand_program` — so a reader error (an
+        // unterminated string, an unbalanced paren, an unknown escape)
+        // must short-circuit the entire composition and `expand_program`
+        // / the keyword filter / `project` must NEVER run. Pin the
+        // ordering: an unbalanced open-paren is rejected by the reader
+        // at parse time, never reaches the from-forms primitive.
+        let mut count = 0usize;
+        let mut e = Expander::new();
+        let err = e
+            .expand_source_and_collect_calls_to::<(), _>(
+                "(defmonitor :name \"unbalanced",
+                "defmonitor",
+                |_args| {
+                    count += 1;
+                    Ok(())
+                },
+            )
+            .expect_err("reader error must short-circuit before expand_program");
+        assert_eq!(
+            count, 0,
+            "project must never run when reader errors at parse time"
+        );
+        // Sanity: the error IS a reader-stage rejection — the rendered
+        // diagnostic mentions the lexer's gate, not the expander's or
+        // projector's (path-uniformity for the read-then-walk ordering).
+        let rendered = format!("{err}");
+        assert!(
+            rendered.to_lowercase().contains("string")
+                || rendered.to_lowercase().contains("paren")
+                || rendered.to_lowercase().contains("eof")
+                || rendered.to_lowercase().contains("unexpected")
+                || rendered.to_lowercase().contains("unterminated")
+                || rendered.to_lowercase().contains("unclosed"),
+            "error must be the reader-stage rejection, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_short_circuits_on_expand_program_error_before_project_runs(
+    ) {
+        // Reader succeeds, but `expand_program` rejects a malformed
+        // `defmacro` head (NAME slot is an int, not a symbol). Pin the
+        // ordering: `expand_program` rejects BEFORE the keyword filter
+        // walks anything, `project` must NEVER run. Sibling of the
+        // from-forms test of the same name — one level up the
+        // composition (sourced from `&str` rather than `Vec<Sexp>`).
+        let mut count = 0usize;
+        let mut e = Expander::new();
+        let err = e
+            .expand_source_and_collect_calls_to::<(), _>(
+                "(defmacro 5 (x) `,x) (defmonitor :name \"x\")",
+                "defmonitor",
+                |_args| {
+                    count += 1;
+                    Ok(())
+                },
+            )
+            .expect_err("expand_program error must short-circuit before project");
+        assert_eq!(
+            count, 0,
+            "project must never run when expand_program errors"
+        );
+        let rendered = format!("{err}");
+        assert!(
+            rendered.contains("NAME") || rendered.contains("symbol"),
+            "error must be the defmacro-NAME-not-a-symbol rejection, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_short_circuits_on_project_error_at_first_failure() {
+        // Reader + `expand_program` both succeed; the per-form `project`
+        // errors on the SECOND matched form. Pin: the collect's short-
+        // circuit fires at the second match's error, the third match's
+        // `project` is NEVER invoked, and the returned error is exactly
+        // the one the closure raised. Mirrors `compile_named`'s
+        // short-circuit on the first `NamedFormMissingName` /
+        // `NamedFormNonSymbolName` / typed-entry rejection — sourced
+        // from `&str`.
+        let src = "(defmonitor :idx 1) (defmonitor :idx 2) (defmonitor :idx 3)";
+        let mut seen = Vec::new();
+        let mut e = Expander::new();
+        let err = e
+            .expand_source_and_collect_calls_to::<(), _>(src, "defmonitor", |args| {
+                let n = args[1].as_int().expect("test args are ints");
+                seen.push(n);
+                if n == 2 {
+                    Err(LispError::Compile {
+                        form: "test".to_string(),
+                        message: "stop at two".to_string(),
+                    })
+                } else {
+                    Ok(())
+                }
+            })
+            .expect_err("project's error must short-circuit collect");
+        assert_eq!(seen, vec![1, 2]);
+        assert!(
+            matches!(err, LispError::Compile { ref message, .. } if message == "stop at two"),
+            "short-circuit must propagate the project's error verbatim, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_yields_empty_vec_for_empty_source() {
+        // Boundary: empty source string yields zero items regardless of
+        // keyword. Pin the degenerate boundary — empty in, empty out —
+        // and the closure is never invoked. Sibling of the from-forms
+        // test of the same name, one level up the composition: the
+        // from-source posture is fused-empty when `read` yields an
+        // empty `Vec<Sexp>` (which, fed into `expand_program`, yields
+        // an empty `Vec<Sexp>`, which iter_calls_to walks to zero
+        // matches).
+        let mut count = 0usize;
+        let mut e = Expander::new();
+        let out: Vec<()> = e
+            .expand_source_and_collect_calls_to("", "anything", |_args| {
+                count += 1;
+                Ok(())
+            })
+            .expect("empty source is not an error");
+        assert!(out.is_empty());
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_expands_macros_before_filtering_by_keyword() {
+        // Critical ordering preserved across the from-source posture:
+        // `defmacro` source registers in `expand_program`, its call
+        // sites expand to the matching keyword, AND the keyword walk
+        // sees both the macro-emitted form and any directly-authored
+        // matches in source order. Sibling of the from-forms test of
+        // the same name, sourced from `&str`.
+        let src = "(defmacro emit-monitor (n) `(defmonitor :name ,n))
+                   (emit-monitor \"alpha\")
+                   (defmonitor :name \"beta\")";
+        let mut e = Expander::new();
+        let names: Vec<String> = e
+            .expand_source_and_collect_calls_to(src, "defmonitor", |args| {
+                Ok(args[1].as_string().unwrap().to_string())
+            })
+            .expect("macroexpanded + directly-authored forms must both flow");
+        assert_eq!(names, vec!["alpha".to_string(), "beta".to_string()]);
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_matches_inlined_read_plus_expand_and_collect_path() {
+        // Structural identity: for any (src, keyword, project) triple
+        // whose pieces succeed, the from-source method's result equals
+        // the inlined pre-lift pipeline `read + expand_and_collect_
+        // calls_to`. Pin shape AND ordering on a mixed source
+        // (matching + non-matching + macroexpand-emitted matches) so a
+        // regression that drifts the method's pipeline from the
+        // inlined closed-form fails here. This is the lift's
+        // load-bearing path-uniformity gate — the SAME assertion that
+        // holds for all four production consumers (free-function
+        // `compile_typed`/`compile_named` + `RealizedCompiler::compile_typed`/`compile_named`)
+        // holds at the primitive's contract level.
+        let src = "(defmacro emit-foo (n) `(foo :idx ,n))
+                   (foo :idx 1)
+                   (emit-foo 2)
+                   (bar :idx 99)
+                   (foo :idx 3)";
+
+        // Inlined pre-lift pipeline.
+        let mut exp_inline = Expander::new();
+        let inline_forms = read(src).unwrap();
+        let via_inline: Vec<i64> = exp_inline
+            .expand_and_collect_calls_to(inline_forms, "foo", |args| Ok(args[1].as_int().unwrap()))
+            .unwrap();
+
+        // From-source method pipeline.
+        let mut exp_method = Expander::new();
+        let via_method: Vec<i64> = exp_method
+            .expand_source_and_collect_calls_to(src, "foo", |args| Ok(args[1].as_int().unwrap()))
+            .unwrap();
+
+        assert_eq!(via_inline, via_method);
+        assert_eq!(via_inline, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_threads_keyword_argument_verbatim_into_filter() {
+        // The `keyword` argument flows straight into the from-forms
+        // primitive's head-comparison gate, which inherits from
+        // `iter_calls_to` — a regression that drifts the keyword (e.g.,
+        // lowercases / trims it en route through the read step) fails
+        // here. Pin by passing TWO different keywords against the SAME
+        // source and asserting each picks up only its matching forms.
+        let src = "(defmonitor :idx 1) (defalert :idx 2) (defmonitor :idx 3) (defnotify :idx 4)";
+
+        let mut e1 = Expander::new();
+        let monitors: Vec<i64> = e1
+            .expand_source_and_collect_calls_to(src, "defmonitor", |args| {
+                Ok(args[1].as_int().unwrap())
+            })
+            .unwrap();
+        assert_eq!(monitors, vec![1, 3]);
+
+        let mut e2 = Expander::new();
+        let alerts: Vec<i64> = e2
+            .expand_source_and_collect_calls_to(src, "defalert", |args| {
+                Ok(args[1].as_int().unwrap())
+            })
+            .unwrap();
+        assert_eq!(alerts, vec![2]);
+
+        let mut e3 = Expander::new();
+        let none: Vec<i64> = e3
+            .expand_source_and_collect_calls_to(src, "missing-keyword", |args| {
+                Ok(args[1].as_int().unwrap())
+            })
+            .unwrap();
+        assert!(none.is_empty());
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_skips_non_matching_forms_without_invoking_project() {
+        // Path-uniformity for the soft-projection posture inherited
+        // from `iter_calls_to`: non-matching forms in the source are
+        // skipped silently, and `project` is never invoked on them.
+        // Sibling of the from-forms test of the same name, sourced
+        // from `&str` with a mix of atoms-and-lists that the reader
+        // emits at the top level.
+        let src = "bare-atom (defalert :idx 1) (defnotify :idx 2)";
+        let mut count = 0usize;
+        let mut e = Expander::new();
+        let out: Vec<()> = e
+            .expand_source_and_collect_calls_to(src, "defmonitor", |_args| {
+                count += 1;
+                Ok(())
+            })
+            .expect("non-matching-only source must collect to empty Vec");
+        assert!(out.is_empty(), "no matching forms — empty Vec, got {out:?}");
+        assert_eq!(count, 0, "project must never run for non-matching forms");
     }
 }

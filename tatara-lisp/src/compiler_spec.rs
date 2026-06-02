@@ -178,10 +178,11 @@ impl RealizedCompiler {
     /// surface with the typed-keyword projection as the per-form
     /// visitor.
     pub fn compile_typed<T: TataraDomain>(&self, src: &str) -> Result<Vec<T>> {
-        let forms = read(src)?;
-        self.preloaded
-            .clone()
-            .expand_and_collect_calls_to(forms, T::KEYWORD, T::compile_from_args)
+        self.preloaded.clone().expand_source_and_collect_calls_to(
+            src,
+            T::KEYWORD,
+            T::compile_from_args,
+        )
     }
 
     /// Compile every `(T::KEYWORD NAME :k v …)` form in `src` into a typed
@@ -230,9 +231,8 @@ impl RealizedCompiler {
     /// posture), THEORY.md §II.1 invariant 2 (free middle; both
     /// postures route through the SAME projection).
     pub fn compile_named<T: TataraDomain>(&self, src: &str) -> Result<Vec<NamedDefinition<T>>> {
-        let forms = read(src)?;
-        self.preloaded.clone().expand_and_collect_calls_to(
-            forms,
+        self.preloaded.clone().expand_source_and_collect_calls_to(
+            src,
             T::KEYWORD,
             named_form_projection::<T>,
         )

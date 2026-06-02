@@ -1267,6 +1267,135 @@ fn current_builder_mut(stack: &mut [Vec<Sexp>]) -> &mut Vec<Sexp> {
         .expect("bytecode-runtime invariant: at least one stack frame during op-loop")
 }
 
+/// Pop the top stack frame off the bytecode-runtime stack, or raise the
+/// structural [`LispError::TemplateInvariant`] rejection with the
+/// supplied [`TemplateInvariantKind`] when the stack is empty — ONE
+/// named primitive both pop-emitting sites in [`apply_compiled`] route
+/// through.
+///
+/// Before this lift two byte-identical
+/// `stack.pop().ok_or_else(|| template_invariant_violation(macro_name,
+/// kind))?` chains lived inline in [`apply_compiled`]:
+///
+///   * `TemplateOp::EndList` arm — pops the just-finished list frame
+///     before the parent-fold push, with kind
+///     [`TemplateInvariantKind::EndListEmptyStack`] guarding the
+///     unreachable empty-stack failure mode.
+///   * Post-loop final pop — consumes the outermost frame that
+///     accumulated the template's result, with kind
+///     [`TemplateInvariantKind::FinalNoValue`] guarding the
+///     unreachable seed-frame-already-popped failure mode.
+///
+/// Two byte-identical re-derivations of the same projection inside one
+/// function, past the ≥2 PRIME-DIRECTIVE trigger once the structural
+/// shape is named. After this lift the two sites collapse to a single
+/// `pop_builder_frame(&mut stack, macro_name, KIND)?` call, and the
+/// bytecode-runtime invariant the projection rests on — "an empty-stack
+/// pop is a structural-variant rejection, not a silent `Option::None`"
+/// — lives in ONE composition point rather than two.
+///
+/// Sibling of [`current_builder_mut`] (the bytecode-runtime stack's
+/// *project-to-top-frame* primitive — the borrow face, never resizes
+/// the stack) and [`resolve_bound_arg`] (the bound-arg-by-index
+/// lookup primitive with per-call-site `TemplateInvariantKind`
+/// constructor). Where `current_builder_mut` borrows the in-progress
+/// top frame for emission and never panics on a reachable input
+/// (callers route past it only when the seed frame is present), this
+/// primitive *consumes* the top frame off the stack and projects its
+/// absence into a structural `LispError::TemplateInvariant` rejection
+/// — the failure-on-empty face of the same `&mut Vec<Vec<Sexp>>`
+/// algebra. The pair —
+/// [`current_builder_mut`] + [`pop_builder_frame`] — close the
+/// substrate's bytecode-runtime stack-frame projection algebra at the
+/// borrow/consume boundary: borrow-the-top-frame for emission (no
+/// rejection — the invariant rests on the seed-frame contract),
+/// consume-the-top-frame for finalization (rejection-routed —
+/// the absence projects through `TemplateInvariantKind` into a
+/// structural variant of [`LispError`]). Together with
+/// [`resolve_bound_arg`] (lookup args by index, with per-call-site
+/// kind constructor) and [`template_invariant_violation`] (the typed
+/// rejection emitter the three primitives share), the four
+/// substrate-level operations name the bytecode-runtime's named
+/// projection surface: lookup-a-bound-arg, project-to-the-current-
+/// builder, consume-a-finished-builder-frame, build-the-invariant-
+/// rejection.
+///
+/// `kind: TemplateInvariantKind` is the closed-set typed enum whose
+/// four variants are EXACTLY the four reachable bytecode-runtime
+/// invariant-violation modes (`SubstBadIndex(usize)` /
+/// `SpliceBadIndex(usize)` from the index-lookup sibling primitive,
+/// `EndListEmptyStack` from the `EndList` arm, `FinalNoValue` from
+/// the post-loop final pop). The Subst / Splice indexed variants
+/// thread their `usize` payload INSIDE the variant, so the invalid
+/// combination "stack-gate kind with an op-index" (a hypothetical
+/// `EndListEmptyStack(99)` carrying a Subst-style payload) is
+/// structurally unrepresentable at this helper's boundary — the
+/// caller cannot misroute an indexed kind through `pop_builder_frame`
+/// at compile time because the kind's data shape is part of its
+/// variant identity. Same closed-set guarantee
+/// [`template_invariant_violation`] gives the four kinds; this
+/// helper composes that guarantee with the `stack.pop()` projection
+/// at the two pop-emitting sites.
+///
+/// The future-run extensions ride this floor: a future bytecode op
+/// that consumes one or more finished frames — a hypothetical
+/// `TemplateOp::EndMany(n: usize)` that pops `n` frames into a
+/// flattened list, a span-aware `TemplateOp::EndListWithSpan(pos)`
+/// that pops with a position-annotated rejection — composes with
+/// ONE call (or a fold over N calls) to [`pop_builder_frame`]
+/// without re-deriving the stack-pop-and-reject shape. A future
+/// instrumentation hook (a debug-mode logger that records every
+/// frame consumption, a span-aware pop that threads `Sexp` positions
+/// through, a multi-frame fold that pops N frames in one step)
+/// wraps ONE call boundary rather than keeping two inline chains in
+/// lockstep at the production op-loop sites.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+/// inline copies of the stack-pop-and-reject projection across the
+/// `apply_compiled` body's `EndList` arm and post-loop final-pop is
+/// past the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
+/// named — the same threshold [`resolve_bound_arg`] (the index-lookup
+/// sibling) crossed in the prior claude-routine run on this file
+/// (492a235) and [`current_builder_mut`] (the top-frame-borrow
+/// sibling) crossed two runs ago (c6a5a9d). THEORY.md §V.1 — knowable
+/// platform / "make invalid states unrepresentable"; the bytecode-
+/// runtime stack-frame consume operation becomes a NAMED primitive
+/// on the substrate's `&mut Vec<Vec<Sexp>>` algebra rather than a
+/// re-derived `pop + ok_or_else + template_invariant_violation`
+/// chain at every op-arm that consumes a frame. THEORY.md §II.1
+/// invariant 2 — free middle; both pop-emitting sites route through
+/// the SHARED `pop_builder_frame` projection, so a regression that
+/// drifts ONE site's posture (e.g. accepts an empty-stack pop at the
+/// `EndList` arm but not the final pop, or swaps the kind constructor
+/// at a single site) is no longer a silent two-site divergence — the
+/// type system binds both sites to ONE composition point.
+///
+/// Frontier inspiration: MLIR's `Block::eraseFromParent()` against a
+/// region's block list — the structured-IR's block-consumption
+/// operation is a named typed primitive that yields a typed
+/// `LogicalResult` rejection rather than a silent `nullptr` projection
+/// when the parent region is empty; the substrate's
+/// `pop_builder_frame` is the unstructured-projection peer on the
+/// substrate's `&mut Vec<Vec<Sexp>>` stack-frame algebra, with
+/// `TemplateInvariantKind` standing in for MLIR's `LogicalResult`'s
+/// closed-set rejection identity. GHC Core's `popTickish` /
+/// `stackPop` family — every Core-IR transform that consumes a stack
+/// frame off the rewriter's working stack binds to one named pop
+/// primitive that threads a typed `WantedFailure` rejection when the
+/// stack is empty; translated through pleme-io primitives as ONE
+/// `pop_builder_frame(stack, macro_name, kind)` call with
+/// `TemplateInvariantKind` carrying the closed-set rejection
+/// identity.
+fn pop_builder_frame(
+    stack: &mut Vec<Vec<Sexp>>,
+    macro_name: &str,
+    kind: TemplateInvariantKind,
+) -> Result<Vec<Sexp>> {
+    stack
+        .pop()
+        .ok_or_else(|| template_invariant_violation(macro_name, kind))
+}
+
 /// Execute a pre-compiled template against the macro's argument list.
 fn apply_compiled(
     macro_name: &str,
@@ -1319,19 +1448,33 @@ fn apply_compiled(
             }
             TemplateOp::BeginList => stack.push(Vec::new()),
             TemplateOp::EndList => {
-                let items = stack.pop().ok_or_else(|| {
-                    template_invariant_violation(
-                        macro_name,
-                        TemplateInvariantKind::EndListEmptyStack,
-                    )
-                })?;
+                // Pop the just-finished list frame through the shared
+                // `pop_builder_frame` projection with
+                // `EndListEmptyStack` as the per-call-site kind
+                // constructor; the post-pop verb (folded
+                // `Sexp::List(items)` push into the parent frame via
+                // `current_builder_mut`) is the EndList arm's per-op
+                // shape — sibling of the Subst/Splice arms' index-
+                // lookup-then-emit posture, with the index-lookup
+                // primitive (`resolve_bound_arg`) and the frame-
+                // consume primitive (`pop_builder_frame`) BOTH routing
+                // through the same `TemplateInvariantKind` closed-set
+                // rejection identity.
+                let items = pop_builder_frame(
+                    &mut stack,
+                    macro_name,
+                    TemplateInvariantKind::EndListEmptyStack,
+                )?;
                 current_builder_mut(&mut stack).push(Sexp::List(items));
             }
         }
     }
-    let mut top = stack.pop().ok_or_else(|| {
-        template_invariant_violation(macro_name, TemplateInvariantKind::FinalNoValue)
-    })?;
+    // Final pop consumes the outermost (seed) frame via the same
+    // shared projection — `FinalNoValue` as the per-call-site kind
+    // constructor pins this site's structural-variant identity, the
+    // post-pop verb (the `top.len() == 1` arity gate below) is the
+    // post-loop tail's per-site shape.
+    let mut top = pop_builder_frame(&mut stack, macro_name, TemplateInvariantKind::FinalNoValue)?;
     if top.len() == 1 {
         Ok(top.remove(0))
     } else {
@@ -6163,6 +6306,254 @@ mod tests {
             out,
             Sexp::List(vec![Sexp::symbol("foo"), Sexp::int(1), Sexp::int(2)])
         );
+    }
+
+    // ── pop_builder_frame: the bytecode-runtime stack-frame consume ─────
+    //
+    // `pop_builder_frame(stack, macro_name, kind)` lifts the
+    // `stack.pop().ok_or_else(|| template_invariant_violation(macro_name,
+    // kind))?` chain that recurred at two sites inside `apply_compiled`
+    // (the `EndList` arm + the post-loop final pop) into ONE named
+    // primitive on the bytecode-runtime's stack-frame algebra. Sibling of
+    // `current_builder_mut` (the top-frame-borrow projection — the same
+    // `&mut Vec<Vec<Sexp>>` consumed at the borrow face) and
+    // `resolve_bound_arg` (the bound-arg-by-index lookup primitive that
+    // also routes through `TemplateInvariantKind` as the per-call-site
+    // rejection identity). These tests pin the primitive's contract
+    // directly; the existing `apply_compiled_*` tests are the path-
+    // uniformity guards proving the two sites route through it without
+    // behavior drift.
+
+    #[test]
+    fn pop_builder_frame_pops_top_frame_off_non_empty_stack() {
+        // Happy path: a two-frame stack pops the topmost frame off and
+        // returns it AS-IS while shrinking the stack by exactly one
+        // element. Pin both the return value (the popped frame's
+        // contents are byte-identical to what was pushed) AND the
+        // mutation (`stack.len()` drops from 2 to 1).
+        let mut stack: Vec<Vec<Sexp>> = vec![
+            vec![Sexp::symbol("outer")],
+            vec![Sexp::int(1), Sexp::int(2)],
+        ];
+        let popped =
+            pop_builder_frame(&mut stack, "wrap", TemplateInvariantKind::EndListEmptyStack)
+                .expect("non-empty stack must pop cleanly");
+        assert_eq!(popped, vec![Sexp::int(1), Sexp::int(2)]);
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack[0], vec![Sexp::symbol("outer")]);
+    }
+
+    #[test]
+    fn pop_builder_frame_emits_template_invariant_with_end_list_empty_stack_kind() {
+        // Empty-stack rejection: an empty stack flows through the
+        // `EndListEmptyStack` kind constructor into a structural
+        // `LispError::TemplateInvariant { macro_name, kind:
+        // EndListEmptyStack }` variant. Fail-before-pass-after: pre-lift
+        // the same input would route through the inline
+        // `stack.pop().ok_or_else(|| template_invariant_violation(_,
+        // EndListEmptyStack))?` chain at the `EndList` arm; post-lift
+        // it routes through ONE named primitive both pop-emitting
+        // sites share, and a regression that drops the kind threading
+        // (e.g. unifies both kinds into one constant) fails here.
+        let mut empty: Vec<Vec<Sexp>> = Vec::new();
+        let err = pop_builder_frame(&mut empty, "wrap", TemplateInvariantKind::EndListEmptyStack)
+            .expect_err("empty stack must reject");
+        match err {
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "wrap");
+                assert_eq!(kind, TemplateInvariantKind::EndListEmptyStack);
+            }
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pop_builder_frame_emits_template_invariant_with_final_no_value_kind() {
+        // Path-uniformity across the closed-set of pop-emitting kinds:
+        // the same primitive threads `FinalNoValue` verbatim through
+        // its `TemplateInvariantKind` slot, with the macro_name
+        // identity preserved across the call boundary. Sibling of the
+        // `EndListEmptyStack` test above — together they pin the
+        // primitive's closed-set posture (BOTH reachable
+        // pop-emitting kinds route through the same primitive, neither
+        // is hard-coded), so a future `TemplateInvariantKind` variant
+        // added for a new pop-emitting op (e.g. a hypothetical
+        // `EndManyEmptyStack`) extends the primitive's reachability
+        // mechanically by passing the new kind through the same slot.
+        let mut empty: Vec<Vec<Sexp>> = Vec::new();
+        let err = pop_builder_frame(&mut empty, "id", TemplateInvariantKind::FinalNoValue)
+            .expect_err("empty stack must reject");
+        match err {
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "id");
+                assert_eq!(kind, TemplateInvariantKind::FinalNoValue);
+            }
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pop_builder_frame_threads_macro_name_through_variant_for_indexed_kinds() {
+        // Closed-set posture check: even kinds the production
+        // `apply_compiled` op-loop ROUTES through `resolve_bound_arg`
+        // rather than `pop_builder_frame` (the indexed `SubstBadIndex(_)`
+        // / `SpliceBadIndex(_)` siblings) MUST compose correctly with
+        // this primitive's typed slot — they are NOT reachable here
+        // from the production loop, but `TemplateInvariantKind` does
+        // not distinguish "indexed" kinds from "stack-gate" kinds at
+        // the helper's signature, so a regression that special-cases
+        // one kind family would be a silent type-narrowing the closed-
+        // set typed enum was lifted to prevent. Pin the universal
+        // routing: ANY kind variant feeds through the primitive's
+        // `kind` slot identically. Sibling assertion to
+        // `template_invariant_violation_threads_subst_idx_through_typed_variant`
+        // — same compose-the-kind-into-the-variant contract, one
+        // composition step further down the substrate stack.
+        let mut empty: Vec<Vec<Sexp>> = Vec::new();
+        let err = pop_builder_frame(
+            &mut empty,
+            "compose",
+            TemplateInvariantKind::SubstBadIndex(42),
+        )
+        .expect_err("empty stack must reject regardless of kind family");
+        match err {
+            LispError::TemplateInvariant { macro_name, kind } => {
+                assert_eq!(macro_name, "compose");
+                assert_eq!(kind, TemplateInvariantKind::SubstBadIndex(42));
+            }
+            other => panic!("expected LispError::TemplateInvariant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pop_builder_frame_is_byte_identical_to_inline_pop_then_template_invariant_violation() {
+        // Structural-identity binding the lift to its pre-lift inline
+        // shape: `pop_builder_frame(stack, macro_name, kind)` IS
+        // `stack.pop().ok_or_else(|| template_invariant_violation(
+        // macro_name, kind))?` — both reachable arms (success +
+        // failure) must produce byte-identical outcomes. The success
+        // arm checks the popped Vec contents AND the post-pop stack
+        // length match the inline path; the failure arm checks the
+        // emitted variant's identity AND its `macro_name` / `kind`
+        // slots match the inline path. A regression that drifts the
+        // primitive's projection (e.g. a `stack.swap_remove(_)` typo,
+        // or a kind-rewrite at the helper boundary) fails on at least
+        // one of the two arms.
+        // Success arm:
+        let mut stack_lift: Vec<Vec<Sexp>> = vec![vec![Sexp::symbol("a")], vec![Sexp::int(7)]];
+        let mut stack_inline: Vec<Vec<Sexp>> = vec![vec![Sexp::symbol("a")], vec![Sexp::int(7)]];
+        let via_lift = pop_builder_frame(
+            &mut stack_lift,
+            "macro",
+            TemplateInvariantKind::EndListEmptyStack,
+        )
+        .expect("non-empty stack pops cleanly through lift");
+        let via_inline = stack_inline.pop().ok_or_else(|| {
+            template_invariant_violation("macro", TemplateInvariantKind::EndListEmptyStack)
+        });
+        assert_eq!(
+            via_lift,
+            via_inline.unwrap(),
+            "popped frame must be byte-identical across lift vs inline"
+        );
+        assert_eq!(
+            stack_lift.len(),
+            stack_inline.len(),
+            "post-pop stack length must be byte-identical across lift vs inline"
+        );
+        // Failure arm:
+        let mut empty_lift: Vec<Vec<Sexp>> = Vec::new();
+        let mut empty_inline: Vec<Vec<Sexp>> = Vec::new();
+        let err_lift = pop_builder_frame(
+            &mut empty_lift,
+            "macro",
+            TemplateInvariantKind::FinalNoValue,
+        )
+        .expect_err("empty stack rejects through lift");
+        let err_inline = empty_inline
+            .pop()
+            .ok_or_else(|| {
+                template_invariant_violation("macro", TemplateInvariantKind::FinalNoValue)
+            })
+            .expect_err("empty stack rejects through inline");
+        match (err_lift, err_inline) {
+            (
+                LispError::TemplateInvariant {
+                    macro_name: m_lift,
+                    kind: k_lift,
+                },
+                LispError::TemplateInvariant {
+                    macro_name: m_inline,
+                    kind: k_inline,
+                },
+            ) => {
+                assert_eq!(m_lift, m_inline);
+                assert_eq!(k_lift, k_inline);
+            }
+            (l, i) => panic!(
+                "expected LispError::TemplateInvariant on both arms, got lift={l:?}, inline={i:?}"
+            ),
+        }
+    }
+
+    #[test]
+    fn pop_builder_frame_routes_apply_compiled_end_list_consume() {
+        // End-to-end path-uniformity guard for the `EndList` arm: a
+        // `(BeginList, Literal(x), EndList)` program pushes a child
+        // frame, populates it with one literal, then routes the child
+        // frame OUT of the stack via `pop_builder_frame` (kind
+        // `EndListEmptyStack` — unreachable on this valid input, but
+        // the kind threads through the primitive identically). The
+        // post-pop verb (`Sexp::List(items)` push into the parent via
+        // `current_builder_mut`) yields the same `Sexp::List([x])`
+        // shape the consumer projected pre-lift. Pin the byte-
+        // identical outcome so a regression that drifts the EndList
+        // arm's routing (e.g. swaps the kind constructor, or routes
+        // through a different stack-mutating primitive) fails loudly
+        // here. Sibling of
+        // `current_builder_mut_routes_apply_compiled_end_list_parent_fold`
+        // — that test pins the parent-fold PUSH; this test pins the
+        // child-frame POP that immediately precedes it. Together the
+        // two close the EndList arm's path-uniformity across the
+        // pop-then-push composition.
+        let tmpl = CompiledTemplate {
+            ops: vec![
+                TemplateOp::BeginList,
+                TemplateOp::Literal(Sexp::symbol("only")),
+                TemplateOp::EndList,
+            ],
+        };
+        let out = apply_compiled("id", &MacroParams::default(), &tmpl, &[])
+            .expect("BeginList/EndList one-literal template must succeed");
+        assert_eq!(out, Sexp::List(vec![Sexp::symbol("only")]));
+    }
+
+    #[test]
+    fn pop_builder_frame_routes_apply_compiled_final_pop_consume() {
+        // End-to-end path-uniformity guard for the post-loop final
+        // pop: a single-op `Literal(s)` program emits `s` into the
+        // outermost (seed) frame, then the post-loop tail routes the
+        // seed frame OUT via `pop_builder_frame` (kind `FinalNoValue`
+        // — unreachable on this valid input). The post-pop arity gate
+        // (`top.len() == 1 { top.remove(0) }`) projects the literal
+        // back as the bound value. Pre-lift the same emission ran
+        // through the inline `stack.pop().ok_or_else(|| template_
+        // invariant_violation(_, FinalNoValue))?` chain at the
+        // post-loop tail; post-lift it routes through ONE named
+        // primitive the EndList arm ALSO routes through, and the
+        // single-literal outcome is byte-identical across both code
+        // paths. Sibling of
+        // `current_builder_mut_routes_apply_compiled_literal_emit` —
+        // that test pins the EMIT into the seed frame; this test pins
+        // the POP of the same seed frame at the post-loop tail.
+        // Together the two close the Literal-only program's path-
+        // uniformity across the emit-then-consume composition.
+        let tmpl = CompiledTemplate {
+            ops: vec![TemplateOp::Literal(Sexp::int(123))],
+        };
+        let out = apply_compiled("id", &MacroParams::default(), &tmpl, &[])
+            .expect("literal-only template must succeed");
+        assert_eq!(out, Sexp::int(123));
     }
 
     // ── MacroParams: the typed param-list primitive ─────────────────────

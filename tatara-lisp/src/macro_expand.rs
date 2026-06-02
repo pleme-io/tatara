@@ -494,6 +494,94 @@ impl Expander {
         Ok(out)
     }
 
+    /// Read a source string into top-level forms via [`crate::reader::read`],
+    /// then route the forms through [`expand_program`](Self::expand_program) —
+    /// the from-source posture of the yield-all-forms-after-expansion primitive,
+    /// in ONE method on the `Expander` surface.
+    ///
+    /// Before this lift the same two-step chain — `let forms = read(src)?;
+    /// <expander>.expand_program(forms)` — lived inline at two sites in
+    /// [`crate::compiler_spec`]: [`RealizedCompiler::compile`](crate::compiler_spec::RealizedCompiler::compile)
+    /// (the public from-source untyped-expansion entry on a realized compiler,
+    /// returning the expanded `Vec<Sexp>` for untyped consumers like
+    /// `tatara-check`'s per-form dispatcher) AND [`realize_in_memory`](crate::compiler_spec::realize_in_memory)'s
+    /// `:macros` library load loop (the per-spec-macro source absorption that
+    /// builds the preloaded expander's macro library through `expand_program`'s
+    /// `defmacro` recognition side-effect). After this lift the read-then-expand
+    /// composition lives in ONE method on the `Expander`; each of the two
+    /// consumers binds it with the per-site expander posture that fits its call
+    /// boundary — `self.preloaded.clone()` for `RealizedCompiler::compile`'s
+    /// per-call clone, `&mut preloaded` for `realize_in_memory`'s shared
+    /// build-up.
+    ///
+    /// Sibling of [`expand_source_and_collect_calls_to`](Self::expand_source_and_collect_calls_to)
+    /// — that method stacks the typed-keyword projection on top of the
+    /// from-source pipeline (`read + expand_program + iter_calls_to(_,
+    /// keyword) + map + collect`); this method is the bare yield-all-forms
+    /// from-source primitive (`read + expand_program`) the typed dispatchers
+    /// stack their keyword projection atop. The two together close the
+    /// from-source posture of the program-level walk family on the
+    /// `Expander` surface: bare (this method) vs. typed-keyword-projected
+    /// (the sibling).
+    ///
+    /// Closes the 2×2 program-level walk family on the `Expander` surface:
+    /// from-forms × yield-all ([`expand_program`](Self::expand_program)),
+    /// from-forms × keyword-projected ([`expand_and_collect_calls_to`](Self::expand_and_collect_calls_to)),
+    /// from-source × keyword-projected ([`expand_source_and_collect_calls_to`](Self::expand_source_and_collect_calls_to)),
+    /// AND now from-source × yield-all (this method). The four together name
+    /// the canonical surfaces a dispatcher composes with to extract an
+    /// expanded program from either a pre-parsed `Vec<Sexp>` (from-forms
+    /// posture, for callers composing with another `Sexp`-producing surface)
+    /// or a raw `&str` (from-source posture, for callers consuming
+    /// authoring-surface source text directly), with or without a
+    /// typed-keyword filter on the result.
+    ///
+    /// `?`-routing through `read` preserves the structural ordering of the
+    /// rejection chain end-to-end: a reader error (lexer / parser /
+    /// unbalanced-paren / unterminated-string) short-circuits BEFORE
+    /// `expand_program` runs; an `expand_program` error
+    /// (`defmacro`-NAME-not-a-symbol, `OptionalParamMalformed`,
+    /// `RestParamMissingName`, et al.) short-circuits at the offending form.
+    /// Each consumer's rejection chain remains exactly what it was pre-lift,
+    /// now sourced from ONE composition point rather than two.
+    ///
+    /// `defmacro`-registration side-effects fire on `&mut self` exactly as
+    /// they do for the from-forms primitive — `realize_in_memory`'s per-spec
+    /// build-up depends on every `defmacro` in every `:macros` source
+    /// landing in `self.macros` (and, when `compile_templates` is on, in
+    /// `self.templates`); `RealizedCompiler::compile`'s per-call clone
+    /// posture isolates absorption to the cloned expander, so a
+    /// `defmacro` in the user's source does NOT leak into the persistent
+    /// realized compiler. Both postures' absorption semantics are
+    /// preserved by routing through this primitive instead of inlining
+    /// the two-step chain.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+    /// inline copies of the `let forms = read(src)?; <expander>.expand_program(forms)`
+    /// two-step chain across `RealizedCompiler::compile` and
+    /// `realize_in_memory` is past the ≥2 PRIME-DIRECTIVE trigger once the
+    /// structural shape is named. THEORY.md §V.1 — knowable platform; the
+    /// read-then-expand composition becomes a NAMED primitive on the
+    /// substrate's `Expander` surface rather than a re-derived two-step
+    /// inline pipeline at every consumer. THEORY.md §II.1 invariant 2 —
+    /// free middle; both consumers route through the SAME composition
+    /// primitive, so a regression that drifts ONE consumer's pipeline
+    /// shape from the other cannot reach the substrate's runtime.
+    ///
+    /// Frontier inspiration: Racket's `(eval-string str ns)` against a
+    /// namespace — the from-source-string entry to namespace-level
+    /// program evaluation is the Racket idiom; the substrate's
+    /// `expand_source_program` is the Rust-typed peer of that, sourced
+    /// from `&str` and yielding the post-macroexpansion `Vec<Sexp>`
+    /// without a typed-keyword filter — exactly the shape an untyped
+    /// consumer (`tatara-check`'s per-form dispatcher, a REPL's
+    /// "expand this buffer" command, an LSP's "show me the expanded
+    /// program" handler) binds to.
+    pub fn expand_source_program(&mut self, src: &str) -> Result<Vec<Sexp>> {
+        let forms = crate::reader::read(src)?;
+        self.expand_program(forms)
+    }
+
     /// Compose the expander's program-level expansion with the substrate's
     /// slice-side typed-keyword projection ([`iter_calls_to`]) and a
     /// caller-supplied per-form projection — `expand_program(forms)?` followed
@@ -7891,5 +7979,219 @@ mod tests {
             .expect("non-matching-only source must collect to empty Vec");
         assert!(out.is_empty(), "no matching forms — empty Vec, got {out:?}");
         assert_eq!(count, 0, "project must never run for non-matching forms");
+    }
+
+    // ── expand_source_program — from-source × yield-all primitive ───
+    //
+    // Closes the 2×2 program-level walk family on the `Expander` surface:
+    // from-forms × yield-all (`expand_program`), from-forms × keyword-
+    // projected (`expand_and_collect_calls_to`), from-source × keyword-
+    // projected (`expand_source_and_collect_calls_to`), AND now
+    // from-source × yield-all (`expand_source_program`). Pins (a) the
+    // happy path (mixed forms flow through reader then expand_program),
+    // (b) reader-stage short-circuit (no expand_program side-effects),
+    // (c) expand_program-stage short-circuit (defmacro-NAME-not-symbol
+    // is rejected at its offending form), (d) defmacro absorption (the
+    // primitive's side-effect on `self.macros` matches the from-forms
+    // posture's side-effect verbatim), (e) the empty-source boundary,
+    // and (f) structural identity vs. the inlined pre-lift `read +
+    // expand_program` pipeline (path-uniformity gate).
+
+    #[test]
+    fn expand_source_program_routes_through_reader_then_expand_program() {
+        // Happy path: a source string with mixed forms (a `defmacro`
+        // definition, a `defmonitor` form, a plain symbol literal) flows
+        // through `read` then through the from-forms primitive. Pin the
+        // SAME emission shape the from-forms test pins, sourced from a
+        // `&str` rather than a `Vec<Sexp>`.
+        let src = r#"(defmacro id (x) `,x)
+                     (defmonitor :name "alpha")
+                     bare-symbol"#;
+        let mut e = Expander::new();
+        let out = e
+            .expand_source_program(src)
+            .expect("mixed forms must compose");
+        // `(defmacro id …)` is consumed as a side-effect (registers `id`
+        // in `e.macros`), so the returned `Vec<Sexp>` contains the
+        // remaining two top-level forms in source order.
+        assert_eq!(out.len(), 2);
+        assert_eq!(
+            out[0].as_call_to("defmonitor").map(<[_]>::len),
+            Some(2),
+            "first surviving form is the defmonitor with two args, got: {:?}",
+            out[0]
+        );
+        assert_eq!(
+            out[1].as_symbol(),
+            Some("bare-symbol"),
+            "second surviving form is the bare symbol literal, got: {:?}",
+            out[1]
+        );
+        // The defmacro side-effect landed in the expander's macro table.
+        assert!(
+            e.has("id"),
+            "defmacro must register `id` in the expander's macro table"
+        );
+    }
+
+    #[test]
+    fn expand_source_program_short_circuits_on_reader_error_before_expand_program() {
+        // The reader runs BEFORE `expand_program` — so a reader error (an
+        // unterminated string, an unbalanced paren) must short-circuit
+        // the entire composition and `expand_program` must NEVER run.
+        // Pin the ordering: a `defmacro` BEFORE the unterminated string
+        // is NOT registered, because the reader fails at parse time
+        // before `expand_program` sees any form.
+        let mut e = Expander::new();
+        let err = e
+            .expand_source_program(r#"(defmacro should-not-register (x) `,x) "unterminated"#)
+            .expect_err("reader error must short-circuit before expand_program");
+        // Sanity: the error IS a reader-stage rejection.
+        let rendered = format!("{err}").to_lowercase();
+        assert!(
+            rendered.contains("string")
+                || rendered.contains("paren")
+                || rendered.contains("eof")
+                || rendered.contains("unexpected")
+                || rendered.contains("unterminated")
+                || rendered.contains("unclosed"),
+            "error must be the reader-stage rejection, got: {err}"
+        );
+        // Path-uniformity gate: the `defmacro` lexically BEFORE the
+        // unterminated string must NOT have been absorbed — `read`'s
+        // failure short-circuits the entire pipeline before
+        // `expand_program` walks any forms.
+        assert!(
+            !e.has("should-not-register"),
+            "reader-stage rejection must short-circuit BEFORE expand_program registers any defmacro"
+        );
+    }
+
+    #[test]
+    fn expand_source_program_short_circuits_on_expand_program_error() {
+        // Reader succeeds, but `expand_program` rejects a malformed
+        // `defmacro` head (NAME slot is an int, not a symbol). Pin the
+        // ordering: the expand_program-stage rejection bubbles up
+        // verbatim, sourced from `&str` rather than `Vec<Sexp>`.
+        let mut e = Expander::new();
+        let err = e
+            .expand_source_program("(defmacro 5 (x) `,x)")
+            .expect_err("expand_program error must propagate");
+        let rendered = format!("{err}");
+        assert!(
+            rendered.contains("NAME") || rendered.contains("symbol"),
+            "error must be the defmacro-NAME-not-a-symbol rejection, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn expand_source_program_yields_empty_vec_for_empty_source() {
+        // Boundary: empty source string yields zero items. Pin the
+        // degenerate boundary — empty in, empty out — sibling of the
+        // from-source × keyword-projected test of the same name, one
+        // level down the composition (no keyword filter).
+        let mut e = Expander::new();
+        let out = e
+            .expand_source_program("")
+            .expect("empty source is not an error");
+        assert!(
+            out.is_empty(),
+            "empty source must yield empty Vec, got: {out:?}"
+        );
+    }
+
+    #[test]
+    fn expand_source_program_absorbs_defmacro_and_expands_subsequent_calls() {
+        // Critical pipeline order: a `defmacro` in the source registers
+        // AND a subsequent call to it expands AND the expanded form
+        // surfaces in the returned Vec. Sourced from `&str`, the
+        // from-source posture preserves the side-effect-then-expansion
+        // semantics of the from-forms primitive verbatim.
+        let src = r#"(defmacro emit-monitor (n) `(defmonitor :name ,n))
+                     (emit-monitor "alpha")
+                     (emit-monitor "beta")"#;
+        let mut e = Expander::new();
+        let out = e
+            .expand_source_program(src)
+            .expect("defmacro absorption then expansion must compose");
+        // Two surviving forms (the `defmacro` itself is consumed as a
+        // side-effect), each expanded to a `(defmonitor :name "<n>")`.
+        assert_eq!(out.len(), 2, "expected two expanded forms, got: {out:?}");
+        for (i, expected_name) in [(0, "alpha"), (1, "beta")] {
+            let args = out[i]
+                .as_call_to("defmonitor")
+                .unwrap_or_else(|| panic!("form {i} must be defmonitor, got: {:?}", out[i]));
+            assert_eq!(args[0].as_keyword(), Some("name"));
+            assert_eq!(args[1].as_string(), Some(expected_name));
+        }
+        // The macro is now in the table — a subsequent call would
+        // expand against this SAME expander.
+        assert!(e.has("emit-monitor"));
+    }
+
+    #[test]
+    fn expand_source_program_matches_inlined_read_plus_expand_program_path() {
+        // Structural identity: for any `src` whose pieces succeed, the
+        // from-source method's result equals the inlined pre-lift
+        // pipeline `read + expand_program`. Pin shape AND ordering on a
+        // mixed source (defmacro definition + macro call + plain form)
+        // so a regression that drifts the method's pipeline from the
+        // inlined closed-form fails here. This is the lift's
+        // load-bearing path-uniformity gate — the SAME assertion holds
+        // for both production consumers (`RealizedCompiler::compile` +
+        // `realize_in_memory`'s `:macros` loop) at the primitive's
+        // contract level.
+        let src = r#"(defmacro id (x) `,x)
+                     (id (foo 1 2))
+                     (bar)"#;
+
+        // Inlined pre-lift pipeline.
+        let mut e_inline = Expander::new();
+        let inline_forms = read(src).unwrap();
+        let via_inline = e_inline
+            .expand_program(inline_forms)
+            .expect("inlined pipeline must succeed");
+
+        // From-source method pipeline.
+        let mut e_method = Expander::new();
+        let via_method = e_method
+            .expand_source_program(src)
+            .expect("from-source method pipeline must succeed");
+
+        assert_eq!(
+            via_inline, via_method,
+            "from-source method must emit byte-identical result to inlined read+expand_program"
+        );
+        // Both pipelines registered the same defmacro side-effect.
+        assert_eq!(e_inline.has("id"), e_method.has("id"));
+        assert!(e_method.has("id"));
+    }
+
+    #[test]
+    fn expand_source_program_preserves_defmacro_absorption_across_repeated_calls() {
+        // Per-`&mut self` absorption posture pin: a `defmacro` registered
+        // in call 1 SURVIVES into call 2 on the SAME `Expander`. This is
+        // the load-bearing semantic `realize_in_memory`'s per-spec-macro
+        // build-up depends on — every iteration's `expand_source_program(
+        // macro_src)?` lands its `defmacro` heads into the SAME mutable
+        // `preloaded` expander, so a follow-up `:macros` source can
+        // invoke macros defined in earlier ones.
+        let mut e = Expander::new();
+        let _ = e
+            .expand_source_program("(defmacro outer (n) `(inner ,n))")
+            .unwrap();
+        assert!(e.has("outer"));
+        // Call 2: defines `inner` AND invokes `outer`, which expands to
+        // `(inner <n>)`. The expansion proves call 1's `outer` survived
+        // into call 2's expansion.
+        let out = e
+            .expand_source_program("(defmacro inner (x) `(wrapped ,x)) (outer 42)")
+            .unwrap();
+        assert_eq!(out.len(), 1, "call 2 yields one expanded form");
+        // (outer 42) → (inner 42) → (wrapped 42)
+        let args = out[0]
+            .as_call_to("wrapped")
+            .expect("nested expansion must reach `wrapped`");
+        assert_eq!(args[0].as_int(), Some(42));
     }
 }

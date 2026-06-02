@@ -43,7 +43,6 @@ use crate::compile::{named_form_projection, NamedDefinition};
 use crate::domain::TataraDomain;
 use crate::error::{CompilerSpecIoStage, LispError, Result};
 use crate::macro_expand::Expander;
-use crate::reader::read;
 
 /// Declarative recipe for a Lisp compiler. Authorable as `(defcompiler …)`.
 #[derive(DeriveTataraDomain, Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -91,10 +90,20 @@ impl RealizedCompiler {
     /// Parse + macroexpand a source string, returning the expanded top-level
     /// forms. Consumers dispatch from the forms to their typed compilers
     /// (via `tatara_lisp::domain::lookup` or `compile_typed::<T>`).
+    ///
+    /// Routes the from-source untyped-expansion pipeline through the
+    /// substrate's composed read-then-expand primitive
+    /// [`Expander::expand_source_program`]: source is read into top-level
+    /// forms and the per-call clone of the preloaded expander expands the
+    /// program (registering any `defmacro` definitions in the source into
+    /// the clone — NOT the persistent realized compiler — and expanding
+    /// every macro call). Sibling of [`Self::compile_typed`] / [`Self::compile_named`]
+    /// — those methods stack a typed-keyword projection on top of the
+    /// from-source primitive; this method exposes the bare untyped expansion
+    /// for consumers (`tatara-check`'s per-form dispatcher) that walk every
+    /// form regardless of keyword.
     pub fn compile(&self, src: &str) -> Result<Vec<Sexp>> {
-        let forms = read(src)?;
-        let mut exp = self.preloaded.clone();
-        exp.expand_program(forms)
+        self.preloaded.clone().expand_source_program(src)
     }
 
     /// Macroexpand a single form (testing / REPL helper).
@@ -249,8 +258,20 @@ impl RealizedCompiler {
 pub fn realize_in_memory(spec: CompilerSpec) -> Result<RealizedCompiler> {
     let mut preloaded = Expander::new();
     for macro_src in &spec.macros {
-        let forms = read(macro_src)?;
-        let _expanded = preloaded.expand_program(forms)?;
+        // Per-spec-macro `:macros` source absorption routes through the
+        // substrate's composed read-then-expand primitive
+        // [`Expander::expand_source_program`]: source is read into top-level
+        // forms and `expand_program` registers every `defmacro` /
+        // `defpoint-template` / `defcheck` head into `preloaded.macros` as
+        // a side-effect (the returned `Vec<Sexp>` of non-defmacro forms is
+        // discarded — spec macros are libraries, not programs). Sibling
+        // consumer to `RealizedCompiler::compile` — both routes thread
+        // their per-site expander posture (`&mut preloaded` here for the
+        // shared build-up, `self.preloaded.clone()` there for the per-call
+        // clone) through the SAME read-then-expand primitive rather than
+        // re-deriving the two-step `read(src)? + expand_program(forms)`
+        // chain at every consumer.
+        preloaded.expand_source_program(macro_src)?;
     }
     Ok(RealizedCompiler { spec, preloaded })
 }
@@ -312,6 +333,7 @@ pub fn load_from_disk(path: impl AsRef<Path>) -> Result<RealizedCompiler> {
 mod tests {
     use super::*;
     use crate::domain::TataraDomain;
+    use crate::reader::read;
 
     #[test]
     fn defcompiler_form_compiles_to_spec() {

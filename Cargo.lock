@@ -5510,6 +5510,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "shigoto-types"
+version = "0.1.0"
+source = "git+https://github.com/pleme-io/shigoto?rev=391a47959d0c29115c0fc98a7574b78105a09d65#391a47959d0c29115c0fc98a7574b78105a09d65"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "gen-platform 0.1.0 (git+https://github.com/pleme-io/gen)",
+ "gen-types 0.1.0 (git+https://github.com/pleme-io/gen)",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "shikumi"
 version = "0.1.0"
 source = "git+https://github.com/pleme-io/shikumi?branch=main#9161fde44527ec6572640d8a77f6919583f6b342"
@@ -6303,6 +6318,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "shigoto-types",
  "tatara-core",
  "tatara-process",
  "thiserror 2.0.18",

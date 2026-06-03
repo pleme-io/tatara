@@ -15,6 +15,7 @@
 //! based on this gate.
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 use tatara_process::phase::ProcessPhase;
 use tatara_process::pool::{EphemeralPool, ReplacementPolicy};
@@ -41,7 +42,7 @@ pub enum ConvergenceAction {
 /// The caller (the async controller) builds this from the cluster's
 /// observed state; the decision function doesn't need full
 /// Process objects.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolMemberSnapshot {
     pub process_name: String,
     pub phase: ProcessPhase,
@@ -70,78 +71,129 @@ impl PoolMemberSnapshot {
     }
 }
 
-/// Pure decision over one Pool's current observation.
-///
-/// Returns a `Vec` because a single reconcile may emit multiple
-/// actions (e.g. scale-down + reap-failed). Empty ⇒ pool already
-/// matches desired state.
+/// The structured pool-convergence decision context — one owned,
+/// serializable value bundling the desired count, the replacement
+/// policy, and the observed member snapshots. The async controller
+/// builds this from the cluster's observed state (the **observe** half);
+/// [`PoolConvergence::decide`] is the pure **decide** half. Because the
+/// context is `Serialize`, the decision is table-testable from a literal
+/// and the shape is what a future `(defdecision …)` form would author.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PoolConvergenceCtx {
+    /// Target healthy member count.
+    pub desired: u32,
+    /// What to do with Failed/Zombie/Reaped members.
+    pub replacement_policy: ReplacementPolicy,
+    /// Observed member snapshots this tick.
+    pub members: Vec<PoolMemberSnapshot>,
+}
+
+impl PoolConvergenceCtx {
+    /// Observe: extract the decision context from a pool spec + the
+    /// member snapshots the controller gathered. The clock is unused by
+    /// this decision, so it isn't carried.
+    #[must_use]
+    pub fn observe(pool: &EphemeralPool, members: &[PoolMemberSnapshot]) -> Self {
+        Self {
+            desired: pool.spec.desired,
+            replacement_policy: pool.spec.replacement_policy,
+            members: members.to_vec(),
+        }
+    }
+}
+
+/// The pool desired-count convergence decision — tatara's canonical
+/// [`shigoto_types::decision::Decision`] consumer. A zero-sized marker;
+/// `decide` is the entire pure rule (the "what should I do?" half of the
+/// reconcile, split from the kube-rs "apply" half).
 ///
 /// Rules (priority order):
 ///
 /// 1. `PausePool` policy + any failed members → emit `Pause`.
 /// 2. Failed members + `ReplaceImmediate` → reap each.
-/// 3. Failed members + `HoldFailed` → do nothing about them
-///    (operator inspects + reaps manually).
-/// 4. Healthy count < desired → emit `CreateMember` × (desired - healthy).
-/// 5. Healthy count > desired → emit `SignalSigterm` × excess, oldest first.
+/// 3. Failed members + `HoldFailed` → do nothing (operator reaps).
+/// 4. Healthy count < desired → `CreateMember` × (desired - healthy).
+/// 5. Healthy count > desired → `SignalSigterm` × excess, oldest first.
 /// 6. Otherwise: no actions.
+pub struct PoolConvergence;
+
+impl shigoto_types::decision::Decision for PoolConvergence {
+    type Ctx = PoolConvergenceCtx;
+    type Action = Vec<ConvergenceAction>;
+
+    fn decide(ctx: &Self::Ctx) -> Self::Action {
+        let desired = ctx.desired;
+        let policy = ctx.replacement_policy;
+
+        let healthy: Vec<&PoolMemberSnapshot> =
+            ctx.members.iter().filter(|m| m.is_healthy()).collect();
+        let failed: Vec<&PoolMemberSnapshot> =
+            ctx.members.iter().filter(|m| m.is_failed()).collect();
+
+        let mut actions = Vec::new();
+
+        // (1) PausePool + any failure ⇒ Pause.
+        if policy == ReplacementPolicy::PausePool && !failed.is_empty() {
+            actions.push(ConvergenceAction::Pause {
+                reason: format!(
+                    "{} member(s) reached Failed/Zombie/Reaped; policy=PausePool",
+                    failed.len()
+                ),
+            });
+            return actions;
+        }
+
+        // (2) ReplaceImmediate ⇒ reap each failed (controller spawns
+        //     replacements via rule (4) on the next tick or this same
+        //     tick if we also emit CreateMember below).
+        if policy == ReplacementPolicy::ReplaceImmediate {
+            for m in &failed {
+                actions.push(ConvergenceAction::ReapFailed {
+                    process_name: m.process_name.clone(),
+                });
+            }
+        }
+        // (3) HoldFailed ⇒ no reaping action; operator reaps manually.
+
+        // (4)+(5) — count-driven scaling.
+        let healthy_count = healthy.len() as u32;
+        if healthy_count < desired {
+            for _ in 0..(desired - healthy_count) {
+                actions.push(ConvergenceAction::CreateMember);
+            }
+        } else if healthy_count > desired {
+            // Pick the oldest excess to SIGTERM (preserves the newer,
+            // likely more-current spec).
+            let mut sorted: Vec<&&PoolMemberSnapshot> = healthy.iter().collect();
+            sorted.sort_by_key(|m| m.created_at);
+            let excess = (healthy_count - desired) as usize;
+            for m in sorted.iter().take(excess) {
+                actions.push(ConvergenceAction::SignalSigterm {
+                    process_name: m.process_name.clone(),
+                });
+            }
+        }
+
+        actions
+    }
+}
+
+/// Pure decision over one Pool's current observation — the stable public
+/// API the controller's reconcile entry point calls. Now an
+/// **observe → decide** shim over the [`PoolConvergence`] `Decision`
+/// impl: build the [`PoolConvergenceCtx`] from the raw inputs, then run
+/// the pure rule. `now` is accepted for call-site stability but unused
+/// (this decision is clock-free).
+///
+/// Returns a `Vec` because a single reconcile may emit multiple actions
+/// (e.g. reap-failed + scale). Empty ⇒ pool already matches desired.
 pub fn decide_pool_convergence(
     pool: &EphemeralPool,
     members: &[PoolMemberSnapshot],
     _now: DateTime<Utc>,
 ) -> Vec<ConvergenceAction> {
-    let desired = pool.spec.desired;
-    let policy = pool.spec.replacement_policy;
-
-    let healthy: Vec<&PoolMemberSnapshot> =
-        members.iter().filter(|m| m.is_healthy()).collect();
-    let failed: Vec<&PoolMemberSnapshot> = members.iter().filter(|m| m.is_failed()).collect();
-
-    let mut actions = Vec::new();
-
-    // (1) PausePool + any failure ⇒ Pause.
-    if policy == ReplacementPolicy::PausePool && !failed.is_empty() {
-        actions.push(ConvergenceAction::Pause {
-            reason: format!(
-                "{} member(s) reached Failed/Zombie/Reaped; policy=PausePool",
-                failed.len()
-            ),
-        });
-        return actions;
-    }
-
-    // (2) ReplaceImmediate ⇒ reap each failed (controller spawns
-    //     replacements via rule (4) on the next tick or this same
-    //     tick if we also emit CreateMember below).
-    if policy == ReplacementPolicy::ReplaceImmediate {
-        for m in &failed {
-            actions.push(ConvergenceAction::ReapFailed {
-                process_name: m.process_name.clone(),
-            });
-        }
-    }
-    // (3) HoldFailed ⇒ no reaping action; operator reaps manually.
-
-    // (4)+(5) — count-driven scaling.
-    let healthy_count = healthy.len() as u32;
-    if healthy_count < desired {
-        for _ in 0..(desired - healthy_count) {
-            actions.push(ConvergenceAction::CreateMember);
-        }
-    } else if healthy_count > desired {
-        // Pick the oldest excess to SIGTERM (preserves the newer,
-        // likely more-current spec).
-        let mut sorted: Vec<&&PoolMemberSnapshot> = healthy.iter().collect();
-        sorted.sort_by_key(|m| m.created_at);
-        let excess = (healthy_count - desired) as usize;
-        for m in sorted.iter().take(excess) {
-            actions.push(ConvergenceAction::SignalSigterm {
-                process_name: m.process_name.clone(),
-            });
-        }
-    }
-
-    actions
+    use shigoto_types::decision::Decision;
+    PoolConvergence::decide(&PoolConvergenceCtx::observe(pool, members))
 }
 
 #[cfg(test)]
@@ -382,5 +434,49 @@ mod tests {
             assert!(!s.is_healthy());
             assert!(s.is_failed());
         }
+    }
+
+    // ── Decision trait surface (the substrate adoption) ────────────
+
+    #[test]
+    fn decision_trait_and_free_fn_agree() {
+        use shigoto_types::decision::Decision;
+        let p = pool_with_desired(3, ReplacementPolicy::ReplaceImmediate);
+        let m = vec![member("a", ProcessPhase::Running, 60)];
+        // The public free fn is now an observe→decide shim over the
+        // Decision impl; the two must produce the same actions.
+        let ctx = PoolConvergenceCtx::observe(&p, &m);
+        let via_trait = PoolConvergence::decide(&ctx);
+        let via_fn = decide_pool_convergence(&p, &m, Utc::now());
+        assert_eq!(via_trait, via_fn);
+        assert_eq!(via_trait.len(), 2, "healthy=1, desired=3 ⇒ spawn 2");
+    }
+
+    #[test]
+    fn decision_is_deterministic() {
+        use shigoto_types::decision::Decision;
+        let ctx = PoolConvergenceCtx {
+            desired: 2,
+            replacement_policy: ReplacementPolicy::ReplaceImmediate,
+            members: vec![
+                member("a", ProcessPhase::Running, 60),
+                member("b", ProcessPhase::Failed, 30),
+            ],
+        };
+        // The trait's determinism law, via the shared harness.
+        shigoto_types::testing::assert_deterministic(|| PoolConvergence::decide(&ctx));
+    }
+
+    #[test]
+    fn ctx_serde_roundtrips() {
+        // The owned Ctx is Serialize → table-testable + (defdecision)-authorable.
+        let ctx = PoolConvergenceCtx {
+            desired: 2,
+            replacement_policy: ReplacementPolicy::HoldFailed,
+            members: vec![member("a", ProcessPhase::Running, 60)],
+        };
+        let json = serde_json::to_string(&ctx).unwrap();
+        let back: PoolConvergenceCtx = serde_json::from_str(&json).unwrap();
+        assert_eq!(ctx, back);
     }
 }

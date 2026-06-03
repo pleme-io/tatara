@@ -131,7 +131,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -142,7 +142,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -858,7 +858,7 @@ dependencies = [
  "cap-primitives",
  "cap-std",
  "io-lifetimes",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -887,7 +887,7 @@ dependencies = [
  "maybe-owned",
  "rustix 1.1.4",
  "rustix-linux-procfs",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
  "winx",
 ]
 
@@ -1085,7 +1085,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1903,7 +1903,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1998,7 +1998,7 @@ dependencies = [
 [[package]]
 name = "egaku"
 version = "0.1.0"
-source = "git+https://github.com/pleme-io/egaku#8a281e756aea63159fb9fbbed1900262c6a0ab43"
+source = "git+https://github.com/pleme-io/egaku#3b2af556217f4bcadc58b2f6b494f80224a10a9e"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
@@ -2119,7 +2119,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2172,7 +2172,7 @@ checksum = "0ce92ff622d6dadf7349484f42c93271a0d49b7cc4d466a936405bacbe10aa78"
 dependencies = [
  "cfg-if",
  "rustix 1.1.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2274,7 +2274,7 @@ checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
 dependencies = [
  "io-lifetimes",
  "rustix 1.1.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2415,8 +2415,8 @@ dependencies = [
 
 [[package]]
 name = "gen-macros"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/gen#0363cc55019e21d9fbc5b96484f1f364516ef282"
+version = "0.1.6"
+source = "git+https://github.com/pleme-io/gen#eea15518fdff36d8b21ed753b6b161fc0d3623f6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2428,8 +2428,8 @@ name = "gen-platform"
 version = "0.1.0"
 source = "git+https://github.com/pleme-io/gen?branch=main#0363cc55019e21d9fbc5b96484f1f364516ef282"
 dependencies = [
- "gen-macros 0.1.0 (git+https://github.com/pleme-io/gen?branch=main)",
- "gen-types 0.1.0 (git+https://github.com/pleme-io/gen?branch=main)",
+ "gen-macros 0.1.0",
+ "gen-types 0.1.0",
  "inventory",
  "serde",
  "serde_json",
@@ -2438,11 +2438,11 @@ dependencies = [
 
 [[package]]
 name = "gen-platform"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/gen#0363cc55019e21d9fbc5b96484f1f364516ef282"
+version = "0.1.6"
+source = "git+https://github.com/pleme-io/gen#eea15518fdff36d8b21ed753b6b161fc0d3623f6"
 dependencies = [
- "gen-macros 0.1.0 (git+https://github.com/pleme-io/gen)",
- "gen-types 0.1.0 (git+https://github.com/pleme-io/gen)",
+ "gen-macros 0.1.6",
+ "gen-types 0.1.6",
  "inventory",
  "serde",
  "serde_json",
@@ -2465,8 +2465,8 @@ dependencies = [
 
 [[package]]
 name = "gen-types"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/gen#0363cc55019e21d9fbc5b96484f1f364516ef282"
+version = "0.1.6"
+source = "git+https://github.com/pleme-io/gen#eea15518fdff36d8b21ed753b6b161fc0d3623f6"
 dependencies = [
  "blake3",
  "chrono",
@@ -2895,7 +2895,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.4",
+ "socket2 0.5.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -2904,7 +2904,7 @@ dependencies = [
 [[package]]
 name = "iac-forge"
 version = "0.1.0"
-source = "git+https://github.com/pleme-io/iac-forge#51b3c55ebaaade677d9bfb581e5006dfa13f9ed5"
+source = "git+https://github.com/pleme-io/iac-forge#c592b447755b62f9c3c7c5181cdd7b4508cae3df"
 dependencies = [
  "blake3",
  "meimei",
@@ -3129,7 +3129,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2285ddfe3054097ef4b2fe909ef8c3bcd1ea52a8f0d274416caebeef39f04a65"
 dependencies = [
  "io-lifetimes",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3279,7 +3279,7 @@ dependencies = [
 [[package]]
 name = "kasou"
 version = "0.1.0"
-source = "git+https://github.com/pleme-io/kasou#3e6c21e93e4ab8a92a1a9a8b12f382e6a219d0eb"
+source = "git+https://github.com/pleme-io/kasou#bbfaf245e0baf0cb6b6b0b6639a56f4e87cb4955"
 dependencies = [
  "block2",
  "dispatch2",
@@ -3585,7 +3585,7 @@ dependencies = [
 [[package]]
 name = "meimei"
 version = "0.1.1"
-source = "git+https://github.com/pleme-io/meimei#5e9be1249482fd82398042a9065f7a46abc76e1d"
+source = "git+https://github.com/pleme-io/meimei#a3865aca03012893719fa4d093e20de4065fa58b"
 
 [[package]]
 name = "memchr"
@@ -3778,7 +3778,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3944,8 +3944,8 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "openapi-forge"
-version = "0.1.1"
-source = "git+https://github.com/pleme-io/openapi-forge#f68005cafdbee0093faa578ab0ac217a9be524f0"
+version = "0.1.2"
+source = "git+https://github.com/pleme-io/openapi-forge#c00f6a31d17f1193153124f28fff67a45506ca30"
 dependencies = [
  "indexmap 2.14.0",
  "sekkei",
@@ -4495,7 +4495,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.2",
  "rustls",
- "socket2 0.6.4",
+ "socket2 0.5.10",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -4532,9 +4532,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.4",
+ "socket2 0.5.10",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5025,7 +5025,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5038,7 +5038,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5282,7 +5282,7 @@ dependencies = [
 [[package]]
 name = "sekkei"
 version = "0.1.1"
-source = "git+https://github.com/pleme-io/sekkei#667798db01509babf9da3583ae5bcf25f72f1a8b"
+source = "git+https://github.com/pleme-io/sekkei#f9d27e9971bd0be7729a492797efa65711cb6171"
 dependencies = [
  "serde",
  "serde_json",
@@ -5516,8 +5516,8 @@ source = "git+https://github.com/pleme-io/shigoto?rev=391a47959d0c29115c0fc98a75
 dependencies = [
  "async-trait",
  "chrono",
- "gen-platform 0.1.0 (git+https://github.com/pleme-io/gen)",
- "gen-types 0.1.0 (git+https://github.com/pleme-io/gen)",
+ "gen-platform 0.1.6",
+ "gen-types 0.1.6",
  "schemars 0.8.22",
  "serde",
  "serde_json",
@@ -5533,8 +5533,8 @@ dependencies = [
  "async-trait",
  "clap",
  "figment",
- "gen-platform 0.1.0 (git+https://github.com/pleme-io/gen)",
- "gen-types 0.1.0 (git+https://github.com/pleme-io/gen)",
+ "gen-platform 0.1.6",
+ "gen-types 0.1.6",
  "notify",
  "serde",
  "serde_json",
@@ -5551,8 +5551,8 @@ dependencies = [
  "arc-swap",
  "async-trait",
  "figment",
- "gen-platform 0.1.0 (git+https://github.com/pleme-io/gen)",
- "gen-types 0.1.0 (git+https://github.com/pleme-io/gen)",
+ "gen-platform 0.1.6",
+ "gen-types 0.1.6",
  "notify",
  "serde",
  "serde_json",
@@ -5687,7 +5687,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5830,14 +5830,14 @@ dependencies = [
  "fd-lock",
  "io-lifetimes",
  "rustix 0.38.44",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
  "winx",
 ]
 
 [[package]]
 name = "takumi"
 version = "0.1.0"
-source = "git+https://github.com/pleme-io/takumi#627a0300fca6784c79ecd7a0834e78ccc797afd5"
+source = "git+https://github.com/pleme-io/takumi#234adbbe0e3f75239cba39b7fe033d9d6806b162"
 dependencies = [
  "indexmap 2.14.0",
  "sekkei",
@@ -6435,8 +6435,8 @@ name = "tatara-vm"
 version = "0.2.1"
 dependencies = [
  "blake3",
- "gen-platform 0.1.0 (git+https://github.com/pleme-io/gen?branch=main)",
- "gen-types 0.1.0 (git+https://github.com/pleme-io/gen?branch=main)",
+ "gen-platform 0.1.0",
+ "gen-types 0.1.0",
  "libc",
  "serde",
  "serde_json",
@@ -6474,7 +6474,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6992,7 +6992,7 @@ dependencies = [
 [[package]]
 name = "tsunagu"
 version = "0.1.1"
-source = "git+https://github.com/pleme-io/tsunagu#c29a385ef35aa59c596cda9f95e512a99d43f451"
+source = "git+https://github.com/pleme-io/tsunagu#2219c0853a003bc89d98eae3ad05b369594072de"
 dependencies = [
  "dirs 6.0.0",
  "serde",
@@ -8356,7 +8356,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8649,7 +8649,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f3fd376f71958b862e7afb20cfe5a22830e1963462f3a17f49d82a6c1d1f42d"
 dependencies = [
  "bitflags 2.11.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

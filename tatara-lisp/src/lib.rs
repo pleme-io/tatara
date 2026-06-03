@@ -46,7 +46,10 @@ pub use domain::{DomainHandler, TataraDomain};
 pub use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
 pub use ast::{iter_calls_to, Atom, Sexp};
-pub use compile::{compile_named, compile_named_from_forms, compile_typed, NamedDefinition};
+pub use compile::{
+    compile_named, compile_named_from_forms, compile_typed, compile_typed_from_forms,
+    NamedDefinition,
+};
 pub use diagnostic::{format_diagnostic, line_col, LineCol};
 pub use env::Env;
 pub use error::{

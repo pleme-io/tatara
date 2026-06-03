@@ -263,6 +263,37 @@ pub fn compile_named<T: TataraDomain>(src: &str) -> Result<Vec<NamedDefinition<T
     Expander::new().expand_source_to_named::<T>(src)
 }
 
+/// Same as `compile_typed` but operates on already-parsed forms. Useful
+/// when the caller has done its own reading (e.g. from a string, a Sexp
+/// loaded from disk, a macro-expanded subform, an LSP's partial AST cache
+/// across edits, a REPL's already-quoted buffer).
+///
+/// Fresh-expander posture of the from-forms typed dispatcher — routes
+/// through [`Expander::expand_to_typed::<T>`] on a brand-new
+/// `Expander::new()`. Sibling of [`compile_named_from_forms`] (the
+/// from-forms named-shape entry) and of [`compile_typed`] (the from-source
+/// typed-shape entry). Together with those two, this free function
+/// closes the fresh-expander dispatcher family at the free-function
+/// boundary across BOTH axes — input posture (from-forms + from-source)
+/// × form shape (typed bare-kwargs + named NAME-then-kwargs) — parallel
+/// to how [`Expander::expand_to_typed`] / [`Expander::expand_to_named`]
+/// / [`Expander::expand_source_to_typed`] / [`Expander::expand_source_to_named`]
+/// close the family at the `Expander` boundary.
+///
+/// The typed-pair `(T::KEYWORD, T::compile_from_args)` is bound at the
+/// type level through `T` inside the from-forms typed primitive on
+/// `Expander`, so this free function and its from-source sibling
+/// [`compile_typed`] bind to the SAME projection through delegation
+/// rather than re-deriving the `(keyword, projection)` pair at their
+/// call site. Non-matching forms are skipped silently (soft-projection
+/// posture inherited from [`iter_calls_to`](crate::ast::iter_calls_to)).
+/// The `Result::collect` short-circuit inside the typed primitive
+/// preserves `T::compile_from_args`'s typed-entry kwargs gate in source
+/// order across both this dispatcher and its from-source sibling.
+pub fn compile_typed_from_forms<T: TataraDomain>(forms: Vec<Sexp>) -> Result<Vec<T>> {
+    Expander::new().expand_to_typed::<T>(forms)
+}
+
 /// Same as `compile_named` but operates on already-parsed forms. Useful when
 /// the caller has done its own reading (e.g., from a string, a Sexp loaded
 /// from disk, a macro-expanded subform).
@@ -283,7 +314,9 @@ pub fn compile_named<T: TataraDomain>(src: &str) -> Result<Vec<NamedDefinition<T
 /// the missing NAME slot, `NamedFormNonSymbolName` for the non-symbol
 /// NAME slot, `T::compile_from_args`'s typed-entry kwargs gate — fires
 /// in source order across both this dispatcher and its from-source
-/// sibling.
+/// sibling. Sibling of [`compile_typed_from_forms`] — together the two
+/// free functions close the from-forms row of the fresh-expander
+/// dispatcher family.
 pub fn compile_named_from_forms<T: TataraDomain>(
     forms: Vec<Sexp>,
 ) -> Result<Vec<NamedDefinition<T>>> {
@@ -917,6 +950,126 @@ mod tests {
         assert_eq!(via_free[0].spec.name, via_method[0].spec.name);
         assert_eq!(via_free[1].name, via_method[1].name);
         assert_eq!(via_free[1].name, "beta");
+    }
+
+    // ── compile_typed_from_forms: closes the fresh-expander free-function ──
+    //
+    // The free-function dispatcher family
+    // (`compile_typed` from-source typed, `compile_named` from-source
+    // named, `compile_named_from_forms` from-forms named) was missing
+    // the from-forms × typed-shape cell — pre-lift, a from-forms typed
+    // consumer at the free-function boundary had to re-derive
+    // `Expander::new().expand_to_typed::<T>(forms)` itself. After this
+    // lift the cell is named, and the family closes symmetrically with
+    // the typed-pair primitives on `Expander`. The tests below pin:
+    // (a) parity with `compile_typed` on `parse(src)`,
+    // (b) parity with `Expander::new().expand_to_typed::<T>(forms)`
+    //     (path-uniformity: the free function routes through the typed
+    //     primitive, NOT a re-derived inline binding),
+    // (c) silent skip for unmatched keywords (soft-projection inherited),
+    // (d) `T::compile_from_args`'s typed-entry rejection chain fires
+    //     identically through the free function as through its sibling.
+
+    #[test]
+    fn compile_typed_from_forms_yields_same_vec_as_compile_typed_on_parse_src() {
+        // Pin parity: feeding pre-read forms through
+        // `compile_typed_from_forms::<T>` is byte-identical to feeding
+        // the source through `compile_typed::<T>` on the same input,
+        // because the from-source free function is
+        // `Expander::new().expand_source_to_typed(src)` →
+        // `read(src)? + Expander::new().expand_to_typed(forms)` and the
+        // from-forms free function is the second leg of that same
+        // composition surfaced as ONE named primitive.
+        // Fail-before-pass-after: the free function must exist AND must
+        // yield the same Vec<T> the from-source sibling does — pre-lift
+        // there was no from-forms typed free function to call.
+        use super::{compile_typed, compile_typed_from_forms};
+        let src = r#"(defcompiler :name "alpha" :dialect "standard")
+                     (defcompiler :name "beta" :dialect "standard")"#;
+        let forms = crate::reader::read(src).expect("read must succeed");
+        let via_forms = compile_typed_from_forms::<CompilerSpec>(forms)
+            .expect("from-forms typed free function must yield Vec<T>");
+        let via_source = compile_typed::<CompilerSpec>(src)
+            .expect("from-source typed free function must yield Vec<T>");
+        assert_eq!(via_forms.len(), 2);
+        assert_eq!(via_forms.len(), via_source.len());
+        assert_eq!(via_forms[0].name, via_source[0].name);
+        assert_eq!(via_forms[0].name, "alpha");
+        assert_eq!(via_forms[1].name, via_source[1].name);
+        assert_eq!(via_forms[1].name, "beta");
+    }
+
+    #[test]
+    fn compile_typed_from_forms_routes_through_expand_to_typed_primitive() {
+        // Compounding property: `compile_typed_from_forms` (the new
+        // free-function entry to the from-forms typed dispatcher) routes
+        // through `Expander::expand_to_typed::<T>` on a fresh expander
+        // — the SAME typed primitive the from-source `compile_typed`
+        // and the preloaded `RealizedCompiler::compile_typed` ultimately
+        // route through. Pin parity: the result of
+        // `compile_typed_from_forms` is byte-identical to invoking
+        // `expand_to_typed` on a fresh expander with the same forms. A
+        // regression that drifts the free function's binding from the
+        // typed primitive (e.g. a future emitter that re-derives the
+        // inline `expand_and_collect_calls_to(forms, T::KEYWORD,
+        // T::compile_from_args)` triple at the free function's call
+        // site) would fail loudly here.
+        use super::{compile_typed_from_forms, Expander};
+        let src = r#"(defcompiler :name "x" :dialect "standard")
+                     (defcompiler :name "y" :dialect "standard")"#;
+        let forms_a = crate::reader::read(src).expect("read must succeed");
+        let forms_b = crate::reader::read(src).expect("read must succeed");
+        let via_free = compile_typed_from_forms::<CompilerSpec>(forms_a)
+            .expect("free function must yield Vec<T>");
+        let via_method = Expander::new()
+            .expand_to_typed::<CompilerSpec>(forms_b)
+            .expect("typed primitive must yield Vec<T>");
+        assert_eq!(via_free.len(), 2);
+        assert_eq!(via_free.len(), via_method.len());
+        assert_eq!(via_free[0].name, via_method[0].name);
+        assert_eq!(via_free[0].name, "x");
+        assert_eq!(via_free[1].name, via_method[1].name);
+        assert_eq!(via_free[1].name, "y");
+    }
+
+    #[test]
+    fn compile_typed_from_forms_skips_unmatched_keywords_silently() {
+        // Path-uniformity inherited from `expand_and_collect_calls_to`'s
+        // keyword filter: forms whose head doesn't match `T::KEYWORD`
+        // are skipped without rejection. The from-forms typed free
+        // function shares the soft-projection posture with every other
+        // typed dispatcher in the family — a `(unrelated-form …)` in
+        // the forms must NOT produce any rejection.
+        use super::compile_typed_from_forms;
+        let src = r#"(unrelated-form 1 2 3)
+                     (defcompiler :name "kept" :dialect "standard")
+                     (also-not-ours :foo bar)"#;
+        let forms = crate::reader::read(src).expect("read must succeed");
+        let specs = compile_typed_from_forms::<CompilerSpec>(forms)
+            .expect("from-forms typed free function must skip unmatched keywords");
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].name, "kept");
+    }
+
+    #[test]
+    fn compile_typed_from_forms_propagates_typed_entry_rejection_chain() {
+        // Pin the structural rejection chain end-to-end through the new
+        // from-forms typed free function: a `T::compile_from_args`
+        // rejection (e.g. missing required kwarg) fires identically here
+        // as through the from-source sibling. A regression that drifts
+        // the free function's projection from `T::compile_from_args`
+        // would silently fail this. `(defcompiler :dialect "standard")`
+        // is missing the required `:name` slot — `CompilerSpec::
+        // compile_from_args` rejects it the same way regardless of
+        // input posture.
+        use super::{compile_typed, compile_typed_from_forms};
+        let src = r#"(defcompiler :dialect "standard")"#;
+        let forms = crate::reader::read(src).expect("read must succeed");
+        let err_from_forms = compile_typed_from_forms::<CompilerSpec>(forms).unwrap_err();
+        let err_from_source = compile_typed::<CompilerSpec>(src).unwrap_err();
+        // Same Display rendering across postures — pins that the rejection
+        // emission site is shared (not re-derived per posture).
+        assert_eq!(format!("{err_from_forms}"), format!("{err_from_source}"));
     }
 
     #[test]

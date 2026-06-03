@@ -39,7 +39,7 @@ use std::path::Path;
 use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
 use crate::ast::Sexp;
-use crate::compile::{named_form_projection, NamedDefinition};
+use crate::compile::NamedDefinition;
 use crate::domain::TataraDomain;
 use crate::error::{CompilerSpecIoStage, LispError, Result};
 use crate::macro_expand::Expander;
@@ -187,11 +187,7 @@ impl RealizedCompiler {
     /// surface with the typed-keyword projection as the per-form
     /// visitor.
     pub fn compile_typed<T: TataraDomain>(&self, src: &str) -> Result<Vec<T>> {
-        self.preloaded.clone().expand_source_and_collect_calls_to(
-            src,
-            T::KEYWORD,
-            T::compile_from_args,
-        )
+        self.preloaded.clone().expand_source_to_typed::<T>(src)
     }
 
     /// Compile every `(T::KEYWORD NAME :k v …)` form in `src` into a typed
@@ -240,11 +236,7 @@ impl RealizedCompiler {
     /// posture), THEORY.md §II.1 invariant 2 (free middle; both
     /// postures route through the SAME projection).
     pub fn compile_named<T: TataraDomain>(&self, src: &str) -> Result<Vec<NamedDefinition<T>>> {
-        self.preloaded.clone().expand_source_and_collect_calls_to(
-            src,
-            T::KEYWORD,
-            named_form_projection::<T>,
-        )
+        self.preloaded.clone().expand_source_to_named::<T>(src)
     }
 }
 

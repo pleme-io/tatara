@@ -17,6 +17,118 @@ use crate::domain::{sexp_shape, TataraDomain};
 use crate::error::{LispError, Result};
 use crate::macro_expand::Expander;
 
+/// Typed-keyword dispatchers on the `Expander` surface — the
+/// `T: TataraDomain`-shaped sibling family of
+/// [`Expander::expand_source_and_collect_calls_to`].
+///
+/// Before this lift the SAME `(src, T::KEYWORD, <projection-for-T>)` triple
+/// was bound at FOUR sites against the untyped primitive: the two
+/// fresh-expander free functions ([`compile_typed`] / [`compile_named`])
+/// AND the two preloaded-expander methods
+/// ([`RealizedCompiler::compile_typed`](crate::compiler_spec::RealizedCompiler::compile_typed)
+/// / [`RealizedCompiler::compile_named`](crate::compiler_spec::RealizedCompiler::compile_named)).
+/// Each pair pinned the SAME `(T::KEYWORD, T::compile_from_args)` triple
+/// (typed, two sites) or `(T::KEYWORD, named_form_projection::<T>)` triple
+/// (named, two sites) — past the ≥2 PRIME-DIRECTIVE trigger.
+///
+/// After this lift the `(keyword, projection)` pair is bound at the type
+/// level through `T`: [`Expander::expand_source_to_typed::<T>`] composes
+/// `(T::KEYWORD, T::compile_from_args)` and
+/// [`Expander::expand_source_to_named::<T>`] composes
+/// `(T::KEYWORD, named_form_projection::<T>)`. All four dispatchers
+/// collapse to ONE method call per posture × form-shape pair, and the
+/// pairing of "keyword filter" with "per-form projection" is no longer a
+/// two-arg discipline at four sites — a regression that mis-pairs
+/// `T::KEYWORD` with `U::compile_from_args` (where `T != U`) at any site
+/// is now structurally impossible: the type parameter binds both
+/// substitutions together inside ONE method body.
+impl Expander {
+    /// Read + macroexpand + project every `(T::KEYWORD :k v …)` form in
+    /// `src` into a typed `T` — the bare-kwargs sibling of
+    /// [`Self::expand_source_to_named`].
+    ///
+    /// Composes [`Self::expand_source_and_collect_calls_to`] with
+    /// `T::KEYWORD` as the keyword filter and `T::compile_from_args` as
+    /// the per-form projection. The expander posture (fresh
+    /// [`Expander::new()`](crate::macro_expand::Expander::new) for one-shot
+    /// typed compilation, preloaded
+    /// [`self.preloaded.clone()`](crate::compiler_spec::RealizedCompiler)
+    /// for compilation inside a CompilerSpec's macro library) is the
+    /// caller's choice — this method binds the typed `(keyword,
+    /// projection)` pair through `T` and dispatches on whichever
+    /// `Expander` value the caller materialized.
+    ///
+    /// Sibling of [`Self::expand_source_to_named`] — both methods route
+    /// through the SAME [`Self::expand_source_and_collect_calls_to`]
+    /// primitive, each binding the per-form projection that fits its
+    /// typed entry shape (bare-kwargs `(T::KEYWORD :k v …)` here,
+    /// NAME-then-kwargs `(T::KEYWORD NAME :k v …)` there).
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// four inline `(T::KEYWORD, T::compile_from_args)` bindings across
+    /// the two fresh-expander free functions ([`compile_typed`]) and the
+    /// two preloaded-expander methods
+    /// ([`RealizedCompiler::compile_typed`](crate::compiler_spec::RealizedCompiler::compile_typed))
+    /// — split across this method and its named sibling — is past the
+    /// ≥2 trigger once the typed shape `(T::KEYWORD,
+    /// T::compile_from_args)` is named. THEORY.md §II.1 invariant 1 —
+    /// typed entry; the typed-keyword filter paired with the
+    /// typed-entry projection IS the typed-entry-batch gate, and naming
+    /// the pair on `Expander` collapses the per-consumer two-arg
+    /// discipline to ONE typed method body the substrate's diagnostic
+    /// promotions hang off of. THEORY.md §II.1 invariant 2 — free
+    /// middle; both expander postures (fresh + preloaded) route through
+    /// the SAME typed-pair primitive, so a regression that drifts ONE
+    /// posture's `(T::KEYWORD, T::compile_from_args)` pairing from the
+    /// other becomes structurally impossible — the type system binds
+    /// both substitutions through `T` at the SINGLE composition point.
+    ///
+    /// Frontier inspiration: Idris's elaborator-reflection
+    /// `Elab.checkType : Term -> Elab Type` — the typed-elaboration
+    /// pipeline binds the typed-entry `(domain, projection)` pair at
+    /// the type level so consumers can't mis-pair them; the substrate's
+    /// `expand_source_to_typed` is the Rust-typed peer on the
+    /// `Expander` surface, with the `TataraDomain` trait standing in
+    /// for Idris's `Elab` monad as the typed-entry witness.
+    pub fn expand_source_to_typed<T: TataraDomain>(&mut self, src: &str) -> Result<Vec<T>> {
+        self.expand_source_and_collect_calls_to(src, T::KEYWORD, T::compile_from_args)
+    }
+
+    /// Read + macroexpand + project every `(T::KEYWORD NAME :k v …)` form
+    /// in `src` into a typed [`NamedDefinition<T>`] — the NAME-then-kwargs
+    /// sibling of [`Self::expand_source_to_typed`].
+    ///
+    /// Composes [`Self::expand_source_and_collect_calls_to`] with
+    /// `T::KEYWORD` as the keyword filter and [`named_form_projection::<T>`]
+    /// as the per-form projection. The named projection splits the
+    /// post-keyword tail into `(NAME, spec_args)` via
+    /// [`Sexp::as_symbol_or_string`](crate::ast::Sexp::as_symbol_or_string)
+    /// (structurally typed rejection through
+    /// [`LispError::NamedFormMissingName`] for the missing-NAME slot
+    /// and [`LispError::NamedFormNonSymbolName`] for the non-symbol
+    /// NAME slot) before running `T::compile_from_args` on the spec
+    /// args tail.
+    ///
+    /// Sibling of [`Self::expand_source_to_typed`] — both methods route
+    /// through the SAME [`Self::expand_source_and_collect_calls_to`]
+    /// primitive, each binding the per-form projection that fits its
+    /// typed entry shape. Together they close the typed-from-source
+    /// family on the `Expander` surface: bare-kwargs typed entry +
+    /// NAME-then-kwargs named entry, each available to both fresh and
+    /// preloaded expander postures through ONE method call.
+    ///
+    /// Theory anchor: see [`Self::expand_source_to_typed`] — the
+    /// named sibling shares the same lift posture, threading the
+    /// NAME-then-kwargs projection through `T` instead of the
+    /// bare-kwargs one.
+    pub fn expand_source_to_named<T: TataraDomain>(
+        &mut self,
+        src: &str,
+    ) -> Result<Vec<NamedDefinition<T>>> {
+        self.expand_source_and_collect_calls_to(src, T::KEYWORD, named_form_projection::<T>)
+    }
+}
+
 /// A typed definition with a positional name — e.g., `(defpoint NAME …)` →
 /// `NamedDefinition<ProcessSpec> { name, spec }`.
 #[derive(Debug, Clone)]
@@ -87,36 +199,34 @@ fn named_form_non_symbol_name<T: TataraDomain>(got: &Sexp) -> LispError {
 
 /// Read + macroexpand + compile every `(T::KEYWORD :k v …)` form into `T`.
 ///
-/// Routes the program-level walk through the substrate's composed
-/// read-then-expand-then-keyword-project primitive
-/// [`Expander::expand_source_and_collect_calls_to`]: a fresh
-/// `Expander::new()` reads `src` into top-level forms, expands them, and
-/// walks every expanded form whose head matches `T::KEYWORD` through
-/// `T::compile_from_args` in source order; non-matching forms are skipped
-/// silently (soft-projection posture inherited from
-/// [`iter_calls_to`](crate::ast::iter_calls_to)). Sibling consumer to
-/// [`compile_named`] — both fresh-expander dispatchers route through the
-/// SAME `Expander::expand_source_and_collect_calls_to` primitive, each
-/// binding the per-form projection that fits its call site:
-/// `T::compile_from_args(args)` for the bare-kwargs form here, and the
-/// NAME-then-`T::compile_from_args` split (`named_form_projection::<T>`)
-/// inside the named consumer.
+/// Fresh-expander posture of the typed dispatcher family — routes through
+/// [`Expander::expand_source_to_typed::<T>`] on a brand-new
+/// `Expander::new()`. The preloaded posture
+/// ([`RealizedCompiler::compile_typed`](crate::compiler_spec::RealizedCompiler::compile_typed))
+/// routes the SAME `T`-typed dispatcher through `self.preloaded.clone()`
+/// — both postures bind to ONE composition point on the `Expander`
+/// surface (the typed-pair primitive whose `(T::KEYWORD,
+/// T::compile_from_args)` substitution is type-level through `T`),
+/// rather than re-deriving the two-arg binding at each call site.
 pub fn compile_typed<T: TataraDomain>(src: &str) -> Result<Vec<T>> {
-    Expander::new().expand_source_and_collect_calls_to(src, T::KEYWORD, T::compile_from_args)
+    Expander::new().expand_source_to_typed::<T>(src)
 }
 
 /// Read + macroexpand + compile every `(T::KEYWORD NAME :k v …)` form into
 /// `NamedDefinition<T>`. The positional `NAME` is captured separately from
 /// the `:kw v` arguments that feed `compile_from_args`.
 ///
-/// Routes the program-level walk through the substrate's composed
-/// read-then-expand-then-keyword-project primitive
-/// [`Expander::expand_source_and_collect_calls_to`] with the per-form
-/// projection [`named_form_projection::<T>`] — sibling consumer to
-/// [`compile_typed`]; the from-forms variant [`compile_named_from_forms`]
-/// stays available for callers that have already parsed their forms.
+/// Fresh-expander posture of the named-form dispatcher family — routes
+/// through [`Expander::expand_source_to_named::<T>`] on a brand-new
+/// `Expander::new()`. Sibling of [`compile_typed`] (the bare-kwargs
+/// dispatcher); the preloaded posture
+/// ([`RealizedCompiler::compile_named`](crate::compiler_spec::RealizedCompiler::compile_named))
+/// routes the SAME `T`-typed named dispatcher through
+/// `self.preloaded.clone()`. The from-forms variant
+/// [`compile_named_from_forms`] stays available for callers that have
+/// already parsed their forms.
 pub fn compile_named<T: TataraDomain>(src: &str) -> Result<Vec<NamedDefinition<T>>> {
-    Expander::new().expand_source_and_collect_calls_to(src, T::KEYWORD, named_form_projection::<T>)
+    Expander::new().expand_source_to_named::<T>(src)
 }
 
 /// Same as `compile_named` but operates on already-parsed forms. Useful when
@@ -411,5 +521,192 @@ mod tests {
             .expect("valid string-NAME form must compile");
         assert_eq!(defs.len(), 1);
         assert_eq!(defs[0].name, "quoted-compiler");
+    }
+
+    // ── Expander::expand_source_to_typed / expand_source_to_named ───
+    //
+    // The `(T::KEYWORD, T::compile_from_args)` AND
+    // `(T::KEYWORD, named_form_projection::<T>)` pairs are bound at the
+    // type level through `T` inside ONE method per form-shape — the
+    // four pre-lift dispatcher sites (two fresh-expander free
+    // functions, two preloaded-expander `RealizedCompiler` methods)
+    // now route through this typed-pair primitive on `Expander`. The
+    // tests below pin: (a) the typed primitive yields the same Vec<T>
+    // the fresh-expander free function does on the SAME source,
+    // (b) the named primitive yields the same Vec<NamedDefinition<T>>
+    // the fresh-expander free function does on the SAME source,
+    // (c) the typed primitive's structural rejection chain
+    // (NamedFormMissingName / NamedFormNonSymbolName /
+    // T::compile_from_args's typed-entry kwargs gate) fires
+    // identically through the new method as through the old free-
+    // function path — path-uniformity across the lift.
+
+    #[test]
+    fn expand_source_to_typed_yields_same_vec_as_fresh_free_function() {
+        // Pin parity: `Expander::new().expand_source_to_typed::<T>(src)`
+        // and `compile_typed::<T>(src)` are byte-identical on the same
+        // source — both fresh-expander posture, both yielding `Vec<T>`,
+        // both routing through ONE typed-pair primitive on `Expander`.
+        // Fail-before-pass-after: this assert requires the new method
+        // to exist AND to yield the same payload the free function
+        // does — pre-lift the method did not exist.
+        use super::Expander;
+        let src = r#"(defcompiler :name "alpha" :dialect "standard")
+                     (defcompiler :name "beta" :dialect "standard")"#;
+        let via_method = Expander::new()
+            .expand_source_to_typed::<CompilerSpec>(src)
+            .expect("typed-pair primitive must yield Vec<T>");
+        let via_free =
+            super::compile_typed::<CompilerSpec>(src).expect("free function must yield Vec<T>");
+        assert_eq!(via_method.len(), 2);
+        assert_eq!(via_method.len(), via_free.len());
+        assert_eq!(via_method[0].name, via_free[0].name);
+        assert_eq!(via_method[0].name, "alpha");
+        assert_eq!(via_method[1].name, via_free[1].name);
+        assert_eq!(via_method[1].name, "beta");
+    }
+
+    #[test]
+    fn expand_source_to_named_yields_same_vec_as_fresh_free_function() {
+        // Sibling parity pin for the named-form posture:
+        // `Expander::new().expand_source_to_named::<T>(src)` and
+        // `compile_named::<T>(src)` are byte-identical on the same
+        // source — both fresh-expander posture, both yielding
+        // `Vec<NamedDefinition<T>>`, both routing through ONE
+        // typed-pair primitive on `Expander`. Fail-before-pass-after:
+        // this assert requires the new method to exist AND to thread
+        // BOTH the keyword filter AND the named-form projection through
+        // `T` — pre-lift the pair was bound at four sites, never as a
+        // single typed-pair method.
+        use super::Expander;
+        let src = r#"(defcompiler alpha-compiler :name "x" :dialect "standard")
+                     (defcompiler beta-compiler  :name "y" :dialect "standard")"#;
+        let via_method = Expander::new()
+            .expand_source_to_named::<CompilerSpec>(src)
+            .expect("typed-pair primitive must yield Vec<NamedDefinition<T>>");
+        let via_free = super::compile_named::<CompilerSpec>(src)
+            .expect("free function must yield Vec<NamedDefinition<T>>");
+        assert_eq!(via_method.len(), 2);
+        assert_eq!(via_method.len(), via_free.len());
+        assert_eq!(via_method[0].name, via_free[0].name);
+        assert_eq!(via_method[0].name, "alpha-compiler");
+        assert_eq!(via_method[0].spec.name, "x");
+        assert_eq!(via_method[1].name, via_free[1].name);
+        assert_eq!(via_method[1].name, "beta-compiler");
+        assert_eq!(via_method[1].spec.name, "y");
+    }
+
+    #[test]
+    fn expand_source_to_typed_skips_unmatched_keywords_silently() {
+        // Path-uniformity: the typed primitive's keyword filter
+        // (inherited from `expand_source_and_collect_calls_to` which
+        // composes `iter_calls_to`) skips forms whose head doesn't
+        // match `T::KEYWORD` silently — same soft-projection posture as
+        // every other consumer of the dispatcher family. A
+        // `(unrelated-form …)` in the source must NOT produce a
+        // `NamedFormMissingName` rejection (that variant fires ONLY
+        // when the keyword MATCHES but the NAME slot is missing —
+        // pinned in the named sibling test below).
+        use super::Expander;
+        let src = r#"(unrelated-form 1 2 3)
+                     (defcompiler :name "kept" :dialect "standard")
+                     (also-not-ours :foo bar)"#;
+        let specs = Expander::new()
+            .expand_source_to_typed::<CompilerSpec>(src)
+            .expect("typed-pair primitive must skip unmatched keywords");
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].name, "kept");
+    }
+
+    #[test]
+    fn expand_source_to_named_emits_named_form_missing_name_through_typed_primitive() {
+        // Pin the structural rejection chain end-to-end through the
+        // new typed primitive: the missing-NAME gate fires AS the
+        // `LispError::NamedFormMissingName` variant identically through
+        // `Expander::expand_source_to_named` as through the free
+        // function `compile_named`. A regression that drifts the
+        // typed-primitive's projection from `named_form_projection::<T>`
+        // (e.g. a typo binds `T::compile_from_args` instead of the
+        // named split) would silently fail BOTH the missing-NAME gate
+        // AND the structural-variant identity assertion.
+        use super::Expander;
+        let err = Expander::new()
+            .expand_source_to_named::<CompilerSpec>("(defcompiler)")
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormMissingName {
+                    keyword: "defcompiler",
+                }
+            ),
+            "expected NamedFormMissingName through typed primitive, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn expand_source_to_named_emits_named_form_non_symbol_name_through_typed_primitive() {
+        // Sibling of the missing-NAME pin: the non-symbol-NAME gate
+        // fires AS the `LispError::NamedFormNonSymbolName` variant
+        // identically through the typed primitive. Together the two
+        // assertions pin path-uniformity across the typed-primitive's
+        // ENTIRE structural rejection chain — both the
+        // `split_first()` arity gate AND the
+        // `as_symbol_or_string()` shape gate route through the same
+        // `named_form_projection::<T>` body the free function routes
+        // through.
+        use super::Expander;
+        let err = Expander::new()
+            .expand_source_to_named::<CompilerSpec>("(defcompiler 5 :name \"x\")")
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormNonSymbolName {
+                    keyword: "defcompiler",
+                    got: SexpShape::Int,
+                }
+            ),
+            "expected NamedFormNonSymbolName through typed primitive, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn expand_source_to_typed_routes_preloaded_macros_into_typed_dispatch() {
+        // The compounding property the lift enables: the SAME typed
+        // primitive `Expander::expand_source_to_typed::<T>` works on
+        // BOTH a fresh expander AND a preloaded expander, with the
+        // expander posture decided by the caller (which `Expander`
+        // value they materialized). Pin that a preloaded expander —
+        // built ad-hoc here without going through `RealizedCompiler` —
+        // carries its registered `defmacro` into the typed dispatch
+        // through the SAME method the fresh-expander free function
+        // calls.
+        use super::Expander;
+        let mut preloaded = Expander::new();
+        preloaded
+            .expand_program(
+                crate::reader::read(
+                    "(defmacro mk-spec (n) `(defcompiler :name ,n :dialect \"standard\"))",
+                )
+                .unwrap(),
+            )
+            .expect("preloading defmacro must succeed");
+        let specs = preloaded
+            .expand_source_to_typed::<CompilerSpec>(r#"(mk-spec "via-preloaded")"#)
+            .expect("preloaded typed primitive must dispatch through the macro");
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].name, "via-preloaded");
+        // Posture-divergence control: the fresh-expander free function
+        // does NOT see the macro and skips the form silently. Pinning
+        // the divergence here proves the typed primitive's expander
+        // posture is the caller's binding, not a hard-coded fresh
+        // expander.
+        let fresh = super::compile_typed::<CompilerSpec>(r#"(mk-spec "via-preloaded")"#)
+            .expect("fresh-expander free function must succeed");
+        assert!(
+            fresh.is_empty(),
+            "fresh-expander posture must NOT see the ad-hoc preloaded macro, got: {fresh:?}"
+        );
     }
 }

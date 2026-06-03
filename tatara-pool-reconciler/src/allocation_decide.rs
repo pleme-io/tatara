@@ -1,6 +1,11 @@
-//! Pure allocation-reconcile decision function.
+//! Pure allocation-reconcile decision — the allocation reconciler's
+//! [`shigoto_types::decision::Decision`] consumer (sibling to the pool
+//! desired-count `PoolConvergence` in `desired.rs`). `observe` resolves the
+//! world relevant to one allocation (which pool it targets + whether that
+//! pool has a free member); `decide` is the pure transition rule.
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 use tatara_process::allocation::{AllocationPhase, EphemeralAllocation, Requestor};
 use tatara_process::pool::{
@@ -26,65 +31,177 @@ pub enum AllocationDecision {
     NoOp,
 }
 
-/// Decide the next allocation transition.
-///
-/// `pool_members(&pool)` returns the slice of PoolMembers for the pool
-/// whose Allocations the caller is matching. Pure: no kube calls.
-pub fn decide_allocation_reconcile<'a, F>(
-    alloc: &EphemeralAllocation,
-    candidate_pools: &'a [EphemeralPool],
-    pool_members: F,
-    now: DateTime<Utc>,
-) -> AllocationDecision
-where
-    F: Fn(&'a EphemeralPool) -> &'a [PoolMember],
-{
-    let phase = alloc
-        .status
-        .as_ref()
-        .map(|s| s.phase)
-        .unwrap_or(AllocationPhase::Pending);
+/// The structured allocation-reconcile decision context — one owned,
+/// serializable snapshot of everything the transition rule needs: the
+/// allocation's lifecycle fields plus the pool it resolved to (and whether
+/// that pool has a free member). The async controller builds this from the
+/// live `EphemeralAllocation` + candidate pools + a member lookup (the
+/// **observe** half); [`AllocationConvergence::decide`] is the pure
+/// **decide** half. Because the context is `Serialize`, the decision is
+/// table-testable from a literal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AllocationConvergenceCtx {
+    /// Lifecycle phase (`Pending` if status is unset).
+    pub phase: AllocationPhase,
+    /// `metadata.deletionTimestamp` is set — a release is in progress.
+    pub being_deleted: bool,
+    /// TTL deadline for a `Bound` allocation, if any.
+    pub expires_at: Option<DateTime<Utc>>,
+    /// Currently-assigned member process name (needed to emit `Release`).
+    pub assigned_process: Option<String>,
+    /// The pool this allocation is bound to (needed to emit `Release`).
+    pub bound_pool: Option<AllocationRef>,
+    /// Decision clock.
+    pub now: DateTime<Utc>,
+    /// The pool this allocation should bind to, resolved during `observe` by
+    /// `pool_ref` / selector matching. `None` ⇒ no pool matched. Only
+    /// consulted on the `Pending`/`Queued` path.
+    pub matched_pool: Option<AllocationRef>,
+    /// A `Free` member's process name in the matched pool, if any.
+    /// `free_member = None` while `matched_pool = Some` ⇒ pool full ⇒ `Wait`.
+    pub free_member: Option<String>,
+}
 
-    // Terminal phases — short-circuit.
-    if phase == AllocationPhase::Released {
-        return AllocationDecision::NoOp;
-    }
+impl AllocationConvergenceCtx {
+    /// Observe: resolve the world relevant to one allocation. For the
+    /// `Pending`/`Queued` path this matches the target pool (explicit
+    /// `pool_ref` or selector via [`best_match`]) and looks up a free member;
+    /// terminal / deleting / `Bound` allocations need no pool match.
+    ///
+    /// `pool_members(&pool)` returns the matched pool's members (pure: no
+    /// kube calls).
+    #[must_use]
+    pub fn observe<'a, F>(
+        alloc: &EphemeralAllocation,
+        candidate_pools: &'a [EphemeralPool],
+        pool_members: F,
+        now: DateTime<Utc>,
+    ) -> Self
+    where
+        F: Fn(&'a EphemeralPool) -> &'a [PoolMember],
+    {
+        let phase = alloc
+            .status
+            .as_ref()
+            .map(|s| s.phase)
+            .unwrap_or(AllocationPhase::Pending);
+        let being_deleted = alloc.metadata.deletion_timestamp.is_some();
+        let expires_at = alloc.status.as_ref().and_then(|s| s.expires_at);
+        let assigned_process = alloc
+            .status
+            .as_ref()
+            .and_then(|s| s.assigned_process.as_ref())
+            .map(|m| m.name.clone());
+        let bound_pool = alloc.status.as_ref().and_then(|s| s.bound_pool.clone());
 
-    // Released-but-not-yet-cleaned-up.
-    if alloc.metadata.deletion_timestamp.is_some() {
-        if let Some(status) = alloc.status.as_ref() {
-            if let (Some(member), Some(pool)) =
-                (status.assigned_process.as_ref(), status.bound_pool.as_ref())
-            {
-                return AllocationDecision::Release {
-                    member_process_name: member.name.clone(),
-                    pool: pool.clone(),
-                };
-            }
-        }
-        return AllocationDecision::NoOp;
-    }
-
-    // Expiry — TTL reached.
-    if phase == AllocationPhase::Bound {
-        if let Some(expires_at) = alloc.status.as_ref().and_then(|s| s.expires_at) {
-            if now >= expires_at {
-                let status = alloc.status.as_ref().unwrap();
-                if let (Some(member), Some(pool)) =
-                    (status.assigned_process.as_ref(), status.bound_pool.as_ref())
-                {
-                    return AllocationDecision::Release {
-                        member_process_name: member.name.clone(),
-                        pool: pool.clone(),
+        // Resolve the target pool + a free member ONLY on the matching path
+        // (Pending/Queued, not deleting/terminal/Bound) — the only branch
+        // `decide` consults `matched_pool`/`free_member`.
+        let (matched_pool, free_member) = if phase != AllocationPhase::Released
+            && !being_deleted
+            && phase != AllocationPhase::Bound
+        {
+            match resolve_pool(alloc, candidate_pools) {
+                Some(pool) => {
+                    let pool_ref = AllocationRef {
+                        name: pool.metadata.name.clone().unwrap_or_default(),
+                        namespace: pool.metadata.namespace.clone().unwrap_or_default(),
                     };
+                    let free = pool_members(pool)
+                        .iter()
+                        .find(|m| m.state == MemberState::Free)
+                        .map(|m| m.process_name.clone());
+                    (Some(pool_ref), free)
+                }
+                None => (None, None),
+            }
+        } else {
+            (None, None)
+        };
+
+        Self {
+            phase,
+            being_deleted,
+            expires_at,
+            assigned_process,
+            bound_pool,
+            now,
+            matched_pool,
+            free_member,
+        }
+    }
+}
+
+/// The allocation-reconcile decision — the allocation reconciler's
+/// [`shigoto_types::decision::Decision`] consumer. A zero-sized marker;
+/// `decide` is the entire pure transition rule (priority order):
+///
+/// 1. `Released` ⇒ `NoOp`.
+/// 2. Being deleted + assigned ⇒ `Release` (else `NoOp`).
+/// 3. `Bound` + expired + assigned ⇒ `Release`; otherwise `HeartbeatBound`.
+/// 4. `Pending`/`Queued`: no matched pool ⇒ `NoMatchingPool`; a free member ⇒
+///    `Bind`; pool full ⇒ `Wait`.
+pub struct AllocationConvergence;
+
+impl shigoto_types::decision::Decision for AllocationConvergence {
+    type Ctx = AllocationConvergenceCtx;
+    type Action = AllocationDecision;
+
+    fn decide(ctx: &Self::Ctx) -> Self::Action {
+        // (1) Terminal — already released.
+        if ctx.phase == AllocationPhase::Released {
+            return AllocationDecision::NoOp;
+        }
+
+        // (2) Released-but-not-yet-cleaned-up.
+        if ctx.being_deleted {
+            return match (ctx.assigned_process.as_ref(), ctx.bound_pool.as_ref()) {
+                (Some(member), Some(pool)) => AllocationDecision::Release {
+                    member_process_name: member.clone(),
+                    pool: pool.clone(),
+                },
+                _ => AllocationDecision::NoOp,
+            };
+        }
+
+        // (3) Bound — expiry (TTL reached) or heartbeat.
+        if ctx.phase == AllocationPhase::Bound {
+            if let Some(expires_at) = ctx.expires_at {
+                if ctx.now >= expires_at {
+                    if let (Some(member), Some(pool)) =
+                        (ctx.assigned_process.as_ref(), ctx.bound_pool.as_ref())
+                    {
+                        return AllocationDecision::Release {
+                            member_process_name: member.clone(),
+                            pool: pool.clone(),
+                        };
+                    }
                 }
             }
+            return AllocationDecision::HeartbeatBound;
         }
-        return AllocationDecision::HeartbeatBound;
-    }
 
-    // Pending / Queued — try to match.
-    let pool = if let Some(pool_ref) = alloc.spec.pool_ref.as_ref() {
+        // (4) Pending / Queued — bind to the matched pool's free member.
+        match ctx.matched_pool.as_ref() {
+            None => AllocationDecision::NoMatchingPool,
+            Some(pool) => match ctx.free_member.as_ref() {
+                Some(member) => AllocationDecision::Bind {
+                    pool: pool.clone(),
+                    member_process_name: member.clone(),
+                },
+                None => AllocationDecision::Wait { pool: pool.clone() },
+            },
+        }
+    }
+}
+
+/// Resolve the pool an allocation targets: an explicit `pool_ref` wins;
+/// otherwise the requestor's selector picks the best match. Pure.
+fn resolve_pool<'a>(
+    alloc: &EphemeralAllocation,
+    candidate_pools: &'a [EphemeralPool],
+) -> Option<&'a EphemeralPool> {
+    if let Some(pool_ref) = alloc.spec.pool_ref.as_ref() {
         candidate_pools.iter().find(|p| {
             p.metadata.name.as_deref() == Some(pool_ref.name.as_str())
                 && p.metadata.namespace.as_deref() == Some(pool_ref.namespace.as_str())
@@ -99,26 +216,28 @@ where
             kind: key.kind,
         };
         best_match(candidate_pools, &key).map(|m| m.pool)
-    };
-
-    let pool = match pool {
-        Some(p) => p,
-        None => return AllocationDecision::NoMatchingPool,
-    };
-
-    let pool_ref = AllocationRef {
-        name: pool.metadata.name.clone().unwrap_or_default(),
-        namespace: pool.metadata.namespace.clone().unwrap_or_default(),
-    };
-    let members = pool_members(pool);
-    let free_member = members.iter().find(|m| m.state == MemberState::Free);
-    match free_member {
-        Some(m) => AllocationDecision::Bind {
-            pool: pool_ref,
-            member_process_name: m.process_name.clone(),
-        },
-        None => AllocationDecision::Wait { pool: pool_ref },
     }
+}
+
+/// Decide the next allocation transition. Stable public entry point — an
+/// **observe → decide** shim over the [`AllocationConvergence`] `Decision`
+/// impl. `pool_members(&pool)` returns the matched pool's members.
+pub fn decide_allocation_reconcile<'a, F>(
+    alloc: &EphemeralAllocation,
+    candidate_pools: &'a [EphemeralPool],
+    pool_members: F,
+    now: DateTime<Utc>,
+) -> AllocationDecision
+where
+    F: Fn(&'a EphemeralPool) -> &'a [PoolMember],
+{
+    use shigoto_types::decision::Decision;
+    AllocationConvergence::decide(&AllocationConvergenceCtx::observe(
+        alloc,
+        candidate_pools,
+        pool_members,
+        now,
+    ))
 }
 
 /// Build a MatchKey from a Requestor for selector routing.
@@ -360,5 +479,78 @@ mod tests {
             }
             other => panic!("expected Release on deletion, got {other:?}"),
         }
+    }
+
+    // ── Decision split: decide directly from an AllocationConvergenceCtx
+    //    literal (no allocation / pools / member closure needed). ──
+
+    fn pool_ref() -> AllocationRef {
+        AllocationRef {
+            name: "akeyless".into(),
+            namespace: "pools".into(),
+        }
+    }
+
+    fn pending_ctx(matched: Option<AllocationRef>, free: Option<String>) -> AllocationConvergenceCtx {
+        AllocationConvergenceCtx {
+            phase: AllocationPhase::Pending,
+            being_deleted: false,
+            expires_at: None,
+            assigned_process: None,
+            bound_pool: None,
+            now: Utc::now(),
+            matched_pool: matched,
+            free_member: free,
+        }
+    }
+
+    #[test]
+    fn decide_from_ctx_binds_to_free_member() {
+        use shigoto_types::decision::Decision;
+        let ctx = pending_ctx(Some(pool_ref()), Some("akeyless-abcd".into()));
+        assert_eq!(
+            AllocationConvergence::decide(&ctx),
+            AllocationDecision::Bind {
+                pool: pool_ref(),
+                member_process_name: "akeyless-abcd".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn decide_from_ctx_waits_when_pool_full() {
+        use shigoto_types::decision::Decision;
+        let ctx = pending_ctx(Some(pool_ref()), None);
+        assert_eq!(
+            AllocationConvergence::decide(&ctx),
+            AllocationDecision::Wait { pool: pool_ref() }
+        );
+    }
+
+    #[test]
+    fn decide_from_ctx_no_matching_pool() {
+        use shigoto_types::decision::Decision;
+        let ctx = pending_ctx(None, None);
+        assert_eq!(
+            AllocationConvergence::decide(&ctx),
+            AllocationDecision::NoMatchingPool
+        );
+    }
+
+    #[test]
+    fn ctx_serde_roundtrips() {
+        let ctx = AllocationConvergenceCtx {
+            phase: AllocationPhase::Bound,
+            being_deleted: false,
+            expires_at: Some(Utc::now()),
+            assigned_process: Some("akeyless-xyz".into()),
+            bound_pool: Some(pool_ref()),
+            now: Utc::now(),
+            matched_pool: None,
+            free_member: None,
+        };
+        let json = serde_json::to_string(&ctx).unwrap();
+        let back: AllocationConvergenceCtx = serde_json::from_str(&json).unwrap();
+        assert_eq!(ctx, back);
     }
 }

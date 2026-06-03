@@ -33,7 +33,9 @@ pub mod controller_allocation;
 
 pub use context::{PoolContext, PoolReconcilerConfig};
 pub use pool_decide::{decide_pool_reconcile, PoolDecision};
-pub use allocation_decide::{decide_allocation_reconcile, AllocationDecision};
+pub use allocation_decide::{
+    decide_allocation_reconcile, AllocationConvergence, AllocationConvergenceCtx, AllocationDecision,
+};
 pub use router::{best_match, MatchedPool};
 pub use return_policy::{plan_return, ReturnPlan};
 

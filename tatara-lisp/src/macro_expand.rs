@@ -1073,15 +1073,28 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
         ops.push(TemplateOp::Literal(node.clone()));
         return Ok(());
     }
+    // Routes the `Sexp::Unquote(inner)` / `Sexp::UnquoteSplice(inner)` arms
+    // through [`Sexp::as_unquote`] — the typed-marker projection that
+    // pairs `Sexp::Unquote ↔ UnquoteForm::Unquote` and
+    // `Sexp::UnquoteSplice ↔ UnquoteForm::Splice` at ONE site. The per-form
+    // `TemplateOp` emission (`Subst` vs `Splice`) keys on the same typed
+    // `form` value the gate-1+gate-2 composition `resolve_unquote_in_params`
+    // threads through. Pre-lift the (Sexp variant, UnquoteForm variant)
+    // pairing was bound per-arm — a future emitter that matched
+    // `Sexp::Unquote(_)` but threaded `UnquoteForm::Splice` into
+    // `resolve_unquote_in_params` (or vice versa) would type-check but
+    // render a misleading diagnostic at the gate-1 / gate-2 rejection.
+    // Post-lift the pair is bound at ONE projection function and the
+    // `match form` mechanically lowers it to the bytecode op.
+    if let Some((form, inner)) = node.as_unquote() {
+        let idx = resolve_unquote_in_params(inner, params, form)?;
+        ops.push(match form {
+            UnquoteForm::Unquote => TemplateOp::Subst(idx),
+            UnquoteForm::Splice => TemplateOp::Splice(idx),
+        });
+        return Ok(());
+    }
     match node {
-        Sexp::Unquote(inner) => {
-            let idx = resolve_unquote_in_params(inner, params, UnquoteForm::Unquote)?;
-            ops.push(TemplateOp::Subst(idx));
-        }
-        Sexp::UnquoteSplice(inner) => {
-            let idx = resolve_unquote_in_params(inner, params, UnquoteForm::Splice)?;
-            ops.push(TemplateOp::Splice(idx));
-        }
         Sexp::List(items) => {
             ops.push(TemplateOp::BeginList);
             for item in items {
@@ -1747,16 +1760,28 @@ fn bind_args(
 /// Substitute `,name` and `,@name` within a template.
 /// `,@name` only makes sense inside a List — it splices the bound list into
 /// the containing list.
+///
+/// Routes both unquote-family sites — the top-level `,X` / `,@X`
+/// recognition AND the list-inner per-item splice recognition — through
+/// the substrate's typed-marker projection [`Sexp::as_unquote`]. Pre-lift
+/// each site opened its own `Sexp::Unquote(inner)` / `Sexp::UnquoteSplice
+/// (inner)` arm paired with a `UnquoteForm::Unquote` / `UnquoteForm::
+/// Splice` literal; post-lift the (Sexp variant, UnquoteForm variant)
+/// pairing is bound at ONE projection function the type system threads
+/// through `(UnquoteForm, &Sexp)`, eliminating the silent two-site
+/// pairing drift the prior shape allowed.
 fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
+    if let Some((kind, inner)) = form.as_unquote() {
+        return match kind {
+            UnquoteForm::Unquote => resolve_unquote_in_bindings(inner, bindings, kind).cloned(),
+            UnquoteForm::Splice => Err(splice_outside_list(inner)),
+        };
+    }
     match form {
-        Sexp::Unquote(inner) => {
-            resolve_unquote_in_bindings(inner, bindings, UnquoteForm::Unquote).cloned()
-        }
-        Sexp::UnquoteSplice(inner) => Err(splice_outside_list(inner)),
         Sexp::List(items) => {
             let mut out: Vec<Sexp> = Vec::with_capacity(items.len());
             for item in items {
-                if let Sexp::UnquoteSplice(inner) = item {
+                if let Some((UnquoteForm::Splice, inner)) = item.as_unquote() {
                     let val = resolve_unquote_in_bindings(inner, bindings, UnquoteForm::Splice)?;
                     splice_value_into(&mut out, val);
                 } else {
@@ -1765,7 +1790,6 @@ fn substitute(form: &Sexp, bindings: &HashMap<String, Sexp>) -> Result<Sexp> {
             }
             Ok(Sexp::List(out))
         }
-        Sexp::Quote(_) | Sexp::Quasiquote(_) => Ok(form.clone()),
         _ => Ok(form.clone()),
     }
 }
@@ -8937,5 +8961,137 @@ mod tests {
             .unwrap();
         assert_eq!(out_a, out_b);
         assert_eq!(out_a, vec![Sexp::int(7)]);
+    }
+
+    // ── as_unquote: path-uniformity across the three substitute / compile_node sites ──
+    //
+    // The new typed-marker projection `Sexp::as_unquote` lifts the
+    // (Sexp::Unquote/UnquoteSplice variant, UnquoteForm::Unquote/Splice
+    // literal) pair into ONE structural query. These tests pin behavioral
+    // parity end-to-end across BOTH expansion strategies:
+    //   * `compile_node` — the bytecode-template strategy's typed marker
+    //     dispatch routes through as_unquote at the compile step.
+    //   * `substitute` (top-level + list-inner) — the substitute-walker
+    //     fallback strategy's typed marker dispatch routes through
+    //     as_unquote at both per-form sites.
+    // The structural invariant the prior runs' `expansion_layers_agree_on_
+    // output_and_cache_wins` benchmark observes — bytecode AND substitute
+    // produce byte-identical output — is anchored here at the macro-template
+    // level for every distinct unquote-family shape the substitute and
+    // bytecode strategies discriminate.
+
+    #[test]
+    fn bytecode_and_substitute_agree_on_unquote_substitution_routed_through_as_unquote() {
+        // A template body whose only marker is a top-level `,x`. Both
+        // expansion strategies route through `as_unquote` (compile_node for
+        // bytecode, substitute for the fallback walker), each pairing
+        // Sexp::Unquote ↔ UnquoteForm::Unquote at ONE typed projection.
+        // Pin byte-identical output across both strategies — the
+        // structural-invariant the new projection's lift was designed to
+        // make load-bearing structural rather than per-site discipline.
+        let src = "(defmacro id (x) ,x) (id 42)";
+        let mut bc = Expander::new();
+        let mut sub = Expander::new_substitute_only();
+        let out_bc = bc.expand_program(read(src).unwrap()).unwrap();
+        let out_sub = sub.expand_program(read(src).unwrap()).unwrap();
+        assert_eq!(out_bc, out_sub, "strategies diverged on `,x` template");
+        assert_eq!(out_bc, vec![Sexp::int(42)]);
+    }
+
+    #[test]
+    fn bytecode_and_substitute_agree_on_unquote_splice_routed_through_as_unquote() {
+        // A template body whose marker is a list-inner `,@xs`. The substitute
+        // strategy's list-inner Splice arm routes through `as_unquote`
+        // matching Some((UnquoteForm::Splice, inner)); the bytecode strategy's
+        // compile_node Splice arm routes through `as_unquote` matching the
+        // same. Pin byte-identical output across both strategies for the
+        // splice path — the projection's typed-marker pairing
+        // Sexp::UnquoteSplice ↔ UnquoteForm::Splice is structurally
+        // identical at every consumer post-lift.
+        let src = "(defmacro wrap (xs) (list 0 ,@xs 99)) (wrap (1 2 3))";
+        let mut bc = Expander::new();
+        let mut sub = Expander::new_substitute_only();
+        let out_bc = bc.expand_program(read(src).unwrap()).unwrap();
+        let out_sub = sub.expand_program(read(src).unwrap()).unwrap();
+        assert_eq!(out_bc, out_sub, "strategies diverged on `,@xs` template");
+        let expected = Sexp::List(vec![
+            Sexp::symbol("list"),
+            Sexp::int(0),
+            Sexp::int(1),
+            Sexp::int(2),
+            Sexp::int(3),
+            Sexp::int(99),
+        ]);
+        assert_eq!(out_bc, vec![expected]);
+    }
+
+    #[test]
+    fn substitute_splice_outside_list_routes_through_as_unquote_typed_marker() {
+        // The substitute strategy's top-level `,@x` arm rejects with
+        // LispError::SpliceOutsideList (a splice marker with no containing
+        // list to flatten into). Pre-lift the arm was
+        // `Sexp::UnquoteSplice(inner) => Err(splice_outside_list(inner))`;
+        // post-lift the arm routes through `as_unquote` matching
+        // Some((UnquoteForm::Splice, inner)) and dispatches on the typed
+        // marker. Pin path-uniformity: the rejection MUST fire identically
+        // through the new projection. The substitute-only strategy bypasses
+        // the bytecode path, exposing this gate directly.
+        //
+        // `(defmacro bad (xs) ,@xs) (bad (1 2 3))` — the body is a bare
+        // `,@xs` at top level (NOT wrapped in a containing list), so the
+        // substitute fallback's top-level Splice arm fires.
+        let src = "(defmacro bad (xs) ,@xs) (bad (1 2 3))";
+        let mut sub = Expander::new_substitute_only();
+        let err = sub.expand_program(read(src).unwrap()).unwrap_err();
+        assert!(
+            matches!(err, crate::error::LispError::SpliceOutsideList { .. }),
+            "expected SpliceOutsideList through as_unquote, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn as_unquote_threads_typed_marker_into_unbound_template_var_rejection() {
+        // A `,unbound` template body — the inner symbol isn't a param —
+        // fires gate-2 (must-be-bound-in-scope). The typed marker
+        // `UnquoteForm::Unquote` MUST thread through `as_unquote` →
+        // `resolve_unquote_in_params(inner, params, form)` → gate-2's
+        // rejection-builder. Pre-lift the marker was bound at the per-arm
+        // literal `UnquoteForm::Unquote`; post-lift it's bound at the
+        // typed projection. Pin: the rejection's `prefix` slot is
+        // UnquoteForm::Unquote, structurally derived from the typed
+        // projection's typed marker, NOT a literal at the arm body.
+        let src = "(defmacro bad (x) ,unbound)";
+        let mut bc = Expander::new();
+        let err = bc.expand_program(read(src).unwrap()).unwrap_err();
+        match err {
+            crate::error::LispError::UnboundTemplateVar { prefix, .. } => {
+                assert_eq!(
+                    prefix,
+                    UnquoteForm::Unquote,
+                    "typed marker drifted from UnquoteForm::Unquote at gate-2"
+                );
+            }
+            other => panic!("expected UnboundTemplateVar, got: {other:?}"),
+        }
+        // Sibling negative control: `,@unbound` inside a containing list
+        // threads UnquoteForm::Splice through the same projection. The
+        // splice MUST be inside a list — `compile_template` rejects
+        // top-level `,@X` bodies with SpliceOutsideList before compile_node
+        // runs, so the typed-marker dispatch on Splice is observable only
+        // for well-positioned splice bodies. Closes path-uniformity across
+        // BOTH typed marker variants at the compile path.
+        let src_splice = "(defmacro bad (x) (foo ,@unbound))";
+        let mut bc2 = Expander::new();
+        let err_splice = bc2.expand_program(read(src_splice).unwrap()).unwrap_err();
+        match err_splice {
+            crate::error::LispError::UnboundTemplateVar { prefix, .. } => {
+                assert_eq!(
+                    prefix,
+                    UnquoteForm::Splice,
+                    "typed marker drifted from UnquoteForm::Splice at gate-2"
+                );
+            }
+            other => panic!("expected UnboundTemplateVar, got: {other:?}"),
+        }
     }
 }

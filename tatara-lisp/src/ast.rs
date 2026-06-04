@@ -1,5 +1,6 @@
 //! S-expression AST.
 
+use crate::error::UnquoteForm;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -373,6 +374,124 @@ impl Sexp {
     {
         let (head, args) = self.as_call()?;
         decode(head).map(|d| (d, args))
+    }
+
+    /// Decompose an unquote-family form into its typed marker and inner
+    /// expression — `Some((UnquoteForm::Unquote, inner))` iff this is `,x`
+    /// (a [`Sexp::Unquote`] wrapper), `Some((UnquoteForm::Splice, inner))`
+    /// iff this is `,@x` (a [`Sexp::UnquoteSplice`] wrapper), `None` for
+    /// every other shape (Quote, Quasiquote, Nil, Atom, List).
+    ///
+    /// This is the *unquote-family projection* — the typed-marker peer of
+    /// [`Sexp::as_call`] for the macro-template substitution surface. Where
+    /// [`Sexp::as_call`] decomposes `(op args …)` into a `(head, args)`
+    /// pair, `as_unquote` decomposes `,x` / `,@x` into a `(form, inner)`
+    /// pair where `form: UnquoteForm` is the closed-set typed marker
+    /// (`Unquote` for `,`, `Splice` for `,@`) and `inner: &Sexp` is the
+    /// borrowed body. The pairing of `Sexp::Unquote ↔ UnquoteForm::Unquote`
+    /// and `Sexp::UnquoteSplice ↔ UnquoteForm::Splice` is the structural
+    /// invariant the macro-expander's substitution path keys every
+    /// rejection on — naming the projection lifts the pair from
+    /// per-callsite discipline (two `Sexp::Unquote(inner)` arms paired
+    /// with two `UnquoteForm::Unquote` literals at distinct sites, two
+    /// `Sexp::UnquoteSplice(inner)` arms paired with two
+    /// `UnquoteForm::Splice` literals at distinct sites) into ONE typed
+    /// projection both expansion strategies route through.
+    ///
+    /// Three consumers in [`macro_expand`](crate::macro_expand) route
+    /// through this primitive:
+    ///   * `compile_node` (bytecode-template compile path) — `,x` becomes
+    ///     `TemplateOp::Subst(idx)`, `,@x` becomes `TemplateOp::Splice(idx)`;
+    ///     both arms share the gate-1+gate-2 composition
+    ///     `resolve_unquote_in_params(inner, params, form)?` keyed on the
+    ///     typed `form` projection.
+    ///   * `substitute` top-level (substitute fallback path) — `,x` resolves
+    ///     to its bound value, `,@x` rejects with
+    ///     `LispError::SpliceOutsideList` (a splice form with no containing
+    ///     list to flatten into).
+    ///   * `substitute` list-inner (substitute fallback path's per-item
+    ///     walk) — `,@x` items splice their bound list/nil/scalar value
+    ///     into the assembled list builder via
+    ///     [`crate::macro_expand::splice_value_into`]; non-splice items
+    ///     recurse into `substitute`.
+    ///
+    /// Pre-lift each site opened the same per-variant match arms —
+    /// `Sexp::Unquote(inner) => … UnquoteForm::Unquote …` and
+    /// `Sexp::UnquoteSplice(inner) => … UnquoteForm::Splice …` —
+    /// independently. The (Sexp variant, UnquoteForm variant) pairing was
+    /// load-bearing across distinct sites yet only enforced by callsite
+    /// discipline. Post-lift the pair binds at ONE projection function the
+    /// type system threads through `(UnquoteForm, &Sexp)`: a regression
+    /// that drifts ONE site's pairing (e.g. a future emitter that matches
+    /// `Sexp::Unquote(_)` but threads `UnquoteForm::Splice` into
+    /// `unquote_target_symbol` — type-checks but renders a misleading
+    /// diagnostic) becomes structurally impossible.
+    ///
+    /// Soft face, like the rest of the `as_*` family on `Sexp`: it answers
+    /// "is this form an unquote-family marker, and what does it wrap?" and
+    /// yields `None` for everything that isn't (skip / fall through), with
+    /// no diagnostic. The strict siblings —
+    /// [`crate::macro_expand::splice_value_into`] for the bound-list
+    /// coercion, `non_symbol_unquote_target` /
+    /// `splice_outside_list` for the per-failure-mode rejections — keep
+    /// their loud-reject posture; this projection is the dispatch face the
+    /// soft pre-rejection walk binds to.
+    ///
+    /// Structural identity binding it to the unquote-family variants:
+    ///   * `as_unquote() == Some((UnquoteForm::Unquote, inner))` iff `self == Sexp::Unquote(inner)`
+    ///   * `as_unquote() == Some((UnquoteForm::Splice, inner))`  iff `self == Sexp::UnquoteSplice(inner)`
+    ///   * `as_unquote().is_some() == matches!(self, Sexp::Unquote(_) | Sexp::UnquoteSplice(_))`
+    ///
+    /// The returned `&Sexp` borrows the inner box's body verbatim — no
+    /// clone, no allocation — same lifetime as `&self`. The closed-set
+    /// guarantee on [`UnquoteForm`] (exactly `Unquote ⊎ Splice`) is
+    /// threaded through this projection's return tuple, so consumers that
+    /// pattern-match on `form: UnquoteForm` get rustc-enforced
+    /// exhaustiveness — a future `Sexp` variant must extend `UnquoteForm`
+    /// AND this match arm together (or stay outside the unquote family
+    /// and project to `None`), eliminating the silent two-site
+    /// extension-drift this lift was already designed to forbid.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// `(Sexp::Unquote, UnquoteForm::Unquote)` and
+    /// `(Sexp::UnquoteSplice, UnquoteForm::Splice)` pairings appear ≥3
+    /// times across `compile_node` (2 arms) + `substitute` (top-level +
+    /// list-inner) — past the PRIME-DIRECTIVE trigger once the structural
+    /// shape is named. THEORY.md §V.1 — knowable platform; the
+    /// unquote-family projection becomes a NAMED primitive on the
+    /// substrate's `Sexp` algebra rather than per-site `Sexp::Unquote(_)
+    /// | Sexp::UnquoteSplice(_)` inline matches paired with per-site
+    /// `UnquoteForm::Unquote` / `UnquoteForm::Splice` literals.
+    /// THEORY.md §II.1 invariant 1 — typed entry; the macro-template
+    /// substitution surface's typed-marker projection IS the rust-level
+    /// typed-entry gate's structural component, lifted from per-site
+    /// duplication onto ONE rust method the substrate's diagnostic
+    /// promotions hang off of. THEORY.md §II.1 invariant 2 — free middle;
+    /// both expansion strategies (bytecode `compile_node` and substitute
+    /// fallback `substitute`) route through the SAME projection, so a
+    /// regression that drifts ONE strategy's (Sexp variant, UnquoteForm
+    /// variant) pairing from the other cannot reach the substrate's
+    /// runtime — the type system binds both strategies to the
+    /// projection's single emission shape.
+    ///
+    /// Frontier inspiration: Racket's `syntax-parse` `~or* (~unquote stx)
+    /// (~unquote-splice stx)` pattern — every macro-template pattern over
+    /// `,id` / `,@id` binds to ONE typed decomposition that surfaces the
+    /// marker identity alongside the inner expression; the substrate's
+    /// `as_unquote` is the Rust-typed peer of that pattern, lifted onto
+    /// the `Sexp` algebra with [`UnquoteForm`] standing in for Racket's
+    /// pattern-class identity. MLIR's typed-IR projection
+    /// `mlir::dyn_cast<UnquoteFamilyOp>(op)` — the typed downcast from a
+    /// polymorphic IR node onto a closed-set op family is the MLIR idiom;
+    /// `as_unquote` is the unstructured-projection peer on the substrate's
+    /// `Sexp` algebra, with `Option<(UnquoteForm, &Sexp)>` standing in for
+    /// MLIR's typed downcast result.
+    pub fn as_unquote(&self) -> Option<(UnquoteForm, &Sexp)> {
+        match self {
+            Self::Unquote(inner) => Some((UnquoteForm::Unquote, inner)),
+            Self::UnquoteSplice(inner) => Some((UnquoteForm::Splice, inner)),
+            _ => None,
+        }
     }
 }
 
@@ -1273,5 +1392,155 @@ mod tests {
                 assert_eq!(a.len(), b.len(), "len drift at keyword {k:?}");
             }
         }
+    }
+
+    // ── as_unquote: the unquote-family projection ───────────────────────
+    //
+    // `as_unquote` lifts the per-callsite `Sexp::Unquote(inner) /
+    // Sexp::UnquoteSplice(inner)` arms paired with their `UnquoteForm::
+    // Unquote / UnquoteForm::Splice` literals — three sites pre-lift
+    // (`compile_node` 2 arms + `substitute` top-level + `substitute`
+    // list-inner) — into ONE typed projection on the `Sexp` algebra.
+    // These tests pin its contract; the existing path tests in
+    // macro_expand.rs are the path-uniformity guards proving the three
+    // sites route through it without behavior drift.
+
+    #[test]
+    fn as_unquote_decomposes_unquote_into_typed_marker_and_inner() {
+        // `,x` — Sexp::Unquote wrapping a symbol. Pin Some((Unquote, &inner)).
+        let inner = Sexp::symbol("x");
+        let form = Sexp::Unquote(Box::new(inner.clone()));
+        let (marker, body) = form
+            .as_unquote()
+            .expect("`,x` must project to Some((Unquote, _))");
+        assert_eq!(marker, UnquoteForm::Unquote);
+        assert_eq!(body, &inner);
+    }
+
+    #[test]
+    fn as_unquote_decomposes_unquote_splice_into_typed_marker_and_inner() {
+        // `,@xs` — Sexp::UnquoteSplice wrapping a symbol. Pin
+        // Some((Splice, &inner)). Sibling positive control to the Unquote
+        // arm: pins BOTH unquote-family variants project to their typed
+        // closed-set UnquoteForm pair through ONE projection function.
+        let inner = Sexp::symbol("xs");
+        let form = Sexp::UnquoteSplice(Box::new(inner.clone()));
+        let (marker, body) = form
+            .as_unquote()
+            .expect("`,@xs` must project to Some((Splice, _))");
+        assert_eq!(marker, UnquoteForm::Splice);
+        assert_eq!(body, &inner);
+    }
+
+    #[test]
+    fn as_unquote_none_for_non_unquote_shapes() {
+        // Every Sexp shape OUTSIDE the unquote family — atoms, lists, nil,
+        // and the OTHER quote-family variants (Quote `'x`, Quasiquote ``x`) —
+        // yields None. Pins the projection's exhaustive negative coverage:
+        // a regression that drifts the matched-variant set (e.g. a future
+        // emitter that projects `'x` into Some((Unquote, _))) would fail
+        // here, even before any downstream dispatcher tests fire.
+        assert_eq!(Sexp::symbol("foo").as_unquote(), None);
+        assert_eq!(Sexp::int(5).as_unquote(), None);
+        assert_eq!(Sexp::keyword("k").as_unquote(), None);
+        assert_eq!(Sexp::string("s").as_unquote(), None);
+        assert_eq!(Sexp::boolean(true).as_unquote(), None);
+        assert_eq!(Sexp::float(1.5).as_unquote(), None);
+        assert_eq!(Sexp::Nil.as_unquote(), None);
+        assert_eq!(Sexp::List(vec![]).as_unquote(), None);
+        assert_eq!(
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(1)]).as_unquote(),
+            None
+        );
+        // `'x` — Quote-family but NOT unquote-family. The closed-set
+        // UnquoteForm projection covers only `,` and `,@`; `'` and `` ` ``
+        // are siblings that this projection does NOT match.
+        assert_eq!(Sexp::Quote(Box::new(Sexp::symbol("x"))).as_unquote(), None);
+        assert_eq!(
+            Sexp::Quasiquote(Box::new(Sexp::symbol("x"))).as_unquote(),
+            None
+        );
+    }
+
+    #[test]
+    fn as_unquote_is_some_iff_matches_unquote_family() {
+        // Structural identity: as_unquote().is_some() agrees with the
+        // pre-lift `matches!(self, Sexp::Unquote(_) | Sexp::UnquoteSplice(_))`
+        // discriminant across the closed Sexp variant set. Sweep every
+        // representative Sexp shape and pin equality of the two discriminants
+        // — a regression that drifts ONE shape's projection (e.g. adds
+        // Quasiquote to the matched set) becomes a typed test failure.
+        let shapes: Vec<(&str, Sexp, bool)> = vec![
+            ("nil", Sexp::Nil, false),
+            ("symbol", Sexp::symbol("x"), false),
+            ("keyword", Sexp::keyword("k"), false),
+            ("string", Sexp::string("s"), false),
+            ("int", Sexp::int(7), false),
+            ("float", Sexp::float(2.5), false),
+            ("bool", Sexp::boolean(true), false),
+            ("empty list", Sexp::List(vec![]), false),
+            (
+                "non-empty list",
+                Sexp::List(vec![Sexp::symbol("op")]),
+                false,
+            ),
+            ("quote", Sexp::Quote(Box::new(Sexp::symbol("x"))), false),
+            (
+                "quasiquote",
+                Sexp::Quasiquote(Box::new(Sexp::symbol("x"))),
+                false,
+            ),
+            ("unquote", Sexp::Unquote(Box::new(Sexp::symbol("x"))), true),
+            (
+                "unquote-splice",
+                Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+                true,
+            ),
+        ];
+        for (label, sexp, expect_some) in &shapes {
+            let via_proj = sexp.as_unquote().is_some();
+            let via_pat = matches!(sexp, Sexp::Unquote(_) | Sexp::UnquoteSplice(_));
+            assert_eq!(
+                via_proj, *expect_some,
+                "as_unquote().is_some() drifted from expected at {label}"
+            );
+            assert_eq!(
+                via_proj, via_pat,
+                "as_unquote().is_some() != pre-lift `matches!(_, Unquote | UnquoteSplice)` at {label}"
+            );
+        }
+    }
+
+    #[test]
+    fn as_unquote_inner_pointer_is_the_boxed_body() {
+        // The returned `&Sexp` borrows the inner box's body verbatim — no
+        // clone, no allocation, same lifetime as `&self`. Pin pointer
+        // identity: the returned `&Sexp` shares its address with the
+        // contents of the original Box, proving no intermediate copy fires
+        // at the projection boundary (so consumers walking deeply nested
+        // template bodies pay zero allocation per unquote node).
+        let inner = Sexp::symbol("payload");
+        let boxed = Box::new(inner);
+        let inner_ptr: *const Sexp = boxed.as_ref();
+        let form = Sexp::Unquote(boxed);
+        let (_, body) = form
+            .as_unquote()
+            .expect("Sexp::Unquote must project to Some");
+        assert!(
+            std::ptr::eq(body, inner_ptr),
+            "as_unquote inner pointer drifted from the boxed body — projection allocates or clones"
+        );
+
+        let inner_splice = Sexp::symbol("payload-splice");
+        let boxed_splice = Box::new(inner_splice);
+        let inner_splice_ptr: *const Sexp = boxed_splice.as_ref();
+        let form_splice = Sexp::UnquoteSplice(boxed_splice);
+        let (_, body_splice) = form_splice
+            .as_unquote()
+            .expect("Sexp::UnquoteSplice must project to Some");
+        assert!(
+            std::ptr::eq(body_splice, inner_splice_ptr),
+            "as_unquote inner pointer drifted from the boxed body (splice arm)"
+        );
     }
 }

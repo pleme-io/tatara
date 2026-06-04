@@ -11,6 +11,7 @@ pub mod classification;
 pub mod compliance;
 pub mod crd;
 pub mod encapsulates;
+pub mod env;
 pub mod ephemeral;
 pub mod export;
 pub mod hostname;

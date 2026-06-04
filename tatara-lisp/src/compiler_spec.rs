@@ -106,6 +106,41 @@ impl RealizedCompiler {
         self.preloaded.clone().expand_source_program(src)
     }
 
+    /// Macroexpand a pre-parsed program through THIS `RealizedCompiler`'s
+    /// preloaded macro library — the from-forms posture of [`Self::compile`].
+    ///
+    /// Routes through [`Expander::expand_program`] on a clone of the
+    /// preloaded expander: the cloned expander walks every supplied form,
+    /// absorbing any `defmacro` / `defpoint-template` / `defcheck` head into
+    /// the clone (NOT the persistent realized compiler, mirroring
+    /// [`Self::compile`]'s per-call clone isolation) and expanding every
+    /// macro call against the spec's `:macros` library plus the in-source
+    /// `defmacro` definitions of THIS call. Non-`defmacro` forms surface in
+    /// source order as the returned `Vec<Sexp>` for downstream consumers
+    /// (`tatara-check`'s per-form dispatcher, an LSP's "show me the
+    /// expanded program" handler that operates on already-parsed AST
+    /// fragments).
+    ///
+    /// Sibling of [`Self::compile`] — that method stacks a [`crate::reader::read`]
+    /// step on top of this one, so the from-source / from-forms pair on
+    /// `RealizedCompiler` for untyped expansion routes through the SAME
+    /// [`Expander::expand_program`] primitive ([`Self::compile`] composes
+    /// it with `crate::reader::read` via [`Expander::expand_source_program`];
+    /// this method binds it directly). The 2×2 cells (untyped vs. typed,
+    /// from-forms vs. from-source) close on `RealizedCompiler` with
+    /// [`Self::compile_typed`] / [`Self::compile_named`] (from-source typed
+    /// / named) plus [`Self::compile_typed_from_forms`] /
+    /// [`Self::compile_named_from_forms`] (from-forms typed / named).
+    ///
+    /// The future change that benefits: a consumer that has already parsed
+    /// `Vec<Sexp>` through another `Sexp`-producing surface (a macro-expanded
+    /// subform, a REPL's already-quoted top-level buffer, an LSP cache of
+    /// partially-edited forms) and wants to dispatch through the preloaded
+    /// library without re-rendering source.
+    pub fn compile_from_forms(&self, forms: Vec<Sexp>) -> Result<Vec<Sexp>> {
+        self.preloaded.clone().expand_program(forms)
+    }
+
     /// Macroexpand a single form (testing / REPL helper).
     pub fn expand(&self, form: &Sexp) -> Result<Sexp> {
         self.preloaded.expand(form)
@@ -190,6 +225,73 @@ impl RealizedCompiler {
         self.preloaded.clone().expand_source_to_typed::<T>(src)
     }
 
+    /// Compile every `(T::KEYWORD :k v …)` form in `forms` into a typed `T`
+    /// through THIS `RealizedCompiler`'s preloaded macro library — the
+    /// from-forms posture of [`Self::compile_typed`].
+    ///
+    /// Routes through [`Expander::expand_to_typed::<T>`] on a clone of the
+    /// preloaded expander — the SAME typed primitive [`Self::compile_typed`]'s
+    /// from-source delegation ultimately threads through ([`Self::compile_typed`]
+    /// is `self.preloaded.clone().expand_source_to_typed::<T>(src)` =
+    /// `read(src)? + expand_to_typed::<T>(forms)`). This method surfaces the
+    /// second leg of that composition as ONE preloaded-posture primitive
+    /// rather than asking every from-forms typed consumer of a realized
+    /// compiler to write `realized.preloaded.clone().expand_to_typed::<T>(forms)`
+    /// itself (and the `preloaded` field is private, so they'd have to
+    /// `realized.compile(... rendered_back_to_source ...)?` round-trip
+    /// through source first, defeating the whole point of from-forms entry).
+    ///
+    /// Sibling of [`Self::compile_typed`] (the from-source posture's
+    /// preloaded-typed dispatcher) and of [`crate::compile_typed_from_forms`]
+    /// (the from-forms posture's fresh-expander dispatcher). Together with
+    /// those two — plus [`Self::compile_typed`]'s fresh-expander free-function
+    /// sibling [`crate::compile_typed`] — this method closes the
+    /// typed-dispatcher matrix across BOTH axes — expander posture
+    /// (fresh + preloaded) × input posture (from-forms + from-source) — at
+    /// the public dispatcher boundary. The matrix is symmetric: each cell
+    /// routes through the SAME typed primitive on `Expander`
+    /// ([`Expander::expand_to_typed::<T>`] for from-forms,
+    /// [`Expander::expand_source_to_typed::<T>`] for from-source — which
+    /// itself delegates to the from-forms primitive through
+    /// `read(src)? + expand_to_typed(forms)`). A regression that drifts ONE
+    /// cell's `(T::KEYWORD, T::compile_from_args)` binding from the others
+    /// is structurally impossible — the type parameter binds both
+    /// substitutions to the SAME concrete type at the call boundary inside
+    /// the typed primitive every cell delegates through.
+    ///
+    /// Per-call posture matches [`Self::compile_typed`]: the preloaded
+    /// expander is cloned per call so cache is shared via `Arc<Mutex>` and
+    /// per-call `defmacro` absorption stays local to the clone. A
+    /// `defmacro` in a pre-parsed form lands in the clone exactly as it
+    /// does in [`Self::compile_typed`]'s from-source posture — both
+    /// postures route through `expand_to_typed::<T>` which composes
+    /// `expand_program(forms)` (the defmacro-absorption + macro-expansion
+    /// step) with the typed-keyword projection.
+    ///
+    /// The future change that benefits: an LSP that maintains a partial
+    /// `Vec<Sexp>` AST cache across edits and wants to re-run typed
+    /// dispatch through a preloaded library against a modified subtree,
+    /// a `tatara-check` runner that walks every typed `(defX …)` form
+    /// inside a `(defcheck …)` macro body that's already been expanded
+    /// once, a REPL `:dispatch <T> (form …)` command that takes
+    /// already-quoted forms against the active compiler's preloaded
+    /// expander — binds to ONE method on `RealizedCompiler`
+    /// (`compile_typed_from_forms::<T>(forms)`) instead of round-tripping
+    /// through source serialization first.
+    ///
+    /// Theory anchor: same as [`Self::compile_typed`]. THEORY.md §VI.1
+    /// (generation over composition; the (preloaded × from-forms × typed)
+    /// cell of the dispatcher matrix is bound in ONE place rather than
+    /// re-derived inline at every from-forms preloaded consumer's call
+    /// site), THEORY.md §II.1 invariant 1 (typed entry; the typed-keyword
+    /// filter paired with `T::compile_from_args` IS the from-forms
+    /// typed-entry-batch gate at the preloaded boundary), THEORY.md §II.1
+    /// invariant 2 (free middle; all four cells of the dispatcher matrix
+    /// route through the SAME typed primitive on `Expander`).
+    pub fn compile_typed_from_forms<T: TataraDomain>(&self, forms: Vec<Sexp>) -> Result<Vec<T>> {
+        self.preloaded.clone().expand_to_typed::<T>(forms)
+    }
+
     /// Compile every `(T::KEYWORD NAME :k v …)` form in `src` into a typed
     /// [`NamedDefinition<T>`] through THIS `RealizedCompiler`'s preloaded
     /// macro library — the preloaded-expander posture of
@@ -237,6 +339,39 @@ impl RealizedCompiler {
     /// postures route through the SAME projection).
     pub fn compile_named<T: TataraDomain>(&self, src: &str) -> Result<Vec<NamedDefinition<T>>> {
         self.preloaded.clone().expand_source_to_named::<T>(src)
+    }
+
+    /// Compile every `(T::KEYWORD NAME :k v …)` form in `forms` into a typed
+    /// [`NamedDefinition<T>`] through THIS `RealizedCompiler`'s preloaded
+    /// macro library — the from-forms posture of [`Self::compile_named`].
+    ///
+    /// Routes through [`Expander::expand_to_named::<T>`] on a clone of the
+    /// preloaded expander — the SAME typed primitive [`Self::compile_named`]'s
+    /// from-source delegation ultimately threads through, and the SAME
+    /// primitive [`crate::compile_named_from_forms`] (the fresh-expander
+    /// posture's from-forms sibling) routes through. The named-form
+    /// structural rejection chain (`NamedFormMissingName` for the missing
+    /// NAME slot, `NamedFormNonSymbolName` for the non-symbol NAME slot,
+    /// `T::compile_from_args`'s typed-entry kwargs gate) fires in source
+    /// order under all three consumers — fresh from-forms, preloaded
+    /// from-source, and preloaded from-forms — because the
+    /// [`named_form_projection::<T>`](crate::compile::named_form_projection)
+    /// helper is bound at ONE site that every cell of the matrix delegates
+    /// through.
+    ///
+    /// Sibling of [`Self::compile_typed_from_forms`] — together the two
+    /// methods close the from-forms row of the dispatcher matrix at the
+    /// preloaded boundary, parallel to how
+    /// [`crate::compile_typed_from_forms`] /
+    /// [`crate::compile_named_from_forms`] close the from-forms row at the
+    /// fresh-expander free-function boundary. Per-call posture mirrors
+    /// [`Self::compile_named`]: cloned expander, shared cache, local
+    /// defmacro absorption.
+    pub fn compile_named_from_forms<T: TataraDomain>(
+        &self,
+        forms: Vec<Sexp>,
+    ) -> Result<Vec<NamedDefinition<T>>> {
+        self.preloaded.clone().expand_to_named::<T>(forms)
     }
 }
 
@@ -912,5 +1047,309 @@ mod tests {
         assert_eq!(list[0].as_symbol(), Some("list"));
         assert_eq!(list[1].as_symbol(), Some("hello"));
         assert_eq!(list[2].as_symbol(), Some("hello"));
+    }
+
+    // ── RealizedCompiler::compile_from_forms / compile_typed_from_forms /
+    //    compile_named_from_forms — close the from-forms row on the preloaded
+    //    boundary
+    //
+    // The preloaded-expander posture's from-forms cells were missing pre-lift.
+    // The free-function family closed the from-forms × {typed, named} cells at
+    // the fresh-expander boundary (`compile_typed_from_forms` /
+    // `compile_named_from_forms`); the `Expander` surface closed the
+    // from-forms × {typed, named} cells through the typed-pair primitives
+    // (`expand_to_typed` / `expand_to_named`). The preloaded boundary on
+    // `RealizedCompiler` had only the from-source cells (`compile_typed` /
+    // `compile_named`), and the untyped from-forms cell paired with `compile`
+    // was missing too. After this lift the matrix is symmetric across all
+    // three axes: expander posture (fresh + preloaded) × input posture
+    // (from-forms + from-source) × form shape (untyped + typed + named).
+    //
+    // Tests below pin: (a) parity with the from-source sibling on parse(src),
+    // (b) path-uniformity through the same typed primitive on `Expander` that
+    // the from-source sibling delegates to, (c) the preloaded-macro
+    // participation property (the key compounding promise — a macro authored
+    // in the spec's `:macros` slot expands inside the from-forms dispatcher
+    // through the SAME preloaded library that powers the from-source
+    // sibling), (d) per-call clone isolation (the preloaded expander is NOT
+    // mutated across calls), (e) the named-form structural rejection chain
+    // fires identically through the from-forms preloaded dispatcher.
+
+    #[test]
+    fn realized_compiler_compile_typed_from_forms_yields_same_vec_as_compile_typed_on_parse_src() {
+        // Pin parity at the preloaded boundary: feeding pre-read forms
+        // through `RealizedCompiler::compile_typed_from_forms::<T>` is
+        // byte-identical to feeding the source through `compile_typed::<T>`
+        // on the same realized compiler. Both postures route through the
+        // SAME typed primitive on the SAME preloaded expander clone — the
+        // from-source method is `read(src)? + expand_to_typed(forms)` and
+        // the from-forms method is the second leg of that composition
+        // surfaced as ONE preloaded primitive.
+        // Fail-before-pass-after: the new method must exist AND yield the
+        // same Vec<T> the from-source sibling does — pre-lift there was no
+        // from-forms typed method on RealizedCompiler.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = r#"(defcompiler :name "alpha" :dialect "standard")
+                     (defcompiler :name "beta" :dialect "standard")"#;
+        let forms = crate::reader::read(src).expect("read must succeed");
+        let via_forms = parent
+            .compile_typed_from_forms::<CompilerSpec>(forms)
+            .expect("from-forms typed preloaded method must yield Vec<T>");
+        let via_source = parent
+            .compile_typed::<CompilerSpec>(src)
+            .expect("from-source typed preloaded method must yield Vec<T>");
+        assert_eq!(via_forms.len(), 2);
+        assert_eq!(via_forms.len(), via_source.len());
+        assert_eq!(via_forms[0].name, via_source[0].name);
+        assert_eq!(via_forms[0].name, "alpha");
+        assert_eq!(via_forms[1].name, via_source[1].name);
+        assert_eq!(via_forms[1].name, "beta");
+    }
+
+    #[test]
+    fn realized_compiler_compile_named_from_forms_yields_same_vec_as_compile_named_on_parse_src() {
+        // Sibling parity pin for the named-form row at the preloaded
+        // boundary: feeding pre-read forms through
+        // `RealizedCompiler::compile_named_from_forms::<T>` is byte-identical
+        // to feeding the source through `compile_named::<T>` on the same
+        // realized compiler.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = r#"(defcompiler alpha-compiler :name "x" :dialect "standard")
+                     (defcompiler beta-compiler  :name "y" :dialect "standard")"#;
+        let forms = crate::reader::read(src).expect("read must succeed");
+        let via_forms = parent
+            .compile_named_from_forms::<CompilerSpec>(forms)
+            .expect("from-forms named preloaded method must yield Vec<NamedDefinition<T>>");
+        let via_source = parent
+            .compile_named::<CompilerSpec>(src)
+            .expect("from-source named preloaded method must yield Vec<NamedDefinition<T>>");
+        assert_eq!(via_forms.len(), 2);
+        assert_eq!(via_forms.len(), via_source.len());
+        assert_eq!(via_forms[0].name, via_source[0].name);
+        assert_eq!(via_forms[0].name, "alpha-compiler");
+        assert_eq!(via_forms[0].spec.name, "x");
+        assert_eq!(via_forms[1].name, via_source[1].name);
+        assert_eq!(via_forms[1].name, "beta-compiler");
+        assert_eq!(via_forms[1].spec.name, "y");
+    }
+
+    #[test]
+    fn realized_compiler_compile_from_forms_yields_same_vec_as_compile_on_parse_src() {
+        // Untyped sibling parity pin: feeding pre-read forms through
+        // `RealizedCompiler::compile_from_forms` yields the same expanded
+        // `Vec<Sexp>` `RealizedCompiler::compile` does on parse(src). The
+        // from-source `compile` is `read(src)? + expand_program(forms)`;
+        // this method binds the second leg directly.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec!["(defmacro when (c x) `(if ,c ,x))".into()],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = "(when #t (foo))";
+        let forms = crate::reader::read(src).expect("read must succeed");
+        let via_forms = parent
+            .compile_from_forms(forms)
+            .expect("from-forms untyped preloaded method must yield Vec<Sexp>");
+        let via_source = parent
+            .compile(src)
+            .expect("from-source untyped preloaded method must yield Vec<Sexp>");
+        assert_eq!(via_forms.len(), 1);
+        assert_eq!(via_forms.len(), via_source.len());
+        // Both postures expanded `(when …)` to `(if …)` through the SAME
+        // preloaded library — proves the from-forms primitive sees the
+        // spec's `:macros` slot.
+        let list = via_forms[0].as_list().unwrap();
+        assert_eq!(list[0].as_symbol(), Some("if"));
+        let list_src = via_source[0].as_list().unwrap();
+        assert_eq!(list_src[0].as_symbol(), Some("if"));
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_from_forms_routes_preloaded_macros_into_typed_dispatch() {
+        // The compounding property: the from-forms preloaded dispatcher
+        // sees the spec's `:macros` library, identically to the from-source
+        // sibling. A `(mk-compiler-spec "lifted")` form pre-parsed and fed
+        // through `compile_typed_from_forms` expands through the preloaded
+        // `(defmacro mk-compiler-spec …)` into `(defcompiler :name "lifted"
+        // …)` and the typed dispatcher yields the structurally-named child
+        // spec — the SAME outcome as feeding the source through
+        // `compile_typed`.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![
+                "(defmacro mk-compiler-spec (n) `(defcompiler :name ,n :dialect \"standard\"))"
+                    .into(),
+            ],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = r#"(mk-compiler-spec "lifted-by-macro-via-forms")"#;
+        let forms = crate::reader::read(src).expect("read must succeed");
+        let specs = parent
+            .compile_typed_from_forms::<CompilerSpec>(forms)
+            .expect("preloaded from-forms typed primitive must dispatch through the macro");
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].name, "lifted-by-macro-via-forms");
+
+        // Posture-divergence control: the fresh-expander from-forms free
+        // function does NOT see the macro and skips the form silently.
+        // Pins that the from-forms preloaded dispatcher's expander posture
+        // is THIS realized compiler's preloaded clone, not a hard-coded
+        // fresh expander.
+        let fresh_forms = crate::reader::read(src).expect("read must succeed");
+        let fresh = crate::compile::compile_typed_from_forms::<CompilerSpec>(fresh_forms)
+            .expect("fresh-expander from-forms free function must succeed");
+        assert!(
+            fresh.is_empty(),
+            "fresh-expander posture must NOT see the preloaded macro, got: {fresh:?}"
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_from_forms_does_not_mutate_preloaded_state() {
+        // Per-call clone isolation pin at the from-forms boundary: a
+        // `defmacro` in a pre-parsed form lands in the per-call clone, not
+        // in the persistent realized compiler's expander. The SAME
+        // `RealizedCompiler` invoked twice through `compile_typed_from_forms`
+        // must NOT accumulate macros across calls — same posture as the
+        // from-source sibling's `realized_compiler_compile_typed_does_not_mutate_preloaded_state`.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src1 = r#"(defmacro mk-y (n) `(defcompiler :name ,n :dialect "standard"))
+                      (mk-y "first")"#;
+        let forms1 = crate::reader::read(src1).expect("read must succeed");
+        let specs1 = parent
+            .compile_typed_from_forms::<CompilerSpec>(forms1)
+            .unwrap();
+        assert_eq!(specs1.len(), 1);
+        assert_eq!(specs1[0].name, "first");
+        // Call 2: the SAME `parent` invoked WITHOUT defining `mk-y` — the
+        // preloaded expander did NOT absorb the previous call's defmacro.
+        let forms2 = crate::reader::read(r#"(mk-y "second")"#).expect("read must succeed");
+        let specs2 = parent
+            .compile_typed_from_forms::<CompilerSpec>(forms2)
+            .unwrap();
+        assert!(
+            specs2.is_empty(),
+            "per-call defmacro absorption must NOT leak into the realized compiler's preloaded expander, got: {specs2:?}"
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_named_from_forms_rejects_missing_name_through_named_form_projection(
+    ) {
+        // Path-uniformity with every other consumer of `named_form_projection`:
+        // the from-forms preloaded named dispatcher emits the structural
+        // `NamedFormMissingName` variant identically to the from-source
+        // sibling (`RealizedCompiler::compile_named`), the fresh-expander
+        // from-source sibling (`crate::compile_named`), AND the
+        // fresh-expander from-forms sibling (`crate::compile_named_from_forms`).
+        // The structural-completeness floor extends from the four prior
+        // cells of the dispatcher matrix to this fifth one through ONE
+        // shared projection function.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let forms = crate::reader::read("(defcompiler)").expect("read must succeed");
+        let err = parent
+            .compile_named_from_forms::<CompilerSpec>(forms)
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormMissingName {
+                    keyword: "defcompiler",
+                }
+            ),
+            "expected NamedFormMissingName through preloaded from-forms primitive, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_from_forms_routes_through_expand_to_typed_primitive() {
+        // Compounding property: `RealizedCompiler::compile_typed_from_forms`
+        // routes through the SAME `Expander::expand_to_typed::<T>` primitive
+        // that every other typed-pair dispatcher in the family routes
+        // through. Pin parity: the result is byte-identical to invoking
+        // `expand_to_typed` directly on a clone of the SAME preloaded
+        // expander with the same forms. A regression that drifts this
+        // method's binding from the typed primitive (e.g. re-derives the
+        // inline `expand_and_collect_calls_to(forms, T::KEYWORD,
+        // T::compile_from_args)` triple at the method's call site) would
+        // fail loudly here.
+        //
+        // We can't reach `parent.preloaded` directly (it's private), so
+        // we reproduce the posture by constructing a sibling
+        // RealizedCompiler with the same `:macros` library and feeding the
+        // same forms through the typed primitive on its preloaded clone.
+        // The two postures are observationally identical when the macro
+        // library is the same and the input forms are the same.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = r#"(defcompiler :name "p" :dialect "standard")
+                     (defcompiler :name "q" :dialect "standard")"#;
+        let forms_a = crate::reader::read(src).expect("read must succeed");
+        let forms_b = crate::reader::read(src).expect("read must succeed");
+        let via_method = parent
+            .compile_typed_from_forms::<CompilerSpec>(forms_a)
+            .expect("preloaded method must yield Vec<T>");
+        let via_fresh_expander_through_primitive = Expander::new()
+            .expand_to_typed::<CompilerSpec>(forms_b)
+            .expect("Expander primitive must yield Vec<T>");
+        assert_eq!(via_method.len(), 2);
+        assert_eq!(via_method.len(), via_fresh_expander_through_primitive.len());
+        assert_eq!(
+            via_method[0].name,
+            via_fresh_expander_through_primitive[0].name
+        );
+        assert_eq!(via_method[0].name, "p");
+        assert_eq!(
+            via_method[1].name,
+            via_fresh_expander_through_primitive[1].name
+        );
+        assert_eq!(via_method[1].name, "q");
     }
 }

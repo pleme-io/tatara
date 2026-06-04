@@ -468,12 +468,118 @@ impl Expander {
     pub fn with_macros<I: IntoIterator<Item = MacroDef>>(defs: I) -> Result<Self> {
         let mut e = Self::new();
         for d in defs {
-            if e.compile_templates {
-                e.templates.insert(d.name.clone(), compile_template(&d)?);
-            }
-            e.macros.insert(d.name.clone(), d);
+            e.register_macro_def(d)?;
         }
         Ok(e)
+    }
+
+    /// Register a parsed [`MacroDef`] into this expander's macro tables —
+    /// the single named primitive on the `Expander` surface every
+    /// macro-registration consumer routes through.
+    ///
+    /// The registration discipline is a two-step composition:
+    ///   1. When [`Self::compile_templates`](Self::new) is on (the
+    ///      `Self::new` default; flipped off by [`Self::new_substitute_only`]),
+    ///      [`compile_template`] pre-compiles the macro body to a typed
+    ///      [`CompiledTemplate`] bytecode and inserts it into `self.templates`
+    ///      keyed by `def.name`.
+    ///   2. The `MacroDef` is moved into `self.macros` keyed by `def.name` —
+    ///      always, regardless of `compile_templates`, because the substitute
+    ///      strategy reads `self.macros` exclusively while the bytecode
+    ///      strategy consults `self.templates` first and falls back to
+    ///      `self.macros` for the body and params.
+    ///
+    /// The order is structural: `compile_template` borrows `&def` while
+    /// `self.macros.insert(def.name.clone(), def)` consumes `def` — the
+    /// template pre-compile MUST precede the move into `self.macros`, and the
+    /// `def.name.clone()` projection captures the key for the moved insert.
+    /// `?`-routing through `compile_template` preserves the structural
+    /// ordering of the rejection chain end-to-end: a template-compile error
+    /// (`UnboundTemplateVar` for an unbound `,name`, `NonSymbolUnquoteTarget`
+    /// for `,5` / `,(nested)`, et al.) short-circuits BEFORE `self.macros`
+    /// is mutated, so a failed registration leaves both tables exactly as
+    /// they were — no partial-write window in which `self.macros.has(name)`
+    /// is true but `self.templates.has(name)` is missing (a regression that
+    /// would silently coerce the bytecode strategy onto the substitute path
+    /// for that one macro despite `compile_templates: true`).
+    ///
+    /// Before this lift the same two-step block —
+    ///
+    /// ```ignore
+    /// if self.compile_templates {
+    ///     self.templates.insert(def.name.clone(), compile_template(&def)?);
+    /// }
+    /// self.macros.insert(def.name.clone(), def);
+    /// ```
+    ///
+    /// — lived byte-identical (modulo `self`/`e` and `def`/`d` substitutions)
+    /// at TWO sites: [`Self::with_macros`] (the constructor that
+    /// bulk-registers an `IntoIterator<Item = MacroDef>`, e.g. a curated
+    /// preloaded set the caller assembled out-of-band) and
+    /// [`Self::expand_program`]'s `(defmacro …)`-head arm (the program-level
+    /// walker that recognizes a `defmacro` / `defpoint-template` / `defcheck`
+    /// head via [`macro_def_from`] and registers it as a side-effect of
+    /// walking the program). After this lift the registration block lives in
+    /// ONE method on the `Expander`; both consumers and any future
+    /// macro-registration surface bind to ONE primitive instead of
+    /// re-deriving the two-step discipline at every call site.
+    ///
+    /// `pub` so authoring surfaces (an LSP that incrementally registers a
+    /// `(defmacro …)` head as the user finishes typing it without a full
+    /// program re-expand, a REPL `:define-macro` command that registers a
+    /// pre-parsed `MacroDef` directly, a future "library merge" operation
+    /// that absorbs another expander's macro set MacroDef-by-MacroDef) can
+    /// register a typed `MacroDef` without round-tripping through source
+    /// serialization first. Sibling of [`Self::with_macros`] (the
+    /// bulk-from-iterator constructor — itself the
+    /// `defs.into_iter().try_fold((), |_, d| self.register_macro_def(d))`
+    /// shape on a fresh expander) and [`Self::expand_program`] (the
+    /// source-level walker that recognizes `(defmacro …)` heads via
+    /// [`macro_def_from`] — itself the program-level fold-over-defmacro-heads
+    /// of this method). All three end up at this primitive.
+    ///
+    /// Returns `Result<()>` so the consumer's rejection chain composes with
+    /// `?`-routing — `with_macros` short-circuits its bulk loop on the first
+    /// `compile_template` failure; `expand_program` short-circuits its
+    /// program walk at the offending `(defmacro …)` form. Infallibility on
+    /// the `compile_templates: false` path is preserved (`compile_template`
+    /// is gated behind the conditional), so a substitute-only expander never
+    /// emits the `compile_template`-side rejection chain.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; two
+    /// byte-identical inline copies of the registration block across
+    /// `with_macros` and `expand_program` is past the ≥2 PRIME-DIRECTIVE
+    /// trigger once the structural shape is named. THEORY.md §V.1 — knowable
+    /// platform; the macro-registration discipline becomes a NAMED primitive
+    /// on the substrate's `Expander` surface rather than a per-consumer
+    /// inline duplication that future emitters (an LSP, a REPL, a library-
+    /// merge operator) would have had to re-derive. THEORY.md §II.1
+    /// invariant 2 — free middle; both consumers route through the SAME
+    /// registration primitive, so a regression that drifts ONE consumer's
+    /// discipline from the other (one path skips the template pre-compile,
+    /// one path inserts the `self.macros` entry in a different order, a
+    /// future third side-effect — logging, attestation, metrics — emitted
+    /// at one site but not the other) cannot reach the substrate's runtime:
+    /// there is exactly one implementation both consumers route through.
+    ///
+    /// Frontier inspiration: Racket's `(define-syntax name template)` at
+    /// REPL is exactly this — register a typed macro into the live
+    /// namespace, no source round-trip; the substrate's `register_macro_def`
+    /// is the Rust-typed peer of that surface, lifted onto the `Expander`'s
+    /// table-level algebra (`macros: HashMap<String, MacroDef>` +
+    /// `templates: HashMap<String, CompiledTemplate>`). MLIR's
+    /// `OpRegistry::registerOp<Op>()` — typed-op registration into a
+    /// dialect's live table at construction-time AND at JIT-walk-time
+    /// through ONE registration entry point; `register_macro_def` is the
+    /// pleme-io peer of that registration entry point on the macro-table
+    /// algebra.
+    pub fn register_macro_def(&mut self, def: MacroDef) -> Result<()> {
+        if self.compile_templates {
+            self.templates
+                .insert(def.name.clone(), compile_template(&def)?);
+        }
+        self.macros.insert(def.name.clone(), def);
+        Ok(())
     }
 
     /// Expand a whole program. Returns the list of top-level forms after
@@ -482,11 +588,7 @@ impl Expander {
         let mut out = Vec::new();
         for form in forms {
             if let Some(def) = macro_def_from(&form)? {
-                if self.compile_templates {
-                    self.templates
-                        .insert(def.name.clone(), compile_template(&def)?);
-                }
-                self.macros.insert(def.name.clone(), def);
+                self.register_macro_def(def)?;
                 continue;
             }
             out.push(self.expand(&form)?);
@@ -8584,5 +8686,256 @@ mod tests {
             .as_call_to("wrapped")
             .expect("nested expansion must reach `wrapped`");
         assert_eq!(args[0].as_int(), Some(42));
+    }
+
+    // ── Expander::register_macro_def: the macro-registration primitive ──
+    //
+    // `register_macro_def(&mut self, def: MacroDef) -> Result<()>` lifts
+    // the byte-identical two-step block —
+    //
+    //   if self.compile_templates {
+    //       self.templates.insert(def.name.clone(), compile_template(&def)?);
+    //   }
+    //   self.macros.insert(def.name.clone(), def);
+    //
+    // — that lived inline at `with_macros` (the bulk-from-iterator
+    // constructor) AND `expand_program`'s `(defmacro …)`-head arm (the
+    // program-walk-time registration site) into ONE named method on the
+    // `Expander` surface. The tests below pin:
+    //
+    //   (a) the bytecode-default expander (`Expander::new()`) populates
+    //       BOTH `macros` AND `templates` keyed by `def.name`,
+    //   (b) the substitute-only expander (`Expander::new_substitute_only()`)
+    //       populates `macros` but SKIPS `templates` — the
+    //       `compile_templates: false` gate fires structurally,
+    //   (c) a template that fails to compile (`,foo` against `params:
+    //       []`) short-circuits BEFORE `self.macros.insert` runs, so the
+    //       failed registration leaves both tables untouched — no
+    //       partial-write window in which `self.macros.has(name)` is
+    //       true but `self.templates.has(name)` is missing,
+    //   (d) `with_macros([def])` and `register_macro_def(def)` on a fresh
+    //       expander produce structurally identical state (both tables'
+    //       sets of keys + the same `MacroDef` body under each key),
+    //   (e) `expand_program` of one `(defmacro …)` form and
+    //       `register_macro_def` of the parsed `MacroDef` produce
+    //       structurally identical state — closing path-uniformity
+    //       across the lift's two consumers AT the registration site.
+    //
+    // The tests bind on `Expander::has(name)` / `Expander::len()` for
+    // the macros table and on bytecode-vs-substitute output equivalence
+    // (a registered macro must expand to the SAME result regardless of
+    // whether the bytecode path's `self.templates` entry exists) for the
+    // templates table.
+
+    fn macro_def_id() -> MacroDef {
+        // `(defmacro id (x) `,x)` — the simplest well-formed MacroDef:
+        // one required param, a single-symbol unquote body. Compiles to
+        // a valid `CompiledTemplate` (no unbound vars), so
+        // `register_macro_def` succeeds on every Expander posture.
+        MacroDef {
+            name: "id".into(),
+            params: MacroParams {
+                required: vec!["x".into()],
+                optional: vec![],
+                rest: None,
+            },
+            // ` ` quasi-quoted `,x` — `Quasiquote(Unquote(Symbol("x")))`.
+            body: Sexp::Quasiquote(Box::new(Sexp::Unquote(Box::new(Sexp::symbol("x"))))),
+        }
+    }
+
+    fn macro_def_bad_template() -> MacroDef {
+        // `(defmacro bad () `,unbound)` — a quasi-quote body with `,unbound`
+        // against an EMPTY required-params list. `compile_template`
+        // rejects it with `UnboundTemplateVar` because `unbound` is not
+        // in `params.names()`. Used to exercise the
+        // `compile_template`-failed-but-self.macros-still-pristine
+        // path-uniformity pin.
+        MacroDef {
+            name: "bad".into(),
+            params: MacroParams::default(),
+            body: Sexp::Quasiquote(Box::new(Sexp::Unquote(Box::new(Sexp::symbol("unbound"))))),
+        }
+    }
+
+    #[test]
+    fn register_macro_def_bytecode_default_populates_macros_and_templates() {
+        // The bytecode-default `Expander::new()` carries
+        // `compile_templates: true`; `register_macro_def` MUST populate
+        // BOTH `self.macros` (the substitute path's registry) AND
+        // `self.templates` (the bytecode path's pre-compiled bytecode
+        // index) keyed by `def.name`. Fail-before-pass-after: this
+        // assert requires the new method to exist AND to compose the
+        // two side-effects in canonical order on a single-call
+        // registration — pre-lift `register_macro_def` did not exist.
+        let mut e = Expander::new();
+        e.register_macro_def(macro_def_id())
+            .expect("well-formed MacroDef must register");
+        assert!(
+            e.has("id"),
+            "self.macros must carry the registered name after register_macro_def"
+        );
+        assert!(
+            e.templates.contains_key("id"),
+            "self.templates must carry the compiled bytecode under the bytecode-default posture"
+        );
+        // The registered macro must expand correctly through the
+        // bytecode strategy — proves the inserted template is the right
+        // bytecode for the body.
+        let out = e
+            .expand_program(read("(id 42)").unwrap())
+            .expect("registered macro must expand");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0], Sexp::int(42));
+    }
+
+    #[test]
+    fn register_macro_def_substitute_only_skips_templates() {
+        // `Expander::new_substitute_only()` carries `compile_templates:
+        // false`; `register_macro_def` MUST populate `self.macros` for
+        // the substitute path but SKIP `self.templates` (no bytecode
+        // pre-compile). Pin the `compile_templates: false` gate fires
+        // structurally — a regression that drifts the conditional from
+        // the registration primitive (e.g. a future emitter that
+        // unconditionally pre-compiles) would silently double the
+        // benchmark baseline's allocation footprint.
+        let mut e = Expander::new_substitute_only();
+        e.register_macro_def(macro_def_id())
+            .expect("well-formed MacroDef must register under substitute-only");
+        assert!(
+            e.has("id"),
+            "self.macros must carry the registered name even under substitute-only"
+        );
+        assert!(
+            !e.templates.contains_key("id"),
+            "self.templates MUST be empty under compile_templates: false — the gate fires"
+        );
+        // The registered macro must still expand correctly through the
+        // substitute strategy — proves the inserted MacroDef is the
+        // right body for substitute-walking.
+        let out = e
+            .expand_program(read("(id 42)").unwrap())
+            .expect("registered macro must expand via substitute path");
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0], Sexp::int(42));
+    }
+
+    #[test]
+    fn register_macro_def_template_compile_failure_leaves_both_tables_pristine() {
+        // The structural ordering pin: when `compile_template(&def)?`
+        // rejects (e.g. `,unbound` against empty params), the `?` MUST
+        // short-circuit BEFORE `self.macros.insert(def.name.clone(),
+        // def)` runs, so a failed registration leaves BOTH tables
+        // exactly as they were. Without this ordering a future
+        // bytecode-strategy lookup would resolve `self.macros.get(name)`
+        // (the body was inserted) AND find `self.templates.get(name)`
+        // returning `None` (the pre-compile failed), silently coercing
+        // the macro onto the substitute fallback path despite
+        // `compile_templates: true`. The lift preserves the pre-lift
+        // ordering (`compile_template` precedes `self.macros.insert`)
+        // structurally — the test pins it across the lift.
+        let mut e = Expander::new();
+        let err = e
+            .register_macro_def(macro_def_bad_template())
+            .expect_err("unbound-template body must reject");
+        // The rejection is the structural variant the bytecode
+        // strategy's template-gate emits.
+        assert!(
+            matches!(err, LispError::UnboundTemplateVar { .. }),
+            "expected UnboundTemplateVar, got: {err:?}"
+        );
+        // Both tables MUST be pristine — no partial write.
+        assert!(
+            !e.has("bad"),
+            "self.macros must be untouched after compile_template failure"
+        );
+        assert!(
+            !e.templates.contains_key("bad"),
+            "self.templates must be untouched after compile_template failure"
+        );
+    }
+
+    #[test]
+    fn with_macros_routes_through_register_macro_def_path_uniformity() {
+        // Path-uniformity pin across the bulk-constructor consumer:
+        // `with_macros([def])` MUST produce the same final state as
+        // `Expander::new()` + `register_macro_def(def)`. A regression
+        // that drifts the constructor's per-MacroDef inline block from
+        // the registration primitive (e.g. a future emitter that
+        // re-inlines the two-step block at `with_macros` rather than
+        // delegating) would fail loudly here.
+        let mut via_register = Expander::new();
+        via_register
+            .register_macro_def(macro_def_id())
+            .expect("register must succeed");
+        let mut via_with_macros =
+            Expander::with_macros([macro_def_id()]).expect("with_macros must succeed");
+        assert_eq!(via_register.len(), via_with_macros.len());
+        assert!(via_register.has("id"));
+        assert!(via_with_macros.has("id"));
+        // Both tables key on the same set across both postures.
+        assert_eq!(
+            via_register.templates.contains_key("id"),
+            via_with_macros.templates.contains_key("id"),
+            "self.templates key-presence must agree across with_macros and register_macro_def"
+        );
+        // Both registered expanders expand the registered macro
+        // identically — the strongest behavioral parity.
+        let out_a = via_register
+            .expand_program(read("(id 99)").unwrap())
+            .unwrap();
+        let out_b = via_with_macros
+            .expand_program(read("(id 99)").unwrap())
+            .unwrap();
+        assert_eq!(out_a, out_b);
+        assert_eq!(out_a, vec![Sexp::int(99)]);
+    }
+
+    #[test]
+    fn expand_program_routes_through_register_macro_def_path_uniformity() {
+        // Path-uniformity pin across the program-walk consumer:
+        // `expand_program` of `(defmacro id (x) `,x)` MUST produce the
+        // same final state as a direct
+        // `register_macro_def(macro_def_id())`. A regression that
+        // drifts `expand_program`'s `(defmacro …)`-head arm from the
+        // registration primitive (e.g. a future emitter that re-inlines
+        // the two-step block at `expand_program` rather than delegating)
+        // would fail loudly here.
+        let mut via_register = Expander::new();
+        via_register
+            .register_macro_def(macro_def_id())
+            .expect("register must succeed");
+        let mut via_expand_program = Expander::new();
+        let yielded = via_expand_program
+            .expand_program(read("(defmacro id (x) `,x)").unwrap())
+            .expect("expand_program of one defmacro must succeed");
+        // expand_program drops the (defmacro …) form from its returned
+        // Vec<Sexp> (defmacro is a definition, not a program form), so
+        // the yielded list is empty — pin the side-effect-only posture.
+        assert!(
+            yielded.is_empty(),
+            "(defmacro …) is a side-effect-only top-level form; expand_program yields nothing"
+        );
+        assert!(via_register.has("id"));
+        assert!(via_expand_program.has("id"));
+        assert_eq!(via_register.len(), via_expand_program.len());
+        // Both tables key on the same set across both postures.
+        assert_eq!(
+            via_register.templates.contains_key("id"),
+            via_expand_program.templates.contains_key("id"),
+            "self.templates key-presence must agree across expand_program and register_macro_def"
+        );
+        // Both registered expanders expand the registered macro
+        // identically — the strongest behavioral parity, closing
+        // path-uniformity across BOTH consumers (with_macros above,
+        // expand_program here) at ONE primitive.
+        let out_a = via_register
+            .expand_program(read("(id 7)").unwrap())
+            .unwrap();
+        let out_b = via_expand_program
+            .expand_program(read("(id 7)").unwrap())
+            .unwrap();
+        assert_eq!(out_a, out_b);
+        assert_eq!(out_a, vec![Sexp::int(7)]);
     }
 }

@@ -590,6 +590,51 @@ pub fn iter_calls_to<'a>(
     forms.iter().filter_map(move |f| f.as_call_to(keyword))
 }
 
+/// Render an `Atom::Float`'s `f64` value to a form that re-reads as
+/// `Atom::Float` — preserves the float-vs-int typed identity across the
+/// `Sexp::Display` → [`crate::reader::read`] round-trip.
+///
+/// Rust's stdlib `Display` impl for `f64` elides the trailing `.0` for
+/// finite integral values: `format!("{}", 1.0_f64) == "1"`,
+/// `format!("{}", 100.0_f64) == "100"`. The substrate's reader
+/// ([`crate::reader::atom_from_str`]) tries `i64::parse` BEFORE
+/// `f64::parse`, so a bare `1` re-reads as `Atom::Int(1)` — NOT as
+/// `Atom::Float(1.0)`. The default Display rendering therefore drifts the
+/// typed identity at the Display→read boundary: `Float(1.0)` round-trips
+/// to `Int(1)` and a regression silently coerces an authoring-surface
+/// `1.0` slot into the typed `Int` track.
+///
+/// This helper emits `1.0` for `1.0_f64` and `1.5` for `1.5_f64` — the
+/// `.0` suffix is appended IFF the value is finite AND already integral
+/// (`n == n.trunc()`). Non-integral values render through the default
+/// `f64` Display impl, which already preserves the fractional component
+/// (`1.5`, `0.99`, etc.) round-trippably. Non-finite values (`NaN`,
+/// `inf`, `-inf`) also fall through to the default impl — they cannot be
+/// reliably round-tripped through the reader regardless (the Hash impl
+/// already warns about NaN's PartialEq irregularity at the cache-key
+/// boundary), so the helper does not paper over that prior limitation.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+/// substrate's typed-entry gate distinguishes `Atom::Int` from
+/// `Atom::Float`, and the Display→read round-trip is the typed-exit-side
+/// mirror that must preserve the distinction. Pre-lift the
+/// `Float(integral) → Int(integral)` collapse silently violated the
+/// invariant at the round-trip boundary; post-lift the typed identity is
+/// preserved. THEORY.md §V.1 — knowable platform; diagnostics that
+/// project a `Float(1.0)` slot through `SexpWitness::display` (sourced
+/// from `Sexp::to_string()`) used to surface as `got 1` — confusingly
+/// identical to the typed `Int(1)` projection. Post-lift the diagnostic
+/// shape names the offender's typed identity (`got 1.0`) so operators
+/// distinguish "you wrote 1.0 in an int slot" from "you wrote 1 in a
+/// kwarg slot the kwarg gate rejected" without re-reading source.
+fn fmt_float(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if n.is_finite() && n == n.trunc() {
+        write!(f, "{n}.0")
+    } else {
+        write!(f, "{n}")
+    }
+}
+
 impl fmt::Display for Sexp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -599,7 +644,7 @@ impl fmt::Display for Sexp {
                 Atom::Keyword(s) => write!(f, ":{s}"),
                 Atom::Str(s) => write!(f, "{s:?}"),
                 Atom::Int(n) => write!(f, "{n}"),
-                Atom::Float(n) => write!(f, "{n}"),
+                Atom::Float(n) => fmt_float(*n, f),
                 Atom::Bool(true) => f.write_str("#t"),
                 Atom::Bool(false) => f.write_str("#f"),
             },
@@ -1542,5 +1587,102 @@ mod tests {
             std::ptr::eq(body_splice, inner_splice_ptr),
             "as_unquote inner pointer drifted from the boxed body (splice arm)"
         );
+    }
+
+    // ── fmt_float: Display→read round-trip preserves Float identity ──────
+    //
+    // Rust's stdlib Display for f64 elides trailing `.0` on integral
+    // floats — `format!("{}", 1.0_f64) == "1"` — and the substrate's
+    // reader tries `i64::parse` before `f64::parse`, so a bare `1` re-reads
+    // as `Atom::Int(1)`, NOT `Atom::Float(1.0)`. The Display→read
+    // round-trip pre-lift dropped the typed Float identity on every
+    // integral float: `Float(1.0)` displayed as `"1"`, re-read as `Int(1)`,
+    // and downstream consumers silently typed the slot as Int. The
+    // `fmt_float` helper appends `.0` for finite integral values so the
+    // round-trip preserves the typed identity. Tests below pin:
+    //   (a) Display of `Float(1.0)` is `"1.0"` (fail-before-pass-after);
+    //   (b) the Display→read round-trip lands as `Float(1.0)`, NOT
+    //       `Int(1)` (the typed-identity preservation contract);
+    //   (c) non-integral floats render unchanged through the default
+    //       impl (`Float(1.5)` is still `"1.5"`);
+    //   (d) negative integral floats inherit the `.0` suffix
+    //       (`Float(-2.0)` is `"-2.0"`);
+    //   (e) integer Display is unaffected (`Int(1)` is still `"1"`) —
+    //       pin path-uniformity so the helper is precisely scoped to
+    //       the Float arm.
+
+    #[test]
+    fn fmt_float_renders_integral_float_with_trailing_zero() {
+        // Fail-before-pass-after: pre-lift `Sexp::float(1.0).to_string()`
+        // was `"1"`; post-lift the typed Float identity is preserved by
+        // the `.0` suffix.
+        assert_eq!(Sexp::float(1.0).to_string(), "1.0");
+        assert_eq!(Sexp::float(100.0).to_string(), "100.0");
+        assert_eq!(Sexp::float(0.0).to_string(), "0.0");
+    }
+
+    #[test]
+    fn fmt_float_round_trips_integral_float_through_reader_as_float() {
+        // The structural contract the lift establishes: a `Float`
+        // serialized via `Display` re-reads as `Float`, NOT `Int`. Pin
+        // the round-trip via the reader so a regression that drops the
+        // `.0` suffix (or that re-orders the reader's i64/f64 parse
+        // attempts to drop the float arm) surfaces here.
+        let orig = Sexp::float(1.0);
+        let rendered = orig.to_string();
+        let forms =
+            crate::reader::read(&rendered).expect("integral float must round-trip through reader");
+        assert_eq!(forms.len(), 1);
+        match &forms[0] {
+            Sexp::Atom(Atom::Float(n)) => assert_eq!(*n, 1.0),
+            other => panic!("Display->read round-trip dropped the Float identity, got: {other:?}"),
+        }
+        // Sibling-shape control: a SECOND integral magnitude reinforces
+        // that the round-trip preserves the value, not only the type.
+        let orig2 = Sexp::float(-42.0);
+        let rendered2 = orig2.to_string();
+        let forms2 = crate::reader::read(&rendered2)
+            .expect("negative integral float must round-trip through reader");
+        match &forms2[0] {
+            Sexp::Atom(Atom::Float(n)) => assert_eq!(*n, -42.0),
+            other => panic!(
+                "Display->read of negative integral float dropped Float identity, got: {other:?}"
+            ),
+        }
+    }
+
+    #[test]
+    fn fmt_float_preserves_non_integral_float_display() {
+        // Path-uniformity: non-integral floats (the case the stdlib impl
+        // already handled correctly) must render unchanged. A regression
+        // that always-appends `.0` would write `"1.5.0"` and fail
+        // here AND fail the reader round-trip below.
+        assert_eq!(Sexp::float(1.5).to_string(), "1.5");
+        assert_eq!(Sexp::float(0.99).to_string(), "0.99");
+        assert_eq!(Sexp::float(-2.75).to_string(), "-2.75");
+
+        // Round-trip control for the non-integral case stays valid: the
+        // helper is precisely scoped, so the fractional component is
+        // preserved verbatim through the reader.
+        let orig = Sexp::float(0.99);
+        let forms = crate::reader::read(&orig.to_string())
+            .expect("non-integral float must round-trip through reader");
+        match &forms[0] {
+            Sexp::Atom(Atom::Float(n)) => assert_eq!(*n, 0.99),
+            other => panic!("non-integral float round-trip drift, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fmt_float_leaves_int_display_unchanged() {
+        // Path-uniformity sibling: `Atom::Int` Display is unaffected by
+        // the `fmt_float` introduction — the helper is wired only into
+        // the `Atom::Float` arm of the Display match. A regression that
+        // accidentally routes `Atom::Int` through `fmt_float` would
+        // render `"1.0"` here and break every consumer that authored an
+        // int kwarg expecting the bare-integer rendering.
+        assert_eq!(Sexp::int(1).to_string(), "1");
+        assert_eq!(Sexp::int(0).to_string(), "0");
+        assert_eq!(Sexp::int(-42).to_string(), "-42");
     }
 }

@@ -23,20 +23,21 @@ impl Hash for Sexp {
                     i.hash(h);
                 }
             }
-            Self::Quote(inner) => {
-                3u8.hash(h);
-                inner.hash(h);
-            }
-            Self::Quasiquote(inner) => {
-                4u8.hash(h);
-                inner.hash(h);
-            }
-            Self::Unquote(inner) => {
-                5u8.hash(h);
-                inner.hash(h);
-            }
-            Self::UnquoteSplice(inner) => {
-                6u8.hash(h);
+            // The four quote-family variants share the (discriminator, inner)
+            // hash shape — all route through `as_quote_form`'s typed-marker
+            // projection so the per-variant discriminator bytes (3/4/5/6) and
+            // the recursive `inner.hash(h)` body bind at ONE site on the
+            // closed-set `QuoteForm` algebra. The `.expect(_)` is a
+            // static-invariant statement (the outer pattern guarantees the
+            // projection lands `Some`) that a future quote-family extension
+            // can't drift across — adding a fifth `Sexp` wrapper variant
+            // forces a corresponding `QuoteForm` extension AND
+            // `as_quote_form` arm, with rustc binding the three together.
+            Self::Quote(_) | Self::Quasiquote(_) | Self::Unquote(_) | Self::UnquoteSplice(_) => {
+                let (qf, inner) = self
+                    .as_quote_form()
+                    .expect("matched quote-family variant must project to Some via as_quote_form");
+                qf.hash_discriminator().hash(h);
                 inner.hash(h);
             }
         }
@@ -487,10 +488,292 @@ impl Sexp {
     /// `Sexp` algebra, with `Option<(UnquoteForm, &Sexp)>` standing in for
     /// MLIR's typed downcast result.
     pub fn as_unquote(&self) -> Option<(UnquoteForm, &Sexp)> {
+        let (qf, inner) = self.as_quote_form()?;
+        qf.as_unquote_form().map(|uf| (uf, inner))
+    }
+
+    /// Decompose a quote-family form into its typed marker and inner
+    /// expression — `Some((QuoteForm::Quote, inner))` iff this is `'x`
+    /// (a [`Sexp::Quote`] wrapper), `Some((QuoteForm::Quasiquote, inner))`
+    /// iff this is `` `x `` (a [`Sexp::Quasiquote`] wrapper),
+    /// `Some((QuoteForm::Unquote, inner))` iff this is `,x` (a
+    /// [`Sexp::Unquote`] wrapper), `Some((QuoteForm::UnquoteSplice, inner))`
+    /// iff this is `,@x` (a [`Sexp::UnquoteSplice`] wrapper), `None` for
+    /// every other shape (Nil, Atom, List).
+    ///
+    /// This is the *quote-family projection* — the typed-marker peer of
+    /// [`Sexp::as_unquote`] generalized across all four homoiconic
+    /// prefix-wrappers. Where [`Sexp::as_unquote`] keys the macro-template
+    /// SUBSTITUTION surface on the closed pair `{Unquote, Splice}` (the
+    /// two prefixes whose template-time semantic is substitution),
+    /// `as_quote_form` keys the WIRE-SHAPE surfaces (Display rendering,
+    /// Hash discrimination, canonical-form interop) on the closed superset
+    /// `{Quote, Quasiquote, Unquote, UnquoteSplice}` — all four prefixes
+    /// the reader can tokenize and the writer must round-trip. The
+    /// `Sexp::as_unquote` projection now derives structurally from
+    /// `as_quote_form`'s output via [`QuoteForm::as_unquote_form`] — the
+    /// 2-of-4 subset gate — so the two projections share a SINGLE
+    /// implementation site on the `Sexp` algebra and the
+    /// (Sexp variant, QuoteForm variant) pairing binds at ONE rust
+    /// function regardless of whether the consumer wants the substitution
+    /// subset or the wire-shape superset.
+    ///
+    /// Three consumers in this file route through this primitive:
+    ///   * `Hash for Sexp` — the four `Quote`/`Quasiquote`/`Unquote`/
+    ///     `UnquoteSplice` arms (pre-lift each carrying its own
+    ///     `<discr>.hash(h); inner.hash(h)` body) collapse to ONE arm
+    ///     that routes through `as_quote_form` and reads the
+    ///     discriminator via [`QuoteForm::hash_discriminator`].
+    ///   * `Display for Sexp` — the four `write!(f, "<prefix>{inner}")`
+    ///     arms (pre-lift each carrying its own literal prefix string)
+    ///     collapse to ONE arm that routes through `as_quote_form` and
+    ///     reads the prefix via [`QuoteForm::prefix`].
+    ///   * [`Sexp::as_unquote`] — derives `Option<(UnquoteForm, &Sexp)>`
+    ///     by composing `as_quote_form` with [`QuoteForm::as_unquote_form`]
+    ///     (the 2-of-4 subset projection), so the macro-template
+    ///     substitution surface inherits the (Sexp variant, marker)
+    ///     pairing through this projection's typed dispatch rather than
+    ///     re-deriving its own arm-based match.
+    ///
+    /// The closed-set guarantee on [`QuoteForm`] (exactly
+    /// `Quote ⊎ Quasiquote ⊎ Unquote ⊎ UnquoteSplice`) is threaded through
+    /// this projection's return tuple, so consumers that pattern-match on
+    /// `form: QuoteForm` get rustc-enforced exhaustiveness — a future
+    /// `Sexp` wrapper variant must extend `QuoteForm` AND this match arm
+    /// together (or stay outside the quote family and project to `None`),
+    /// eliminating the silent multi-site extension-drift this lift was
+    /// designed to forbid.
+    ///
+    /// Soft face, like the rest of the `as_*` family on `Sexp`: it
+    /// answers "is this form a quote-family marker, and what does it
+    /// wrap?" and yields `None` for everything that isn't (skip / fall
+    /// through), with no diagnostic.
+    ///
+    /// Structural identity binding it to the quote-family variants and
+    /// its `as_unquote` subset sibling:
+    ///   * `as_quote_form() == Some((QuoteForm::Quote, inner))`         iff `self == Sexp::Quote(inner)`
+    ///   * `as_quote_form() == Some((QuoteForm::Quasiquote, inner))`    iff `self == Sexp::Quasiquote(inner)`
+    ///   * `as_quote_form() == Some((QuoteForm::Unquote, inner))`       iff `self == Sexp::Unquote(inner)`
+    ///   * `as_quote_form() == Some((QuoteForm::UnquoteSplice, inner))` iff `self == Sexp::UnquoteSplice(inner)`
+    ///   * `as_quote_form().is_some() == matches!(self, Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) | Sexp::UnquoteSplice(_))`
+    ///   * `as_unquote() == as_quote_form().and_then(|(qf, inner)| qf.as_unquote_form().map(|uf| (uf, inner)))`
+    ///
+    /// The returned `&Sexp` borrows the inner box's body verbatim — no
+    /// clone, no allocation — same lifetime as `&self` and same posture
+    /// as [`Sexp::as_unquote`]'s tail.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// quote-family (Sexp variant, prefix string, hash discriminator)
+    /// triple appeared inline at three sites (`Hash for Sexp`,
+    /// `Display for Sexp`, `as_unquote`) — well past the ≥2 PRIME-DIRECTIVE
+    /// trigger once the structural shape is named. THEORY.md §V.1 —
+    /// knowable platform; the quote-family typed-marker projection becomes
+    /// a NAMED primitive on the substrate's `Sexp` algebra rather than
+    /// per-site inline matches paired with per-site discriminator literals
+    /// and prefix literals. THEORY.md §II.1 invariant 1 — typed entry; the
+    /// reader's prefix-to-variant dispatch ([`crate::reader::read_quoted`])
+    /// AND the Display impl's variant-to-prefix dispatch are dual
+    /// typed-entry / typed-exit gates over the same closed set; the
+    /// `QuoteForm` algebra threads BOTH gates through ONE typed enum so a
+    /// regression that drifts one side's prefix from the other (e.g. the
+    /// reader gains a fifth prefix but the Display impl doesn't) is no
+    /// longer a silent two-site divergence — rustc binds both sides to
+    /// the same closed-set enum. THEORY.md §II.1 invariant 2 — free
+    /// middle; the three consumers (Hash, Display, `as_unquote`) route
+    /// through the SAME projection, so a regression that drifts ONE
+    /// consumer's (Sexp variant, marker) pairing from the others cannot
+    /// reach the substrate's runtime.
+    ///
+    /// Frontier inspiration: Racket's `syntax-parse` `~or* (~quote stx)
+    /// (~quasiquote stx) (~unquote stx) (~unquote-splice stx)` pattern —
+    /// every macro-template pattern over `'`/`` ` ``/`,`/`,@` binds to
+    /// ONE typed decomposition that surfaces the marker identity
+    /// alongside the inner expression; the substrate's `as_quote_form` is
+    /// the Rust-typed peer of that pattern, lifted onto the `Sexp`
+    /// algebra with `QuoteForm` standing in for Racket's pattern-class
+    /// identity at the homoiconic prefix surface. MLIR's typed-IR
+    /// projection `mlir::dyn_cast<QuoteFamilyOp>(op)` — the typed downcast
+    /// from a polymorphic IR node onto a closed-set op family is the MLIR
+    /// idiom; `as_quote_form` is the unstructured-projection peer on the
+    /// substrate's `Sexp` algebra, with `Option<(QuoteForm, &Sexp)>`
+    /// standing in for MLIR's typed downcast result.
+    pub fn as_quote_form(&self) -> Option<(QuoteForm, &Sexp)> {
         match self {
-            Self::Unquote(inner) => Some((UnquoteForm::Unquote, inner)),
-            Self::UnquoteSplice(inner) => Some((UnquoteForm::Splice, inner)),
+            Self::Quote(inner) => Some((QuoteForm::Quote, inner)),
+            Self::Quasiquote(inner) => Some((QuoteForm::Quasiquote, inner)),
+            Self::Unquote(inner) => Some((QuoteForm::Unquote, inner)),
+            Self::UnquoteSplice(inner) => Some((QuoteForm::UnquoteSplice, inner)),
             _ => None,
+        }
+    }
+}
+
+/// Closed-set typed identifier for the four homoiconic prefix-wrappers in
+/// the substrate's `Sexp` algebra — `'x` ([`Sexp::Quote`]), `` `x ``
+/// ([`Sexp::Quasiquote`]), `,x` ([`Sexp::Unquote`]), `,@x`
+/// ([`Sexp::UnquoteSplice`]) — paired with the projections each consumer
+/// surface needs ([`Self::prefix`] for [`crate::ast::Sexp`]'s `Display`
+/// impl AND the reader's prefix dispatch dual, [`Self::hash_discriminator`]
+/// for [`crate::ast::Sexp`]'s `Hash` impl, [`Self::as_unquote_form`] for
+/// the 2-of-4 subset gate the template-substitution surface keys on).
+///
+/// Mirror at the homoiconic-prefix-wrapper boundary of the prior-run
+/// `UnquoteForm` (template-marker subset, 2 variants),
+/// `CompilerSpecIoStage` (disk-persistence surface),
+/// `TemplateInvariantKind` (bytecode-runtime surface), `MacroDefHead`
+/// (macro-definition-head closed set), and `KwargPath` (kwargs-path-shape
+/// surface) closed-set lifts: those enums key their respective rejection
+/// or projection variants on a typed identity carried inside the variant's
+/// data shape; this enum keys the FOUR distinct quote-family rendering /
+/// hashing / template-substitution sites on a typed marker identity.
+/// Adding a fifth homoiconic prefix-wrapper (e.g., a hypothetical `,~`
+/// reverse-unquote) requires extending this enum, which rustc-enforces
+/// matching at every projection site (`prefix`, `hash_discriminator`,
+/// `as_unquote_form`, plus `Sexp::as_quote_form`'s match arm) — the closed
+/// set becomes a TYPE rather than four `&'static str` / `u8` literals that
+/// could drift independently across `Sexp::Display`'s prefix arm and
+/// `Sexp::Hash`'s discriminator arm and the reader's prefix dispatch.
+///
+/// Subset-gate relationship to [`UnquoteForm`]: the template-substitution
+/// surface's [`Sexp::as_unquote`] is now `as_quote_form().and_then(|(qf,
+/// inner)| qf.as_unquote_form().map(|uf| (uf, inner)))` — the 2-of-4
+/// projection lives at ONE site on this algebra ([`Self::as_unquote_form`])
+/// rather than being re-derived at every consumer that wants only the
+/// `{Unquote, UnquoteSplice}` subset. A future enum variant that joins
+/// the template-substitution subset (e.g. a typed `defalias`-projected
+/// fifth marker) extends [`UnquoteForm`] AND
+/// [`Self::as_unquote_form`]'s arm together, with rustc binding the
+/// extension through the projection's `Option` return type.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+/// homoiconic-prefix-wrapper dispatch (the reader's prefix-to-variant
+/// gate AND the Display impl's variant-to-prefix dual) IS the rust-level
+/// typed-entry / typed-exit gate, and naming its closed-set identity
+/// lifts the gate from per-site literal-pair discipline to ONE typed
+/// enum the substrate's diagnostic promotions hang off of.
+/// THEORY.md §V.1 — knowable platform; the closed set of homoiconic
+/// prefix-wrappers becomes a TYPE rather than four `&'static str` / `u8`
+/// literals scattered across Hash / Display / interop / sexp_shape — a
+/// typo in any one site is no longer a runtime drift but a compile error
+/// against the typed projection. THEORY.md §VI.1 — generation over
+/// composition; the typed enum lands the structural-completeness floor
+/// for the quote-family surface, parallel to how `UnquoteForm` lands it
+/// for the template-marker subset and `MacroDefHead` for the
+/// macro-definition-head surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuoteForm {
+    /// `'x` — literal-quote prefix. The `'` marker; the inner expression
+    /// is NOT subject to macro substitution. Projects to NO
+    /// `UnquoteForm` (the template-substitution surface ignores quote).
+    Quote,
+    /// `` `x `` — quasi-quote prefix. The `` ` `` marker; the inner
+    /// expression is the template body inside which `,` and `,@` mark
+    /// substitution points. Projects to NO `UnquoteForm` (a quasi-quote
+    /// is the substitution SCOPE, not a substitution itself).
+    Quasiquote,
+    /// `,x` — single-value substitution. The `,` marker; the inner
+    /// symbol is substituted with its bound value at template
+    /// expansion. Projects to `UnquoteForm::Unquote` for the
+    /// template-substitution surface.
+    Unquote,
+    /// `,@x` — list-splice substitution. The `,@` marker; the inner
+    /// symbol must be bound to a list, whose elements are flattened
+    /// into the containing list at template expansion. Projects to
+    /// `UnquoteForm::Splice` for the template-substitution surface.
+    UnquoteSplice,
+}
+
+impl QuoteForm {
+    /// Canonical `&'static str` prefix that paired with the variant
+    /// renders the homoiconic form — `"'"` for [`Self::Quote`],
+    /// `` "`" `` for [`Self::Quasiquote`], `","` for [`Self::Unquote`],
+    /// `",@"` for [`Self::UnquoteSplice`]. Threaded through
+    /// [`crate::ast::Sexp`]'s `Display` impl so the per-variant prefix
+    /// rendering lives at ONE site on this algebra rather than four
+    /// inline literal strings across the Display arms.
+    ///
+    /// Structural dual of the reader's [`crate::reader::read_quoted`]
+    /// dispatch: the reader maps prefix-tokens to `Sexp::{Quote,
+    /// Quasiquote, Unquote, UnquoteSplice}` constructors; this method
+    /// maps the typed `QuoteForm` marker back to its canonical prefix
+    /// string. Adding a fifth prefix extends both sides — the reader's
+    /// tokenizer + dispatch AND this method — with rustc enforcing
+    /// the pair through the closed-set enum. Round-trip:
+    /// `read(format!("{}{inner}", qf.prefix()))` produces the
+    /// `Sexp::*` variant matching `qf`, by construction.
+    ///
+    /// The `&'static str` lifetime is load-bearing: it lets every
+    /// consumer (Display arm, future format strings, future interop
+    /// canonical-form taggers) project through this method without
+    /// an allocation, parallel to how [`UnquoteForm::marker`]
+    /// projects its 2-of-4 subset surface.
+    #[must_use]
+    pub fn prefix(self) -> &'static str {
+        match self {
+            Self::Quote => "'",
+            Self::Quasiquote => "`",
+            Self::Unquote => ",",
+            Self::UnquoteSplice => ",@",
+        }
+    }
+
+    /// Stable, per-variant byte discriminator that paired with the
+    /// recursive inner hash builds the substrate's `Hash for Sexp`
+    /// projection — `3` for [`Self::Quote`], `4` for
+    /// [`Self::Quasiquote`], `5` for [`Self::Unquote`], `6` for
+    /// [`Self::UnquoteSplice`]. The byte values are load-bearing
+    /// because the expansion cache (`Expander::cache`) keys on the
+    /// hash of `(macro_name, args)` — changing a discriminator silently
+    /// invalidates every cached expansion AND mis-collides with the
+    /// reserved bytes the non-quote-family Hash arms use (`0` for
+    /// `Nil`, `1` for `Atom`, `2` for `List`). The closed set ensures
+    /// the four arms partition `{3, 4, 5, 6}` injectively against the
+    /// reserved bytes — a future quote-family extension must extend
+    /// this method AND the non-quote-family arms in lockstep, with
+    /// rustc binding the consistency through exhaustiveness over the
+    /// closed enum.
+    ///
+    /// `pub(crate)` because the byte-discriminator surface is an
+    /// implementation detail of the substrate's `Hash for Sexp` cache-
+    /// key contract; exposing it publicly would leak the cache-key
+    /// shape through the API without enabling any external consumer
+    /// the public projections (`Sexp::as_quote_form`, `Self::prefix`,
+    /// `Self::as_unquote_form`) don't already serve.
+    #[must_use]
+    pub(crate) fn hash_discriminator(self) -> u8 {
+        match self {
+            Self::Quote => 3,
+            Self::Quasiquote => 4,
+            Self::Unquote => 5,
+            Self::UnquoteSplice => 6,
+        }
+    }
+
+    /// Project the 4-of-4 quote-family marker into the 2-of-4
+    /// template-substitution subset — `Some(UnquoteForm::Unquote)` for
+    /// [`Self::Unquote`], `Some(UnquoteForm::Splice)` for
+    /// [`Self::UnquoteSplice`], `None` for [`Self::Quote`] /
+    /// [`Self::Quasiquote`] (the literal-quote and quasi-quote
+    /// prefixes are wrappers, NOT substitution points). ONE projection
+    /// on this algebra the [`crate::ast::Sexp::as_unquote`] derivation
+    /// routes through — the (Sexp variant, UnquoteForm marker) pairing
+    /// now binds at the typed [`crate::ast::Sexp::as_quote_form`]
+    /// projection's output composed with this method's output, instead
+    /// of being re-derived per-arm inside `Sexp::as_unquote`.
+    ///
+    /// The closed-set guarantee on [`UnquoteForm`] (exactly
+    /// `Unquote ⊎ Splice`) AND on [`Self`] (exactly
+    /// `Quote ⊎ Quasiquote ⊎ Unquote ⊎ UnquoteSplice`) ensures that the
+    /// 2-of-4 subset is structurally fixed: a future variant joining
+    /// the template-substitution surface extends both enums AND this
+    /// method's match arm together, with rustc binding the extension
+    /// through the projection's `Option` return type.
+    #[must_use]
+    pub fn as_unquote_form(self) -> Option<UnquoteForm> {
+        match self {
+            Self::Unquote => Some(UnquoteForm::Unquote),
+            Self::UnquoteSplice => Some(UnquoteForm::Splice),
+            Self::Quote | Self::Quasiquote => None,
         }
     }
 }
@@ -658,10 +941,23 @@ impl fmt::Display for Sexp {
                 }
                 f.write_str(")")
             }
-            Self::Quote(inner) => write!(f, "'{inner}"),
-            Self::Quasiquote(inner) => write!(f, "`{inner}"),
-            Self::Unquote(inner) => write!(f, ",{inner}"),
-            Self::UnquoteSplice(inner) => write!(f, ",@{inner}"),
+            // The four quote-family variants share the
+            // `write!(f, "<prefix>{inner}")` Display shape — all route
+            // through `as_quote_form`'s typed-marker projection so the
+            // per-variant prefix (`'`, `` ` ``, `,`, `,@`) binds at ONE
+            // site on the closed-set `QuoteForm` algebra and the
+            // recursive `inner` rendering composes through the unified
+            // Display arm. The (prefix, variant) pairing IS the structural
+            // dual of the reader's `read_quoted` (prefix, variant-ctor)
+            // dispatch — naming it once threads the round-trip discipline
+            // through ONE rust function the reader and the Display impl
+            // both bind against.
+            Self::Quote(_) | Self::Quasiquote(_) | Self::Unquote(_) | Self::UnquoteSplice(_) => {
+                let (qf, inner) = self
+                    .as_quote_form()
+                    .expect("matched quote-family variant must project to Some via as_quote_form");
+                write!(f, "{}{inner}", qf.prefix())
+            }
         }
     }
 }
@@ -1671,6 +1967,318 @@ mod tests {
             Sexp::Atom(Atom::Float(n)) => assert_eq!(*n, 0.99),
             other => panic!("non-integral float round-trip drift, got: {other:?}"),
         }
+    }
+
+    // ── QuoteForm + as_quote_form: closed-set quote-family projection ─────
+    //
+    // `as_quote_form` lifts the per-callsite `Sexp::Quote(inner)
+    // / Sexp::Quasiquote(inner) / Sexp::Unquote(inner) /
+    // Sexp::UnquoteSplice(inner)` arm-set paired with their
+    // per-variant prefix string (`'`, `` ` ``, `,`, `,@`) and
+    // discriminator byte (3, 4, 5, 6) into ONE typed projection on
+    // the `Sexp` algebra. Three consumers in this file route through
+    // it (`Hash for Sexp`, `Display for Sexp`, `Sexp::as_unquote`)
+    // so the (Sexp variant, marker, prefix, discriminator) tuple
+    // binds at ONE site. Tests below pin:
+    //   (a) the projection lands `Some((QuoteForm::*, inner))` for
+    //       each of the four wrapper variants AND `None` for every
+    //       non-quote-family shape;
+    //   (b) `QuoteForm::prefix` returns the canonical reader-token
+    //       prefix for each variant — load-bearing for the round-trip
+    //       property the `Display`→reader dual encodes;
+    //   (c) `QuoteForm::hash_discriminator` returns the same byte
+    //       values the pre-lift Hash arms emitted (3, 4, 5, 6) — pin
+    //       the cache-key contract so a regression that drifts a
+    //       discriminator silently invalidates every cached expansion
+    //       fails loudly here;
+    //   (d) `QuoteForm::as_unquote_form` projects the 2-of-4 subset
+    //       `{Unquote → UnquoteForm::Unquote, UnquoteSplice →
+    //       UnquoteForm::Splice}` and yields `None` for `{Quote,
+    //       Quasiquote}` — the structural-subset gate the
+    //       `Sexp::as_unquote` derivation routes through;
+    //   (e) `Sexp::as_unquote` derived from `as_quote_form +
+    //       QuoteForm::as_unquote_form` agrees with the pre-lift
+    //       arm-based semantic across every Sexp shape — path
+    //       uniformity across the subset gate;
+    //   (f) the four homoiconic prefixes round-trip through the
+    //       reader via `read(format!("{prefix}{inner}"))` into the
+    //       matching `Sexp::*` variant — the typed dual of the
+    //       reader's prefix dispatch, pinned end-to-end on the four
+    //       wrappers (sibling to `fmt_float`'s Float round-trip pin
+    //       at the Display→read boundary).
+
+    #[test]
+    fn as_quote_form_projects_each_wrapper_variant_to_typed_marker_and_inner() {
+        // `'foo` — Sexp::Quote wrapping a symbol. Pin Some((Quote, &inner))
+        // with the typed marker AND the borrowed inner body.
+        let inner = Sexp::symbol("foo");
+        let form = Sexp::Quote(Box::new(inner.clone()));
+        let (qf, body) = form.as_quote_form().expect("Sexp::Quote must project");
+        assert_eq!(qf, QuoteForm::Quote);
+        assert_eq!(body, &inner);
+
+        // `` `foo `` — Sexp::Quasiquote wrapping a symbol.
+        let form_qq = Sexp::Quasiquote(Box::new(inner.clone()));
+        let (qf_qq, body_qq) = form_qq
+            .as_quote_form()
+            .expect("Sexp::Quasiquote must project");
+        assert_eq!(qf_qq, QuoteForm::Quasiquote);
+        assert_eq!(body_qq, &inner);
+
+        // `,foo` — Sexp::Unquote wrapping a symbol.
+        let form_u = Sexp::Unquote(Box::new(inner.clone()));
+        let (qf_u, body_u) = form_u.as_quote_form().expect("Sexp::Unquote must project");
+        assert_eq!(qf_u, QuoteForm::Unquote);
+        assert_eq!(body_u, &inner);
+
+        // `,@xs` — Sexp::UnquoteSplice wrapping a symbol.
+        let form_us = Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs")));
+        let (qf_us, body_us) = form_us
+            .as_quote_form()
+            .expect("Sexp::UnquoteSplice must project");
+        assert_eq!(qf_us, QuoteForm::UnquoteSplice);
+        assert_eq!(body_us, &Sexp::symbol("xs"));
+    }
+
+    #[test]
+    fn as_quote_form_none_for_non_quote_family_shapes() {
+        // Every shape OUTSIDE the closed quote-family must project to
+        // None: Nil, every Atom variant, and List (empty + populated).
+        // Pin the closed-set boundary so a regression that accidentally
+        // promotes a non-wrapper variant into the quote family becomes
+        // a typed test failure.
+        assert_eq!(Sexp::Nil.as_quote_form(), None);
+        assert_eq!(Sexp::symbol("x").as_quote_form(), None);
+        assert_eq!(Sexp::keyword("k").as_quote_form(), None);
+        assert_eq!(Sexp::string("s").as_quote_form(), None);
+        assert_eq!(Sexp::int(7).as_quote_form(), None);
+        assert_eq!(Sexp::float(2.5).as_quote_form(), None);
+        assert_eq!(Sexp::boolean(true).as_quote_form(), None);
+        assert_eq!(Sexp::List(vec![]).as_quote_form(), None);
+        assert_eq!(
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]).as_quote_form(),
+            None
+        );
+    }
+
+    #[test]
+    fn as_quote_form_inner_pointer_is_the_boxed_body() {
+        // The returned `&Sexp` borrows the inner box's body verbatim —
+        // no clone, no allocation, same lifetime as `&self`. Pin
+        // pointer identity for each of the four wrapper variants so a
+        // regression that adds an intermediate copy at the projection
+        // boundary surfaces here. Same posture as
+        // `as_unquote_inner_pointer_is_the_boxed_body` for its 2-of-4
+        // subset.
+        let payload = Sexp::symbol("payload");
+        let boxed = Box::new(payload);
+        let inner_ptr: *const Sexp = boxed.as_ref();
+        let form = Sexp::Quote(boxed);
+        let (_, body) = form.as_quote_form().expect("Sexp::Quote must project");
+        assert!(
+            std::ptr::eq(body, inner_ptr),
+            "as_quote_form inner pointer drifted from the boxed body — projection allocates or clones"
+        );
+
+        let payload_qq = Sexp::symbol("payload-qq");
+        let boxed_qq = Box::new(payload_qq);
+        let inner_ptr_qq: *const Sexp = boxed_qq.as_ref();
+        let form_qq = Sexp::Quasiquote(boxed_qq);
+        let (_, body_qq) = form_qq
+            .as_quote_form()
+            .expect("Sexp::Quasiquote must project");
+        assert!(
+            std::ptr::eq(body_qq, inner_ptr_qq),
+            "as_quote_form inner pointer drifted (quasiquote arm)"
+        );
+    }
+
+    #[test]
+    fn quote_form_prefix_pins_canonical_reader_tokens_for_every_variant() {
+        // Pin every prefix string load-bearing for the Display→read
+        // round-trip. A regression that drifts the prefix (e.g. swaps
+        // `'` and `` ` `` between Quote and Quasiquote) silently
+        // re-routes every renderer through the wrong variant; this
+        // test fails loudly. Sibling-arm sweep so the (variant,
+        // prefix) pair stays load-bearing under reordering refactors.
+        assert_eq!(QuoteForm::Quote.prefix(), "'");
+        assert_eq!(QuoteForm::Quasiquote.prefix(), "`");
+        assert_eq!(QuoteForm::Unquote.prefix(), ",");
+        assert_eq!(QuoteForm::UnquoteSplice.prefix(), ",@");
+    }
+
+    #[test]
+    fn quote_form_hash_discriminator_pins_legacy_cache_key_bytes() {
+        // CACHE-KEY CONTRACT: pre-lift `Hash for Sexp` used the literal
+        // byte values 3/4/5/6 for Quote/Quasiquote/Unquote/UnquoteSplice
+        // as the per-variant discriminator. The expansion cache
+        // (`Expander::cache`) keys on Hash; ANY change to a
+        // discriminator byte silently invalidates every cached
+        // expansion across the substrate AND risks collision with the
+        // reserved bytes the non-quote-family Hash arms use (0=Nil,
+        // 1=Atom, 2=List). Pin the four legacy values explicitly so a
+        // regression that re-numbers them surfaces immediately — the
+        // `QuoteForm` algebra MUST preserve the prior byte mapping
+        // bit-for-bit.
+        assert_eq!(QuoteForm::Quote.hash_discriminator(), 3);
+        assert_eq!(QuoteForm::Quasiquote.hash_discriminator(), 4);
+        assert_eq!(QuoteForm::Unquote.hash_discriminator(), 5);
+        assert_eq!(QuoteForm::UnquoteSplice.hash_discriminator(), 6);
+    }
+
+    #[test]
+    fn quote_form_as_unquote_form_projects_two_of_four_subset() {
+        // The structural-subset gate: only `{Unquote, UnquoteSplice}`
+        // are template-substitution markers; `{Quote, Quasiquote}` are
+        // wrappers whose semantic does NOT include substitution. Pin
+        // the 2-of-4 partition so the `Sexp::as_unquote` derivation's
+        // closed-set arithmetic stays correct.
+        assert_eq!(
+            QuoteForm::Unquote.as_unquote_form(),
+            Some(UnquoteForm::Unquote)
+        );
+        assert_eq!(
+            QuoteForm::UnquoteSplice.as_unquote_form(),
+            Some(UnquoteForm::Splice)
+        );
+        assert_eq!(QuoteForm::Quote.as_unquote_form(), None);
+        assert_eq!(QuoteForm::Quasiquote.as_unquote_form(), None);
+    }
+
+    #[test]
+    fn as_unquote_derives_from_as_quote_form_composed_with_subset_gate() {
+        // Path-uniformity: `Sexp::as_unquote` is now derived from
+        // `as_quote_form().and_then(|(qf, inner)| qf.as_unquote_form()
+        // .map(|uf| (uf, inner)))`. Pin that the derived semantic
+        // agrees with the pre-lift arm-based one across the closed
+        // Sexp variant set — every shape's projection through
+        // `as_unquote` must equal the manual composition through
+        // `as_quote_form` + `QuoteForm::as_unquote_form`. A regression
+        // that drifts ONE projection's posture from the composition
+        // becomes a typed test failure.
+        let shapes: Vec<(&str, Sexp)> = vec![
+            ("nil", Sexp::Nil),
+            ("symbol", Sexp::symbol("x")),
+            ("keyword", Sexp::keyword("k")),
+            ("string", Sexp::string("s")),
+            ("int", Sexp::int(7)),
+            ("float", Sexp::float(2.5)),
+            ("bool", Sexp::boolean(true)),
+            ("empty list", Sexp::List(vec![])),
+            ("non-empty list", Sexp::List(vec![Sexp::symbol("op")])),
+            ("quote", Sexp::Quote(Box::new(Sexp::symbol("x")))),
+            ("quasiquote", Sexp::Quasiquote(Box::new(Sexp::symbol("x")))),
+            ("unquote", Sexp::Unquote(Box::new(Sexp::symbol("x")))),
+            (
+                "unquote-splice",
+                Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+            ),
+        ];
+        for (label, sexp) in &shapes {
+            let via_direct = sexp.as_unquote();
+            let via_composed = sexp
+                .as_quote_form()
+                .and_then(|(qf, inner)| qf.as_unquote_form().map(|uf| (uf, inner)));
+            assert_eq!(
+                via_direct, via_composed,
+                "as_unquote drifted from composed as_quote_form+as_unquote_form at {label}"
+            );
+        }
+    }
+
+    #[test]
+    fn hash_for_sexp_preserves_legacy_quote_family_discriminator_bytes() {
+        // CACHE-KEY CONTRACT (Hash side): pin that the lifted
+        // `Hash for Sexp` impl produces byte-identical hashes for the
+        // four quote-family variants as the pre-lift implementation.
+        // We compute the expected hash via a SECOND hasher that
+        // manually drives the pre-lift `<discr>.hash(h); inner.hash(h)`
+        // sequence, then compare. A regression that drifts the
+        // discriminator OR re-orders the (discr, inner) sequence
+        // surfaces here as a hash-value mismatch.
+        use std::collections::hash_map::DefaultHasher;
+        let inner = Sexp::symbol("payload");
+        for (label, sexp, expected_discr) in [
+            ("quote", Sexp::Quote(Box::new(inner.clone())), 3u8),
+            ("quasiquote", Sexp::Quasiquote(Box::new(inner.clone())), 4u8),
+            ("unquote", Sexp::Unquote(Box::new(inner.clone())), 5u8),
+            (
+                "unquote-splice",
+                Sexp::UnquoteSplice(Box::new(inner.clone())),
+                6u8,
+            ),
+        ] {
+            let mut via_impl = DefaultHasher::new();
+            sexp.hash(&mut via_impl);
+
+            let mut via_legacy = DefaultHasher::new();
+            expected_discr.hash(&mut via_legacy);
+            inner.hash(&mut via_legacy);
+
+            assert_eq!(
+                via_impl.finish(),
+                via_legacy.finish(),
+                "Hash for Sexp drifted from legacy (discr={expected_discr}, inner) sequence at {label}"
+            );
+        }
+    }
+
+    #[test]
+    fn display_for_sexp_renders_each_quote_family_variant_with_canonical_prefix() {
+        // Pin the post-lift Display rendering: every wrapper variant
+        // renders as `<prefix><inner>` with the prefix sourced from
+        // `QuoteForm::prefix`. A regression that drifts the prefix
+        // arm-routing (e.g. routes Quote through `` ` `` instead of
+        // `'`) fails loudly here. The literal `inner` rendering is
+        // the symbol `foo` so the prefix is the only diff between
+        // arms — pin path-uniformity across the closed set.
+        let inner = Sexp::symbol("foo");
+        assert_eq!(Sexp::Quote(Box::new(inner.clone())).to_string(), "'foo");
+        assert_eq!(
+            Sexp::Quasiquote(Box::new(inner.clone())).to_string(),
+            "`foo"
+        );
+        assert_eq!(Sexp::Unquote(Box::new(inner.clone())).to_string(), ",foo");
+        assert_eq!(Sexp::UnquoteSplice(Box::new(inner)).to_string(), ",@foo");
+    }
+
+    #[test]
+    fn display_for_sexp_round_trips_each_quote_family_variant_through_reader() {
+        // ROUND-TRIP CONTRACT: every wrapper variant's Display →
+        // reader path produces the matching `Sexp::*` variant. The
+        // reader's prefix-dispatch (in `reader::parse`) consumes the
+        // canonical `'` / `` ` `` / `,` / `,@` tokens and produces
+        // the corresponding wrapper; the Display impl emits the same
+        // tokens via `QuoteForm::prefix`. Pin the round-trip
+        // end-to-end so a regression that drifts the prefix on
+        // either side (Display or reader) fails loudly here. Sibling
+        // posture to `fmt_float_round_trips_integral_float_through
+        // _reader_as_float` — the Float round-trip pin at the
+        // Display→read boundary; this test pins the four
+        // quote-family round-trips at the same boundary.
+        let inner_body = Sexp::symbol("payload");
+
+        let quote = Sexp::Quote(Box::new(inner_body.clone()));
+        let forms = crate::reader::read(&quote.to_string()).expect("quote must round-trip");
+        assert_eq!(forms.len(), 1);
+        assert_eq!(forms[0], quote);
+
+        let quasiquote = Sexp::Quasiquote(Box::new(inner_body.clone()));
+        let forms =
+            crate::reader::read(&quasiquote.to_string()).expect("quasiquote must round-trip");
+        assert_eq!(forms.len(), 1);
+        assert_eq!(forms[0], quasiquote);
+
+        let unquote = Sexp::Unquote(Box::new(inner_body.clone()));
+        let forms = crate::reader::read(&unquote.to_string()).expect("unquote must round-trip");
+        assert_eq!(forms.len(), 1);
+        assert_eq!(forms[0], unquote);
+
+        let splice = Sexp::UnquoteSplice(Box::new(inner_body));
+        let forms =
+            crate::reader::read(&splice.to_string()).expect("unquote-splice must round-trip");
+        assert_eq!(forms.len(), 1);
+        assert_eq!(forms[0], splice);
     }
 
     #[test]

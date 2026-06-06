@@ -22,14 +22,23 @@ use tatara_process::prelude::{Process, ProcessSpec};
 
 fn emit(name: &str, spec: ProcessSpec) -> Result<(), ()> {
     let proc = Process::new(name, spec);
-    match serde_yaml::to_string(&proc) {
+    emit_yaml(&proc, name)
+}
+
+/// Emit any serializable doc as a `---` YAML block (used for breathe Band CRs).
+fn emit_value(v: &serde_json::Value) -> Result<(), ()> {
+    emit_yaml(v, "band")
+}
+
+fn emit_yaml<T: serde::Serialize>(v: &T, what: &str) -> Result<(), ()> {
+    match serde_yaml::to_string(v) {
         Ok(y) => {
             println!("---");
             println!("{}", y.trim_end());
             Ok(())
         }
         Err(e) => {
-            eprintln!("serialize {name}: {e}");
+            eprintln!("serialize {what}: {e}");
             Err(())
         }
     }
@@ -73,9 +82,16 @@ fn main() -> ExitCode {
                 envs.len(),
                 m.spec.selection_size()
             );
-            for env in envs {
-                if emit(&env.name, env.spec.into()).is_err() {
+            for env in &envs {
+                if emit(&env.name, env.spec.clone().into()).is_err() {
                     return ExitCode::from(1);
+                }
+                // Each env's breathe Band CRs (empty unless a :breathe envelope
+                // is declared) — so the whole sweep is cost-bounded.
+                for band in m.spec.breathe_bands(env) {
+                    if emit_value(&band).is_err() {
+                        return ExitCode::from(1);
+                    }
                 }
             }
         }

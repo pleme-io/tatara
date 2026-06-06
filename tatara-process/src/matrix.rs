@@ -24,10 +24,15 @@
 //!          (:name "replicas" :path "replicaCount" :values (1 3))
 //!          (:name "flag"     :path "feature.flag" :values ("on" "off")))
 //!   :select Cartesian
-//!   :budget (:max-envs 12 :cost-ceiling "$5/h"))
+//!   :budget (:max-envs 12 :cost-ceiling "$5/h")
+//!   :breathe (:dimensions ((:kind "memory" :floor "128Mi" :ceiling "1Gi")
+//!                          (:kind "cpu"    :floor "100m"  :ceiling "1"))
+//!             :cooldown-seconds 60 :dry-run #t))
 //! ```
-//! → 2×2×2 = 8 named `EphemeralSpec`s, each breathe-bounded under the shared
-//! `:budget`.
+//! → 2×2×2 = 8 named `EphemeralSpec`s. `tatara-lispc` renders each as a
+//! `Process` CR plus its breathe Band CRs (one per dimension), so the whole
+//! sweep is cost-bounded under the shared `:budget` and auto-scales within the
+//! `:breathe` floor/ceiling limits.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -57,6 +62,65 @@ pub struct EnvMatrixSpec {
     /// permutation set stays cost-bounded.
     #[serde(default)]
     pub budget: MatrixBudget,
+
+    /// Optional breathe envelope. When set, [`EnvMatrixSpec::breathe_bands`]
+    /// emits one breathe Band CR per dimension per env, so each generated
+    /// environment auto-scales inside cost-bounded floor/ceiling limits
+    /// (idle-shrink → near-floor, breathe-up on demand). This is how the
+    /// sweep "fully leverages breathability": author the envelope once, every
+    /// permutation inherits it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub breathe: Option<BreatheEnvelope>,
+}
+
+/// The breathe envelope inherited by every env in a sweep — the per-dimension
+/// homeostasis bounds plus dev-loop-tuned cadence.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BreatheEnvelope {
+    /// The resource dimensions to band. Each yields a breathe Band CR
+    /// (`MemoryBand` / `CpuBand` / `StorageBand`) per env.
+    pub dimensions: Vec<BreatheDimension>,
+
+    /// Band cooldown in seconds between carves — low (e.g. 60s) for fast
+    /// dev-loop breathe-up/shrink, vs the fleet default.
+    #[serde(default = "default_breathe_cooldown")]
+    pub cooldown_seconds: u64,
+
+    /// Start observe-only (`dryRun`) — breathe reports what it WOULD carve
+    /// without mutating, until the cost SLA is validated. Default `true`
+    /// (safe by default for a fresh sweep).
+    #[serde(default = "default_true")]
+    pub dry_run: bool,
+
+    /// The workload kind the bands target (default `Deployment`). The band's
+    /// `targetRef.name` is the env's Helm release name (the per-env release).
+    #[serde(default = "default_target_kind")]
+    pub target_kind: String,
+}
+
+/// One banded resource dimension: which breathe Band kind and its bounds.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BreatheDimension {
+    /// `memory` | `cpu` | `storage` → `MemoryBand` / `CpuBand` / `StorageBand`.
+    pub kind: String,
+    /// Floor quantity (the never-shrink-below limit, in the dimension's unit:
+    /// bytes-quantity like `128Mi` for memory/storage, millicores like `100m`
+    /// for cpu). Idle envs shrink toward this.
+    pub floor: String,
+    /// Ceiling quantity (the never-grow-above limit) — the cost-bounding wall.
+    pub ceiling: String,
+}
+
+fn default_breathe_cooldown() -> u64 {
+    60
+}
+fn default_true() -> bool {
+    true
+}
+fn default_target_kind() -> String {
+    "Deployment".to_string()
 }
 
 /// One permutation axis: a named dimension and the values it ranges over.
@@ -205,7 +269,75 @@ impl EnvMatrixSpec {
         } else {
             format!("{}-{}", matrix_name, suffix.join("-"))
         };
+        // Each permutation is a distinct Helm release named for the env, so the
+        // variants coexist and breathe bands can target each one by name.
+        spec.aplicacao.release_name = Some(name.clone());
         NamedEphemeral { name, spec }
+    }
+
+    /// Emit the breathe Band CRs for one generated env — one per envelope
+    /// dimension (`MemoryBand` / `CpuBand` / `StorageBand`). Empty when no
+    /// `:breathe` envelope is declared. Each band targets the env's Helm
+    /// release (a `Deployment` by default) and inherits the sweep's
+    /// `:budget :cost-ceiling` as a `breathe.pleme.io/cost-ceiling` annotation,
+    /// so the controller gates the whole sweep against one cost budget.
+    pub fn breathe_bands(&self, env: &NamedEphemeral) -> Vec<serde_json::Value> {
+        let Some(envelope) = &self.breathe else {
+            return vec![];
+        };
+        let target_name = env
+            .spec
+            .aplicacao
+            .release_name
+            .clone()
+            .unwrap_or_else(|| env.name.clone());
+        let namespace = env
+            .spec
+            .aplicacao
+            .target_namespace
+            .clone()
+            .unwrap_or_else(|| env.name.clone());
+        let mut annotations = serde_json::Map::new();
+        if let Some(ceiling) = &self.budget.cost_ceiling {
+            annotations.insert(
+                "breathe.pleme.io/cost-ceiling".to_string(),
+                serde_json::Value::String(ceiling.clone()),
+            );
+        }
+        envelope
+            .dimensions
+            .iter()
+            .filter_map(|dim| {
+                let kind = band_kind_for(&dim.kind)?;
+                Some(serde_json::json!({
+                    "apiVersion": "breathe.pleme.io/v1",
+                    "kind": kind,
+                    "metadata": {
+                        "name": format!("{}-{}", env.name, dim.kind.to_ascii_lowercase()),
+                        "namespace": namespace,
+                        "labels": { "matrix-env": env.name },
+                        "annotations": annotations,
+                    },
+                    "spec": {
+                        "targetRef": { "kind": envelope.target_kind, "name": target_name },
+                        "floor": dim.floor,
+                        "ceiling": dim.ceiling,
+                        "cooldownSeconds": envelope.cooldown_seconds,
+                        "dryRun": envelope.dry_run,
+                    },
+                }))
+            })
+            .collect()
+    }
+}
+
+/// Map a dimension keyword to its breathe Band CR kind.
+fn band_kind_for(dim: &str) -> Option<&'static str> {
+    match dim.to_ascii_lowercase().as_str() {
+        "memory" | "mem" => Some("MemoryBand"),
+        "cpu" => Some("CpuBand"),
+        "storage" | "disk" => Some("StorageBand"),
+        _ => None,
     }
 }
 
@@ -384,6 +516,7 @@ mod tests {
             ],
             select: SelectStrategy::Cartesian,
             budget: MatrixBudget::default(),
+            breathe: None,
         }
     }
 
@@ -461,6 +594,51 @@ mod tests {
                 IntentVariant::Aplicacao(_)
             ));
         }
+    }
+
+    #[test]
+    fn breathe_envelope_emits_bands_per_env() {
+        let mut m = matrix();
+        m.budget.cost_ceiling = Some("$5/h".into());
+        m.breathe = Some(BreatheEnvelope {
+            dimensions: vec![
+                BreatheDimension {
+                    kind: "memory".into(),
+                    floor: "128Mi".into(),
+                    ceiling: "1Gi".into(),
+                },
+                BreatheDimension {
+                    kind: "cpu".into(),
+                    floor: "100m".into(),
+                    ceiling: "1".into(),
+                },
+            ],
+            cooldown_seconds: 60,
+            dry_run: true,
+            target_kind: "Deployment".into(),
+        });
+        let envs = m.expand("echo-sweep");
+        let env0 = &envs[0];
+        let bands = m.breathe_bands(env0);
+        assert_eq!(bands.len(), 2, "one band per dimension");
+        let mem = &bands[0];
+        assert_eq!(mem["kind"], "MemoryBand");
+        assert_eq!(mem["spec"]["targetRef"]["kind"], "Deployment");
+        // The band targets the env's per-env Helm release (= env name).
+        assert_eq!(mem["spec"]["targetRef"]["name"], env0.name.as_str());
+        assert_eq!(mem["spec"]["floor"], "128Mi");
+        assert_eq!(mem["spec"]["ceiling"], "1Gi");
+        assert_eq!(mem["spec"]["dryRun"], true);
+        // The sweep's cost budget rides on every band as an annotation.
+        assert_eq!(
+            mem["metadata"]["annotations"]["breathe.pleme.io/cost-ceiling"],
+            "$5/h"
+        );
+        assert_eq!(bands[1]["kind"], "CpuBand");
+
+        // No envelope ⇒ no bands.
+        let m2 = matrix();
+        assert!(m2.breathe_bands(&m2.expand("x")[0]).is_empty());
     }
 
     #[test]

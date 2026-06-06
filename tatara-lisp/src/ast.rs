@@ -1,6 +1,6 @@
 //! S-expression AST.
 
-use crate::error::UnquoteForm;
+use crate::error::{SexpShape, UnquoteForm};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -849,6 +849,61 @@ impl QuoteForm {
             Self::Quasiquote => "quasiquote",
             Self::Unquote => "unquote",
             Self::UnquoteSplice => "unquote-splicing",
+        }
+    }
+
+    /// Project the typed marker into its matching [`crate::error::SexpShape`]
+    /// variant — `Quote → SexpShape::Quote`, `Quasiquote → SexpShape::Quasiquote`,
+    /// `Unquote → SexpShape::Unquote`, `UnquoteSplice → SexpShape::UnquoteSplice`.
+    /// ONE projection on the closed-set quote-family algebra the substrate's
+    /// outer-shape projection ([`crate::domain::sexp_shape`]) routes through
+    /// for the four quote-family arms — so the (Sexp variant, SexpShape
+    /// variant) pairing binds at ONE site on the typed algebra rather than
+    /// at four byte-identical inline arms in [`crate::domain::sexp_shape`].
+    ///
+    /// The SIXTH consumer of the closed-set [`QuoteForm`] algebra, sibling
+    /// of [`Self::prefix`] (Display / reader prefix-string surface),
+    /// [`Self::hash_discriminator`] (Hash cache-key bytes surface),
+    /// [`Self::as_unquote_form`] (2-of-4 template-substitution subset gate),
+    /// [`Self::iac_forge_tag`] (cross-crate canonical-form tag surface), and
+    /// [`Self::wrap`] (reader's marker → `Sexp::*` constructor surface).
+    /// Composes with [`SexpShape::label`] to yield the short diagnostic
+    /// label string the substrate's `LispError::TypeMismatch.got` slot
+    /// renders — the (QuoteForm variant, SexpShape variant, short label)
+    /// triple binds end-to-end through the typed algebra so a regression
+    /// that drifts the short label silently between the typed marker and
+    /// the diagnostic surface is structurally impossible.
+    ///
+    /// Bidirectional note: the dual projection
+    /// `SexpShape::as_quote_form(self) -> Option<QuoteForm>` is NOT
+    /// currently provided because no consumer needs it — every site that
+    /// has a [`SexpShape`] has it because it has a [`Sexp`] already, so
+    /// the per-form [`Sexp::as_quote_form`] projection covers the
+    /// converse direction. If a future authoring tool (LSP / REPL /
+    /// `tatara-check` typed-pattern matcher) wants to lift the typed
+    /// marker out of a diagnostic-side shape identity, the dual lands as
+    /// ONE new match on the closed set, parallel to the structure here.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (QuoteForm
+    /// variant, SexpShape variant) pairing becomes a TYPE projection on
+    /// the substrate algebra rather than four inline arms in
+    /// [`crate::domain::sexp_shape`]. A typo or swap at the shape-projection
+    /// site is no longer a runtime drift but a compile error against the
+    /// typed projection. THEORY.md §II.1 invariant 2 — free middle; SIX
+    /// consumers of the [`QuoteForm`] algebra now route through ONE typed
+    /// closed-set match family, so a regression that drifts ONE consumer's
+    /// pairing from the others cannot reach the substrate's runtime.
+    /// THEORY.md §VI.1 — generation over composition; the (Sexp variant,
+    /// SexpShape variant) pairing appeared at four arms in `sexp_shape` —
+    /// past the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
+    /// named.
+    #[must_use]
+    pub fn sexp_shape(self) -> SexpShape {
+        match self {
+            Self::Quote => SexpShape::Quote,
+            Self::Quasiquote => SexpShape::Quasiquote,
+            Self::Unquote => SexpShape::Unquote,
+            Self::UnquoteSplice => SexpShape::UnquoteSplice,
         }
     }
 
@@ -2372,6 +2427,103 @@ mod tests {
              form requires '-splicing' while the substrate's diagnostic label uses \
              the shorter '-splice'; consolidating them would break either side",
         );
+    }
+
+    #[test]
+    fn quote_form_sexp_shape_pins_canonical_shape_identity_for_every_variant() {
+        // CLOSED-SET SHAPE-PROJECTION CONTRACT: each `QuoteForm` variant
+        // projects to its matching `SexpShape` variant — load-bearing for
+        // the (Sexp variant, SexpShape variant) pairing the substrate's
+        // outer-shape projection `domain::sexp_shape` routes through.
+        // Sibling-arm sweep so the four pairings stay load-bearing under
+        // reordering refactors. A regression that drifts ONE arm (e.g.
+        // routes `QuoteForm::Quote` to `SexpShape::Quasiquote`) surfaces
+        // here immediately rather than as a silent operator-facing
+        // diagnostic drift at every `LispError::TypeMismatch.got` slot
+        // for a quote-family witness.
+        use crate::error::SexpShape;
+        assert_eq!(QuoteForm::Quote.sexp_shape(), SexpShape::Quote);
+        assert_eq!(QuoteForm::Quasiquote.sexp_shape(), SexpShape::Quasiquote);
+        assert_eq!(QuoteForm::Unquote.sexp_shape(), SexpShape::Unquote);
+        assert_eq!(
+            QuoteForm::UnquoteSplice.sexp_shape(),
+            SexpShape::UnquoteSplice
+        );
+    }
+
+    #[test]
+    fn quote_form_sexp_shape_composes_with_label_for_canonical_short_diagnostic_string() {
+        // COMPOSITION-LAW CONTRACT: `qf.sexp_shape().label()` is the
+        // canonical short diagnostic string for the quote-family marker
+        // — `"quote"`, `"quasiquote"`, `"unquote"`, `"unquote-splice"`.
+        // The composition law binds the substrate's typed marker
+        // (`QuoteForm`) to its diagnostic surface (`SexpShape::label`)
+        // through ONE algebra so a future change to either projection's
+        // label (e.g. a substrate-wide rename of `"unquote-splice"` to
+        // `"splice"`) rides through the typed composition rather than
+        // requiring an inline match at every diagnostic-construction
+        // site that previously hand-paired the marker with its label.
+        // Pin the short labels here — DISTINCT from the iac-forge tag's
+        // `"unquote-splicing"` (load-bearing for the boundary distinction
+        // already pinned by
+        // `quote_form_iac_forge_tag_diverges_from_sexp_shape_label_for_unquote_splice`).
+        assert_eq!(QuoteForm::Quote.sexp_shape().label(), "quote");
+        assert_eq!(QuoteForm::Quasiquote.sexp_shape().label(), "quasiquote");
+        assert_eq!(QuoteForm::Unquote.sexp_shape().label(), "unquote");
+        assert_eq!(
+            QuoteForm::UnquoteSplice.sexp_shape().label(),
+            "unquote-splice"
+        );
+    }
+
+    #[test]
+    fn quote_form_sexp_shape_paired_with_as_quote_form_preserves_pre_lift_pairing_for_every_sexp() {
+        // PATH-UNIFORMITY CONTRACT: the (Sexp variant, SexpShape variant)
+        // pairing the pre-lift `sexp_shape` arms encoded inline is now
+        // structurally derived via
+        // `s.as_quote_form().map(|(qf, _)| qf.sexp_shape())` for every
+        // quote-family `Sexp` shape. Pin the derivation against the
+        // pre-lift pairing across all four quote-family wrapper variants
+        // so a regression that drifts ONE side of the typed algebra
+        // (e.g. a `QuoteForm::Quote → SexpShape::Quasiquote` typo, or a
+        // `Sexp::as_quote_form` arm that swaps two markers) surfaces
+        // immediately. Non-quote-family shapes project to `None` from
+        // `as_quote_form`, which the assertion arm skips — the typed
+        // closed-set partition is load-bearing for the early-return
+        // shape of the lifted `domain::sexp_shape`.
+        use crate::error::SexpShape;
+        let cases: &[(&str, Sexp, SexpShape)] = &[
+            (
+                "quote",
+                Sexp::Quote(Box::new(Sexp::symbol("x"))),
+                SexpShape::Quote,
+            ),
+            (
+                "quasiquote",
+                Sexp::Quasiquote(Box::new(Sexp::symbol("x"))),
+                SexpShape::Quasiquote,
+            ),
+            (
+                "unquote",
+                Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+                SexpShape::Unquote,
+            ),
+            (
+                "unquote-splice",
+                Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+                SexpShape::UnquoteSplice,
+            ),
+        ];
+        for (label, sexp, expected_shape) in cases {
+            let (qf, _) = sexp
+                .as_quote_form()
+                .unwrap_or_else(|| panic!("{label} must project through as_quote_form"));
+            assert_eq!(
+                qf.sexp_shape(),
+                *expected_shape,
+                "{label} drifted from typed (QuoteForm, SexpShape) pairing"
+            );
+        }
     }
 
     #[test]

@@ -577,10 +577,24 @@ pub fn sexp_shape(s: &Sexp) -> SexpShape {
         Sexp::Atom(Atom::Float(_)) => SexpShape::Float,
         Sexp::Atom(Atom::Bool(_)) => SexpShape::Bool,
         Sexp::List(_) => SexpShape::List,
-        Sexp::Quote(_) => SexpShape::Quote,
-        Sexp::Quasiquote(_) => SexpShape::Quasiquote,
-        Sexp::Unquote(_) => SexpShape::Unquote,
-        Sexp::UnquoteSplice(_) => SexpShape::UnquoteSplice,
+        // The four quote-family variants share the
+        // `Sexp::* → SexpShape::*` shape — all route through
+        // `as_quote_form`'s typed-marker projection so the per-variant
+        // (Sexp variant, SexpShape variant) pairing binds at ONE site on
+        // the closed-set `QuoteForm` algebra (`QuoteForm::sexp_shape`)
+        // rather than four byte-identical inline arms here. The
+        // `.expect(_)` is a static-invariant statement (the outer pattern
+        // guarantees the projection lands `Some`) — a future quote-family
+        // extension that drifts `Sexp` AND `QuoteForm` apart fails at
+        // rustc, not at runtime. Sibling posture to `Hash for Sexp`'s
+        // four-arm `hash_discriminator` collapse, `Display for Sexp`'s
+        // `prefix` collapse, and `interop`'s `iac_forge_tag` collapse.
+        Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) | Sexp::UnquoteSplice(_) => {
+            let (qf, _) = s
+                .as_quote_form()
+                .expect("matched quote-family variant must project to Some via as_quote_form");
+            qf.sexp_shape()
+        }
     }
 }
 
@@ -2173,6 +2187,54 @@ mod tests {
             sexp_shape(&Sexp::UnquoteSplice(Box::new(Sexp::Nil))),
             SexpShape::UnquoteSplice
         );
+    }
+
+    #[test]
+    fn sexp_shape_routes_quote_family_arms_through_quote_form_sexp_shape_projection() {
+        // PATH-UNIFORMITY CONTRACT: the lifted `sexp_shape` routes its
+        // four quote-family arms through `Sexp::as_quote_form()` +
+        // `QuoteForm::sexp_shape()`. Pin that the legacy per-arm
+        // pairing and the typed-projection composition AGREE bit-for-bit
+        // across every quote-family `Sexp` shape — a regression in
+        // EITHER projection direction (an `as_quote_form` arm that
+        // swaps markers, or a `QuoteForm::sexp_shape` arm that drifts
+        // its `SexpShape` mapping) surfaces here immediately. Non-
+        // quote-family shapes project to `None` from `as_quote_form`
+        // and are out of scope for this contract.
+        use crate::ast::QuoteForm;
+        let samples = [
+            (
+                Sexp::Quote(Box::new(Sexp::symbol("payload"))),
+                QuoteForm::Quote,
+            ),
+            (
+                Sexp::Quasiquote(Box::new(Sexp::symbol("payload"))),
+                QuoteForm::Quasiquote,
+            ),
+            (
+                Sexp::Unquote(Box::new(Sexp::symbol("payload"))),
+                QuoteForm::Unquote,
+            ),
+            (
+                Sexp::UnquoteSplice(Box::new(Sexp::symbol("payload"))),
+                QuoteForm::UnquoteSplice,
+            ),
+        ];
+        for (sexp, expected_qf) in &samples {
+            let via_lifted = sexp_shape(sexp);
+            let (qf, _) = sexp
+                .as_quote_form()
+                .expect("quote-family sample must project through as_quote_form");
+            assert_eq!(
+                qf, *expected_qf,
+                "as_quote_form drifted typed marker at {sexp:?}"
+            );
+            let via_composed = qf.sexp_shape();
+            assert_eq!(
+                via_lifted, via_composed,
+                "sexp_shape drifted from as_quote_form + QuoteForm::sexp_shape at {sexp:?}"
+            );
+        }
     }
 
     #[test]

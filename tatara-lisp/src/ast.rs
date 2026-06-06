@@ -851,6 +851,95 @@ impl QuoteForm {
             Self::UnquoteSplice => "unquote-splicing",
         }
     }
+
+    /// Project the typed marker back into its matching `Sexp::*` wrapper
+    /// variant applied to `inner` — the structural inverse of
+    /// [`crate::ast::Sexp::as_quote_form`]. [`Self::Quote`] yields
+    /// [`Sexp::Quote`], [`Self::Quasiquote`] yields [`Sexp::Quasiquote`],
+    /// [`Self::Unquote`] yields [`Sexp::Unquote`], [`Self::UnquoteSplice`]
+    /// yields [`Sexp::UnquoteSplice`], each boxing `inner` into the
+    /// corresponding tuple-variant constructor (`fn(Box<Sexp>) -> Sexp`).
+    ///
+    /// Round-trip identity with [`crate::ast::Sexp::as_quote_form`] — the
+    /// structural law every consumer can pin against:
+    ///
+    /// ```ignore
+    /// // for every (qf, inner): qf.wrap(inner.clone()).as_quote_form() == Some((qf, &inner))
+    /// // for every Sexp s matching the quote family:
+    /// //     let (qf, inner) = s.as_quote_form().unwrap();
+    /// //     qf.wrap(inner.clone()) == s
+    /// ```
+    ///
+    /// Consumer: [`crate::reader::read_quoted`] — the FIFTH consumer site
+    /// of the closed-set `QuoteForm` algebra (sibling to `Hash for Sexp`'s
+    /// `hash_discriminator` arm, `Display for Sexp`'s `prefix` arm,
+    /// `Sexp::as_unquote`'s `as_unquote_form` subset-gate composition, and
+    /// the feature-gated `From<&Sexp> for iac_forge::SExpr`'s
+    /// `iac_forge_tag` arm). Pre-lift the reader's parse dispatch carried
+    /// its own parallel closed set: a local `Token::{Quote, Quasiquote,
+    /// Unquote, UnquoteSplice}` enum paired with the matching `Sexp::*`
+    /// tuple-variant constructors threaded as `fn(Box<Sexp>) -> Sexp`
+    /// arguments to `read_quoted`. The (Token variant, Sexp::* constructor)
+    /// pairing was load-bearing yet only enforced by callsite discipline
+    /// at the FIFTH consumer site the prior `QuoteForm` lifts did not
+    /// reach — a regression that swapped `Sexp::Quote` and
+    /// `Sexp::Quasiquote` between the parser arms type-checked but
+    /// silently corrupted every program's quote-family parse.
+    ///
+    /// Post-lift the reader's `Token` collapses to ONE typed variant
+    /// `Token::Quoted(QuoteForm)`, the parser's four prefix arms collapse
+    /// to ONE arm `Some((Token::Quoted(qf), _)) => read_quoted(it,
+    /// eof_pos, qf)`, and `read_quoted` routes through this projection to
+    /// produce the matching `Sexp::*` variant. The (QuoteForm variant,
+    /// Sexp::* constructor) pairing now binds at ONE site on the typed
+    /// algebra — rustc enforces exhaustiveness across [`Self`]'s closed
+    /// set, so a regression that drifts the (marker, constructor) pair
+    /// becomes a typed compile error rather than a silent program-text
+    /// corruption.
+    ///
+    /// The `Sexp` (owned) return type complements [`Sexp::as_quote_form`]'s
+    /// `&Sexp` (borrowed) — `wrap` consumes the inner body to build the
+    /// new wrapper, `as_quote_form` borrows the inner body from the
+    /// existing wrapper. The asymmetry is intentional: at the reader's
+    /// parse-then-wrap boundary the inner is fresh from `parse(...)?` and
+    /// has no caller-owned binding; the typed `Box::new(inner)` allocation
+    /// lives at ONE site rather than four (one per pre-lift parser arm),
+    /// so a future allocation-policy change (e.g. arena-allocated wrappers
+    /// for span-aware Sexp) lands as ONE edit.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// reader's prefix-token → Sexp-wrapper gate IS the rust-level
+    /// typed-entry gate at the source-text boundary, and naming the
+    /// typed projection from [`QuoteForm`] back to the `Sexp::*` wrapper
+    /// lifts the gate from per-arm constructor literals to ONE method
+    /// the closed-set algebra owns — parallel to how [`Self::prefix`]
+    /// lifts the Display↔reader prefix-string surface. THEORY.md §II.1
+    /// invariant 2 — free middle; ALL FIVE consumers (Hash, Display,
+    /// as_unquote, iac-forge interop, reader's parse) now route through
+    /// the SAME closed-set algebra so a regression that drifts ONE
+    /// consumer's pairing from the others cannot reach the substrate's
+    /// runtime. THEORY.md §V.1 — knowable platform; the (QuoteForm
+    /// variant, Sexp::* constructor) pairing becomes a TYPE projection on
+    /// the substrate algebra rather than four `fn(Box<Sexp>) -> Sexp`
+    /// function pointers threaded as call arguments. A typo or
+    /// swap is no longer a runtime drift but a compile error against the
+    /// typed projection. THEORY.md §VI.1 — generation over composition;
+    /// the (QuoteForm variant, Sexp::* constructor) pairing appeared at
+    /// the four reader arms — past the ≥2 PRIME-DIRECTIVE trigger once
+    /// the structural shape is named. The typed projection lands the
+    /// structural-completeness floor for the reader's quote-family
+    /// surface, completing the FIVE-consumer closure of the
+    /// `QuoteForm` algebra.
+    #[must_use]
+    pub fn wrap(self, inner: Sexp) -> Sexp {
+        let boxed = Box::new(inner);
+        match self {
+            Self::Quote => Sexp::Quote(boxed),
+            Self::Quasiquote => Sexp::Quasiquote(boxed),
+            Self::Unquote => Sexp::Unquote(boxed),
+            Self::UnquoteSplice => Sexp::UnquoteSplice(boxed),
+        }
+    }
 }
 
 /// Iterate over the argument tails of every form in `forms` whose call head
@@ -2419,6 +2508,112 @@ mod tests {
             crate::reader::read(&splice.to_string()).expect("unquote-splice must round-trip");
         assert_eq!(forms.len(), 1);
         assert_eq!(forms[0], splice);
+    }
+
+    #[test]
+    fn quote_form_wrap_projects_each_typed_marker_into_matching_sexp_wrapper() {
+        // CLOSED-SET CONSTRUCTOR CONTRACT: pin that `QuoteForm::wrap` is
+        // the structural inverse of `Sexp::as_quote_form` at the
+        // marker→wrapper boundary. Every variant of the closed-set
+        // `QuoteForm` algebra projects to its matching `Sexp::*` wrapper
+        // applied to the supplied inner — `Quote → Sexp::Quote`,
+        // `Quasiquote → Sexp::Quasiquote`, `Unquote → Sexp::Unquote`,
+        // `UnquoteSplice → Sexp::UnquoteSplice`. A regression that swaps
+        // two arms (e.g. `Self::Quote → Sexp::Quasiquote`) type-checks
+        // but silently corrupts every consumer that constructs a quote-
+        // family Sexp through the projection — fails loudly here.
+        // Sibling-arm sweep so the (marker, constructor) pair stays
+        // load-bearing under reordering refactors.
+        let inner = Sexp::symbol("payload");
+        assert_eq!(
+            QuoteForm::Quote.wrap(inner.clone()),
+            Sexp::Quote(Box::new(inner.clone()))
+        );
+        assert_eq!(
+            QuoteForm::Quasiquote.wrap(inner.clone()),
+            Sexp::Quasiquote(Box::new(inner.clone()))
+        );
+        assert_eq!(
+            QuoteForm::Unquote.wrap(inner.clone()),
+            Sexp::Unquote(Box::new(inner.clone()))
+        );
+        assert_eq!(
+            QuoteForm::UnquoteSplice.wrap(inner.clone()),
+            Sexp::UnquoteSplice(Box::new(inner))
+        );
+    }
+
+    #[test]
+    fn quote_form_wrap_round_trips_through_as_quote_form_for_every_variant() {
+        // ROUND-TRIP CONTRACT: pin the structural identity
+        // `qf.wrap(inner.clone()).as_quote_form() == Some((qf, &inner))`
+        // for every variant of the closed-set `QuoteForm` algebra. This
+        // is the canonical law binding the marker→wrapper projection
+        // (`wrap`) to its wrapper→marker dual (`as_quote_form`) on the
+        // substrate's `Sexp` algebra. A regression that drifts the
+        // (marker, constructor) pair on EITHER side — `wrap` routing
+        // `Quote` to `Sexp::Quasiquote`, OR `as_quote_form` routing
+        // `Sexp::Quote(_)` to `QuoteForm::Quasiquote` — surfaces as a
+        // round-trip mismatch here. Sweep all four variants so the
+        // round-trip stays load-bearing across the closed set. Same
+        // posture as the `display_for_sexp_round_trips_each_quote_family
+        // _variant_through_reader` round-trip pin at the Display→read
+        // boundary; this test pins the round-trip at the marker→Sexp
+        // projection boundary.
+        let inner_body = Sexp::symbol("payload");
+        for qf in [
+            QuoteForm::Quote,
+            QuoteForm::Quasiquote,
+            QuoteForm::Unquote,
+            QuoteForm::UnquoteSplice,
+        ] {
+            let wrapped = qf.wrap(inner_body.clone());
+            let projected = wrapped
+                .as_quote_form()
+                .expect("wrap output must project back through as_quote_form");
+            assert_eq!(
+                projected.0, qf,
+                "wrap→as_quote_form drifted at marker for variant {qf:?}"
+            );
+            assert_eq!(
+                projected.1, &inner_body,
+                "wrap→as_quote_form drifted at inner body for variant {qf:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_wrap_derives_each_arm_to_its_pre_lift_box_new_form() {
+        // PATH-UNIFORMITY CONTRACT: pin that `QuoteForm::wrap` is
+        // observably equivalent to the pre-lift four-arm reader pattern
+        // `Sexp::<Variant>(Box::new(inner))` across every variant of the
+        // closed set. The reader's pre-lift parse arms each constructed
+        // their corresponding wrapper inline; post-lift the parse routes
+        // through `QuoteForm::wrap`. A regression that drifts the
+        // projection's allocation posture (e.g. wraps in an extra layer,
+        // or skips the `Box::new`) fails loudly here. Companion to the
+        // `wrap` projection test above — that test pins the (marker,
+        // constructor) pairing; this test pins the structural shape of
+        // each wrap output bit-for-bit against the pre-lift inline form.
+        let inner = Sexp::List(vec![Sexp::symbol("inner"), Sexp::int(7)]);
+        for (qf, expected) in [
+            (QuoteForm::Quote, Sexp::Quote(Box::new(inner.clone()))),
+            (
+                QuoteForm::Quasiquote,
+                Sexp::Quasiquote(Box::new(inner.clone())),
+            ),
+            (QuoteForm::Unquote, Sexp::Unquote(Box::new(inner.clone()))),
+            (
+                QuoteForm::UnquoteSplice,
+                Sexp::UnquoteSplice(Box::new(inner.clone())),
+            ),
+        ] {
+            assert_eq!(
+                qf.wrap(inner.clone()),
+                expected,
+                "wrap drifted from pre-lift Sexp::<Variant>(Box::new(inner)) form for {qf:?}"
+            );
+        }
     }
 
     #[test]

@@ -6,17 +6,30 @@
 //! downstream tools (`tatara-lispc`, `tatara-check`, REPL, future LSP) can
 //! pinpoint the failure in the source.
 
-use crate::ast::{Atom, Sexp};
+use crate::ast::{Atom, QuoteForm, Sexp};
 use crate::error::{LispError, Result};
 
+// The four homoiconic prefix-wrappers (`'`, `` ` ``, `,`, `,@`) collapse
+// onto ONE `Token::Quoted(QuoteForm)` variant carrying the substrate's
+// typed `QuoteForm` marker. Pre-lift the reader carried its own parallel
+// closed set (`Token::{Quote, Quasiquote, Unquote, UnquoteSplice}`) paired
+// with the matching `Sexp::*` tuple-variant constructors threaded as
+// `fn(Box<Sexp>) -> Sexp` arguments to `read_quoted` — the FIFTH consumer
+// site of the quote-family closed set the prior `QuoteForm` lifts did not
+// reach. Post-lift the reader binds to the substrate algebra: tokenizer
+// arms construct `Token::Quoted(QuoteForm::*)` directly, the parser
+// collapses its four `Some((Token::Quote*, _))` arms to ONE
+// `Some((Token::Quoted(qf), _))` arm, and `read_quoted` routes through
+// `QuoteForm::wrap` so the (marker, Sexp::* constructor) pairing binds
+// at ONE site rather than per-arm. Adding a fifth homoiconic prefix
+// extends `QuoteForm` AND the tokenizer arm AND `QuoteForm::wrap`'s arm
+// in lockstep — rustc binds the reader's wrap step to the substrate
+// algebra through exhaustiveness over the closed enum.
 #[derive(Clone, Debug, PartialEq)]
 enum Token {
     LParen,
     RParen,
-    Quote,
-    Quasiquote,
-    Unquote,
-    UnquoteSplice,
+    Quoted(QuoteForm),
     Atom(String),
     Str(String),
 }
@@ -62,20 +75,20 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
             }
             '\'' => {
                 chars.next();
-                out.push((Token::Quote, pos));
+                out.push((Token::Quoted(QuoteForm::Quote), pos));
             }
             '`' => {
                 chars.next();
-                out.push((Token::Quasiquote, pos));
+                out.push((Token::Quoted(QuoteForm::Quasiquote), pos));
             }
             ',' => {
                 chars.next();
                 // `,@` is splicing unquote; bare `,` is unquote.
                 if chars.peek().map(|&(_, c)| c) == Some('@') {
                     chars.next();
-                    out.push((Token::UnquoteSplice, pos));
+                    out.push((Token::Quoted(QuoteForm::UnquoteSplice), pos));
                 } else {
-                    out.push((Token::Unquote, pos));
+                    out.push((Token::Quoted(QuoteForm::Unquote), pos));
                 }
             }
             '"' => {
@@ -145,10 +158,15 @@ fn parse<I: Iterator<Item = Spanned>>(
             }
         }
         Some((Token::RParen, pos)) => Err(LispError::UnmatchedParen { pos }),
-        Some((Token::Quote, _)) => read_quoted(it, eof_pos, Sexp::Quote),
-        Some((Token::Quasiquote, _)) => read_quoted(it, eof_pos, Sexp::Quasiquote),
-        Some((Token::Unquote, _)) => read_quoted(it, eof_pos, Sexp::Unquote),
-        Some((Token::UnquoteSplice, _)) => read_quoted(it, eof_pos, Sexp::UnquoteSplice),
+        // The four pre-lift `Some((Token::Quote*, _))` arms collapse to
+        // ONE arm routing through the typed `QuoteForm` marker — the
+        // (Token variant, Sexp::* constructor) pairing now binds at the
+        // closed-set algebra (`QuoteForm::wrap`) rather than threaded as
+        // per-arm constructor literals. Adding a fifth homoiconic prefix
+        // extends `QuoteForm` AND the tokenizer arm AND `QuoteForm::wrap`'s
+        // match arm in lockstep — rustc binds the extension through
+        // exhaustiveness over the closed enum.
+        Some((Token::Quoted(qf), _)) => read_quoted(it, eof_pos, qf),
         Some((Token::Str(s), _)) => Ok(Sexp::Atom(Atom::Str(s))),
         Some((Token::Atom(s), _)) => Ok(atom_from_str(&s)),
         None => Err(LispError::Eof { pos: eof_pos }),
@@ -156,33 +174,42 @@ fn parse<I: Iterator<Item = Spanned>>(
 }
 
 /// Parse the datum following a quote-like prefix token (`'`, `` ` ``, `,`,
-/// `,@`) and wrap it in the corresponding `Sexp` constructor.
+/// `,@`) and wrap it in the matching `Sexp::*` constructor projected from
+/// the typed [`QuoteForm`] marker.
 ///
 /// Centralizes the four byte-identical "read-inner-and-box" arms in
-/// `parse` — one per homoiconic prefix — into ONE emission site. Each
-/// `Sexp::Quote` / `Sexp::Quasiquote` / `Sexp::Unquote` /
-/// `Sexp::UnquoteSplice` tuple-variant constructor is itself a
-/// `fn(Box<Sexp>) -> Sexp` (Rust tuple-variant ctors are first-class
-/// function pointers), passed in via the `wrap` parameter so the helper
-/// is shape-of-arm, not shape-of-variant — adding a fifth homoiconic
-/// marker becomes ONE new arm, not three lines.
+/// `parse` — one per homoiconic prefix — into ONE emission site. The
+/// per-prefix (Token variant, Sexp::* constructor) pairing now binds at
+/// ONE site on the substrate's `QuoteForm` closed-set algebra: the
+/// parser dispatches on `Token::Quoted(qf)`, this helper reads the
+/// inner datum, and [`QuoteForm::wrap`] projects the typed marker back
+/// into its `Sexp::*` wrapper variant. The (marker, constructor) pair
+/// lives at the typed projection ([`QuoteForm::wrap`]) rather than
+/// threaded as a per-arm `fn(Box<Sexp>) -> Sexp` constructor literal
+/// passed in by the caller — adding a fifth homoiconic prefix extends
+/// `QuoteForm` AND its tokenizer arm AND [`QuoteForm::wrap`]'s match arm
+/// in lockstep, with rustc binding the extension through exhaustiveness
+/// over the closed enum.
 ///
 /// Theory anchor: THEORY.md §VI.1 — three-times rule. The four
 /// `Some((Token::Quote*, _))` arms in `parse` each ran `let inner =
 /// parse(it, eof_pos)?; Ok(Sexp::*(Box::new(inner)))` — byte-identical
-/// modulo the `Sexp::*` constructor. Lifted into one helper so the
-/// next change to the read-inner shape (e.g. threading source spans
-/// when `Sexp` carries `pos: Option<usize>`) lands as ONE edit, not
-/// four. Parallel posture to `tagged()` in `interop.rs` — the
-/// canonical-form interop's analogous closed-set wrap helper across
-/// the same four homoiconic variants.
+/// modulo the `Sexp::*` constructor. Lifted into ONE helper that routes
+/// through the substrate's closed-set `QuoteForm` algebra so the next
+/// change to the read-inner shape (e.g. threading source spans when
+/// `Sexp` carries `pos: Option<usize>`) lands as ONE edit, not four.
+/// Parallel posture to `tagged()` in `interop.rs` — the canonical-form
+/// interop's analogous closed-set wrap helper across the same four
+/// homoiconic variants, now also lifted onto [`QuoteForm::iac_forge_tag`].
+/// Both interop helpers project from `QuoteForm` to a per-consumer
+/// surface; this helper closes the FIFTH consumer site of the algebra.
 fn read_quoted<I: Iterator<Item = Spanned>>(
     it: &mut std::iter::Peekable<I>,
     eof_pos: usize,
-    wrap: fn(Box<Sexp>) -> Sexp,
+    qf: QuoteForm,
 ) -> Result<Sexp> {
     let inner = parse(it, eof_pos)?;
-    Ok(wrap(Box::new(inner)))
+    Ok(qf.wrap(inner))
 }
 
 fn atom_from_str(s: &str) -> Sexp {
@@ -421,6 +448,116 @@ mod tests {
             LispError::Eof { pos } => assert_eq!(pos, src.len()),
             other => panic!("expected Eof, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn reader_threads_each_prefix_through_quote_form_wrap_dual_of_as_quote_form() {
+        // END-TO-END CLOSED-SET CONTRACT: pin that the reader's
+        // prefix-dispatch routes through the substrate's typed
+        // `QuoteForm` algebra at every step. For each of the four
+        // homoiconic prefixes (`'`, `` ` ``, `,`, `,@`) the read path
+        // produces a `Sexp::*` value byte-identical to what
+        // `expected_qf.wrap(inner)` builds — pinning that the reader's
+        // `Token::Quoted(qf) → read_quoted(it, eof_pos, qf) →
+        // qf.wrap(inner)` pipeline binds to the same algebra every
+        // other consumer (Hash, Display, as_unquote, iac-forge interop)
+        // routes through. A regression that bypasses `QuoteForm::wrap`
+        // (e.g. reverts to per-arm `Sexp::*` constructor literals) AND
+        // accidentally swaps two constructors silently corrupts every
+        // program's quote-family parse; this test catches the drift via
+        // the typed marker projection.
+        let inner = Sexp::symbol("payload");
+        for (src, expected_qf) in [
+            ("'payload", QuoteForm::Quote),
+            ("`payload", QuoteForm::Quasiquote),
+            (",payload", QuoteForm::Unquote),
+            (",@payload", QuoteForm::UnquoteSplice),
+        ] {
+            let forms = read(src).expect(src);
+            assert_eq!(forms.len(), 1, "{src} must produce one form");
+
+            // (1) Read result equals `expected_qf.wrap(inner.clone())` —
+            // pin the reader→wrap dual end-to-end.
+            assert_eq!(
+                forms[0],
+                expected_qf.wrap(inner.clone()),
+                "{src} drifted from QuoteForm::wrap dual"
+            );
+
+            // (2) Project the read form back through `as_quote_form` to
+            // confirm the typed marker matches `expected_qf` and the
+            // inner body is preserved — pin the round-trip law
+            // `read(qf.prefix() + inner.repr) →[as_quote_form] (qf, inner)`.
+            let (qf, body) = forms[0]
+                .as_quote_form()
+                .unwrap_or_else(|| panic!("{src} must project through as_quote_form"));
+            assert_eq!(qf, expected_qf, "{src} produced wrong typed marker");
+            assert_eq!(body, &inner, "{src} drifted inner body");
+        }
+    }
+
+    #[test]
+    fn token_quoted_arms_carry_typed_quote_form_marker_for_every_prefix() {
+        // CLOSED-SET TOKENIZATION CONTRACT: pin that each homoiconic
+        // prefix tokenizes to `Token::Quoted(QuoteForm::*)` with the
+        // matching closed-set variant. The pre-lift reader carried a
+        // parallel `Token::{Quote, Quasiquote, Unquote, UnquoteSplice}`
+        // closed set; post-lift the tokenizer binds directly to the
+        // substrate's `QuoteForm` algebra. A regression that drifts the
+        // (prefix char, QuoteForm variant) pairing inside the tokenizer
+        // (e.g. routes `'` to `QuoteForm::Quasiquote`) surfaces here
+        // because the spanned-token output exposes the typed marker
+        // directly — no intermediate constructor function to obscure
+        // the (prefix → marker) intent.
+        for (src, expected_qf, expected_span) in [
+            ("'", QuoteForm::Quote, 0usize),
+            ("`", QuoteForm::Quasiquote, 0),
+            (",", QuoteForm::Unquote, 0),
+            (",@", QuoteForm::UnquoteSplice, 0),
+        ] {
+            let tokens = tokenize(src).expect(src);
+            assert_eq!(tokens.len(), 1, "{src} must produce one token");
+            match &tokens[0] {
+                (Token::Quoted(qf), pos) => {
+                    assert_eq!(*qf, expected_qf, "{src} drifted typed marker");
+                    assert_eq!(*pos, expected_span, "{src} drifted span position");
+                }
+                other => panic!("{src} expected Token::Quoted, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn token_quoted_unquote_splice_two_char_marker_collapses_to_single_token() {
+        // TOKEN-MERGE CONTRACT: pin that the two-char `,@` prefix
+        // collapses to ONE `Token::Quoted(QuoteForm::UnquoteSplice)`
+        // token, not two adjacent tokens — and that the bare `,` (with
+        // no following `@`) projects to `QuoteForm::Unquote`. The
+        // tokenizer's peek-then-consume `@`-discriminator is load-
+        // bearing for the closed-set dispatch; a regression that
+        // emits two tokens for `,@` would route through `Unquote`
+        // followed by an `@` atom, silently re-shaping every splice
+        // form's parse.
+        let tokens = tokenize(",@xs").expect(",@xs");
+        assert_eq!(tokens.len(), 2, ",@xs must tokenize as splice + atom");
+        assert!(
+            matches!(tokens[0], (Token::Quoted(QuoteForm::UnquoteSplice), 0)),
+            "expected ,@ token at position 0, got {:?}",
+            tokens[0]
+        );
+        assert!(
+            matches!(tokens[1], (Token::Atom(_), 2)),
+            "expected atom token at position 2, got {:?}",
+            tokens[1]
+        );
+
+        let tokens_bare = tokenize(",xs").expect(",xs");
+        assert_eq!(tokens_bare.len(), 2, ",xs must tokenize as unquote + atom");
+        assert!(
+            matches!(tokens_bare[0], (Token::Quoted(QuoteForm::Unquote), 0)),
+            "expected , token at position 0, got {:?}",
+            tokens_bare[0]
+        );
     }
 
     #[test]

@@ -776,6 +776,81 @@ impl QuoteForm {
             Self::Quote | Self::Quasiquote => None,
         }
     }
+
+    /// Canonical iac-forge interop tag — the symbol head the canonical
+    /// 2-element-list encoding of a quote-family wrapper uses when
+    /// projecting `tatara_lisp::Sexp` into `iac_forge::sexpr::SExpr`:
+    /// `"quote"` for [`Self::Quote`], `"quasiquote"` for
+    /// [`Self::Quasiquote`], `"unquote"` for [`Self::Unquote`],
+    /// `"unquote-splicing"` for [`Self::UnquoteSplice`].
+    ///
+    /// The mapping is Common-Lisp-canonical: a `,@x` form encodes as
+    /// `(unquote-splicing x)` rather than `(unquote-splice x)`. That
+    /// tag-string choice is INTENTIONALLY DISTINCT from the substrate's
+    /// shorter diagnostic label projected by
+    /// [`crate::error::SexpShape::label`] (which renders
+    /// `[`Self::UnquoteSplice`]` as `"unquote-splice"` — the shorter
+    /// idiom appropriate for `expected …, got unquote-splice` error
+    /// surfaces). The two projections key the SAME closed set on TWO
+    /// distinct boundaries:
+    ///
+    /// * `iac_forge_tag` — cross-crate canonical form, BLAKE3 attestation
+    ///   keys, render-cache shape (load-bearing for byte-identical
+    ///   inter-crate compatibility with the iac-forge ecosystem).
+    /// * `SexpShape::label` — operator-facing diagnostic label,
+    ///   `LispError::TypeMismatch.got` rendering, REPL/LSP
+    ///   shape-of-witness surface.
+    ///
+    /// Pre-lift the four canonical iac-forge tag strings lived inline
+    /// across four arms in [`crate::interop`]'s
+    /// `From<&Sexp> for iac_forge::sexpr::SExpr` impl, paired with the
+    /// matching `Sexp::{Quote, Quasiquote, Unquote, UnquoteSplice}`
+    /// patterns. The pairing was load-bearing yet only enforced by
+    /// callsite discipline at a FOURTH consumer site (alongside `Hash`,
+    /// `Display`, and `Sexp::as_unquote`) the prior closed-set
+    /// `QuoteForm` lift did not reach (the `iac-forge` feature gate
+    /// kept that site's drift risk silent in the default build). After
+    /// this lift the interop arms collapse to ONE arm routing through
+    /// [`crate::ast::Sexp::as_quote_form`] + this method, so the
+    /// (Sexp variant, canonical tag string) pairing binds at ONE site
+    /// on the substrate algebra regardless of which consumer surface
+    /// (`Hash`, `Display`, `Sexp::as_unquote`, iac-forge interop)
+    /// needs it.
+    ///
+    /// The `&'static str` lifetime is load-bearing: every iac-forge
+    /// consumer projects through this method into the canonical
+    /// 2-element-list head without an allocation, parallel to how
+    /// [`Self::prefix`], [`UnquoteForm::marker`], and
+    /// [`crate::error::SexpShape::label`] project their respective
+    /// closed-set surfaces. A future homoiconic prefix-wrapper (e.g.
+    /// hypothetical `,~` reverse-unquote) extends [`Self`] AND this
+    /// method's match arm together — rustc binds the iac-forge
+    /// canonical-form surface to the algebra through exhaustiveness.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// quote-family canonical-form tag set becomes a TYPE projection
+    /// on the substrate algebra rather than four `&'static str`
+    /// literals scattered across the `interop` arms (parallel to how
+    /// `Self::prefix` lifts the Display↔reader prefix and
+    /// `Self::hash_discriminator` lifts the cache-key bytes).
+    /// THEORY.md §VI.1 — generation over composition; the (Sexp
+    /// variant, iac-forge tag) pairing appeared at the four
+    /// `interop.rs` arms — past the ≥2 PRIME-DIRECTIVE trigger once
+    /// the structural shape is named. THEORY.md §II.1 invariant 1 —
+    /// typed entry; the cross-crate canonical-form projection IS the
+    /// typed-exit gate at the iac-forge boundary, and naming its
+    /// closed-set tag identity lifts the gate from per-site literal
+    /// discipline to ONE method the iac-forge round-trip discipline
+    /// binds against.
+    #[must_use]
+    pub fn iac_forge_tag(self) -> &'static str {
+        match self {
+            Self::Quote => "quote",
+            Self::Quasiquote => "quasiquote",
+            Self::Unquote => "unquote",
+            Self::UnquoteSplice => "unquote-splicing",
+        }
+    }
 }
 
 /// Iterate over the argument tails of every form in `forms` whose call head
@@ -2143,6 +2218,71 @@ mod tests {
         );
         assert_eq!(QuoteForm::Quote.as_unquote_form(), None);
         assert_eq!(QuoteForm::Quasiquote.as_unquote_form(), None);
+    }
+
+    #[test]
+    fn quote_form_iac_forge_tag_pins_canonical_lisp_tag_strings_for_every_variant() {
+        // CROSS-CRATE CANONICAL-FORM CONTRACT: the four canonical
+        // iac-forge tags are load-bearing for inter-crate compatibility
+        // — `iac_forge::sexpr::SExpr` consumers (BLAKE3 attestation,
+        // render cache) key on the canonical 2-element-list shape
+        // `(<tag> <inner>)`. A regression that drifts ONE tag silently
+        // invalidates every cached canonical form across the substrate
+        // AND mis-collides with the legacy `SexpShape::label` projection
+        // that uses the shorter `"unquote-splice"` for the diagnostic
+        // surface. Pin the four legacy tag values explicitly so a
+        // regression that re-spells them surfaces immediately.
+        assert_eq!(QuoteForm::Quote.iac_forge_tag(), "quote");
+        assert_eq!(QuoteForm::Quasiquote.iac_forge_tag(), "quasiquote");
+        assert_eq!(QuoteForm::Unquote.iac_forge_tag(), "unquote");
+        assert_eq!(QuoteForm::UnquoteSplice.iac_forge_tag(), "unquote-splicing");
+    }
+
+    #[test]
+    fn quote_form_iac_forge_tag_diverges_from_sexp_shape_label_for_unquote_splice() {
+        // BOUNDARY-DISTINCT CONTRACT: the iac-forge canonical tag for
+        // `UnquoteSplice` is `"unquote-splicing"` (Common Lisp idiom,
+        // load-bearing for canonical-form round-trip with the iac-forge
+        // ecosystem), distinct from `SexpShape::label`'s shorter
+        // `"unquote-splice"` (the substrate's diagnostic label idiom).
+        // The two projections key the SAME closed-set on TWO distinct
+        // boundaries — pinning the divergence here documents the
+        // intent: a future "consolidation" PR that homogenizes them
+        // would silently break either the iac-forge canonical-form
+        // round-trip OR the operator-facing diagnostic surface. The
+        // three other variants (Quote, Quasiquote, Unquote) DO match
+        // across both projections — pin that path-uniformity too so a
+        // regression that drifts one of the three matched arms surfaces
+        // immediately. Sibling-arm sweep so the (variant, tag) AND
+        // (variant, label) pairings stay load-bearing under reordering
+        // refactors.
+        use crate::error::SexpShape;
+        assert_eq!(
+            QuoteForm::Quote.iac_forge_tag(),
+            SexpShape::Quote.label(),
+            "quote tag/label agreement"
+        );
+        assert_eq!(
+            QuoteForm::Quasiquote.iac_forge_tag(),
+            SexpShape::Quasiquote.label(),
+            "quasiquote tag/label agreement"
+        );
+        assert_eq!(
+            QuoteForm::Unquote.iac_forge_tag(),
+            SexpShape::Unquote.label(),
+            "unquote tag/label agreement"
+        );
+        // The intentional divergence — load-bearing for the iac-forge
+        // canonical form vs the substrate's diagnostic label.
+        assert_eq!(QuoteForm::UnquoteSplice.iac_forge_tag(), "unquote-splicing");
+        assert_eq!(SexpShape::UnquoteSplice.label(), "unquote-splice");
+        assert_ne!(
+            QuoteForm::UnquoteSplice.iac_forge_tag(),
+            SexpShape::UnquoteSplice.label(),
+            "the two projections must disagree at UnquoteSplice — the CL canonical \
+             form requires '-splicing' while the substrate's diagnostic label uses \
+             the shorter '-splice'; consolidating them would break either side",
+        );
     }
 
     #[test]

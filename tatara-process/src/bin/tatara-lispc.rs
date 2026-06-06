@@ -1,7 +1,14 @@
-//! `tatara-lispc` — compile a `.lisp` defpoint source into `Process` YAML.
+//! `tatara-lispc` — compile a `.lisp` source into `Process` YAML.
+//!
+//! Handles three authoring surfaces, all lowering to the universal `Process`
+//! CRD:
+//! - `(defenvmatrix …)` — a permutation generator; **fans out** to N Process
+//!   YAMLs (one per environment in the sweep).
+//! - `(defephemeral …)` — one ephemeral environment → one Process.
+//! - `(defpoint …)` — the full Process surface → one Process.
 //!
 //! ```sh
-//! tatara-lispc observability-stack.lisp
+//! tatara-lispc echo-sweep.lisp
 //! # prints one or more --- Process YAML blocks to stdout
 //! ```
 
@@ -9,7 +16,24 @@ use std::env;
 use std::fs;
 use std::process::ExitCode;
 
-use tatara_process::prelude::Process;
+use tatara_process::ephemeral::compile_ephemeral_source;
+use tatara_process::matrix::compile_env_matrix_source;
+use tatara_process::prelude::{Process, ProcessSpec};
+
+fn emit(name: &str, spec: ProcessSpec) -> Result<(), ()> {
+    let proc = Process::new(name, spec);
+    match serde_yaml::to_string(&proc) {
+        Ok(y) => {
+            println!("---");
+            println!("{}", y.trim_end());
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("serialize {name}: {e}");
+            Err(())
+        }
+    }
+}
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
@@ -25,25 +49,45 @@ fn main() -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let defs = match tatara_process::compile_source(&source) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                tatara_lisp::format_diagnostic(&source, &e, Some(path))
-            );
-            return ExitCode::from(1);
-        }
-    };
-    for def in defs {
-        let proc = Process::new(&def.name, def.spec);
-        match serde_yaml::to_string(&proc) {
-            Ok(y) => {
-                println!("---");
-                println!("{}", y.trim_end());
+
+    // Dispatch on the authored form. Each path lowers to the universal Process
+    // CRD; a matrix fans out to one Process per generated environment.
+    macro_rules! compiled {
+        ($call:expr) => {
+            match $call {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{}", tatara_lisp::format_diagnostic(&source, &e, Some(path)));
+                    return ExitCode::from(1);
+                }
             }
-            Err(e) => {
-                eprintln!("serialize {}: {e}", def.name);
+        };
+    }
+
+    if source.contains("(defenvmatrix") {
+        for m in compiled!(compile_env_matrix_source(&source)) {
+            let envs = m.spec.expand(&m.name);
+            eprintln!(
+                "tatara-lispc: matrix '{}' → {} environment(s) (selection {})",
+                m.name,
+                envs.len(),
+                m.spec.selection_size()
+            );
+            for env in envs {
+                if emit(&env.name, env.spec.into()).is_err() {
+                    return ExitCode::from(1);
+                }
+            }
+        }
+    } else if source.contains("(defephemeral") {
+        for d in compiled!(compile_ephemeral_source(&source)) {
+            if emit(&d.name, d.spec.into()).is_err() {
+                return ExitCode::from(1);
+            }
+        }
+    } else {
+        for d in compiled!(tatara_process::compile_source(&source)) {
+            if emit(&d.name, d.spec).is_err() {
                 return ExitCode::from(1);
             }
         }

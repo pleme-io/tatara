@@ -19,6 +19,7 @@ pub mod identity;
 pub mod intent;
 pub mod lifetime;
 pub mod lifetime_clock;
+pub mod matrix;
 pub mod phase;
 pub mod pool;
 pub mod receipt;
@@ -46,6 +47,10 @@ pub mod prelude {
         EncapsulationKindVariant, EncapsulationMode, ExistingHelmRelease, ExistingKustomization,
     };
     pub use crate::ephemeral::{compile_ephemeral_source, EphemeralSpec};
+    pub use crate::matrix::{
+        compile_env_matrix_source, EnvMatrixSpec, MatrixAxis, MatrixBudget, NamedEphemeral,
+        SelectStrategy,
+    };
     pub use crate::hostname::{
         ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameError,
         EPHEMERAL_ID_HASH_LEN,

@@ -103,7 +103,17 @@ pub struct BreatheEnvelope {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BreatheDimension {
-    /// `memory` | `cpu` | `storage` → `MemoryBand` / `CpuBand` / `StorageBand`.
+    /// The breathe dimension keyword — `memory`/`mem` → `MemoryBand`,
+    /// `cpu` → `CpuBand`, `storage`/`disk` → `StorageBand`. Case-
+    /// insensitive. Decoded through the typed [`BreatheDimensionKind`]
+    /// closed-set projection: aliases (`mem` / `disk`) decode to the
+    /// SAME variant as the primary keyword, then [`BreatheDimensionKind::
+    /// band_kind`] projects the CR kind and [`BreatheDimensionKind::
+    /// name_segment`] projects the canonical band-name segment so the
+    /// emitted band name (`<env>-{name-segment}`) does NOT depend on
+    /// which alias the operator wrote. Unrecognized keywords drop the
+    /// dimension (no band emitted) — the closed set IS the substrate's
+    /// supported axis set.
     pub kind: String,
     /// Floor quantity (the never-shrink-below limit, in the dimension's unit:
     /// bytes-quantity like `128Mi` for memory/storage, millicores like `100m`
@@ -261,7 +271,11 @@ impl EnvMatrixSpec {
         let mut suffix = Vec::with_capacity(coord.len());
         for (axis_idx, &val_idx) in coord.iter().enumerate() {
             let axis = &self.axes[axis_idx];
-            let val = axis.vals().get(val_idx).cloned().unwrap_or(serde_json::Value::Null);
+            let val = axis
+                .vals()
+                .get(val_idx)
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
             apply_axis(&mut spec, &axis.path, val.clone());
             suffix.push(format!("{}-{}", slug(&axis.name), slug_value(&val)));
         }
@@ -312,12 +326,12 @@ impl EnvMatrixSpec {
             .dimensions
             .iter()
             .filter_map(|dim| {
-                let kind = band_kind_for(&dim.kind)?;
+                let kind = BreatheDimensionKind::from_keyword(&dim.kind)?;
                 Some(serde_json::json!({
                     "apiVersion": "breathe.pleme.io/v1",
-                    "kind": kind,
+                    "kind": kind.band_kind(),
                     "metadata": {
-                        "name": format!("{}-{}", env.name, dim.kind.to_ascii_lowercase()),
+                        "name": format!("{}-{}", env.name, kind.name_segment()),
                         "namespace": namespace,
                         "labels": { "matrix-env": env.name },
                         "annotations": annotations,
@@ -335,13 +349,121 @@ impl EnvMatrixSpec {
     }
 }
 
-/// Map a dimension keyword to its breathe Band CR kind.
-fn band_kind_for(dim: &str) -> Option<&'static str> {
-    match dim.to_ascii_lowercase().as_str() {
-        "memory" | "mem" => Some("MemoryBand"),
-        "cpu" => Some("CpuBand"),
-        "storage" | "disk" => Some("StorageBand"),
-        _ => None,
+/// Closed-set typed identifier for the three reachable breathe Band CR
+/// kinds a [`BreatheDimension::kind`] keyword can target — [`Self::Memory`]
+/// → `MemoryBand`, [`Self::Cpu`] → `CpuBand`, [`Self::Storage`] →
+/// `StorageBand` — as a Rust enum, so the (keyword-set, CR-kind,
+/// name-segment) triple binds at ONE site on the typed algebra rather
+/// than at three byte-identical string-literal sites scattered across
+/// [`EnvMatrixSpec::breathe_bands`] and the deleted `band_kind_for`
+/// helper.
+///
+/// Pre-lift the dispatch lived as a string-input / `&'static str`-output
+/// `band_kind_for` helper paired with an inline
+/// `dim.kind.to_ascii_lowercase()` composing the band's metadata-name
+/// segment. The two arms of the pairing did NOT canonicalize together:
+/// `band_kind_for("mem")` and `band_kind_for("memory")` both projected
+/// to `"MemoryBand"`, but the inline name-segment site echoed the
+/// operator's raw alias (`<env>-mem` vs `<env>-memory`), so a single
+/// matrix sweep that wrote one dimension as `"mem"` and another as
+/// `"memory"` produced two bands with drift-shaped names and no compile
+/// or runtime signal that the names depended on operator-side alias
+/// choice. Post-lift the pairing binds at ONE typed projection
+/// ([`Self::band_kind`] + [`Self::name_segment`]) — both the CR kind
+/// AND the name segment derive from the same closed-set variant, so
+/// every alias canonicalizes to ONE band-name shape regardless of how
+/// the operator spelled the dimension keyword.
+///
+/// Adding a fourth dimension (e.g. `Network` → `NetworkBand`,
+/// name-segment `"network"`) extends the enum AND the three projection
+/// arms ([`Self::from_keyword`], [`Self::band_kind`],
+/// [`Self::name_segment`]) in lockstep — rustc binds the extension
+/// through exhaustiveness over the closed enum so a partial extension
+/// that forgets ONE projection becomes a compile error rather than a
+/// runtime drift where the new band-kind projects but the name-segment
+/// falls back to the raw keyword.
+///
+/// Sibling closed-set lift to this file's [`MatrixTarget`]
+/// (three-of-three magic-target identifier on the same `EphemeralSpec`
+/// algebra) and to tatara-lisp's `QuoteForm` (four-of-four homoiconic
+/// prefix-wrappers), `UnquoteForm` (two-of-four template-marker
+/// subset), `MacroDefHead` (two-of-two macro-definition heads), and
+/// `CompilerSpecIoStage` (disk-persistence surface) closed-set
+/// algebras: those enums key their respective dispatch / projection
+/// variants on a typed identity carried inside the variant; this enum
+/// keys the three reachable breathe-dimension CR-kind / name-segment
+/// pairs on a typed marker identity.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set
+/// of breathe-dimension keywords becomes a TYPE rather than three
+/// `&'static str` literals at one site and a raw-keyword `to_ascii_
+/// lowercase()` at another. A typo in any arm becomes a compile error
+/// against the typed projection. THEORY.md §VI.1 — generation over
+/// composition; the (keyword-set, CR-kind, name-segment) triple was
+/// load-bearing across two sites yet enforced by per-site call-site
+/// discipline — past the ≥2 PRIME-DIRECTIVE trigger once the
+/// structural shape is named.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BreatheDimensionKind {
+    /// `memory` / `mem` → `MemoryBand`, name-segment `"memory"`.
+    Memory,
+    /// `cpu` → `CpuBand`, name-segment `"cpu"`.
+    Cpu,
+    /// `storage` / `disk` → `StorageBand`, name-segment `"storage"`.
+    Storage,
+}
+
+impl BreatheDimensionKind {
+    /// Decode a [`BreatheDimension::kind`] keyword (case-insensitive)
+    /// into the typed marker, or `None` for keywords that aren't in
+    /// the closed set (they fall through to the `filter_map` drop in
+    /// [`EnvMatrixSpec::breathe_bands`] — the dimension contributes
+    /// no band). Closed-set primary inverse of [`Self::band_kind`]
+    /// and [`Self::name_segment`]: every primary / alias keyword for
+    /// a variant decodes back to that variant.
+    #[must_use]
+    pub fn from_keyword(kw: &str) -> Option<Self> {
+        match kw.to_ascii_lowercase().as_str() {
+            "memory" | "mem" => Some(Self::Memory),
+            "cpu" => Some(Self::Cpu),
+            "storage" | "disk" => Some(Self::Storage),
+            _ => None,
+        }
+    }
+
+    /// Canonical breathe Band CR kind — the `kind:` field on the
+    /// emitted Band CR (`MemoryBand` / `CpuBand` / `StorageBand`).
+    /// Projects through `&'static str` (no allocation) so consumers
+    /// (the `breathe_bands` emitter, future CRD discovery, future
+    /// LSP completion lists) compose with the same shape
+    /// `tatara_lisp`'s `QuoteForm::prefix` / `MatrixTarget::marker`
+    /// closed-set surfaces use.
+    #[must_use]
+    pub fn band_kind(self) -> &'static str {
+        match self {
+            Self::Memory => "MemoryBand",
+            Self::Cpu => "CpuBand",
+            Self::Storage => "StorageBand",
+        }
+    }
+
+    /// Canonical lower-case keyword used as the band metadata-name
+    /// segment (`{env-name}-{name-segment}`). Pinned to the variant
+    /// rather than echoed from the operator-side alias: a sweep that
+    /// declares `(:kind "mem" …)` produces `<env>-memory`, NOT
+    /// `<env>-mem` — every alias funnels to ONE deterministic band
+    /// name so two dimensions written with two different aliases
+    /// (`"mem"` and `"memory"`) cannot collide-by-shape into
+    /// indistinguishable band names; the typed projection is the
+    /// canonical-name boundary the substrate's deterministic-output
+    /// posture relies on.
+    #[must_use]
+    pub fn name_segment(self) -> &'static str {
+        match self {
+            Self::Memory => "memory",
+            Self::Cpu => "cpu",
+            Self::Storage => "storage",
+        }
     }
 }
 
@@ -952,6 +1074,241 @@ mod tests {
                 "{variant:?}: apply_axis.chart_ref drifted from MatrixTarget::apply"
             );
         }
+    }
+
+    // ── BreatheDimensionKind: closed-set dimension dispatch ───────────
+    //
+    // The string-input `band_kind_for` helper paired with an inline
+    // `dim.kind.to_ascii_lowercase()` name-segment site collapses onto
+    // the typed `BreatheDimensionKind` closed-set enum. The tests
+    // below pin five structural contracts the lift establishes —
+    // primary-keyword decode, alias-equivalence (each alias decodes to
+    // the SAME variant as the primary), per-variant `band_kind` /
+    // `name_segment` projection, unknown-keyword drop, and the
+    // canonical-name contract that `breathe_bands` emits the SAME
+    // band-name regardless of which alias the operator wrote (the
+    // load-bearing improvement over pre-lift's per-alias name drift).
+    const BREATHE_DIM_VARIANTS: [BreatheDimensionKind; 3] = [
+        BreatheDimensionKind::Memory,
+        BreatheDimensionKind::Cpu,
+        BreatheDimensionKind::Storage,
+    ];
+
+    #[test]
+    fn breathe_dimension_kind_from_keyword_round_trips_through_band_kind_for_every_variant() {
+        // PRIMARY-KEYWORD CONTRACT: for every `BreatheDimensionKind`
+        // variant, decoding its `name_segment` (the canonical primary
+        // keyword `memory` / `cpu` / `storage`) through `from_keyword`
+        // yields the same variant. Sibling-arm sweep so the three
+        // pairings stay load-bearing under reordering refactors — a
+        // regression that drifts ONE arm's `from_keyword → name_segment`
+        // round-trip (e.g. routes `"cpu"` through to `Memory`) fails
+        // loudly here.
+        for variant in BREATHE_DIM_VARIANTS {
+            assert_eq!(
+                BreatheDimensionKind::from_keyword(variant.name_segment()),
+                Some(variant),
+                "from_keyword(name_segment) must round-trip to {variant:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn breathe_dimension_kind_aliases_decode_to_the_same_variant_as_the_primary_keyword() {
+        // ALIAS-EQUIVALENCE CONTRACT: aliases (`mem` for Memory,
+        // `disk` for Storage) decode to the SAME variant as the
+        // primary keyword. Cpu has no alias so the (variant,
+        // alias-set) table is asymmetric — pin every (alias, variant)
+        // pair explicitly so a regression that adds a wrong alias
+        // (e.g. `"hdd" → Cpu`) fails loudly here.
+        let pairs: &[(&str, BreatheDimensionKind)] = &[
+            ("mem", BreatheDimensionKind::Memory),
+            ("memory", BreatheDimensionKind::Memory),
+            ("MEM", BreatheDimensionKind::Memory),
+            ("Memory", BreatheDimensionKind::Memory),
+            ("cpu", BreatheDimensionKind::Cpu),
+            ("CPU", BreatheDimensionKind::Cpu),
+            ("Cpu", BreatheDimensionKind::Cpu),
+            ("disk", BreatheDimensionKind::Storage),
+            ("storage", BreatheDimensionKind::Storage),
+            ("DISK", BreatheDimensionKind::Storage),
+            ("Storage", BreatheDimensionKind::Storage),
+        ];
+        for (keyword, expected) in pairs {
+            assert_eq!(
+                BreatheDimensionKind::from_keyword(keyword),
+                Some(*expected),
+                "from_keyword({keyword:?}) must decode as {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn breathe_dimension_kind_band_kind_projects_canonical_cr_kind_for_every_variant() {
+        // CANONICAL-CR-KIND CONTRACT: each variant's `band_kind()`
+        // projects to its canonical breathe Band CR kind literal
+        // (`MemoryBand` / `CpuBand` / `StorageBand`) — the wire-format
+        // string the `kind:` field on the emitted CR carries. Pins
+        // the literal identity at the typed projection rather than
+        // at the inline arms in pre-lift `band_kind_for` so a future
+        // rename (e.g. `MemoryBand` → `MemBand`) lands at ONE method
+        // body.
+        assert_eq!(BreatheDimensionKind::Memory.band_kind(), "MemoryBand");
+        assert_eq!(BreatheDimensionKind::Cpu.band_kind(), "CpuBand");
+        assert_eq!(BreatheDimensionKind::Storage.band_kind(), "StorageBand");
+    }
+
+    #[test]
+    fn breathe_dimension_kind_name_segment_canonicalizes_aliases_to_the_primary_keyword() {
+        // CANONICAL-NAME-SEGMENT CONTRACT: for every alias of a
+        // variant, `from_keyword(alias).name_segment()` MUST equal
+        // the primary-keyword name segment — NOT the alias the
+        // operator wrote. Pre-lift the band metadata name echoed
+        // `dim.kind.to_ascii_lowercase()` so an operator who wrote
+        // `(:kind "mem" …)` got a band named `<env>-mem` while
+        // another who wrote `(:kind "memory" …)` got `<env>-memory`;
+        // two semantically-identical sweeps produced two different
+        // band-name surfaces and no test caught the drift. Post-lift
+        // the name segment binds to the typed variant so EVERY alias
+        // funnels to ONE canonical band name.
+        let pairs: &[(&str, &str)] = &[
+            ("mem", "memory"),
+            ("memory", "memory"),
+            ("MEM", "memory"),
+            ("cpu", "cpu"),
+            ("CPU", "cpu"),
+            ("disk", "storage"),
+            ("storage", "storage"),
+            ("DISK", "storage"),
+        ];
+        for (alias, canonical) in pairs {
+            let kind = BreatheDimensionKind::from_keyword(alias)
+                .expect("alias must decode to a known dimension");
+            assert_eq!(
+                kind.name_segment(),
+                *canonical,
+                "from_keyword({alias:?}).name_segment() must canonicalize to {canonical:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn breathe_dimension_kind_from_keyword_rejects_unknown_keywords() {
+        // UNKNOWN-KEYWORD CONTRACT: `from_keyword` returns `None` for
+        // every shape outside the closed set — the empty string,
+        // near-miss typos, and dimension keywords the substrate does
+        // not (yet) support. The `None` return is load-bearing: it
+        // signals `breathe_bands` to drop the dimension via
+        // `filter_map`, so a regression that starts admitting
+        // near-miss keywords (e.g. case-fold matching `"net" →
+        // Network` against a Network variant that doesn't exist)
+        // would silently route unrelated dimensions through the
+        // dispatch — fails loudly here.
+        for unknown in [
+            "", "network", // not yet a supported dimension
+            "gpu",     // not yet a supported dimension
+            "memoryy", // typo
+            "cp",      // truncated
+            "diskz",   // suffix
+        ] {
+            assert_eq!(
+                BreatheDimensionKind::from_keyword(unknown),
+                None,
+                "{unknown:?} must NOT decode as a breathe dimension"
+            );
+        }
+    }
+
+    #[test]
+    fn breathe_bands_emits_canonical_name_segment_regardless_of_operator_alias() {
+        // END-TO-END CANONICAL-NAME CONTRACT (breathe_bands side):
+        // two sweeps that declare the SAME dimension under two
+        // different aliases (`(:kind "mem" …)` vs `(:kind "memory"
+        // …)`) emit Band CRs with the SAME band metadata name. Pre-
+        // lift this assertion FAILED — the `"mem"` sweep produced
+        // `<env>-mem` and the `"memory"` sweep produced `<env>-
+        // memory`. Post-lift the name segment routes through
+        // `BreatheDimensionKind::name_segment` so every alias funnels
+        // to one canonical name. A regression that reverts to
+        // echoing `dim.kind.to_ascii_lowercase()` would silently
+        // re-introduce the drift; this test catches it.
+        let envelope = |kind: &str| BreatheEnvelope {
+            dimensions: vec![BreatheDimension {
+                kind: kind.into(),
+                floor: "128Mi".into(),
+                ceiling: "1Gi".into(),
+            }],
+            cooldown_seconds: 60,
+            dry_run: true,
+            target_kind: "Deployment".into(),
+        };
+        let mut m_mem = matrix();
+        m_mem.breathe = Some(envelope("mem"));
+        let mut m_memory = matrix();
+        m_memory.breathe = Some(envelope("memory"));
+        let mut m_upper = matrix();
+        m_upper.breathe = Some(envelope("MEMORY"));
+
+        let envs = matrix().expand("echo-sweep");
+        let env0 = &envs[0];
+
+        let bands_mem = m_mem.breathe_bands(env0);
+        let bands_memory = m_memory.breathe_bands(env0);
+        let bands_upper = m_upper.breathe_bands(env0);
+
+        assert_eq!(bands_mem.len(), 1);
+        assert_eq!(bands_memory.len(), 1);
+        assert_eq!(bands_upper.len(), 1);
+
+        let expected_name = format!("{}-memory", env0.name);
+        assert_eq!(bands_mem[0]["metadata"]["name"], expected_name);
+        assert_eq!(bands_memory[0]["metadata"]["name"], expected_name);
+        assert_eq!(bands_upper[0]["metadata"]["name"], expected_name);
+
+        // The CR kind also canonicalizes — every alias projects to
+        // `MemoryBand` (the wire-format kind).
+        assert_eq!(bands_mem[0]["kind"], "MemoryBand");
+        assert_eq!(bands_memory[0]["kind"], "MemoryBand");
+        assert_eq!(bands_upper[0]["kind"], "MemoryBand");
+    }
+
+    #[test]
+    fn breathe_bands_drops_dimensions_with_unknown_kind_keywords() {
+        // UNKNOWN-DIMENSION DROP CONTRACT (breathe_bands side): a
+        // dimension whose keyword `from_keyword` doesn't recognize
+        // drops out via `filter_map` — the sweep continues with the
+        // remaining recognized dimensions. Pin the drop here so a
+        // regression that starts emitting bands with raw / unmapped
+        // `kind:` values (e.g. an inline fallback that bypasses the
+        // typed projection) fails loudly.
+        let mut m = matrix();
+        m.breathe = Some(BreatheEnvelope {
+            dimensions: vec![
+                BreatheDimension {
+                    kind: "memory".into(),
+                    floor: "128Mi".into(),
+                    ceiling: "1Gi".into(),
+                },
+                BreatheDimension {
+                    kind: "network".into(), // unrecognized — must drop
+                    floor: "1Mbps".into(),
+                    ceiling: "100Mbps".into(),
+                },
+                BreatheDimension {
+                    kind: "cpu".into(),
+                    floor: "100m".into(),
+                    ceiling: "1".into(),
+                },
+            ],
+            cooldown_seconds: 60,
+            dry_run: true,
+            target_kind: "Deployment".into(),
+        });
+        let envs = m.expand("echo-sweep");
+        let bands = m.breathe_bands(&envs[0]);
+        assert_eq!(bands.len(), 2, "unknown dimension `network` must drop");
+        assert_eq!(bands[0]["kind"], "MemoryBand");
+        assert_eq!(bands[1]["kind"], "CpuBand");
     }
 
     #[test]

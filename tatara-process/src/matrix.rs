@@ -132,8 +132,12 @@ pub struct MatrixAxis {
     pub name: String,
 
     /// Where each value is written on the base spec:
-    /// - `@version` / `@profile` / `@chart-ref` → the matching
-    ///   `AplicacaoIntent` field (value must be a string),
+    /// - A typed [`MatrixTarget`] marker ([`MatrixTarget::Version`] /
+    ///   [`MatrixTarget::Profile`] / [`MatrixTarget::ChartRef`]) → the
+    ///   matching `AplicacaoIntent` field (value must be a string). The
+    ///   path-string surface for each variant is canonicalized by
+    ///   [`MatrixTarget::marker`] (`"@version"` / `"@profile"` /
+    ///   `"@chart-ref"`) and decoded by [`MatrixTarget::from_path`].
     /// - any other string → a dot-path into `aplicacao.values_overlay`
     ///   (e.g. `replicaCount`, `image.tag`, `feature.flag`); intermediate
     ///   objects are created as needed,
@@ -341,25 +345,136 @@ fn band_kind_for(dim: &str) -> Option<&'static str> {
     }
 }
 
-/// Apply one axis value to a spec at the axis's path.
+/// Closed-set typed identifier for the `@`-prefixed magic targets a
+/// [`MatrixAxis::path`] can write into on the base [`EphemeralSpec`] — the
+/// three reachable aplicacao-field write targets ([`Self::Version`] →
+/// `aplicacao.version`, [`Self::Profile`] → `aplicacao.profile`,
+/// [`Self::ChartRef`] → `aplicacao.chart_ref`) — as a Rust enum, so the
+/// three-way (path-string, aplicacao-field) pairing binds at ONE site on
+/// the typed algebra rather than at three byte-identical inline arms in
+/// [`apply_axis`].
+///
+/// Pre-lift the magic-target dispatch lived as three arms in
+/// [`apply_axis`], each opening its own `val.as_str().to_string() →
+/// field = …` skeleton paired with its own `&'static str` literal arm
+/// label. The (path-literal, aplicacao-field) pairing was load-bearing
+/// across three sites yet only enforced by call-site discipline — a
+/// regression that swapped two assignment targets (e.g. routed
+/// `"@version"` to `chart_ref`) type-checked but silently mis-applied
+/// every operator's matrix sweep. Post-lift the pairing binds at ONE
+/// typed projection ([`Self::apply`]) the substrate's invariant relies on:
+/// rustc's closed-set match across [`Self`] enforces that every variant
+/// has exactly one apply arm and exactly one [`Self::marker`] arm, and
+/// the bidirectional contract `from_path(t.marker()) == Some(t)` makes the
+/// decode + canonical-marker round-trip a TYPE rather than three string
+/// literals scattered across the file.
+///
+/// Adding a fourth magic-target (e.g. `@release-name` →
+/// `aplicacao.release_name`, `@target-namespace` →
+/// `aplicacao.target_namespace`) extends the enum AND the three
+/// projection arms ([`Self::from_path`], [`Self::marker`], [`Self::apply`])
+/// in lockstep — rustc binds the extension through exhaustiveness over
+/// the closed enum so a partial extension that forgets ONE projection
+/// becomes a compile error rather than a runtime drift.
+///
+/// Sibling closed-set lift to tatara-lisp's `QuoteForm` (four-of-four
+/// homoiconic prefix-wrappers), `UnquoteForm` (two-of-four template-
+/// marker subset), `MacroDefHead` (two-of-two macro-definition heads),
+/// and `CompilerSpecIoStage` (disk-persistence surface) closed-set
+/// algebras: those enums key their respective dispatch / projection
+/// variants on a typed identity carried inside the variant; this enum
+/// keys the three reachable matrix-axis aplicacao-field write targets
+/// on a typed marker identity.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the closed set of
+/// `@`-prefixed magic targets becomes a TYPE rather than three
+/// `&'static str` literals scattered across [`apply_axis`]. A typo in
+/// any arm becomes a compile error against the typed projection.
+/// THEORY.md §VI.1 — generation over composition; the (path-literal,
+/// aplicacao-field) pairing appeared at three arms — past the ≥2
+/// PRIME-DIRECTIVE trigger once the structural shape is named.
+/// THEORY.md §II.1 invariant 1 — typed entry; the matrix-axis
+/// path-string to typed-target decoding IS the typed-entry gate at the
+/// `MatrixAxis::path` boundary, and naming the closed-set identity
+/// lifts the gate from per-site literal discipline to ONE method
+/// the substrate's diagnostic promotions hang off of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MatrixTarget {
+    /// `@version` → `aplicacao.version`.
+    Version,
+    /// `@profile` → `aplicacao.profile`.
+    Profile,
+    /// `@chart-ref` → `aplicacao.chart_ref`.
+    ChartRef,
+}
+
+impl MatrixTarget {
+    /// Decode a [`MatrixAxis::path`] string into the typed marker, or
+    /// `None` for paths that aren't reserved `@`-prefixed magic targets
+    /// (they fall through to [`overlay_at_path`] semantics inside
+    /// [`apply_axis`]). Closed-set dual of [`Self::marker`]: for every
+    /// variant `t`, `from_path(t.marker()) == Some(t)`.
+    #[must_use]
+    pub fn from_path(path: &str) -> Option<Self> {
+        match path {
+            "@version" => Some(Self::Version),
+            "@profile" => Some(Self::Profile),
+            "@chart-ref" => Some(Self::ChartRef),
+            _ => None,
+        }
+    }
+
+    /// Canonical `&'static str` marker — the `@`-prefixed path literal
+    /// each variant decodes from. Bidirectional dual of [`Self::from_path`]:
+    /// for every variant `t`, `from_path(t.marker()) == Some(t)`. The
+    /// `&'static str` lifetime lets consumers (axis-path docstrings,
+    /// future `tatara-check` typed-target enumerators, future LSP
+    /// completion lists) project through this method without an
+    /// allocation, parallel to how `tatara_lisp`'s `QuoteForm::prefix`
+    /// / `UnquoteForm::marker` / `CompilerSpecIoStage::operation`
+    /// project their closed-set surfaces.
+    #[must_use]
+    pub fn marker(self) -> &'static str {
+        match self {
+            Self::Version => "@version",
+            Self::Profile => "@profile",
+            Self::ChartRef => "@chart-ref",
+        }
+    }
+
+    /// Apply a string value into the targeted [`AplicacaoIntent`] field
+    /// on `spec.aplicacao`. Non-string values are silently ignored —
+    /// matching the pre-lift [`apply_axis`] posture (the magic-target
+    /// arms only acted when `val.as_str()` succeeded; non-string axis
+    /// values for a magic target are dropped, NOT routed to the
+    /// overlay). The (variant, field-assignment) pairing binds at ONE
+    /// match arm rather than three byte-identical sites — a regression
+    /// that drifts ONE arm's field target (e.g. routes
+    /// [`Self::Version`] to `chart_ref`) becomes a compile error
+    /// against the typed projection.
+    pub fn apply(self, spec: &mut EphemeralSpec, val: &serde_json::Value) {
+        let Some(s) = val.as_str() else {
+            return;
+        };
+        let s = s.to_string();
+        match self {
+            Self::Version => spec.aplicacao.version = s,
+            Self::Profile => spec.aplicacao.profile = s,
+            Self::ChartRef => spec.aplicacao.chart_ref = s,
+        }
+    }
+}
+
+/// Apply one axis value to a spec at the axis's path. Routes through the
+/// substrate's [`MatrixTarget`] closed-set dispatch — `@`-prefixed magic
+/// targets bind through [`MatrixTarget::from_path`] + [`MatrixTarget::apply`]
+/// at ONE typed site rather than three inline match arms; everything
+/// else falls through to [`overlay_at_path`].
 fn apply_axis(spec: &mut EphemeralSpec, path: &str, val: serde_json::Value) {
-    match path {
-        "@version" => {
-            if let Some(s) = val.as_str() {
-                spec.aplicacao.version = s.to_string();
-            }
-        }
-        "@profile" => {
-            if let Some(s) = val.as_str() {
-                spec.aplicacao.profile = s.to_string();
-            }
-        }
-        "@chart-ref" => {
-            if let Some(s) = val.as_str() {
-                spec.aplicacao.chart_ref = s.to_string();
-            }
-        }
-        p => overlay_at_path(&mut spec.aplicacao.values_overlay, p, val),
+    if let Some(target) = MatrixTarget::from_path(path) {
+        target.apply(spec, &val);
+    } else {
+        overlay_at_path(&mut spec.aplicacao.values_overlay, path, val);
     }
 }
 
@@ -647,6 +762,196 @@ mod tests {
         overlay_at_path(&mut root, "a.b.c", serde_json::json!("v"));
         assert_eq!(root["a"]["b"]["c"], "v");
         assert_eq!(root["existing"], 1, "existing keys preserved");
+    }
+
+    // ── MatrixTarget: closed-set magic-target dispatch ──────────────
+    //
+    // The three `@`-prefixed magic-target arms (`@version` /
+    // `@profile` / `@chart-ref`) inside the pre-lift `apply_axis` body
+    // collapse onto the typed `MatrixTarget` closed-set enum. The
+    // tests below pin three structural contracts the lift establishes
+    // — bidirection (`from_path ↔ marker`), per-variant apply
+    // semantics (each variant writes exactly its named field), and
+    // the soft-projection posture (`from_path` returns `None` for
+    // non-magic paths so they cascade to `overlay_at_path`).
+
+    #[test]
+    fn matrix_target_from_path_round_trips_through_marker_for_every_variant() {
+        // BIDIRECTION CONTRACT: for every `MatrixTarget` variant,
+        // decoding its canonical marker through `from_path` yields
+        // the same variant. Sibling-arm sweep so the three pairings
+        // stay load-bearing under reordering refactors — a regression
+        // that drifts ONE arm's `from_path → marker` round-trip (e.g.
+        // routes `@version` through to `Profile`) fails loudly here.
+        for variant in [
+            MatrixTarget::Version,
+            MatrixTarget::Profile,
+            MatrixTarget::ChartRef,
+        ] {
+            assert_eq!(
+                MatrixTarget::from_path(variant.marker()),
+                Some(variant),
+                "from_path(marker) must round-trip to {variant:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn matrix_target_marker_renders_canonical_at_prefixed_path_for_every_variant() {
+        // CANONICAL-MARKER CONTRACT: each variant's `marker()` projects
+        // to its canonical `@`-prefixed path literal. Pins the literal
+        // identity at the typed projection rather than at the inline
+        // arms in pre-lift `apply_axis` so a future renaming (e.g.
+        // hyphenated `@chart-ref` → `@chartRef` to match camelCase
+        // serde rename) lands at ONE method body.
+        assert_eq!(MatrixTarget::Version.marker(), "@version");
+        assert_eq!(MatrixTarget::Profile.marker(), "@profile");
+        assert_eq!(MatrixTarget::ChartRef.marker(), "@chart-ref");
+    }
+
+    #[test]
+    fn matrix_target_apply_writes_string_value_to_targeted_aplicacao_field() {
+        // PER-VARIANT APPLY CONTRACT: each variant's `apply` writes
+        // exclusively to its named `aplicacao` field. Pin BOTH the
+        // target-field write AND the non-write of the two sibling
+        // fields — a regression that drifts ONE arm's assignment
+        // target (e.g. routes `Version → chart_ref`) silently
+        // corrupts every operator's matrix sweep and would not
+        // surface without an explicit per-arm pin.
+        let mut spec = base();
+        MatrixTarget::Version.apply(&mut spec, &serde_json::json!("9.9.9"));
+        assert_eq!(spec.aplicacao.version, "9.9.9");
+        assert_eq!(spec.aplicacao.profile, "minimal", "profile untouched");
+        assert_eq!(
+            spec.aplicacao.chart_ref, "oci://ghcr.io/pleme-io/charts/echo",
+            "chart_ref untouched"
+        );
+
+        let mut spec = base();
+        MatrixTarget::Profile.apply(&mut spec, &serde_json::json!("airgapped"));
+        assert_eq!(spec.aplicacao.profile, "airgapped");
+        assert_eq!(spec.aplicacao.version, "0.1.0", "version untouched");
+
+        let mut spec = base();
+        MatrixTarget::ChartRef.apply(
+            &mut spec,
+            &serde_json::json!("oci://example.com/charts/other"),
+        );
+        assert_eq!(spec.aplicacao.chart_ref, "oci://example.com/charts/other");
+        assert_eq!(spec.aplicacao.version, "0.1.0", "version untouched");
+    }
+
+    #[test]
+    fn matrix_target_apply_silently_ignores_non_string_values_for_every_variant() {
+        // NON-STRING-VALUE CONTRACT: magic-target arms accept ONLY
+        // string values; ints / bools / nulls / arrays / objects are
+        // silently dropped (they don't route to `overlay_at_path` —
+        // the path already matched a magic target so the fallthrough
+        // never fires). Pin the drop-on-non-string posture across all
+        // three variants × five non-string shapes so a regression
+        // that starts routing through `val.to_string()` (which would
+        // stringify `42` into `"42"` and silently mis-write the
+        // field) fails loudly here.
+        let non_string_values = [
+            serde_json::json!(42),
+            serde_json::json!(true),
+            serde_json::json!(null),
+            serde_json::json!([1, 2]),
+            serde_json::json!({ "k": "v" }),
+        ];
+        for variant in [
+            MatrixTarget::Version,
+            MatrixTarget::Profile,
+            MatrixTarget::ChartRef,
+        ] {
+            for val in &non_string_values {
+                let mut spec = base();
+                let before = (
+                    spec.aplicacao.version.clone(),
+                    spec.aplicacao.profile.clone(),
+                    spec.aplicacao.chart_ref.clone(),
+                );
+                variant.apply(&mut spec, val);
+                let after = (
+                    spec.aplicacao.version.clone(),
+                    spec.aplicacao.profile.clone(),
+                    spec.aplicacao.chart_ref.clone(),
+                );
+                assert_eq!(
+                    before, after,
+                    "{variant:?}.apply({val}) must NOT mutate aplicacao on non-string"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn matrix_target_from_path_rejects_non_magic_path_strings_to_cascade_through_overlay() {
+        // SOFT-PROJECTION CONTRACT: `from_path` returns `None` for
+        // every shape that isn't an `@`-prefixed reserved magic
+        // target — the empty path, plain dotted-paths, plain
+        // identifiers, and even `@`-prefixed strings that aren't in
+        // the closed set. The `None` return is load-bearing: it
+        // signals `apply_axis` to cascade into `overlay_at_path`, so
+        // a regression that starts admitting near-miss `@`-prefixes
+        // (e.g. `@chart-Ref` via case-insensitive matching) would
+        // silently route plain overlay paths through the magic-target
+        // dispatch — fails loudly here.
+        for non_magic in [
+            "",
+            "replicaCount",
+            "feature.flag",
+            "image.tag",
+            "@versoin",  // typo → not a magic target
+            "@chartRef", // missing hyphen → not a magic target
+            "version",   // missing `@` prefix → not a magic target
+        ] {
+            assert_eq!(
+                MatrixTarget::from_path(non_magic),
+                None,
+                "{non_magic:?} must NOT decode as a magic target"
+            );
+        }
+    }
+
+    #[test]
+    fn apply_axis_routes_magic_target_paths_through_matrix_target_apply() {
+        // PATH-UNIFORMITY CONTRACT (apply_axis side): the lifted
+        // `apply_axis` routes its three magic-target arms through
+        // `MatrixTarget::from_path` + `MatrixTarget::apply`. Pin that
+        // the legacy per-arm assignment and the typed-projection
+        // composition AGREE bit-for-bit across every magic target —
+        // a regression in `apply_axis` that bypasses the typed
+        // projection (e.g. reverts to inline `match path { ... }`
+        // arms) AND accidentally swaps two field targets silently
+        // corrupts every operator's matrix sweep; this test catches
+        // the drift via the typed-marker dispatch.
+        for variant in [
+            MatrixTarget::Version,
+            MatrixTarget::Profile,
+            MatrixTarget::ChartRef,
+        ] {
+            let mut via_axis = base();
+            apply_axis(
+                &mut via_axis,
+                variant.marker(),
+                serde_json::json!("sentinel-VAL"),
+            );
+            let mut via_target = base();
+            variant.apply(&mut via_target, &serde_json::json!("sentinel-VAL"));
+            assert_eq!(
+                via_axis.aplicacao.version, via_target.aplicacao.version,
+                "{variant:?}: apply_axis.version drifted from MatrixTarget::apply"
+            );
+            assert_eq!(
+                via_axis.aplicacao.profile, via_target.aplicacao.profile,
+                "{variant:?}: apply_axis.profile drifted from MatrixTarget::apply"
+            );
+            assert_eq!(
+                via_axis.aplicacao.chart_ref, via_target.aplicacao.chart_ref,
+                "{variant:?}: apply_axis.chart_ref drifted from MatrixTarget::apply"
+            );
+        }
     }
 
     #[test]

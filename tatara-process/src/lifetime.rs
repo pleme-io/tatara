@@ -54,11 +54,14 @@ impl Lifetime {
     /// borrow on the embedded `DEFAULT_PERMANENT`); ambiguous (both set) is
     /// an error.
     pub fn variant(&self) -> Result<LifetimeVariant<'_>, LifetimeError> {
-        match (&self.permanent, &self.ephemeral) {
-            (Some(p), None) => Ok(LifetimeVariant::Permanent(p)),
-            (None, Some(e)) => Ok(LifetimeVariant::Ephemeral(e)),
-            (None, None) => Ok(LifetimeVariant::Permanent(&DEFAULT_PERMANENT)),
-            (Some(_), Some(_)) => Err(LifetimeError::Ambiguous),
+        use crate::tagged_union::{resolve, ResolveError};
+        match resolve([
+            self.permanent.as_ref().map(LifetimeVariant::Permanent),
+            self.ephemeral.as_ref().map(LifetimeVariant::Ephemeral),
+        ]) {
+            Ok(v) => Ok(v),
+            Err(ResolveError::None) => Ok(LifetimeVariant::Permanent(&DEFAULT_PERMANENT)),
+            Err(ResolveError::Many) => Err(LifetimeError::Ambiguous),
         }
     }
 
@@ -206,7 +209,10 @@ mod tests {
         let l = Lifetime::default();
         assert!(l.is_default());
         assert!(!l.is_ephemeral());
-        assert!(matches!(l.variant().unwrap(), LifetimeVariant::Permanent(_)));
+        assert!(matches!(
+            l.variant().unwrap(),
+            LifetimeVariant::Permanent(_)
+        ));
     }
 
     #[test]

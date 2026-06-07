@@ -106,27 +106,22 @@ pub enum EncapsulationKindError {
 impl EncapsulationKind {
     /// Resolve to exactly one variant.
     pub fn variant(&self) -> Result<EncapsulationKindVariant<'_>, EncapsulationKindError> {
-        let count = [
-            self.existing_helm_release.is_some(),
-            self.existing_kustomization.is_some(),
-            self.bare_workload.is_some(),
-        ]
-        .into_iter()
-        .filter(|b| *b)
-        .count();
-        match count {
-            0 => Err(EncapsulationKindError::Empty),
-            1 => Ok(if let Some(h) = &self.existing_helm_release {
-                EncapsulationKindVariant::ExistingHelmRelease(h)
-            } else if let Some(k) = &self.existing_kustomization {
-                EncapsulationKindVariant::ExistingKustomization(k)
-            } else if let Some(b) = &self.bare_workload {
-                EncapsulationKindVariant::BareWorkload(b)
-            } else {
-                unreachable!()
-            }),
-            _ => Err(EncapsulationKindError::Ambiguous),
-        }
+        use crate::tagged_union::{resolve, ResolveError};
+        resolve([
+            self.existing_helm_release
+                .as_ref()
+                .map(EncapsulationKindVariant::ExistingHelmRelease),
+            self.existing_kustomization
+                .as_ref()
+                .map(EncapsulationKindVariant::ExistingKustomization),
+            self.bare_workload
+                .as_ref()
+                .map(EncapsulationKindVariant::BareWorkload),
+        ])
+        .map_err(|e| match e {
+            ResolveError::None => EncapsulationKindError::Empty,
+            ResolveError::Many => EncapsulationKindError::Ambiguous,
+        })
     }
 }
 
@@ -306,7 +301,10 @@ mod tests {
         match back.kind.variant().unwrap() {
             EncapsulationKindVariant::BareWorkload(b) => {
                 assert_eq!(b.selector.len(), 2);
-                assert_eq!(b.selector.get("app").map(String::as_str), Some("akeyless-gator"));
+                assert_eq!(
+                    b.selector.get("app").map(String::as_str),
+                    Some("akeyless-gator")
+                );
             }
             other => panic!("expected BareWorkload, got {other:?}"),
         }

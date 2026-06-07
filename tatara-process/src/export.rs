@@ -138,30 +138,19 @@ pub enum ArtifactError {
 impl ArtifactSource {
     /// Resolve to exactly one variant.
     pub fn variant(&self) -> Result<ArtifactVariant<'_>, ArtifactError> {
-        let count = [
-            self.receipts.is_some(),
-            self.test_report.is_some(),
-            self.process_snapshot.is_some(),
-            self.run_marker.is_some(),
-        ]
-        .into_iter()
-        .filter(|b| *b)
-        .count();
-        match count {
-            0 => Err(ArtifactError::Empty),
-            1 => Ok(if let Some(r) = &self.receipts {
-                ArtifactVariant::Receipts(r)
-            } else if let Some(t) = &self.test_report {
-                ArtifactVariant::TestReport(t)
-            } else if let Some(p) = &self.process_snapshot {
-                ArtifactVariant::ProcessSnapshot(p)
-            } else if let Some(m) = &self.run_marker {
-                ArtifactVariant::RunMarker(m)
-            } else {
-                unreachable!()
-            }),
-            _ => Err(ArtifactError::Ambiguous),
-        }
+        use crate::tagged_union::{resolve, ResolveError};
+        resolve([
+            self.receipts.as_ref().map(ArtifactVariant::Receipts),
+            self.test_report.as_ref().map(ArtifactVariant::TestReport),
+            self.process_snapshot
+                .as_ref()
+                .map(ArtifactVariant::ProcessSnapshot),
+            self.run_marker.as_ref().map(ArtifactVariant::RunMarker),
+        ])
+        .map_err(|e| match e {
+            ResolveError::None => ArtifactError::Empty,
+            ResolveError::Many => ArtifactError::Ambiguous,
+        })
     }
 }
 
@@ -268,27 +257,16 @@ pub enum ChannelError {
 
 impl VectorChannel {
     pub fn variant(&self) -> Result<ChannelVariant<'_>, ChannelError> {
-        let count = [
-            self.http_event.is_some(),
-            self.nats_subject.is_some(),
-            self.stdout.is_some(),
-        ]
-        .into_iter()
-        .filter(|b| *b)
-        .count();
-        match count {
-            0 => Err(ChannelError::Empty),
-            1 => Ok(if let Some(h) = &self.http_event {
-                ChannelVariant::HttpEvent(h)
-            } else if let Some(n) = &self.nats_subject {
-                ChannelVariant::NatsSubject(n)
-            } else if let Some(s) = &self.stdout {
-                ChannelVariant::Stdout(s)
-            } else {
-                unreachable!()
-            }),
-            _ => Err(ChannelError::Ambiguous),
-        }
+        use crate::tagged_union::{resolve, ResolveError};
+        resolve([
+            self.http_event.as_ref().map(ChannelVariant::HttpEvent),
+            self.nats_subject.as_ref().map(ChannelVariant::NatsSubject),
+            self.stdout.as_ref().map(ChannelVariant::Stdout),
+        ])
+        .map_err(|e| match e {
+            ResolveError::None => ChannelError::Empty,
+            ResolveError::Many => ChannelError::Ambiguous,
+        })
     }
 }
 

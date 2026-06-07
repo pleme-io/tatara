@@ -168,16 +168,11 @@ impl Intent {
     /// `unreachable!()`. The Empty diagnostic carries the closed-set
     /// list via `INTENT_KIND_LIST`.
     pub fn variant(&self) -> Result<IntentVariant<'_>, IntentError> {
-        let mut found: Option<IntentVariant<'_>> = None;
-        for kind in IntentKind::ALL {
-            if let Some(v) = kind.select(self) {
-                if found.is_some() {
-                    return Err(IntentError::Ambiguous);
-                }
-                found = Some(v);
-            }
-        }
-        found.ok_or(IntentError::Empty(INTENT_KIND_LIST))
+        use crate::tagged_union::{resolve, ResolveError};
+        resolve(IntentKind::ALL.into_iter().map(|k| k.select(self))).map_err(|e| match e {
+            ResolveError::None => IntentError::Empty(INTENT_KIND_LIST),
+            ResolveError::Many => IntentError::Ambiguous,
+        })
     }
 }
 

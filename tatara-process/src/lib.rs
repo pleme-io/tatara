@@ -47,19 +47,15 @@ pub mod prelude {
         EncapsulationKindVariant, EncapsulationMode, ExistingHelmRelease, ExistingKustomization,
     };
     pub use crate::ephemeral::{compile_ephemeral_source, EphemeralSpec};
-    pub use crate::matrix::{
-        compile_env_matrix_source, EnvMatrixSpec, MatrixAxis, MatrixBudget, NamedEphemeral,
-        SelectStrategy,
-    };
-    pub use crate::hostname::{
-        ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameError,
-        EPHEMERAL_ID_HASH_LEN,
-    };
     pub use crate::export::{
         ArtifactError, ArtifactSource, ArtifactVariant, ChannelError, ChannelVariant, ExportSpec,
         ExportTrigger, HttpEventChannel, NatsSubjectChannel, ProcessSnapshotSource, ReceiptsSource,
         ReportFormat, RunMarkerSource, StdoutChannel, TestReportSource, VectorChannel,
         DEFAULT_NATS_URL, DEFAULT_VECTOR_INGEST,
+    };
+    pub use crate::hostname::{
+        ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameError,
+        EPHEMERAL_ID_HASH_LEN,
     };
     pub use crate::identity::{content_hash, derive_identity, format_process_address, Identity};
     pub use crate::intent::{
@@ -70,10 +66,14 @@ pub mod prelude {
         EphemeralLifetime, Lifetime, LifetimeVariant, PermanentLifetime, TeardownPolicy,
     };
     pub use crate::lifetime_clock::{evaluate as lifetime_clock_evaluate, AutoTerminate};
-    pub use crate::phase::ProcessPhase;
+    pub use crate::matrix::{
+        compile_env_matrix_source, EnvMatrixSpec, MatrixAxis, MatrixBudget, NamedEphemeral,
+        SelectStrategy,
+    };
+    pub use crate::phase::{ProcessPhase, UnknownPhase};
     pub use crate::pool::{
-        AllocationRef, EphemeralPool, MatchKey, MemberState, PoolCondition, PoolMember,
-        PoolPhase, PoolSelector, PoolSpec, PoolStatus, ReturnPolicy,
+        AllocationRef, EphemeralPool, MatchKey, MemberState, PoolCondition, PoolMember, PoolPhase,
+        PoolSelector, PoolSpec, PoolStatus, ReturnPolicy,
     };
     pub use crate::receipt::{ReceiptEnvelope, ReceiptError, RECEIPT_VERSION};
     pub use crate::routing::{RoutingBackend, RoutingHostname, RoutingSpec};

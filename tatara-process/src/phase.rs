@@ -62,6 +62,51 @@ impl Default for ProcessPhase {
 }
 
 impl ProcessPhase {
+    /// The closed set of phases — single source of truth that drives
+    /// `as_str` / Display / `FromStr` so adding a variant updates every
+    /// projection at once (and the `display_matches_as_str` +
+    /// `all_phases_roundtrip_via_as_str` tests pin the bridge). Also
+    /// used by the test sites that need to sweep every-other-variant
+    /// (`reaped_is_sink`, `releasing_can_only_be_entered_from_terminal_gates`,
+    /// `terminal_reached_gates_are_attested_and_failed`), so a new
+    /// variant lands in ALL once and reaches every test by iteration
+    /// rather than by per-test array maintenance.
+    pub const ALL: [Self; 11] = [
+        Self::Pending,
+        Self::Forking,
+        Self::Execing,
+        Self::Running,
+        Self::Attested,
+        Self::Reconverging,
+        Self::Releasing,
+        Self::Exiting,
+        Self::Failed,
+        Self::Zombie,
+        Self::Reaped,
+    ];
+
+    /// Canonical PascalCase wire-format projection. Used by Display
+    /// (single source of truth) and by `FromStr` to identify the
+    /// variant from its annotation / status-field representation.
+    /// The serde rename derives produce the same form on the JSON
+    /// boundary; this method exposes it to Rust callers (logs,
+    /// annotation values, error messages) without re-serializing.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "Pending",
+            Self::Forking => "Forking",
+            Self::Execing => "Execing",
+            Self::Running => "Running",
+            Self::Attested => "Attested",
+            Self::Reconverging => "Reconverging",
+            Self::Releasing => "Releasing",
+            Self::Exiting => "Exiting",
+            Self::Failed => "Failed",
+            Self::Zombie => "Zombie",
+            Self::Reaped => "Reaped",
+        }
+    }
+
     /// True if the phase is a terminal sink with no further transitions.
     pub const fn is_terminal(self) -> bool {
         matches!(self, Self::Reaped)
@@ -123,21 +168,25 @@ impl ProcessPhase {
 
 impl std::fmt::Display for ProcessPhase {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Pending => "Pending",
-            Self::Forking => "Forking",
-            Self::Execing => "Execing",
-            Self::Running => "Running",
-            Self::Attested => "Attested",
-            Self::Reconverging => "Reconverging",
-            Self::Releasing => "Releasing",
-            Self::Exiting => "Exiting",
-            Self::Failed => "Failed",
-            Self::Zombie => "Zombie",
-            Self::Reaped => "Reaped",
-        })
+        f.write_str(self.as_str())
     }
 }
+
+impl std::str::FromStr for ProcessPhase {
+    type Err = UnknownPhase;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for phase in Self::ALL {
+            if s == phase.as_str() {
+                return Ok(phase);
+            }
+        }
+        Err(UnknownPhase(s.to_string()))
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("unknown process phase: {0}")]
+pub struct UnknownPhase(pub String);
 
 #[cfg(test)]
 mod tests {
@@ -176,17 +225,12 @@ mod tests {
     fn terminal_reached_gates_are_attested_and_failed() {
         assert!(Attested.is_terminal_reached());
         assert!(Failed.is_terminal_reached());
-        for p in [
-            Pending,
-            Forking,
-            Execing,
-            Running,
-            Reconverging,
-            Releasing,
-            Exiting,
-            Zombie,
-            Reaped,
-        ] {
+        // Sweep every other variant via ALL so a future variant is
+        // covered automatically (was a hand-maintained 9-entry array).
+        for p in super::ProcessPhase::ALL {
+            if matches!(p, Attested | Failed) {
+                continue;
+            }
             assert!(!p.is_terminal_reached(), "{p:?} is not a terminal gate");
         }
     }
@@ -195,40 +239,23 @@ mod tests {
     fn releasing_can_only_be_entered_from_terminal_gates() {
         // Releasing has exactly two legal entries — the terminal-
         // reached gates. Anything else is a state-machine bug.
-        let entries: Vec<_> = [
-            Pending,
-            Forking,
-            Execing,
-            Running,
-            Attested,
-            Reconverging,
-            Releasing,
-            Exiting,
-            Failed,
-            Zombie,
-            Reaped,
-        ]
-        .into_iter()
-        .filter(|p| p.can_transition_to(Releasing))
-        .collect();
+        // ALL is the source of truth for the candidate set.
+        let entries: Vec<_> = super::ProcessPhase::ALL
+            .into_iter()
+            .filter(|p| p.can_transition_to(Releasing))
+            .collect();
         assert_eq!(entries, vec![Attested, Failed]);
     }
 
     #[test]
     fn reaped_is_sink() {
         assert!(Reaped.is_terminal());
-        for next in [
-            Pending,
-            Forking,
-            Execing,
-            Running,
-            Attested,
-            Reconverging,
-            Releasing,
-            Exiting,
-            Failed,
-            Zombie,
-        ] {
+        // Sweep every non-Reaped variant via ALL so a new phase
+        // pins the sink-ness invariant automatically.
+        for next in super::ProcessPhase::ALL {
+            if next == Reaped {
+                continue;
+            }
             assert!(
                 !Reaped.can_transition_to(next),
                 "Reaped → {next:?} should be illegal"
@@ -248,5 +275,60 @@ mod tests {
         assert!(Attested.is_alive());
         assert!(!Zombie.is_alive());
         assert!(!Reaped.is_alive());
+    }
+
+    // ── closed-set algebra contracts (ALL × as_str × FromStr) ────────
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` (or vice versa)
+    /// fails here.
+    #[test]
+    fn all_phases_roundtrip_via_as_str() {
+        use std::str::FromStr;
+        for phase in super::ProcessPhase::ALL {
+            assert_eq!(
+                super::ProcessPhase::from_str(phase.as_str()).unwrap(),
+                phase,
+                "round-trip failed for {phase:?}",
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future
+    /// callers reach for either projection without drift. If a
+    /// reviewer accidentally re-introduces an inline match in
+    /// Display, this test would fail the moment a variant rename
+    /// touches one site but not the other.
+    #[test]
+    fn display_matches_as_str() {
+        for phase in super::ProcessPhase::ALL {
+            assert_eq!(phase.to_string(), phase.as_str());
+        }
+    }
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here (uniqueness check)
+    /// before drifting `FromStr` or the sweep tests above. The arity
+    /// is asserted by the array type itself (`[Self; 11]`).
+    #[test]
+    fn all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for phase in super::ProcessPhase::ALL {
+            assert!(seen.insert(phase), "duplicate variant in ALL: {phase:?}");
+        }
+        assert_eq!(seen.len(), super::ProcessPhase::ALL.len());
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / unrelated — and the
+    /// error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_phase_errors() {
+        use std::str::FromStr;
+        for bad in ["", "attested", "FAILED", "Cancelled", "Reapped"] {
+            let err = super::ProcessPhase::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
     }
 }

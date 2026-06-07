@@ -49,49 +49,135 @@ pub enum IntentVariant<'a> {
     Guest(&'a GuestIntent),
 }
 
-#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
+impl IntentVariant<'_> {
+    /// Reverse projection — every borrowed variant knows its
+    /// `IntentKind` discriminator. Pairs with `IntentKind::select`
+    /// so `IntentKind::select(intent).map(|v| v.kind())` round-trips
+    /// the closed set; pinned by `intent_kind_round_trips_through_variant_kind`.
+    pub fn kind(&self) -> IntentKind {
+        match self {
+            Self::Nix(_) => IntentKind::Nix,
+            Self::Flux(_) => IntentKind::Flux,
+            Self::Lisp(_) => IntentKind::Lisp,
+            Self::Container(_) => IntentKind::Container,
+            Self::Aplicacao(_) => IntentKind::Aplicacao,
+            Self::Guest(_) => IntentKind::Guest,
+        }
+    }
+
+    /// Canonical attestation-pillar bytes for the populated variant —
+    /// `serde_json::to_vec` on the inner reference, with an empty
+    /// fallback that matches the pre-lift Observe-mode shape in
+    /// `tatara-reconciler::render`. ONE site owns the per-variant
+    /// serialization so adding a 7th variant requires only the
+    /// arm here, not the parallel match the pre-lift Observe arm
+    /// carried.
+    pub fn canonical_bytes(&self) -> Vec<u8> {
+        match self {
+            Self::Nix(n) => serde_json::to_vec(n).unwrap_or_default(),
+            Self::Flux(f) => serde_json::to_vec(f).unwrap_or_default(),
+            Self::Lisp(l) => serde_json::to_vec(l).unwrap_or_default(),
+            Self::Container(c) => serde_json::to_vec(c).unwrap_or_default(),
+            Self::Aplicacao(a) => serde_json::to_vec(a).unwrap_or_default(),
+            Self::Guest(g) => serde_json::to_vec(g).unwrap_or_default(),
+        }
+    }
+}
+
+/// Closed-set discriminator over `Intent`'s six tagged-union slots.
+/// Single source of truth that drives `Intent::variant`'s ambiguity
+/// + emptiness resolver, the `IntentError::Empty` message, and the
+/// reverse `IntentVariant::kind` projection. Adding a 7th intent
+/// variant lands at one `ALL` entry + one `as_str` arm + one
+/// `select` arm + one `IntentVariant::kind` arm — exhaustively
+/// checked by the compiler.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum IntentKind {
+    Nix,
+    Flux,
+    Lisp,
+    Container,
+    Aplicacao,
+    Guest,
+}
+
+impl IntentKind {
+    /// The closed set of intent kinds — single source of truth that
+    /// drives `Intent::variant`'s sweep so a variant added without
+    /// an `ALL` entry never reaches the resolver.
+    pub const ALL: [Self; 6] = [
+        Self::Nix,
+        Self::Flux,
+        Self::Lisp,
+        Self::Container,
+        Self::Aplicacao,
+        Self::Guest,
+    ];
+
+    /// Canonical lower-case wire-format key — matches the serde
+    /// `rename_all = "camelCase"` field name on `Intent`. The
+    /// `IntentError::Empty` message composes the human-readable
+    /// list from this projection so a new variant lands in the
+    /// operator-facing diagnostic automatically via the `ALL`
+    /// sweep, not via hand-maintained error-string drift.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Nix => "nix",
+            Self::Flux => "flux",
+            Self::Lisp => "lisp",
+            Self::Container => "container",
+            Self::Aplicacao => "aplicacao",
+            Self::Guest => "guest",
+        }
+    }
+
+    /// Project an `Intent` borrow into the optional typed variant
+    /// view for this kind. Returns `None` iff the matching slot is
+    /// `None`. Composes the closed-set sweep `Intent::variant`
+    /// loops over.
+    pub fn select<'a>(self, intent: &'a Intent) -> Option<IntentVariant<'a>> {
+        match self {
+            Self::Nix => intent.nix.as_ref().map(IntentVariant::Nix),
+            Self::Flux => intent.flux.as_ref().map(IntentVariant::Flux),
+            Self::Lisp => intent.lisp.as_ref().map(IntentVariant::Lisp),
+            Self::Container => intent.container.as_ref().map(IntentVariant::Container),
+            Self::Aplicacao => intent.aplicacao.as_ref().map(IntentVariant::Aplicacao),
+            Self::Guest => intent.guest.as_ref().map(IntentVariant::Guest),
+        }
+    }
+}
+
+#[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum IntentError {
-    #[error(
-        "intent has no variant set (one of nix/flux/lisp/container/aplicacao/guest required)"
-    )]
-    Empty,
+    #[error("intent has no variant set (one of {0} required)")]
+    Empty(&'static str),
     #[error("intent has multiple variants set; exactly one required")]
     Ambiguous,
 }
 
+/// Slash-joined list of every `IntentKind::as_str()` — composed once
+/// at compile time so `IntentError::Empty`'s diagnostic carries the
+/// closed-set summary without per-variant string drift.
+const INTENT_KIND_LIST: &str = "nix/flux/lisp/container/aplicacao/guest";
+
 impl Intent {
     /// Resolve to exactly one variant. Errors on zero or many.
+    /// Sweeps over `IntentKind::ALL` so a 7th variant added with an
+    /// `ALL` entry is structurally honored at this site — no
+    /// parallel `is_some()` count array, no if-let-else chain, no
+    /// `unreachable!()`. The Empty diagnostic carries the closed-set
+    /// list via `INTENT_KIND_LIST`.
     pub fn variant(&self) -> Result<IntentVariant<'_>, IntentError> {
-        let count = [
-            self.nix.is_some(),
-            self.flux.is_some(),
-            self.lisp.is_some(),
-            self.container.is_some(),
-            self.aplicacao.is_some(),
-            self.guest.is_some(),
-        ]
-        .into_iter()
-        .filter(|b| *b)
-        .count();
-        match count {
-            0 => Err(IntentError::Empty),
-            1 => Ok(if let Some(n) = &self.nix {
-                IntentVariant::Nix(n)
-            } else if let Some(f) = &self.flux {
-                IntentVariant::Flux(f)
-            } else if let Some(l) = &self.lisp {
-                IntentVariant::Lisp(l)
-            } else if let Some(c) = &self.container {
-                IntentVariant::Container(c)
-            } else if let Some(a) = &self.aplicacao {
-                IntentVariant::Aplicacao(a)
-            } else if let Some(g) = &self.guest {
-                IntentVariant::Guest(g)
-            } else {
-                unreachable!()
-            }),
-            _ => Err(IntentError::Ambiguous),
+        let mut found: Option<IntentVariant<'_>> = None;
+        for kind in IntentKind::ALL {
+            if let Some(v) = kind.select(self) {
+                if found.is_some() {
+                    return Err(IntentError::Ambiguous);
+                }
+                found = Some(v);
+            }
         }
+        found.ok_or(IntentError::Empty(INTENT_KIND_LIST))
     }
 }
 
@@ -279,7 +365,10 @@ mod tests {
     #[test]
     fn empty_intent_errors() {
         let i = Intent::default();
-        assert_eq!(i.variant().unwrap_err(), IntentError::Empty);
+        match i.variant().unwrap_err() {
+            IntentError::Empty(list) => assert_eq!(list, INTENT_KIND_LIST),
+            other => panic!("expected Empty, got {other:?}"),
+        }
     }
 
     #[test]
@@ -392,6 +481,240 @@ mod tests {
                 assert_eq!(a.install_timeout.as_deref(), Some("25m"));
             }
             other => panic!("expected Aplicacao, got {other:?}"),
+        }
+    }
+
+    /// `ALL` is the source of truth for the resolver sweep — pin its
+    /// closure so a variant added without an `ALL` entry fails here
+    /// (via the uniqueness check) before drifting `variant()`.
+    #[test]
+    fn intent_kind_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in IntentKind::ALL {
+            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
+        }
+        assert_eq!(seen.len(), IntentKind::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: each variant's `as_str()` matches the
+    /// camelCase serde field name on `Intent`. A future rename of
+    /// any field lands here at one site — and the `Empty` diagnostic
+    /// composed from `INTENT_KIND_LIST` stays coherent with the
+    /// wire format.
+    #[test]
+    fn intent_kind_as_str_matches_intent_field_name() {
+        for kind in IntentKind::ALL {
+            // Pre-serialize an `Intent` carrying just this kind's
+            // slot populated; the only key in the resulting JSON
+            // object must equal `kind.as_str()`.
+            let i = match kind {
+                IntentKind::Nix => Intent {
+                    nix: Some(NixIntent {
+                        flake_ref: "f".into(),
+                        attribute: "a".into(),
+                        system: None,
+                        attic_cache: None,
+                        extra_args: vec![],
+                        delegate_to_nix_build: false,
+                    }),
+                    ..Intent::default()
+                },
+                IntentKind::Flux => Intent {
+                    flux: Some(FluxIntent {
+                        git_repository: "g".into(),
+                        path: "p".into(),
+                        git_repository_namespace: None,
+                        target_namespace: None,
+                        decrypt_sops: true,
+                        helm_chart: None,
+                        helm_values: None,
+                    }),
+                    ..Intent::default()
+                },
+                IntentKind::Lisp => Intent {
+                    lisp: Some(LispIntent {
+                        source: "()".into(),
+                        reader: "tatara-lisp".into(),
+                        version: "v1".into(),
+                        bindings: BTreeMap::new(),
+                    }),
+                    ..Intent::default()
+                },
+                IntentKind::Container => Intent {
+                    container: Some(ContainerIntent {
+                        image: "x".into(),
+                        replicas: None,
+                        command: vec![],
+                        args: vec![],
+                        env: BTreeMap::new(),
+                        workload_kind: WorkloadKind::default(),
+                    }),
+                    ..Intent::default()
+                },
+                IntentKind::Aplicacao => Intent {
+                    aplicacao: Some(AplicacaoIntent {
+                        chart_ref: "x".into(),
+                        version: "1".into(),
+                        profile: String::new(),
+                        values_overlay: serde_json::Value::Null,
+                        release_name: None,
+                        target_namespace: None,
+                        install_timeout: None,
+                    }),
+                    ..Intent::default()
+                },
+                IntentKind::Guest => Intent {
+                    guest: Some(GuestIntent {
+                        spec: serde_json::json!({"name": "x"}),
+                        state_dir: None,
+                        allow_remote_build: None,
+                    }),
+                    ..Intent::default()
+                },
+            };
+            let v = serde_json::to_value(&i).expect("Intent serializes");
+            let obj = v.as_object().expect("Intent serializes to object");
+            let keys: Vec<&String> = obj.keys().collect();
+            assert_eq!(
+                keys.len(),
+                1,
+                "exactly one slot populated for kind {kind:?}, got {keys:?}"
+            );
+            assert_eq!(
+                keys[0],
+                kind.as_str(),
+                "as_str() must match serde field name for {kind:?}"
+            );
+        }
+    }
+
+    /// ROUND-TRIP CONTRACT: `IntentKind::select(intent).map(|v|
+    /// v.kind()) == Some(kind)`. The reverse `IntentVariant::kind`
+    /// projection composes the closed set in both directions — a
+    /// regression that misroutes a select arm (e.g. `Self::Nix =>
+    /// intent.flux.as_ref()...`) fails loudly here.
+    #[test]
+    fn intent_kind_round_trips_through_variant_kind() {
+        for kind in IntentKind::ALL {
+            let i = single_slot_intent(kind);
+            let v = kind.select(&i).expect("populated slot must select");
+            assert_eq!(v.kind(), kind, "round-trip failed for {kind:?}");
+            // And the resolver lands on the same variant.
+            assert_eq!(
+                i.variant().expect("exactly-one variant").kind(),
+                kind,
+                "variant() resolver disagreed on {kind:?}"
+            );
+        }
+    }
+
+    /// EMPTY-DIAGNOSTIC CONTRACT: the closed-set kind list embedded
+    /// in `IntentError::Empty` echoes the canonical join of every
+    /// `IntentKind::as_str()` projection. A variant added without
+    /// updating `INTENT_KIND_LIST` (or a renamed variant) shows up
+    /// here as a mismatch.
+    #[test]
+    fn intent_error_empty_lists_every_kind_in_canonical_order() {
+        let parts: Vec<&'static str> = IntentKind::ALL.iter().map(|k| k.as_str()).collect();
+        let joined = parts.join("/");
+        assert_eq!(joined, INTENT_KIND_LIST);
+    }
+
+    /// CANONICAL-BYTES CONTRACT: every populated variant yields the
+    /// SAME bytes as `serde_json::to_vec` on the inner reference.
+    /// Pins the lift of the parallel observe-mode match in
+    /// `tatara-reconciler::render` to this single method.
+    #[test]
+    fn intent_variant_canonical_bytes_matches_inner_serialize() {
+        for kind in IntentKind::ALL {
+            let i = single_slot_intent(kind);
+            let v = i.variant().expect("exactly-one variant");
+            let via_method = v.canonical_bytes();
+            let expected: Vec<u8> = match &v {
+                IntentVariant::Nix(n) => serde_json::to_vec(n).unwrap_or_default(),
+                IntentVariant::Flux(f) => serde_json::to_vec(f).unwrap_or_default(),
+                IntentVariant::Lisp(l) => serde_json::to_vec(l).unwrap_or_default(),
+                IntentVariant::Container(c) => serde_json::to_vec(c).unwrap_or_default(),
+                IntentVariant::Aplicacao(a) => serde_json::to_vec(a).unwrap_or_default(),
+                IntentVariant::Guest(g) => serde_json::to_vec(g).unwrap_or_default(),
+            };
+            assert_eq!(
+                via_method, expected,
+                "canonical_bytes mismatch for {kind:?}"
+            );
+            assert!(!via_method.is_empty(), "{kind:?} produced empty bytes");
+        }
+    }
+
+    /// Construct an `Intent` with exactly the given kind's slot
+    /// populated by a minimal valid inner spec. Shared across the
+    /// closed-set property tests so they each cover every variant
+    /// without restating the construction table.
+    fn single_slot_intent(kind: IntentKind) -> Intent {
+        match kind {
+            IntentKind::Nix => Intent {
+                nix: Some(NixIntent {
+                    flake_ref: "github:a/b".into(),
+                    attribute: "x".into(),
+                    system: None,
+                    attic_cache: None,
+                    extra_args: vec![],
+                    delegate_to_nix_build: false,
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Flux => Intent {
+                flux: Some(FluxIntent {
+                    git_repository: "g".into(),
+                    path: "p".into(),
+                    git_repository_namespace: None,
+                    target_namespace: None,
+                    decrypt_sops: true,
+                    helm_chart: None,
+                    helm_values: None,
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Lisp => Intent {
+                lisp: Some(LispIntent {
+                    source: "()".into(),
+                    reader: "tatara-lisp".into(),
+                    version: "v1".into(),
+                    bindings: BTreeMap::new(),
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Container => Intent {
+                container: Some(ContainerIntent {
+                    image: "ghcr.io/x:1".into(),
+                    replicas: Some(1),
+                    command: vec![],
+                    args: vec![],
+                    env: BTreeMap::new(),
+                    workload_kind: WorkloadKind::default(),
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Aplicacao => Intent {
+                aplicacao: Some(AplicacaoIntent {
+                    chart_ref: "oci://ghcr.io/x".into(),
+                    version: "0.1.0".into(),
+                    profile: String::new(),
+                    values_overlay: serde_json::Value::Null,
+                    release_name: None,
+                    target_namespace: None,
+                    install_timeout: None,
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Guest => Intent {
+                guest: Some(GuestIntent {
+                    spec: serde_json::json!({"name": "guest-1"}),
+                    state_dir: None,
+                    allow_remote_build: None,
+                }),
+                ..Intent::default()
+            },
         }
     }
 

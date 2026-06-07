@@ -62,16 +62,11 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
     let (resources, intent_bytes) = if mode == EncapsulationMode::Observe {
         // Observe mode — no Intent-driven workload emission.
         // Intent bytes still go into the attestation pillar so the
-        // typed shape the Process declares is recorded.
-        let bytes = match &variant {
-            IntentVariant::Flux(f) => serde_json::to_vec(f).unwrap_or_default(),
-            IntentVariant::Nix(n) => serde_json::to_vec(n).unwrap_or_default(),
-            IntentVariant::Lisp(l) => serde_json::to_vec(l).unwrap_or_default(),
-            IntentVariant::Container(c) => serde_json::to_vec(c).unwrap_or_default(),
-            IntentVariant::Guest(g) => serde_json::to_vec(g).unwrap_or_default(),
-            IntentVariant::Aplicacao(a) => serde_json::to_vec(a).unwrap_or_default(),
-        };
-        (vec![], bytes)
+        // typed shape the Process declares is recorded. ONE site
+        // owns the per-variant serialization via
+        // `IntentVariant::canonical_bytes` — adding a 7th variant
+        // extends that method, not this dispatcher.
+        (vec![], variant.canonical_bytes())
     } else {
         match variant {
             IntentVariant::Flux(f) => render_flux(&owner_name, &owner_ns, f),

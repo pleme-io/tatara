@@ -65,7 +65,7 @@ pub mod prelude {
     };
     pub use crate::lifetime::{
         EphemeralLifetime, Lifetime, LifetimeError, LifetimeKind, LifetimeVariant,
-        PermanentLifetime, TeardownPolicy,
+        PermanentLifetime, TeardownPolicy, UnknownTeardownPolicy,
     };
     pub use crate::lifetime_clock::{evaluate as lifetime_clock_evaluate, AutoTerminate};
     pub use crate::matrix::{

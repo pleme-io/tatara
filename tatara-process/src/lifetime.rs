@@ -16,6 +16,8 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 
 use crate::export::ExportSpec;
 use crate::phase::ProcessPhase;
@@ -255,7 +257,7 @@ fn default_max_concurrent() -> u32 {
 ///
 /// Aligns with `ProcessPhase` (`Attested` / `Failed`) rather than borrowing
 /// foreign success/failure language — typed phases are the source of truth.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum TeardownPolicy {
     /// SIGTERM as soon as the Process reaches `Attested` or `Failed`.
@@ -271,14 +273,105 @@ pub enum TeardownPolicy {
 }
 
 impl TeardownPolicy {
-    /// True iff, given a terminal phase, this policy says "tear down."
-    pub fn should_teardown_on_attested(self) -> bool {
-        matches!(self, Self::Always | Self::OnAttested)
+    /// The closed set of teardown policies — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad and the typed
+    /// `should_teardown_on` dispatch over `ProcessPhase`. Adding a fifth
+    /// variant lands at one `ALL` entry + one `as_str` arm + one
+    /// `should_teardown_on` arm — exhaustively checked by the compiler
+    /// (the `[Self; 4]` array literal forces the arity).
+    ///
+    /// Sibling closed-set lifts on the same `ProcessSpec` axis:
+    /// [`super::intent::IntentKind::ALL`], [`super::LifetimeKind::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::signal::ProcessSignal::ALL`].
+    pub const ALL: [Self; 4] = [Self::Always, Self::OnAttested, Self::OnFailed, Self::Never];
+
+    /// Canonical PascalCase wire-format projection — matches the serde
+    /// `rename_all = "PascalCase"` output verbatim. Used by Display
+    /// (single source of truth), by `FromStr` to identify the variant
+    /// from its annotation / status-field representation, and by
+    /// operator-facing reason strings the reconciler stamps without
+    /// reaching for `{:?}` Debug formatting. Pinned by
+    /// `teardown_policy_as_str_matches_serde`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Always => "Always",
+            Self::OnAttested => "OnAttested",
+            Self::OnFailed => "OnFailed",
+            Self::Never => "Never",
+        }
     }
-    pub fn should_teardown_on_failed(self) -> bool {
-        matches!(self, Self::Always | Self::OnFailed)
+
+    /// True iff, given a `ProcessPhase`, this policy says "tear down."
+    /// ONE typed dispatch over the typed phase enum that replaces the
+    /// pair of hand-rolled `matches!(self, Self::Always | Self::OnX)`
+    /// predicates `lifetime_clock::evaluate` previously branched on.
+    /// Non-terminal phases (`Pending` / `Forking` / `Execing` / `Running`
+    /// / `Reconverging` / `Releasing` / `Exiting` / `Zombie` / `Reaped`)
+    /// always return `false` — teardown is a terminal-phase decision.
+    ///
+    /// The legacy [`Self::should_teardown_on_attested`] /
+    /// [`Self::should_teardown_on_failed`] predicates remain as thin
+    /// delegates so existing call sites keep their narrow signatures;
+    /// the truth table is pinned by
+    /// `teardown_policy_legacy_predicates_delegate_to_phase_dispatch`.
+    pub const fn should_teardown_on(self, phase: ProcessPhase) -> bool {
+        match phase {
+            ProcessPhase::Attested => matches!(self, Self::Always | Self::OnAttested),
+            ProcessPhase::Failed => matches!(self, Self::Always | Self::OnFailed),
+            ProcessPhase::Pending
+            | ProcessPhase::Forking
+            | ProcessPhase::Execing
+            | ProcessPhase::Running
+            | ProcessPhase::Reconverging
+            | ProcessPhase::Releasing
+            | ProcessPhase::Exiting
+            | ProcessPhase::Zombie
+            | ProcessPhase::Reaped => false,
+        }
+    }
+
+    /// Thin delegate to [`Self::should_teardown_on`] for the `Attested`
+    /// case — kept so existing call sites (notably the truth-table
+    /// test in this module) keep their narrow signature without
+    /// reaching for the typed-phase variant.
+    pub const fn should_teardown_on_attested(self) -> bool {
+        self.should_teardown_on(ProcessPhase::Attested)
+    }
+
+    /// Symmetric delegate to [`Self::should_teardown_on`] for the
+    /// `Failed` case.
+    pub const fn should_teardown_on_failed(self) -> bool {
+        self.should_teardown_on(ProcessPhase::Failed)
     }
 }
+
+impl fmt::Display for TeardownPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for TeardownPolicy {
+    type Err = UnknownTeardownPolicy;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.as_str() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownTeardownPolicy(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`crate::boundary::UnknownConditionKind`] and
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown teardown policy: {0}")]
+pub struct UnknownTeardownPolicy(pub String);
 
 #[cfg(test)]
 mod tests {
@@ -331,6 +424,134 @@ mod tests {
         assert!(TeardownPolicy::OnFailed.should_teardown_on_failed());
         assert!(!TeardownPolicy::Never.should_teardown_on_attested());
         assert!(!TeardownPolicy::Never.should_teardown_on_failed());
+    }
+
+    // ── closed-set algebra for TeardownPolicy (ALL × as_str × FromStr ×
+    //    should_teardown_on(phase)) ─
+
+    /// `ALL` is the source of truth for the resolver / `FromStr` sweep
+    /// — pin its closure so a variant added without an `ALL` entry
+    /// fails here (via the uniqueness check) before drifting `as_str` /
+    /// `should_teardown_on`. The arity is asserted by the `[Self; 4]`
+    /// array type itself.
+    #[test]
+    fn teardown_policy_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for policy in TeardownPolicy::ALL {
+            assert!(seen.insert(policy), "duplicate variant in ALL: {policy:?}");
+        }
+        assert_eq!(seen.len(), TeardownPolicy::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename
+    /// (or an `as_str` arm typo) lands here at one site. The reason
+    /// string `lifetime_clock::evaluate` stamps reaches for the same
+    /// projection via `Display`, so a Debug-vs-canonical drift would
+    /// surface here, not in operator-facing reason strings.
+    #[test]
+    fn teardown_policy_as_str_matches_serde() {
+        for policy in TeardownPolicy::ALL {
+            let serialized = serde_json::to_string(&policy)
+                .expect("TeardownPolicy serializes")
+                .trim_matches('"')
+                .to_string();
+            assert_eq!(
+                policy.as_str(),
+                serialized,
+                "as_str() must match serde output for {policy:?}",
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future
+    /// callers (notably `lifetime_clock::evaluate`'s reason string)
+    /// reach for either projection without drift.
+    #[test]
+    fn teardown_policy_display_matches_as_str() {
+        for policy in TeardownPolicy::ALL {
+            assert_eq!(policy.to_string(), policy.as_str());
+        }
+    }
+
+    /// ROUND-TRIP CONTRACT: every variant survives `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` (or vice versa)
+    /// fails here.
+    #[test]
+    fn teardown_policy_roundtrip_via_as_str() {
+        use std::str::FromStr;
+        for policy in TeardownPolicy::ALL {
+            assert_eq!(
+                TeardownPolicy::from_str(policy.as_str()).expect("known policy round-trips"),
+                policy,
+                "round-trip failed for {policy:?}",
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / unrelated — and the
+    /// error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_teardown_policy_errors() {
+        use std::str::FromStr;
+        for bad in ["", "always", "ALWAYS", "OnAtested", "Bogus"] {
+            let err = TeardownPolicy::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: `should_teardown_on(phase)` agrees with
+    /// the documented (policy, phase) → bool table for every variant
+    /// at every typed phase. The two terminal phases (Attested,
+    /// Failed) carry the policy-specific result; every non-terminal
+    /// phase returns `false`. The closed-set sweep over both
+    /// `TeardownPolicy::ALL` and `ProcessPhase::ALL` means a new
+    /// variant in either enum reaches this test by iteration — no
+    /// per-test array maintenance.
+    #[test]
+    fn teardown_policy_should_teardown_on_truth_table() {
+        for policy in TeardownPolicy::ALL {
+            for phase in ProcessPhase::ALL {
+                let expected = match phase {
+                    ProcessPhase::Attested => {
+                        matches!(policy, TeardownPolicy::Always | TeardownPolicy::OnAttested)
+                    }
+                    ProcessPhase::Failed => {
+                        matches!(policy, TeardownPolicy::Always | TeardownPolicy::OnFailed)
+                    }
+                    _ => false,
+                };
+                assert_eq!(
+                    policy.should_teardown_on(phase),
+                    expected,
+                    "should_teardown_on({policy:?}, {phase:?}) drift",
+                );
+            }
+        }
+    }
+
+    /// DELEGATION CONTRACT: the legacy `should_teardown_on_attested` /
+    /// `should_teardown_on_failed` predicates agree with the typed
+    /// `should_teardown_on(phase)` dispatch they delegate to, for
+    /// every variant. A regression that re-introduces an inline
+    /// `matches!` in either legacy predicate fails here the moment
+    /// `should_teardown_on` is the source of truth.
+    #[test]
+    fn teardown_policy_legacy_predicates_delegate_to_phase_dispatch() {
+        for policy in TeardownPolicy::ALL {
+            assert_eq!(
+                policy.should_teardown_on_attested(),
+                policy.should_teardown_on(ProcessPhase::Attested),
+                "Attested delegate drift for {policy:?}",
+            );
+            assert_eq!(
+                policy.should_teardown_on_failed(),
+                policy.should_teardown_on(ProcessPhase::Failed),
+                "Failed delegate drift for {policy:?}",
+            );
+        }
     }
 
     #[test]

@@ -47,24 +47,19 @@ pub fn evaluate(
         return AutoTerminate::Skip;
     };
 
-    // 1. Teardown policy on terminal phases.
-    if current_phase == ProcessPhase::Attested
-        && ephemeral.teardown_policy.should_teardown_on_attested()
-    {
+    // 1. Teardown policy on terminal phases — ONE typed dispatch over
+    //    `(TeardownPolicy, ProcessPhase)` replaces the previous pair of
+    //    near-identical Attested/Failed branches. Non-terminal phases
+    //    short-circuit inside `should_teardown_on` so the reason string
+    //    composes against a typed canonical-PascalCase projection
+    //    (`Display` -> `TeardownPolicy::as_str` + `ProcessPhase::as_str`),
+    //    not `{:?}` Debug formatting that drifts on a variant rename.
+    if ephemeral.teardown_policy.should_teardown_on(current_phase) {
         return AutoTerminate::Now {
             reason: format!(
-                "ephemeral lifetime: teardown_policy={:?} fired on Attested",
-                ephemeral.teardown_policy
-            ),
-        };
-    }
-    if current_phase == ProcessPhase::Failed
-        && ephemeral.teardown_policy.should_teardown_on_failed()
-    {
-        return AutoTerminate::Now {
-            reason: format!(
-                "ephemeral lifetime: teardown_policy={:?} fired on Failed",
-                ephemeral.teardown_policy
+                "ephemeral lifetime: teardown_policy={} fired on {}",
+                ephemeral.teardown_policy,
+                current_phase.as_str(),
             ),
         };
     }
@@ -298,6 +293,39 @@ mod tests {
             evaluate(&p, ProcessPhase::Running, Utc::now()),
             AutoTerminate::Skip
         );
+    }
+
+    /// REASON-STRING CONTRACT: the operator-visible reason composes
+    /// the canonical PascalCase projection of `TeardownPolicy` and
+    /// `ProcessPhase` (via Display) rather than the Debug formatting
+    /// used pre-lift. A future variant rename of either enum updates
+    /// the reason string at ONE site (the `as_str` arm) instead of
+    /// drifting between the typed surface and the operator log.
+    #[test]
+    fn teardown_reason_string_uses_canonical_projection() {
+        let p = ephemeral_process("1h", TeardownPolicy::OnAttested, 60);
+        match evaluate(&p, ProcessPhase::Attested, Utc::now()) {
+            AutoTerminate::Now { reason } => {
+                assert!(
+                    reason.contains("teardown_policy=OnAttested"),
+                    "expected canonical PascalCase policy, got: {reason}",
+                );
+                assert!(
+                    reason.contains("fired on Attested"),
+                    "expected canonical PascalCase phase, got: {reason}",
+                );
+            }
+            other => panic!("expected AutoTerminate::Now, got {other:?}"),
+        }
+
+        let p = ephemeral_process("1h", TeardownPolicy::Always, 60);
+        match evaluate(&p, ProcessPhase::Failed, Utc::now()) {
+            AutoTerminate::Now { reason } => {
+                assert!(reason.contains("teardown_policy=Always"));
+                assert!(reason.contains("fired on Failed"));
+            }
+            other => panic!("expected AutoTerminate::Now, got {other:?}"),
+        }
     }
 
     #[test]

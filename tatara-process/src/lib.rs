@@ -36,7 +36,7 @@ pub mod prelude {
         EphemeralAllocation, Requestor,
     };
     pub use crate::attestation::ProcessAttestation;
-    pub use crate::boundary::{Boundary, Condition, ConditionKind};
+    pub use crate::boundary::{Boundary, Condition, ConditionKind, UnknownConditionKind};
     pub use crate::classification::{
         CalmClassification, Classification, ConvergencePointType, DataClassification, Horizon,
         HorizonKind, OptimizationDirection, SubstrateType,

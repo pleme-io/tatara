@@ -105,15 +105,22 @@ pub async fn evaluate(
             )
             .await
         }
-        ConditionKind::PromQL => Ok(Satisfaction::Unknown(
-            "PromQL evaluator not yet implemented".into(),
-        )),
-        ConditionKind::Cel => Ok(Satisfaction::Unknown(
-            "CEL evaluator not yet implemented".into(),
-        )),
-        ConditionKind::NixEval => Ok(Satisfaction::Unknown(
-            "NixEval evaluator not yet implemented".into(),
-        )),
+        // Stub evaluators — `ConditionKind::stub_message` owns each
+        // operator-facing string in `tatara-process::boundary`, so the
+        // three "not yet implemented" arms here collapse to one site
+        // that delegates to the typed projection. Adding (or
+        // promoting) a stub kind lands at `stub_message`, not here.
+        // The OR-pattern keeps exhaustiveness — the compiler still
+        // forces every `ConditionKind` to reach a branch.
+        ConditionKind::PromQL | ConditionKind::Cel | ConditionKind::NixEval => {
+            Ok(Satisfaction::Unknown(
+                condition
+                    .kind
+                    .stub_message()
+                    .expect("is_stub() iff stub_message().is_some()")
+                    .into(),
+            ))
+        }
         ConditionKind::JobAttested => {
             evaluate_job_attested(client, default_ns, &condition.params, process).await
         }
@@ -610,7 +617,9 @@ mod tests {
         assert!(matches!(v, ReceiptVerdict::Ok(_)));
 
         let v = parse_receipt_payload(&payload, Some("nope"));
-        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("composed_root mismatch")));
+        assert!(
+            matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("composed_root mismatch"))
+        );
     }
 
     #[test]
@@ -630,7 +639,9 @@ mod tests {
         let mut payload: Value = serde_json::from_str(&valid_receipt()).unwrap();
         payload["version"] = Value::String("tatara-receipt/v2".into());
         let v = parse_receipt_payload(&payload.to_string(), None);
-        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("version != tatara-receipt/v1")));
+        assert!(
+            matches!(v, ReceiptVerdict::Malformed(ref m) if m.contains("version != tatara-receipt/v1"))
+        );
     }
 
     #[test]
@@ -657,7 +668,9 @@ mod tests {
     #[test]
     fn invalid_json_is_malformed() {
         let v = parse_receipt_payload("not json", None);
-        assert!(matches!(v, ReceiptVerdict::Malformed(ref m) if m.to_lowercase().contains("invalid")));
+        assert!(
+            matches!(v, ReceiptVerdict::Malformed(ref m) if m.to_lowercase().contains("invalid"))
+        );
     }
 
     #[test]

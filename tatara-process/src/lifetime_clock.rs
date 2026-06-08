@@ -15,7 +15,6 @@ use chrono::{DateTime, Utc};
 use std::time::Duration;
 
 use crate::crd::Process;
-use crate::lifetime::LifetimeVariant;
 use crate::phase::ProcessPhase;
 
 /// Decision the phase machine acts on.
@@ -31,14 +30,21 @@ pub enum AutoTerminate {
 /// ephemeral lifetime clock fires now.
 ///
 /// `now` is injected so unit tests can drive the clock deterministically.
-pub fn evaluate(process: &Process, current_phase: ProcessPhase, now: DateTime<Utc>) -> AutoTerminate {
-    let lifetime = match process.spec.lifetime.variant() {
-        Ok(v) => v,
-        Err(_) => return AutoTerminate::Skip, // ambiguous — treat as no-op
+pub fn evaluate(
+    process: &Process,
+    current_phase: ProcessPhase,
+    now: DateTime<Utc>,
+) -> AutoTerminate {
+    // Closed-set projection: ambiguous → no-op; permanent → no-op;
+    // ephemeral → fall through to teardown / TTL checks. ONE
+    // `as_ephemeral` gate replaces the previous two-step
+    // match-then-match dance and shares the projection with
+    // `requeue_with_ttl` below.
+    let Ok(variant) = process.spec.lifetime.variant() else {
+        return AutoTerminate::Skip;
     };
-    let ephemeral = match lifetime {
-        LifetimeVariant::Permanent(_) => return AutoTerminate::Skip,
-        LifetimeVariant::Ephemeral(e) => e,
+    let Some(ephemeral) = variant.as_ephemeral() else {
+        return AutoTerminate::Skip;
     };
 
     // 1. Teardown policy on terminal phases.
@@ -99,7 +105,12 @@ fn is_terminal_or_exit(p: ProcessPhase) -> bool {
 /// `evaluate()` returned `Skip` — picks the smaller of HEARTBEAT and
 /// TTL-remaining so we don't oversleep past expiry.
 pub fn requeue_with_ttl(process: &Process, now: DateTime<Utc>, default: Duration) -> Duration {
-    let Ok(LifetimeVariant::Ephemeral(e)) = process.spec.lifetime.variant() else {
+    // Shared `as_ephemeral` projection with [`evaluate`] — the
+    // "give me only the ephemeral case" shape lives at one site.
+    let Ok(variant) = process.spec.lifetime.variant() else {
+        return default;
+    };
+    let Some(e) = variant.as_ephemeral() else {
         return default;
     };
     let Some(creation) = process.metadata.creation_timestamp.as_ref() else {
@@ -247,10 +258,7 @@ mod tests {
             evaluate(&p, ProcessPhase::Attested, now),
             AutoTerminate::Now { .. }
         ));
-        assert_eq!(
-            evaluate(&p, ProcessPhase::Failed, now),
-            AutoTerminate::Skip
-        );
+        assert_eq!(evaluate(&p, ProcessPhase::Failed, now), AutoTerminate::Skip);
     }
 
     #[test]

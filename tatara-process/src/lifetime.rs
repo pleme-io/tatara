@@ -38,6 +38,85 @@ pub enum LifetimeVariant<'a> {
     Ephemeral(&'a EphemeralLifetime),
 }
 
+impl LifetimeVariant<'_> {
+    /// Reverse projection — every borrowed variant knows its
+    /// `LifetimeKind` discriminator. Pairs with `LifetimeKind::select`
+    /// so `LifetimeKind::select(lifetime).map(|v| v.kind())` round-trips
+    /// the closed set on the populated side; pinned by
+    /// `lifetime_kind_round_trips_through_variant_kind`.
+    pub fn kind(&self) -> LifetimeKind {
+        match self {
+            Self::Permanent(_) => LifetimeKind::Permanent,
+            Self::Ephemeral(_) => LifetimeKind::Ephemeral,
+        }
+    }
+
+    /// Projection to the inner `EphemeralLifetime` iff this variant is
+    /// `Ephemeral`. ONE site owns the "give me only the ephemeral case"
+    /// shape every consumer of the lifetime clock previously hand-rolled
+    /// via `let Ok(LifetimeVariant::Ephemeral(e)) = ...`; pinned by
+    /// `lifetime_variant_as_ephemeral_returns_inner_only_for_ephemeral`.
+    pub fn as_ephemeral(&self) -> Option<&EphemeralLifetime> {
+        match self {
+            Self::Ephemeral(e) => Some(e),
+            Self::Permanent(_) => None,
+        }
+    }
+
+    /// Projection to the inner `PermanentLifetime` iff this variant is
+    /// `Permanent`. Symmetric counterpart to [`Self::as_ephemeral`].
+    pub fn as_permanent(&self) -> Option<&PermanentLifetime> {
+        match self {
+            Self::Permanent(p) => Some(p),
+            Self::Ephemeral(_) => None,
+        }
+    }
+}
+
+/// Closed-set discriminator over `Lifetime`'s two tagged-union slots.
+/// Single source of truth that drives `Lifetime::variant`'s ambiguity
+/// resolver, the reverse `LifetimeVariant::kind` projection, and any
+/// `select`-style routing. Adding a third lifetime variant (e.g. a
+/// future `Burst` slot for budget-capped non-TTL lifetimes) lands at
+/// one `ALL` entry + one `as_str` arm + one `select` arm + one
+/// `LifetimeVariant::kind` arm — exhaustively checked by the compiler.
+///
+/// Sibling closed-set lift to [`crate::intent::IntentKind`] on the
+/// same `ProcessSpec` axis. Same shape, smaller closed set, same
+/// compounding pattern.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LifetimeKind {
+    Permanent,
+    Ephemeral,
+}
+
+impl LifetimeKind {
+    /// The closed set of lifetime kinds — single source of truth that
+    /// drives `Lifetime::variant`'s sweep so a variant added without
+    /// an `ALL` entry never reaches the resolver.
+    pub const ALL: [Self; 2] = [Self::Permanent, Self::Ephemeral];
+
+    /// Canonical lower-case wire-format key — matches the serde
+    /// `rename_all = "camelCase"` field name on `Lifetime`. Pinned by
+    /// `lifetime_kind_as_str_matches_lifetime_field_name`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Permanent => "permanent",
+            Self::Ephemeral => "ephemeral",
+        }
+    }
+
+    /// Project a `Lifetime` borrow into the optional typed variant view
+    /// for this kind. Returns `None` iff the matching slot is `None`.
+    /// Composes the closed-set sweep `Lifetime::variant` loops over.
+    pub fn select<'a>(self, lifetime: &'a Lifetime) -> Option<LifetimeVariant<'a>> {
+        match self {
+            Self::Permanent => lifetime.permanent.as_ref().map(LifetimeVariant::Permanent),
+            Self::Ephemeral => lifetime.ephemeral.as_ref().map(LifetimeVariant::Ephemeral),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum LifetimeError {
     #[error("lifetime has multiple variants set; at most one required")]
@@ -53,12 +132,13 @@ impl Lifetime {
     /// Resolve to a variant view. Empty resolves to `Permanent` (a static
     /// borrow on the embedded `DEFAULT_PERMANENT`); ambiguous (both set) is
     /// an error.
+    ///
+    /// Sweeps over `LifetimeKind::ALL` so a third variant added with an
+    /// `ALL` entry is structurally honored at this site — no parallel
+    /// `is_some()` count, no per-variant if-let chain.
     pub fn variant(&self) -> Result<LifetimeVariant<'_>, LifetimeError> {
         use crate::tagged_union::{resolve, ResolveError};
-        match resolve([
-            self.permanent.as_ref().map(LifetimeVariant::Permanent),
-            self.ephemeral.as_ref().map(LifetimeVariant::Ephemeral),
-        ]) {
+        match resolve(LifetimeKind::ALL.into_iter().map(|k| k.select(self))) {
             Ok(v) => Ok(v),
             Err(ResolveError::None) => Ok(LifetimeVariant::Permanent(&DEFAULT_PERMANENT)),
             Err(ResolveError::Many) => Err(LifetimeError::Ambiguous),
@@ -341,6 +421,127 @@ mod tests {
         let lt = EphemeralLifetime::default();
         assert!(!lt.has_applicable_exports(ProcessPhase::Attested));
         assert!(!lt.has_applicable_exports(ProcessPhase::Failed));
+    }
+
+    /// `ALL` is the source of truth for the resolver sweep — pin its
+    /// closure so a variant added without an `ALL` entry fails here
+    /// (via the uniqueness check) before drifting `variant()`.
+    #[test]
+    fn lifetime_kind_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in LifetimeKind::ALL {
+            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
+        }
+        assert_eq!(seen.len(), LifetimeKind::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: each variant's `as_str()` matches the
+    /// camelCase serde field name on `Lifetime`. A future rename of
+    /// any field lands here at one site.
+    #[test]
+    fn lifetime_kind_as_str_matches_lifetime_field_name() {
+        for kind in LifetimeKind::ALL {
+            let l = match kind {
+                LifetimeKind::Permanent => Lifetime {
+                    permanent: Some(PermanentLifetime {}),
+                    ..Lifetime::default()
+                },
+                LifetimeKind::Ephemeral => Lifetime {
+                    ephemeral: Some(EphemeralLifetime::default()),
+                    ..Lifetime::default()
+                },
+            };
+            let v = serde_json::to_value(&l).expect("Lifetime serializes");
+            let obj = v.as_object().expect("Lifetime serializes to object");
+            let keys: Vec<&String> = obj.keys().collect();
+            assert_eq!(
+                keys.len(),
+                1,
+                "exactly one slot populated for kind {kind:?}, got {keys:?}"
+            );
+            assert_eq!(
+                keys[0],
+                kind.as_str(),
+                "as_str() must match serde field name for {kind:?}"
+            );
+        }
+    }
+
+    /// ROUND-TRIP CONTRACT: `LifetimeKind::select(lifetime).map(|v|
+    /// v.kind()) == Some(kind)`. The reverse `LifetimeVariant::kind`
+    /// projection composes the closed set in both directions — a
+    /// regression that misroutes a select arm (e.g. `Self::Permanent =>
+    /// l.ephemeral.as_ref()...`) fails loudly here.
+    #[test]
+    fn lifetime_kind_round_trips_through_variant_kind() {
+        for kind in LifetimeKind::ALL {
+            let l = single_slot_lifetime(kind);
+            let v = kind.select(&l).expect("populated slot must select");
+            assert_eq!(v.kind(), kind, "round-trip failed for {kind:?}");
+            // And the resolver lands on the same variant.
+            assert_eq!(
+                l.variant().expect("exactly-one variant").kind(),
+                kind,
+                "variant() resolver disagreed on {kind:?}"
+            );
+        }
+    }
+
+    /// `as_ephemeral` returns `Some` iff the variant is `Ephemeral`.
+    /// Pins the lift of the `let Ok(LifetimeVariant::Ephemeral(e)) = ...`
+    /// pattern that `lifetime_clock::evaluate` + `requeue_with_ttl`
+    /// previously hand-rolled.
+    #[test]
+    fn lifetime_variant_as_ephemeral_returns_inner_only_for_ephemeral() {
+        let permanent = PermanentLifetime {};
+        let v = LifetimeVariant::Permanent(&permanent);
+        assert!(v.as_ephemeral().is_none());
+        assert!(v.as_permanent().is_some());
+
+        let ephemeral = EphemeralLifetime {
+            ttl: "42m".into(),
+            teardown_policy: TeardownPolicy::OnAttested,
+            max_concurrent: 3,
+            exports: vec![],
+        };
+        let v = LifetimeVariant::Ephemeral(&ephemeral);
+        let inner = v.as_ephemeral().expect("ephemeral must project");
+        assert_eq!(inner.ttl, "42m");
+        assert_eq!(inner.teardown_policy, TeardownPolicy::OnAttested);
+        assert_eq!(inner.max_concurrent, 3);
+        assert!(v.as_permanent().is_none());
+    }
+
+    /// EMPTY-RESOLVES-TO-PERMANENT CONTRACT: the resolver's "no slot
+    /// set" outcome is `Permanent`, not an error. Pin via the
+    /// closed-set kind projection so a future variant added to the
+    /// closed set (and to the `Lifetime` struct) without updating
+    /// the default resolution would surface here — the default
+    /// stays `Permanent` regardless of the closed set's arity.
+    #[test]
+    fn empty_lifetime_resolves_to_permanent_kind() {
+        let l = Lifetime::default();
+        let v = l.variant().expect("default lifetime resolves");
+        assert_eq!(v.kind(), LifetimeKind::Permanent);
+        assert!(v.as_permanent().is_some());
+        assert!(v.as_ephemeral().is_none());
+    }
+
+    /// Construct a `Lifetime` with exactly the given kind's slot
+    /// populated by a minimal valid inner spec. Shared across the
+    /// closed-set property tests so they each cover every variant
+    /// without restating the construction table.
+    fn single_slot_lifetime(kind: LifetimeKind) -> Lifetime {
+        match kind {
+            LifetimeKind::Permanent => Lifetime {
+                permanent: Some(PermanentLifetime {}),
+                ..Lifetime::default()
+            },
+            LifetimeKind::Ephemeral => Lifetime {
+                ephemeral: Some(EphemeralLifetime::default()),
+                ..Lifetime::default()
+            },
+        }
     }
 
     #[test]

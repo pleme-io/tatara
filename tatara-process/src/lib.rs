@@ -64,7 +64,8 @@ pub mod prelude {
         IntentVariant, LispIntent, NixIntent, WorkloadKind,
     };
     pub use crate::lifetime::{
-        EphemeralLifetime, Lifetime, LifetimeVariant, PermanentLifetime, TeardownPolicy,
+        EphemeralLifetime, Lifetime, LifetimeError, LifetimeKind, LifetimeVariant,
+        PermanentLifetime, TeardownPolicy,
     };
     pub use crate::lifetime_clock::{evaluate as lifetime_clock_evaluate, AutoTerminate};
     pub use crate::matrix::{

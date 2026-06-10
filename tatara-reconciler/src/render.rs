@@ -51,6 +51,12 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
     //   * Observe                  → emit NOTHING here; the Process
     //                                only watches + adds routing/
     //                                exports/attestation
+    //
+    // The two branches below route through the typed projections
+    // (`emits_workload` / `preserves_release_name`) on
+    // `EncapsulationMode` rather than `mode == Variant` equality —
+    // adding a fourth variant in `tatara-process` reaches each
+    // projection's closed-set match, not these sites.
     use tatara_process::encapsulates::EncapsulationMode;
     let mode = process
         .spec
@@ -59,7 +65,7 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
         .map(|e| e.mode)
         .unwrap_or(EncapsulationMode::Manage);
 
-    let (resources, intent_bytes) = if mode == EncapsulationMode::Observe {
+    let (resources, intent_bytes) = if !mode.emits_workload() {
         // Observe mode — no Intent-driven workload emission.
         // Intent bytes still go into the attestation pillar so the
         // typed shape the Process declares is recorded. ONE site
@@ -85,7 +91,7 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
                 // the rest. R12 adds an adoption annotation so the
                 // operator can see at-a-glance which HRs are adopting.
                 let (resources, bytes) = render_aplicacao(&owner_name, &owner_ns, a);
-                let resources = if mode == EncapsulationMode::Adopt {
+                let resources = if mode.preserves_release_name() {
                     mark_resources_as_adopting(resources, process)
                 } else {
                     resources

@@ -38,6 +38,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt;
+use std::str::FromStr;
 use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
 /// How a Process wraps pre-existing in-cluster state.
@@ -162,7 +164,7 @@ pub struct BareWorkload {
 }
 
 /// Three modes the reconciler dispatches on at render time.
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub enum EncapsulationMode {
     /// **Default** — Process IS the control loop for whatever is
@@ -183,19 +185,100 @@ pub enum EncapsulationMode {
 }
 
 impl EncapsulationMode {
+    /// The closed set of encapsulation modes — single source of truth
+    /// that drives the `as_str` / Display / `FromStr` triad and the
+    /// typed `emits_workload` / `preserves_release_name` dispatch.
+    /// Adding a fourth variant lands at one `ALL` entry + one `as_str`
+    /// arm + one arm in each of the two boolean projections —
+    /// exhaustively checked by the compiler (the `[Self; 3]` array
+    /// literal forces the arity).
+    ///
+    /// Sibling closed-set lifts on the same `ProcessSpec` axis:
+    /// [`crate::export::ExportTrigger::ALL`],
+    /// [`crate::lifetime::TeardownPolicy::ALL`],
+    /// [`crate::intent::IntentKind::ALL`],
+    /// [`crate::lifetime::LifetimeKind::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::signal::ProcessSignal::ALL`].
+    pub const ALL: [Self; 3] = [Self::Manage, Self::Adopt, Self::Observe];
+
+    /// Canonical PascalCase wire-format projection — matches the serde
+    /// `rename_all = "PascalCase"` output verbatim. Used by Display
+    /// (single source of truth), by `FromStr` to identify the variant
+    /// from its annotation / status-field representation, and by
+    /// operator-facing reason strings without reaching for `{:?}` Debug
+    /// formatting. Pinned by `mode_as_str_matches_serde`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Manage => "Manage",
+            Self::Adopt => "Adopt",
+            Self::Observe => "Observe",
+        }
+    }
+
     /// True iff the reconciler should emit (or re-emit) the
     /// underlying HR/Kustomization at render time.
     /// Observe ⇒ false; Manage/Adopt ⇒ true.
-    pub fn emits_workload(self) -> bool {
-        matches!(self, Self::Manage | Self::Adopt)
+    ///
+    /// Closed-set match (not `matches!`) so adding a fourth variant
+    /// triggers the compiler's exhaustiveness check at this site
+    /// rather than silently defaulting to `false`. ONE typed dispatch
+    /// over the closed set that replaces the
+    /// `mode == EncapsulationMode::Observe` hand-rolled equality at
+    /// the reconciler's render entry — the truth table for "should
+    /// this mode emit a workload?" is now owned by the typed surface,
+    /// not by a pattern fragment two crates have to keep coherent.
+    pub const fn emits_workload(self) -> bool {
+        match self {
+            Self::Manage | Self::Adopt => true,
+            Self::Observe => false,
+        }
     }
 
     /// True iff the reconciler should preserve the existing release
     /// name (so helm-controller adopts in-place). Only Adopt.
-    pub fn preserves_release_name(self) -> bool {
-        matches!(self, Self::Adopt)
+    ///
+    /// Closed-set match (not `matches!`) so adding a fourth variant
+    /// triggers the compiler's exhaustiveness check at this site.
+    /// ONE typed dispatch that replaces the
+    /// `mode == EncapsulationMode::Adopt` hand-rolled equality at the
+    /// reconciler's `render_aplicacao` adoption-annotation branch.
+    pub const fn preserves_release_name(self) -> bool {
+        match self {
+            Self::Adopt => true,
+            Self::Manage | Self::Observe => false,
+        }
     }
 }
+
+impl fmt::Display for EncapsulationMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for EncapsulationMode {
+    type Err = UnknownEncapsulationMode;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for mode in Self::ALL {
+            if s == mode.as_str() {
+                return Ok(mode);
+            }
+        }
+        Err(UnknownEncapsulationMode(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`crate::export::UnknownExportTrigger`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`], and
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown encapsulation mode: {0}")]
+pub struct UnknownEncapsulationMode(pub String);
 
 #[cfg(test)]
 mod tests {
@@ -264,6 +347,140 @@ mod tests {
     #[test]
     fn mode_default_is_manage() {
         assert_eq!(EncapsulationMode::default(), EncapsulationMode::Manage);
+    }
+
+    // ── closed-set algebra for EncapsulationMode (ALL × as_str ×
+    //    Display × FromStr × emits_workload × preserves_release_name) ─
+
+    /// `ALL` is the source of truth for the resolver / `FromStr` sweep
+    /// — pin its closure so a variant added without an `ALL` entry
+    /// fails here (via the uniqueness check) before drifting `as_str`
+    /// / `emits_workload` / `preserves_release_name`. The arity is
+    /// asserted by the `[Self; 3]` array type itself.
+    #[test]
+    fn mode_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for mode in EncapsulationMode::ALL {
+            assert!(seen.insert(mode), "duplicate variant in ALL: {mode:?}");
+        }
+        assert_eq!(seen.len(), EncapsulationMode::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename
+    /// (or an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface and the YAML wire format
+    /// the reconciler / operator both read.
+    #[test]
+    fn mode_as_str_matches_serde() {
+        for mode in EncapsulationMode::ALL {
+            let serialized = serde_json::to_string(&mode).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                mode.as_str(),
+                "as_str drift for {mode:?}: as_str={} serde={unquoted}",
+                mode.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift. If a reviewer
+    /// accidentally re-introduces an inline match in Display, this
+    /// test would fail the moment a variant rename touches one site
+    /// but not the other.
+    #[test]
+    fn mode_display_matches_as_str() {
+        for mode in EncapsulationMode::ALL {
+            assert_eq!(mode.to_string(), mode.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn mode_roundtrip_via_as_str() {
+        use std::str::FromStr;
+        for mode in EncapsulationMode::ALL {
+            assert_eq!(
+                EncapsulationMode::from_str(mode.as_str()).unwrap(),
+                mode,
+                "round-trip failed for {mode:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / unrelated — and the
+    /// error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_encapsulation_mode_errors() {
+        use std::str::FromStr;
+        for bad in ["", "manage", "ADOPT", "Observed", "Wrap"] {
+            let err = EncapsulationMode::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: `emits_workload` / `preserves_release_name`
+    /// agree with the documented (mode) -> (bool, bool) table for every
+    /// variant. A new variant in `EncapsulationMode` without extending
+    /// either projection's match is caught by the compiler (closed-set
+    /// match in each method); adding a variant without extending its
+    /// truth row is caught here.
+    #[test]
+    fn mode_projection_truth_table() {
+        let table: &[(EncapsulationMode, bool, bool)] = &[
+            // (mode, emits_workload, preserves_release_name)
+            (EncapsulationMode::Manage, true, false),
+            (EncapsulationMode::Adopt, true, true),
+            (EncapsulationMode::Observe, false, false),
+        ];
+        assert_eq!(table.len(), EncapsulationMode::ALL.len());
+        for (mode, emits, preserves) in table {
+            assert_eq!(
+                mode.emits_workload(),
+                *emits,
+                "emits_workload drift for {mode:?}"
+            );
+            assert_eq!(
+                mode.preserves_release_name(),
+                *preserves,
+                "preserves_release_name drift for {mode:?}"
+            );
+        }
+    }
+
+    /// DRIFT-PROOF CONTRACT: the hand-rolled
+    /// `mode == EncapsulationMode::Observe` and
+    /// `mode == EncapsulationMode::Adopt` checks the reconciler's
+    /// `render` function used pre-lift agree with the typed
+    /// projections for every variant in `ALL`. A regression that
+    /// re-introduces a raw `==` against a variant name fails here:
+    /// `!emits_workload()` IS "Observe mode" and
+    /// `preserves_release_name()` IS "Adopt mode", expressed as a
+    /// property of the typed surface rather than a pattern fragment
+    /// two crates have to keep coherent.
+    #[test]
+    fn mode_typed_projections_replace_raw_equality() {
+        for mode in EncapsulationMode::ALL {
+            assert_eq!(
+                !mode.emits_workload(),
+                mode == EncapsulationMode::Observe,
+                "!emits_workload() drift for {mode:?}"
+            );
+            assert_eq!(
+                mode.preserves_release_name(),
+                mode == EncapsulationMode::Adopt,
+                "preserves_release_name() drift for {mode:?}"
+            );
+        }
     }
 
     #[test]

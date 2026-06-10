@@ -38,7 +38,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use tatara_process::export::{
-    ArtifactVariant, ExportSpec, NatsSubjectChannel, ReportFormat, RunMarkerSource,
+    ArtifactVariant, ExportSpec, NatsSubjectChannel, ReportFormat, ReportPayloadShape,
+    RunMarkerSource,
 };
 use tatara_process::receipt::ReceiptEnvelope;
 
@@ -143,8 +144,14 @@ pub fn prepare_event_payload(
         ArtifactVariant::TestReport(tr) => {
             labels.insert("configmap".into(), tr.configmap.clone());
             labels.insert("key".into(), tr.key.clone());
-            let p = match tr.format {
-                ReportFormat::NdJson => {
+            // Closed-set dispatch via `ReportFormat::payload_shape` — the
+            // 2-arm match over `ReportPayloadShape` is exhaustive, so
+            // adding a future `ReportFormat` variant lands at one
+            // `payload_shape` arm in tatara-process and never touches
+            // the worker. Replaces the prior `_ => base64` silent
+            // default that quietly swallowed new variants.
+            let p = match tr.format.payload_shape() {
+                ReportPayloadShape::NdJsonLines => {
                     let lines: Vec<serde_json::Value> = artifact_bytes
                         .split(|b| *b == b'\n')
                         .filter(|l| !l.is_empty())
@@ -152,7 +159,7 @@ pub fn prepare_event_payload(
                         .collect();
                     serde_json::json!({ "ndjson": lines })
                 }
-                _ => {
+                ReportPayloadShape::OpaqueBytes => {
                     use base64_inline as base64;
                     serde_json::json!({ "raw_b64": base64::encode(artifact_bytes) })
                 }

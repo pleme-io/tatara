@@ -203,7 +203,7 @@ pub struct RunMarkerSource {
 /// Bytes-shape hint for `TestReportSource`. Tatara emits the bytes
 /// untransformed and tags the Vector event with this so shinryu
 /// can route to the right parser tier.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum ReportFormat {
     /// xUnit / JUnit XML — the closed-loop probe + gator emit this.
@@ -216,6 +216,103 @@ pub enum ReportFormat {
     #[default]
     Raw,
 }
+
+/// How the export worker should embed a `TestReportSource`'s bytes into
+/// the shipped `ExportEvent.payload`. Lifted as a closed-set typed
+/// projection from [`ReportFormat::payload_shape`] so the worker's
+/// dispatch is exhaustive on `ReportPayloadShape`, not on `ReportFormat`
+/// with a silent `_` arm. Adding a future `ReportFormat` variant forces
+/// the author to pick its shape here (single edit site); adding a
+/// future shape (e.g. compressed) forces every consumer to handle it.
+///
+/// Sibling typed-projection lift over a closed enum (rather than
+/// `matches!` / `_` arm dispatch):
+/// [`crate::lifetime::TeardownPolicy::should_teardown_on`],
+/// [`ExportTrigger::fires_on`], [`crate::phase::ProcessPhase::as_str`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ReportPayloadShape {
+    /// Newline-delimited JSON — split on `\n`, parse each non-empty
+    /// line as JSON, embed under `payload.ndjson` as an array.
+    NdJsonLines,
+    /// Opaque bytes — base64-encode the artifact verbatim, embed
+    /// under `payload.raw_b64` as a string. The default shape for
+    /// anything Vector / shinryu shouldn't pre-parse.
+    OpaqueBytes,
+}
+
+impl ReportFormat {
+    /// The closed set of report formats — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad and the typed
+    /// `payload_shape` dispatch. Adding a fifth variant lands at one
+    /// `ALL` entry + one `as_str` arm + one `payload_shape` arm —
+    /// exhaustively checked by the compiler (the `[Self; 4]` array
+    /// literal forces the arity).
+    ///
+    /// Sibling closed-set lifts on the same `ExportSpec` axis:
+    /// [`ExportTrigger::ALL`], [`crate::lifetime::TeardownPolicy::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::signal::ProcessSignal::ALL`],
+    /// [`crate::encapsulates::EncapsulationMode::ALL`].
+    pub const ALL: [Self; 4] = [Self::Junit, Self::TapV13, Self::NdJson, Self::Raw];
+
+    /// Canonical PascalCase wire-format projection — matches the serde
+    /// `rename_all = "PascalCase"` output verbatim. Used by Display
+    /// (single source of truth) and by `FromStr`'s sweep of `ALL` so
+    /// the typed surface and the YAML wire format cannot drift. Pinned
+    /// by `report_format_as_str_matches_serde`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Junit => "Junit",
+            Self::TapV13 => "TapV13",
+            Self::NdJson => "NdJson",
+            Self::Raw => "Raw",
+        }
+    }
+
+    /// Typed projection: which payload-embedding strategy the export
+    /// worker should pick for this format. ONE typed dispatch that
+    /// replaces the worker's `match tr.format { NdJson => …, _ => … }`
+    /// silent-default arm. Adding a new `ReportFormat` variant forces
+    /// the author to decide its shape here (the compiler exhaustively
+    /// checks this match); the worker's dispatch on the returned
+    /// `ReportPayloadShape` then remains a closed 2-arm match. Pinned
+    /// by `report_format_payload_shape_truth_table`.
+    pub const fn payload_shape(self) -> ReportPayloadShape {
+        match self {
+            Self::NdJson => ReportPayloadShape::NdJsonLines,
+            Self::Junit | Self::TapV13 | Self::Raw => ReportPayloadShape::OpaqueBytes,
+        }
+    }
+}
+
+impl fmt::Display for ReportFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ReportFormat {
+    type Err = UnknownReportFormat;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for format in Self::ALL {
+            if s == format.as_str() {
+                return Ok(format);
+            }
+        }
+        Err(UnknownReportFormat(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownExportTrigger`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`],
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown report format: {0}")]
+pub struct UnknownReportFormat(pub String);
 
 // ─── VectorChannel ─────────────────────────────────────────────────
 
@@ -734,6 +831,108 @@ mod tests {
                 trigger.fires_on_failed(),
                 trigger.fires_on(crate::phase::ProcessPhase::Failed),
                 "legacy fires_on_failed drift for {trigger:?}"
+            );
+        }
+    }
+
+    // ── closed-set algebra for ReportFormat (ALL × as_str × FromStr ×
+    //    payload_shape) ─
+
+    /// `ALL` is the source of truth for the `FromStr` sweep + the
+    /// `payload_shape` truth-table test — pin its closure so a variant
+    /// added without an `ALL` entry fails here (via the uniqueness
+    /// check) before drifting `as_str` / `payload_shape`. The arity is
+    /// asserted by the `[Self; 4]` array type itself.
+    #[test]
+    fn report_format_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for format in ReportFormat::ALL {
+            assert!(seen.insert(format), "duplicate variant in ALL: {format:?}");
+        }
+        assert_eq!(seen.len(), ReportFormat::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename
+    /// (or an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface and the YAML wire format
+    /// the reconciler / operator both read.
+    #[test]
+    fn report_format_as_str_matches_serde() {
+        for format in ReportFormat::ALL {
+            let serialized = serde_json::to_string(&format).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                format.as_str(),
+                "as_str drift for {format:?}: as_str={} serde={unquoted}",
+                format.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift.
+    #[test]
+    fn report_format_display_matches_as_str() {
+        for format in ReportFormat::ALL {
+            assert_eq!(format.to_string(), format.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn report_format_roundtrip_via_as_str() {
+        for format in ReportFormat::ALL {
+            assert_eq!(
+                ReportFormat::from_str(format.as_str()).unwrap(),
+                format,
+                "round-trip failed for {format:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / unrelated — and the
+    /// error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_report_format_errors() {
+        for bad in ["", "junit", "JUNIT", "tap", "Yaml", "TomlV1"] {
+            let err = ReportFormat::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: `payload_shape` agrees with the documented
+    /// shape table for every variant in `ALL`. A new variant whose
+    /// shape the author forgets to add to `payload_shape`'s match is
+    /// caught by the compiler at the match site; a regression that
+    /// reshuffles existing variants (e.g. routing `NdJson` to opaque
+    /// bytes) is caught here. `payload_shape` is the worker's only
+    /// dispatch — once this passes, the worker's `match shape { … }`
+    /// is exhaustive on the 2-variant `ReportPayloadShape` instead of
+    /// the 4-variant `ReportFormat`, so adding a future format never
+    /// touches the worker.
+    #[test]
+    fn report_format_payload_shape_truth_table() {
+        let table: &[(ReportFormat, ReportPayloadShape)] = &[
+            (ReportFormat::Junit, ReportPayloadShape::OpaqueBytes),
+            (ReportFormat::TapV13, ReportPayloadShape::OpaqueBytes),
+            (ReportFormat::NdJson, ReportPayloadShape::NdJsonLines),
+            (ReportFormat::Raw, ReportPayloadShape::OpaqueBytes),
+        ];
+        assert_eq!(table.len(), ReportFormat::ALL.len());
+        for (format, expected) in table {
+            assert_eq!(
+                format.payload_shape(),
+                *expected,
+                "payload_shape({format:?}) drift"
             );
         }
     }

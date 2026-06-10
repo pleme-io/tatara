@@ -34,20 +34,22 @@ pub enum SignalEffect {
 
 pub fn apply(phase: ProcessPhase, signal: ProcessSignal, sighup: SighupStrategy) -> SignalEffect {
     use ProcessSignal::*;
-    match (signal, sighup) {
-        (Sighup, SighupStrategy::Noop) => SignalEffect::Noop,
-        (Sighup, SighupStrategy::Reconverge) if phase.is_running() => {
-            SignalEffect::TransitionTo(ProcessPhase::Reconverging)
-        }
-        (Sighup, SighupStrategy::Restart) if phase.is_running() => {
-            SignalEffect::TransitionTo(ProcessPhase::Exiting)
-        }
-        (Sigterm, _) if phase.is_alive() => SignalEffect::TransitionTo(ProcessPhase::Exiting),
-        (Sigkill, _) if !phase.is_terminal() => SignalEffect::TransitionTo(ProcessPhase::Reaped),
-        (Sigusr1, _) if phase.is_running() => SignalEffect::ForceAttest,
-        (Sigusr2, _) if phase.is_running() => SignalEffect::Remediate,
-        (Sigstop, _) => SignalEffect::Suspend,
-        (Sigcont, _) => SignalEffect::Resume,
+    match signal {
+        // SIGHUP arms collapsed through the typed `SighupStrategy::sighup_target`
+        // projection: target phase is purely a function of the strategy variant,
+        // the `is_running()` phase guard is the strategy-independent precondition.
+        // `Noop` projects to `None` and falls through to `SignalEffect::Noop`
+        // regardless of phase, preserving the pre-lift behavior.
+        Sighup => match sighup.sighup_target() {
+            Some(target) if phase.is_running() => SignalEffect::TransitionTo(target),
+            _ => SignalEffect::Noop,
+        },
+        Sigterm if phase.is_alive() => SignalEffect::TransitionTo(ProcessPhase::Exiting),
+        Sigkill if !phase.is_terminal() => SignalEffect::TransitionTo(ProcessPhase::Reaped),
+        Sigusr1 if phase.is_running() => SignalEffect::ForceAttest,
+        Sigusr2 if phase.is_running() => SignalEffect::Remediate,
+        Sigstop => SignalEffect::Suspend,
+        Sigcont => SignalEffect::Resume,
         _ => SignalEffect::Noop,
     }
 }

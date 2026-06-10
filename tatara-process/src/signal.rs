@@ -7,6 +7,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::phase::ProcessPhase;
+
 /// The first-class signals the controller honors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -98,7 +100,12 @@ impl std::str::FromStr for ProcessSignal {
 pub struct UnknownSignal(pub String);
 
 /// How a Process handles SIGHUP.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+///
+/// Sibling closed-set lifts on the same `ProcessSpec` axis:
+/// [`ProcessSignal::ALL`] (parser triad), [`crate::phase::ProcessPhase::ALL`]
+/// (target codomain), [`crate::spec::MustReachPhase::ALL`] (typed subset of
+/// ProcessPhase).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum SighupStrategy {
     /// Running → Reconverging → Execing without tearing down resources.
@@ -110,9 +117,87 @@ pub enum SighupStrategy {
     Noop,
 }
 
+impl SighupStrategy {
+    /// The closed set of SIGHUP strategies — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad and the typed
+    /// `sighup_target` projection. Adding a fourth strategy (e.g. a
+    /// future `Suspend` that maps SIGHUP to `SignalEffect::Suspend`)
+    /// lands at one `ALL` entry, one `as_str` arm, and one
+    /// `sighup_target` arm — exhaustively checked by the compiler
+    /// (the `[Self; 3]` array literal forces the arity).
+    pub const ALL: [Self; 3] = [Self::Reconverge, Self::Restart, Self::Noop];
+
+    /// Canonical PascalCase wire-format projection — matches the serde
+    /// `rename_all = "PascalCase"` output verbatim. Used by Display
+    /// (single source of truth), by `FromStr` to identify the variant
+    /// from its annotation / status-field representation, and by
+    /// operator-facing diagnostic strings without re-serializing
+    /// through `serde_json`. Pinned by
+    /// `sighup_strategy_as_str_matches_serde`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Reconverge => "Reconverge",
+            Self::Restart => "Restart",
+            Self::Noop => "Noop",
+        }
+    }
+
+    /// Typed projection: when this Process receives SIGHUP while in a
+    /// `is_running()` phase, which `ProcessPhase` does the reconciler
+    /// transition into? `None` means SIGHUP is a no-op (the `Noop`
+    /// strategy). The phase guard lives at the call site (the strategy
+    /// itself doesn't know about phase), so the codomain is purely a
+    /// function of the strategy variant.
+    ///
+    /// Used by `tatara_reconciler::signals::apply` to lift the three
+    /// SIGHUP arms (Reconverge / Restart / Noop) into one
+    /// projection-driven arm. A future variant lands at one
+    /// `sighup_target` arm; `apply` doesn't change.
+    ///
+    /// Pinned by `sighup_target_truth_table` (per-variant codomain)
+    /// AND by `sighup_target_projects_only_to_legal_sighup_transitions`
+    /// (every `Some(target)` must be reachable from `Running` /
+    /// `Attested` via `ProcessPhase::can_transition_to`).
+    pub const fn sighup_target(self) -> Option<ProcessPhase> {
+        match self {
+            Self::Reconverge => Some(ProcessPhase::Reconverging),
+            Self::Restart => Some(ProcessPhase::Exiting),
+            Self::Noop => None,
+        }
+    }
+}
+
+impl std::fmt::Display for SighupStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for SighupStrategy {
+    type Err = UnknownSighupStrategy;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for strat in Self::ALL {
+            if s == strat.as_str() {
+                return Ok(strat);
+            }
+        }
+        Err(UnknownSighupStrategy(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownSignal`], [`crate::phase::UnknownPhase`],
+/// [`crate::spec::UnknownMustReachPhase`], and
+/// [`crate::boundary::UnknownConditionKind`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown sighup strategy: {0}")]
+pub struct UnknownSighupStrategy(pub String);
+
 #[cfg(test)]
 mod tests {
-    use super::ProcessSignal;
+    use super::{ProcessSignal, SighupStrategy, UnknownSighupStrategy};
+    use crate::phase::ProcessPhase;
     use std::str::FromStr;
 
     #[test]
@@ -175,5 +260,139 @@ mod tests {
         // pre-refactor contract that `UnknownSignal` echoes the
         // normalized form, not the operator's casing.
         assert_eq!(err.0, "SIGFOO");
+    }
+
+    // ── closed-set algebra for SighupStrategy (ALL × as_str × FromStr ×
+    //    sighup_target) ────────────────────────────────────────────────
+
+    /// `ALL` is the source of truth for the `FromStr` sweep and the
+    /// projection-truth-table test — pin its closure so a variant added
+    /// without an `ALL` entry fails here (via the uniqueness check)
+    /// before drifting `as_str` / `sighup_target`. The arity is
+    /// asserted by the `[Self; 3]` array type itself.
+    #[test]
+    fn sighup_strategy_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for strat in SighupStrategy::ALL {
+            assert!(seen.insert(strat), "duplicate variant in ALL: {strat:?}");
+        }
+        assert_eq!(seen.len(), SighupStrategy::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename (or
+    /// an `as_str` arm typo) lands here at one site, not in a CRD
+    /// `enum:` enumeration that quietly drifted away from the typed
+    /// surface.
+    #[test]
+    fn sighup_strategy_as_str_matches_serde() {
+        for strat in SighupStrategy::ALL {
+            let serialized = serde_json::to_string(&strat)
+                .expect("SighupStrategy serializes")
+                .trim_matches('"')
+                .to_string();
+            assert_eq!(
+                strat.as_str(),
+                serialized,
+                "as_str() must match serde output for {strat:?}",
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift.
+    #[test]
+    fn sighup_strategy_display_matches_as_str() {
+        for strat in SighupStrategy::ALL {
+            assert_eq!(strat.to_string(), strat.as_str());
+        }
+    }
+
+    /// ROUND-TRIP CONTRACT: every variant survives `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` (or vice versa)
+    /// fails here.
+    #[test]
+    fn sighup_strategy_roundtrip_via_as_str() {
+        for strat in SighupStrategy::ALL {
+            assert_eq!(
+                SighupStrategy::from_str(strat.as_str()).expect("known variant round-trips"),
+                strat,
+                "round-trip failed for {strat:?}",
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings outside the canonical projection
+    /// (empty / lowercased / typo / unrelated) — and the error echoes
+    /// the input verbatim so the operator-facing diagnostic carries
+    /// the offending value, not a normalized form.
+    #[test]
+    fn unknown_sighup_strategy_errors() {
+        for bad in ["", "reconverge", "RESTART", "Suspend", "noop "] {
+            let err = SighupStrategy::from_str(bad).unwrap_err();
+            let UnknownSighupStrategy(payload) = &err;
+            assert_eq!(payload, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// PROJECTION TRUTH TABLE: pin the per-variant codomain of
+    /// `sighup_target`. A future variant addition lands here at one
+    /// arm — and the compiler's closed-set match in `sighup_target`
+    /// catches the missing arm before this test runs.
+    #[test]
+    fn sighup_target_truth_table() {
+        assert_eq!(
+            SighupStrategy::Reconverge.sighup_target(),
+            Some(ProcessPhase::Reconverging)
+        );
+        assert_eq!(
+            SighupStrategy::Restart.sighup_target(),
+            Some(ProcessPhase::Exiting)
+        );
+        assert_eq!(SighupStrategy::Noop.sighup_target(), None);
+    }
+
+    /// SEMANTIC SUBSET CONTRACT: every `Some(target)` produced by
+    /// `sighup_target` must be reachable from a `is_running()` phase
+    /// (`Running` or `Attested`) via `ProcessPhase::can_transition_to`.
+    /// This pins the contract `tatara_reconciler::signals::apply`
+    /// relies on: the typed projection produces only phases the
+    /// reconciler is allowed to transition into from the SIGHUP
+    /// reception sites. A future `SighupStrategy::Refresh` that
+    /// projected to `ProcessPhase::Pending` would FAIL here (Pending
+    /// is not a legal successor of Running/Attested), forcing the
+    /// author to either pick a legal target phase or extend
+    /// `ProcessPhase::can_transition_to` deliberately.
+    #[test]
+    fn sighup_target_projects_only_to_legal_sighup_transitions() {
+        for strat in SighupStrategy::ALL {
+            if let Some(target) = strat.sighup_target() {
+                let reachable_from_running = ProcessPhase::Running.can_transition_to(target);
+                let reachable_from_attested = ProcessPhase::Attested.can_transition_to(target);
+                assert!(
+                    reachable_from_running || reachable_from_attested,
+                    "{strat:?}.sighup_target() = {target:?} must be reachable from \
+                     Running or Attested via can_transition_to",
+                );
+            }
+        }
+    }
+
+    /// PROJECTION INJECTIVITY: distinct variants that produce `Some`
+    /// project to distinct `ProcessPhase`s. Pairing this with the
+    /// reachability contract above forces a future SIGHUP strategy
+    /// variant to land on a fresh legal SIGHUP-target phase (or to
+    /// project to `None` and be a deliberate no-op).
+    #[test]
+    fn sighup_target_projection_is_injective() {
+        let mut seen = std::collections::HashSet::new();
+        for strat in SighupStrategy::ALL {
+            if let Some(target) = strat.sighup_target() {
+                assert!(
+                    seen.insert(target),
+                    "two variants project to the same ProcessPhase: {target:?}",
+                );
+            }
+        }
     }
 }

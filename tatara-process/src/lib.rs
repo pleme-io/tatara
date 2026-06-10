@@ -81,7 +81,7 @@ pub mod prelude {
     };
     pub use crate::receipt::{ReceiptEnvelope, ReceiptError, RECEIPT_VERSION};
     pub use crate::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
-    pub use crate::signal::{ProcessSignal, SighupStrategy};
+    pub use crate::signal::{ProcessSignal, SighupStrategy, UnknownSighupStrategy};
     pub use crate::spec::{
         DependsOn, IdentitySpec, MustReachPhase, SignalPolicy, UnknownMustReachPhase,
     };

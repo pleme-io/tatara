@@ -609,11 +609,10 @@ pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
         .ephemeral
         .iter()
         .flat_map(|e| {
-            e.exports.iter().enumerate().filter(|(_, s)| match gate {
-                ProcessPhase::Attested => s.when.fires_on_attested(),
-                ProcessPhase::Failed => s.when.fires_on_failed(),
-                _ => false,
-            })
+            e.exports
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| s.when.fires_on(gate))
         })
         .collect();
 

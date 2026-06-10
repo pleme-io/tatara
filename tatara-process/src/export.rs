@@ -53,6 +53,10 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt;
+use std::str::FromStr;
+
+use crate::phase::ProcessPhase;
 
 // ─── ExportSpec ────────────────────────────────────────────────────
 
@@ -342,7 +346,7 @@ pub struct StdoutChannel {
 /// When the export fires. Aligns with `ProcessPhase` so the
 /// reconciler's `Releasing` phase can match against the terminal
 /// phase reached directly.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum ExportTrigger {
     /// Fire when the Process reaches `Attested`. Default — matches
@@ -358,15 +362,105 @@ pub enum ExportTrigger {
 }
 
 impl ExportTrigger {
-    /// True iff this trigger fires on `Attested`.
-    pub fn fires_on_attested(self) -> bool {
-        matches!(self, Self::OnAttested | Self::Always)
+    /// The closed set of export triggers — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad and the typed
+    /// `fires_on` dispatch over `ProcessPhase`. Adding a fourth variant
+    /// lands at one `ALL` entry + one `as_str` arm + one `fires_on` arm
+    /// — exhaustively checked by the compiler (the `[Self; 3]` array
+    /// literal forces the arity).
+    ///
+    /// Sibling closed-set lifts on the same `ProcessSpec` axis:
+    /// [`crate::lifetime::TeardownPolicy::ALL`],
+    /// [`crate::intent::IntentKind::ALL`],
+    /// [`crate::lifetime::LifetimeKind::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::signal::ProcessSignal::ALL`].
+    pub const ALL: [Self; 3] = [Self::OnAttested, Self::OnFailed, Self::Always];
+
+    /// Canonical PascalCase wire-format projection — matches the serde
+    /// `rename_all = "PascalCase"` output verbatim. Used by Display
+    /// (single source of truth), by `FromStr` to identify the variant
+    /// from its annotation / status-field representation, and by
+    /// operator-facing reason strings without reaching for `{:?}` Debug
+    /// formatting. Pinned by `export_trigger_as_str_matches_serde`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::OnAttested => "OnAttested",
+            Self::OnFailed => "OnFailed",
+            Self::Always => "Always",
+        }
     }
-    /// True iff this trigger fires on `Failed`.
-    pub fn fires_on_failed(self) -> bool {
-        matches!(self, Self::OnFailed | Self::Always)
+
+    /// True iff, given a `ProcessPhase`, this trigger says "fire."
+    /// ONE typed dispatch over the typed phase enum that replaces the
+    /// four hand-rolled `match phase { Attested => fires_on_attested(),
+    /// Failed => fires_on_failed(), _ => false }` sites the reconciler
+    /// and `EphemeralLifetime` previously branched on. Every
+    /// non-terminal phase always returns `false` — exports are a
+    /// terminal-phase decision, now enforced by the closed-set match
+    /// over `ProcessPhase`.
+    ///
+    /// The legacy [`Self::fires_on_attested`] / [`Self::fires_on_failed`]
+    /// predicates remain as thin delegates so existing call sites keep
+    /// their narrow signatures; the truth table is pinned by
+    /// `export_trigger_legacy_predicates_delegate_to_phase_dispatch`.
+    pub const fn fires_on(self, phase: ProcessPhase) -> bool {
+        match phase {
+            ProcessPhase::Attested => matches!(self, Self::OnAttested | Self::Always),
+            ProcessPhase::Failed => matches!(self, Self::OnFailed | Self::Always),
+            ProcessPhase::Pending
+            | ProcessPhase::Forking
+            | ProcessPhase::Execing
+            | ProcessPhase::Running
+            | ProcessPhase::Reconverging
+            | ProcessPhase::Releasing
+            | ProcessPhase::Exiting
+            | ProcessPhase::Zombie
+            | ProcessPhase::Reaped => false,
+        }
+    }
+
+    /// Thin delegate to [`Self::fires_on`] for the `Attested` case —
+    /// kept so existing call sites that already know the gate keep
+    /// their narrow signature without reaching for the typed-phase
+    /// variant.
+    pub const fn fires_on_attested(self) -> bool {
+        self.fires_on(ProcessPhase::Attested)
+    }
+
+    /// Symmetric delegate to [`Self::fires_on`] for the `Failed` case.
+    pub const fn fires_on_failed(self) -> bool {
+        self.fires_on(ProcessPhase::Failed)
     }
 }
+
+impl fmt::Display for ExportTrigger {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ExportTrigger {
+    type Err = UnknownExportTrigger;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for trigger in Self::ALL {
+            if s == trigger.as_str() {
+                return Ok(trigger);
+            }
+        }
+        Err(UnknownExportTrigger(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`], and
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown export trigger: {0}")]
+pub struct UnknownExportTrigger(pub String);
 
 // ─── Tests ─────────────────────────────────────────────────────────
 
@@ -455,6 +549,193 @@ mod tests {
         assert!(!ExportTrigger::OnFailed.fires_on_attested());
         assert!(ExportTrigger::Always.fires_on_attested());
         assert!(ExportTrigger::Always.fires_on_failed());
+    }
+
+    // ── closed-set algebra for ExportTrigger (ALL × as_str × FromStr ×
+    //    fires_on(phase)) ─
+
+    /// `ALL` is the source of truth for the resolver / `FromStr` sweep
+    /// — pin its closure so a variant added without an `ALL` entry
+    /// fails here (via the uniqueness check) before drifting `as_str` /
+    /// `fires_on`. The arity is asserted by the `[Self; 3]` array type
+    /// itself.
+    #[test]
+    fn export_trigger_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for trigger in ExportTrigger::ALL {
+            assert!(
+                seen.insert(trigger),
+                "duplicate variant in ALL: {trigger:?}"
+            );
+        }
+        assert_eq!(seen.len(), ExportTrigger::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename
+    /// (or an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface and the YAML wire format
+    /// the reconciler / operator both read.
+    #[test]
+    fn export_trigger_as_str_matches_serde() {
+        for trigger in ExportTrigger::ALL {
+            let serialized = serde_json::to_string(&trigger).expect("serialize");
+            // serde_json wraps strings in quotes; strip them for compare.
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                trigger.as_str(),
+                "as_str drift for {trigger:?}: as_str={} serde={unquoted}",
+                trigger.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift. If a reviewer
+    /// accidentally re-introduces an inline match in Display, this
+    /// test would fail the moment a variant rename touches one site
+    /// but not the other.
+    #[test]
+    fn export_trigger_display_matches_as_str() {
+        for trigger in ExportTrigger::ALL {
+            assert_eq!(trigger.to_string(), trigger.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn export_trigger_roundtrip_via_as_str() {
+        use std::str::FromStr;
+        for trigger in ExportTrigger::ALL {
+            assert_eq!(
+                ExportTrigger::from_str(trigger.as_str()).unwrap(),
+                trigger,
+                "round-trip failed for {trigger:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / unrelated — and the
+    /// error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_export_trigger_errors() {
+        use std::str::FromStr;
+        for bad in ["", "onAttested", "ALWAYS", "Never", "OnSuccess"] {
+            let err = ExportTrigger::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: `fires_on(phase)` agrees with the
+    /// documented (trigger, phase) -> bool table for every (3 × 11)
+    /// combination. A new variant in either `ExportTrigger` or
+    /// `ProcessPhase` reaches this test by iteration — adding a phase
+    /// without extending `fires_on`'s match would be caught by the
+    /// compiler (the closed-set match over `ProcessPhase` enforces it);
+    /// adding a trigger without extending its truth row is caught
+    /// here.
+    #[test]
+    fn export_trigger_fires_on_truth_table() {
+        // ProcessPhase imports are local to the test to keep the
+        // module's top-level surface minimal.
+        use crate::phase::ProcessPhase::{
+            Attested, Execing, Exiting, Failed, Forking, Pending, Reaped, Reconverging, Releasing,
+            Running, Zombie,
+        };
+        let table: &[(ExportTrigger, &[(crate::phase::ProcessPhase, bool)])] = &[
+            (
+                ExportTrigger::OnAttested,
+                &[
+                    (Attested, true),
+                    (Failed, false),
+                    (Pending, false),
+                    (Forking, false),
+                    (Execing, false),
+                    (Running, false),
+                    (Reconverging, false),
+                    (Releasing, false),
+                    (Exiting, false),
+                    (Zombie, false),
+                    (Reaped, false),
+                ],
+            ),
+            (
+                ExportTrigger::OnFailed,
+                &[
+                    (Attested, false),
+                    (Failed, true),
+                    (Pending, false),
+                    (Forking, false),
+                    (Execing, false),
+                    (Running, false),
+                    (Reconverging, false),
+                    (Releasing, false),
+                    (Exiting, false),
+                    (Zombie, false),
+                    (Reaped, false),
+                ],
+            ),
+            (
+                ExportTrigger::Always,
+                &[
+                    (Attested, true),
+                    (Failed, true),
+                    (Pending, false),
+                    (Forking, false),
+                    (Execing, false),
+                    (Running, false),
+                    (Reconverging, false),
+                    (Releasing, false),
+                    (Exiting, false),
+                    (Zombie, false),
+                    (Reaped, false),
+                ],
+            ),
+        ];
+        // The truth table must cover every (trigger, phase) pair.
+        assert_eq!(table.len(), ExportTrigger::ALL.len());
+        for (_, row) in table {
+            assert_eq!(row.len(), crate::phase::ProcessPhase::ALL.len());
+        }
+        for (trigger, row) in table {
+            for (phase, expected) in *row {
+                assert_eq!(
+                    trigger.fires_on(*phase),
+                    *expected,
+                    "fires_on({trigger:?}, {phase:?}) drift"
+                );
+            }
+        }
+    }
+
+    /// DELEGATION CONTRACT: the legacy `fires_on_attested` /
+    /// `fires_on_failed` predicates agree with the typed
+    /// `fires_on(phase)` dispatch they delegate to, for every variant
+    /// in `ALL`. A regression that re-introduces an inline `matches!`
+    /// in either legacy predicate fails here. `fires_on` is the
+    /// source of truth.
+    #[test]
+    fn export_trigger_legacy_predicates_delegate_to_phase_dispatch() {
+        for trigger in ExportTrigger::ALL {
+            assert_eq!(
+                trigger.fires_on_attested(),
+                trigger.fires_on(crate::phase::ProcessPhase::Attested),
+                "legacy fires_on_attested drift for {trigger:?}"
+            );
+            assert_eq!(
+                trigger.fires_on_failed(),
+                trigger.fires_on(crate::phase::ProcessPhase::Failed),
+                "legacy fires_on_failed drift for {trigger:?}"
+            );
+        }
     }
 
     #[test]

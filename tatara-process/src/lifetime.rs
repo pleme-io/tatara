@@ -213,11 +213,7 @@ impl EphemeralLifetime {
     /// Returns `false` when the export list is empty or no trigger
     /// matches — both cases collapse to the existing teardown path.
     pub fn has_applicable_exports(&self, phase: ProcessPhase) -> bool {
-        self.exports.iter().any(|e| match phase {
-            ProcessPhase::Attested => e.when.fires_on_attested(),
-            ProcessPhase::Failed => e.when.fires_on_failed(),
-            _ => false,
-        })
+        self.exports.iter().any(|e| e.when.fires_on(phase))
     }
 
     /// Iterate over the exports whose trigger fires on `phase`.
@@ -227,11 +223,7 @@ impl EphemeralLifetime {
         &self,
         phase: ProcessPhase,
     ) -> impl Iterator<Item = &ExportSpec> + '_ {
-        self.exports.iter().filter(move |e| match phase {
-            ProcessPhase::Attested => e.when.fires_on_attested(),
-            ProcessPhase::Failed => e.when.fires_on_failed(),
-            _ => false,
-        })
+        self.exports.iter().filter(move |e| e.when.fires_on(phase))
     }
 }
 

@@ -553,12 +553,7 @@ pub fn render_export_jobs(
 
     let mut out = Vec::new();
     for (index, spec) in ephemeral.exports.iter().enumerate() {
-        let fires = match gate {
-            ProcessPhase::Attested => spec.when.fires_on_attested(),
-            ProcessPhase::Failed => spec.when.fires_on_failed(),
-            _ => false,
-        };
-        if !fires {
+        if !spec.when.fires_on(gate) {
             continue;
         }
         out.push(one_export_job(

@@ -51,8 +51,8 @@ pub mod prelude {
     pub use crate::export::{
         ArtifactError, ArtifactSource, ArtifactVariant, ChannelError, ChannelVariant, ExportSpec,
         ExportTrigger, HttpEventChannel, NatsSubjectChannel, ProcessSnapshotSource, ReceiptsSource,
-        ReportFormat, RunMarkerSource, StdoutChannel, TestReportSource, VectorChannel,
-        DEFAULT_NATS_URL, DEFAULT_VECTOR_INGEST,
+        ReportFormat, RunMarkerSource, StdoutChannel, TestReportSource, UnknownExportTrigger,
+        VectorChannel, DEFAULT_NATS_URL, DEFAULT_VECTOR_INGEST,
     };
     pub use crate::hostname::{
         ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameError,

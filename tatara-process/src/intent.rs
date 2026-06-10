@@ -19,6 +19,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt;
+use std::str::FromStr;
 
 /// Intent — exactly one variant should be populated.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
@@ -315,7 +317,10 @@ pub struct ContainerIntent {
     pub workload_kind: WorkloadKind,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+/// K8s workload kind the `container` intent renders into. PascalCase
+/// values match the K8s `kind:` field on the emitted manifest verbatim,
+/// so `as_str` doubles as the canonical `kind:` projection at render time.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum WorkloadKind {
     #[default]
@@ -325,6 +330,114 @@ pub enum WorkloadKind {
     Job,
     CronJob,
 }
+
+impl WorkloadKind {
+    /// The closed set of workload kinds — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad and the typed
+    /// `api_version` / `is_batch` projections. Adding a sixth variant
+    /// lands at one `ALL` entry + one `as_str` arm + one arm in each
+    /// projection — exhaustively checked by the compiler (the `[Self; 5]`
+    /// array literal forces the arity).
+    ///
+    /// Sibling closed-set lifts on the same `ProcessSpec` axis:
+    /// [`crate::encapsulates::EncapsulationMode::ALL`],
+    /// [`crate::export::ExportTrigger::ALL`],
+    /// [`crate::export::ReportFormat::ALL`],
+    /// [`crate::lifetime::TeardownPolicy::ALL`],
+    /// [`crate::intent::IntentKind::ALL`],
+    /// [`crate::lifetime::LifetimeKind::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::signal::ProcessSignal::ALL`].
+    pub const ALL: [Self; 5] = [
+        Self::Deployment,
+        Self::StatefulSet,
+        Self::DaemonSet,
+        Self::Job,
+        Self::CronJob,
+    ];
+
+    /// Canonical PascalCase wire-format projection — matches the serde
+    /// `rename_all = "PascalCase"` output verbatim AND the K8s manifest
+    /// `kind:` field the `container` intent's future renderer will emit.
+    /// Used by Display (single source of truth), by `FromStr` to identify
+    /// the variant from its annotation / status-field representation, and
+    /// by operator-facing reason strings without reaching for `{:?}` Debug
+    /// formatting. Pinned by `workload_kind_as_str_matches_serde`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Deployment => "Deployment",
+            Self::StatefulSet => "StatefulSet",
+            Self::DaemonSet => "DaemonSet",
+            Self::Job => "Job",
+            Self::CronJob => "CronJob",
+        }
+    }
+
+    /// Canonical K8s `apiVersion:` projection — `apps/v1` for the
+    /// long-running workload trio, `batch/v1` for the batch pair.
+    /// Single source of truth for the apiVersion the `container` intent
+    /// renderer will stamp on the emitted manifest; pinned by
+    /// `workload_kind_projection_truth_table` so a future variant lands
+    /// at one arm here, not at every render site that previously
+    /// hand-rolled `match kind { Job | CronJob => "batch/v1", _ => … }`.
+    ///
+    /// Closed-set match (not `matches!`) so adding a sixth variant
+    /// triggers the compiler's exhaustiveness check at this site
+    /// rather than silently defaulting to either group.
+    pub const fn api_version(self) -> &'static str {
+        match self {
+            Self::Deployment | Self::StatefulSet | Self::DaemonSet => "apps/v1",
+            Self::Job | Self::CronJob => "batch/v1",
+        }
+    }
+
+    /// True iff the workload kind is a batch (terminating) workload —
+    /// `Job` or `CronJob`. Drives the future container renderer's
+    /// decision between persistent / one-shot retry semantics and lets
+    /// the lifetime clock distinguish "naturally terminates" from "runs
+    /// until SIGTERM" without re-deriving the partition from
+    /// `api_version() == "batch/v1"`.
+    ///
+    /// Closed-set match (not `matches!`) so adding a sixth variant
+    /// triggers the compiler's exhaustiveness check at this site.
+    pub const fn is_batch(self) -> bool {
+        match self {
+            Self::Job | Self::CronJob => true,
+            Self::Deployment | Self::StatefulSet | Self::DaemonSet => false,
+        }
+    }
+}
+
+impl fmt::Display for WorkloadKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for WorkloadKind {
+    type Err = UnknownWorkloadKind;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.as_str() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownWorkloadKind(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`crate::encapsulates::UnknownEncapsulationMode`],
+/// [`crate::export::UnknownExportTrigger`],
+/// [`crate::export::UnknownReportFormat`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`], and
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown workload kind: {0}")]
+pub struct UnknownWorkloadKind(pub String);
 
 /// Guest intent — the Process is a Linux VM or WASM component supervised
 /// by `tatara-hospedeiro`. See `tatara/docs/declarative-guests.md`.
@@ -710,6 +823,120 @@ mod tests {
                 }),
                 ..Intent::default()
             },
+        }
+    }
+
+    // ── closed-set algebra for WorkloadKind (ALL × as_str × Display ×
+    //    FromStr × api_version × is_batch) ─────────────────────────────
+
+    /// `ALL` is the source of truth for the resolver / `FromStr` sweep
+    /// — pin its closure so a variant added without an `ALL` entry
+    /// fails here (via the uniqueness check) before drifting `as_str`
+    /// / `api_version` / `is_batch`. The arity is asserted by the
+    /// `[Self; 5]` array type itself.
+    #[test]
+    fn workload_kind_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in WorkloadKind::ALL {
+            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
+        }
+        assert_eq!(seen.len(), WorkloadKind::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: every variant's `as_str()` matches serde's
+    /// PascalCase output verbatim. A future variant rename (or an
+    /// `as_str` arm typo) lands at one site, instead of drifting
+    /// between the typed surface, the K8s `kind:` manifest field, and
+    /// the YAML wire format the reconciler / operator both read.
+    #[test]
+    fn workload_kind_as_str_matches_serde() {
+        for kind in WorkloadKind::ALL {
+            let serialized = serde_json::to_string(&kind).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                kind.as_str(),
+                "as_str drift for {kind:?}: as_str={} serde={unquoted}",
+                kind.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift. If a reviewer
+    /// accidentally re-introduces an inline match in Display, this
+    /// test would fail the moment a variant rename touches one site
+    /// but not the other.
+    #[test]
+    fn workload_kind_display_matches_as_str() {
+        for kind in WorkloadKind::ALL {
+            assert_eq!(kind.to_string(), kind.as_str());
+        }
+    }
+
+    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn workload_kind_roundtrip_via_as_str() {
+        use std::str::FromStr;
+        for kind in WorkloadKind::ALL {
+            assert_eq!(
+                WorkloadKind::from_str(kind.as_str()).unwrap(),
+                kind,
+                "round-trip failed for {kind:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / unrelated — and the
+    /// error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_workload_kind_errors() {
+        use std::str::FromStr;
+        for bad in ["", "deployment", "JOB", "ReplicaSet", "Pod"] {
+            let err = WorkloadKind::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    #[test]
+    fn workload_kind_default_is_deployment() {
+        assert_eq!(WorkloadKind::default(), WorkloadKind::Deployment);
+    }
+
+    /// TRUTH-TABLE CONTRACT: `api_version` / `is_batch` agree with the
+    /// documented (kind) -> (apiVersion, is_batch) table for every
+    /// variant. A new variant in `WorkloadKind` without extending
+    /// either projection's match is caught by the compiler (closed-set
+    /// match in each method); adding a variant without extending its
+    /// truth row is caught here. Also pins the invariant
+    /// `is_batch <=> api_version == "batch/v1"`, so a future renderer
+    /// can route on either projection without re-deriving the partition.
+    #[test]
+    fn workload_kind_projection_truth_table() {
+        let table: &[(WorkloadKind, &str, bool)] = &[
+            // (kind, api_version, is_batch)
+            (WorkloadKind::Deployment, "apps/v1", false),
+            (WorkloadKind::StatefulSet, "apps/v1", false),
+            (WorkloadKind::DaemonSet, "apps/v1", false),
+            (WorkloadKind::Job, "batch/v1", true),
+            (WorkloadKind::CronJob, "batch/v1", true),
+        ];
+        assert_eq!(table.len(), WorkloadKind::ALL.len());
+        for (kind, api, batch) in table {
+            assert_eq!(kind.api_version(), *api, "api_version drift for {kind:?}");
+            assert_eq!(kind.is_batch(), *batch, "is_batch drift for {kind:?}");
+            assert_eq!(
+                kind.is_batch(),
+                kind.api_version() == "batch/v1",
+                "is_batch / api_version partition disagrees for {kind:?}"
+            );
         }
     }
 

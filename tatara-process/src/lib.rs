@@ -79,7 +79,8 @@ pub mod prelude {
     pub use crate::phase::{ProcessPhase, UnknownPhase};
     pub use crate::pool::{
         AllocationRef, EphemeralPool, MatchKey, MemberState, PoolCondition, PoolMember, PoolPhase,
-        PoolSelector, PoolSpec, PoolStatus, ReturnPolicy,
+        PoolSelector, PoolSpec, PoolStatus, ReplacementPolicy, ReturnPolicy,
+        UnknownReplacementPolicy,
     };
     pub use crate::receipt::{ReceiptEnvelope, ReceiptError, RECEIPT_VERSION};
     pub use crate::routing::{RoutingBackend, RoutingHostname, RoutingSpec};

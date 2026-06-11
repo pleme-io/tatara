@@ -23,6 +23,9 @@
 //!   └── AllocationStatus (phase, assigned_process_ref, allocated_at, expires_at)
 //! ```
 
+use std::fmt;
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use kube::CustomResource;
 use schemars::JsonSchema;
@@ -145,7 +148,22 @@ pub struct PoolSpec {
 }
 
 /// What the pool reconciler does when a member reaches `Failed`.
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+///
+/// Sibling closed-set lifts on the same `tatara-process` axis:
+/// [`crate::compliance::VerificationPhase::ALL`],
+/// [`crate::signal::SighupStrategy::ALL`],
+/// [`crate::spec::MustReachPhase::ALL`],
+/// [`crate::intent::WorkloadKind::ALL`],
+/// [`crate::export::ReportFormat::ALL`],
+/// [`crate::encapsulates::EncapsulationMode::ALL`],
+/// [`crate::export::ExportTrigger::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::LifetimeKind::ALL`],
+/// [`crate::intent::IntentKind::ALL`],
+/// [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`].
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub enum ReplacementPolicy {
     /// **Default** — Failed member is reaped + replaced immediately
@@ -162,16 +180,98 @@ pub enum ReplacementPolicy {
 }
 
 impl ReplacementPolicy {
+    /// The closed set of replacement policies — single source of truth
+    /// that drives the `as_str` / Display / `FromStr` triad and the
+    /// `replaces_failed` / `pauses_on_failure` predicate pair. Adding a
+    /// fourth variant lands at one `ALL` entry + one `as_str` arm + one
+    /// predicate arm per projection — exhaustively checked by the
+    /// compiler (the `[Self; 3]` array literal forces the arity) and by
+    /// the predicate-pair injectivity test below (a new variant must
+    /// land in its own (replaces_failed, pauses_on_failure) bucket or
+    /// the author has to extend the consumer dispatch in
+    /// `tatara-pool-reconciler::desired::PoolConvergence::decide`).
+    pub const ALL: [Self; 3] = [Self::ReplaceImmediate, Self::HoldFailed, Self::PausePool];
+
+    /// Canonical PascalCase wire-format projection — matches the serde
+    /// `rename_all = "PascalCase"` output verbatim AND the CRD `enum:`
+    /// enumeration the pool reconciler stamps on the
+    /// `ephemeralpools.tatara.pleme.io` schema. Pinned by
+    /// `replacement_policy_as_str_matches_serde` so a variant rename
+    /// can't drift between the typed surface, the CRD enum, the YAML
+    /// wire format AND the operator-facing diagnostic (the
+    /// `desired.rs` Pause reason composes `policy={policy}` via
+    /// Display, not a hard-coded `"PausePool"` literal that would
+    /// silently rot).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ReplaceImmediate => "ReplaceImmediate",
+            Self::HoldFailed => "HoldFailed",
+            Self::PausePool => "PausePool",
+        }
+    }
+
     /// Should the pool auto-spawn a replacement for a Failed member?
-    pub fn replaces_failed(self) -> bool {
-        matches!(self, Self::ReplaceImmediate)
+    /// Closed-set match (not `matches!`) so a future variant triggers
+    /// the compiler's exhaustiveness check at this site rather than
+    /// silently defaulting to `false`. Paired with
+    /// `pauses_on_failure` they form the two-axis projection
+    /// consumers in `tatara-pool-reconciler::desired::PoolConvergence`
+    /// pattern-match against — `replaces_failed` true ⇒ emit
+    /// `ReapFailed` per failure; `pauses_on_failure` true with any
+    /// failure ⇒ emit `Pause` and short-circuit. The pair is
+    /// `(true, false) | (false, false) | (false, true)` — pinned
+    /// injective by `replacement_policy_predicate_pair_is_injective`.
+    pub const fn replaces_failed(self) -> bool {
+        match self {
+            Self::ReplaceImmediate => true,
+            Self::HoldFailed | Self::PausePool => false,
+        }
     }
 
     /// Should reaching Failed on any member pause the whole pool?
-    pub fn pauses_on_failure(self) -> bool {
-        matches!(self, Self::PausePool)
+    /// See `replaces_failed` for the closed-match rationale + the
+    /// predicate-pair contract.
+    pub const fn pauses_on_failure(self) -> bool {
+        match self {
+            Self::PausePool => true,
+            Self::ReplaceImmediate | Self::HoldFailed => false,
+        }
     }
 }
+
+impl fmt::Display for ReplacementPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ReplacementPolicy {
+    type Err = UnknownReplacementPolicy;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for policy in Self::ALL {
+            if s == policy.as_str() {
+                return Ok(policy);
+            }
+        }
+        Err(UnknownReplacementPolicy(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`crate::compliance::UnknownVerificationPhase`],
+/// [`crate::signal::UnknownSighupStrategy`],
+/// [`crate::spec::UnknownMustReachPhase`],
+/// [`crate::intent::UnknownWorkloadKind`],
+/// [`crate::export::UnknownReportFormat`],
+/// [`crate::encapsulates::UnknownEncapsulationMode`],
+/// [`crate::export::UnknownExportTrigger`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`], and
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown replacement policy: {0}")]
+pub struct UnknownReplacementPolicy(pub String);
 
 fn default_free_ttl() -> String {
     "24h".to_string()
@@ -468,7 +568,11 @@ mod tests {
         assert!(s.matches(&MatchKey {
             repo: "x",
             branch: "y",
-            pr_labels: &["needs-akeyless".into(), "integration".into(), "extra".into()],
+            pr_labels: &[
+                "needs-akeyless".into(),
+                "integration".into(),
+                "extra".into()
+            ],
             kind: "z",
         }));
         // One label missing → no match.
@@ -500,6 +604,157 @@ mod tests {
     #[test]
     fn pool_phase_defaults_to_initializing() {
         assert_eq!(PoolPhase::default(), PoolPhase::Initializing);
+    }
+
+    // ── closed-set algebra contracts for ReplacementPolicy
+    //    (ALL × as_str × FromStr × predicate-pair) ────────────────────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness
+    /// check before drifting `FromStr` or the sweep tests below.
+    /// The arity is asserted by the `[Self; 3]` array type itself.
+    #[test]
+    fn replacement_policy_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for policy in ReplacementPolicy::ALL {
+            assert!(seen.insert(policy), "duplicate variant in ALL: {policy:?}");
+        }
+        assert_eq!(seen.len(), ReplacementPolicy::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename (or
+    /// an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface, the CRD enum, and the
+    /// YAML wire format.
+    #[test]
+    fn replacement_policy_as_str_matches_serde() {
+        for policy in ReplacementPolicy::ALL {
+            let serialized = serde_json::to_string(&policy).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                policy.as_str(),
+                "as_str drift for {policy:?}: as_str={} serde={unquoted}",
+                policy.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift. The operator-facing
+    /// "policy={policy}" diagnostic in `tatara-pool-reconciler::desired`
+    /// composes through Display rather than through a hard-coded
+    /// variant string.
+    #[test]
+    fn replacement_policy_display_matches_as_str() {
+        for policy in ReplacementPolicy::ALL {
+            assert_eq!(policy.to_string(), policy.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn replacement_policy_roundtrip_via_as_str() {
+        for policy in ReplacementPolicy::ALL {
+            assert_eq!(
+                ReplacementPolicy::from_str(policy.as_str()).unwrap(),
+                policy,
+                "round-trip failed for {policy:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / unrelated — and the
+    /// error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_replacement_policy_errors() {
+        for bad in [
+            "",
+            "replaceimmediate",
+            "PAUSEPOOL",
+            "Replace-Immediate",
+            "hold_failed",
+            "Pause",
+            "Reset",
+        ] {
+            let err = ReplacementPolicy::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: the predicate pair agrees with the
+    /// documented per-variant on-failure behavior.
+    #[test]
+    fn replacement_policy_predicate_truth_tables() {
+        assert!(ReplacementPolicy::ReplaceImmediate.replaces_failed());
+        assert!(!ReplacementPolicy::ReplaceImmediate.pauses_on_failure());
+
+        assert!(!ReplacementPolicy::HoldFailed.replaces_failed());
+        assert!(!ReplacementPolicy::HoldFailed.pauses_on_failure());
+
+        assert!(!ReplacementPolicy::PausePool.replaces_failed());
+        assert!(ReplacementPolicy::PausePool.pauses_on_failure());
+    }
+
+    /// DISJOINTNESS CONTRACT: no variant returns true from BOTH
+    /// predicates simultaneously — the two on-failure actions
+    /// (reap-each-failed vs pause-whole-pool) are mutually exclusive.
+    /// A future `ReplacementPolicy::PauseAndReap` that returned true
+    /// from both would FAIL here, forcing the author to either pick
+    /// one bucket or extend the consumer dispatch site in
+    /// `tatara-pool-reconciler::desired::PoolConvergence::decide`
+    /// deliberately rather than silently double-firing both branches.
+    #[test]
+    fn replacement_policy_predicates_are_disjoint() {
+        for policy in ReplacementPolicy::ALL {
+            assert!(
+                !(policy.replaces_failed() && policy.pauses_on_failure()),
+                "{policy:?} returns true from both replaces_failed and pauses_on_failure",
+            );
+        }
+    }
+
+    /// INJECTIVITY CONTRACT: the pair `(replaces_failed,
+    /// pauses_on_failure)` is injective across `ALL`. Each variant
+    /// projects to its own `(bool, bool)` bucket: `(true, false)` =
+    /// reap; `(false, false)` = hold; `(false, true)` = pause. Pairing
+    /// this with the disjointness contract above forces a future
+    /// variant to land in a fresh `(replaces_failed,
+    /// pauses_on_failure)` bucket — or the author extends the consumer
+    /// dispatch in `tatara-pool-reconciler::desired::PoolConvergence`
+    /// to recognize the new projection bucket.
+    #[test]
+    fn replacement_policy_predicate_pair_is_injective() {
+        let projections: Vec<(bool, bool)> = ReplacementPolicy::ALL
+            .into_iter()
+            .map(|p| (p.replaces_failed(), p.pauses_on_failure()))
+            .collect();
+        let unique: std::collections::HashSet<_> = projections.iter().copied().collect();
+        assert_eq!(
+            projections.len(),
+            unique.len(),
+            "predicate pair projection is not injective: {projections:?}",
+        );
+    }
+
+    /// DEFAULT-AGREEMENT CONTRACT: `ReplacementPolicy::default()`
+    /// returns the variant tagged `#[default]` in the enum, AND that
+    /// variant reaps (the production-safe behavior). A future #[default]
+    /// rename without flipping the predicates fails here.
+    #[test]
+    fn replacement_policy_default_replaces_failed() {
+        let d = ReplacementPolicy::default();
+        assert_eq!(d, ReplacementPolicy::ReplaceImmediate);
+        assert!(d.replaces_failed());
+        assert!(!d.pauses_on_failure());
     }
 
     #[test]

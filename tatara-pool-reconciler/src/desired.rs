@@ -55,10 +55,7 @@ impl PoolMemberSnapshot {
     /// True iff this snapshot is in a phase that counts toward the
     /// pool's healthy member count.
     pub fn is_healthy(&self) -> bool {
-        matches!(
-            self.phase,
-            ProcessPhase::Running | ProcessPhase::Attested
-        )
+        matches!(self.phase, ProcessPhase::Running | ProcessPhase::Attested)
     }
 
     /// True iff this snapshot is in a phase that should be reaped
@@ -132,11 +129,16 @@ impl shigoto_types::decision::Decision for PoolConvergence {
 
         let mut actions = Vec::new();
 
-        // (1) PausePool + any failure ⇒ Pause.
-        if policy == ReplacementPolicy::PausePool && !failed.is_empty() {
+        // (1) PausePool ⇒ Pause on any failure. Dispatch on the typed
+        //     `pauses_on_failure` projection instead of the variant
+        //     literal so a future `ReplacementPolicy::PauseAndDrain`
+        //     (or similar) lands here automatically and the
+        //     diagnostic carries the canonical wire-format string via
+        //     Display, not a hard-coded literal.
+        if policy.pauses_on_failure() && !failed.is_empty() {
             actions.push(ConvergenceAction::Pause {
                 reason: format!(
-                    "{} member(s) reached Failed/Zombie/Reaped; policy=PausePool",
+                    "{} member(s) reached Failed/Zombie/Reaped; policy={policy}",
                     failed.len()
                 ),
             });
@@ -145,8 +147,12 @@ impl shigoto_types::decision::Decision for PoolConvergence {
 
         // (2) ReplaceImmediate ⇒ reap each failed (controller spawns
         //     replacements via rule (4) on the next tick or this same
-        //     tick if we also emit CreateMember below).
-        if policy == ReplacementPolicy::ReplaceImmediate {
+        //     tick if we also emit CreateMember below). Dispatch on
+        //     the typed `replaces_failed` projection — pinned
+        //     disjoint from `pauses_on_failure` by
+        //     `replacement_policy_predicates_are_disjoint` so a
+        //     future variant must land in exactly one bucket.
+        if policy.replaces_failed() {
             for m in &failed {
                 actions.push(ConvergenceAction::ReapFailed {
                     process_name: m.process_name.clone(),
@@ -154,6 +160,8 @@ impl shigoto_types::decision::Decision for PoolConvergence {
             }
         }
         // (3) HoldFailed ⇒ no reaping action; operator reaps manually.
+        //     Falls through both predicates: `replaces_failed` =
+        //     `pauses_on_failure` = false.
 
         // (4)+(5) — count-driven scaling.
         let healthy_count = healthy.len() as u32;
@@ -261,7 +269,9 @@ mod tests {
         let p = pool_with_desired(3, ReplacementPolicy::ReplaceImmediate);
         let actions = decide_pool_convergence(&p, &[], Utc::now());
         assert_eq!(actions.len(), 3);
-        assert!(actions.iter().all(|a| matches!(a, ConvergenceAction::CreateMember)));
+        assert!(actions
+            .iter()
+            .all(|a| matches!(a, ConvergenceAction::CreateMember)));
     }
 
     #[test]
@@ -394,7 +404,9 @@ mod tests {
         // when materializing — pure decision oversupplies; oversupply
         // becomes excess on the next tick once they reach Running.)
         assert_eq!(actions.len(), 3);
-        assert!(actions.iter().all(|a| matches!(a, ConvergenceAction::CreateMember)));
+        assert!(actions
+            .iter()
+            .all(|a| matches!(a, ConvergenceAction::CreateMember)));
     }
 
     #[test]
@@ -429,7 +441,11 @@ mod tests {
             assert!(s.is_healthy());
             assert!(!s.is_failed());
         }
-        for phase in [ProcessPhase::Failed, ProcessPhase::Zombie, ProcessPhase::Reaped] {
+        for phase in [
+            ProcessPhase::Failed,
+            ProcessPhase::Zombie,
+            ProcessPhase::Reaped,
+        ] {
             let s = member("x", phase, 60);
             assert!(!s.is_healthy());
             assert!(s.is_failed());

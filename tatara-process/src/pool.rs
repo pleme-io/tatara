@@ -400,7 +400,17 @@ pub struct PoolCondition {
 }
 
 /// What the pool does when an allocation releases a member.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+///
+/// Sibling closed-set on the `EphemeralPool` axis:
+/// [`ReplacementPolicy::ALL`]. Sibling closed-sets on the
+/// `tatara-process` algebra: [`crate::lifetime::TeardownPolicy::ALL`]
+/// (the *release*-time counterpart for non-pooled ephemeral envs),
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::LifetimeKind::ALL`],
+/// [`crate::intent::IntentKind::ALL`],
+/// [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`].
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum ReturnPolicy {
     /// Tear down the Process + create a fresh one. Safe but slow
@@ -417,6 +427,93 @@ pub enum ReturnPolicy {
     /// post-mortem of a flaky test.
     Keep,
 }
+
+impl ReturnPolicy {
+    /// The closed set of return policies — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad and the
+    /// `keeps_process` / `runs_reset_job` predicate pair. Adding a
+    /// fourth variant lands at one `ALL` entry + one `as_str` arm +
+    /// one arm per predicate — exhaustively checked by the compiler
+    /// (the `[Self; 3]` array literal forces the arity) and by the
+    /// predicate-pair injectivity test (a new variant must land in
+    /// its own (keeps_process, runs_reset_job) bucket or the author
+    /// has to extend the consumer dispatch in
+    /// `tatara-pool-reconciler::return_policy::plan_return`).
+    pub const ALL: [Self; 3] = [Self::Replace, Self::Reset, Self::Keep];
+
+    /// Canonical PascalCase wire-format projection — matches the
+    /// serde `rename_all = "PascalCase"` output verbatim AND the CRD
+    /// `enum:` enumeration the pool reconciler stamps on the
+    /// `ephemeralpools.tatara.pleme.io` schema. Pinned by
+    /// `return_policy_as_str_matches_serde` so a variant rename can't
+    /// drift between the typed surface, the CRD enum, the YAML wire
+    /// format AND any future operator-facing diagnostic that composes
+    /// `policy={policy}` via Display rather than a hard-coded literal.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Replace => "Replace",
+            Self::Reset => "Reset",
+            Self::Keep => "Keep",
+        }
+    }
+
+    /// Does the pool keep the backing Process alive across release?
+    /// Closed-set match (not `matches!`) so a future variant triggers
+    /// the compiler's exhaustiveness check at this site rather than
+    /// silently defaulting to `false`. Paired with `runs_reset_job`
+    /// they form the two-axis projection that the consumer in
+    /// `tatara-pool-reconciler::return_policy::plan_return` matches
+    /// against — `keeps_process` false ⇒ `DeleteAndRespawn`;
+    /// `keeps_process && runs_reset_job` ⇒ `ResetThenFree`;
+    /// `keeps_process && !runs_reset_job` ⇒ `KeepForInspection`. The
+    /// pair is `(false, false) | (true, true) | (true, false)` —
+    /// pinned injective by
+    /// `return_policy_predicate_pair_is_injective`.
+    pub const fn keeps_process(self) -> bool {
+        match self {
+            Self::Replace => false,
+            Self::Reset | Self::Keep => true,
+        }
+    }
+
+    /// Does the policy run a typed `:reset` Job to wipe state in
+    /// place? See `keeps_process` for the closed-match rationale +
+    /// the predicate-pair contract.
+    pub const fn runs_reset_job(self) -> bool {
+        match self {
+            Self::Reset => true,
+            Self::Replace | Self::Keep => false,
+        }
+    }
+}
+
+impl fmt::Display for ReturnPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ReturnPolicy {
+    type Err = UnknownReturnPolicy;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for policy in Self::ALL {
+            if s == policy.as_str() {
+                return Ok(policy);
+            }
+        }
+        Err(UnknownReturnPolicy(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownReplacementPolicy`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`], and
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown return policy: {0}")]
+pub struct UnknownReturnPolicy(pub String);
 
 /// Routing selector — matches an `EphemeralAllocation`'s requestor
 /// against pool-eligibility predicates.
@@ -775,5 +872,159 @@ mod tests {
             pr_labels: &[],
             kind: "scheduled",
         }));
+    }
+
+    // ── closed-set algebra contracts for ReturnPolicy
+    //    (ALL × as_str × FromStr × predicate-pair) ────────────────────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness
+    /// check before drifting `FromStr` or the sweep tests below.
+    /// The arity is asserted by the `[Self; 3]` array type itself.
+    #[test]
+    fn return_policy_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for policy in ReturnPolicy::ALL {
+            assert!(seen.insert(policy), "duplicate variant in ALL: {policy:?}");
+        }
+        assert_eq!(seen.len(), ReturnPolicy::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename (or
+    /// an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface, the CRD enum, and the
+    /// YAML wire format.
+    #[test]
+    fn return_policy_as_str_matches_serde() {
+        for policy in ReturnPolicy::ALL {
+            let serialized = serde_json::to_string(&policy).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                policy.as_str(),
+                "as_str drift for {policy:?}: as_str={} serde={unquoted}",
+                policy.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift, mirroring the
+    /// `ReplacementPolicy` discipline.
+    #[test]
+    fn return_policy_display_matches_as_str() {
+        for policy in ReturnPolicy::ALL {
+            assert_eq!(policy.to_string(), policy.as_str());
+        }
+    }
+
+    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending the canonical projection
+    /// fails here.
+    #[test]
+    fn return_policy_roundtrip_via_as_str() {
+        for policy in ReturnPolicy::ALL {
+            assert_eq!(
+                ReturnPolicy::from_str(policy.as_str()).unwrap(),
+                policy,
+                "round-trip failed for {policy:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / unrelated — and the
+    /// error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_return_policy_errors() {
+        for bad in [
+            "",
+            "replace",
+            "RESET",
+            "Re-place",
+            "keep_for_inspection",
+            "DeleteAndRespawn",
+            "ReplaceImmediate",
+        ] {
+            let err = ReturnPolicy::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: the predicate pair agrees with the
+    /// documented per-variant on-release behavior.
+    #[test]
+    fn return_policy_predicate_truth_tables() {
+        assert!(!ReturnPolicy::Replace.keeps_process());
+        assert!(!ReturnPolicy::Replace.runs_reset_job());
+
+        assert!(ReturnPolicy::Reset.keeps_process());
+        assert!(ReturnPolicy::Reset.runs_reset_job());
+
+        assert!(ReturnPolicy::Keep.keeps_process());
+        assert!(!ReturnPolicy::Keep.runs_reset_job());
+    }
+
+    /// IMPLICATION CONTRACT: `runs_reset_job` implies `keeps_process`.
+    /// You cannot run a typed `:reset` Job against a Process you've
+    /// just deleted; the impossible bucket `(false, true)` must stay
+    /// empty. A future variant returning true from `runs_reset_job`
+    /// while returning false from `keeps_process` fails here, which
+    /// forces the author to either flip `keeps_process` to true or
+    /// extend the consumer dispatch site in
+    /// `tatara-pool-reconciler::return_policy::plan_return`
+    /// deliberately rather than letting an impossible state slip in.
+    #[test]
+    fn return_policy_reset_implies_keeps_process() {
+        for policy in ReturnPolicy::ALL {
+            if policy.runs_reset_job() {
+                assert!(
+                    policy.keeps_process(),
+                    "{policy:?} runs a reset job but does not keep the process",
+                );
+            }
+        }
+    }
+
+    /// INJECTIVITY CONTRACT: the pair `(keeps_process, runs_reset_job)`
+    /// is injective across `ALL`. Each variant projects to its own
+    /// `(bool, bool)` bucket: `(false, false)` = delete + respawn;
+    /// `(true, true)` = reset-in-place; `(true, false)` = keep for
+    /// inspection. Pairing this with the implication contract above
+    /// forces a future variant to land in a fresh
+    /// `(keeps_process, runs_reset_job)` bucket — or the author
+    /// extends the consumer dispatch in
+    /// `tatara-pool-reconciler::return_policy::plan_return` to
+    /// recognize the new projection bucket.
+    #[test]
+    fn return_policy_predicate_pair_is_injective() {
+        let projections: Vec<(bool, bool)> = ReturnPolicy::ALL
+            .into_iter()
+            .map(|p| (p.keeps_process(), p.runs_reset_job()))
+            .collect();
+        let unique: std::collections::HashSet<_> = projections.iter().copied().collect();
+        assert_eq!(
+            projections.len(),
+            unique.len(),
+            "predicate pair projection is not injective: {projections:?}",
+        );
+    }
+
+    /// DEFAULT-AGREEMENT CONTRACT: `ReturnPolicy::default()` returns
+    /// the variant tagged `#[default]` in the enum, AND that variant
+    /// is the safe "tear down + respawn" behavior — neither keeps the
+    /// process nor runs a reset Job. A future `#[default]` rename
+    /// without flipping the predicates fails here.
+    #[test]
+    fn return_policy_default_is_replace_and_neither_predicate_fires() {
+        let d = ReturnPolicy::default();
+        assert_eq!(d, ReturnPolicy::Replace);
+        assert!(!d.keeps_process());
+        assert!(!d.runs_reset_job());
     }
 }

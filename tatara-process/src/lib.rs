@@ -41,7 +41,9 @@ pub mod prelude {
         CalmClassification, Classification, ConvergencePointType, DataClassification, Horizon,
         HorizonKind, OptimizationDirection, SubstrateType,
     };
-    pub use crate::compliance::{ComplianceBinding, ComplianceSpec, VerificationPhase};
+    pub use crate::compliance::{
+        ComplianceBinding, ComplianceSpec, UnknownVerificationPhase, VerificationPhase,
+    };
     pub use crate::crd::{Process, ProcessSpec, ProcessStatus};
     pub use crate::encapsulates::{
         BareWorkload, EncapsulatesSpec, EncapsulationKind, EncapsulationKindError,

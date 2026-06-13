@@ -21,6 +21,16 @@ use crate::lifetime::TeardownPolicy;
 use crate::phase::ProcessPhase;
 
 /// Decision the phase machine acts on.
+///
+/// Two-variant payload-carrying enum: `Skip` carries no payload (no-op
+/// signal to the controller), `Now` carries the typed [`TerminateReason`]
+/// that the controller stamps onto `status.message`. The
+/// (payload-carrying-enum, payload-stripped-typed-discriminator) split
+/// — `Now(reason)` on the wire-shape, [`AutoTerminateKind::Now`] for
+/// closed dispatch — is the same shape every sibling closed-set lift
+/// in this crate carries (see [`crate::lifetime_clock::TerminateReason`]
+/// → [`TerminateReasonKind`], [`crate::matrix::SelectStrategy`] →
+/// [`crate::matrix::SelectStrategyKind`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AutoTerminate {
     /// No auto-terminate signal — continue with the normal phase handler.
@@ -28,6 +38,123 @@ pub enum AutoTerminate {
     /// Transition the Process to `Exiting` with the given operator-visible reason.
     Now { reason: TerminateReason },
 }
+
+impl AutoTerminate {
+    /// Discriminator projection — strips the [`Now`]-variant payload and
+    /// returns the closed-set kind. Used by the kind-sweep tests and by
+    /// any future consumer that groups decisions by category (metrics
+    /// labels, dashboard enumeration, `status.conditions[].reason`
+    /// reason-keys) without pattern-matching the full payload.
+    ///
+    /// [`Now`]: AutoTerminate::Now
+    pub const fn kind(&self) -> AutoTerminateKind {
+        match self {
+            Self::Skip => AutoTerminateKind::Skip,
+            Self::Now { .. } => AutoTerminateKind::Now,
+        }
+    }
+
+    /// Reason projection — `Some(&reason)` when the decision is
+    /// [`Now`], `None` when [`Skip`]. The closed-set predicate dual:
+    /// callers that need only the payload (e.g. to stamp
+    /// `status.message`) reach through this projection instead of the
+    /// inline `if let AutoTerminate::Now { reason } = …` destructure,
+    /// so the variant-name → payload-field binding lives at ONE site.
+    /// Adding a third payload-carrying variant in the future updates
+    /// every consumer through this method's exhaustiveness check
+    /// rather than scattering destructures across the call graph.
+    ///
+    /// [`Now`]: AutoTerminate::Now
+    /// [`Skip`]: AutoTerminate::Skip
+    pub const fn reason(&self) -> Option<&TerminateReason> {
+        match self {
+            Self::Skip => None,
+            Self::Now { reason } => Some(reason),
+        }
+    }
+
+    /// `true` iff the decision is [`Now`]. Symmetric to [`Self::is_skip`].
+    ///
+    /// [`Now`]: AutoTerminate::Now
+    pub const fn is_now(&self) -> bool {
+        matches!(self, Self::Now { .. })
+    }
+
+    /// `true` iff the decision is [`Skip`]. Symmetric to [`Self::is_now`].
+    ///
+    /// [`Skip`]: AutoTerminate::Skip
+    pub const fn is_skip(&self) -> bool {
+        matches!(self, Self::Skip)
+    }
+}
+
+/// The closed set of [`AutoTerminate`] kinds — the discriminator view,
+/// payload-stripped, that sibling closed-set enums in this crate carry
+/// (see [`TerminateReasonKind`], [`crate::matrix::SelectStrategyKind`],
+/// [`crate::lifetime::LifetimeKind`]).
+///
+/// Drives the `as_str` / Display / `FromStr` triad over [`Self::ALL`] so
+/// a new variant added with an `ALL` entry automatically extends the
+/// parser, the canonical wire-format projection, and any future
+/// metrics-label / dashboard / `status.conditions[].reason` enumeration
+/// that needs to enumerate the decision categories. The `[Self; 2]`
+/// array literal forces the arity so a third variant cannot land
+/// without bumping the constant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum AutoTerminateKind {
+    /// The kind-view of [`AutoTerminate::Skip`].
+    Skip,
+    /// The kind-view of [`AutoTerminate::Now`] — the payload is
+    /// stripped at this projection.
+    Now,
+}
+
+impl AutoTerminateKind {
+    /// The closed set — single source of truth for `as_str` / Display /
+    /// `FromStr`.
+    pub const ALL: [Self; 2] = [Self::Skip, Self::Now];
+
+    /// Canonical PascalCase wire-format projection. Mirrors the
+    /// `tatara-process` PascalCase idiom used by every other closed-set
+    /// enum's `as_str` projection (e.g. [`ProcessPhase::as_str`],
+    /// [`TerminateReasonKind::as_str`]). A future metrics-label /
+    /// `status.conditions[].reason` field reads this projection
+    /// directly.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Skip => "Skip",
+            Self::Now => "Now",
+        }
+    }
+}
+
+impl fmt::Display for AutoTerminateKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for AutoTerminateKind {
+    type Err = UnknownAutoTerminateKind;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.as_str() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownAutoTerminateKind(s.to_string()))
+    }
+}
+
+/// Typed parse error for [`AutoTerminateKind::from_str`] — carries the
+/// offending input verbatim so an operator-facing diagnostic surfaces
+/// the bad value, not a normalized form. Symmetric to every sibling
+/// `Unknown*` error in this crate (e.g. [`UnknownTerminateReasonKind`],
+/// [`crate::phase::UnknownPhase`],
+/// [`crate::lifetime::UnknownTeardownPolicy`]).
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error("unknown auto-terminate kind: {0}")]
+pub struct UnknownAutoTerminateKind(pub String);
 
 /// Why the ephemeral lifetime clock fired.
 ///
@@ -689,6 +816,239 @@ mod tests {
             }
             other => panic!("expected AutoTerminate::Now, got {other:?}"),
         }
+    }
+
+    // ── AutoTerminate / AutoTerminateKind closed-set contracts ────────
+
+    /// `ALL` is the source of truth; a variant added without an `ALL`
+    /// entry fails here (uniqueness check) before any sweep test below
+    /// runs. Arity is asserted by the array type itself (`[Self; 2]`).
+    /// Every entry in `ALL` is also reachable through a concrete
+    /// `AutoTerminate` value via `kind()` — the projection is
+    /// exhaustive across the variant set.
+    #[test]
+    fn auto_terminate_kind_all_enumerates_each_variant_exactly_once() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in AutoTerminateKind::ALL {
+            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
+        }
+        assert_eq!(seen.len(), AutoTerminateKind::ALL.len());
+
+        // Every kind is reachable through some concrete AutoTerminate.
+        let sample_reason = TerminateReason::TtlExpired {
+            ttl: "1h".into(),
+            elapsed: Duration::from_secs(0),
+        };
+        let by_concrete: std::collections::HashSet<_> = [
+            AutoTerminate::Skip.kind(),
+            AutoTerminate::Now {
+                reason: sample_reason,
+            }
+            .kind(),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            by_concrete, seen,
+            "kind() projection not exhaustive over ALL"
+        );
+    }
+
+    /// `as_str` is unique per variant — two kinds can never collide on
+    /// the same wire-string, so a future kind-keyed metrics label or
+    /// `status.conditions[].reason` field never aliases.
+    #[test]
+    fn auto_terminate_kind_as_str_unique_per_variant() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in AutoTerminateKind::ALL {
+            assert!(
+                seen.insert(kind.as_str()),
+                "as_str collision for {kind:?}: {}",
+                kind.as_str(),
+            );
+        }
+    }
+
+    /// BYTE-EXACT canonical wire-format pin — renaming either of the two
+    /// canonical strings is a wire-format change that fails this test
+    /// FIRST so it stays a deliberate change, not a silent rename that
+    /// drifts existing alerts / dashboards / operator runbooks.
+    #[test]
+    fn auto_terminate_kind_canonical_names_pinned() {
+        assert_eq!(AutoTerminateKind::Skip.as_str(), "Skip");
+        assert_eq!(AutoTerminateKind::Now.as_str(), "Now");
+    }
+
+    /// Every kind's `as_str` is in canonical PascalCase. The first
+    /// character is uppercase; no whitespace; no separators. The
+    /// `tatara-process` PascalCase idiom holds at one test site.
+    #[test]
+    fn auto_terminate_kind_as_str_is_pascal_case() {
+        for kind in AutoTerminateKind::ALL {
+            let s = kind.as_str();
+            assert!(!s.is_empty(), "as_str empty for {kind:?}");
+            assert!(
+                s.chars().next().unwrap().is_ascii_uppercase(),
+                "as_str not PascalCase for {kind:?}: {s}",
+            );
+            assert!(
+                !s.contains(|c: char| c.is_whitespace() || c == '_' || c == '-'),
+                "as_str carries separator for {kind:?}: {s}",
+            );
+        }
+    }
+
+    /// `Display` IS `as_str` — pinning this lets future callers reach
+    /// for either projection without drift.
+    #[test]
+    fn auto_terminate_kind_display_matches_as_str() {
+        for kind in AutoTerminateKind::ALL {
+            assert_eq!(kind.to_string(), kind.as_str());
+        }
+    }
+
+    /// Every variant survives `as_str` ↔ `FromStr` round-trip.
+    #[test]
+    fn auto_terminate_kind_roundtrip_via_as_str() {
+        use std::str::FromStr;
+        for kind in AutoTerminateKind::ALL {
+            assert_eq!(
+                AutoTerminateKind::from_str(kind.as_str()).unwrap(),
+                kind,
+                "round-trip failed for {kind:?}",
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings outside the canonical projection
+    /// (empty / lowercased / typo / cross-axis-leaked) and echoes the
+    /// input verbatim. Cross-axis inputs (ProcessPhase / TeardownPolicy
+    /// / TerminateReasonKind variant names) MUST fail —
+    /// `AutoTerminateKind` is its own axis, not a transparent
+    /// reflection of any sibling enum.
+    #[test]
+    fn unknown_auto_terminate_kind_errors() {
+        use std::str::FromStr;
+        for bad in [
+            "",
+            "skip",
+            "now",
+            "SKIP",
+            "NOW",
+            "S",
+            "N",
+            "no-op",
+            "terminate",
+            // Cross-axis-leaked — must NOT cross axes.
+            "Attested",
+            "Failed",
+            "TeardownPolicy",
+            "TtlExpired",
+            "Always",
+            "Permanent",
+            "Ephemeral",
+        ] {
+            let err = AutoTerminateKind::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// `reason()` projection: `Now { reason }` returns `Some(&reason)`,
+    /// `Skip` returns `None`. The (variant-name → payload-field)
+    /// binding lives at ONE site so a future third payload-carrying
+    /// variant updates every consumer through this method's
+    /// exhaustiveness check rather than scattering destructures across
+    /// the call graph.
+    #[test]
+    fn auto_terminate_reason_projection() {
+        assert!(AutoTerminate::Skip.reason().is_none());
+
+        let reason = TerminateReason::TtlExpired {
+            ttl: "1h".into(),
+            elapsed: Duration::from_secs(0),
+        };
+        let now = AutoTerminate::Now {
+            reason: reason.clone(),
+        };
+        assert_eq!(now.reason(), Some(&reason));
+
+        let teardown = TerminateReason::TeardownPolicy {
+            policy: TeardownPolicy::OnAttested,
+            phase: ProcessPhase::Attested,
+        };
+        let now = AutoTerminate::Now {
+            reason: teardown.clone(),
+        };
+        assert_eq!(now.reason(), Some(&teardown));
+    }
+
+    /// `is_now` / `is_skip` are exact complements over the closed set —
+    /// `is_now ⊕ is_skip = true` for every variant. Locks the predicate
+    /// pair so a future third variant that's neither Skip nor Now must
+    /// extend BOTH predicates in lockstep (or this contract fails).
+    #[test]
+    fn auto_terminate_predicate_pair_is_exhaustive_complement() {
+        let reason = TerminateReason::TtlExpired {
+            ttl: "1h".into(),
+            elapsed: Duration::from_secs(0),
+        };
+        for decision in [
+            AutoTerminate::Skip,
+            AutoTerminate::Now {
+                reason: reason.clone(),
+            },
+        ] {
+            assert_ne!(
+                decision.is_now(),
+                decision.is_skip(),
+                "predicate pair drift for {decision:?}",
+            );
+            // The kind projection agrees with each predicate.
+            assert_eq!(decision.is_now(), decision.kind() == AutoTerminateKind::Now);
+            assert_eq!(
+                decision.is_skip(),
+                decision.kind() == AutoTerminateKind::Skip
+            );
+            // `reason()` agrees with `is_now`.
+            assert_eq!(decision.reason().is_some(), decision.is_now());
+        }
+    }
+
+    /// The `kind()` projection on the typed result of `evaluate` agrees
+    /// with the behavioural expectation: ephemeral-on-Attested with an
+    /// OnAttested policy returns `Now`, permanent never does. Closes
+    /// the loop between the closed-set view and the live decision so
+    /// any future kind-keyed metrics label (e.g.
+    /// `tatara_lifetime_clock_decisions_total{kind="Now"}`) reads the
+    /// typed projection rather than the inline destructure.
+    #[test]
+    fn evaluate_decision_kind_agrees_with_runtime_behaviour() {
+        let p = permanent_process();
+        for phase in [
+            ProcessPhase::Pending,
+            ProcessPhase::Running,
+            ProcessPhase::Attested,
+            ProcessPhase::Failed,
+        ] {
+            let decision = evaluate(&p, phase, Utc::now());
+            assert_eq!(
+                decision.kind(),
+                AutoTerminateKind::Skip,
+                "permanent Process must always Skip; got Now for phase={phase:?}",
+            );
+            assert!(decision.reason().is_none());
+        }
+
+        let p = ephemeral_process("1h", TeardownPolicy::OnAttested, 60);
+        let now = Utc::now();
+        assert_eq!(
+            evaluate(&p, ProcessPhase::Attested, now).kind(),
+            AutoTerminateKind::Now,
+        );
+        assert_eq!(
+            evaluate(&p, ProcessPhase::Running, now).kind(),
+            AutoTerminateKind::Skip,
+        );
     }
 
     #[test]

@@ -9,6 +9,6 @@
 //! and use `tatara_process::lifetime_clock::evaluate`.
 
 pub use tatara_process::lifetime_clock::{
-    evaluate, requeue_with_ttl, AutoTerminate, TerminateReason, TerminateReasonKind,
-    UnknownTerminateReasonKind,
+    evaluate, requeue_with_ttl, AutoTerminate, AutoTerminateKind, TerminateReason,
+    TerminateReasonKind, UnknownAutoTerminateKind, UnknownTerminateReasonKind,
 };

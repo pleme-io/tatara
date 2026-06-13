@@ -225,19 +225,108 @@ pub enum ReportFormat {
 /// the author to pick its shape here (single edit site); adding a
 /// future shape (e.g. compressed) forces every consumer to handle it.
 ///
+/// The (shape, JSON-embed-field) pairing — `NdJsonLines` → `"ndjson"`,
+/// `OpaqueBytes` → `"raw_b64"` — binds at ONE typed projection
+/// ([`Self::payload_field`]) rather than at the future worker's
+/// embed-site string literals; pre-lift the field names lived in this
+/// enum's per-variant docstring prose AND would have lived at the
+/// worker's `payload.insert("ndjson", …)` / `payload.insert("raw_b64",
+/// …)` call sites, where a rename of `"raw_b64"` → `"raw"` at one site
+/// drifts silently from the docstring and the operator-facing shinryu
+/// schema.
+///
 /// Sibling typed-projection lift over a closed enum (rather than
 /// `matches!` / `_` arm dispatch):
 /// [`crate::lifetime::TeardownPolicy::should_teardown_on`],
 /// [`ExportTrigger::fires_on`], [`crate::phase::ProcessPhase::as_str`].
+///
+/// Sibling closed-set [`Self::ALL`] lift in lockstep with every other
+/// `ALL`-keyed enum on the same `ExportSpec` axis ([`ReportFormat::ALL`],
+/// [`ExportTrigger::ALL`]) and across the crate
+/// ([`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ReportPayloadShape {
     /// Newline-delimited JSON — split on `\n`, parse each non-empty
-    /// line as JSON, embed under `payload.ndjson` as an array.
+    /// line as JSON, embed under `payload.<payload_field>` (=
+    /// `payload.ndjson`) as an array. Field name is the typed
+    /// projection [`Self::payload_field`] so no embed-site literal
+    /// can drift from this docstring.
     NdJsonLines,
     /// Opaque bytes — base64-encode the artifact verbatim, embed
-    /// under `payload.raw_b64` as a string. The default shape for
-    /// anything Vector / shinryu shouldn't pre-parse.
+    /// under `payload.<payload_field>` (= `payload.raw_b64`) as a
+    /// string. The default shape for anything Vector / shinryu
+    /// shouldn't pre-parse. Field name is the typed projection
+    /// [`Self::payload_field`].
     OpaqueBytes,
+}
+
+impl ReportPayloadShape {
+    /// The closed set of payload shapes — single source of truth
+    /// that drives the [`Self::as_str`] / [`fmt::Display`] pair and
+    /// the [`Self::payload_field`] projection. Adding a third shape
+    /// (e.g. `Compressed` → `"gzip"`) lands at one `ALL` entry + one
+    /// `as_str` arm + one `payload_field` arm + at least one new
+    /// `ReportFormat::payload_shape` mapping — exhaustively checked
+    /// by the compiler (the `[Self; 2]` array literal forces the
+    /// arity).
+    ///
+    /// Sibling closed-set lifts on the same `ExportSpec` axis:
+    /// [`ReportFormat::ALL`], [`ExportTrigger::ALL`],
+    /// [`crate::lifetime::TeardownPolicy::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::signal::ProcessSignal::ALL`],
+    /// [`crate::encapsulates::EncapsulationMode::ALL`].
+    pub const ALL: [Self; 2] = [Self::NdJsonLines, Self::OpaqueBytes];
+
+    /// Canonical PascalCase identifier — used by [`fmt::Display`] (so
+    /// `format!("{shape}")` never reaches for `{:?}` Debug) and as
+    /// the operator-facing reason-string projection. No serde wire
+    /// shape today (the enum is worker-internal), but the identifier
+    /// matches the sibling-aligned `as_str` shape that every other
+    /// closed-set enum in this crate exposes
+    /// ([`ReportFormat::as_str`], [`ExportTrigger::as_str`],
+    /// [`crate::phase::ProcessPhase::as_str`]). Pinned by
+    /// `report_payload_shape_as_str_unique_per_variant`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NdJsonLines => "NdJsonLines",
+            Self::OpaqueBytes => "OpaqueBytes",
+        }
+    }
+
+    /// The JSON field name within `ExportEvent.payload` where the
+    /// worker embeds this shape's encoded value — `"ndjson"` for the
+    /// newline-split array, `"raw_b64"` for the base64-encoded
+    /// opaque string. Pre-lift these names lived ONLY in the
+    /// per-variant docstring prose; once the export worker lands, a
+    /// rename at the embed site (`payload.insert("ndjson", …)` →
+    /// `payload.insert("events", …)`) silently drifts from the
+    /// docstring and from the operator-facing shinryu schema with no
+    /// compile or runtime signal. Post-lift the worker's embed site
+    /// is `payload.insert(shape.payload_field().into(), …)` and a
+    /// rename lands at ONE arm here. The per-variant uniqueness
+    /// invariant (no two shapes alias to the same field name) is
+    /// pinned by `report_payload_shape_payload_field_unique_per_
+    /// variant` so the worker's embed site cannot have two shapes
+    /// collide on the same destination key. Truth table pinned by
+    /// `report_payload_shape_payload_field_truth_table` so a future
+    /// rename lands here at one site, not in the worker.
+    pub const fn payload_field(self) -> &'static str {
+        match self {
+            Self::NdJsonLines => "ndjson",
+            Self::OpaqueBytes => "raw_b64",
+        }
+    }
+}
+
+impl fmt::Display for ReportPayloadShape {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 impl ReportFormat {
@@ -933,6 +1022,139 @@ mod tests {
                 format.payload_shape(),
                 *expected,
                 "payload_shape({format:?}) drift"
+            );
+        }
+    }
+
+    /// CLOSURE-OF-PROJECTION CONTRACT: every `ReportPayloadShape`
+    /// variant is the image of at least one `ReportFormat` variant —
+    /// no shape is stranded. A `Compressed` shape added to
+    /// `ReportPayloadShape::ALL` without an `ALL → payload_shape`
+    /// mapping at any `ReportFormat` arm makes the worker's
+    /// 3-variant dispatch reachable from no input, which would
+    /// silently dead-code one arm. Caught here.
+    #[test]
+    fn report_payload_shape_reachable_from_some_report_format() {
+        for shape in ReportPayloadShape::ALL {
+            let reachable = ReportFormat::ALL.iter().any(|f| f.payload_shape() == shape);
+            assert!(
+                reachable,
+                "{shape:?} is in ReportPayloadShape::ALL but no ReportFormat projects to it"
+            );
+        }
+    }
+
+    /// CLOSED-SET CONTRACT: `ReportPayloadShape::ALL` enumerates each
+    /// variant exactly once. The `[Self; 2]` array literal forces
+    /// the arity at compile time; this test pins per-variant
+    /// reachability so adding a third shape (`Compressed`) without
+    /// extending `ALL` fails here rather than silently dropping the
+    /// new variant from every sweep through `Self::ALL`.
+    #[test]
+    fn report_payload_shape_all_enumerates_each_variant_exactly_once() {
+        let mut seen = std::collections::HashSet::new();
+        for shape in ReportPayloadShape::ALL {
+            assert!(seen.insert(shape), "duplicate variant in ALL: {shape:?}");
+        }
+        assert_eq!(seen.len(), ReportPayloadShape::ALL.len());
+        for shape in [
+            ReportPayloadShape::NdJsonLines,
+            ReportPayloadShape::OpaqueBytes,
+        ] {
+            assert!(
+                ReportPayloadShape::ALL.contains(&shape),
+                "{shape:?} declared but not in ALL"
+            );
+        }
+    }
+
+    /// CANONICAL-KEY UNIQUENESS: no two shapes alias the same
+    /// `as_str` identifier. A future rename of one variant to a name
+    /// that collides with another (e.g. both → `"Lines"`) breaks the
+    /// shape's identity in operator-facing reason strings and would
+    /// silently make Display non-injective. Caught here.
+    #[test]
+    fn report_payload_shape_as_str_unique_per_variant() {
+        let mut seen = std::collections::HashSet::new();
+        for shape in ReportPayloadShape::ALL {
+            assert!(
+                seen.insert(shape.as_str()),
+                "as_str collision: {shape:?} → {:?}",
+                shape.as_str()
+            );
+        }
+        assert_eq!(seen.len(), ReportPayloadShape::ALL.len());
+    }
+
+    /// DISPLAY-IS-AS_STR: the Display impl IS `as_str` — pinning
+    /// this lets callers reach for either projection without drift.
+    /// Sibling to `report_format_display_matches_as_str` and
+    /// `export_trigger_display_matches_as_str`.
+    #[test]
+    fn report_payload_shape_display_matches_as_str() {
+        for shape in ReportPayloadShape::ALL {
+            assert_eq!(shape.to_string(), shape.as_str());
+        }
+    }
+
+    /// EMBED-FIELD UNIQUENESS: no two shapes write into the same
+    /// `payload.<field>` key. The worker's embed site is
+    /// `payload.insert(shape.payload_field().into(), …)`; if two
+    /// shapes aliased to the same field name, two different report
+    /// sources arriving in the same export envelope would silently
+    /// overwrite each other's bytes. Caught here.
+    #[test]
+    fn report_payload_shape_payload_field_unique_per_variant() {
+        let mut seen = std::collections::HashSet::new();
+        for shape in ReportPayloadShape::ALL {
+            assert!(
+                seen.insert(shape.payload_field()),
+                "payload_field collision: {shape:?} → {:?}",
+                shape.payload_field()
+            );
+        }
+        assert_eq!(seen.len(), ReportPayloadShape::ALL.len());
+    }
+
+    /// TRUTH-TABLE: `payload_field` matches the documented
+    /// `payload.ndjson` / `payload.raw_b64` shinryu schema. A future
+    /// rename (e.g. `"raw_b64"` → `"raw"`) lands here at one arm
+    /// rather than drifting between the docstring prose and the
+    /// worker's embed-site literal. Adding a third shape forces the
+    /// author to add a row here (driven by `ALL`), so the table
+    /// width tracks the closed set.
+    #[test]
+    fn report_payload_shape_payload_field_truth_table() {
+        let table: &[(ReportPayloadShape, &str)] = &[
+            (ReportPayloadShape::NdJsonLines, "ndjson"),
+            (ReportPayloadShape::OpaqueBytes, "raw_b64"),
+        ];
+        assert_eq!(table.len(), ReportPayloadShape::ALL.len());
+        for (shape, expected) in table {
+            assert_eq!(
+                shape.payload_field(),
+                *expected,
+                "payload_field({shape:?}) drift"
+            );
+        }
+    }
+
+    /// Every variant's `payload_field` is non-empty and contains no
+    /// JSON-path-separator (`.`) — the worker concatenates
+    /// `payload.<payload_field>` so an embedded `.` would alias into
+    /// the parent map and silently flatten the embed. Structural
+    /// guard for the field-name shape.
+    #[test]
+    fn report_payload_shape_payload_field_is_a_single_segment() {
+        for shape in ReportPayloadShape::ALL {
+            let field = shape.payload_field();
+            assert!(
+                !field.is_empty(),
+                "payload_field({shape:?}) is empty — embed site has no destination"
+            );
+            assert!(
+                !field.contains('.'),
+                "payload_field({shape:?}) contains '.' ({field:?}) — would flatten the embed into payload's parent map"
             );
         }
     }

@@ -40,7 +40,7 @@ pub mod prelude {
     pub use crate::classification::{
         Arity, CalmClassification, Classification, ConvergencePointType, DataClassification,
         Horizon, HorizonKind, OptimizationDirection, SubstrateType, UnknownConvergencePointType,
-        UnknownDataClassification,
+        UnknownDataClassification, UnknownSubstrateType,
     };
     pub use crate::compliance::{
         ComplianceBinding, ComplianceSpec, UnknownVerificationPhase, VerificationPhase,

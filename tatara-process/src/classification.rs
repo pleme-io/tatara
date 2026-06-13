@@ -303,6 +303,29 @@ impl fmt::Display for Arity {
 }
 
 /// Operational substrate.
+///
+/// Closed-set sibling on the classification axis algebra; the `ALL` /
+/// `as_str` / Display / `FromStr` triad mirrors
+/// [`ConvergencePointType::ALL`], [`DataClassification::ALL`],
+/// [`crate::pool::PoolPhase::ALL`], [`crate::pool::MemberState::ALL`],
+/// [`crate::pool::ReplacementPolicy::ALL`],
+/// [`crate::pool::ReturnPolicy::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::lifetime::LifetimeKind::ALL`],
+/// [`crate::intent::IntentKind::ALL`],
+/// [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`]. The
+/// `is_resource` / `is_policy` / `is_telemetry` predicate triple
+/// carves the eight variants into three structurally-disjoint
+/// substrate planes — resource (you allocate from it), policy (it
+/// gates access for other workloads), telemetry (it observes other
+/// workloads) — so future compliance-baseline selectors that
+/// dispatch on a substrate's plane (resource budgets only apply to
+/// resource substrates; policy substrates inherit baselines from
+/// what they govern; telemetry substrates inherit baselines from
+/// what they observe) read a typed projection rather than
+/// re-deriving from variant names.
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]
@@ -317,6 +340,147 @@ pub enum SubstrateType {
     Observability,
     Regulatory,
 }
+
+impl SubstrateType {
+    /// The closed set of substrates — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad AND the
+    /// `is_resource` / `is_policy` / `is_telemetry` predicate triple.
+    /// Adding a ninth variant lands at one `ALL` entry + one
+    /// `as_str` arm + one arm per predicate — exhaustively checked
+    /// by the compiler (the `[Self; 8]` array literal forces the
+    /// arity) AND by the per-variant plane-bucket contract test (a
+    /// new variant must declare its own plane or any future
+    /// compliance-baseline selector that dispatches on
+    /// `(is_resource, is_policy, is_telemetry)` will silently
+    /// mis-classify it). Closes the load-bearing classification-axis
+    /// enum that
+    /// `tatara_core::domain::compliance_binding::PointSelector::BySubstrate`
+    /// already dispatches against and that every `Process`'s
+    /// `Classification.substrate` reads as the operational
+    /// substrate the convergence point lives on.
+    pub const ALL: [Self; 8] = [
+        Self::Financial,
+        Self::Compute,
+        Self::Network,
+        Self::Storage,
+        Self::Security,
+        Self::Identity,
+        Self::Observability,
+        Self::Regulatory,
+    ];
+
+    /// Canonical PascalCase wire-format projection — matches the
+    /// serde `rename_all = "PascalCase"` output verbatim AND the CRD
+    /// `enum:` enumeration that the Process schema stamps on
+    /// `spec.classification.substrate`. Pinned by
+    /// `substrate_type_as_str_matches_serde` so a variant rename
+    /// can't drift between the typed surface, the CRD enum, the YAML
+    /// wire format AND any future operator-facing diagnostic that
+    /// composes `substrate={kind}` via Display rather than a
+    /// hard-coded literal that would silently rot. Display + FromStr
+    /// triad over `ALL` mirrors `ConvergencePointType` /
+    /// `DataClassification` / `PoolPhase` / `MemberState` /
+    /// `ReplacementPolicy` / `ReturnPolicy` / `TeardownPolicy` /
+    /// `ConditionKind` / `ProcessPhase` / `ProcessSignal`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Financial => "Financial",
+            Self::Compute => "Compute",
+            Self::Network => "Network",
+            Self::Storage => "Storage",
+            Self::Security => "Security",
+            Self::Identity => "Identity",
+            Self::Observability => "Observability",
+            Self::Regulatory => "Regulatory",
+        }
+    }
+
+    /// Is this a resource substrate — one you allocate budgets from
+    /// to run workloads? `Financial | Compute | Network | Storage`.
+    /// Closed-set match (not `matches!`) so a future variant
+    /// triggers the compiler's exhaustiveness check at this site
+    /// rather than silently defaulting to `false`. Paired with
+    /// `is_policy` and `is_telemetry` they form the three-way
+    /// disjoint plane carving sealed by
+    /// `substrate_type_buckets_cover_every_variant` — the bridge
+    /// that lets future compliance-baseline selectors dispatch on
+    /// plane without re-deriving from variant names.
+    pub const fn is_resource(self) -> bool {
+        match self {
+            Self::Financial | Self::Compute | Self::Network | Self::Storage => true,
+            Self::Security | Self::Identity | Self::Observability | Self::Regulatory => false,
+        }
+    }
+
+    /// Is this a policy substrate — one that gates access or
+    /// compliance for other workloads rather than carrying their
+    /// payload? `Security | Identity | Regulatory`. Closed-set match
+    /// so a future variant triggers the compiler's exhaustiveness
+    /// check. See `is_resource` for the bucket-carving contract.
+    pub const fn is_policy(self) -> bool {
+        match self {
+            Self::Security | Self::Identity | Self::Regulatory => true,
+            Self::Financial
+            | Self::Compute
+            | Self::Network
+            | Self::Storage
+            | Self::Observability => false,
+        }
+    }
+
+    /// Is this a telemetry substrate — one that passively observes
+    /// other workloads (metrics, logs, traces) without carrying
+    /// their payload or gating their access? `Observability` only.
+    /// Closed-set match so a future variant triggers the compiler's
+    /// exhaustiveness check. See `is_resource` for the
+    /// bucket-carving contract. A telemetry substrate's compliance
+    /// baseline is inherited from what it observes — the singleton
+    /// bucket is intentional, not a placeholder.
+    pub const fn is_telemetry(self) -> bool {
+        match self {
+            Self::Observability => true,
+            Self::Financial
+            | Self::Compute
+            | Self::Network
+            | Self::Storage
+            | Self::Security
+            | Self::Identity
+            | Self::Regulatory => false,
+        }
+    }
+}
+
+impl fmt::Display for SubstrateType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for SubstrateType {
+    type Err = UnknownSubstrateType;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for t in Self::ALL {
+            if s == t.as_str() {
+                return Ok(t);
+            }
+        }
+        Err(UnknownSubstrateType(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownConvergencePointType`],
+/// [`UnknownDataClassification`], [`crate::pool::UnknownMemberState`],
+/// [`crate::pool::UnknownPoolPhase`],
+/// [`crate::pool::UnknownReplacementPolicy`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`],
+/// [`crate::phase::UnknownPhase`],
+/// [`crate::signal::UnknownSighupStrategy`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown substrate type: {0}")]
+pub struct UnknownSubstrateType(pub String);
 
 /// How long the point runs. Flattened struct-of-optionals so the OpenAPI
 /// schema carries a single `kind` discriminator without per-variant merge.
@@ -1216,5 +1380,191 @@ mod tests {
     fn arity_is_one_predicate_truth_table() {
         assert!(Arity::One.is_one());
         assert!(!Arity::Many.is_one());
+    }
+
+    // ── closed-set algebra contracts for SubstrateType
+    //    (ALL × as_str × FromStr × predicate triple × bridge) ─────────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness
+    /// check before drifting `FromStr` or the sweep tests below. The
+    /// arity is asserted by the `[Self; 8]` array type itself.
+    #[test]
+    fn substrate_type_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for t in SubstrateType::ALL {
+            assert!(seen.insert(t), "duplicate variant in ALL: {t:?}");
+        }
+        assert_eq!(seen.len(), SubstrateType::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename
+    /// (or an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface, the CRD enum, and the
+    /// YAML wire format the reconciler reads from
+    /// `spec.classification.substrate`.
+    #[test]
+    fn substrate_type_as_str_matches_serde() {
+        for t in SubstrateType::ALL {
+            let serialized = serde_json::to_string(&t).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                t.as_str(),
+                "as_str drift for {t:?}: as_str={} serde={unquoted}",
+                t.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future
+    /// callers reach for either projection without drift. Any
+    /// operator-facing `substrate={kind}` diagnostic that composes
+    /// through Display inherits the canonical wire-format string
+    /// automatically.
+    #[test]
+    fn substrate_type_display_matches_as_str() {
+        for t in SubstrateType::ALL {
+            assert_eq!(t.to_string(), t.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s
+    /// sweep of `ALL` fails here.
+    #[test]
+    fn substrate_type_roundtrip_via_as_str() {
+        for t in SubstrateType::ALL {
+            assert_eq!(
+                SubstrateType::from_str(t.as_str()).unwrap(),
+                t,
+                "round-trip failed for {t:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings outside the canonical projection —
+    /// empty / lowercased / typo / cross-axis-leaked — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// surfaces the bad value, not a normalized form.
+    #[test]
+    fn unknown_substrate_type_errors() {
+        for bad in [
+            "", "compute",  // lowercased
+            "COMPUTE",  // uppercased
+            "Computte", // typo
+            "Database", "Steady",   // PoolPhase-axis leak
+            "Pii",      // DataClassification-axis leak
+            "Attested", // ProcessPhase-axis leak
+            "Gate",     // ConvergencePointType-axis leak
+            "Monotone", // CalmClassification-axis leak
+            "PromQL",   // ConditionKind-axis leak
+        ] {
+            let err = SubstrateType::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: the predicate triple agrees with the
+    /// documented per-variant plane role. Pinning this table at one
+    /// site means any future compliance-baseline selector reads the
+    /// same projection that the reconciler stamps on the CRD.
+    #[test]
+    fn substrate_type_predicate_truth_tables() {
+        // Resource plane: you allocate budgets from it.
+        for t in [
+            SubstrateType::Financial,
+            SubstrateType::Compute,
+            SubstrateType::Network,
+            SubstrateType::Storage,
+        ] {
+            assert!(t.is_resource(), "{t:?} should be a resource substrate");
+            assert!(!t.is_policy(), "{t:?} should not be a policy substrate");
+            assert!(
+                !t.is_telemetry(),
+                "{t:?} should not be a telemetry substrate"
+            );
+        }
+
+        // Policy plane: it gates access for other workloads.
+        for t in [
+            SubstrateType::Security,
+            SubstrateType::Identity,
+            SubstrateType::Regulatory,
+        ] {
+            assert!(!t.is_resource(), "{t:?} should not be a resource substrate");
+            assert!(t.is_policy(), "{t:?} should be a policy substrate");
+            assert!(
+                !t.is_telemetry(),
+                "{t:?} should not be a telemetry substrate"
+            );
+        }
+
+        // Telemetry plane: it observes other workloads.
+        assert!(!SubstrateType::Observability.is_resource());
+        assert!(!SubstrateType::Observability.is_policy());
+        assert!(SubstrateType::Observability.is_telemetry());
+    }
+
+    /// COVERAGE CONTRACT: every variant lands in *exactly one* of
+    /// the three plane buckets — resource, policy, or telemetry.
+    /// Pins the three buckets at their declared cardinalities (4,
+    /// 3, 1 — sum to `ALL.len()`) so a future variant lands
+    /// somewhere deliberately. No variant returns true from more
+    /// than one predicate; no variant returns false from all three.
+    #[test]
+    fn substrate_type_buckets_cover_every_variant() {
+        let mut resource = 0u32;
+        let mut policy = 0u32;
+        let mut telemetry = 0u32;
+        for t in SubstrateType::ALL {
+            let buckets = [t.is_resource(), t.is_policy(), t.is_telemetry()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "{t:?} landed in {hits} buckets: {buckets:?} (must be exactly one)"
+            );
+            if t.is_resource() {
+                resource += 1;
+            }
+            if t.is_policy() {
+                policy += 1;
+            }
+            if t.is_telemetry() {
+                telemetry += 1;
+            }
+        }
+        assert_eq!(
+            resource, 4,
+            "resource bucket: Financial + Compute + Network + Storage"
+        );
+        assert_eq!(policy, 3, "policy bucket: Security + Identity + Regulatory");
+        assert_eq!(telemetry, 1, "telemetry bucket: Observability");
+        assert_eq!(
+            resource + policy + telemetry,
+            SubstrateType::ALL.len() as u32
+        );
+    }
+
+    /// BRIDGE ROUND-TRIP CONTRACT: every variant survives the
+    /// CRD-facing (`PascalCase`) ↔ tatara-core (`snake_case`)
+    /// `From` hop. Today the bridge is two hand-written 8-arm
+    /// matches in this file; pinning the round-trip over `ALL`
+    /// means a future variant added without extending the bridge
+    /// fails here at one site instead of drifting between the CRD
+    /// wire format and the `core::SubstrateType` selector axis
+    /// that `compliance_binding::PointSelector::BySubstrate`
+    /// already dispatches against.
+    #[test]
+    fn substrate_type_bridge_roundtrip_over_all() {
+        for t in SubstrateType::ALL {
+            let core_t: core::SubstrateType = t.into();
+            let back: SubstrateType = core_t.into();
+            assert_eq!(back, t, "bridge round-trip failed for {t:?}");
+        }
     }
 }

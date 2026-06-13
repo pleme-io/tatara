@@ -529,12 +529,159 @@ impl Horizon {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+/// Direction of asymptotic optimization — does the metric trend
+/// downward (cost / latency / error rate) or upward
+/// (throughput / coverage / revenue)?
+///
+/// Closed-set sibling on the classification axis algebra; the `ALL` /
+/// `as_str` / Display / `FromStr` triad mirrors
+/// [`ConvergencePointType::ALL`], [`SubstrateType::ALL`],
+/// [`DataClassification::ALL`], [`CalmClassification::ALL`],
+/// [`crate::pool::PoolPhase::ALL`], [`crate::pool::MemberState::ALL`],
+/// [`crate::pool::ReplacementPolicy::ALL`],
+/// [`crate::pool::ReturnPolicy::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::lifetime::LifetimeKind::ALL`],
+/// [`crate::intent::IntentKind::ALL`],
+/// [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`]. The
+/// [`Self::is_improvement`] predicate is the load-bearing
+/// optimization primitive — `Asymptotic` horizons read it as the
+/// typed image of "did this metric sample improve over the last
+/// one?" rather than re-deriving `<` vs `>` from the variant name
+/// at every consumer site (rate-window evaluators, breathe-band
+/// regression detectors, asymptotic-health probes).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum OptimizationDirection {
+    /// Cost / latency / error rate — lower is better. The default for
+    /// an under-specified `Asymptotic` horizon so an unannotated
+    /// metric can't silently flip the rate-window evaluator's polarity
+    /// (a future `Maximize`-default-via-rename would silently invert
+    /// every existing alert that treats decreasing rate as healthy).
+    #[default]
     Minimize,
+    /// Throughput / coverage / revenue — higher is better.
     Maximize,
 }
+
+impl OptimizationDirection {
+    /// The closed set of optimization directions — single source of
+    /// truth that drives the `as_str` / Display / `FromStr` triad AND
+    /// the `prefers_lower` partition AND the `is_improvement`
+    /// load-bearing primitive AND both `From` bridge arms. Adding a
+    /// third variant (e.g. a `Stabilize` sentinel for "drive toward
+    /// a target value", which neither minimization nor maximization
+    /// names) lands at one `ALL` entry + one `as_str` arm + one
+    /// `prefers_lower` arm + one `is_improvement` arm + two bridge
+    /// arms — exhaustively checked by the compiler (the `[Self; 2]`
+    /// array literal forces the arity) AND by the per-variant
+    /// truth-table tests (a new variant must declare its own
+    /// improvement semantics, or every asymptotic-health probe will
+    /// silently bucket it). Closes the load-bearing classification
+    /// sub-axis that the `Horizon.direction` field threads through
+    /// every `Asymptotic` Process.
+    pub const ALL: [Self; 2] = [Self::Minimize, Self::Maximize];
+
+    /// Canonical PascalCase wire-format projection — matches the serde
+    /// `rename_all = "PascalCase"` output verbatim AND the CRD `enum:`
+    /// enumeration the Process schema stamps on
+    /// `spec.classification.horizon.direction`. Pinned by
+    /// `optimization_direction_as_str_matches_serde` so a variant
+    /// rename can't drift between the typed surface, the CRD enum, the
+    /// YAML wire format AND any future operator-facing diagnostic
+    /// composed as `direction={kind}` via Display rather than a
+    /// hard-coded literal. Display + `FromStr` triad over `ALL`
+    /// mirrors every sibling closed-set enum in this crate.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Minimize => "Minimize",
+            Self::Maximize => "Maximize",
+        }
+    }
+
+    /// Does this direction prefer numerically lower values?
+    /// Closed-set match (not `matches!`) so a future variant triggers
+    /// the compiler's exhaustiveness check at this site rather than
+    /// silently defaulting to `false` (which would mis-bucket a
+    /// `Stabilize`-style variant onto the maximization path). The
+    /// boolean partition is the algebraic shape of an optimization
+    /// direction: `Minimize ⇒ true`, `Maximize ⇒ false`. Mirrors
+    /// [`CalmClassification::requires_coordination`] — a two-variant
+    /// truth-table that any future dispatch on a per-direction policy
+    /// (rate-window evaluator polarity, breathe-band regression
+    /// detector sign, asymptotic-health threshold direction) reads
+    /// once rather than re-deriving from the variant name.
+    pub const fn prefers_lower(self) -> bool {
+        match self {
+            Self::Minimize => true,
+            Self::Maximize => false,
+        }
+    }
+
+    /// LOAD-BEARING OPTIMIZATION PRIMITIVE: under this direction, is
+    /// `after` strictly better than `before`? Closed-set match so a
+    /// future variant triggers the compiler's exhaustiveness check
+    /// rather than silently defaulting to `false` (which would
+    /// silently mark every sample as a regression). For `Minimize`,
+    /// improvement means `after < before`; for `Maximize`, `after >
+    /// before`. Strict inequality so a no-op sample (equal values) is
+    /// NOT counted as improvement — pinned by
+    /// `optimization_direction_no_op_is_not_improvement`, which
+    /// guarantees a flatlined rate-window evaluator doesn't silently
+    /// keep claiming "still improving" forever and skipping the
+    /// healthy-rate-threshold gate. NaN on either operand short-
+    /// circuits to `false` (no improvement claim from indeterminate
+    /// data) via the standard `PartialOrd` behavior — pinned by
+    /// `optimization_direction_nan_is_not_improvement`. The
+    /// asymmetry contract (`is_improvement(a, b)` xor
+    /// `is_improvement(b, a)` for distinct finite samples) is pinned
+    /// by `optimization_direction_is_improvement_is_antisymmetric`,
+    /// the algebraic shape that every asymptotic-health rate-window
+    /// evaluator depends on to avoid double-counting an improvement
+    /// as a regression on the reverse traversal.
+    pub fn is_improvement(self, before: f64, after: f64) -> bool {
+        match self {
+            Self::Minimize => after < before,
+            Self::Maximize => after > before,
+        }
+    }
+}
+
+impl fmt::Display for OptimizationDirection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for OptimizationDirection {
+    type Err = UnknownOptimizationDirection;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for d in Self::ALL {
+            if s == d.as_str() {
+                return Ok(d);
+            }
+        }
+        Err(UnknownOptimizationDirection(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownConvergencePointType`],
+/// [`UnknownSubstrateType`], [`UnknownDataClassification`],
+/// [`UnknownCalmClassification`],
+/// [`crate::pool::UnknownMemberState`],
+/// [`crate::pool::UnknownPoolPhase`],
+/// [`crate::pool::UnknownReplacementPolicy`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`],
+/// [`crate::phase::UnknownPhase`],
+/// [`crate::signal::UnknownSighupStrategy`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown optimization direction: {0}")]
+pub struct UnknownOptimizationDirection(pub String);
 
 /// CALM theorem classification — determines whether coordination is required.
 ///
@@ -914,16 +1061,23 @@ impl From<OptimizationDirection> for core::OptimizationDirection {
     }
 }
 
+impl From<core::OptimizationDirection> for OptimizationDirection {
+    fn from(v: core::OptimizationDirection) -> Self {
+        use core::OptimizationDirection as C;
+        match v {
+            C::Minimize => Self::Minimize,
+            C::Maximize => Self::Maximize,
+        }
+    }
+}
+
 impl From<Horizon> for core::ConvergenceHorizon {
     fn from(v: Horizon) -> Self {
         match v.kind {
             HorizonKind::Bounded => Self::Bounded,
             HorizonKind::Asymptotic => Self::Asymptotic {
                 metric: v.metric.unwrap_or_default(),
-                direction: v
-                    .direction
-                    .unwrap_or(OptimizationDirection::Minimize)
-                    .into(),
+                direction: v.direction.unwrap_or_default().into(),
                 healthy_rate_threshold: v.healthy_rate_threshold.unwrap_or_default(),
             },
         }
@@ -1855,6 +2009,257 @@ mod tests {
             let core_c: core::CalmClassification = c.into();
             let back: CalmClassification = core_c.into();
             assert_eq!(back, c, "bridge round-trip failed for {c:?}");
+        }
+    }
+
+    // ── closed-set algebra contracts for OptimizationDirection
+    //    (ALL × as_str × FromStr × prefers_lower × is_improvement) ───
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness
+    /// check before drifting `FromStr` or the sweep tests below. The
+    /// arity is asserted by the `[Self; 2]` array type itself.
+    #[test]
+    fn optimization_direction_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for d in OptimizationDirection::ALL {
+            assert!(seen.insert(d), "duplicate variant in ALL: {d:?}");
+        }
+        assert_eq!(seen.len(), OptimizationDirection::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename
+    /// (or an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface, the CRD enum, and the
+    /// YAML wire format the reconciler reads from
+    /// `spec.classification.horizon.direction`.
+    #[test]
+    fn optimization_direction_as_str_matches_serde() {
+        for d in OptimizationDirection::ALL {
+            let serialized = serde_json::to_string(&d).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                d.as_str(),
+                "as_str drift for {d:?}: as_str={} serde={unquoted}",
+                d.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future
+    /// callers reach for either projection without drift. Any
+    /// operator-facing `direction={kind}` diagnostic that composes
+    /// through Display inherits the canonical wire-format string
+    /// automatically.
+    #[test]
+    fn optimization_direction_display_matches_as_str() {
+        for d in OptimizationDirection::ALL {
+            assert_eq!(d.to_string(), d.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s
+    /// sweep of `ALL` fails here.
+    #[test]
+    fn optimization_direction_roundtrip_via_as_str() {
+        for d in OptimizationDirection::ALL {
+            assert_eq!(
+                OptimizationDirection::from_str(d.as_str()).unwrap(),
+                d,
+                "round-trip failed for {d:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings outside the canonical projection —
+    /// empty / lowercased / typo / cross-axis-leaked — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// surfaces the bad value, not a normalized form.
+    #[test]
+    fn unknown_optimization_direction_errors() {
+        for bad in [
+            "", "minimize", // lowercased
+            "MINIMIZE", // uppercased
+            "Minimze",  // typo
+            "Lower",    // synonym, not canonical
+            "Higher",   // synonym, not canonical
+            "Asc",      // wire-leak from sort-order axis
+            "Desc",     // wire-leak from sort-order axis
+            "Bounded",  // HorizonKind-axis leak
+            "Monotone", // CalmClassification-axis leak
+            "Steady",   // PoolPhase-axis leak
+            "Pii",      // DataClassification-axis leak
+            "Attested", // ProcessPhase-axis leak
+            "Compute",  // SubstrateType-axis leak
+            "Gate",     // ConvergencePointType-axis leak
+            "PromQL",   // ConditionKind-axis leak
+        ] {
+            let err = OptimizationDirection::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: `prefers_lower` is the boolean
+    /// partition `Minimize ⇒ true`, `Maximize ⇒ false`. Pinning this
+    /// table at one site means any future dispatch on per-direction
+    /// polarity (rate-window evaluator, breathe-band regression
+    /// detector) reads the same projection rather than re-deriving
+    /// from the variant name. Mirrors
+    /// [`CalmClassification::requires_coordination`]'s truth-table
+    /// shape.
+    #[test]
+    fn optimization_direction_prefers_lower_truth_table() {
+        assert!(OptimizationDirection::Minimize.prefers_lower());
+        assert!(!OptimizationDirection::Maximize.prefers_lower());
+    }
+
+    /// COVERAGE CONTRACT: every variant lands in exactly one of two
+    /// polarity buckets — prefers-lower (`Minimize`) or
+    /// prefers-higher (`Maximize`). Pins the two buckets at their
+    /// declared cardinalities (1, 1 — sum to `ALL.len()`) so a
+    /// future variant lands somewhere deliberately.
+    #[test]
+    fn optimization_direction_buckets_cover_every_variant() {
+        let mut lower = 0u32;
+        let mut higher = 0u32;
+        for d in OptimizationDirection::ALL {
+            if d.prefers_lower() {
+                lower += 1;
+            } else {
+                higher += 1;
+            }
+        }
+        assert_eq!(lower, 1, "prefers-lower bucket: Minimize");
+        assert_eq!(higher, 1, "prefers-higher bucket: Maximize");
+        assert_eq!(lower + higher, OptimizationDirection::ALL.len() as u32);
+    }
+
+    /// LOAD-BEARING TRUTH-TABLE: `is_improvement` answers "is `after`
+    /// strictly better than `before` under this direction?" for the
+    /// canonical samples. Pins the strict-improvement semantic at
+    /// one site so a future rate-window evaluator or breathe-band
+    /// regression detector reads the same projection that the
+    /// asymptotic-health probe writes.
+    #[test]
+    fn optimization_direction_is_improvement_truth_table() {
+        // Minimize: lower-is-better
+        assert!(OptimizationDirection::Minimize.is_improvement(10.0, 5.0));
+        assert!(!OptimizationDirection::Minimize.is_improvement(5.0, 10.0));
+
+        // Maximize: higher-is-better
+        assert!(OptimizationDirection::Maximize.is_improvement(5.0, 10.0));
+        assert!(!OptimizationDirection::Maximize.is_improvement(10.0, 5.0));
+    }
+
+    /// NO-OP CONTRACT: a sample equal to the previous one is NOT an
+    /// improvement under either direction. Pinning this guarantees
+    /// a flatlined rate-window evaluator doesn't silently keep
+    /// claiming "still improving" forever and skipping the
+    /// healthy-rate-threshold gate.
+    #[test]
+    fn optimization_direction_no_op_is_not_improvement() {
+        for d in OptimizationDirection::ALL {
+            assert!(
+                !d.is_improvement(7.0, 7.0),
+                "{d:?}: equal samples must not count as improvement",
+            );
+            assert!(
+                !d.is_improvement(0.0, 0.0),
+                "{d:?}: zero/zero must not count as improvement",
+            );
+        }
+    }
+
+    /// NaN CONTRACT: NaN on either operand short-circuits to `false`
+    /// (no improvement claim from indeterminate data) via the
+    /// standard `PartialOrd` behavior. Without this, a rate-window
+    /// evaluator that sampled a NaN partway through (a transient
+    /// metric-scrape failure) would either panic on an `Ord`
+    /// comparison or — worse — silently claim improvement on the
+    /// next valid sample by treating NaN as the worst case.
+    #[test]
+    fn optimization_direction_nan_is_not_improvement() {
+        let nan = f64::NAN;
+        for d in OptimizationDirection::ALL {
+            assert!(
+                !d.is_improvement(nan, 1.0),
+                "{d:?}: NaN before must not count as improvement",
+            );
+            assert!(
+                !d.is_improvement(1.0, nan),
+                "{d:?}: NaN after must not count as improvement",
+            );
+            assert!(
+                !d.is_improvement(nan, nan),
+                "{d:?}: NaN/NaN must not count as improvement",
+            );
+        }
+    }
+
+    /// ANTISYMMETRY CONTRACT: for distinct finite samples,
+    /// `is_improvement(a, b)` xor `is_improvement(b, a)` —
+    /// exactly one direction of the pair counts as improvement.
+    /// This is the algebraic shape every asymptotic-health
+    /// rate-window evaluator depends on to avoid double-counting
+    /// an improvement as a regression on the reverse traversal.
+    /// A future variant that returned `true` for both directions
+    /// (or `false` for both, the equal-sample case) would FAIL
+    /// here, forcing the author to extend the consumer dispatch
+    /// deliberately.
+    #[test]
+    fn optimization_direction_is_improvement_is_antisymmetric() {
+        let pairs = [(1.0_f64, 2.0_f64), (0.0, 100.0), (-3.5, 3.5), (1e9, 1e-9)];
+        for d in OptimizationDirection::ALL {
+            for (a, b) in pairs {
+                assert!(a != b, "test fixture requires distinct samples");
+                assert!(
+                    d.is_improvement(a, b) ^ d.is_improvement(b, a),
+                    "{d:?}: antisymmetry violated on ({a}, {b})",
+                );
+            }
+        }
+    }
+
+    /// DEFAULT-AGREEMENT CONTRACT:
+    /// `OptimizationDirection::default()` returns `Minimize` (the
+    /// variant tagged `#[default]`), AND that variant lands in the
+    /// prefers-lower bucket. A future `#[default]` rename without
+    /// flipping the predicate fails here — `Minimize` is the
+    /// canonical default for distributed-systems asymptotic
+    /// optimization (cost / latency / error rate), so an
+    /// unannotated metric must not silently flip the rate-window
+    /// evaluator's polarity. This is also the same value the
+    /// `Horizon → ConvergenceHorizon` bridge falls back to when
+    /// `direction` is unset, so pinning the default here pins the
+    /// bridge's behavior at one site.
+    #[test]
+    fn optimization_direction_default_is_minimize_prefers_lower() {
+        let d = OptimizationDirection::default();
+        assert_eq!(d, OptimizationDirection::Minimize);
+        assert!(d.prefers_lower());
+    }
+
+    /// BRIDGE ROUND-TRIP CONTRACT: every variant survives the
+    /// CRD-facing (`PascalCase`) ↔ tatara-core (`snake_case`)
+    /// `From` hop. Pre-lift the bridge was a one-way
+    /// `From<OptimizationDirection> for core::OptimizationDirection`
+    /// with no reverse — asymmetric to every other classification-
+    /// axis bridge in this file. Pinning the round-trip over `ALL`
+    /// means a future variant added without extending the bridge
+    /// fails here at one site instead of drifting between the CRD
+    /// wire format and `core::OptimizationDirection`.
+    #[test]
+    fn optimization_direction_bridge_roundtrip_over_all() {
+        for d in OptimizationDirection::ALL {
+            let core_d: core::OptimizationDirection = d.into();
+            let back: OptimizationDirection = core_d.into();
+            assert_eq!(back, d, "bridge round-trip failed for {d:?}");
         }
     }
 }

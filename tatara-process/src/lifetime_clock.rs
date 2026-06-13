@@ -12,9 +12,12 @@
 //! from there (children drained, finalizer guards owned resources).
 
 use chrono::{DateTime, Utc};
+use std::fmt;
+use std::str::FromStr;
 use std::time::Duration;
 
 use crate::crd::Process;
+use crate::lifetime::TeardownPolicy;
 use crate::phase::ProcessPhase;
 
 /// Decision the phase machine acts on.
@@ -23,8 +26,153 @@ pub enum AutoTerminate {
     /// No auto-terminate signal — continue with the normal phase handler.
     Skip,
     /// Transition the Process to `Exiting` with the given operator-visible reason.
-    Now { reason: String },
+    Now { reason: TerminateReason },
 }
+
+/// Why the ephemeral lifetime clock fired.
+///
+/// Typed image of the two reason strings the pre-lift evaluator composed
+/// inline with `format!(…)`. Each variant carries the typed payload its
+/// `Display` formats against the canonical PascalCase projection of
+/// [`TeardownPolicy`] / [`ProcessPhase`], so the operator-visible reason
+/// is read off the typed surface rather than a free-form template that
+/// could drift on a variant rename. The reason string is the deliverable
+/// the reconciler stamps onto `status.message`; this enum is the source
+/// of truth.
+///
+/// Adding a third cause (e.g. parent-cascade from a SIGKILL'd parent in
+/// the hierarchical PID model, OOM-style memory-pressure pre-emption, or
+/// a future ResourceQuota gate) lands at one variant + one [`Display`]
+/// arm + one [`TerminateReasonKind`] entry — exhaustively checked by the
+/// compiler AND by the per-variant truth-table tests.
+///
+/// Sibling closed-set lifts on the same `tatara-process` axis:
+/// [`crate::intent::IntentKind::ALL`], [`crate::LifetimeKind::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TerminateReason {
+    /// The Process reached a terminal-gate phase ([`ProcessPhase::Attested`]
+    /// or [`ProcessPhase::Failed`]) and the ephemeral lifetime's
+    /// [`TeardownPolicy`] elected to fire on that phase.
+    TeardownPolicy {
+        policy: TeardownPolicy,
+        phase: ProcessPhase,
+    },
+    /// The ephemeral lifetime's TTL elapsed in a non-terminal phase.
+    /// `ttl` carries the operator-authored `humantime` string verbatim
+    /// (e.g. `"1h"`, `"30m"`) so the reason surfaces the spec field as
+    /// it was written, not as it parsed. `elapsed` is the wall-clock
+    /// distance from `metadata.creation_timestamp` at evaluation time.
+    TtlExpired { ttl: String, elapsed: Duration },
+}
+
+impl TerminateReason {
+    /// Discriminator projection — strips the payload, yielding the
+    /// closed-set kind. Used by the reason-kind sweep tests and by any
+    /// future consumer that wants to group reasons by cause without
+    /// pattern-matching the full payload (e.g. metrics labels, future
+    /// `status.conditions` reason-keys).
+    pub const fn kind(&self) -> TerminateReasonKind {
+        match self {
+            Self::TeardownPolicy { .. } => TerminateReasonKind::TeardownPolicy,
+            Self::TtlExpired { .. } => TerminateReasonKind::TtlExpired,
+        }
+    }
+}
+
+impl fmt::Display for TerminateReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // LOAD-BEARING CONTRACT: the strings produced here are the
+        // operator-visible reasons the reconciler stamps onto
+        // `status.message` and `status.conditions[…].message`. They
+        // must match the pre-lift `format!(…)` output byte-for-byte
+        // so existing alerts, dashboards, and operator runbooks keep
+        // matching. Pinned by `terminate_reason_display_matches_pre_lift`.
+        match self {
+            Self::TeardownPolicy { policy, phase } => {
+                write!(
+                    f,
+                    "ephemeral lifetime: teardown_policy={} fired on {}",
+                    policy.as_str(),
+                    phase.as_str(),
+                )
+            }
+            Self::TtlExpired { ttl, elapsed } => {
+                write!(
+                    f,
+                    "ephemeral lifetime: ttl={} expired (elapsed={}s)",
+                    ttl,
+                    elapsed.as_secs(),
+                )
+            }
+        }
+    }
+}
+
+/// The closed set of [`TerminateReason`] kinds — the discriminator
+/// view, payload-stripped, that sibling closed-set enums in this
+/// crate carry (see [`ProcessPhase`], [`TeardownPolicy`]).
+///
+/// Drives the `as_str` / Display / `FromStr` triad over [`Self::ALL`] so
+/// a new variant added with an `ALL` entry automatically extends the
+/// parser, the canonical wire-format projection, and any future
+/// metrics-label / `status.conditions[].reason` enumeration that needs
+/// to enumerate the reason categories.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TerminateReasonKind {
+    TeardownPolicy,
+    TtlExpired,
+}
+
+impl TerminateReasonKind {
+    /// The closed set — single source of truth for `as_str` / Display /
+    /// `FromStr`. The `[Self; 2]` array literal forces the arity so a
+    /// third variant added without an `ALL` entry fails at the type
+    /// level before the test sweep below runs.
+    pub const ALL: [Self; 2] = [Self::TeardownPolicy, Self::TtlExpired];
+
+    /// Canonical PascalCase wire-format projection. Mirrors the
+    /// `tatara-process` PascalCase idiom used by every other closed-set
+    /// enum's `as_str` projection (e.g. [`ProcessPhase::as_str`],
+    /// [`TeardownPolicy::as_str`]). A future `status.conditions[].reason`
+    /// field reads this projection directly.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::TeardownPolicy => "TeardownPolicy",
+            Self::TtlExpired => "TtlExpired",
+        }
+    }
+}
+
+impl fmt::Display for TerminateReasonKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for TerminateReasonKind {
+    type Err = UnknownTerminateReasonKind;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.as_str() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownTerminateReasonKind(s.to_string()))
+    }
+}
+
+/// Typed parse error for [`TerminateReasonKind::from_str`] — carries the
+/// offending input verbatim so an operator-facing diagnostic surfaces
+/// the bad value, not a normalized form. Symmetric to every sibling
+/// `Unknown*` error in this crate (e.g. [`crate::phase::UnknownPhase`],
+/// [`crate::lifetime::UnknownTeardownPolicy`]).
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error("unknown terminate reason kind: {0}")]
+pub struct UnknownTerminateReasonKind(pub String);
 
 /// Inspect a Process at the given current phase and return whether the
 /// ephemeral lifetime clock fires now.
@@ -50,17 +198,17 @@ pub fn evaluate(
     // 1. Teardown policy on terminal phases — ONE typed dispatch over
     //    `(TeardownPolicy, ProcessPhase)` replaces the previous pair of
     //    near-identical Attested/Failed branches. Non-terminal phases
-    //    short-circuit inside `should_teardown_on` so the reason string
-    //    composes against a typed canonical-PascalCase projection
-    //    (`Display` -> `TeardownPolicy::as_str` + `ProcessPhase::as_str`),
-    //    not `{:?}` Debug formatting that drifts on a variant rename.
+    //    short-circuit inside `should_teardown_on`. The reason is the
+    //    typed `TerminateReason::TeardownPolicy` variant whose `Display`
+    //    composes the operator-visible string against the canonical
+    //    PascalCase projection (`TeardownPolicy::as_str` +
+    //    `ProcessPhase::as_str`), not a free-form template.
     if ephemeral.teardown_policy.should_teardown_on(current_phase) {
         return AutoTerminate::Now {
-            reason: format!(
-                "ephemeral lifetime: teardown_policy={} fired on {}",
-                ephemeral.teardown_policy,
-                current_phase.as_str(),
-            ),
+            reason: TerminateReason::TeardownPolicy {
+                policy: ephemeral.teardown_policy,
+                phase: current_phase,
+            },
         };
     }
 
@@ -72,11 +220,10 @@ pub fn evaluate(
                 if let Some(elapsed) = elapsed {
                     if elapsed >= ttl {
                         return AutoTerminate::Now {
-                            reason: format!(
-                                "ephemeral lifetime: ttl={} expired (elapsed={}s)",
-                                ephemeral.ttl,
-                                elapsed.as_secs()
-                            ),
+                            reason: TerminateReason::TtlExpired {
+                                ttl: ephemeral.ttl.clone(),
+                                elapsed,
+                            },
                         };
                     }
                 }
@@ -306,13 +453,14 @@ mod tests {
         let p = ephemeral_process("1h", TeardownPolicy::OnAttested, 60);
         match evaluate(&p, ProcessPhase::Attested, Utc::now()) {
             AutoTerminate::Now { reason } => {
+                let rendered = reason.to_string();
                 assert!(
-                    reason.contains("teardown_policy=OnAttested"),
-                    "expected canonical PascalCase policy, got: {reason}",
+                    rendered.contains("teardown_policy=OnAttested"),
+                    "expected canonical PascalCase policy, got: {rendered}",
                 );
                 assert!(
-                    reason.contains("fired on Attested"),
-                    "expected canonical PascalCase phase, got: {reason}",
+                    rendered.contains("fired on Attested"),
+                    "expected canonical PascalCase phase, got: {rendered}",
                 );
             }
             other => panic!("expected AutoTerminate::Now, got {other:?}"),
@@ -321,8 +469,223 @@ mod tests {
         let p = ephemeral_process("1h", TeardownPolicy::Always, 60);
         match evaluate(&p, ProcessPhase::Failed, Utc::now()) {
             AutoTerminate::Now { reason } => {
-                assert!(reason.contains("teardown_policy=Always"));
-                assert!(reason.contains("fired on Failed"));
+                let rendered = reason.to_string();
+                assert!(rendered.contains("teardown_policy=Always"));
+                assert!(rendered.contains("fired on Failed"));
+            }
+            other => panic!("expected AutoTerminate::Now, got {other:?}"),
+        }
+    }
+
+    // ── TerminateReason / TerminateReasonKind closed-set contracts ────
+
+    /// BYTE-FOR-BYTE PRE-LIFT CONTRACT: the Display impl on
+    /// `TerminateReason` must produce the exact string the pre-lift
+    /// inline `format!(…)` calls produced. Existing alerts, dashboards,
+    /// and operator runbooks that grep `status.message` for these
+    /// substrings keep matching. A future variant rename of
+    /// `TeardownPolicy` / `ProcessPhase` updates the rendered string
+    /// here automatically (Display reads `as_str` projection), but the
+    /// template — `"ephemeral lifetime: teardown_policy={} fired on {}"`
+    /// vs `"ephemeral lifetime: ttl={} expired (elapsed={}s)"` — is
+    /// pinned at the Display site.
+    #[test]
+    fn terminate_reason_display_matches_pre_lift() {
+        // TeardownPolicy variant — every combination of policy × phase
+        // sweeps both PascalCase projections.
+        for policy in TeardownPolicy::ALL {
+            for phase in ProcessPhase::ALL {
+                let reason = TerminateReason::TeardownPolicy { policy, phase };
+                let expected = format!(
+                    "ephemeral lifetime: teardown_policy={} fired on {}",
+                    policy.as_str(),
+                    phase.as_str(),
+                );
+                assert_eq!(
+                    reason.to_string(),
+                    expected,
+                    "Display drifted for ({policy:?}, {phase:?})",
+                );
+            }
+        }
+        // TtlExpired variant — pins the ttl-verbatim + elapsed-secs
+        // template against representative humantime strings the
+        // EphemeralLifetime.ttl field accepts.
+        for (ttl, elapsed_secs) in [("1h", 0u64), ("30m", 60), ("90s", 100), ("5m30s", 3600)] {
+            let reason = TerminateReason::TtlExpired {
+                ttl: ttl.to_string(),
+                elapsed: Duration::from_secs(elapsed_secs),
+            };
+            assert_eq!(
+                reason.to_string(),
+                format!("ephemeral lifetime: ttl={ttl} expired (elapsed={elapsed_secs}s)"),
+            );
+        }
+    }
+
+    /// Reason `kind()` projection — closed-set match so a future
+    /// variant triggers exhaustiveness checking at the projection
+    /// site rather than silently bucketing through a wildcard. Every
+    /// variant's `kind()` matches its `TerminateReasonKind` peer.
+    #[test]
+    fn terminate_reason_kind_truth_table() {
+        assert_eq!(
+            TerminateReason::TeardownPolicy {
+                policy: TeardownPolicy::Always,
+                phase: ProcessPhase::Attested,
+            }
+            .kind(),
+            TerminateReasonKind::TeardownPolicy,
+        );
+        assert_eq!(
+            TerminateReason::TtlExpired {
+                ttl: "1h".to_string(),
+                elapsed: Duration::from_secs(0),
+            }
+            .kind(),
+            TerminateReasonKind::TtlExpired,
+        );
+    }
+
+    /// `ALL` is the source of truth; a variant added without an `ALL`
+    /// entry fails here (uniqueness check) before any sweep test below
+    /// runs. Arity is asserted by the array type itself (`[Self; 2]`).
+    #[test]
+    fn terminate_reason_kind_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in TerminateReasonKind::ALL {
+            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
+        }
+        assert_eq!(seen.len(), TerminateReasonKind::ALL.len());
+    }
+
+    /// `Display` IS `as_str` — pinning this lets future callers reach
+    /// for either projection without drift.
+    #[test]
+    fn terminate_reason_kind_display_matches_as_str() {
+        for kind in TerminateReasonKind::ALL {
+            assert_eq!(kind.to_string(), kind.as_str());
+        }
+    }
+
+    /// Every variant survives `as_str` ↔ `FromStr` round-trip.
+    #[test]
+    fn terminate_reason_kind_roundtrip_via_as_str() {
+        use std::str::FromStr;
+        for kind in TerminateReasonKind::ALL {
+            assert_eq!(
+                TerminateReasonKind::from_str(kind.as_str()).unwrap(),
+                kind,
+                "round-trip failed for {kind:?}",
+            );
+        }
+    }
+
+    /// Every kind's `as_str` is in canonical PascalCase. The first
+    /// character is uppercase; no whitespace; no separators. The
+    /// `tatara-process` PascalCase idiom holds at one test site.
+    #[test]
+    fn terminate_reason_kind_as_str_is_pascal_case() {
+        for kind in TerminateReasonKind::ALL {
+            let s = kind.as_str();
+            assert!(!s.is_empty(), "as_str empty for {kind:?}");
+            assert!(
+                s.chars().next().unwrap().is_ascii_uppercase(),
+                "as_str not PascalCase for {kind:?}: {s}",
+            );
+            assert!(
+                !s.contains(|c: char| c.is_whitespace() || c == '_' || c == '-'),
+                "as_str carries separator for {kind:?}: {s}",
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings outside the canonical projection
+    /// (empty / lowercased / typo / cross-axis-leaked) and echoes the
+    /// input verbatim. Cross-axis inputs (ProcessPhase / TeardownPolicy
+    /// variant names) MUST fail — `TerminateReasonKind` is its own
+    /// axis, not a transparent reflection of either.
+    #[test]
+    fn unknown_terminate_reason_kind_errors() {
+        use std::str::FromStr;
+        for bad in [
+            "",
+            "teardownPolicy",
+            "TEARDOWN_POLICY",
+            "Teardown",
+            "TtlExpire",
+            "ttl_expired",
+            "ttlExpired",
+            // Cross-axis-leaked — must NOT cross axes.
+            "Attested",
+            "Failed",
+            "Always",
+            "OnAttested",
+            "OnFailed",
+            "Never",
+            "Permanent",
+            "Ephemeral",
+        ] {
+            let err = TerminateReasonKind::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// The reason `evaluate` returns under teardown maps to
+    /// `TerminateReasonKind::TeardownPolicy` AND its payload reflects
+    /// the spec's `(teardown_policy, current_phase)` verbatim — the
+    /// typed surface IS the source of truth, not an inline format
+    /// template. A future consumer that wants to group reasons by
+    /// kind in metrics labels reads `reason.kind()`, not a substring
+    /// match.
+    #[test]
+    fn evaluate_typed_reason_carries_teardown_payload() {
+        for (policy, phase) in [
+            (TeardownPolicy::Always, ProcessPhase::Attested),
+            (TeardownPolicy::Always, ProcessPhase::Failed),
+            (TeardownPolicy::OnAttested, ProcessPhase::Attested),
+            (TeardownPolicy::OnFailed, ProcessPhase::Failed),
+        ] {
+            let p = ephemeral_process("1h", policy, 60);
+            match evaluate(&p, phase, Utc::now()) {
+                AutoTerminate::Now { reason } => {
+                    assert_eq!(reason.kind(), TerminateReasonKind::TeardownPolicy);
+                    assert_eq!(
+                        reason,
+                        TerminateReason::TeardownPolicy { policy, phase },
+                        "typed payload drift for ({policy:?}, {phase:?})",
+                    );
+                }
+                other => {
+                    panic!("expected AutoTerminate::Now for ({policy:?}, {phase:?}), got {other:?}",)
+                }
+            }
+        }
+    }
+
+    /// TTL expiry returns a `TtlExpired` reason whose `ttl` field is
+    /// the operator-authored humantime string verbatim (NOT the
+    /// parsed `Duration`'s pretty-print) and whose `elapsed` is the
+    /// wall-clock distance. Pinned here so a future evaluator change
+    /// that re-formats the ttl through `humantime::format_duration`
+    /// would fail.
+    #[test]
+    fn evaluate_typed_reason_carries_ttl_payload() {
+        let p = ephemeral_process("30s", TeardownPolicy::Never, 60);
+        let now = Utc::now();
+        match evaluate(&p, ProcessPhase::Running, now) {
+            AutoTerminate::Now { reason } => {
+                assert_eq!(reason.kind(), TerminateReasonKind::TtlExpired);
+                match reason {
+                    TerminateReason::TtlExpired { ttl, elapsed } => {
+                        assert_eq!(ttl, "30s", "ttl should be verbatim spec string");
+                        assert!(
+                            elapsed >= Duration::from_secs(30),
+                            "elapsed should be at least the ttl",
+                        );
+                    }
+                    other => panic!("expected TtlExpired, got {other:?}"),
+                }
             }
             other => panic!("expected AutoTerminate::Now, got {other:?}"),
         }

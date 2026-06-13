@@ -272,7 +272,7 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     if let AutoTerminate::Now { reason } =
         lifetime_clock::evaluate(p, ProcessPhase::Running, chrono::Utc::now())
     {
-        return transition_to_exiting(ctx, &ns, &name, &reason).await;
+        return transition_to_exiting(ctx, &ns, &name, &reason.to_string()).await;
     }
 
     let refs = p
@@ -405,10 +405,11 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
         // Route through Releasing iff applicable exports declared.
         // Empty exports / no-trigger-match → fall through to the
         // existing Attested → Exiting path (zero-trace ephemeral).
+        let rendered = reason.to_string();
         if has_applicable_exports(p, ProcessPhase::Attested) {
-            return transition_to_releasing(ctx, &ns, &name, &reason).await;
+            return transition_to_releasing(ctx, &ns, &name, &rendered).await;
         }
-        return transition_to_exiting(ctx, &ns, &name, &reason).await;
+        return transition_to_exiting(ctx, &ns, &name, &rendered).await;
     }
 
     let refs = p
@@ -638,8 +639,7 @@ pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
 
     // 4. Watch all our export Jobs. Use a label selector that picks
     //    up only this Process's exports — not any sibling Process's.
-    let jobs_api: Api<k8s_openapi::api::batch::v1::Job> =
-        Api::namespaced(ctx.kube.clone(), &ns);
+    let jobs_api: Api<k8s_openapi::api::batch::v1::Job> = Api::namespaced(ctx.kube.clone(), &ns);
     let selector = format!(
         "{}={},{}=export",
         tatara_process::annotations::PROCESS,
@@ -820,8 +820,9 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
         // Route through Releasing iff applicable post-mortem exports
         // declared. Without any, Failed → Zombie directly (no export
         // window to run).
+        let rendered = reason.to_string();
         if has_applicable_exports(p, ProcessPhase::Failed) {
-            return transition_to_releasing(ctx, &ns, &name, &reason).await;
+            return transition_to_releasing(ctx, &ns, &name, &rendered).await;
         }
         // Phase.rs marks Failed → Zombie as the only legal next step
         // when no exports route through Releasing. Honor the FSM and
@@ -832,7 +833,7 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
         let body = json!({
             "phase": ProcessPhase::Zombie,
             "phaseSince": chrono::Utc::now(),
-            "message": reason,
+            "message": rendered,
         });
         patch::patch_process_status(&api, &name, body)
             .await

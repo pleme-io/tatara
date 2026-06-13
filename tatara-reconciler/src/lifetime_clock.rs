@@ -8,4 +8,7 @@
 //! unchanged. New consumers should depend on `tatara_process` directly
 //! and use `tatara_process::lifetime_clock::evaluate`.
 
-pub use tatara_process::lifetime_clock::{evaluate, requeue_with_ttl, AutoTerminate};
+pub use tatara_process::lifetime_clock::{
+    evaluate, requeue_with_ttl, AutoTerminate, TerminateReason, TerminateReasonKind,
+    UnknownTerminateReasonKind,
+};

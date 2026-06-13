@@ -73,7 +73,10 @@ pub mod prelude {
         EphemeralLifetime, Lifetime, LifetimeError, LifetimeKind, LifetimeVariant,
         PermanentLifetime, TeardownPolicy, UnknownTeardownPolicy,
     };
-    pub use crate::lifetime_clock::{evaluate as lifetime_clock_evaluate, AutoTerminate};
+    pub use crate::lifetime_clock::{
+        evaluate as lifetime_clock_evaluate, AutoTerminate, TerminateReason, TerminateReasonKind,
+        UnknownTerminateReasonKind,
+    };
     pub use crate::matrix::{
         compile_env_matrix_source, EnvMatrixSpec, MatrixAxis, MatrixBudget, NamedEphemeral,
         SelectStrategy,

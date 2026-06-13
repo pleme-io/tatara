@@ -257,14 +257,24 @@ fn pool_phase_from_members(pool: &EphemeralPool, members: &[PoolMember]) -> Pool
     if pool.metadata.deletion_timestamp.is_some() {
         return PoolPhase::Draining;
     }
-    let free = count_state(members, MemberState::Free);
-    let spawning = count_state(members, MemberState::Spawning);
-    let supply = free + spawning;
+    // The (free + spawning) supply calc lives at one site: the
+    // `MemberState::counts_toward_supply` closed-set predicate. A
+    // future variant that should also count toward supply (e.g. a
+    // "Warming" state between Spawning and Free) lands at one
+    // predicate arm in `tatara-process::pool::MemberState`; this site
+    // inherits the new bucketing automatically. The
+    // `member_state_failed_implies_no_supply` disjointness contract
+    // in tatara-process pins that a Failed member can never inflate
+    // this count.
+    let supply = members
+        .iter()
+        .filter(|m| m.state.counts_toward_supply())
+        .count() as u32;
     let want = pool.spec.desired_size;
     if members.is_empty() {
         return PoolPhase::Initializing;
     }
-    if pool.spec.min_size > 0 && (free + spawning) < pool.spec.min_size {
+    if pool.spec.min_size > 0 && supply < pool.spec.min_size {
         return PoolPhase::Degraded;
     }
     if supply < want {

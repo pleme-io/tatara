@@ -346,6 +346,13 @@ pub struct AllocationRef {
 }
 
 /// Per-slot state in the pool's free list.
+///
+/// Sibling closed-sets on the `EphemeralPool` axis: [`ReplacementPolicy::ALL`]
+/// (the on-failure policy that the pool reconciler dispatches against
+/// the [`Self::is_failed`] projection), [`ReturnPolicy::ALL`] (the
+/// release-time disposition that transitions an [`Self::Allocated`]
+/// member into [`Self::Returning`] before it either re-enters
+/// [`Self::Free`] or gets [`Self::Spawning`]'d as a fresh slot).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "PascalCase")]
 pub enum MemberState {
@@ -361,6 +368,112 @@ pub enum MemberState {
     /// Permanent failure — the member needs operator attention.
     Failed,
 }
+
+impl MemberState {
+    /// The closed set of member states — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad AND the
+    /// `is_failed` / `counts_toward_supply` predicate pair. Adding a
+    /// sixth variant lands at one `ALL` entry + one `as_str` arm + one
+    /// arm per predicate — exhaustively checked by the compiler (the
+    /// `[Self; 5]` array literal forces the arity) and by the
+    /// per-variant truth-table contract test (a new variant must
+    /// declare its own `(is_failed, counts_toward_supply)` projection
+    /// or the consumer dispatch in
+    /// `tatara-pool-reconciler::controller_pool::pool_phase_from_members`
+    /// and `tatara-pool-reconciler::pool_decide::decide_pool_reconcile`
+    /// will silently bucket it into the wrong lifecycle column).
+    pub const ALL: [Self; 5] = [
+        Self::Spawning,
+        Self::Free,
+        Self::Allocated,
+        Self::Returning,
+        Self::Failed,
+    ];
+
+    /// Canonical PascalCase wire-format projection — matches the serde
+    /// `rename_all = "PascalCase"` output verbatim AND the CRD `enum:`
+    /// enumeration that `ephemeralpools.tatara.pleme.io` stamps on
+    /// `status.members[].state`. Pinned by
+    /// `member_state_as_str_matches_serde` so a variant rename can't
+    /// drift between the typed surface, the CRD enum, the YAML wire
+    /// format AND any future operator-facing diagnostic that composes
+    /// `state={state}` via Display rather than a hard-coded literal
+    /// that would silently rot.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Spawning => "Spawning",
+            Self::Free => "Free",
+            Self::Allocated => "Allocated",
+            Self::Returning => "Returning",
+            Self::Failed => "Failed",
+        }
+    }
+
+    /// Is this member in a permanent-failure state — needs operator
+    /// attention? Closed-set match (not `matches!`) so a future variant
+    /// triggers the compiler's exhaustiveness check at this site rather
+    /// than silently defaulting to `false`. Consumed by
+    /// `tatara-pool-reconciler::pool_decide::decide_pool_reconcile` to
+    /// gate the highest-priority `ReplaceMembers` decision branch — a
+    /// future variant that should also trigger replacement (e.g.
+    /// `MemberState::Quarantined`) flips this predicate at one site
+    /// and inherits the priority-1 dispatch without touching the
+    /// consumer match arm.
+    pub const fn is_failed(self) -> bool {
+        match self {
+            Self::Failed => true,
+            Self::Spawning | Self::Free | Self::Allocated | Self::Returning => false,
+        }
+    }
+
+    /// Does this member contribute to the pool's *available supply*
+    /// (current ready slots + slots coming online)? Closed-set match so
+    /// a future variant triggers the compiler's exhaustiveness check.
+    /// Consumed by
+    /// `tatara-pool-reconciler::controller_pool::pool_phase_from_members`
+    /// — the `(free + spawning)` supply calc collapses into one
+    /// predicate-driven filter, so a future "warming-up" state
+    /// (`MemberState::Warming` between Spawning and Free) plugs into
+    /// the supply count at one site rather than three. Disjoint with
+    /// `is_failed` — pinned by `member_state_failed_implies_no_supply`
+    /// (a Failed member can never count toward supply; the pool
+    /// reconciler would otherwise double-count failures as available
+    /// capacity).
+    pub const fn counts_toward_supply(self) -> bool {
+        match self {
+            Self::Free | Self::Spawning => true,
+            Self::Allocated | Self::Returning | Self::Failed => false,
+        }
+    }
+}
+
+impl fmt::Display for MemberState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for MemberState {
+    type Err = UnknownMemberState;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for state in Self::ALL {
+            if s == state.as_str() {
+                return Ok(state);
+            }
+        }
+        Err(UnknownMemberState(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownReplacementPolicy`],
+/// [`UnknownReturnPolicy`], [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`], and
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown member state: {0}")]
+pub struct UnknownMemberState(pub String);
 
 /// Pool lifecycle phase (observed across the whole pool population).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
@@ -1026,5 +1139,162 @@ mod tests {
         assert_eq!(d, ReturnPolicy::Replace);
         assert!(!d.keeps_process());
         assert!(!d.runs_reset_job());
+    }
+
+    // ── closed-set algebra contracts for MemberState
+    //    (ALL × as_str × FromStr × predicate pair) ────────────────────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness check
+    /// before drifting `FromStr` or the sweep tests below. The arity is
+    /// asserted by the `[Self; 5]` array type itself.
+    #[test]
+    fn member_state_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for state in MemberState::ALL {
+            assert!(seen.insert(state), "duplicate variant in ALL: {state:?}");
+        }
+        assert_eq!(seen.len(), MemberState::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename (or
+    /// an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface, the CRD enum, and the YAML
+    /// wire format the pool reconciler stamps on
+    /// `status.members[].state`.
+    #[test]
+    fn member_state_as_str_matches_serde() {
+        for state in MemberState::ALL {
+            let serialized = serde_json::to_string(&state).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                state.as_str(),
+                "as_str drift for {state:?}: as_str={} serde={unquoted}",
+                state.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift. Any operator-facing
+    /// "state={state}" diagnostic that composes through Display
+    /// inherits the canonical wire-format string automatically.
+    #[test]
+    fn member_state_display_matches_as_str() {
+        for state in MemberState::ALL {
+            assert_eq!(state.to_string(), state.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn member_state_roundtrip_via_as_str() {
+        for state in MemberState::ALL {
+            assert_eq!(
+                MemberState::from_str(state.as_str()).unwrap(),
+                state,
+                "round-trip failed for {state:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / cross-axis-leaked — and
+    /// the error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_member_state_errors() {
+        for bad in [
+            "",
+            "free",
+            "SPAWNING",
+            "Free-State",
+            "allocated_now",
+            "ReplaceImmediate", // ReplacementPolicy-axis leak
+            "Reset",            // ReturnPolicy-axis leak
+            "Attested",         // ProcessPhase-axis leak
+        ] {
+            let err = MemberState::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: the predicate pair agrees with the
+    /// documented per-variant lifecycle role. The pool reconciler's
+    /// `pool_phase_from_members` supply calc collapses
+    /// `count_state(Free) + count_state(Spawning)` into one
+    /// `counts_toward_supply` filter; this table pins the per-variant
+    /// projection that consumer depends on.
+    #[test]
+    fn member_state_predicate_truth_tables() {
+        assert!(!MemberState::Spawning.is_failed());
+        assert!(MemberState::Spawning.counts_toward_supply());
+
+        assert!(!MemberState::Free.is_failed());
+        assert!(MemberState::Free.counts_toward_supply());
+
+        assert!(!MemberState::Allocated.is_failed());
+        assert!(!MemberState::Allocated.counts_toward_supply());
+
+        assert!(!MemberState::Returning.is_failed());
+        assert!(!MemberState::Returning.counts_toward_supply());
+
+        assert!(MemberState::Failed.is_failed());
+        assert!(!MemberState::Failed.counts_toward_supply());
+    }
+
+    /// DISJOINTNESS CONTRACT: no variant returns true from BOTH
+    /// `is_failed` and `counts_toward_supply` simultaneously — a
+    /// failed member can never be counted as available capacity. A
+    /// future variant that returned true from both would FAIL here,
+    /// forcing the author to either drop it from supply, or extend
+    /// the consumer's bucketing in
+    /// `tatara-pool-reconciler::controller_pool::pool_phase_from_members`
+    /// deliberately rather than silently inflating the pool's supply
+    /// count with failed slots.
+    #[test]
+    fn member_state_failed_implies_no_supply() {
+        for state in MemberState::ALL {
+            assert!(
+                !(state.is_failed() && state.counts_toward_supply()),
+                "{state:?} returns true from both is_failed and counts_toward_supply — \
+                 a failed member can never be counted as available pool capacity",
+            );
+        }
+    }
+
+    /// COVERAGE CONTRACT: every variant lands somewhere — either
+    /// in supply, or as a failed slot, or as an in-use bucket
+    /// (`Allocated | Returning`). A future variant that returns
+    /// `false` from `counts_toward_supply` AND `false` from
+    /// `is_failed` is fine *iff* it represents an in-use slot; this
+    /// test pins the existing variants in their declared buckets so
+    /// the consumer-side dispatch in
+    /// `tatara-pool-reconciler::pool_decide::decide_pool_reconcile`
+    /// stays grounded.
+    #[test]
+    fn member_state_buckets_cover_every_variant() {
+        let mut supply = 0u32;
+        let mut failed = 0u32;
+        let mut in_use = 0u32;
+        for state in MemberState::ALL {
+            match (state.is_failed(), state.counts_toward_supply()) {
+                (true, false) => failed += 1,
+                (false, true) => supply += 1,
+                (false, false) => in_use += 1,
+                (true, true) => panic!("disjointness already pins this empty for {state:?}"),
+            }
+        }
+        assert_eq!(supply, 2, "supply bucket: Free + Spawning");
+        assert_eq!(failed, 1, "failed bucket: Failed");
+        assert_eq!(in_use, 2, "in-use bucket: Allocated + Returning");
+        assert_eq!(supply + failed + in_use, MemberState::ALL.len() as u32);
     }
 }

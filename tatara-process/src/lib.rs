@@ -39,8 +39,8 @@ pub mod prelude {
     pub use crate::boundary::{Boundary, Condition, ConditionKind, UnknownConditionKind};
     pub use crate::classification::{
         Arity, CalmClassification, Classification, ConvergencePointType, DataClassification,
-        Horizon, HorizonKind, OptimizationDirection, SubstrateType, UnknownConvergencePointType,
-        UnknownDataClassification, UnknownSubstrateType,
+        Horizon, HorizonKind, OptimizationDirection, SubstrateType, UnknownCalmClassification,
+        UnknownConvergencePointType, UnknownDataClassification, UnknownSubstrateType,
     };
     pub use crate::compliance::{
         ComplianceBinding, ComplianceSpec, UnknownVerificationPhase, VerificationPhase,

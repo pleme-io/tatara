@@ -537,13 +537,128 @@ pub enum OptimizationDirection {
 }
 
 /// CALM theorem classification — determines whether coordination is required.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+///
+/// Closed-set sibling on the classification axis algebra; the `ALL` /
+/// `as_str` / Display / `FromStr` triad mirrors
+/// [`ConvergencePointType::ALL`], [`SubstrateType::ALL`],
+/// [`DataClassification::ALL`], [`crate::pool::PoolPhase::ALL`],
+/// [`crate::pool::MemberState::ALL`], [`crate::pool::ReplacementPolicy::ALL`],
+/// [`crate::pool::ReturnPolicy::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::lifetime::LifetimeKind::ALL`],
+/// [`crate::intent::IntentKind::ALL`],
+/// [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`]. The
+/// [`Self::requires_coordination`] predicate is the CALM theorem
+/// keystone — Hellerstein's "Consistency As Logical Monotonicity"
+/// states that a program can be distributed without coordination iff
+/// it computes a monotone function, so `Monotone ⇒ no coordination`
+/// and `NonMonotone ⇒ requires coordination` is a typed image of the
+/// theorem itself rather than a runtime convention. Future reconciler
+/// dispatch on `calm.requires_coordination()` (Raft for non-monotone
+/// writes; gossip for monotone ones) reads this projection rather
+/// than re-deriving from variant names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum CalmClassification {
+    /// Can be distributed without coordination (CALM ⇒ the program
+    /// computes a monotone function).
     #[default]
     Monotone,
+    /// Requires coordination (CALM ⇒ the program is not monotone).
     NonMonotone,
 }
+
+impl CalmClassification {
+    /// The closed set of CALM classifications — single source of truth
+    /// that drives the `as_str` / Display / `FromStr` triad AND the
+    /// `requires_coordination` predicate. Adding a third variant
+    /// (e.g. a `ConditionallyMonotone` sentinel for ops that are
+    /// monotone under a witness, like CRDT joins under a fixed
+    /// schema) lands at one `ALL` entry + one `as_str` arm + one
+    /// predicate arm + one bridge-pair arm — exhaustively checked by
+    /// the compiler (the `[Self; 2]` array literal forces the arity)
+    /// AND by the per-variant predicate truth-table test (a new
+    /// variant must declare its own coordination requirement or any
+    /// future reconciler-side dispatch will silently bucket it).
+    /// Closes the load-bearing classification-axis enum that the
+    /// `Classification.calm` field exposes to every Process and that
+    /// [`tatara_lattice`]'s boolean-lattice `Lattice for
+    /// CalmClassification` impl reads via [`Self::requires_coordination`]
+    /// as the lattice's `top()` predicate.
+    pub const ALL: [Self; 2] = [Self::Monotone, Self::NonMonotone];
+
+    /// Canonical PascalCase wire-format projection — matches the
+    /// serde `rename_all = "PascalCase"` output verbatim AND the CRD
+    /// `enum:` enumeration that the Process schema stamps on
+    /// `spec.classification.calm`. Pinned by
+    /// `calm_classification_as_str_matches_serde` so a variant rename
+    /// can't drift between the typed surface, the CRD enum, the YAML
+    /// wire format AND any future operator-facing diagnostic that
+    /// composes `calm={kind}` via Display rather than a hard-coded
+    /// literal that would silently rot. Display + FromStr triad over
+    /// `ALL` mirrors every sibling closed-set enum in this crate.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Monotone => "Monotone",
+            Self::NonMonotone => "NonMonotone",
+        }
+    }
+
+    /// CALM-THEOREM KEYSTONE: does this classification require
+    /// distributed coordination? Closed-set match (not `matches!`) so
+    /// a future variant triggers the compiler's exhaustiveness check
+    /// at this site rather than silently defaulting to `false` and
+    /// shipping a non-monotone operation onto the no-coordination
+    /// path. The theorem (Hellerstein 2010) states that a program can
+    /// be distributed without coordination iff it computes a monotone
+    /// function — `Monotone ⇒ false` and `NonMonotone ⇒ true` is the
+    /// typed image of that biconditional. Consumers (future reconciler
+    /// dispatch between Raft writes and gossip propagation; current
+    /// `tatara_lattice` boolean-lattice ordering where `Monotone ≤
+    /// NonMonotone`) read this predicate rather than re-deriving from
+    /// variant names.
+    pub const fn requires_coordination(self) -> bool {
+        match self {
+            Self::Monotone => false,
+            Self::NonMonotone => true,
+        }
+    }
+}
+
+impl fmt::Display for CalmClassification {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for CalmClassification {
+    type Err = UnknownCalmClassification;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for c in Self::ALL {
+            if s == c.as_str() {
+                return Ok(c);
+            }
+        }
+        Err(UnknownCalmClassification(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownConvergencePointType`],
+/// [`UnknownSubstrateType`], [`UnknownDataClassification`],
+/// [`crate::pool::UnknownMemberState`],
+/// [`crate::pool::UnknownPoolPhase`],
+/// [`crate::pool::UnknownReplacementPolicy`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`],
+/// [`crate::phase::UnknownPhase`],
+/// [`crate::signal::UnknownSighupStrategy`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown calm classification: {0}")]
+pub struct UnknownCalmClassification(pub String);
 
 /// Data sensitivity, drives compliance baseline selection.
 ///
@@ -820,6 +935,16 @@ impl From<CalmClassification> for core::CalmClassification {
         match v {
             CalmClassification::Monotone => Self::Monotone,
             CalmClassification::NonMonotone => Self::NonMonotone,
+        }
+    }
+}
+
+impl From<core::CalmClassification> for CalmClassification {
+    fn from(v: core::CalmClassification) -> Self {
+        use core::CalmClassification as C;
+        match v {
+            C::Monotone => Self::Monotone,
+            C::NonMonotone => Self::NonMonotone,
         }
     }
 }
@@ -1565,6 +1690,171 @@ mod tests {
             let core_t: core::SubstrateType = t.into();
             let back: SubstrateType = core_t.into();
             assert_eq!(back, t, "bridge round-trip failed for {t:?}");
+        }
+    }
+
+    // ── closed-set algebra contracts for CalmClassification
+    //    (ALL × as_str × FromStr × requires_coordination × bridge) ─────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness
+    /// check before drifting `FromStr` or the sweep tests below. The
+    /// arity is asserted by the `[Self; 2]` array type itself.
+    #[test]
+    fn calm_classification_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for c in CalmClassification::ALL {
+            assert!(seen.insert(c), "duplicate variant in ALL: {c:?}");
+        }
+        assert_eq!(seen.len(), CalmClassification::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename
+    /// (or an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface, the CRD enum, and the
+    /// YAML wire format the reconciler reads from
+    /// `spec.classification.calm`.
+    #[test]
+    fn calm_classification_as_str_matches_serde() {
+        for c in CalmClassification::ALL {
+            let serialized = serde_json::to_string(&c).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                c.as_str(),
+                "as_str drift for {c:?}: as_str={} serde={unquoted}",
+                c.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future
+    /// callers reach for either projection without drift. Any
+    /// operator-facing `calm={kind}` diagnostic that composes
+    /// through Display inherits the canonical wire-format string
+    /// automatically.
+    #[test]
+    fn calm_classification_display_matches_as_str() {
+        for c in CalmClassification::ALL {
+            assert_eq!(c.to_string(), c.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s
+    /// sweep of `ALL` fails here.
+    #[test]
+    fn calm_classification_roundtrip_via_as_str() {
+        for c in CalmClassification::ALL {
+            assert_eq!(
+                CalmClassification::from_str(c.as_str()).unwrap(),
+                c,
+                "round-trip failed for {c:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings outside the canonical projection —
+    /// empty / lowercased / typo / cross-axis-leaked — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// surfaces the bad value, not a normalized form.
+    #[test]
+    fn unknown_calm_classification_errors() {
+        for bad in [
+            "",
+            "monotone",     // lowercased
+            "MONOTONE",     // uppercased
+            "Mono",         // typo
+            "non_monotone", // core's snake_case form (must not cross axes)
+            "non-monotone", // dashed
+            "Monotonic",    // close-typo
+            "Steady",       // PoolPhase-axis leak
+            "Pii",          // DataClassification-axis leak
+            "Attested",     // ProcessPhase-axis leak
+            "Compute",      // SubstrateType-axis leak
+            "Gate",         // ConvergencePointType-axis leak
+            "PromQL",       // ConditionKind-axis leak
+        ] {
+            let err = CalmClassification::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// CALM-THEOREM TRUTH-TABLE CONTRACT: `requires_coordination`
+    /// implements the biconditional half of Hellerstein's CALM
+    /// theorem — `Monotone ⇒ false` and `NonMonotone ⇒ true`.
+    /// Pinning this table at one site means any future reconciler
+    /// dispatch that picks between Raft writes and gossip
+    /// propagation reads the same projection the lattice ordering
+    /// (`Monotone ≤ NonMonotone`) does. A future variant that
+    /// flipped this mapping would have to renumber every consumer
+    /// deliberately rather than silently shipping a non-monotone
+    /// operation onto the no-coordination path.
+    #[test]
+    fn calm_classification_requires_coordination_truth_table() {
+        assert!(!CalmClassification::Monotone.requires_coordination());
+        assert!(CalmClassification::NonMonotone.requires_coordination());
+    }
+
+    /// COVERAGE CONTRACT: every variant lands in exactly one of two
+    /// coordination buckets — no-coordination (`Monotone`) or
+    /// requires-coordination (`NonMonotone`). Pins the two buckets
+    /// at their declared cardinalities (1, 1 — sum to `ALL.len()`)
+    /// so a future variant lands somewhere deliberately. The
+    /// biconditional structure of the CALM theorem makes this
+    /// partition exhaustive by construction.
+    #[test]
+    fn calm_classification_buckets_cover_every_variant() {
+        let mut no_coord = 0u32;
+        let mut coord = 0u32;
+        for c in CalmClassification::ALL {
+            if c.requires_coordination() {
+                coord += 1;
+            } else {
+                no_coord += 1;
+            }
+        }
+        assert_eq!(no_coord, 1, "no-coordination bucket: Monotone");
+        assert_eq!(coord, 1, "requires-coordination bucket: NonMonotone");
+        assert_eq!(no_coord + coord, CalmClassification::ALL.len() as u32);
+    }
+
+    /// DEFAULT-AGREEMENT CONTRACT: `CalmClassification::default()`
+    /// returns `Monotone` (the variant tagged `#[default]`) AND that
+    /// variant lands in the no-coordination bucket. A future
+    /// `#[default]` rename without flipping the predicate fails
+    /// here — the default for an under-specified Process must
+    /// remain the no-coordination side so that an unannotated
+    /// Process can't silently demand Raft writes the reconciler
+    /// isn't configured to provide.
+    #[test]
+    fn calm_classification_default_is_monotone_no_coordination() {
+        let c = CalmClassification::default();
+        assert_eq!(c, CalmClassification::Monotone);
+        assert!(!c.requires_coordination());
+    }
+
+    /// BRIDGE ROUND-TRIP CONTRACT: every variant survives the
+    /// CRD-facing (`PascalCase`) ↔ tatara-core (`snake_case`)
+    /// `From` hop. Today the bridge is two hand-written 2-arm
+    /// matches in this file; pinning the round-trip over `ALL`
+    /// means a future variant added without extending the bridge
+    /// fails here at one site instead of drifting between the CRD
+    /// wire format and the `core::CalmClassification` selector
+    /// axis. Closes the asymmetry that pre-lift had a
+    /// `From<CalmClassification> for core::CalmClassification`
+    /// forward bridge but no reverse — symmetric to every other
+    /// classification-axis bridge in this file.
+    #[test]
+    fn calm_classification_bridge_roundtrip_over_all() {
+        for c in CalmClassification::ALL {
+            let core_c: core::CalmClassification = c.into();
+            let back: CalmClassification = core_c.into();
+            assert_eq!(back, c, "bridge round-trip failed for {c:?}");
         }
     }
 }

@@ -8,9 +8,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use tatara_process::allocation::{AllocationPhase, EphemeralAllocation, Requestor};
-use tatara_process::pool::{
-    AllocationRef, EphemeralPool, MatchKey, MemberState, PoolMember,
-};
+use tatara_process::pool::{AllocationRef, EphemeralPool, MatchKey, MemberState, PoolMember};
 
 use crate::router::best_match;
 
@@ -18,7 +16,10 @@ use crate::router::best_match;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AllocationDecision {
     /// Bind: pool selected + member chosen.
-    Bind { pool: AllocationRef, member_process_name: String },
+    Bind {
+        pool: AllocationRef,
+        member_process_name: String,
+    },
     /// A pool matched but every member is occupied — try again next tick.
     Wait { pool: AllocationRef },
     /// No pool selector matched. Surface in status; retry on pool spec changes.
@@ -26,7 +27,10 @@ pub enum AllocationDecision {
     /// Already Bound; allocation is stable (heartbeat).
     HeartbeatBound,
     /// `expires_at` reached (or allocation deleted upstream). Trigger return.
-    Release { member_process_name: String, pool: AllocationRef },
+    Release {
+        member_process_name: String,
+        pool: AllocationRef,
+    },
     /// Released; nothing to do.
     NoOp,
 }
@@ -95,12 +99,13 @@ impl AllocationConvergenceCtx {
         let bound_pool = alloc.status.as_ref().and_then(|s| s.bound_pool.clone());
 
         // Resolve the target pool + a free member ONLY on the matching path
-        // (Pending/Queued, not deleting/terminal/Bound) — the only branch
-        // `decide` consults `matched_pool`/`free_member`.
-        let (matched_pool, free_member) = if phase != AllocationPhase::Released
-            && !being_deleted
-            && phase != AllocationPhase::Bound
-        {
+        // (Pending/Queued/NoMatchingPool, not deleting/terminal/Bound/Releasing).
+        // Lifted onto the typed `AllocationPhase::needs_pool_routing()`
+        // closed-set projection — closes the latent gap where `Failed` /
+        // `Releasing` (neither `Released` nor `Bound`) used to slip through
+        // and trigger a phantom rebind on an allocation that the operator
+        // needs to inspect or a release that's mid-flight.
+        let (matched_pool, free_member) = if phase.needs_pool_routing() && !being_deleted {
             match resolve_pool(alloc, candidate_pools) {
                 Some(pool) => {
                     let pool_ref = AllocationRef {
@@ -148,8 +153,12 @@ impl shigoto_types::decision::Decision for AllocationConvergence {
     type Action = AllocationDecision;
 
     fn decide(ctx: &Self::Ctx) -> Self::Action {
-        // (1) Terminal — already released.
-        if ctx.phase == AllocationPhase::Released {
+        // (1) Terminal — `Released` (clean audit record) or `Failed`
+        //     (pool refused; operator intervention needed) — short-circuit
+        //     before re-running the routing / heartbeat ladder. Lifted
+        //     onto the typed `AllocationPhase::is_terminal()` closed-set
+        //     projection so a new terminal variant lands once.
+        if ctx.phase.is_terminal() {
             return AllocationDecision::NoOp;
         }
 
@@ -454,12 +463,73 @@ mod tests {
         assert_eq!(d, AllocationDecision::NoOp);
     }
 
+    /// Regression: a `Failed` allocation without a deletion timestamp
+    /// MUST short-circuit to `NoOp` rather than fall through to the
+    /// routing branch and silently rebind to a fresh pool member. The
+    /// open-coded `phase != Released && phase != Bound` gate used to
+    /// let this slip through; the typed `is_terminal()` /
+    /// `needs_pool_routing()` projection pair closes both arms. Pool
+    /// + free member are deliberately available — the decision must
+    /// NOT bind regardless.
+    #[test]
+    fn failed_allocation_is_noop_without_deletion() {
+        let p = pool("akeyless", "pools", PoolSelector::default());
+        let mut a = alloc("manual", "any/repo", "main");
+        a.status = Some(AllocationStatus {
+            phase: AllocationPhase::Failed,
+            message: Some("max_size reached; operator must intervene".into()),
+            ..Default::default()
+        });
+        let members = vec![member("akeyless-fresh", MemberState::Free)];
+        let d = decide_allocation_reconcile(&a, &[p], |_| &members, Utc::now());
+        assert_eq!(
+            d,
+            AllocationDecision::NoOp,
+            "Failed allocation MUST NOT rebind to a free member",
+        );
+    }
+
+    /// Regression: a `Releasing` allocation without a deletion
+    /// timestamp MUST NOT trigger pool resolution either — the
+    /// release ladder is already in flight; matching a new pool
+    /// would race the in-flight return. Same typed-projection fix
+    /// covers this arm.
+    #[test]
+    fn releasing_allocation_does_not_rebind_without_deletion() {
+        let p = pool("akeyless", "pools", PoolSelector::default());
+        let mut a = alloc("manual", "any/repo", "main");
+        a.status = Some(AllocationStatus {
+            phase: AllocationPhase::Releasing,
+            bound_pool: Some(AllocationRef {
+                name: "akeyless".into(),
+                namespace: "pools".into(),
+            }),
+            assigned_process: Some(AllocationRef {
+                name: "akeyless-old".into(),
+                namespace: "pools".into(),
+            }),
+            ..Default::default()
+        });
+        let members = vec![member("akeyless-fresh", MemberState::Free)];
+        let d = decide_allocation_reconcile(&a, &[p], |_| &members, Utc::now());
+        // Releasing is neither terminal nor routing-eligible AND not
+        // Bound, so it falls through to the priority-4 fallback —
+        // which now sees matched_pool=None (routing was skipped) and
+        // emits NoMatchingPool. The point is it MUST NOT bind to the
+        // fresh free member.
+        assert!(
+            !matches!(d, AllocationDecision::Bind { .. }),
+            "Releasing allocation MUST NOT rebind: got {d:?}",
+        );
+    }
+
     #[test]
     fn deletion_timestamp_releases_assigned_process() {
         let p = pool("akeyless", "pools", PoolSelector::default());
         let mut a = alloc("manual", "any/repo", "main");
-        a.metadata.deletion_timestamp =
-            Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(Utc::now()));
+        a.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
+            Utc::now(),
+        ));
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Bound,
             bound_pool: Some(AllocationRef {
@@ -474,7 +544,10 @@ mod tests {
         });
         let d = decide_allocation_reconcile(&a, &[p], |_| &[], Utc::now());
         match d {
-            AllocationDecision::Release { member_process_name, .. } => {
+            AllocationDecision::Release {
+                member_process_name,
+                ..
+            } => {
                 assert_eq!(member_process_name, "akeyless-xyz");
             }
             other => panic!("expected Release on deletion, got {other:?}"),
@@ -491,7 +564,10 @@ mod tests {
         }
     }
 
-    fn pending_ctx(matched: Option<AllocationRef>, free: Option<String>) -> AllocationConvergenceCtx {
+    fn pending_ctx(
+        matched: Option<AllocationRef>,
+        free: Option<String>,
+    ) -> AllocationConvergenceCtx {
         AllocationConvergenceCtx {
             phase: AllocationPhase::Pending,
             being_deleted: false,

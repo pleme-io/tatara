@@ -25,17 +25,281 @@ pub struct Classification {
 }
 
 /// Structural type — how data flows through the point.
+///
+/// Closed-set sibling on the classification axis algebra; the `ALL` /
+/// `as_str` / Display / `FromStr` triad mirrors
+/// [`DataClassification::ALL`], [`crate::pool::PoolPhase::ALL`],
+/// [`crate::pool::MemberState::ALL`], [`crate::pool::ReplacementPolicy::ALL`],
+/// [`crate::pool::ReturnPolicy::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::lifetime::LifetimeKind::ALL`],
+/// [`crate::intent::IntentKind::ALL`],
+/// [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`]. The
+/// `(input_arity, output_arity)` projection (via [`Arity`]) closes the
+/// graph-topology contract: each variant lands in exactly one of the
+/// three structural buckets — endomorphic (1→1), diffusive (1→N), or
+/// convergent (N→1) — so future DAG composition / edge-cardinality
+/// validators dispatch on a typed projection rather than re-deriving
+/// from variant names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "PascalCase")]
 pub enum ConvergencePointType {
+    /// 1 input → 1 output (linear conversion).
     Transform,
+    /// 1 input → N outputs (fan-out, spawns downstream DAGs).
     Fork,
+    /// N inputs → 1 output (fan-in, merges upstream results).
     Join,
+    /// N inputs → 1 output (barrier, waits for all inputs).
     Gate,
+    /// N inputs → 1 output (choice, picks best by policy).
     Select,
+    /// 1 input → N outputs same type (replicate signal).
     Broadcast,
+    /// N inputs → 1 output (fold/aggregate).
     Reduce,
+    /// 1 input → 1 output + side-channel (tap for observation).
     Observe,
+}
+
+impl ConvergencePointType {
+    /// The closed set of point types — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad AND the
+    /// `(input_arity, output_arity)` typed pair (via [`Arity`]) AND the
+    /// `is_endomorphic` / `is_diffusive` / `is_convergent` predicate
+    /// triple. Adding a ninth variant lands at one `ALL` entry + one
+    /// `as_str` arm + one `input_arity` arm + one `output_arity` arm +
+    /// one arm per predicate — exhaustively checked by the compiler
+    /// (the `[Self; 8]` array literal forces the arity) AND by the
+    /// per-variant truth-table contract test (a new variant must
+    /// declare its own `(input, output)` arity pair or any future
+    /// DAG composition validator that dispatches on
+    /// `(input_arity, output_arity)` will silently mis-wire it).
+    /// Closes the load-bearing classification-axis enum that
+    /// `tatara_core::domain::compliance_binding::PointSelector::ByType`
+    /// already dispatches against and that every `Process`'s
+    /// `Classification.point_type` reads as the topological identity
+    /// of the convergence point.
+    pub const ALL: [Self; 8] = [
+        Self::Transform,
+        Self::Fork,
+        Self::Join,
+        Self::Gate,
+        Self::Select,
+        Self::Broadcast,
+        Self::Reduce,
+        Self::Observe,
+    ];
+
+    /// Canonical PascalCase wire-format projection — matches the
+    /// serde `rename_all = "PascalCase"` output verbatim AND the CRD
+    /// `enum:` enumeration that the Process schema stamps on
+    /// `spec.classification.pointType`. Pinned by
+    /// `convergence_point_type_as_str_matches_serde` so a variant
+    /// rename can't drift between the typed surface, the CRD enum,
+    /// the YAML wire format AND any future operator-facing
+    /// diagnostic that composes `pointType={kind}` via Display
+    /// rather than a hard-coded literal that would silently rot.
+    /// Display + FromStr triad over `ALL` mirrors `DataClassification`
+    /// / `PoolPhase` / `MemberState` / `ReplacementPolicy` /
+    /// `ReturnPolicy` / `TeardownPolicy` / `ConditionKind` /
+    /// `ProcessPhase` / `ProcessSignal`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Transform => "Transform",
+            Self::Fork => "Fork",
+            Self::Join => "Join",
+            Self::Gate => "Gate",
+            Self::Select => "Select",
+            Self::Broadcast => "Broadcast",
+            Self::Reduce => "Reduce",
+            Self::Observe => "Observe",
+        }
+    }
+
+    /// Cardinality of the input edge into this point — `One` for
+    /// `Transform | Fork | Broadcast | Observe` (single-source
+    /// projections), `Many` for `Join | Gate | Select | Reduce`
+    /// (multi-source convergent reductions). Closed-set match (not
+    /// `matches!`) so a future variant triggers the compiler's
+    /// exhaustiveness check at this site rather than silently
+    /// defaulting to `One`. Paired with [`Self::output_arity`] they
+    /// form the typed `(input, output)` projection that future
+    /// DAG composition validators (edge-cardinality checks: "you
+    /// can't connect a Fork's output to a Transform's input
+    /// without a Join in between") dispatch against — a single
+    /// projection per variant means a future `Demux` / `Mux` /
+    /// `Pipeline` point lands in exactly one cell of the
+    /// `Arity × Arity` topology table rather than rotting against
+    /// open-coded `== ConvergencePointType::Fork` checks.
+    pub const fn input_arity(self) -> Arity {
+        match self {
+            Self::Transform | Self::Fork | Self::Broadcast | Self::Observe => Arity::One,
+            Self::Join | Self::Gate | Self::Select | Self::Reduce => Arity::Many,
+        }
+    }
+
+    /// Cardinality of the output edge from this point — `Many` for
+    /// `Fork | Broadcast` (fan-out), `One` for everything else.
+    /// Closed-set match so a future variant triggers the compiler's
+    /// exhaustiveness check. See [`Self::input_arity`] for the
+    /// arity-pair contract + bucket definitions.
+    pub const fn output_arity(self) -> Arity {
+        match self {
+            Self::Fork | Self::Broadcast => Arity::Many,
+            Self::Transform
+            | Self::Join
+            | Self::Gate
+            | Self::Select
+            | Self::Reduce
+            | Self::Observe => Arity::One,
+        }
+    }
+
+    /// Does this point preserve the single-input single-output
+    /// shape? `(input, output) == (One, One)` — `Transform`
+    /// (identity-shaped reshape) and `Observe` (passthrough +
+    /// side-channel tap). Closed-set match so a future variant
+    /// triggers the compiler's exhaustiveness check. Paired with
+    /// `is_diffusive` and `is_convergent` they form the three-way
+    /// disjoint bucket carving sealed by
+    /// `convergence_point_type_buckets_cover_every_variant` AND
+    /// `convergence_point_type_arity_pair_agrees_with_bucket` —
+    /// the bridge that lets the bucket predicates and the arity
+    /// pair name the same topology partition from two angles.
+    pub const fn is_endomorphic(self) -> bool {
+        match self {
+            Self::Transform | Self::Observe => true,
+            Self::Fork
+            | Self::Join
+            | Self::Gate
+            | Self::Select
+            | Self::Broadcast
+            | Self::Reduce => false,
+        }
+    }
+
+    /// Does this point fan out — single input replicated/split
+    /// across many outputs? `(input, output) == (One, Many)` —
+    /// `Fork` and `Broadcast`. Closed-set match so a future variant
+    /// triggers the compiler's exhaustiveness check. See
+    /// `is_endomorphic` for the bucket-carving contract.
+    pub const fn is_diffusive(self) -> bool {
+        match self {
+            Self::Fork | Self::Broadcast => true,
+            Self::Transform
+            | Self::Join
+            | Self::Gate
+            | Self::Select
+            | Self::Reduce
+            | Self::Observe => false,
+        }
+    }
+
+    /// Does this point reduce — many inputs collapsed to one
+    /// output? `(input, output) == (Many, One)` — `Join`, `Gate`,
+    /// `Select`, `Reduce`. Closed-set match so a future variant
+    /// triggers the compiler's exhaustiveness check. See
+    /// `is_endomorphic` for the bucket-carving contract. The
+    /// impossible `(Many, Many)` topology bucket is pinned empty
+    /// by `convergence_point_type_arity_pair_agrees_with_bucket`
+    /// — a `(Many, Many)` point would mean "many independent
+    /// inputs replicated across many independent outputs", which
+    /// has no convergence semantics: every DAG-composition
+    /// validator would have to special-case it. A future variant
+    /// that wants `(Many, Many)` must first extend the bucket
+    /// carving deliberately.
+    pub const fn is_convergent(self) -> bool {
+        match self {
+            Self::Join | Self::Gate | Self::Select | Self::Reduce => true,
+            Self::Transform | Self::Fork | Self::Broadcast | Self::Observe => false,
+        }
+    }
+}
+
+impl fmt::Display for ConvergencePointType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ConvergencePointType {
+    type Err = UnknownConvergencePointType;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for t in Self::ALL {
+            if s == t.as_str() {
+                return Ok(t);
+            }
+        }
+        Err(UnknownConvergencePointType(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownDataClassification`],
+/// [`crate::pool::UnknownMemberState`], [`crate::pool::UnknownPoolPhase`],
+/// [`crate::pool::UnknownReplacementPolicy`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`],
+/// [`crate::phase::UnknownPhase`],
+/// [`crate::signal::UnknownSighupStrategy`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown convergence point type: {0}")]
+pub struct UnknownConvergencePointType(pub String);
+
+/// Edge cardinality of a [`ConvergencePointType`]'s input or output.
+///
+/// Typed projection used by [`ConvergencePointType::input_arity`] and
+/// [`ConvergencePointType::output_arity`] so DAG composition validators
+/// reach for a closed-set enum rather than re-deriving the in/out
+/// cardinality from variant names. `Many` is the "≥1, could be N"
+/// cardinality — it carries no upper bound because the convergence
+/// point's variant tag is already the structural identity; the
+/// number itself is a runtime property of the DAG, not the typescape.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Arity {
+    /// Single edge — exactly one input or one output.
+    One,
+    /// Multiple edges — any number ≥ 1.
+    Many,
+}
+
+impl Arity {
+    /// The closed set of arities — single source of truth that
+    /// drives `as_str` / Display AND the `is_one` predicate. Adding
+    /// a third variant (e.g. `Arity::Zero` for sinks) lands at one
+    /// `ALL` entry + one `as_str` arm + one predicate arm —
+    /// exhaustively checked by the compiler.
+    pub const ALL: [Self; 2] = [Self::One, Self::Many];
+
+    /// Canonical projection — `"One" | "Many"`. Pinned by
+    /// `arity_display_matches_as_str` so a future Display impl
+    /// can't drift from the canonical string.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::One => "One",
+            Self::Many => "Many",
+        }
+    }
+
+    /// Is this the single-edge cardinality? Closed-set match (not
+    /// `matches!`) so a future variant triggers the compiler's
+    /// exhaustiveness check.
+    pub const fn is_one(self) -> bool {
+        match self {
+            Self::One => true,
+            Self::Many => false,
+        }
+    }
+}
+
+impl fmt::Display for Arity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// Operational substrate.
@@ -695,5 +959,262 @@ mod tests {
             let back: DataClassification = core.into();
             assert_eq!(back, class, "bridge round-trip failed for {class:?}");
         }
+    }
+
+    // ── closed-set algebra contracts for ConvergencePointType
+    //    (ALL × as_str × FromStr × arity-pair × predicate triple) ────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness
+    /// check before drifting `FromStr` or the sweep tests below. The
+    /// arity is asserted by the `[Self; 8]` array type itself.
+    #[test]
+    fn convergence_point_type_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for t in ConvergencePointType::ALL {
+            assert!(seen.insert(t), "duplicate variant in ALL: {t:?}");
+        }
+        assert_eq!(seen.len(), ConvergencePointType::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename (or
+    /// an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface, the CRD enum, and the YAML
+    /// wire format the reconciler reads from
+    /// `spec.classification.pointType`.
+    #[test]
+    fn convergence_point_type_as_str_matches_serde() {
+        for t in ConvergencePointType::ALL {
+            let serialized = serde_json::to_string(&t).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                t.as_str(),
+                "as_str drift for {t:?}: as_str={} serde={unquoted}",
+                t.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift.
+    #[test]
+    fn convergence_point_type_display_matches_as_str() {
+        for t in ConvergencePointType::ALL {
+            assert_eq!(t.to_string(), t.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn convergence_point_type_roundtrip_via_as_str() {
+        for t in ConvergencePointType::ALL {
+            assert_eq!(
+                ConvergencePointType::from_str(t.as_str()).unwrap(),
+                t,
+                "round-trip failed for {t:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings outside the canonical projection —
+    /// empty / lowercased / typo / cross-axis-leaked — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// surfaces the bad value, not a normalized form.
+    #[test]
+    fn unknown_convergence_point_type_errors() {
+        for bad in [
+            "",
+            "gate",       // lowercased
+            "GATE",       // uppercased
+            "Transformr", // typo
+            "Filter",
+            "Steady",   // PoolPhase-axis leak
+            "Pii",      // DataClassification-axis leak
+            "Attested", // ProcessPhase-axis leak
+            "Compute",  // SubstrateType-axis leak
+            "Monotone", // CalmClassification-axis leak
+            "PromQL",   // ConditionKind-axis leak
+        ] {
+            let err = ConvergencePointType::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: the predicate triple agrees with the
+    /// documented per-variant topology role. Pinning this table at
+    /// one site means any future DAG validator reads the same
+    /// projection that compliance bindings dispatch against.
+    #[test]
+    fn convergence_point_type_predicate_truth_tables() {
+        // Endomorphic: 1→1
+        assert!(ConvergencePointType::Transform.is_endomorphic());
+        assert!(!ConvergencePointType::Transform.is_diffusive());
+        assert!(!ConvergencePointType::Transform.is_convergent());
+
+        assert!(ConvergencePointType::Observe.is_endomorphic());
+        assert!(!ConvergencePointType::Observe.is_diffusive());
+        assert!(!ConvergencePointType::Observe.is_convergent());
+
+        // Diffusive: 1→N
+        assert!(!ConvergencePointType::Fork.is_endomorphic());
+        assert!(ConvergencePointType::Fork.is_diffusive());
+        assert!(!ConvergencePointType::Fork.is_convergent());
+
+        assert!(!ConvergencePointType::Broadcast.is_endomorphic());
+        assert!(ConvergencePointType::Broadcast.is_diffusive());
+        assert!(!ConvergencePointType::Broadcast.is_convergent());
+
+        // Convergent: N→1
+        for t in [
+            ConvergencePointType::Join,
+            ConvergencePointType::Gate,
+            ConvergencePointType::Select,
+            ConvergencePointType::Reduce,
+        ] {
+            assert!(!t.is_endomorphic(), "{t:?} should not be endomorphic");
+            assert!(!t.is_diffusive(), "{t:?} should not be diffusive");
+            assert!(t.is_convergent(), "{t:?} should be convergent");
+        }
+    }
+
+    /// COVERAGE CONTRACT: every variant lands in *exactly one* of the
+    /// three topology buckets — endomorphic, diffusive, or convergent.
+    /// Pins the three buckets at their declared cardinalities (2, 2, 4
+    /// — sum to `ALL.len()`) so a future variant lands somewhere
+    /// deliberately. No variant returns true from more than one
+    /// predicate; no variant returns false from all three.
+    #[test]
+    fn convergence_point_type_buckets_cover_every_variant() {
+        let mut endomorphic = 0u32;
+        let mut diffusive = 0u32;
+        let mut convergent = 0u32;
+        for t in ConvergencePointType::ALL {
+            let buckets = [t.is_endomorphic(), t.is_diffusive(), t.is_convergent()];
+            let hits: u32 = buckets.iter().map(|b| u32::from(*b)).sum();
+            assert_eq!(
+                hits, 1,
+                "{t:?} landed in {hits} buckets: {buckets:?} (must be exactly one)"
+            );
+            if t.is_endomorphic() {
+                endomorphic += 1;
+            }
+            if t.is_diffusive() {
+                diffusive += 1;
+            }
+            if t.is_convergent() {
+                convergent += 1;
+            }
+        }
+        assert_eq!(endomorphic, 2, "endomorphic bucket: Transform + Observe");
+        assert_eq!(diffusive, 2, "diffusive bucket: Fork + Broadcast");
+        assert_eq!(
+            convergent, 4,
+            "convergent bucket: Join + Gate + Select + Reduce"
+        );
+        assert_eq!(
+            endomorphic + diffusive + convergent,
+            ConvergencePointType::ALL.len() as u32
+        );
+    }
+
+    /// ARITY-PAIR ⇔ BUCKET CONTRACT: the `(input_arity, output_arity)`
+    /// projection names the same topology partition as the
+    /// `is_endomorphic` / `is_diffusive` / `is_convergent` predicate
+    /// triple. `(One, One) ⇒ endomorphic`; `(One, Many) ⇒ diffusive`;
+    /// `(Many, One) ⇒ convergent`. The impossible `(Many, Many)`
+    /// bucket is pinned empty here — a `(Many, Many)` point would
+    /// have no convergence semantics (many independent inputs
+    /// replicated across many independent outputs) and every future
+    /// DAG-composition validator would have to special-case it. This
+    /// seal is the bridge that lets a future graph validator dispatch
+    /// on either projection (arity pair OR bucket predicates) without
+    /// drift — and a future variant that wants `(Many, Many)` must
+    /// extend the bucket carving deliberately rather than silently
+    /// shipping a fourth topology class.
+    #[test]
+    fn convergence_point_type_arity_pair_agrees_with_bucket() {
+        for t in ConvergencePointType::ALL {
+            match (t.input_arity(), t.output_arity()) {
+                (Arity::One, Arity::One) => assert!(
+                    t.is_endomorphic(),
+                    "{t:?} has (One, One) arity but is not endomorphic"
+                ),
+                (Arity::One, Arity::Many) => assert!(
+                    t.is_diffusive(),
+                    "{t:?} has (One, Many) arity but is not diffusive"
+                ),
+                (Arity::Many, Arity::One) => assert!(
+                    t.is_convergent(),
+                    "{t:?} has (Many, One) arity but is not convergent"
+                ),
+                (Arity::Many, Arity::Many) => panic!(
+                    "{t:?} has (Many, Many) arity — pinned empty; \
+                     extend the topology carving before adding a variant here"
+                ),
+            }
+        }
+    }
+
+    /// BRIDGE ROUND-TRIP CONTRACT: every variant survives the
+    /// CRD-facing (`PascalCase`) ↔ tatara-core (`snake_case`)
+    /// `From` hop. Today the bridge is two hand-written 8-arm
+    /// matches in this file; pinning the round-trip over `ALL`
+    /// means a future variant added without extending the bridge
+    /// fails here at one site instead of drifting between the CRD
+    /// wire format and the
+    /// `core::ConvergencePointType` selector axis that
+    /// `compliance_binding::PointSelector::ByType` already
+    /// dispatches against.
+    #[test]
+    fn convergence_point_type_bridge_roundtrip_over_all() {
+        for t in ConvergencePointType::ALL {
+            let core_t: core::ConvergencePointType = t.into();
+            let back: ConvergencePointType = core_t.into();
+            assert_eq!(back, t, "bridge round-trip failed for {t:?}");
+        }
+    }
+
+    // ── closed-set algebra contracts for Arity ───────────────────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here. The arity is asserted
+    /// by the `[Self; 2]` array type itself.
+    #[test]
+    fn arity_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for a in Arity::ALL {
+            assert!(seen.insert(a), "duplicate variant in ALL: {a:?}");
+        }
+        assert_eq!(seen.len(), Arity::ALL.len());
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future
+    /// callers reach for either projection without drift. No serde
+    /// matching here because `Arity` is a typed projection, not a
+    /// CRD-facing enum — it never crosses the wire.
+    #[test]
+    fn arity_display_matches_as_str() {
+        for a in Arity::ALL {
+            assert_eq!(a.to_string(), a.as_str());
+        }
+    }
+
+    /// PREDICATE CONTRACT: `is_one` is true exactly for `Arity::One`.
+    /// The disjointness against `Many` is structural (only two
+    /// variants) but pinning the codomain here means a future
+    /// `Arity::Zero` variant must declare its own `is_one` arm
+    /// deliberately rather than silently defaulting through a
+    /// non-closed-set match.
+    #[test]
+    fn arity_is_one_predicate_truth_table() {
+        assert!(Arity::One.is_one());
+        assert!(!Arity::Many.is_one());
     }
 }

@@ -80,7 +80,7 @@ pub mod prelude {
     pub use crate::pool::{
         AllocationRef, EphemeralPool, MatchKey, MemberState, PoolCondition, PoolMember, PoolPhase,
         PoolSelector, PoolSpec, PoolStatus, ReplacementPolicy, ReturnPolicy, UnknownMemberState,
-        UnknownReplacementPolicy,
+        UnknownPoolPhase, UnknownReplacementPolicy,
     };
     pub use crate::receipt::{ReceiptEnvelope, ReceiptError, RECEIPT_VERSION};
     pub use crate::routing::{RoutingBackend, RoutingHostname, RoutingSpec};

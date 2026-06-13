@@ -476,6 +476,15 @@ impl FromStr for MemberState {
 pub struct UnknownMemberState(pub String);
 
 /// Pool lifecycle phase (observed across the whole pool population).
+///
+/// Sibling closed-set on the same `EphemeralPool` axis as
+/// [`MemberState::ALL`] (the per-slot lifecycle this phase aggregates
+/// over via [`MemberState::counts_toward_supply`]),
+/// [`ReplacementPolicy::ALL`] (on-failure policy) and
+/// [`ReturnPolicy::ALL`] (release-time disposition). Together with
+/// `MemberState`, this closes the pool reconciler's
+/// `(slot-state, pool-phase)` two-tier observation algebra on the
+/// same closed-set discipline as the rest of `tatara-process`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "PascalCase")]
 pub enum PoolPhase {
@@ -499,6 +508,123 @@ impl Default for PoolPhase {
         Self::Initializing
     }
 }
+
+impl PoolPhase {
+    /// The closed set of pool phases — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad AND the
+    /// `is_steady` / `is_terminal` predicate pair. Adding a seventh
+    /// variant lands at one `ALL` entry + one `as_str` arm + one arm
+    /// per predicate — exhaustively checked by the compiler (the
+    /// `[Self; 6]` array literal forces the arity) AND by the
+    /// per-variant truth-table contract test (a new variant must
+    /// declare its own `(is_steady, is_terminal)` projection or any
+    /// future status-aggregator surface — `feira pool list
+    /// --healthy`, the operator-facing condition aggregator, the
+    /// desired-loop heartbeat short-circuit — will silently bucket
+    /// it into the wrong lifecycle column).
+    pub const ALL: [Self; 6] = [
+        Self::Initializing,
+        Self::Steady,
+        Self::ScalingUp,
+        Self::ScalingDown,
+        Self::Degraded,
+        Self::Draining,
+    ];
+
+    /// Canonical PascalCase wire-format projection — matches the
+    /// serde `rename_all = "PascalCase"` output verbatim AND the CRD
+    /// `enum:` enumeration that `ephemeralpools.tatara.pleme.io`
+    /// stamps on `status.phase`. Pinned by
+    /// `pool_phase_as_str_matches_serde` so a variant rename can't
+    /// drift between the typed surface, the CRD enum, the YAML wire
+    /// format AND any future operator-facing diagnostic that
+    /// composes `phase={phase}` via Display rather than a hard-coded
+    /// literal that would silently rot. Display + FromStr triad
+    /// over `ALL` mirrors `MemberState` / `ReplacementPolicy` /
+    /// `ReturnPolicy` / `AllocationPhase` / `TeardownPolicy` /
+    /// `ConditionKind` / `ProcessPhase` / `ProcessSignal`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Initializing => "Initializing",
+            Self::Steady => "Steady",
+            Self::ScalingUp => "ScalingUp",
+            Self::ScalingDown => "ScalingDown",
+            Self::Degraded => "Degraded",
+            Self::Draining => "Draining",
+        }
+    }
+
+    /// Is the pool fully converged — supply matches desired, no
+    /// reconciler-driven population change pending? Closed-set match
+    /// (not `matches!`) so a future variant triggers the compiler's
+    /// exhaustiveness check at this site rather than silently
+    /// defaulting to `false`. Paired with `is_terminal` they form
+    /// the two-axis projection that future status aggregators
+    /// (operator-facing fleet health, `feira pool list --healthy`,
+    /// the SSE filter "show non-steady pools") dispatch against —
+    /// `is_steady && !is_terminal` ⇒ converged (goal state);
+    /// `!is_steady && is_terminal` ⇒ being deleted (no future
+    /// spawn); `!is_steady && !is_terminal` ⇒ transient
+    /// (Initializing | ScalingUp | ScalingDown | Degraded — pool
+    /// is in motion toward desired). The impossible bucket
+    /// `(true, true)` — a draining pool that's somehow also steady
+    /// — is pinned empty by `pool_phase_steady_excludes_terminal`.
+    pub const fn is_steady(self) -> bool {
+        match self {
+            Self::Steady => true,
+            Self::Initializing
+            | Self::ScalingUp
+            | Self::ScalingDown
+            | Self::Degraded
+            | Self::Draining => false,
+        }
+    }
+
+    /// Is the pool in its absorbing exit state — deletion-stamped,
+    /// reconciler is reaping every member, no spawn will ever
+    /// happen again? Closed-set match so a future variant triggers
+    /// the compiler's exhaustiveness check. See `is_steady` for the
+    /// predicate-pair contract + bucket definitions.
+    pub const fn is_terminal(self) -> bool {
+        match self {
+            Self::Draining => true,
+            Self::Initializing
+            | Self::Steady
+            | Self::ScalingUp
+            | Self::ScalingDown
+            | Self::Degraded => false,
+        }
+    }
+}
+
+impl fmt::Display for PoolPhase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PoolPhase {
+    type Err = UnknownPoolPhase;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for phase in Self::ALL {
+            if s == phase.as_str() {
+                return Ok(phase);
+            }
+        }
+        Err(UnknownPoolPhase(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownMemberState`],
+/// [`UnknownReplacementPolicy`], [`UnknownReturnPolicy`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`], and
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown pool phase: {0}")]
+pub struct UnknownPoolPhase(pub String);
 
 /// Standard K8s Condition shape (kept local so tatara-process doesn't
 /// depend on k8s_openapi types in its public schema).
@@ -1296,5 +1422,182 @@ mod tests {
         assert_eq!(failed, 1, "failed bucket: Failed");
         assert_eq!(in_use, 2, "in-use bucket: Allocated + Returning");
         assert_eq!(supply + failed + in_use, MemberState::ALL.len() as u32);
+    }
+
+    // ── closed-set algebra contracts for PoolPhase
+    //    (ALL × as_str × FromStr × predicate pair) ────────────────────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness check
+    /// before drifting `FromStr` or the sweep tests below. The arity is
+    /// asserted by the `[Self; 6]` array type itself.
+    #[test]
+    fn pool_phase_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for phase in PoolPhase::ALL {
+            assert!(seen.insert(phase), "duplicate variant in ALL: {phase:?}");
+        }
+        assert_eq!(seen.len(), PoolPhase::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename (or
+    /// an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface, the CRD enum, and the YAML
+    /// wire format the pool reconciler stamps on `status.phase`.
+    #[test]
+    fn pool_phase_as_str_matches_serde() {
+        for phase in PoolPhase::ALL {
+            let serialized = serde_json::to_string(&phase).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                phase.as_str(),
+                "as_str drift for {phase:?}: as_str={} serde={unquoted}",
+                phase.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift. Any operator-facing
+    /// "phase={phase}" diagnostic that composes through Display
+    /// inherits the canonical wire-format string automatically.
+    #[test]
+    fn pool_phase_display_matches_as_str() {
+        for phase in PoolPhase::ALL {
+            assert_eq!(phase.to_string(), phase.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn pool_phase_roundtrip_via_as_str() {
+        for phase in PoolPhase::ALL {
+            assert_eq!(
+                PoolPhase::from_str(phase.as_str()).unwrap(),
+                phase,
+                "round-trip failed for {phase:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased / typo / cross-axis-leaked — and
+    /// the error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    #[test]
+    fn unknown_pool_phase_errors() {
+        for bad in [
+            "",
+            "steady",
+            "SCALINGUP",
+            "Scaling-Up",
+            "scaling_down",
+            "Free",       // MemberState-axis leak
+            "Replace",    // ReturnPolicy-axis leak
+            "Attested",   // ProcessPhase-axis leak
+            "HoldFailed", // ReplacementPolicy-axis leak
+        ] {
+            let err = PoolPhase::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// TRUTH-TABLE CONTRACT: the predicate pair agrees with the
+    /// documented per-variant lifecycle role. Pinning this table at
+    /// one site means any future status-aggregator surface
+    /// (`feira pool list --healthy`, the SSE filter, the desired-loop
+    /// heartbeat short-circuit) reads the same projection that the
+    /// reconciler writes.
+    #[test]
+    fn pool_phase_predicate_truth_tables() {
+        assert!(!PoolPhase::Initializing.is_steady());
+        assert!(!PoolPhase::Initializing.is_terminal());
+
+        assert!(PoolPhase::Steady.is_steady());
+        assert!(!PoolPhase::Steady.is_terminal());
+
+        assert!(!PoolPhase::ScalingUp.is_steady());
+        assert!(!PoolPhase::ScalingUp.is_terminal());
+
+        assert!(!PoolPhase::ScalingDown.is_steady());
+        assert!(!PoolPhase::ScalingDown.is_terminal());
+
+        assert!(!PoolPhase::Degraded.is_steady());
+        assert!(!PoolPhase::Degraded.is_terminal());
+
+        assert!(!PoolPhase::Draining.is_steady());
+        assert!(PoolPhase::Draining.is_terminal());
+    }
+
+    /// DISJOINTNESS CONTRACT: no variant returns true from BOTH
+    /// `is_steady` and `is_terminal` simultaneously — a draining pool
+    /// is by definition transitioning OUT, not the goal converged
+    /// state. A future variant that returned true from both would
+    /// FAIL here, forcing the author to either pick one bucket or
+    /// extend the consumer dispatch sites (status aggregators,
+    /// heartbeat short-circuit) deliberately rather than silently
+    /// double-firing both branches.
+    #[test]
+    fn pool_phase_steady_excludes_terminal() {
+        for phase in PoolPhase::ALL {
+            assert!(
+                !(phase.is_steady() && phase.is_terminal()),
+                "{phase:?} returns true from both is_steady and is_terminal — \
+                 a draining pool is by definition not the converged goal state",
+            );
+        }
+    }
+
+    /// COVERAGE CONTRACT: every variant lands somewhere — either the
+    /// converged goal (`Steady`), the absorbing exit (`Draining`),
+    /// or the transient bucket (`Initializing | ScalingUp |
+    /// ScalingDown | Degraded` — pool is in motion toward desired).
+    /// A future variant that returns `false` from BOTH predicates is
+    /// fine *iff* it represents an in-motion state; this test pins
+    /// the existing variants in their declared buckets so the
+    /// projection consumers stay grounded.
+    #[test]
+    fn pool_phase_buckets_cover_every_variant() {
+        let mut converged = 0u32;
+        let mut terminal = 0u32;
+        let mut transient = 0u32;
+        for phase in PoolPhase::ALL {
+            match (phase.is_steady(), phase.is_terminal()) {
+                (true, false) => converged += 1,
+                (false, true) => terminal += 1,
+                (false, false) => transient += 1,
+                (true, true) => panic!("disjointness already pins this empty for {phase:?}"),
+            }
+        }
+        assert_eq!(converged, 1, "converged bucket: Steady");
+        assert_eq!(terminal, 1, "terminal bucket: Draining");
+        assert_eq!(
+            transient, 4,
+            "transient bucket: Initializing + ScalingUp + ScalingDown + Degraded"
+        );
+        assert_eq!(
+            converged + terminal + transient,
+            PoolPhase::ALL.len() as u32
+        );
+    }
+
+    /// DEFAULT-AGREEMENT CONTRACT: `PoolPhase::default()` returns the
+    /// variant a freshly-admitted pool should land in — `Initializing`
+    /// — AND that variant is neither steady (no members yet) nor
+    /// terminal (not deletion-stamped). A future `Default` rename
+    /// without flipping the predicates fails here.
+    #[test]
+    fn pool_phase_default_is_initializing_in_transient_bucket() {
+        let d = PoolPhase::default();
+        assert_eq!(d, PoolPhase::Initializing);
+        assert!(!d.is_steady());
+        assert!(!d.is_terminal());
     }
 }

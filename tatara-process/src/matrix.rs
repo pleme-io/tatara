@@ -416,21 +416,79 @@ pub enum BreatheDimensionKind {
 }
 
 impl BreatheDimensionKind {
+    /// The closed set of breathe dimensions — single source of truth
+    /// that drives the [`Self::from_keyword`] decode sweep AND the
+    /// [`Self::name_segment`] projection through [`Self::aliases`].
+    /// Adding a fourth dimension (e.g. `Network` → `NetworkBand`,
+    /// name-segment `"network"`) lands at one `ALL` entry + one
+    /// `aliases` arm + one `band_kind` arm, exhaustively checked by
+    /// the compiler (the `[Self; 3]` array literal forces the arity)
+    /// AND by the per-variant truth-table tests below. Sibling
+    /// closed-set lift to every other `ALL`-keyed enum in this crate
+    /// including [`MatrixTarget::ALL`] (the file-local closed-set
+    /// peer), [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::intent::IntentKind::ALL`],
+    /// [`crate::signal::ProcessSignal::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::lifetime::TeardownPolicy::ALL`], and
+    /// [`crate::classification::SubstrateType::ALL`]; having ONE
+    /// enumeration site means future LSP-completion, `tatara-check`
+    /// breathe-dimension enumeration, and exhaustive bidirection
+    /// sweeps project through this constant rather than re-listing
+    /// the variants at every consumer.
+    pub const ALL: [Self; 3] = [Self::Memory, Self::Cpu, Self::Storage];
+
+    /// The closed alias set this variant accepts at the
+    /// [`BreatheDimension::kind`] boundary (lowercase). Slot 0 IS the
+    /// canonical name segment — [`Self::name_segment`] reads
+    /// `aliases()[0]` so the canonical-name and alias-set pairing
+    /// binds at ONE site rather than at TWO sites (a `from_keyword`
+    /// alias-union arm AND a `name_segment` literal arm per variant).
+    /// Pre-lift the (alias-set, canonical-name) pairing was load-
+    /// bearing across two methods yet enforced by per-site call-site
+    /// discipline — a regression that renames the [`Self::Memory`]
+    /// canonical from `"memory"` → `"ram"` in [`Self::name_segment`]
+    /// without updating the [`Self::from_keyword`] arm silently
+    /// desynchronizes the two sites (band names track the canonical
+    /// but decode keeps accepting only `"memory"` / `"mem"`). Post-
+    /// lift the rename lands at ONE [`Self::aliases`] arm and
+    /// [`Self::name_segment`] + [`Self::from_keyword`] automatically
+    /// track because both project through this method.
+    ///
+    /// Every alias is lowercase; callers MUST lowercase their input
+    /// before comparing (the [`Self::from_keyword`] sweep does this
+    /// once at the top of its loop). The slice MUST be non-empty —
+    /// `name_segment()` panics on empty; the
+    /// `breathe_dimension_kind_aliases_nonempty_for_every_variant`
+    /// truth-table test pins the contract.
+    #[must_use]
+    pub fn aliases(self) -> &'static [&'static str] {
+        match self {
+            Self::Memory => &["memory", "mem"],
+            Self::Cpu => &["cpu"],
+            Self::Storage => &["storage", "disk"],
+        }
+    }
+
     /// Decode a [`BreatheDimension::kind`] keyword (case-insensitive)
     /// into the typed marker, or `None` for keywords that aren't in
     /// the closed set (they fall through to the `filter_map` drop in
     /// [`EnvMatrixSpec::breathe_bands`] — the dimension contributes
     /// no band). Closed-set primary inverse of [`Self::band_kind`]
     /// and [`Self::name_segment`]: every primary / alias keyword for
-    /// a variant decodes back to that variant.
+    /// a variant decodes back to that variant. Lifted onto a linear
+    /// search across [`Self::ALL`] keyed on [`Self::aliases`] so the
+    /// canonical lowercase alias literals live at ONE site (the
+    /// `aliases` arms) rather than at TWO sites (a `from_keyword`
+    /// alias-union arm AND a `name_segment` literal arm per variant)
+    /// — adding a fourth dimension extends only `ALL` + `aliases` +
+    /// `band_kind`, NOT a third per-variant literal site.
     #[must_use]
     pub fn from_keyword(kw: &str) -> Option<Self> {
-        match kw.to_ascii_lowercase().as_str() {
-            "memory" | "mem" => Some(Self::Memory),
-            "cpu" => Some(Self::Cpu),
-            "storage" | "disk" => Some(Self::Storage),
-            _ => None,
-        }
+        let lower = kw.to_ascii_lowercase();
+        Self::ALL
+            .into_iter()
+            .find(|t| t.aliases().iter().any(|a| *a == lower))
     }
 
     /// Canonical breathe Band CR kind — the `kind:` field on the
@@ -458,14 +516,13 @@ impl BreatheDimensionKind {
     /// (`"mem"` and `"memory"`) cannot collide-by-shape into
     /// indistinguishable band names; the typed projection is the
     /// canonical-name boundary the substrate's deterministic-output
-    /// posture relies on.
+    /// posture relies on. Projects through [`Self::aliases`] slot 0
+    /// so the canonical name + accepted-alias set live at ONE source
+    /// of truth — a future variant adds ONE `aliases` arm and the
+    /// canonical name is automatically the first entry.
     #[must_use]
     pub fn name_segment(self) -> &'static str {
-        match self {
-            Self::Memory => "memory",
-            Self::Cpu => "cpu",
-            Self::Storage => "storage",
-        }
+        self.aliases()[0]
     }
 }
 
@@ -1203,18 +1260,151 @@ mod tests {
     // The string-input `band_kind_for` helper paired with an inline
     // `dim.kind.to_ascii_lowercase()` name-segment site collapses onto
     // the typed `BreatheDimensionKind` closed-set enum. The tests
-    // below pin five structural contracts the lift establishes —
+    // below pin the structural contracts the lift establishes —
+    // `ALL` arity + uniqueness + reachability, `aliases` non-emptiness
+    // / lowercase / no-cross-variant-collisions / slot-0-is-canonical,
     // primary-keyword decode, alias-equivalence (each alias decodes to
     // the SAME variant as the primary), per-variant `band_kind` /
     // `name_segment` projection, unknown-keyword drop, and the
     // canonical-name contract that `breathe_bands` emits the SAME
     // band-name regardless of which alias the operator wrote (the
     // load-bearing improvement over pre-lift's per-alias name drift).
-    const BREATHE_DIM_VARIANTS: [BreatheDimensionKind; 3] = [
-        BreatheDimensionKind::Memory,
-        BreatheDimensionKind::Cpu,
-        BreatheDimensionKind::Storage,
-    ];
+
+    #[test]
+    fn breathe_dimension_kind_all_enumerates_each_variant_exactly_once() {
+        // ALL CONTRACT: `BreatheDimensionKind::ALL` is the substrate's
+        // closed-set source of truth — every consumer (`from_keyword`,
+        // future `tatara-check` enumerators, sibling test sweeps)
+        // projects through it. Three contracts: arity (the `[Self; 3]`
+        // array literal pins it at compile time), no-duplicate (a slot
+        // that re-lists `Memory` would pass arity but silently lose
+        // `Storage`-shaped coverage from every sweep), and per-variant
+        // reachability (every declared variant appears in `ALL`).
+        // Sibling shape to every other `ALL`-keyed enum's truth-table
+        // test in this crate.
+        let segments: Vec<&'static str> = BreatheDimensionKind::ALL
+            .iter()
+            .map(|v| v.name_segment())
+            .collect();
+        assert_eq!(segments.len(), 3, "ALL must enumerate exactly 3 variants");
+        let mut sorted = segments.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(
+            sorted.len(),
+            segments.len(),
+            "ALL must contain no duplicate variants ({segments:?})"
+        );
+        // Per-variant reachability: every declared variant projects
+        // through some `ALL` entry.
+        for v in [
+            BreatheDimensionKind::Memory,
+            BreatheDimensionKind::Cpu,
+            BreatheDimensionKind::Storage,
+        ] {
+            assert!(
+                BreatheDimensionKind::ALL.contains(&v),
+                "BreatheDimensionKind::ALL must enumerate {v:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn breathe_dimension_kind_aliases_nonempty_for_every_variant() {
+        // ALIASES NON-EMPTINESS CONTRACT: `aliases()` MUST return a
+        // non-empty slice for every variant — `name_segment()` reads
+        // `aliases()[0]` and an empty slice would panic at runtime.
+        // The truth-table sweep over `ALL` pins the invariant at test
+        // time so a future variant whose `aliases` arm returns `&[]`
+        // fails loudly here rather than at the first operator-side
+        // `name_segment()` call.
+        for variant in BreatheDimensionKind::ALL {
+            assert!(
+                !variant.aliases().is_empty(),
+                "BreatheDimensionKind::{variant:?}.aliases() must be non-empty"
+            );
+        }
+    }
+
+    #[test]
+    fn breathe_dimension_kind_aliases_are_all_lowercase() {
+        // ALIAS LOWERCASE CONTRACT: every entry of `aliases()` is
+        // pre-lowercased; `from_keyword` lowercases the input ONCE
+        // and compares directly against the alias entries. An upper-
+        // case alias literal (e.g. `&["Memory", "mem"]`) would silently
+        // fail to decode the lowercase input `"memory"` despite
+        // appearing to declare it. Pin the lowercase contract over
+        // `ALL × aliases()` so the case-fold invariant is structural,
+        // not per-arm-discipline.
+        for variant in BreatheDimensionKind::ALL {
+            for alias in variant.aliases() {
+                assert_eq!(
+                    *alias,
+                    alias.to_ascii_lowercase(),
+                    "BreatheDimensionKind::{variant:?} alias {alias:?} must be lowercase"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn breathe_dimension_kind_name_segment_is_aliases_slot_zero() {
+        // CANONICAL-SLOT CONTRACT: `name_segment()` projects through
+        // `aliases()[0]`. Pin the slot-0 binding so a future refactor
+        // that reorders an `aliases` arm (e.g. swaps `"memory"` and
+        // `"mem"` for Memory) immediately reshapes the canonical
+        // band-name and the test fails — preventing a silent
+        // canonical-name drift from `<env>-memory` to `<env>-mem` that
+        // would otherwise type-check.
+        for variant in BreatheDimensionKind::ALL {
+            assert_eq!(
+                variant.name_segment(),
+                variant.aliases()[0],
+                "BreatheDimensionKind::{variant:?}.name_segment() must be aliases()[0]"
+            );
+        }
+    }
+
+    #[test]
+    fn breathe_dimension_kind_aliases_have_no_cross_variant_collisions() {
+        // CROSS-VARIANT UNIQUENESS CONTRACT: no alias appears in two
+        // variants' `aliases()` lists. Two variants accepting the same
+        // alias would make `from_keyword` non-deterministic — the
+        // linear search across `ALL` would return whichever variant
+        // came first in `ALL`. Sibling shape to every other closed-set
+        // round-trip-uniqueness sweep in this crate.
+        let mut pairs: Vec<(&'static str, BreatheDimensionKind)> = Vec::new();
+        for variant in BreatheDimensionKind::ALL {
+            for alias in variant.aliases() {
+                if let Some((_, prior)) = pairs.iter().find(|(a, _)| a == alias) {
+                    panic!(
+                        "alias {alias:?} appears in both {prior:?} and {variant:?} \
+                         — `from_keyword` would be non-deterministic"
+                    );
+                }
+                pairs.push((*alias, variant));
+            }
+        }
+    }
+
+    #[test]
+    fn breathe_dimension_kind_from_keyword_decodes_every_alias_for_every_variant() {
+        // ALL-ALIAS DECODE SWEEP: for every (variant, alias) pair in
+        // `ALL × aliases()`, `from_keyword(alias)` MUST decode to that
+        // variant. Subsumes the prior pinned-pairs table by deriving
+        // the sweep from the typed source of truth — adding a fourth
+        // dimension automatically extends the sweep through `ALL`
+        // rather than requiring a hand-edited literal table.
+        for variant in BreatheDimensionKind::ALL {
+            for alias in variant.aliases() {
+                assert_eq!(
+                    BreatheDimensionKind::from_keyword(alias),
+                    Some(variant),
+                    "from_keyword({alias:?}) must decode as {variant:?}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn breathe_dimension_kind_from_keyword_round_trips_through_band_kind_for_every_variant() {
@@ -1226,7 +1416,7 @@ mod tests {
         // regression that drifts ONE arm's `from_keyword → name_segment`
         // round-trip (e.g. routes `"cpu"` through to `Memory`) fails
         // loudly here.
-        for variant in BREATHE_DIM_VARIANTS {
+        for variant in BreatheDimensionKind::ALL {
             assert_eq!(
                 BreatheDimensionKind::from_keyword(variant.name_segment()),
                 Some(variant),

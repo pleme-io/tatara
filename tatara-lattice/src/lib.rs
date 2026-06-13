@@ -36,8 +36,19 @@ pub trait Lattice: Sized + Clone + PartialEq {
 
 // ── DataClassification — total order ────────────────────────────────────
 //
-// Public < Internal < Confidential < Pii, Phi, Pci (all equivalent top-tier sensitivity).
-// We treat PII/PHI/PCI as pairwise incomparable — meet via lexicographic order within.
+// Public < Internal < Confidential < Pii < Phi < Pci. The ordering is
+// sealed at one site in `tatara_process::classification` —
+// `DataClassification::sensitivity_rank` — so a future variant inserted
+// in the middle of the enum declaration does not silently shift this
+// lattice's `leq` relation. Pre-lift the comparator was `(*self as u8)
+// <= (*other as u8)`, which rode silently on declaration order; an
+// insertion would have moved every later variant's lattice slot
+// without any compile error or test signal. Post-lift the rank is
+// declared per-variant on the typed projection, pinned by
+// `data_classification_rank_is_strictly_monotone_over_all` and
+// `data_classification_rank_agrees_with_partial_ord` in the source
+// crate, and `data_classification_leq_uses_typed_rank` below pins
+// THIS impl to the typed projection (not the silent cast).
 
 impl Lattice for DataClassification {
     fn meet(&self, other: &Self) -> Self {
@@ -55,7 +66,7 @@ impl Lattice for DataClassification {
         }
     }
     fn leq(&self, other: &Self) -> bool {
-        (*self as u8) <= (*other as u8)
+        self.sensitivity_rank() <= other.sensitivity_rank()
     }
     fn bottom() -> Self {
         DataClassification::Public
@@ -320,15 +331,48 @@ mod tests {
 
     use proptest::prelude::*;
 
+    /// SEAL TEST: this lattice's `leq` agrees with the typed
+    /// `sensitivity_rank` projection in `tatara_process::classification`,
+    /// NOT with a silent `as u8` declaration-order cast. A future
+    /// reordering of the source enum's variant declarations is caught
+    /// by `data_classification_rank_agrees_with_partial_ord` in the
+    /// source crate; THIS test ensures the lattice impl actually
+    /// consumes that typed projection. Removing the
+    /// `sensitivity_rank` call from `Lattice::leq` (back to `as u8`)
+    /// would still pass every lattice law because the rank values
+    /// were chosen to agree with declaration order today — but it
+    /// would re-introduce the silent declaration-order coupling that
+    /// the lift severed. This test fails when the rank arms disagree
+    /// with what `Lattice::leq` returns for any pair in `ALL × ALL`.
+    #[test]
+    fn data_classification_leq_uses_typed_rank() {
+        for a in DataClassification::ALL {
+            for b in DataClassification::ALL {
+                assert_eq!(
+                    a.leq(&b),
+                    a.sensitivity_rank() <= b.sensitivity_rank(),
+                    "Lattice::leq for ({a:?}, {b:?}) disagrees with sensitivity_rank — \
+                     the lattice ordering has drifted away from the typed rank \
+                     projection that seals it",
+                );
+            }
+        }
+    }
+
+    /// Generic closed-set proptest strategy — iterates a static `ALL`
+    /// slice via `prop_oneof! { Just(*v) ... }`. Lifts the hand-rolled
+    /// strategy that previously hard-coded each variant onto the
+    /// closed-set source of truth, so adding a variant to
+    /// `DataClassification::ALL` automatically extends the property
+    /// search space here without touching this strategy.
+    fn from_all<T: Copy + std::fmt::Debug + 'static>(
+        all: &'static [T],
+    ) -> impl Strategy<Value = T> {
+        (0..all.len()).prop_map(move |i| all[i])
+    }
+
     fn any_data_class() -> impl Strategy<Value = DataClassification> {
-        prop_oneof![
-            Just(DataClassification::Public),
-            Just(DataClassification::Internal),
-            Just(DataClassification::Confidential),
-            Just(DataClassification::Pii),
-            Just(DataClassification::Phi),
-            Just(DataClassification::Pci),
-        ]
+        from_all(&DataClassification::ALL)
     }
 
     fn any_calm() -> impl Strategy<Value = CalmClassification> {

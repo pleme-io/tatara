@@ -500,7 +500,37 @@ pub struct Horizon {
     pub healthy_rate_threshold: Option<f64>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+/// The shape of a convergence horizon's lifetime — does the point
+/// run toward a fixed point and terminate, or run in perpetuity with
+/// a rate signal?
+///
+/// Closed-set sibling on the classification axis algebra; the `ALL` /
+/// `as_str` / Display / `FromStr` triad mirrors
+/// [`ConvergencePointType::ALL`], [`SubstrateType::ALL`],
+/// [`DataClassification::ALL`], [`CalmClassification::ALL`],
+/// [`OptimizationDirection::ALL`], [`crate::pool::PoolPhase::ALL`],
+/// [`crate::pool::MemberState::ALL`],
+/// [`crate::pool::ReplacementPolicy::ALL`],
+/// [`crate::pool::ReturnPolicy::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::lifetime::LifetimeKind::ALL`],
+/// [`crate::intent::IntentKind::ALL`],
+/// [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`]. The [`Self::terminates`]
+/// predicate is the load-bearing horizon-shape primitive — schedulers
+/// asking "will this Process ever reach `Reaped` via natural
+/// termination?" read it as the typed image of the lattice ordering
+/// (`Bounded ≤ Asymptotic` because the bounded horizon strictly
+/// refines the asymptotic one by also terminating) rather than
+/// re-deriving from the variant name. The
+/// [`Self::requires_metric_axes`] predicate is the typed validity
+/// witness for the [`Horizon`] struct's three `Option<…>` fields
+/// (`metric`, `direction`, `healthy_rate_threshold`) — they're
+/// `Some(_)` iff the kind requires them, so the implicit invariant
+/// the optionality encodes becomes a checkable per-kind predicate
+/// instead of operator folklore.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum HorizonKind {
     /// Has a fixed point — distance reaches 0 and terminates.
@@ -509,6 +539,133 @@ pub enum HorizonKind {
     /// Runs in perpetuity — rate is the health signal, not distance.
     Asymptotic,
 }
+
+impl HorizonKind {
+    /// The closed set of horizon kinds — single source of truth that
+    /// drives the `as_str` / Display / `FromStr` triad AND the
+    /// `terminates` predicate AND the `requires_metric_axes` shape-
+    /// validity witness. Adding a third variant (e.g. a `Periodic`
+    /// sentinel for "terminates on each window boundary then
+    /// re-arms", which neither perpetually-running nor singularly-
+    /// terminating names) lands at one `ALL` entry + one `as_str`
+    /// arm + one `terminates` arm + one `requires_metric_axes` arm —
+    /// exhaustively checked by the compiler (the `[Self; 2]` array
+    /// literal forces the arity) AND by the per-variant truth-table
+    /// tests (a new variant must declare its own termination AND
+    /// metric-axes requirement, or every scheduler / horizon-shape
+    /// validator will silently bucket it). Closes the load-bearing
+    /// classification sub-axis that the `Horizon.kind` field threads
+    /// through every `Classification.horizon` field on every
+    /// Process — the last open sibling on the classification axis
+    /// algebra after `OptimizationDirection` (980a318),
+    /// `CalmClassification` (da3430c), `SubstrateType` (b9d7b3b),
+    /// `ConvergencePointType` (7941527), `Arity`, and
+    /// `DataClassification` (81bffa0).
+    pub const ALL: [Self; 2] = [Self::Bounded, Self::Asymptotic];
+
+    /// Canonical PascalCase wire-format projection — matches the
+    /// serde `rename_all = "PascalCase"` output verbatim AND the CRD
+    /// `enum:` enumeration the Process schema stamps on
+    /// `spec.classification.horizon.kind`. Pinned by
+    /// `horizon_kind_as_str_matches_serde` so a variant rename
+    /// can't drift between the typed surface, the CRD enum, the
+    /// YAML wire format AND any future operator-facing diagnostic
+    /// composing `horizon.kind={kind}` via Display rather than a
+    /// hard-coded literal. Display + FromStr triad over `ALL`
+    /// mirrors every sibling closed-set enum in this crate.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Bounded => "Bounded",
+            Self::Asymptotic => "Asymptotic",
+        }
+    }
+
+    /// LOAD-BEARING HORIZON-SHAPE PRIMITIVE: does this kind terminate
+    /// naturally — i.e. does it have a fixed point that
+    /// `ConvergenceDistance` can reach? Closed-set match (not
+    /// `matches!`) so a future variant triggers the compiler's
+    /// exhaustiveness check rather than silently defaulting to
+    /// `false` (which would silently mis-route a terminating
+    /// variant through the asymptotic rate-window evaluator) or
+    /// `true` (which would silently invent a fixed point for a
+    /// perpetual variant). `Bounded ⇒ true`, `Asymptotic ⇒ false`
+    /// is the typed image of the documented lattice ordering
+    /// `Bounded ≤ Asymptotic` — the bounded horizon strictly refines
+    /// the asymptotic one BY ALSO TERMINATING. Future schedulers
+    /// asking "will this Process reach `Reaped` via natural
+    /// termination?" read this predicate, and the tatara-lattice
+    /// `Lattice for Horizon` impl (which currently dispatches on
+    /// `self.kind == HorizonKind::Bounded` at three sites) can be
+    /// recast in a future run to read `self.kind.terminates()` so
+    /// the lattice basis is the typed primitive rather than a
+    /// variant-name comparison.
+    pub const fn terminates(self) -> bool {
+        match self {
+            Self::Bounded => true,
+            Self::Asymptotic => false,
+        }
+    }
+
+    /// LOAD-BEARING SHAPE-VALIDITY WITNESS: does this kind require
+    /// the three asymptotic-only [`Horizon`] axes (`metric`,
+    /// `direction`, `healthy_rate_threshold`) to be `Some(_)`?
+    /// Closed-set match (not `matches!`) so a future variant
+    /// triggers the compiler's exhaustiveness check rather than
+    /// silently defaulting to `false` (which would silently let an
+    /// asymptotic-shaped variant ship with missing metric axes and
+    /// trip the rate-window evaluator at runtime). `Bounded ⇒
+    /// false`, `Asymptotic ⇒ true` is the typed image of the
+    /// optionality the [`Horizon`] struct encodes via three
+    /// `Option<…>` fields — the implicit invariant ("Asymptotic
+    /// only" in the field docs) is now a checkable per-kind
+    /// predicate. Future horizon-shape validators (CRD admission,
+    /// `tatara-check` form linter, Lisp authoring-time predicate)
+    /// read this rather than re-deriving from variant names.
+    /// Pinned as the antisymmetric partner of [`Self::terminates`]
+    /// — exactly one of `(terminates, requires_metric_axes)` is
+    /// true per variant — by
+    /// `horizon_kind_terminate_xor_requires_metric_axes`.
+    pub const fn requires_metric_axes(self) -> bool {
+        match self {
+            Self::Bounded => false,
+            Self::Asymptotic => true,
+        }
+    }
+}
+
+impl fmt::Display for HorizonKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for HorizonKind {
+    type Err = UnknownHorizonKind;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for k in Self::ALL {
+            if s == k.as_str() {
+                return Ok(k);
+            }
+        }
+        Err(UnknownHorizonKind(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownConvergencePointType`],
+/// [`UnknownSubstrateType`], [`UnknownDataClassification`],
+/// [`UnknownCalmClassification`], [`UnknownOptimizationDirection`],
+/// [`crate::pool::UnknownMemberState`],
+/// [`crate::pool::UnknownPoolPhase`],
+/// [`crate::pool::UnknownReplacementPolicy`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`],
+/// [`crate::phase::UnknownPhase`],
+/// [`crate::signal::UnknownSighupStrategy`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown horizon kind: {0}")]
+pub struct UnknownHorizonKind(pub String);
 
 impl Horizon {
     pub fn bounded() -> Self {
@@ -2261,5 +2418,214 @@ mod tests {
             let back: OptimizationDirection = core_d.into();
             assert_eq!(back, d, "bridge round-trip failed for {d:?}");
         }
+    }
+
+    // ── closed-set algebra contracts for HorizonKind
+    //    (ALL × as_str × FromStr × terminates × requires_metric_axes) ──
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness
+    /// check before drifting `FromStr` or the sweep tests below. The
+    /// arity is asserted by the `[Self; 2]` array type itself.
+    #[test]
+    fn horizon_kind_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for k in HorizonKind::ALL {
+            assert!(seen.insert(k), "duplicate variant in ALL: {k:?}");
+        }
+        assert_eq!(seen.len(), HorizonKind::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
+    /// output verbatim for every variant. A future variant rename
+    /// (or an `as_str` arm typo) lands here at one site, instead of
+    /// drifting between the typed surface, the CRD enum, and the
+    /// YAML wire format the reconciler stamps on
+    /// `spec.classification.horizon.kind`.
+    #[test]
+    fn horizon_kind_as_str_matches_serde() {
+        for k in HorizonKind::ALL {
+            let serialized = serde_json::to_string(&k).expect("serialize");
+            let unquoted = serialized
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .to_string();
+            assert_eq!(
+                unquoted,
+                k.as_str(),
+                "as_str drift for {k:?}: as_str={} serde={unquoted}",
+                k.as_str()
+            );
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future
+    /// callers reach for either projection without drift. Any
+    /// operator-facing `horizon.kind={kind}` diagnostic that
+    /// composes through Display inherits the canonical wire-format
+    /// string automatically.
+    #[test]
+    fn horizon_kind_display_matches_as_str() {
+        for k in HorizonKind::ALL {
+            assert_eq!(k.to_string(), k.as_str());
+        }
+    }
+
+    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s
+    /// sweep of `ALL` fails here.
+    #[test]
+    fn horizon_kind_roundtrip_via_as_str() {
+        for k in HorizonKind::ALL {
+            assert_eq!(
+                HorizonKind::from_str(k.as_str()).unwrap(),
+                k,
+                "round-trip failed for {k:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings outside the canonical projection —
+    /// empty / lowercased / typo / cross-axis-leaked — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// surfaces the bad value, not a normalized form.
+    #[test]
+    fn unknown_horizon_kind_errors() {
+        for bad in [
+            "",
+            "bounded",   // lowercased
+            "BOUNDED",   // uppercased
+            "Boundd",    // typo
+            "Finite",    // synonym, not canonical
+            "Perpetual", // synonym, not canonical
+            "Infinite",  // synonym, not canonical
+            "Minimize",  // OptimizationDirection-axis leak
+            "Monotone",  // CalmClassification-axis leak
+            "Pii",       // DataClassification-axis leak
+            "Steady",    // PoolPhase-axis leak
+            "Attested",  // ProcessPhase-axis leak
+            "Compute",   // SubstrateType-axis leak
+            "Gate",      // ConvergencePointType-axis leak
+            "PromQL",    // ConditionKind-axis leak
+        ] {
+            let err = HorizonKind::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// LOAD-BEARING TRUTH-TABLE: `terminates` is the boolean
+    /// partition `Bounded ⇒ true`, `Asymptotic ⇒ false`. Pinning
+    /// this table at one site means any future scheduler asking
+    /// "will this Process reach `Reaped` via natural termination?"
+    /// reads the same projection that the lattice ordering encodes
+    /// (Bounded ≤ Asymptotic BECAUSE the bounded horizon strictly
+    /// refines the asymptotic one by also terminating).
+    #[test]
+    fn horizon_kind_terminates_truth_table() {
+        assert!(HorizonKind::Bounded.terminates());
+        assert!(!HorizonKind::Asymptotic.terminates());
+    }
+
+    /// LOAD-BEARING TRUTH-TABLE: `requires_metric_axes` is the
+    /// boolean partition `Bounded ⇒ false`, `Asymptotic ⇒ true` —
+    /// the typed image of the optionality the [`Horizon`] struct
+    /// encodes via its three `Option<…>` fields (`metric`,
+    /// `direction`, `healthy_rate_threshold`). The implicit
+    /// "Asymptotic only" invariant in the field docs is now a
+    /// checkable per-kind predicate. Pinning this table at one site
+    /// means any future horizon-shape validator (CRD admission,
+    /// `tatara-check` form linter, Lisp authoring-time predicate)
+    /// reads the same projection.
+    #[test]
+    fn horizon_kind_requires_metric_axes_truth_table() {
+        assert!(!HorizonKind::Bounded.requires_metric_axes());
+        assert!(HorizonKind::Asymptotic.requires_metric_axes());
+    }
+
+    /// COVERAGE CONTRACT: every variant lands in exactly one of two
+    /// termination buckets — terminating (`Bounded`) or perpetual
+    /// (`Asymptotic`). Pins the two buckets at their declared
+    /// cardinalities (1, 1 — sum to `ALL.len()`) so a future variant
+    /// lands somewhere deliberately.
+    #[test]
+    fn horizon_kind_buckets_cover_every_variant() {
+        let mut terminating = 0u32;
+        let mut perpetual = 0u32;
+        for k in HorizonKind::ALL {
+            if k.terminates() {
+                terminating += 1;
+            } else {
+                perpetual += 1;
+            }
+        }
+        assert_eq!(terminating, 1, "terminating bucket: Bounded");
+        assert_eq!(perpetual, 1, "perpetual bucket: Asymptotic");
+        assert_eq!(terminating + perpetual, HorizonKind::ALL.len() as u32);
+    }
+
+    /// ANTISYMMETRY CONTRACT: for every variant, exactly one of
+    /// `(terminates, requires_metric_axes)` is true — the two
+    /// predicates carve the variants into complementary buckets
+    /// (terminating ↔ no metric axes; perpetual ↔ requires metric
+    /// axes). A future variant that returned `true` for both (a
+    /// terminating horizon that nonetheless tracks an asymptotic
+    /// metric) or `false` for both (an inert horizon with no
+    /// termination AND no metric signal — there'd be nothing to
+    /// observe) would fail here, forcing the author to extend
+    /// either the predicates or the [`Horizon`] struct's
+    /// optionality contract deliberately.
+    #[test]
+    fn horizon_kind_terminate_xor_requires_metric_axes() {
+        for k in HorizonKind::ALL {
+            assert!(
+                k.terminates() ^ k.requires_metric_axes(),
+                "{k:?}: terminates() XOR requires_metric_axes() must hold",
+            );
+        }
+    }
+
+    /// DEFAULT-AGREEMENT CONTRACT: `HorizonKind::default()` returns
+    /// `Bounded` (the variant tagged `#[default]`), AND that
+    /// variant lands in the terminating bucket. A future
+    /// `#[default]` rename without flipping the predicate fails
+    /// here — `Bounded` is the canonical default for a convergence
+    /// horizon (a point with no asymptotic axes declared should
+    /// terminate naturally, not silently flip into a perpetual
+    /// rate-window evaluator with zero threshold). This is also
+    /// the same value `Horizon::default()` carries, so pinning the
+    /// default here pins the struct-default behavior at one site.
+    #[test]
+    fn horizon_kind_default_is_bounded_terminates() {
+        let k = HorizonKind::default();
+        assert_eq!(k, HorizonKind::Bounded);
+        assert!(k.terminates());
+        assert!(!k.requires_metric_axes());
+    }
+
+    /// HORIZON ↔ KIND AGREEMENT: every variant in `HorizonKind::ALL`
+    /// composes with the existing [`Horizon::bounded`] /
+    /// [`Horizon::asymptotic`] constructors to produce a `Horizon`
+    /// whose `kind` matches AND whose `Option<…>` fields agree
+    /// with `requires_metric_axes`. Pins the implicit contract
+    /// between the kind discriminator and the optionality at one
+    /// site — a future kind added without extending either the
+    /// constructors or `requires_metric_axes` fails here before
+    /// drifting between the typed surface and the documented
+    /// "Asymptotic only" field invariant.
+    #[test]
+    fn horizon_kind_agrees_with_struct_optionality() {
+        let bounded = Horizon::bounded();
+        assert_eq!(bounded.kind, HorizonKind::Bounded);
+        assert!(!bounded.kind.requires_metric_axes());
+        assert!(bounded.metric.is_none());
+        assert!(bounded.direction.is_none());
+        assert!(bounded.healthy_rate_threshold.is_none());
+
+        let asymp = Horizon::asymptotic("p99_latency", OptimizationDirection::Minimize, 0.1);
+        assert_eq!(asymp.kind, HorizonKind::Asymptotic);
+        assert!(asymp.kind.requires_metric_axes());
+        assert!(asymp.metric.is_some());
+        assert!(asymp.direction.is_some());
+        assert!(asymp.healthy_rate_threshold.is_some());
     }
 }

@@ -35,6 +35,7 @@
 //! `:breathe` floor/ceiling limits.
 
 use std::fmt;
+use std::str::FromStr;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -172,6 +173,21 @@ impl MatrixAxis {
 }
 
 /// How the permutation set is drawn from the axes.
+///
+/// Closed-set discriminator: see [`SelectStrategyKind`] for the
+/// payload-stripped view that drives `as_str` / `Display` / `FromStr`
+/// over [`SelectStrategyKind::ALL`]. Adding a third strategy (e.g.
+/// `Latin` for a Latin-hypercube sweep or `Random { seed, count }`
+/// for a seeded random sample) lands at one variant here + one
+/// [`SelectStrategyKind`] entry + one `kind()` arm + one
+/// [`SelectStrategy::selection_size_for`] arm, exhaustively checked
+/// by the compiler AND by the per-variant truth-table tests below.
+///
+/// Sibling closed-set algebra to every other typed surface on the
+/// `tatara-process` matrix axis: [`MatrixTarget::ALL`],
+/// [`BreatheDimensionKind::ALL`], [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::lifetime_clock::TerminateReasonKind::ALL`].
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Default)]
 pub enum SelectStrategy {
     /// The full cartesian product of every axis. N envs = Π |axisᵢ|.
@@ -182,6 +198,165 @@ pub enum SelectStrategy {
     /// a sparse subset instead of the full product.
     Explicit(Vec<Vec<usize>>),
 }
+
+impl SelectStrategy {
+    /// Discriminator projection — strips the payload, yielding the
+    /// closed-set kind. Used by the kind-sweep tests and by any future
+    /// consumer that wants to group strategies by category without
+    /// pattern-matching the full payload (e.g. metrics labels,
+    /// `tatara-check` enumerators, future `status.conditions[].reason`
+    /// reason-keys, LSP completion lists). Sibling shape to
+    /// [`crate::lifetime_clock::TerminateReason::kind`].
+    #[must_use]
+    pub const fn kind(&self) -> SelectStrategyKind {
+        match self {
+            Self::Cartesian => SelectStrategyKind::Cartesian,
+            Self::Explicit(_) => SelectStrategyKind::Explicit,
+        }
+    }
+
+    /// Count the selection size against `axes_lengths` (one entry per
+    /// matrix axis, the count of `values` for that axis), WITHOUT
+    /// materializing the coordinate set. The closed-set dispatch IS
+    /// the lift: for [`Self::Cartesian`] the answer is the product
+    /// of axis lengths (so a 10×10×… sweep counts in O(N) instead of
+    /// allocating the whole product just to call `.len()`); for
+    /// [`Self::Explicit`] it's the count of in-bounds coordinate
+    /// tuples (one in-bounds index per axis).
+    ///
+    /// Routes through [`coords_in_bounds_against`] for the Explicit
+    /// case so the in-bounds check binds at ONE site that the
+    /// [`EnvMatrixSpec::coord_in_bounds`] adapter and the
+    /// [`EnvMatrixSpec::coordinates`] filter also project through —
+    /// a regression that drifts ONE site's bounds-check semantics
+    /// (e.g. starts admitting equal indices) lands at the shared
+    /// helper, not at three byte-identical sites.
+    ///
+    /// Aligns with the pre-lift `cartesian` empty-axes semantics:
+    /// empty `axes_lengths` ⇒ 1 (one empty coord), any zero length
+    /// ⇒ 0 (no env can range over no values), otherwise the product.
+    ///
+    /// Saturating fold so a sweep whose product exceeds `usize::MAX`
+    /// saturates to `usize::MAX` rather than panicking in debug
+    /// builds or silently wrapping in release — either of which
+    /// would mis-cap downstream when [`EnvMatrixSpec::expand`] reads
+    /// the size as a budget hint. Saturation gives the operator a
+    /// deterministic "as many as fit" signal at the top of the
+    /// `usize` range, NOT a wraparound to a small number that would
+    /// silently under-spawn.
+    #[must_use]
+    pub fn selection_size_for(&self, axes_lengths: &[usize]) -> usize {
+        match self {
+            Self::Cartesian => {
+                if axes_lengths.is_empty() {
+                    1
+                } else if axes_lengths.iter().any(|&l| l == 0) {
+                    0
+                } else {
+                    axes_lengths
+                        .iter()
+                        .copied()
+                        .fold(1_usize, usize::saturating_mul)
+                }
+            }
+            Self::Explicit(coords) => coords
+                .iter()
+                .filter(|c| coord_in_bounds_against(axes_lengths, c))
+                .count(),
+        }
+    }
+}
+
+/// True iff `coord` has one in-bounds index per axis (length equals
+/// `axes_lengths.len()`, and every `coord[i] < axes_lengths[i]`).
+/// Free function so the [`SelectStrategy::selection_size_for`] count
+/// path and the [`EnvMatrixSpec::coord_in_bounds`] filter path share
+/// ONE bounds-check definition — pre-lift these would have drifted
+/// independently if either grew an off-by-one or an inclusive-bound
+/// regression.
+#[must_use]
+fn coord_in_bounds_against(axes_lengths: &[usize], coord: &[usize]) -> bool {
+    coord.len() == axes_lengths.len() && coord.iter().zip(axes_lengths).all(|(&i, &l)| i < l)
+}
+
+/// The closed set of [`SelectStrategy`] kinds — the discriminator
+/// view, payload-stripped, that sibling closed-set enums in this
+/// crate carry (see [`crate::lifetime_clock::TerminateReasonKind`],
+/// [`MatrixTarget`], [`BreatheDimensionKind`]).
+///
+/// Drives the `as_str` / `Display` / `FromStr` triad over
+/// [`Self::ALL`] so a new variant added with an `ALL` entry
+/// automatically extends the parser, the canonical wire-format
+/// projection, and any future kind-keyed enumeration that needs
+/// to list the strategy categories (metrics labels, sweep
+/// dashboards, `status.conditions[].reason` keys, LSP completion).
+///
+/// The `as_str` projection pins the PascalCase serde external-tag
+/// form (`"Cartesian"` / `"Explicit"`) so a round-trip through the
+/// JSON wire stays bit-identical with the typed kind name — a
+/// future consumer that reads `serde_json::Value::String(s)` off
+/// the wire and routes through `SelectStrategyKind::from_str(&s)`
+/// gets back the same kind the typed authoring site composed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SelectStrategyKind {
+    /// Full cartesian product of every axis.
+    Cartesian,
+    /// Operator-supplied explicit list of coordinate tuples.
+    Explicit,
+}
+
+impl SelectStrategyKind {
+    /// The closed set — single source of truth for `as_str` / Display /
+    /// `FromStr`. The `[Self; 2]` array literal forces the arity so a
+    /// third variant added without an `ALL` entry fails at the type
+    /// level before the test sweep below runs.
+    pub const ALL: [Self; 2] = [Self::Cartesian, Self::Explicit];
+
+    /// Canonical PascalCase wire-format projection. Mirrors the
+    /// `tatara-process` PascalCase idiom used by every other
+    /// closed-set enum's `as_str` projection (e.g.
+    /// [`crate::lifetime_clock::TerminateReasonKind::as_str`],
+    /// [`crate::lifetime::TeardownPolicy::as_str`]) AND the serde
+    /// external-tag form `SelectStrategy` already serializes through
+    /// — so a round-trip through the JSON wire stays bit-identical
+    /// with the typed kind name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Cartesian => "Cartesian",
+            Self::Explicit => "Explicit",
+        }
+    }
+}
+
+impl fmt::Display for SelectStrategyKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for SelectStrategyKind {
+    type Err = UnknownSelectStrategyKind;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.as_str() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownSelectStrategyKind(s.to_string()))
+    }
+}
+
+/// Typed parse error for [`SelectStrategyKind::from_str`] — carries
+/// the offending input verbatim so an operator-facing diagnostic
+/// surfaces the bad value, not a normalized form. Symmetric to every
+/// sibling `Unknown*` error in this crate (e.g.
+/// [`crate::phase::UnknownPhase`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::lifetime_clock::UnknownTerminateReasonKind`]).
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error("unknown select strategy kind: {0}")]
+pub struct UnknownSelectStrategyKind(pub String);
 
 /// Shared budget across the sweep.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, Default)]
@@ -237,19 +412,28 @@ impl EnvMatrixSpec {
         }
     }
 
-    /// True iff `coord` has one in-bounds index per axis.
+    /// True iff `coord` has one in-bounds index per axis. Routes
+    /// through [`coord_in_bounds_against`] so the bounds check binds
+    /// at ONE site that [`SelectStrategy::selection_size_for`] also
+    /// projects through — a regression that drifts the bounds-check
+    /// semantics (e.g. an off-by-one or an inclusive-bound flip) lands
+    /// at the shared helper rather than at two byte-identical sites.
     fn coord_in_bounds(&self, coord: &[usize]) -> bool {
-        coord.len() == self.axes.len()
-            && coord
-                .iter()
-                .zip(&self.axes)
-                .all(|(&i, ax)| i < ax.vals().len())
+        let lengths: Vec<usize> = self.axes.iter().map(|a| a.vals().len()).collect();
+        coord_in_bounds_against(&lengths, coord)
     }
 
     /// How many environments this matrix *would* generate before the
-    /// `max_envs` cap (the full selection size).
+    /// `max_envs` cap (the full selection size). Routes through
+    /// [`SelectStrategy::selection_size_for`] so the count is read
+    /// off the typed strategy projection WITHOUT materializing the
+    /// coordinate set — a 10-axis Cartesian sweep over 10 values
+    /// each counts in O(N) instead of allocating a 10-billion-entry
+    /// `Vec<Vec<usize>>` just to call `.len()`. Pinned by
+    /// `selection_size_avoids_materializing_cartesian_product`.
     pub fn selection_size(&self) -> usize {
-        self.coordinates().len()
+        let lengths: Vec<usize> = self.axes.iter().map(|a| a.vals().len()).collect();
+        self.select.selection_size_for(&lengths)
     }
 
     /// Expand the matrix into the concrete, capped set of named ephemeral
@@ -1621,6 +1805,282 @@ mod tests {
         assert_eq!(bands.len(), 2, "unknown dimension `network` must drop");
         assert_eq!(bands[0]["kind"], "MemoryBand");
         assert_eq!(bands[1]["kind"], "CpuBand");
+    }
+
+    // ── SelectStrategyKind: closed-set strategy discriminator ────────
+    //
+    // `SelectStrategy` carries data on `Explicit(Vec<Vec<usize>>)`, so
+    // the closed-set view lives on the payload-stripped
+    // `SelectStrategyKind` (same shape as `TerminateReason` →
+    // `TerminateReasonKind` in `lifetime_clock`). The tests below pin
+    // the structural contracts the lift establishes — `ALL` arity +
+    // uniqueness + reachability, `as_str` canonical PascalCase pin +
+    // uniqueness, `Display` IS `as_str`, `FromStr` round-trips through
+    // `ALL`, `kind()` agrees with each variant exhaustively, and the
+    // `selection_size_for` count agrees with `coordinates().len()` on
+    // every probe shape (the load-bearing perf lift: count without
+    // materializing the cartesian product).
+
+    #[test]
+    fn select_strategy_kind_all_enumerates_each_variant_exactly_once() {
+        // CLOSED-SET ARITY CONTRACT: `SelectStrategyKind::ALL` covers
+        // every variant exactly once. The `[Self; 2]` array literal
+        // pins the arity at compile time; this sweep additionally pins
+        // that none of the two entries is a duplicate (every variant's
+        // `as_str` appears exactly once in the projected set) and that
+        // every declared variant is reachable through `ALL`. Sibling
+        // closed-set contract to every other `ALL`-keyed enum in this
+        // crate (see `MatrixTarget`, `BreatheDimensionKind`,
+        // `TerminateReasonKind`, …).
+        let names: Vec<&'static str> = SelectStrategyKind::ALL.iter().map(|k| k.as_str()).collect();
+        assert_eq!(names.len(), 2, "ALL must enumerate exactly 2 variants");
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(
+            sorted.len(),
+            names.len(),
+            "ALL must contain no duplicate variants ({names:?})"
+        );
+        for named in [SelectStrategyKind::Cartesian, SelectStrategyKind::Explicit] {
+            assert!(
+                SelectStrategyKind::ALL.contains(&named),
+                "{named:?} missing from ALL"
+            );
+        }
+    }
+
+    #[test]
+    fn select_strategy_kind_as_str_canonical_pascal_case_pinned() {
+        // CANONICAL-NAME CONTRACT: each variant's `as_str()` projects
+        // to its serde external-tag PascalCase form — so a typed kind
+        // round-trips bit-identically with the wire-format discriminator
+        // that `SelectStrategy`'s `Serialize`/`Deserialize` derive
+        // already uses. Pinning the literal at the typed projection
+        // means a future rename of the wire form (e.g. PascalCase →
+        // kebab-case via `#[serde(rename_all = "kebab-case")]`) lands
+        // here AND at the serde rename in lockstep — diverging the
+        // two would break the round-trip the closed-set view promises.
+        assert_eq!(SelectStrategyKind::Cartesian.as_str(), "Cartesian");
+        assert_eq!(SelectStrategyKind::Explicit.as_str(), "Explicit");
+    }
+
+    #[test]
+    fn select_strategy_kind_as_str_unique_per_variant() {
+        // UNIQUENESS CONTRACT: no two variants alias the same canonical
+        // name — Display would be non-injective and FromStr would be
+        // non-deterministic otherwise. Sweep over `ALL × ALL` pinning
+        // strict inequality for distinct variants.
+        for a in SelectStrategyKind::ALL {
+            for b in SelectStrategyKind::ALL {
+                if a == b {
+                    assert_eq!(a.as_str(), b.as_str());
+                } else {
+                    assert_ne!(
+                        a.as_str(),
+                        b.as_str(),
+                        "distinct variants {a:?}/{b:?} must not alias as_str"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn select_strategy_kind_display_matches_as_str() {
+        // DISPLAY-CANONICAL CONTRACT: `Display` projects through
+        // `as_str()` byte-for-byte. Pins the canonical-form posture
+        // every sibling closed-set enum in this crate carries
+        // (`TerminateReasonKind`, `ProcessPhase`, `TeardownPolicy`,
+        // …): a future Display impl that re-derives from variant
+        // names (e.g. `format!("{self:?}")`) drifts from the canonical
+        // wire form and breaks every consumer that reads the Display
+        // form as a wire string.
+        for kind in SelectStrategyKind::ALL {
+            assert_eq!(kind.to_string(), kind.as_str());
+        }
+    }
+
+    #[test]
+    fn select_strategy_kind_from_str_round_trips_canonical_names() {
+        // ROUND-TRIP CONTRACT: `FromStr(as_str(v)) == Ok(v)` for every
+        // variant. Pins the closed-set inverse property the canonical
+        // wire-format projection promises — a regression that drifts
+        // `from_str`'s match arms (e.g. accepts only lowercase) breaks
+        // the round-trip the typed kind exposes to any future consumer
+        // that decodes the wire string back to the typed variant.
+        for kind in SelectStrategyKind::ALL {
+            assert_eq!(
+                SelectStrategyKind::from_str(kind.as_str()),
+                Ok(kind),
+                "from_str(as_str({kind:?})) must round-trip"
+            );
+        }
+    }
+
+    #[test]
+    fn select_strategy_kind_from_str_rejects_unknown_with_verbatim_input() {
+        // UNKNOWN-INPUT CONTRACT: parsing a non-canonical string fails
+        // with a typed `UnknownSelectStrategyKind` carrying the input
+        // verbatim — operators see the bad value, not a normalized
+        // form. Sibling shape to every `Unknown*` parse error in this
+        // crate (e.g. `UnknownPhase`, `UnknownTeardownPolicy`,
+        // `UnknownTerminateReasonKind`).
+        for bad in [
+            "",
+            "cartesian", // wrong case
+            "explicit",  // wrong case
+            "Latin",
+            "Random",
+            "Cartesian ", // trailing whitespace
+        ] {
+            let err = SelectStrategyKind::from_str(bad).unwrap_err();
+            assert_eq!(
+                err,
+                UnknownSelectStrategyKind(bad.to_string()),
+                "from_str({bad:?}) must surface the offending input verbatim"
+            );
+        }
+    }
+
+    #[test]
+    fn select_strategy_kind_projection_agrees_per_variant() {
+        // PROJECTION CONTRACT: `SelectStrategy::kind()` strips the
+        // payload to the typed discriminator exhaustively. Pin per
+        // variant so a future regression that drifts ONE arm (e.g.
+        // routes `Explicit(_)` through to `Cartesian`) — which would
+        // silently make the typed discriminator non-injective — fails
+        // loudly here. The `Explicit` probe additionally pins that
+        // the projection is `const` over the payload shape (an empty
+        // coord list and a populated one project to the SAME kind).
+        assert_eq!(
+            SelectStrategy::Cartesian.kind(),
+            SelectStrategyKind::Cartesian
+        );
+        assert_eq!(
+            SelectStrategy::Explicit(vec![]).kind(),
+            SelectStrategyKind::Explicit
+        );
+        assert_eq!(
+            SelectStrategy::Explicit(vec![vec![0, 1, 2]]).kind(),
+            SelectStrategyKind::Explicit
+        );
+        // And the Default IS Cartesian — pin the default's kind
+        // projection so a future `#[default]` move silently breaks
+        // any consumer that assumed Cartesian.
+        assert_eq!(
+            SelectStrategy::default().kind(),
+            SelectStrategyKind::Cartesian
+        );
+    }
+
+    #[test]
+    fn selection_size_for_cartesian_handles_empty_and_zero_length_axes() {
+        // CARTESIAN EDGE-CASE CONTRACT: aligns with pre-lift `cartesian`
+        // semantics — empty axes ⇒ 1 (the single empty coord), any
+        // zero-length axis ⇒ 0 (no env can range over no values).
+        // Pin both edges so a future refactor that drops the empty /
+        // zero-length cases (and silently bumps the size to `product`
+        // of an empty iter = 1, or skips the zero-length short-circuit)
+        // fails here BEFORE any operator-facing matrix sweeps drift.
+        let strat = SelectStrategy::Cartesian;
+        assert_eq!(
+            strat.selection_size_for(&[]),
+            1,
+            "no axes ⇒ one empty coord"
+        );
+        assert_eq!(strat.selection_size_for(&[0]), 0, "any zero-length ⇒ 0");
+        assert_eq!(
+            strat.selection_size_for(&[2, 0, 3]),
+            0,
+            "zero-length anywhere ⇒ 0"
+        );
+        assert_eq!(strat.selection_size_for(&[3]), 3);
+        assert_eq!(strat.selection_size_for(&[2, 3, 4]), 24);
+    }
+
+    #[test]
+    fn selection_size_for_explicit_filters_out_of_bounds_coords() {
+        // EXPLICIT FILTER CONTRACT: in-bounds coords are counted;
+        // mis-length and out-of-bounds coords are dropped — matching
+        // the pre-lift `coord_in_bounds` filter on `coordinates()`.
+        // Routes through the shared `coord_in_bounds_against` helper,
+        // so a regression on the bounds-check lands at ONE site.
+        let strat = SelectStrategy::Explicit(vec![
+            vec![0, 0, 0],
+            vec![1, 1, 1],
+            vec![2, 0, 0],    // axis-0 out of bounds (lengths[0]=2)
+            vec![0, 0],       // mis-length
+            vec![0, 0, 0, 0], // mis-length
+            vec![1, 1, 0],
+        ]);
+        assert_eq!(strat.selection_size_for(&[2, 2, 2]), 3);
+    }
+
+    #[test]
+    fn selection_size_matches_coordinates_len_on_every_probe() {
+        // EQUIVALENCE CONTRACT: `EnvMatrixSpec::selection_size()` —
+        // which now routes through the typed `selection_size_for`
+        // projection — must agree with the pre-lift definition
+        // `self.coordinates().len()` on every shape. Pin a battery of
+        // probes covering Cartesian / Explicit / empty-axes / zero-
+        // length-axis / mixed-bounds-coord shapes so a future
+        // performance refactor of EITHER path that diverges its count
+        // from the materialized-coords reference fails here.
+        let mut m = matrix();
+        // Cartesian over the 2×2×2 default.
+        assert_eq!(m.selection_size(), m.coordinates().len());
+        // Cartesian with one zero-length axis (no values at all).
+        m.axes[1].values = serde_json::json!([]);
+        assert_eq!(m.selection_size(), 0);
+        assert_eq!(m.selection_size(), m.coordinates().len());
+        // Cartesian with all axes empty: still no axes worth zeroing,
+        // and the product over no-axes is the single empty coord.
+        let mut m2 = matrix();
+        m2.axes.clear();
+        assert_eq!(m2.selection_size(), 1);
+        assert_eq!(m2.selection_size(), m2.coordinates().len());
+        // Explicit with mixed in-bounds / out-of-bounds / mis-length
+        // coords against the 2×2×2 axes.
+        let mut m3 = matrix();
+        m3.select = SelectStrategy::Explicit(vec![
+            vec![0, 0, 0],
+            vec![1, 1, 1],
+            vec![2, 0, 0],
+            vec![0, 0],
+            vec![1, 0, 1],
+        ]);
+        assert_eq!(m3.selection_size(), 3);
+        assert_eq!(m3.selection_size(), m3.coordinates().len());
+    }
+
+    #[test]
+    fn selection_size_avoids_materializing_cartesian_product() {
+        // PERF LIFT CONTRACT: a sweep over axes whose product exceeds
+        // any reasonable test allocation budget (10 axes × 100 values
+        // = 10^20 coords) must still resolve `selection_size()` in
+        // O(N) time WITHOUT materializing the coordinate set. Pre-lift
+        // `selection_size` called `coordinates().len()` which would
+        // either OOM or wedge on this probe; post-lift the closed-set
+        // dispatch routes through a saturating product over the axis
+        // lengths.
+        //
+        // 10^20 overflows `usize`, so the assertion pins the saturated
+        // sentinel `usize::MAX` — the deterministic "as many as fit"
+        // signal the fold promises rather than a debug-build panic or
+        // a release-build wraparound to a small number.
+        let strat = SelectStrategy::Cartesian;
+        let lengths = vec![100_usize; 10];
+        assert_eq!(
+            strat.selection_size_for(&lengths),
+            usize::MAX,
+            "10^20 must saturate to usize::MAX, not panic or wrap"
+        );
+        // And the saturation is sticky once reached: appending more
+        // non-trivial axes never reduces the count.
+        let mut deeper = lengths.clone();
+        deeper.push(2);
+        assert_eq!(strat.selection_size_for(&deeper), usize::MAX);
     }
 
     #[test]

@@ -79,7 +79,7 @@ pub mod prelude {
     };
     pub use crate::matrix::{
         compile_env_matrix_source, EnvMatrixSpec, MatrixAxis, MatrixBudget, NamedEphemeral,
-        SelectStrategy,
+        SelectStrategy, SelectStrategyKind, UnknownSelectStrategyKind,
     };
     pub use crate::phase::{ProcessPhase, UnknownPhase};
     pub use crate::pool::{

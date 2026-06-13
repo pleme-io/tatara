@@ -34,6 +34,8 @@
 //! sweep is cost-bounded under the shared `:budget` and auto-scales within the
 //! `:breathe` floor/ceiling limits.
 
+use std::fmt;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
@@ -531,19 +533,41 @@ pub enum MatrixTarget {
 }
 
 impl MatrixTarget {
+    /// The closed set of magic targets — single source of truth that
+    /// drives the `marker` / Display / `from_path` triad AND the
+    /// per-variant `apply` arm. Adding a fourth magic target (e.g.
+    /// `@release-name` → `aplicacao.release_name`, `@target-namespace`
+    /// → `aplicacao.target_namespace`) lands at one `ALL` entry + one
+    /// `marker` arm + one `apply` arm, exhaustively checked by the
+    /// compiler (the `[Self; 3]` array literal forces the arity) AND
+    /// by the per-variant bidirection + apply truth-table tests
+    /// below. Sibling closed-set lift to every other `ALL`-keyed enum
+    /// in this crate including [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::intent::IntentKind::ALL`],
+    /// [`crate::signal::ProcessSignal::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::lifetime::TeardownPolicy::ALL`], and
+    /// [`crate::classification::SubstrateType::ALL`]; having ONE
+    /// enumeration site means future LSP-completion, `tatara-check`
+    /// magic-target enumeration, and exhaustive bidirection sweeps
+    /// project through this constant rather than re-listing the
+    /// variants at every consumer.
+    pub const ALL: [Self; 3] = [Self::Version, Self::Profile, Self::ChartRef];
+
     /// Decode a [`MatrixAxis::path`] string into the typed marker, or
     /// `None` for paths that aren't reserved `@`-prefixed magic targets
     /// (they fall through to [`overlay_at_path`] semantics inside
     /// [`apply_axis`]). Closed-set dual of [`Self::marker`]: for every
-    /// variant `t`, `from_path(t.marker()) == Some(t)`.
+    /// variant `t`, `from_path(t.marker()) == Some(t)`. Lifted onto a
+    /// linear search across [`Self::ALL`] keyed on [`Self::marker`] so
+    /// the canonical `@`-prefixed string literals live at ONE site
+    /// (the `marker` arms) rather than at TWO sites (a `from_path`
+    /// arm AND a `marker` arm per variant) — adding a fourth magic
+    /// target extends only `ALL` + the `marker` arm + the `apply`
+    /// arm, NOT a third per-variant literal site.
     #[must_use]
     pub fn from_path(path: &str) -> Option<Self> {
-        match path {
-            "@version" => Some(Self::Version),
-            "@profile" => Some(Self::Profile),
-            "@chart-ref" => Some(Self::ChartRef),
-            _ => None,
-        }
+        Self::ALL.into_iter().find(|t| t.marker() == path)
     }
 
     /// Canonical `&'static str` marker — the `@`-prefixed path literal
@@ -584,6 +608,19 @@ impl MatrixTarget {
             Self::Profile => spec.aplicacao.profile = s,
             Self::ChartRef => spec.aplicacao.chart_ref = s,
         }
+    }
+}
+
+impl fmt::Display for MatrixTarget {
+    /// Project the variant through [`Self::marker`] — the canonical
+    /// `@`-prefixed path literal each variant decodes from. Pinned by
+    /// `matrix_target_display_matches_marker_for_every_variant` so a
+    /// future Display impl can't drift from the canonical marker (the
+    /// posture every sibling-closed-set Display in this crate carries,
+    /// e.g. [`crate::lifetime_clock::TerminateReason`],
+    /// [`crate::classification::Arity`]).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.marker())
     }
 }
 
@@ -901,15 +938,15 @@ mod tests {
     fn matrix_target_from_path_round_trips_through_marker_for_every_variant() {
         // BIDIRECTION CONTRACT: for every `MatrixTarget` variant,
         // decoding its canonical marker through `from_path` yields
-        // the same variant. Sibling-arm sweep so the three pairings
-        // stay load-bearing under reordering refactors — a regression
-        // that drifts ONE arm's `from_path → marker` round-trip (e.g.
-        // routes `@version` through to `Profile`) fails loudly here.
-        for variant in [
-            MatrixTarget::Version,
-            MatrixTarget::Profile,
-            MatrixTarget::ChartRef,
-        ] {
+        // the same variant. Sibling-arm sweep over `MatrixTarget::ALL`
+        // so the three pairings stay load-bearing under reordering
+        // refactors — a regression that drifts ONE arm's `from_path
+        // → marker` round-trip (e.g. routes `@version` through to
+        // `Profile`) fails loudly here. The `ALL` slice is closed so
+        // a fourth variant automatically extends this sweep through
+        // the closed-set constant rather than requiring a hand-edited
+        // literal-array bump.
+        for variant in MatrixTarget::ALL {
             assert_eq!(
                 MatrixTarget::from_path(variant.marker()),
                 Some(variant),
@@ -981,11 +1018,7 @@ mod tests {
             serde_json::json!([1, 2]),
             serde_json::json!({ "k": "v" }),
         ];
-        for variant in [
-            MatrixTarget::Version,
-            MatrixTarget::Profile,
-            MatrixTarget::ChartRef,
-        ] {
+        for variant in MatrixTarget::ALL {
             for val in &non_string_values {
                 let mut spec = base();
                 let before = (
@@ -1048,11 +1081,7 @@ mod tests {
         // arms) AND accidentally swaps two field targets silently
         // corrupts every operator's matrix sweep; this test catches
         // the drift via the typed-marker dispatch.
-        for variant in [
-            MatrixTarget::Version,
-            MatrixTarget::Profile,
-            MatrixTarget::ChartRef,
-        ] {
+        for variant in MatrixTarget::ALL {
             let mut via_axis = base();
             apply_axis(
                 &mut via_axis,
@@ -1072,6 +1101,99 @@ mod tests {
             assert_eq!(
                 via_axis.aplicacao.chart_ref, via_target.aplicacao.chart_ref,
                 "{variant:?}: apply_axis.chart_ref drifted from MatrixTarget::apply"
+            );
+        }
+    }
+
+    #[test]
+    fn matrix_target_all_enumerates_each_variant_exactly_once() {
+        // CLOSED-SET ARITY CONTRACT: `MatrixTarget::ALL` covers every
+        // variant exactly once. The `[Self; 3]` array literal forces
+        // the arity at compile time (a fourth variant would fail to
+        // construct the literal until `ALL` is bumped); this sweep
+        // additionally pins that none of the three entries is a
+        // duplicate (every variant's marker appears exactly once in
+        // the projected marker set). Sibling closed-set contract to
+        // every other `ALL`-keyed enum in this crate — see e.g.
+        // `phase::tests::process_phase_all_covers_every_variant`,
+        // `intent::tests::intent_kind_all_covers_every_variant`,
+        // `signal::tests::process_signal_all_covers_every_variant`.
+        let markers: Vec<&'static str> = MatrixTarget::ALL.iter().map(|t| t.marker()).collect();
+        assert_eq!(markers.len(), 3, "ALL must enumerate exactly 3 variants");
+        let mut sorted = markers.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(
+            sorted.len(),
+            markers.len(),
+            "ALL must contain no duplicate variants ({markers:?})"
+        );
+        // PER-VARIANT REACHABILITY: each named variant appears in
+        // `ALL`. The `[Self; 3]` literal forces the arity; this sweep
+        // pins that the three slots are NOT all filled with one
+        // variant (a regression like `[Self::Version, Self::Version,
+        // Self::Version]` would satisfy the arity check + the
+        // marker-len check but still be silently wrong).
+        for named in [
+            MatrixTarget::Version,
+            MatrixTarget::Profile,
+            MatrixTarget::ChartRef,
+        ] {
+            assert!(
+                MatrixTarget::ALL.contains(&named),
+                "{named:?} missing from ALL"
+            );
+        }
+    }
+
+    #[test]
+    fn matrix_target_display_matches_marker_for_every_variant() {
+        // DISPLAY-CANONICAL CONTRACT: `Display` projects through
+        // `marker()` byte-for-byte. Pins the canonical-form posture
+        // every sibling closed-set enum in this crate carries
+        // (`TerminateReason`, `Arity`, `ProcessPhase`, …): a future
+        // Display impl that re-derives from variant names (e.g.
+        // `format!("{self:?}")`) drifts from the canonical
+        // `@`-prefixed marker and breaks every consumer that reads
+        // the Display form as a hint string. The sweep across `ALL`
+        // makes the contract automatically cover any future variant.
+        for variant in MatrixTarget::ALL {
+            assert_eq!(
+                variant.to_string(),
+                variant.marker(),
+                "Display({variant:?}) must equal marker()"
+            );
+        }
+    }
+
+    #[test]
+    fn matrix_target_from_path_is_derived_from_all_via_marker() {
+        // LIFT-POSTURE CONTRACT: `from_path` is the closed-set inverse
+        // of `marker` over `MatrixTarget::ALL` — for every path string,
+        // `from_path(p)` equals the (at-most-one) variant in `ALL`
+        // whose `marker()` equals `p`. Pins that adding a fourth
+        // variant to `ALL` + its `marker` arm automatically makes
+        // `from_path` recognize the new marker, with NO additional
+        // edit to `from_path` required. A regression that reverts
+        // `from_path` to an inline `match path { ... }` body would
+        // pass for the three existing variants but silently fail this
+        // closed-set inversion sweep the moment a new variant is
+        // added to `ALL` without a paired `from_path` arm.
+        let probes: &[&str] = &[
+            "@version",
+            "@profile",
+            "@chart-ref",
+            "@release-name", // not a magic target today; must decode as None
+            "",
+            "feature.flag",
+            "version",
+        ];
+        for p in probes {
+            let expected = MatrixTarget::ALL.iter().copied().find(|t| t.marker() == *p);
+            assert_eq!(
+                MatrixTarget::from_path(p),
+                expected,
+                "from_path({p:?}) must equal the unique ALL entry whose marker() == {p:?}"
             );
         }
     }

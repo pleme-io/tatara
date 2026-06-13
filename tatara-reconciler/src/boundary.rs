@@ -26,6 +26,8 @@ use serde_json::Value;
 use tatara_process::boundary::{Condition, ConditionKind};
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
+#[cfg(test)]
+use tatara_process::receipt::ReceiptKind;
 use tatara_process::receipt::{ReceiptEnvelope, ReceiptError};
 
 use crate::ssapply;
@@ -596,7 +598,7 @@ mod tests {
     fn valid_receipt() -> String {
         // Compose root deterministically using the same domain tag as
         // ReceiptEnvelope so the generated payload parses cleanly.
-        let env = ReceiptEnvelope::build("closed-loop-auth", "aaaa", "bbbb", "cccc", None);
+        let env = ReceiptEnvelope::build(ReceiptKind::ClosedLoopAuth, "aaaa", "bbbb", "cccc", None);
         serde_json::to_string(&env).unwrap()
     }
 
@@ -609,7 +611,7 @@ mod tests {
 
     #[test]
     fn expected_root_match_succeeds_mismatch_fails() {
-        let env = ReceiptEnvelope::build("closed-loop-auth", "aaaa", "bbbb", "cccc", None);
+        let env = ReceiptEnvelope::build(ReceiptKind::ClosedLoopAuth, "aaaa", "bbbb", "cccc", None);
         let payload = serde_json::to_string(&env).unwrap();
         let root = env.composed_root.clone();
 
@@ -683,7 +685,7 @@ mod tests {
 
     #[test]
     fn yaml_payload_parses_via_either() {
-        let env = ReceiptEnvelope::build("db-migration", "aaaa", "bbbb", "cccc", None);
+        let env = ReceiptEnvelope::build(ReceiptKind::DbMigration, "aaaa", "bbbb", "cccc", None);
         let yaml = serde_yaml::to_string(&env).unwrap();
         let v = parse_receipt_payload(&yaml, None);
         assert!(matches!(v, ReceiptVerdict::Ok(_)));

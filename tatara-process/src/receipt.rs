@@ -34,6 +34,9 @@
 //! evidence:      { ... }                              # optional, free-form
 //! ```
 
+use std::fmt;
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -43,6 +46,216 @@ use crate::attestation::ProcessAttestation;
 /// Canonical version string. Bump → `tatara-receipt/v2` if the wire
 /// shape changes; parsers refuse anything else for the v1 reader.
 pub const RECEIPT_VERSION: &str = "tatara-receipt/v1";
+
+/// Closed-set typed identifier for the four known [`ReceiptEnvelope::kind`]
+/// strings the substrate emits today — [`Self::ClosedLoopAuth`] →
+/// `"closed-loop-auth"`, [`Self::DbMigration`] → `"db-migration"`,
+/// [`Self::TestSuite`] → `"test-suite"`, [`Self::NixBuild`] →
+/// `"nix-build"` — as a Rust enum, so the (variant, canonical kebab-case
+/// kind, semantic role) triple binds at ONE site on the typed algebra
+/// rather than at the four byte-identical string-literal sites scattered
+/// across the closed-loop probe binary (`default_value` on
+/// `--receipt-kind`), the reconciler's receipt-parser tests, the
+/// `ephemeral_pipeline` integration test, and the future shinka /
+/// kenshi / nix-build Job authors that compose `ReceiptEnvelope::build`.
+///
+/// Pre-lift the four canonical kebab-case kinds lived as `&'static str`
+/// literal arguments at every author site (`ReceiptEnvelope::build(
+/// "closed-loop-auth", …)`) AND as docstring prose at this module's
+/// header (`Today's consumers: closed-loop-auth, db-migration,
+/// test-suite, nix-build`). The (canonical-string, semantic-role)
+/// pairing was load-bearing across ≥5 files yet enforced by per-site
+/// call-site discipline — a rename of `"closed-loop-auth"` →
+/// `"closed-loop"` at the probe binary's CLI default (the originator of
+/// every production receipt) silently desynchronizes from the docstring
+/// prose AND from the reconciler's test fixtures AND from any future
+/// kind-keyed dispatch (e.g. shinka's per-kind verifier registry) — the
+/// `kind` field is a `String` from the wire shape's perspective so the
+/// compiler cannot bind the literals together. Post-lift the canonical
+/// kebab-case strings live at ONE [`Self::as_str`] arm per variant;
+/// every author site composes the typed variant through
+/// `ReceiptEnvelope::build(ReceiptKind::ClosedLoopAuth, …)` (the typed
+/// → `String` `From` impl lets the existing `impl Into<String>` API
+/// surface accept the variant transparently) and a rename lands at ONE
+/// `as_str` arm here — no per-call-site grep + edit sweep, no silent
+/// drift between the docstring header and the wire literals.
+///
+/// The `kind` field on [`ReceiptEnvelope`] remains a `String` because
+/// the schema is open by design: operators register new `kind` strings
+/// for future consumers (operator-domain Job receipts) without bumping
+/// the wire version. The typed `ReceiptKind` is the closed-set *view*
+/// over that open String — every receipt the substrate itself emits
+/// projects through one of the four typed variants, and the typed
+/// projection [`ReceiptEnvelope::known_kind`] decodes any envelope's
+/// `kind` into `Some(ReceiptKind)` when it matches a known variant,
+/// `None` for operator-registered open kinds. The (open-String,
+/// closed-typed-view) split is the same shape `tatara-lisp`'s
+/// `Sexp::Sym` (open atoms) vs `MacroDefHead` (closed-set head
+/// markers) takes — open data through one type, closed dispatch
+/// through another, no `_` fallthrough where the closed set runs.
+///
+/// Adding a fifth kind (e.g. `Provenance` → `"provenance-attest"`)
+/// extends the enum AND the two projection arms ([`Self::as_str`],
+/// [`Self::from_str`] via the [`Self::ALL`] sweep) in lockstep — rustc
+/// binds the extension through exhaustiveness over the closed enum so
+/// a partial extension that forgets ONE projection becomes a compile
+/// error rather than a runtime drift where the new kind builds receipts
+/// but `known_kind()` returns `None` and the future kind-keyed verifier
+/// dispatch silently falls through.
+///
+/// Sibling closed-set [`Self::ALL`] lift across the crate:
+/// [`crate::export::ReportFormat::ALL`],
+/// [`crate::export::ExportTrigger::ALL`],
+/// [`crate::export::ReportPayloadShape::ALL`],
+/// [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::lifetime::LifetimeKind::ALL`],
+/// [`crate::intent::IntentKind::ALL`],
+/// [`crate::lifetime_clock::TerminateReasonKind::ALL`].
+///
+/// Theory anchor: THEORY.md §III — the typescape; the substrate's own
+/// receipt kinds become a TYPE rather than four `&'static str` literals
+/// at every author site and a docstring header that drifts the moment
+/// any rename happens off-script. THEORY.md §V.3 — three-pillar
+/// attestation; the `kind` field is the *what-am-I* discriminator on
+/// every receipt that chains into a [`ProcessAttestation`], and the
+/// typed variant is the substrate's shared vocabulary for "which kind
+/// of work just got attested" — pre-lift each call site had to spell
+/// the kind by hand, post-lift each call site composes the typed
+/// constant and any consumer (future verifier, future dashboard, future
+/// LSP completion) sweeps [`Self::ALL`] to enumerate every known
+/// substrate-emitted receipt without grep.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ReceiptKind {
+    /// Closed-loop auth probe — stamps that a system's bundled identity
+    /// issuer authenticated its bundled client. Emitted by
+    /// `tatara-closed-loop-probe`; the substrate primitive every
+    /// closed-loop-testable product composes (Akeyless gator↔gateway,
+    /// future: identity providers, message brokers, databases that can
+    /// issue creds to themselves).
+    ClosedLoopAuth,
+    /// Schema/migration runs. shinka emits one per applied migration;
+    /// the pillars carry the diff hash so the chain shows exactly which
+    /// migration was applied where.
+    DbMigration,
+    /// Test suites — kenshi-runner et al. The `evidence` field carries
+    /// pass/fail counts; the pillars stamp the suite identity.
+    TestSuite,
+    /// Nix builds. Carries the store-path pillar as `artifact_hash`;
+    /// chains every reproducible build into the Process attestation
+    /// chain so a derivation's output is provable on its owning
+    /// Process.
+    NixBuild,
+}
+
+impl ReceiptKind {
+    /// The closed set of substrate-emitted receipt kinds — single
+    /// source of truth that drives the [`Self::from_str`] decode sweep
+    /// AND any future enumeration consumer (kind-keyed verifier
+    /// registry, dashboard completion list, `tatara-check` receipt-kind
+    /// enumeration). Adding a fifth variant (e.g. `Provenance` →
+    /// `"provenance-attest"`) lands at one `ALL` entry + one `as_str`
+    /// arm — exhaustively checked by the compiler (the `[Self; 4]`
+    /// array literal forces the arity) AND by the per-variant
+    /// truth-table tests below.
+    ///
+    /// Sibling closed-set lifts across the crate's typescape:
+    /// [`crate::export::ReportFormat::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::intent::IntentKind::ALL`].
+    pub const ALL: [Self; 4] = [
+        Self::ClosedLoopAuth,
+        Self::DbMigration,
+        Self::TestSuite,
+        Self::NixBuild,
+    ];
+
+    /// Canonical kebab-case wire-format kind — the literal that lands
+    /// in [`ReceiptEnvelope::kind`] when this variant authors the
+    /// receipt. Pinned to four byte-exact strings the substrate has
+    /// already published (the closed-loop probe's `default_value` on
+    /// `--receipt-kind`, the reconciler tests' fixture builds, the
+    /// `ephemeral_pipeline` integration test's assertions) — renaming
+    /// any one is a wire-format change, not a typed-internal refactor,
+    /// and the `receipt_kind_canonical_names_pinned` truth-table test
+    /// fails first to keep the substrate honest. Used by
+    /// [`fmt::Display`] (single source of truth) and as the `String`
+    /// projection that `From<ReceiptKind> for String` ([`Self::into`])
+    /// composes so [`ReceiptEnvelope::build`]'s `impl Into<String>`
+    /// kind argument transparently accepts the typed variant.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ClosedLoopAuth => "closed-loop-auth",
+            Self::DbMigration => "db-migration",
+            Self::TestSuite => "test-suite",
+            Self::NixBuild => "nix-build",
+        }
+    }
+
+}
+
+/// Decode a `kind` string into the typed variant — `Ok(kind)` when the
+/// string matches one of the four canonical kebab-case literals exactly
+/// (byte-equal, case-sensitive — the wire shape is pinned),
+/// `Err(UnknownReceiptKind)` for any other string (open operator-
+/// registered kinds, typos, future-version kinds). Round-trip invariant
+/// pinned by `receipt_kind_from_str_round_trips_canonical_names`:
+/// `k.as_str().parse() == Ok(k)` for every variant. Open-by-design
+/// callers prefer [`ReceiptEnvelope::known_kind`]'s `Option<ReceiptKind>`
+/// shape, which collapses the typed `Err` into a `None` so open kinds
+/// stay open. Lifted onto a linear sweep over [`Self::ALL`] keyed on
+/// [`Self::as_str`] so the canonical literals live at ONE site (the
+/// `as_str` arms) rather than at TWO sites (a `from_str` `match` arm AND
+/// an `as_str` arm per variant) — adding a fifth kind extends only
+/// `ALL` + `as_str`, NOT a third per-variant literal site.
+impl FromStr for ReceiptKind {
+    type Err = UnknownReceiptKind;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.as_str() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownReceiptKind(s.to_string()))
+    }
+}
+
+/// Typed parse error for [`ReceiptKind::from_str`] — carries the
+/// offending input verbatim so an operator-facing diagnostic surfaces
+/// the bad value, not a normalized form. Symmetric to every sibling
+/// `Unknown*` error in this crate (e.g. [`crate::phase::UnknownPhase`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::lifetime_clock::UnknownTerminateReasonKind`]).
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error("unknown receipt kind: {0}")]
+pub struct UnknownReceiptKind(pub String);
+
+impl fmt::Display for ReceiptKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl From<ReceiptKind> for String {
+    /// Composes [`ReceiptKind::as_str`] into an owned `String` so
+    /// every `impl Into<String>` API surface ([`ReceiptEnvelope::build`]'s
+    /// `kind` parameter most notably) accepts the typed variant
+    /// transparently — the call site stays `build(kind, …)` and the
+    /// typed → wire bridge runs through ONE place.
+    fn from(k: ReceiptKind) -> Self {
+        k.as_str().to_owned()
+    }
+}
+
+impl From<ReceiptKind> for &'static str {
+    fn from(k: ReceiptKind) -> Self {
+        k.as_str()
+    }
+}
 
 /// Typed receipt envelope. Any Job in pleme-io that wants its result to
 /// chain into a Process's `status.attestation` writes one of these.
@@ -139,8 +352,8 @@ impl ReceiptEnvelope {
 
     /// Parse a receipt from a JSON string.
     pub fn parse_json(payload: &str) -> Result<Self, ReceiptError> {
-        let env: Self = serde_json::from_str(payload)
-            .map_err(|e| ReceiptError::InvalidJson(e.to_string()))?;
+        let env: Self =
+            serde_json::from_str(payload).map_err(|e| ReceiptError::InvalidJson(e.to_string()))?;
         env.verify_shape()?;
         Ok(env)
     }
@@ -148,8 +361,8 @@ impl ReceiptEnvelope {
     /// Parse a receipt from a YAML string. Useful for ConfigMaps that
     /// store the payload in YAML form.
     pub fn parse_yaml(payload: &str) -> Result<Self, ReceiptError> {
-        let env: Self = serde_yaml::from_str(payload)
-            .map_err(|e| ReceiptError::InvalidYaml(e.to_string()))?;
+        let env: Self =
+            serde_yaml::from_str(payload).map_err(|e| ReceiptError::InvalidYaml(e.to_string()))?;
         env.verify_shape()?;
         Ok(env)
     }
@@ -219,11 +432,33 @@ impl ReceiptEnvelope {
         Ok(&self.composed_root)
     }
 
+    /// Decode `self.kind` into the typed [`ReceiptKind`] variant when
+    /// the wire string matches one of the four substrate-emitted
+    /// canonical kebab-case kinds; `None` when the kind is an
+    /// operator-registered open string (the schema is open by design —
+    /// every receipt remains a valid receipt, but only typed kinds
+    /// participate in closed-set dispatch). The (open `String`,
+    /// closed-typed view) split lets future kind-keyed consumers
+    /// (verifier registries, dashboard completion, audit-trail
+    /// classifiers) sweep the typed variants without touching the
+    /// open-by-design wire shape. Lifted as the canonical decode site
+    /// so no consumer re-implements the `match self.kind.as_str()`
+    /// arm-by-arm — the closed-set sweep happens through
+    /// [`ReceiptKind::from_str`] at ONE site.
+    #[must_use]
+    pub fn known_kind(&self) -> Option<ReceiptKind> {
+        self.kind.parse().ok()
+    }
+
     /// Lower into a `ProcessAttestation` — the canonical handoff so a
     /// Job's typed receipt becomes evidence on a Process. `generation`
     /// + `previous_root` come from the owning Process's prior
     /// attestation (or 0 + None for the first cycle).
-    pub fn to_attestation(&self, generation: u64, previous_root: Option<&str>) -> ProcessAttestation {
+    pub fn to_attestation(
+        &self,
+        generation: u64,
+        previous_root: Option<&str>,
+    ) -> ProcessAttestation {
         ProcessAttestation::compose(
             self.artifact_hash.clone(),
             if self.control_hash.is_empty() {
@@ -409,7 +644,10 @@ generated_at:  2026-05-19T12:00:00Z
 
         let next = r.to_attestation(1, Some(&a.composed_root));
         assert_eq!(next.generation, 1);
-        assert_eq!(next.previous_root.as_deref(), Some(a.composed_root.as_str()));
+        assert_eq!(
+            next.previous_root.as_deref(),
+            Some(a.composed_root.as_str())
+        );
         // The composed_root differs because previous_root is included.
         assert_ne!(next.composed_root, a.composed_root);
     }
@@ -438,5 +676,118 @@ generated_at:  2026-05-19T12:00:00Z
         let s = serde_json::to_string(&r).unwrap();
         let back = ReceiptEnvelope::parse_json(&s).expect("round-trip");
         assert_eq!(back.evidence["passed"], 12);
+    }
+
+    // ── ReceiptKind closed-set truth-table ───────────────────────────
+
+    #[test]
+    fn receipt_kind_all_enumerates_each_variant_exactly_once() {
+        use std::collections::HashSet;
+
+        let all = ReceiptKind::ALL;
+        assert_eq!(all.len(), 4, "ALL arity must match the closed set");
+
+        let mut seen: HashSet<ReceiptKind> = HashSet::new();
+        for k in all {
+            assert!(seen.insert(k), "duplicate variant in ALL: {k:?}");
+        }
+        for k in [
+            ReceiptKind::ClosedLoopAuth,
+            ReceiptKind::DbMigration,
+            ReceiptKind::TestSuite,
+            ReceiptKind::NixBuild,
+        ] {
+            assert!(all.contains(&k), "variant {k:?} unreachable through ALL");
+        }
+    }
+
+    #[test]
+    fn receipt_kind_as_str_unique_per_variant() {
+        use std::collections::HashSet;
+
+        let names: Vec<&'static str> = ReceiptKind::ALL.iter().map(|k| k.as_str()).collect();
+        let unique: HashSet<&&'static str> = names.iter().collect();
+        assert_eq!(
+            unique.len(),
+            names.len(),
+            "non-injective as_str — Display would alias: {names:?}"
+        );
+    }
+
+    #[test]
+    fn receipt_kind_canonical_names_pinned() {
+        // Byte-exact wire-format pin — renaming any of these is a
+        // wire-format change, not a typed-internal refactor.
+        assert_eq!(ReceiptKind::ClosedLoopAuth.as_str(), "closed-loop-auth");
+        assert_eq!(ReceiptKind::DbMigration.as_str(), "db-migration");
+        assert_eq!(ReceiptKind::TestSuite.as_str(), "test-suite");
+        assert_eq!(ReceiptKind::NixBuild.as_str(), "nix-build");
+    }
+
+    #[test]
+    fn receipt_kind_from_str_round_trips_canonical_names() {
+        for k in ReceiptKind::ALL {
+            assert_eq!(k.as_str().parse::<ReceiptKind>(), Ok(k));
+        }
+    }
+
+    #[test]
+    fn receipt_kind_from_str_rejects_open_kinds() {
+        // Empty / future / typo / wrong-case all surface a typed
+        // UnknownReceiptKind carrying the offending input verbatim
+        // (operator-facing diagnostic); the schema is open at the
+        // wire layer, but the closed-set view is byte-exact.
+        for bad in ["", "closed_loop_auth", "ClosedLoopAuth", "operator-custom-kind"] {
+            let err = bad.parse::<ReceiptKind>().unwrap_err();
+            assert_eq!(err, UnknownReceiptKind(bad.to_string()));
+        }
+    }
+
+    #[test]
+    fn receipt_kind_display_delegates_to_as_str() {
+        for k in ReceiptKind::ALL {
+            assert_eq!(format!("{k}"), k.as_str());
+        }
+    }
+
+    #[test]
+    fn receipt_kind_into_string_matches_as_str() {
+        for k in ReceiptKind::ALL {
+            let s: String = k.into();
+            assert_eq!(s, k.as_str());
+        }
+    }
+
+    #[test]
+    fn build_accepts_typed_receipt_kind() {
+        // The typed → wire bridge: `build(ReceiptKind::X, …)` produces
+        // a receipt whose `kind` field is exactly `X.as_str()`.
+        for k in ReceiptKind::ALL {
+            let env = ReceiptEnvelope::build(k, "i", "a", "c", None);
+            assert_eq!(env.kind, k.as_str());
+            assert!(env.verify_shape().is_ok());
+            assert!(env.verify_root(None));
+        }
+    }
+
+    #[test]
+    fn known_kind_decodes_built_receipts() {
+        for k in ReceiptKind::ALL {
+            let env = ReceiptEnvelope::build(k, "i", "a", "c", None);
+            assert_eq!(env.known_kind(), Some(k));
+        }
+    }
+
+    #[test]
+    fn known_kind_returns_none_for_open_kinds() {
+        // Open-by-design: a custom operator-registered kind still
+        // parses, still verifies, and still attests — it just doesn't
+        // project through the closed-set typed view.
+        let env = ReceiptEnvelope::build("operator-custom-kind", "i", "a", "c", None);
+        assert_eq!(env.known_kind(), None);
+        assert!(
+            env.verify_shape().is_ok(),
+            "open kind must remain a valid receipt"
+        );
     }
 }

@@ -22,7 +22,7 @@ use tatara_process::ephemeral::compile_ephemeral_source;
 use tatara_process::intent::IntentVariant;
 use tatara_process::lifetime::{LifetimeVariant, TeardownPolicy};
 use tatara_process::prelude::{Process, ProcessSpec};
-use tatara_process::receipt::{ReceiptEnvelope, RECEIPT_VERSION};
+use tatara_process::receipt::{ReceiptEnvelope, ReceiptKind, RECEIPT_VERSION};
 
 use tatara_reconciler::render;
 
@@ -160,14 +160,20 @@ fn closed_loop_receipt_round_trips_and_lowers_to_attestation() {
     // (the ConfigMap wire form), then parse back via the same typed
     // path the reconciler uses.
     let probe_receipt = ReceiptEnvelope::build(
-        "closed-loop-auth",
+        ReceiptKind::ClosedLoopAuth,
         "intent-hash-from-gator-jwk",
         "artifact-hash-of-secret-blob",
         "control-hash-of-signature-verify",
         None,
     );
     assert_eq!(probe_receipt.version, RECEIPT_VERSION);
-    assert_eq!(probe_receipt.kind, "closed-loop-auth");
+    assert_eq!(probe_receipt.kind, ReceiptKind::ClosedLoopAuth.as_str());
+    // And the typed projection round-trips: the wire-format kind
+    // decodes back into the typed variant the probe authored with.
+    assert_eq!(
+        probe_receipt.known_kind(),
+        Some(ReceiptKind::ClosedLoopAuth)
+    );
     assert!(probe_receipt.verify_shape().is_ok());
     assert!(probe_receipt.verify_root(None));
 
@@ -190,7 +196,7 @@ fn closed_loop_receipt_round_trips_and_lowers_to_attestation() {
     // Next attestation chains via previous_root — the next ephemeral
     // run's receipt extends the chain.
     let next_receipt = ReceiptEnvelope::build(
-        "closed-loop-auth",
+        ReceiptKind::ClosedLoopAuth,
         "next-intent",
         "next-artifact",
         "next-control",

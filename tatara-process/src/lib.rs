@@ -87,7 +87,7 @@ pub mod prelude {
         PoolSelector, PoolSpec, PoolStatus, ReplacementPolicy, ReturnPolicy, UnknownMemberState,
         UnknownPoolPhase, UnknownReplacementPolicy,
     };
-    pub use crate::receipt::{ReceiptEnvelope, ReceiptError, RECEIPT_VERSION};
+    pub use crate::receipt::{ReceiptEnvelope, ReceiptError, ReceiptKind, RECEIPT_VERSION};
     pub use crate::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
     pub use crate::signal::{ProcessSignal, SighupStrategy, UnknownSighupStrategy};
     pub use crate::spec::{

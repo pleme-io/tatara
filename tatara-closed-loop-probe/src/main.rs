@@ -18,7 +18,7 @@ use kube::api::{Patch, PatchParams, PostParams};
 use kube::{Api, Client};
 use serde_json::json;
 use std::collections::BTreeMap;
-use tatara_process::receipt::ReceiptEnvelope;
+use tatara_process::receipt::{ReceiptEnvelope, ReceiptKind};
 use tracing::{info, warn};
 
 mod probe;
@@ -65,8 +65,13 @@ struct Args {
     #[arg(long, env = "RECEIPT_NAMESPACE", default_value = "default")]
     receipt_namespace: String,
 
-    /// `kind` field on the emitted receipt.
-    #[arg(long, env = "RECEIPT_KIND", default_value = "closed-loop-auth")]
+    /// `kind` field on the emitted receipt. Defaults to the typed
+    /// [`ReceiptKind::ClosedLoopAuth`] canonical wire string so the
+    /// probe binary, the receipt envelope, and the reconciler verifier
+    /// all bind to the same `ReceiptKind` projection — a rename of
+    /// the canonical kebab-case kind lands at one [`ReceiptKind::as_str`]
+    /// arm and propagates here through `default_value_t`.
+    #[arg(long, env = "RECEIPT_KIND", default_value_t = String::from(ReceiptKind::ClosedLoopAuth))]
     receipt_kind: String,
 
     /// Optional Process reference (`<ns>/<name>`) stamped on the receipt
@@ -215,6 +220,7 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
 mod tests {
     use super::Args;
     use clap::Parser;
+    use tatara_process::receipt::ReceiptKind;
 
     #[test]
     fn args_parse_with_required_flags() {
@@ -230,6 +236,9 @@ mod tests {
         assert!(args.is_ok(), "{:?}", args.err());
         let a = args.unwrap();
         assert_eq!(a.issuer_port, 8080);
-        assert_eq!(a.receipt_kind, "closed-loop-auth");
+        // Default kind binds through the typed projection — a rename of
+        // the canonical kebab-case literal lands at ONE `as_str` arm,
+        // not at this CLI default + every consumer assertion.
+        assert_eq!(a.receipt_kind, ReceiptKind::ClosedLoopAuth.as_str());
     }
 }

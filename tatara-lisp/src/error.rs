@@ -1772,19 +1772,61 @@ pub enum MacroDefHead {
 }
 
 impl MacroDefHead {
+    /// The closed set of three macro-definition heads — single source
+    /// of truth that drives the [`Self::keyword`] / [`fmt::Display`]
+    /// projection AND the [`Self::from_keyword`] / [`FromStr`] decode
+    /// sweeps keyed on [`Self::keyword`]. Adding a hypothetical fourth
+    /// head (e.g. a `defpoint-fragment` partial-template surface, a
+    /// `defrewrite` typed-rewriter authoring keyword) lands at one
+    /// [`Self::ALL`] entry + one [`Self::keyword`] arm — exhaustively
+    /// checked by the compiler (the `[Self; 3]` array literal forces
+    /// the arity) AND by the per-variant truth-table tests below.
+    ///
+    /// Sibling closed-set lift to every other typed-shape enum in the
+    /// crate ([`crate::ast::AtomKind::ALL`],
+    /// [`crate::ast::QuoteForm::ALL`], [`SexpShape::ALL`],
+    /// [`UnquoteForm::ALL`]) and across the workspace
+    /// (`ConditionKind::ALL`, `ProcessPhase::ALL`,
+    /// `ProcessSignal::ALL`, `ChannelKind::ALL`, `IntentKind::ALL`,
+    /// `LifetimeKind::ALL`, `RequestorKind::ALL`, `ReceiptKind::ALL`,
+    /// …) every one of which paired its typed projection with `ALL`
+    /// before this lift.
+    ///
+    /// Future consumers that compose against `ALL`: LSP / REPL
+    /// completion for the macro-definition head at point (every
+    /// `(defma…` partial input expands through `Self::ALL.iter().
+    /// map(MacroDefHead::keyword)`), `tatara-check` coverage assertions
+    /// over which macro-definition heads reach a `DefmacroArity` /
+    /// `DefmacroNonSymbolName` / `DefmacroNonListParams` arm at all
+    /// (the typed sweep replaces the per-call-site vocabulary of three
+    /// `&'static str` literals), any future audit-trail metric jointly
+    /// labeled by [`Self::keyword`] (e.g.
+    /// `tatara_lisp_defmacro_arity_total{head="defmacro"}` — the
+    /// metric label set IS [`Self::ALL`] mapped through
+    /// [`Self::keyword`]).
+    pub const ALL: [Self; 3] = [Self::Defmacro, Self::DefpointTemplate, Self::Defcheck];
+
     /// Project a `head: &str` borrow (a `Sexp` symbol slice) into the
     /// typed `MacroDefHead`. Returns `None` if `head` is not one of the
     /// three canonical macro-definition head keywords; the caller
     /// (`macro_def_from`) then returns `Ok(None)` to mean "this form is
     /// not a defmacro form."
+    ///
+    /// Implemented as a linear sweep over [`Self::ALL`] keyed on
+    /// [`Self::keyword`] so the three canonical keyword literals
+    /// (`"defmacro"` / `"defpoint-template"` / `"defcheck"`) live at
+    /// ONE site (the `keyword` arms) rather than at TWO sites
+    /// (`keyword` + a per-variant `from_keyword` match arm). Adding a
+    /// fourth variant extends only [`Self::ALL`] + [`Self::keyword`],
+    /// NOT a third per-variant literal site. The `Option<Self>` face
+    /// is the open-by-design projection [`crate::ast::Sexp::as_call_to_any`]
+    /// composes against; [`FromStr`] is the typed-error face callers
+    /// reaching for a parse-rejection diagnostic compose against.
+    /// Cross-face contract pinned by
+    /// `macro_def_head_from_keyword_matches_from_str_for_every_input`.
     #[must_use]
     pub fn from_keyword(head: &str) -> Option<Self> {
-        match head {
-            "defmacro" => Some(Self::Defmacro),
-            "defpoint-template" => Some(Self::DefpointTemplate),
-            "defcheck" => Some(Self::Defcheck),
-            _ => None,
-        }
+        head.parse().ok()
     }
 
     /// Project the typed `MacroDefHead` back to the canonical
@@ -1810,6 +1852,74 @@ impl std::fmt::Display for MacroDefHead {
         f.write_str(self.keyword())
     }
 }
+
+/// Decode a canonical [`MacroDefHead`] keyword back into the typed
+/// variant — `Ok(head)` when the input matches one of the three
+/// canonical keyword literals exactly (`"defmacro"`,
+/// `"defpoint-template"`, `"defcheck"` — byte-equal, case-sensitive
+/// because the keywords are operator-facing reader vocabulary and any
+/// case drift would silently bifurcate the round-trip), and
+/// [`Err(UnknownMacroDefHead)`] for every other string (typos, the
+/// non-canonical capitalization `"Defmacro"`, the
+/// non-existent-but-near `"defmacroo"` / `"defcheckk"`, a sibling
+/// authoring-surface keyword like `"defpoint"` that names a
+/// definition-form NOT a definition-template, a `SexpShape` label like
+/// `"symbol"` that names a structural identity NOT a defmacro head).
+///
+/// Round-trip invariant pinned by
+/// `macro_def_head_keyword_round_trips_through_from_str`: for every
+/// variant `h` in [`MacroDefHead::ALL`], `h.keyword().parse() ==
+/// Ok(h)`. The decode is a linear sweep over [`MacroDefHead::ALL`]
+/// keyed on [`MacroDefHead::keyword`] so the three canonical literals
+/// live at ONE site (the `keyword` arms) rather than at TWO sites
+/// (`keyword` + per-variant `from_str` arms). Adding a fourth variant
+/// extends only [`MacroDefHead::ALL`] + [`MacroDefHead::keyword`],
+/// NOT a per-variant `from_str` arm. Same shape every sibling
+/// closed-set `FromStr` in this workspace uses ([`SexpShape::FromStr`],
+/// [`UnquoteForm::FromStr`], [`crate::ast::AtomKind::FromStr`],
+/// [`crate::ast::QuoteForm::FromStr`],
+/// `RequestorKind::from_str`, `ReceiptKind::from_str`,
+/// `AllocationPhase::from_str`, `ConditionKind::from_str`,
+/// `ProcessPhase::from_str`, …).
+///
+/// Cross-face relationship to [`MacroDefHead::from_keyword`]: the
+/// `Option`-faced projection ([`crate::ast::Sexp::as_call_to_any`]'s
+/// decoder slot) and the typed-error projection (this `FromStr`) are
+/// the SAME closed-set sweep with different rejection-face polarities.
+/// `from_keyword` delegates to `parse().ok()` so the closed-set sweep
+/// lives at ONE site (this impl); a regression that drifts the two
+/// faces would fail
+/// `macro_def_head_from_keyword_matches_from_str_for_every_input`.
+impl std::str::FromStr for MacroDefHead {
+    type Err = UnknownMacroDefHead;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        for head in Self::ALL {
+            if s == head.keyword() {
+                return Ok(head);
+            }
+        }
+        Err(UnknownMacroDefHead(s.to_owned()))
+    }
+}
+
+/// Typed parse failure for [`MacroDefHead`]'s [`std::str::FromStr`] —
+/// carries the offending input verbatim so an operator-facing
+/// diagnostic surfaces the bad value, not a normalized form.
+/// Symmetric to every sibling `Unknown*` error in the workspace
+/// ([`UnknownSexpShape`], [`crate::ast::UnknownAtomKind`],
+/// [`crate::ast::UnknownQuoteForm`], [`UnknownUnquoteForm`],
+/// `tatara_process::allocation::UnknownRequestorKind`,
+/// `tatara_process::receipt::UnknownReceiptKind`,
+/// `tatara_process::phase::UnknownPhase`,
+/// `tatara_process::boundary::UnknownConditionKind`,
+/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
+/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
+/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
+/// diagnostics that hand the offending input back unchanged to the
+/// human.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("unknown macro definition head: {0}")]
+pub struct UnknownMacroDefHead(pub String);
 
 /// Closed-set identifier for the way a `Sexp::List` entry in a macro's
 /// `&optional` section failed to match the canonical `(NAME DEFAULT)`
@@ -2861,8 +2971,8 @@ mod tests {
         optional_param_malformed_suffix, paren_suffix, rest_param_missing_name_suffix,
         rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
         unknown_kwarg_suffix, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
-        OptionalParamMalformedReason, SexpShape, SexpWitness, UnknownSexpShape, UnknownUnquoteForm,
-        UnquoteForm,
+        OptionalParamMalformedReason, SexpShape, SexpWitness, UnknownMacroDefHead,
+        UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
     };
 
     #[test]
@@ -7904,5 +8014,247 @@ mod tests {
         assert!(" ,".parse::<UnquoteForm>().is_err());
         assert!(", ".parse::<UnquoteForm>().is_err());
         assert!(", @".parse::<UnquoteForm>().is_err());
+    }
+
+    // --- MacroDefHead closed-set FromStr + UnknownMacroDefHead lift ---
+    //
+    // Same posture as `unquote_form_*` / `sexp_shape_*` /
+    // `atom_kind_*` / `quote_form_*`: pin the four contract laws of the
+    // closed-set (ALL, projection, FromStr, Unknown*) quadruple so the
+    // typed surface and the rendered diagnostic literal cannot drift,
+    // and the open-by-design `from_keyword` face matches the
+    // typed-error `FromStr` face byte-for-byte (the same closed-set
+    // sweep, different rejection polarities).
+
+    #[test]
+    fn macro_def_head_all_is_unique_and_complete() {
+        // Closed-set posture: `ALL` enumerates every reachable variant
+        // EXACTLY ONCE — no duplicates, no omissions. The `[Self; 3]`
+        // array literal in the declaration forces the arity at compile
+        // time; this test catches the orthogonal failure modes — a
+        // future variant added at the type without being added to ALL
+        // (silently dropped from every consumer's sweep), or a typo
+        // that duplicates an entry (silently double-counted). Same
+        // truth-table pinning every sibling closed-set lift in the
+        // workspace uses (SexpShape::ALL, AtomKind::ALL,
+        // QuoteForm::ALL, UnquoteForm::ALL, RequestorKind::ALL,
+        // ReceiptKind::ALL, ConditionKind::ALL, …).
+        assert_eq!(MacroDefHead::ALL.len(), 3);
+        let mut sorted: Vec<&str> = MacroDefHead::ALL.iter().map(|h| h.keyword()).collect();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "MacroDefHead::ALL must not contain duplicates"
+        );
+        assert_eq!(
+            sorted,
+            vec!["defcheck", "defmacro", "defpoint-template"],
+            "MacroDefHead::ALL must cover all three macro-definition heads"
+        );
+    }
+
+    #[test]
+    fn macro_def_head_keyword_round_trips_through_from_str() {
+        // Bidirectional `keyword` ↔ `FromStr` contract: for every
+        // variant in ALL, `head.keyword().parse() == Ok(head)`. A
+        // regression that drifts the (variant, literal) pairing at
+        // ONE arm of `keyword` (e.g. typo `defpoint_template` with an
+        // underscore instead of `defpoint-template` with a hyphen) OR
+        // at the `FromStr` decode body (off-by-one, missing variant in
+        // the sweep) fails-loudly here. The canonical-literal site is
+        // singular (`keyword`) so the round-trip is the only way the
+        // typed surface and the rendered diagnostic literal can drift
+        // apart — pinning it here means they cannot.
+        for head in MacroDefHead::ALL {
+            let parsed: MacroDefHead = head
+                .keyword()
+                .parse()
+                .expect("every ALL variant's keyword must round-trip through FromStr");
+            assert_eq!(
+                parsed,
+                head,
+                "FromStr({}) must round-trip to the same variant",
+                head.keyword()
+            );
+        }
+    }
+
+    #[test]
+    fn macro_def_head_from_keyword_matches_from_str_for_every_input() {
+        // Cross-face contract: the `Option`-faced `from_keyword`
+        // projection (`tatara_lisp::ast::Sexp::as_call_to_any`'s
+        // decoder slot, signature `Fn(&str) -> Option<T>`) and the
+        // typed-error-faced `FromStr` projection are the SAME closed-
+        // set sweep with different rejection polarities. After the
+        // lift `from_keyword` delegates to `parse().ok()`, so the
+        // closed-set sweep lives at ONE site (the `FromStr` impl) and
+        // both faces project the same accept/reject decision at every
+        // input. Pinning this law means a future refactor that drifts
+        // ONE face from the other (e.g., adding a fourth variant to
+        // `keyword` but forgetting to bump `Self::ALL`, or branching
+        // `from_keyword` against a hand-rolled match arm instead of
+        // routing through the typed sweep) fails here.
+        let inputs: &[&str] = &[
+            // The three canonical heads — both faces accept.
+            "defmacro",
+            "defpoint-template",
+            "defcheck",
+            // Non-canonical capitalizations — both faces reject.
+            "Defmacro",
+            "DEFCHECK",
+            "DefpointTemplate",
+            // Near misses — both faces reject.
+            "defmacroo",
+            "defcheckk",
+            "defpoint_template",
+            "defpoint",
+            "defpoint-templates",
+            // Sibling authoring surfaces from other closed sets —
+            // both faces reject (cross-set disjointness).
+            "defmonitor",
+            "defnotify",
+            "defpoint",
+            "defalertpolicy",
+            // SexpShape labels (the structural-identity vocabulary on
+            // a DIFFERENT axis) — both faces reject.
+            "symbol",
+            "list",
+            "nil",
+            // Punctuation from QuoteForm / UnquoteForm vocabularies —
+            // both faces reject (closed sets live on disjoint axes).
+            ",",
+            ",@",
+            "'",
+            "`",
+            // Edge cases — both faces reject.
+            "",
+            " ",
+            " defmacro",
+            "defmacro ",
+        ];
+        for s in inputs {
+            let from_kw = MacroDefHead::from_keyword(s);
+            let from_str = s.parse::<MacroDefHead>().ok();
+            assert_eq!(
+                from_kw,
+                from_str,
+                "`from_keyword` and `FromStr` must agree on {s:?}: from_keyword={from_kw:?}, FromStr={from_str:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_macro_def_head_carries_offending_input_verbatim() {
+        // Operator-facing diagnostic contract: the offending input
+        // lands in the typed error verbatim — no normalization, no
+        // truncation, no whitespace coercion. Pin the exact
+        // `#[error(...)]` rendering AND the typed `.0` field
+        // projection so a future refactor that normalizes (e.g.
+        // `.trim()` / `.to_ascii_lowercase()`) before building the
+        // error or that drops the input fails-loudly here. Symmetric
+        // to every sibling `Unknown*` carrier in the workspace
+        // ([`UnknownSexpShape`], [`crate::ast::UnknownAtomKind`],
+        // [`UnknownUnquoteForm`], [`crate::ast::UnknownQuoteForm`],
+        // `tatara_process::allocation::UnknownRequestorKind`, …).
+        let err: UnknownMacroDefHead = "Defmacro"
+            .parse::<MacroDefHead>()
+            .expect_err("capitalized `Defmacro` is not a canonical macro-definition head");
+        assert_eq!(err.0, "Defmacro");
+        assert_eq!(format!("{err}"), "unknown macro definition head: Defmacro");
+
+        let err: UnknownMacroDefHead = "defmacroo"
+            .parse::<MacroDefHead>()
+            .expect_err("`defmacroo` is not a canonical macro-definition head");
+        assert_eq!(err.0, "defmacroo");
+        assert_eq!(format!("{err}"), "unknown macro definition head: defmacroo");
+
+        let err: UnknownMacroDefHead = ""
+            .parse::<MacroDefHead>()
+            .expect_err("empty input must NOT decode to a MacroDefHead");
+        assert_eq!(err.0, "");
+        assert_eq!(format!("{err}"), "unknown macro definition head: ");
+
+        // Whitespace-padded canonical keyword MUST reject — the
+        // typed identity is byte-exact, the offending input is
+        // returned verbatim with its padding intact (not trimmed).
+        // The rendered diagnostic preserves the leading space, so
+        // the bad value reaches the operator unmolested.
+        let err: UnknownMacroDefHead = " defmacro"
+            .parse::<MacroDefHead>()
+            .expect_err("leading-space `defmacro` must reject — typed identity is byte-exact");
+        assert_eq!(err.0, " defmacro");
+        assert_eq!(
+            format!("{err}"),
+            "unknown macro definition head:  defmacro",
+            "leading whitespace is preserved verbatim in the rendered diagnostic",
+        );
+    }
+
+    #[test]
+    fn macro_def_head_from_str_rejects_cross_axis_vocabularies() {
+        // Cross-axis guard: a MacroDefHead is the head keyword of a
+        // `(defmacro …)`-shaped form — distinct from every other
+        // closed-set vocabulary in this crate. A `FromStr` that
+        // silently accepted a SexpShape label, an UnquoteForm marker,
+        // a QuoteForm prefix, or an AtomKind label would corrupt the
+        // typed identity at the macro-definition-head boundary. Pin
+        // BOTH directions: the three canonical keywords decode
+        // through MacroDefHead, the sibling closed-set vocabularies
+        // do NOT.
+        assert_eq!(
+            "defmacro".parse::<MacroDefHead>().unwrap(),
+            MacroDefHead::Defmacro
+        );
+        assert_eq!(
+            "defpoint-template".parse::<MacroDefHead>().unwrap(),
+            MacroDefHead::DefpointTemplate
+        );
+        assert_eq!(
+            "defcheck".parse::<MacroDefHead>().unwrap(),
+            MacroDefHead::Defcheck
+        );
+
+        // SexpShape labels — the structural-identity vocabulary
+        // (twelve outer Sexp shapes) — share NO labels with the
+        // macro-definition-head vocabulary. All must reject.
+        for shape in SexpShape::ALL {
+            assert!(
+                shape.label().parse::<MacroDefHead>().is_err(),
+                "SexpShape::{shape:?} label `{}` must NOT decode as a MacroDefHead",
+                shape.label(),
+            );
+        }
+
+        // UnquoteForm punctuation markers (`,` / `,@`) belong to the
+        // template-marker axis — they MUST reject here because
+        // MacroDefHead is on the symbol-keyword axis.
+        for form in UnquoteForm::ALL {
+            assert!(
+                form.marker().parse::<MacroDefHead>().is_err(),
+                "UnquoteForm marker `{}` must NOT decode as a MacroDefHead",
+                form.marker(),
+            );
+        }
+
+        // The `defpoint` authoring-surface keyword names a
+        // `(defpoint …)` definition form — NOT a definition-template
+        // form. The two are intentionally disjoint: `defpoint` is a
+        // tatara-process domain authoring head, `defpoint-template`
+        // is a parameterized-template head on the same surface.
+        // Pinning the rejection here keeps the two from drifting.
+        assert!("defpoint".parse::<MacroDefHead>().is_err());
+        assert!("defmonitor".parse::<MacroDefHead>().is_err());
+        assert!("defnotify".parse::<MacroDefHead>().is_err());
+        assert!("defalertpolicy".parse::<MacroDefHead>().is_err());
+
+        // Common-Lisp-style aliases the substrate does NOT admit.
+        // Pinning these rejects keeps a future refactor from
+        // silently extending the vocabulary without bumping
+        // `Self::ALL` first.
+        assert!("def-macro".parse::<MacroDefHead>().is_err());
+        assert!("defun".parse::<MacroDefHead>().is_err());
+        assert!("define-syntax".parse::<MacroDefHead>().is_err());
     }
 }

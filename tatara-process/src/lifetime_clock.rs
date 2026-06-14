@@ -134,15 +134,60 @@ impl fmt::Display for AutoTerminateKind {
     }
 }
 
+/// Body delegates to
+/// [`tatara_lisp::ClosedSet::parse_label`]'s default linear sweep over
+/// [`Self::ALL`] keyed on [`Self::as_str`] (via the `label` projection)
+/// so the canonical literals live at ONE site (the `as_str` arms)
+/// rather than at TWO sites — adding a third kind extends only `ALL`
+/// + `as_str`, NOT a per-variant `from_str` arm.
 impl FromStr for AutoTerminateKind {
     type Err = UnknownAutoTerminateKind;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.as_str() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownAutoTerminateKind(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`AutoTerminateKind`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from this enum's
+/// [`std::str::FromStr::from_str`] body into ONE place
+/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
+/// with every other `tatara-process` closed-set implementor
+/// ([`TerminateReasonKind`], [`crate::allocation::RequestorKind`],
+/// [`crate::allocation::AllocationPhase`],
+/// [`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`],
+/// [`crate::spec::MustReachPhase`],
+/// [`crate::boundary::ConditionKind`],
+/// [`crate::intent::WorkloadKind`],
+/// [`crate::lifetime::TeardownPolicy`],
+/// [`crate::signal::SighupStrategy`],
+/// [`crate::pool::ReplacementPolicy`],
+/// [`crate::pool::MemberState`],
+/// [`crate::pool::PoolPhase`],
+/// [`crate::pool::ReturnPolicy`],
+/// [`crate::classification::ConvergencePointType`],
+/// [`crate::classification::SubstrateType`],
+/// [`crate::classification::HorizonKind`],
+/// [`crate::classification::OptimizationDirection`],
+/// [`crate::classification::CalmClassification`]). The trait method
+/// `label` delegates to the inherent [`AutoTerminateKind::as_str`] —
+/// the inherent name (PascalCase `as_str`) stays the load-bearing
+/// wire-vocabulary projection that matches the
+/// [`crate::lifetime_clock::evaluate`] decision-projection's emitted
+/// reason, the `status.conditions[].reason` field a future metrics
+/// label would read, and the sibling-axis `as_str` projections in
+/// `tatara-process` verbatim, while the trait method gives generic
+/// consumers a STABLE name (`label`) across the workspace-wide
+/// closed-set implementors.
+impl tatara_lisp::ClosedSet for AutoTerminateKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownAutoTerminateKind;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownAutoTerminateKind(s.to_owned())
     }
 }
 
@@ -280,15 +325,60 @@ impl fmt::Display for TerminateReasonKind {
     }
 }
 
+/// Body delegates to
+/// [`tatara_lisp::ClosedSet::parse_label`]'s default linear sweep over
+/// [`Self::ALL`] keyed on [`Self::as_str`] (via the `label` projection)
+/// so the canonical literals live at ONE site (the `as_str` arms)
+/// rather than at TWO sites — adding a third reason extends only `ALL`
+/// + `as_str`, NOT a per-variant `from_str` arm.
 impl FromStr for TerminateReasonKind {
     type Err = UnknownTerminateReasonKind;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.as_str() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownTerminateReasonKind(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`TerminateReasonKind`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from this enum's
+/// [`std::str::FromStr::from_str`] body into ONE place
+/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
+/// with every other `tatara-process` closed-set implementor (sibling
+/// in this very file is [`AutoTerminateKind`]; outside this file the
+/// cohort spans [`crate::allocation::RequestorKind`],
+/// [`crate::allocation::AllocationPhase`],
+/// [`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`],
+/// [`crate::spec::MustReachPhase`],
+/// [`crate::boundary::ConditionKind`],
+/// [`crate::intent::WorkloadKind`],
+/// [`crate::lifetime::TeardownPolicy`],
+/// [`crate::signal::SighupStrategy`],
+/// [`crate::pool::ReplacementPolicy`],
+/// [`crate::pool::MemberState`],
+/// [`crate::pool::PoolPhase`],
+/// [`crate::pool::ReturnPolicy`],
+/// [`crate::classification::ConvergencePointType`],
+/// [`crate::classification::SubstrateType`],
+/// [`crate::classification::HorizonKind`],
+/// [`crate::classification::OptimizationDirection`],
+/// [`crate::classification::CalmClassification`]). The trait method
+/// `label` delegates to the inherent [`TerminateReasonKind::as_str`]
+/// — the inherent name (PascalCase `as_str`) stays the load-bearing
+/// wire-vocabulary projection that matches the
+/// [`crate::lifetime_clock::evaluate`] decision-projection's emitted
+/// reason and the `status.conditions[].reason` field a future metrics
+/// label would read verbatim, while the trait method gives generic
+/// consumers a STABLE name (`label`) across the workspace-wide
+/// closed-set implementors.
+impl tatara_lisp::ClosedSet for TerminateReasonKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownTerminateReasonKind;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownTerminateReasonKind(s.to_owned())
     }
 }
 
@@ -677,13 +767,21 @@ mod tests {
     /// `ALL` is the source of truth; a variant added without an `ALL`
     /// entry fails here (uniqueness check) before any sweep test below
     /// runs. Arity is asserted by the array type itself (`[Self; 2]`).
+    /// Exercise the substrate-wide [`tatara_lisp::ClosedSet`] contract on
+    /// [`TerminateReasonKind`] — pins the structural three-plus-one
+    /// (`ALL` is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the
+    /// hand-derived `terminate_reason_kind_all_is_unique_and_complete`
+    /// + `terminate_reason_kind_roundtrip_via_as_str` + the empty-input
+    /// arm of `unknown_terminate_reason_kind_errors`. `FromStr`
+    /// delegates to `<Self as tatara_lisp::ClosedSet>::parse_label`,
+    /// so this helper exercises the same code path the lifetime-clock
+    /// evaluator hits when parsing a typed reason back out of a
+    /// `status.conditions[].reason` slot.
     #[test]
-    fn terminate_reason_kind_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for kind in TerminateReasonKind::ALL {
-            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
-        }
-        assert_eq!(seen.len(), TerminateReasonKind::ALL.len());
+    fn terminate_reason_kind_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<TerminateReasonKind>();
     }
 
     /// `Display` IS `as_str` — pinning this lets future callers reach
@@ -692,19 +790,6 @@ mod tests {
     fn terminate_reason_kind_display_matches_as_str() {
         for kind in TerminateReasonKind::ALL {
             assert_eq!(kind.to_string(), kind.as_str());
-        }
-    }
-
-    /// Every variant survives `as_str` ↔ `FromStr` round-trip.
-    #[test]
-    fn terminate_reason_kind_roundtrip_via_as_str() {
-        use std::str::FromStr;
-        for kind in TerminateReasonKind::ALL {
-            assert_eq!(
-                TerminateReasonKind::from_str(kind.as_str()).unwrap(),
-                kind,
-                "round-trip failed for {kind:?}",
-            );
         }
     }
 
@@ -728,15 +813,19 @@ mod tests {
     }
 
     /// `FromStr` rejects strings outside the canonical projection
-    /// (empty / lowercased / typo / cross-axis-leaked) and echoes the
-    /// input verbatim. Cross-axis inputs (ProcessPhase / TeardownPolicy
-    /// variant names) MUST fail — `TerminateReasonKind` is its own
-    /// axis, not a transparent reflection of either.
+    /// (lowercased / typo / cross-axis-leaked) and echoes the input
+    /// verbatim. The empty-string arm is covered by
+    /// `terminate_reason_kind_is_well_formed_closed_set` via the
+    /// [`tatara_lisp::ClosedSet`] contract; the verbatim-echo arms
+    /// stay here because they pin the `UnknownTerminateReasonKind`
+    /// newtype payload contract the trait's `make_unknown` cannot
+    /// see. Cross-axis inputs (ProcessPhase / TeardownPolicy variant
+    /// names) MUST fail — `TerminateReasonKind` is its own axis, not
+    /// a transparent reflection of either.
     #[test]
     fn unknown_terminate_reason_kind_errors() {
         use std::str::FromStr;
         for bad in [
-            "",
             "teardownPolicy",
             "TEARDOWN_POLICY",
             "Teardown",
@@ -820,21 +909,41 @@ mod tests {
 
     // ── AutoTerminate / AutoTerminateKind closed-set contracts ────────
 
-    /// `ALL` is the source of truth; a variant added without an `ALL`
-    /// entry fails here (uniqueness check) before any sweep test below
-    /// runs. Arity is asserted by the array type itself (`[Self; 2]`).
-    /// Every entry in `ALL` is also reachable through a concrete
-    /// `AutoTerminate` value via `kind()` — the projection is
-    /// exhaustive across the variant set.
+    /// Exercise the substrate-wide [`tatara_lisp::ClosedSet`] contract on
+    /// [`AutoTerminateKind`] — pins the structural three-plus-one
+    /// (`ALL` is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the
+    /// hand-derived uniqueness sweep in
+    /// `auto_terminate_kind_kind_projection_is_exhaustive_over_all`'s
+    /// pre-lift form + the `auto_terminate_kind_roundtrip_via_as_str`
+    /// hand-rolled sweep + the empty-input arm of
+    /// `unknown_auto_terminate_kind_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this
+    /// helper exercises the same code path the lifetime-clock
+    /// evaluator hits when parsing a typed kind back out of a
+    /// `status.conditions[].reason` slot.
     #[test]
-    fn auto_terminate_kind_all_enumerates_each_variant_exactly_once() {
-        let mut seen = std::collections::HashSet::new();
-        for kind in AutoTerminateKind::ALL {
-            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
-        }
-        assert_eq!(seen.len(), AutoTerminateKind::ALL.len());
+    fn auto_terminate_kind_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<AutoTerminateKind>();
+    }
 
-        // Every kind is reachable through some concrete AutoTerminate.
+    /// Every entry in `ALL` is reachable through a concrete
+    /// [`AutoTerminate`] value via [`AutoTerminate::kind`] — the
+    /// projection is exhaustive across the variant set. Pre-lift this
+    /// pin was bundled with a uniqueness HashSet sweep that
+    /// [`auto_terminate_kind_is_well_formed_closed_set`] now covers
+    /// generically through the [`tatara_lisp::ClosedSet`] contract;
+    /// post-lift this test keeps only the domain-specific
+    /// `kind()`-exhaustiveness contract (the (variant-name →
+    /// payload-stripped kind) binding the [`AutoTerminate`] surface
+    /// projects through). A future third payload-carrying
+    /// `AutoTerminate` variant updates this pin AND
+    /// [`AutoTerminate::kind`]'s exhaustiveness match together,
+    /// exhaustively checked by the compiler.
+    #[test]
+    fn auto_terminate_kind_kind_projection_is_exhaustive_over_all() {
+        let by_all: std::collections::HashSet<_> = AutoTerminateKind::ALL.iter().copied().collect();
         let sample_reason = TerminateReason::TtlExpired {
             ttl: "1h".into(),
             elapsed: Duration::from_secs(0),
@@ -849,7 +958,7 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(
-            by_concrete, seen,
+            by_concrete, by_all,
             "kind() projection not exhaustive over ALL"
         );
     }
@@ -907,30 +1016,20 @@ mod tests {
         }
     }
 
-    /// Every variant survives `as_str` ↔ `FromStr` round-trip.
-    #[test]
-    fn auto_terminate_kind_roundtrip_via_as_str() {
-        use std::str::FromStr;
-        for kind in AutoTerminateKind::ALL {
-            assert_eq!(
-                AutoTerminateKind::from_str(kind.as_str()).unwrap(),
-                kind,
-                "round-trip failed for {kind:?}",
-            );
-        }
-    }
-
     /// `FromStr` rejects strings outside the canonical projection
-    /// (empty / lowercased / typo / cross-axis-leaked) and echoes the
-    /// input verbatim. Cross-axis inputs (ProcessPhase / TeardownPolicy
-    /// / TerminateReasonKind variant names) MUST fail —
-    /// `AutoTerminateKind` is its own axis, not a transparent
-    /// reflection of any sibling enum.
+    /// (lowercased / typo / cross-axis-leaked) and echoes the input
+    /// verbatim. The empty-string arm AND the round-trip sweep are
+    /// covered by `auto_terminate_kind_is_well_formed_closed_set` via
+    /// the [`tatara_lisp::ClosedSet`] contract; the cases here pin the
+    /// `UnknownAutoTerminateKind` newtype payload contract the
+    /// trait's `make_unknown` cannot see. Cross-axis inputs
+    /// (ProcessPhase / TeardownPolicy / TerminateReasonKind variant
+    /// names) MUST fail — `AutoTerminateKind` is its own axis, not
+    /// a transparent reflection of any sibling enum.
     #[test]
     fn unknown_auto_terminate_kind_errors() {
         use std::str::FromStr;
         for bad in [
-            "",
             "skip",
             "now",
             "SKIP",

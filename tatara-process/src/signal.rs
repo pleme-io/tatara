@@ -176,12 +176,35 @@ impl std::fmt::Display for SighupStrategy {
 impl std::str::FromStr for SighupStrategy {
     type Err = UnknownSighupStrategy;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for strat in Self::ALL {
-            if s == strat.as_str() {
-                return Ok(strat);
-            }
-        }
-        Err(UnknownSighupStrategy(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`SighupStrategy`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from this enum's
+/// [`std::str::FromStr::from_str`] body into ONE place
+/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
+/// with every other `tatara-process` closed-set implementor
+/// ([`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`],
+/// [`crate::lifetime::TeardownPolicy`], …).
+///
+/// [`ProcessSignal`] is NOT a `ClosedSet` implementor — its `FromStr`
+/// keys on a compound projection (`as_str` || `short_str`) with
+/// case-insensitive uppercase normalization rather than a single
+/// canonical label, the same exemption pattern as
+/// [`tatara_lisp::CompilerSpecIoStage`]'s compound `(operation,
+/// label)` key. Only [`SighupStrategy`] (single PascalCase label, no
+/// normalization) plugs in here.
+impl tatara_lisp::ClosedSet for SighupStrategy {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownSighupStrategy;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownSighupStrategy(s.to_owned())
     }
 }
 
@@ -265,18 +288,21 @@ mod tests {
     // ── closed-set algebra for SighupStrategy (ALL × as_str × FromStr ×
     //    sighup_target) ────────────────────────────────────────────────
 
-    /// `ALL` is the source of truth for the `FromStr` sweep and the
-    /// projection-truth-table test — pin its closure so a variant added
-    /// without an `ALL` entry fails here (via the uniqueness check)
-    /// before drifting `as_str` / `sighup_target`. The arity is
-    /// asserted by the `[Self; 3]` array type itself.
+    /// Structural well-formedness of [`SighupStrategy`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through `label ↔
+    /// parse_label`, labels are pairwise distinct, `""` is outside the
+    /// closed set) at ONE call site. Replaces the hand-derived
+    /// `sighup_strategy_all_is_unique_and_complete` +
+    /// `sighup_strategy_roundtrip_via_as_str` + the empty-input arm of
+    /// `unknown_sighup_strategy_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the reconciler hits when parsing a
+    /// CRD `enum:`-validated value back to the typed strategy.
     #[test]
-    fn sighup_strategy_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for strat in SighupStrategy::ALL {
-            assert!(seen.insert(strat), "duplicate variant in ALL: {strat:?}");
-        }
-        assert_eq!(seen.len(), SighupStrategy::ALL.len());
+    fn sighup_strategy_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<SighupStrategy>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -308,27 +334,17 @@ mod tests {
         }
     }
 
-    /// ROUND-TRIP CONTRACT: every variant survives `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` (or vice versa)
-    /// fails here.
-    #[test]
-    fn sighup_strategy_roundtrip_via_as_str() {
-        for strat in SighupStrategy::ALL {
-            assert_eq!(
-                SighupStrategy::from_str(strat.as_str()).expect("known variant round-trips"),
-                strat,
-                "round-trip failed for {strat:?}",
-            );
-        }
-    }
-
     /// `FromStr` rejects strings outside the canonical projection
-    /// (empty / lowercased / typo / unrelated) — and the error echoes
-    /// the input verbatim so the operator-facing diagnostic carries
-    /// the offending value, not a normalized form.
+    /// (lowercased / typo / unrelated) — and the error echoes the
+    /// input verbatim so the operator-facing diagnostic carries the
+    /// offending value, not a normalized form. The empty-input arm is
+    /// pinned by [`sighup_strategy_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownSighupStrategy`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_sighup_strategy_errors() {
-        for bad in ["", "reconverge", "RESTART", "Suspend", "noop "] {
+        for bad in ["reconverge", "RESTART", "Suspend", "noop "] {
             let err = SighupStrategy::from_str(bad).unwrap_err();
             let UnknownSighupStrategy(payload) = &err;
             assert_eq!(payload, bad, "error payload should echo input verbatim");

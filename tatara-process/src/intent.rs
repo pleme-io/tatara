@@ -418,12 +418,36 @@ impl fmt::Display for WorkloadKind {
 impl FromStr for WorkloadKind {
     type Err = UnknownWorkloadKind;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.as_str() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownWorkloadKind(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`WorkloadKind`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from this enum's
+/// [`std::str::FromStr::from_str`] body into ONE place
+/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
+/// with every other `tatara-process` closed-set implementor
+/// ([`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`],
+/// [`crate::lifetime::TeardownPolicy`],
+/// [`crate::signal::SighupStrategy`],
+/// [`crate::spec::MustReachPhase`],
+/// [`crate::boundary::ConditionKind`], …). The trait method `label`
+/// delegates to the inherent [`WorkloadKind::as_str`] — the inherent
+/// name (PascalCase `as_str`) stays the load-bearing wire-vocabulary
+/// projection that matches the serde rename + the K8s manifest
+/// `kind:` field verbatim, while the trait method gives generic
+/// consumers a STABLE name (`label`) across the 36+ closed-set
+/// implementors.
+impl tatara_lisp::ClosedSet for WorkloadKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownWorkloadKind;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownWorkloadKind(s.to_owned())
     }
 }
 
@@ -829,18 +853,21 @@ mod tests {
     // ── closed-set algebra for WorkloadKind (ALL × as_str × Display ×
     //    FromStr × api_version × is_batch) ─────────────────────────────
 
-    /// `ALL` is the source of truth for the resolver / `FromStr` sweep
-    /// — pin its closure so a variant added without an `ALL` entry
-    /// fails here (via the uniqueness check) before drifting `as_str`
-    /// / `api_version` / `is_batch`. The arity is asserted by the
-    /// `[Self; 5]` array type itself.
+    /// Structural well-formedness of [`WorkloadKind`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through `label ↔
+    /// parse_label`, labels are pairwise distinct, `""` is outside the
+    /// closed set) at ONE call site. Replaces the hand-derived
+    /// `workload_kind_all_is_unique_and_complete` +
+    /// `workload_kind_roundtrip_via_as_str` + the empty-input arm of
+    /// `unknown_workload_kind_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the reconciler hits when parsing a
+    /// K8s `kind:`-shaped value back to the typed workload kind.
     #[test]
-    fn workload_kind_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for kind in WorkloadKind::ALL {
-            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
-        }
-        assert_eq!(seen.len(), WorkloadKind::ALL.len());
+    fn workload_kind_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<WorkloadKind>();
     }
 
     /// CANONICAL-KEY CONTRACT: every variant's `as_str()` matches serde's
@@ -877,29 +904,19 @@ mod tests {
         }
     }
 
-    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn workload_kind_roundtrip_via_as_str() {
-        use std::str::FromStr;
-        for kind in WorkloadKind::ALL {
-            assert_eq!(
-                WorkloadKind::from_str(kind.as_str()).unwrap(),
-                kind,
-                "round-trip failed for {kind:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
-    /// error echoes the input verbatim so the operator-facing
-    /// diagnostic carries the offending value, not a normalized form.
+    /// projection — lowercased / typo / unrelated — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// carries the offending value, not a normalized form. The
+    /// empty-input arm is pinned by
+    /// [`workload_kind_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownWorkloadKind`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_workload_kind_errors() {
         use std::str::FromStr;
-        for bad in ["", "deployment", "JOB", "ReplicaSet", "Pod"] {
+        for bad in ["deployment", "JOB", "ReplicaSet", "Pod"] {
             let err = WorkloadKind::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }

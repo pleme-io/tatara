@@ -348,12 +348,32 @@ impl fmt::Display for TeardownPolicy {
 impl FromStr for TeardownPolicy {
     type Err = UnknownTeardownPolicy;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.as_str() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownTeardownPolicy(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`TeardownPolicy`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from this enum's
+/// [`std::str::FromStr::from_str`] body into ONE place
+/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
+/// with every other `tatara-process` closed-set implementor
+/// ([`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`], …). The trait method
+/// `label` delegates to the inherent [`TeardownPolicy::as_str`] — the
+/// inherent name (PascalCase `as_str`) stays the load-bearing wire-
+/// vocabulary projection that matches the serde rename + the
+/// reconciler's reason-string emission verbatim, while the trait
+/// method gives generic consumers a STABLE name (`label`) across the
+/// 36+ closed-set implementors.
+impl tatara_lisp::ClosedSet for TeardownPolicy {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownTeardownPolicy;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownTeardownPolicy(s.to_owned())
     }
 }
 
@@ -421,18 +441,21 @@ mod tests {
     // ── closed-set algebra for TeardownPolicy (ALL × as_str × FromStr ×
     //    should_teardown_on(phase)) ─
 
-    /// `ALL` is the source of truth for the resolver / `FromStr` sweep
-    /// — pin its closure so a variant added without an `ALL` entry
-    /// fails here (via the uniqueness check) before drifting `as_str` /
-    /// `should_teardown_on`. The arity is asserted by the `[Self; 4]`
-    /// array type itself.
+    /// Structural well-formedness of [`TeardownPolicy`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through `label ↔
+    /// parse_label`, labels are pairwise distinct, `""` is outside the
+    /// closed set) at ONE call site. Replaces the hand-derived
+    /// `teardown_policy_all_is_unique_and_complete` +
+    /// `teardown_policy_roundtrip_via_as_str` + the empty-input arm of
+    /// `unknown_teardown_policy_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the reconciler hits when parsing a
+    /// CRD `enum:`-validated value back to the typed policy.
     #[test]
-    fn teardown_policy_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for policy in TeardownPolicy::ALL {
-            assert!(seen.insert(policy), "duplicate variant in ALL: {policy:?}");
-        }
-        assert_eq!(seen.len(), TeardownPolicy::ALL.len());
+    fn teardown_policy_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<TeardownPolicy>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -466,29 +489,19 @@ mod tests {
         }
     }
 
-    /// ROUND-TRIP CONTRACT: every variant survives `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` (or vice versa)
-    /// fails here.
-    #[test]
-    fn teardown_policy_roundtrip_via_as_str() {
-        use std::str::FromStr;
-        for policy in TeardownPolicy::ALL {
-            assert_eq!(
-                TeardownPolicy::from_str(policy.as_str()).expect("known policy round-trips"),
-                policy,
-                "round-trip failed for {policy:?}",
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
-    /// error echoes the input verbatim so the operator-facing
-    /// diagnostic carries the offending value, not a normalized form.
+    /// projection — lowercased / typo / unrelated — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// carries the offending value, not a normalized form. The
+    /// empty-input arm is pinned by
+    /// [`teardown_policy_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownTeardownPolicy`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_teardown_policy_errors() {
         use std::str::FromStr;
-        for bad in ["", "always", "ALWAYS", "OnAtested", "Bogus"] {
+        for bad in ["always", "ALWAYS", "OnAtested", "Bogus"] {
             let err = TeardownPolicy::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }

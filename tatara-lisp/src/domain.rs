@@ -570,12 +570,22 @@ pub fn kwargs_pos_form(idx: usize) -> crate::error::KwargPath {
 pub fn sexp_shape(s: &Sexp) -> SexpShape {
     match s {
         Sexp::Nil => SexpShape::Nil,
-        Sexp::Atom(Atom::Symbol(_)) => SexpShape::Symbol,
-        Sexp::Atom(Atom::Keyword(_)) => SexpShape::Keyword,
-        Sexp::Atom(Atom::Str(_)) => SexpShape::String,
-        Sexp::Atom(Atom::Int(_)) => SexpShape::Int,
-        Sexp::Atom(Atom::Float(_)) => SexpShape::Float,
-        Sexp::Atom(Atom::Bool(_)) => SexpShape::Bool,
+        // The six atomic-payload variants share the
+        // `Sexp::Atom(_) → SexpShape::*` shape — all route through
+        // `Atom::kind`'s typed closed-set projection so the per-variant
+        // (Atom variant, SexpShape variant) pairing binds at ONE site on
+        // the closed-set `AtomKind` algebra (`AtomKind::sexp_shape`)
+        // rather than six byte-identical inline arms here. Sibling
+        // posture to the quote-family collapse below (and to
+        // `Hash for Atom`'s six-arm `hash_discriminator` collapse on the
+        // atomic axis, and `Hash for Sexp`'s four-arm `hash_discriminator`
+        // collapse on the quote-family axis). A future seventh atomic
+        // kind (e.g. `Atom::Char` for `#\x` reader syntax) extends
+        // `AtomKind` AND `Atom::kind` together, with rustc binding the
+        // extension through the `AtomKind::sexp_shape` arm here — adding
+        // it at one of the three sites without the other two becomes a
+        // compile error, not a silent drift.
+        Sexp::Atom(a) => a.kind().sexp_shape(),
         Sexp::List(_) => SexpShape::List,
         // The four quote-family variants share the
         // `Sexp::* → SexpShape::*` shape — all route through

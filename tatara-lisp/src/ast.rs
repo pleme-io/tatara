@@ -3,6 +3,7 @@
 use crate::error::{SexpShape, UnquoteForm};
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use thiserror::Error;
 
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
@@ -44,36 +45,28 @@ impl Hash for Sexp {
     }
 }
 
+// The six atomic variants share the (discriminator, inner) hash shape —
+// the per-variant discriminator byte binds at ONE site on the closed-set
+// `AtomKind` algebra (`AtomKind::hash_discriminator`) rather than at six
+// inline `<N>u8.hash(h)` arms here. The inner-payload arm stays a match
+// because the payload type differs per variant (`String` for symbol /
+// keyword / str, `i64` for int, `f64::to_bits()` for float, `bool` for
+// bool); the or-pattern collapses the three string-carrying arms. Float:
+// hash the bit pattern. NaN != NaN so PartialEq is broken, but cache
+// lookups use PartialEq-by-hash which this satisfies modulo a NaN
+// collision risk we accept for template args. The (Atom variant, byte)
+// pairing is pinned bit-for-bit by `atom_kind_hash_discriminator_pins_
+// legacy_atom_cache_key_bytes` against the pre-lift 0/1/2/3/4/5 sequence
+// — same posture as `quote_form_hash_discriminator_pins_legacy_cache_
+// key_bytes` for the four-of-thirteen `Sexp` wrapper variants.
 impl Hash for Atom {
     fn hash<H: Hasher>(&self, h: &mut H) {
+        self.kind().hash_discriminator().hash(h);
         match self {
-            Self::Symbol(s) => {
-                0u8.hash(h);
-                s.hash(h);
-            }
-            Self::Keyword(s) => {
-                1u8.hash(h);
-                s.hash(h);
-            }
-            Self::Str(s) => {
-                2u8.hash(h);
-                s.hash(h);
-            }
-            Self::Int(n) => {
-                3u8.hash(h);
-                n.hash(h);
-            }
-            // Float: hash the bit pattern. NaN != NaN so PartialEq is broken,
-            // but cache lookups use PartialEq-by-hash which this satisfies
-            // modulo a NaN collision risk we accept for template args.
-            Self::Float(f) => {
-                4u8.hash(h);
-                f.to_bits().hash(h);
-            }
-            Self::Bool(b) => {
-                5u8.hash(h);
-                b.hash(h);
-            }
+            Self::Symbol(s) | Self::Keyword(s) | Self::Str(s) => s.hash(h),
+            Self::Int(n) => n.hash(h),
+            Self::Float(f) => f.to_bits().hash(h),
+            Self::Bool(b) => b.hash(h),
         }
     }
 }
@@ -109,6 +102,416 @@ pub enum Atom {
     /// Boolean literal (`#t`, `#f`).
     Bool(bool),
 }
+
+impl Atom {
+    /// Project the atomic value into its closed-set [`AtomKind`] marker —
+    /// `Symbol(_) → AtomKind::Symbol`, `Keyword(_) → AtomKind::Keyword`,
+    /// `Str(_) → AtomKind::Str`, `Int(_) → AtomKind::Int`,
+    /// `Float(_) → AtomKind::Float`, `Bool(_) → AtomKind::Bool`. The
+    /// projection discards the payload and surfaces the typed
+    /// discriminator that every per-atom-kind dispatch site (Hash cache-
+    /// key bytes via [`AtomKind::hash_discriminator`], outer-shape
+    /// projection via [`AtomKind::sexp_shape`], diagnostic label via
+    /// [`AtomKind::label`]) keys on.
+    ///
+    /// Soft-projection peer of [`Sexp::as_quote_form`]: where
+    /// `as_quote_form` decomposes the four homoiconic prefix wrappers
+    /// into `(QuoteForm, &Sexp)`, `kind` decomposes the six atomic
+    /// payloads into `AtomKind` alone — there is no inner-sexp body to
+    /// surface, so the projection's return type is just the marker.
+    /// Sibling-arm sweep with the quote-family `as_quote_form` /
+    /// `QuoteForm` algebra lifts the (Atom variant, byte-discriminator,
+    /// canonical-label, SexpShape variant) quadruple from per-callsite
+    /// discipline (`Hash for Atom`'s six byte literals AND
+    /// `domain::sexp_shape`'s six SexpShape literals) onto ONE typed
+    /// algebra the substrate's diagnostic + cache-key surfaces both
+    /// route through.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Atom variant, downstream-consumer-payload) pairing now binds at
+    /// ONE typed projection site (this method composed with
+    /// [`AtomKind`]'s arms) regardless of which consumer surface
+    /// (cache-key Hash, diagnostic SexpShape, future LSP completion
+    /// label) needs it. A regression that drifts ONE consumer's pairing
+    /// from the others cannot reach the substrate's runtime.
+    #[must_use]
+    pub fn kind(&self) -> AtomKind {
+        match self {
+            Self::Symbol(_) => AtomKind::Symbol,
+            Self::Keyword(_) => AtomKind::Keyword,
+            Self::Str(_) => AtomKind::Str,
+            Self::Int(_) => AtomKind::Int,
+            Self::Float(_) => AtomKind::Float,
+            Self::Bool(_) => AtomKind::Bool,
+        }
+    }
+}
+
+/// Closed-set typed discriminator for the six [`Atom`] payload variants —
+/// `Symbol(String)`, `Keyword(String)`, `Str(String)`, `Int(i64)`,
+/// `Float(f64)`, `Bool(bool)` — paired with the projections every
+/// per-atom-kind consumer keys on ([`Self::hash_discriminator`] for
+/// [`Hash for Atom`]'s cache-key bytes, [`Self::sexp_shape`] for
+/// [`crate::domain::sexp_shape`]'s atom-arm collapse, [`Self::label`]
+/// for the operator-facing diagnostic vocabulary, [`Self::FromStr`]
+/// for the typed-inverse decode that lets LSP / REPL / metric-aggregator
+/// consumers round-trip a rendered diagnostic label back into the typed
+/// discriminator).
+///
+/// Atomic-payload peer of [`QuoteForm`] (the four homoiconic prefix
+/// wrappers — `Sexp::{Quote, Quasiquote, Unquote, UnquoteSplice}`):
+/// where `QuoteForm` carves the closed set on `Sexp`'s wrapper-variant
+/// axis, `AtomKind` carves the closed set on `Sexp`'s atomic-payload
+/// axis. Together the two closed-set discriminators cover every reachable
+/// `Sexp` outermost shape except `Nil` and `List` (the structural
+/// constructors `()` and `(…)`) — every other shape is either an
+/// `Atom(_)` projecting through this enum's [`Self::sexp_shape`] arm or a
+/// quote-family wrapper projecting through [`QuoteForm::sexp_shape`].
+/// After this lift the two enums' [`Self::sexp_shape`] arms own ALL TEN
+/// of [`SexpShape`]'s twelve canonical labels through ONE typed
+/// composition each rather than through per-callsite arm-pairing in
+/// [`crate::domain::sexp_shape`].
+///
+/// Mirror at the atomic-payload boundary of the prior-run [`QuoteForm`]
+/// (homoiconic-prefix-wrapper closed set, 4 variants), the cross-crate
+/// `tatara-process` closed-set family
+/// (`ConditionKind::ALL`, `ProcessPhase::ALL`, `ProcessSignal::ALL`,
+/// `ChannelKind::ALL`, `IntentKind::ALL`, `LifetimeKind::ALL`,
+/// `RequestorKind::ALL`, `ReceiptKind::ALL`, …) and this crate's own
+/// [`SexpShape`] (the twelve reachable Sexp outermost shapes — the
+/// SUPERSET this enum projects into via [`Self::sexp_shape`]) and
+/// [`UnquoteForm`] (the two template-substitution markers) closed-set
+/// lifts: those enums key their respective rejection or projection
+/// variants on a typed identity carried inside the variant's data shape;
+/// this enum keys the SIX [`Atom`] payload variants on a typed
+/// discriminator identity threaded through ALL THREE per-atom-kind
+/// dispatch sites ([`Hash for Atom`]'s six byte literals,
+/// [`crate::domain::sexp_shape`]'s six atom arms, AND the
+/// diagnostic-label vocabulary [`SexpShape::label`] publishes for the
+/// atom subset). Adding a hypothetical seventh atomic kind (e.g. a
+/// `Char` literal for `#\x` reader syntax, a `Bigint` for arbitrary-
+/// precision integers, a `Symbol2` for namespaced symbols) requires
+/// extending this enum, which rustc-enforces matching at every
+/// projection site ([`Self::label`], [`Self::hash_discriminator`],
+/// [`Self::sexp_shape`], [`Atom::kind`], the [`Hash for Atom`] inner
+/// match, and the [`Self::FromStr`] sweep keyed on [`Self::ALL`]) — the
+/// closed set becomes a TYPE rather than six `&'static str` / `u8`
+/// / `SexpShape` literals that could drift independently across the
+/// substrate's three per-atom-kind consumer surfaces.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+/// atomic-payload discriminator at a typed-entry rejection IS part of
+/// the proof of WHAT the gate observed, and naming its closed-set
+/// identity lifts the discriminator from per-site literal-pair
+/// discipline (a byte at the Hash site, a SexpShape variant at the
+/// `sexp_shape` site, a `&'static str` at any future LSP completion
+/// site) to ONE typed enum the substrate's diagnostic + cache-key
+/// surfaces both bind against. THEORY.md §II.1 invariant 2 — free
+/// middle; THREE consumers ([`Hash for Atom`],
+/// [`crate::domain::sexp_shape`], and the future diagnostic /
+/// completion surface) route through ONE typed closed-set match
+/// family, so a regression that drifts ONE consumer's pairing from the
+/// others cannot reach the substrate's runtime. THEORY.md §V.1 —
+/// knowable platform; the closed set of atomic payload kinds becomes a
+/// TYPE rather than six byte literals (Hash) + six SexpShape literals
+/// (`sexp_shape`) scattered across distinct files — a typo in any one
+/// site is no longer a runtime drift but a compile error against the
+/// typed projection. THEORY.md §VI.1 — generation over composition;
+/// the (Atom variant, label, discriminator-byte, SexpShape variant)
+/// quadruple appeared inline at THREE sites (`Hash for Atom`'s six
+/// byte arms, `domain::sexp_shape`'s six atom arms, plus implicit
+/// pairing across `SexpShape::label`'s six atom-subset arms) — well
+/// past the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
+/// named.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomKind {
+    /// `Atom::Symbol(_)` — `"symbol"` diagnostic label, byte `0u8`
+    /// hash discriminator, projects to [`SexpShape::Symbol`].
+    Symbol,
+    /// `Atom::Keyword(_)` — `"keyword"` diagnostic label, byte `1u8`
+    /// hash discriminator, projects to [`SexpShape::Keyword`].
+    Keyword,
+    /// `Atom::Str(_)` — `"string"` diagnostic label, byte `2u8` hash
+    /// discriminator, projects to [`SexpShape::String`].
+    Str,
+    /// `Atom::Int(_)` — `"int"` diagnostic label, byte `3u8` hash
+    /// discriminator, projects to [`SexpShape::Int`].
+    Int,
+    /// `Atom::Float(_)` — `"float"` diagnostic label, byte `4u8` hash
+    /// discriminator, projects to [`SexpShape::Float`].
+    Float,
+    /// `Atom::Bool(_)` — `"bool"` diagnostic label, byte `5u8` hash
+    /// discriminator, projects to [`SexpShape::Bool`].
+    Bool,
+}
+
+impl AtomKind {
+    /// The closed set of six atomic [`Atom`] payload kinds — single
+    /// source of truth that drives every per-kind projection
+    /// ([`Self::label`] / [`fmt::Display`], [`Self::hash_discriminator`],
+    /// [`Self::sexp_shape`], and the [`Self::FromStr`] decode sweep
+    /// keyed on [`Self::label`]).
+    ///
+    /// Adding a hypothetical seventh atomic kind (e.g. `Char` for
+    /// `#\x` reader syntax, `Bigint` for arbitrary-precision
+    /// integers) lands at one [`Self::ALL`] entry plus one arm per
+    /// projection — exhaustively checked by the compiler (the
+    /// `[Self; 6]` array literal forces the arity) AND by the
+    /// per-variant truth-table tests below.
+    ///
+    /// Sibling closed-set lift to every other typed-shape enum the
+    /// substrate carries: this crate's own [`SexpShape::ALL`] (the
+    /// twelve reachable outer shapes — superset of this kind's six),
+    /// [`QuoteForm`] (the four homoiconic prefix wrappers — peer
+    /// projection on the SAME `Sexp` algebra), [`UnquoteForm`] (the
+    /// two template-substitution markers — proper subset of
+    /// `QuoteForm`), and the cross-crate `tatara-process` family
+    /// (`ConditionKind::ALL`, `ProcessPhase::ALL`,
+    /// `ProcessSignal::ALL`, `ChannelKind::ALL`, `IntentKind::ALL`,
+    /// …) every one of which paired its typed projection with `ALL`
+    /// before this lift.
+    ///
+    /// Future consumers that compose against `ALL`: LSP / REPL
+    /// completion for the operator-facing rendered atom-kind label
+    /// (every `expected X, got Y` substring in `LispError`'s rendered
+    /// diagnostics for an atomic witness keys on this set's projection
+    /// through [`Self::label`]); `tatara-check` coverage assertions
+    /// over which atomic kinds reach a `TypeMismatch.got` arm at all
+    /// — the typed sweep replaces a per-callsite vocabulary of six
+    /// `&'static str` literals; any future audit-trail metric jointly
+    /// labeled by [`Self::label`] (e.g.
+    /// `tatara_lisp_atom_type_mismatch_total{got="symbol"}`) — the
+    /// metric label set IS [`Self::ALL`] mapped through
+    /// [`Self::label`]; any future structural rewriter (typed
+    /// analogue of MLIR's `op.walk<AtomKind::Symbol>()`) that wants
+    /// to sweep over every atomic kind in a typed sequence.
+    pub const ALL: [Self; 6] = [
+        Self::Symbol,
+        Self::Keyword,
+        Self::Str,
+        Self::Int,
+        Self::Float,
+        Self::Bool,
+    ];
+
+    /// Project the typed marker to the canonical `&'static str`
+    /// diagnostic label — `"symbol"` for [`Self::Symbol`],
+    /// `"keyword"` for [`Self::Keyword`], `"string"` for [`Self::Str`]
+    /// (the wire-shape rename `Str → "string"` matches the
+    /// [`SexpShape::String`] label projection), `"int"` for
+    /// [`Self::Int`], `"float"` for [`Self::Float`], `"bool"` for
+    /// [`Self::Bool`]. Each label is byte-for-byte identical to the
+    /// corresponding [`SexpShape`] variant's label, so a future
+    /// consumer that holds an [`AtomKind`] and rendered diagnostic
+    /// label can round-trip through this method into the [`SexpShape`]
+    /// supeset's diagnostic vocabulary without re-deriving the
+    /// per-variant string.
+    ///
+    /// The `&'static str` lifetime is load-bearing: it lets the
+    /// variant project through this method without an allocation,
+    /// parallel to how [`SexpShape::label`], [`QuoteForm::prefix`],
+    /// [`QuoteForm::iac_forge_tag`], [`UnquoteForm::marker`], and
+    /// [`crate::error::ExpectedKwargShape::label`] project their
+    /// respective closed-set surfaces.
+    ///
+    /// The bidirectional contract is anchored by tests:
+    /// `atom_kind_label_renders_canonical_string_for_every_variant`
+    /// pins each variant's canonical literal so a typo in any arm
+    /// fails-loudly, `atom_kind_display_matches_label_for_every_variant`
+    /// pins Display-equals-label so any future
+    /// `#[error("... got {got}")]` annotation that threads through
+    /// this projection projects byte-for-byte, and
+    /// `atom_kind_label_round_trips_through_from_str` pins the
+    /// `label` ↔ [`Self::FromStr`] round-trip for every variant in
+    /// [`Self::ALL`] so the typed surface and the rendered diagnostic
+    /// literal cannot drift.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Symbol => "symbol",
+            Self::Keyword => "keyword",
+            Self::Str => "string",
+            Self::Int => "int",
+            Self::Float => "float",
+            Self::Bool => "bool",
+        }
+    }
+
+    /// Stable, per-variant byte discriminator that paired with the
+    /// recursive payload hash builds the substrate's [`Hash for Atom`]
+    /// projection — `0u8` for [`Self::Symbol`], `1u8` for
+    /// [`Self::Keyword`], `2u8` for [`Self::Str`], `3u8` for
+    /// [`Self::Int`], `4u8` for [`Self::Float`], `5u8` for
+    /// [`Self::Bool`]. The byte values are load-bearing because the
+    /// macro-expansion cache ([`crate::macro_expand::Expander`]'s
+    /// cache) keys on the hash of `(macro_name, args)`, and any
+    /// `Atom` participates in that hash — changing a discriminator
+    /// silently invalidates every cached expansion across the
+    /// substrate.
+    ///
+    /// The closed set ensures the six arms partition `{0, 1, 2, 3,
+    /// 4, 5}` injectively. Disjointness from [`QuoteForm`]'s
+    /// `{3, 4, 5, 6}` is structural rather than overlap-induced
+    /// hash collision: [`Hash for Atom`] and the quote-family arms of
+    /// [`Hash for Sexp`] hash DISTINCT types (`Atom` vs `Sexp`), and
+    /// `Atom`'s discriminator lives nested INSIDE `Sexp::Atom`'s outer
+    /// `1u8` discriminator — the prefix-uniqueness contract that the
+    /// `Hash for Sexp` outer match maintains independently. A future
+    /// quote-family or atomic-kind extension must extend BOTH bodies'
+    /// arms in lockstep, with rustc binding the consistency through
+    /// exhaustiveness over BOTH closed enums.
+    ///
+    /// `pub(crate)` because the byte-discriminator surface is an
+    /// implementation detail of the substrate's [`Hash for Atom`]
+    /// cache-key contract; exposing it publicly would leak the
+    /// cache-key shape through the API without enabling any external
+    /// consumer the public projections ([`Atom::kind`], [`Self::label`],
+    /// [`Self::sexp_shape`]) don't already serve. Same posture as
+    /// [`QuoteForm::hash_discriminator`].
+    #[must_use]
+    pub(crate) fn hash_discriminator(self) -> u8 {
+        match self {
+            Self::Symbol => 0,
+            Self::Keyword => 1,
+            Self::Str => 2,
+            Self::Int => 3,
+            Self::Float => 4,
+            Self::Bool => 5,
+        }
+    }
+
+    /// Project the typed marker into its matching [`SexpShape`]
+    /// variant — `Symbol → SexpShape::Symbol`, `Keyword →
+    /// SexpShape::Keyword`, `Str → SexpShape::String`, `Int →
+    /// SexpShape::Int`, `Float → SexpShape::Float`, `Bool →
+    /// SexpShape::Bool`. ONE projection on the closed-set atomic-
+    /// payload algebra that [`crate::domain::sexp_shape`]'s outer-shape
+    /// projection routes through for the six atom arms — so the
+    /// (Atom variant, SexpShape variant) pairing binds at ONE site on
+    /// the typed algebra rather than at six byte-identical inline arms
+    /// in [`crate::domain::sexp_shape`]. Direct sibling to
+    /// [`QuoteForm::sexp_shape`] — that closed enum carves the
+    /// quote-family arms of [`SexpShape`]'s twelve-variant closed set,
+    /// while this enum carves the atomic-payload arms.
+    ///
+    /// Composition law: for every [`Atom`] `a`,
+    /// `crate::domain::sexp_shape(&Sexp::Atom(a.clone())) ==
+    /// a.kind().sexp_shape()`. Pinned by the cross-projection round-trip
+    /// test in this module, so a regression that drifts either side
+    /// of the typed algebra (an [`Atom::kind`] arm or this
+    /// [`Self::sexp_shape`] arm) surfaces immediately rather than as a
+    /// silent operator-facing diagnostic drift at every
+    /// `LispError::TypeMismatch.got` slot for an atomic witness.
+    ///
+    /// Bidirectional note: the dual projection
+    /// `SexpShape::as_atom_kind(self) -> Option<AtomKind>` is NOT
+    /// currently provided because no consumer needs it — every site
+    /// that has a [`SexpShape`] has it because it has a [`Sexp`]
+    /// already, so the per-form [`Atom::kind`] projection covers the
+    /// converse direction. If a future authoring tool (LSP / REPL /
+    /// `tatara-check` typed-pattern matcher) wants to lift the typed
+    /// marker out of a diagnostic-side shape identity, the dual lands
+    /// as ONE new `match` over the closed set, parallel to the
+    /// structure here.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (Atom
+    /// variant, SexpShape variant) pairing becomes a TYPE projection
+    /// on the substrate algebra rather than six inline arms in
+    /// [`crate::domain::sexp_shape`]. A typo or swap at the shape-
+    /// projection site is no longer a runtime drift but a compile
+    /// error against the typed projection. THEORY.md §II.1 invariant
+    /// 2 — free middle; THREE consumers ([`Hash for Atom`] via
+    /// [`Self::hash_discriminator`], [`crate::domain::sexp_shape`]
+    /// via this method, and the future diagnostic / completion surface
+    /// via [`Self::label`]) now route through ONE typed closed-set
+    /// match family, so a regression that drifts ONE consumer's
+    /// pairing from the others cannot reach the substrate's runtime.
+    #[must_use]
+    pub fn sexp_shape(self) -> SexpShape {
+        match self {
+            Self::Symbol => SexpShape::Symbol,
+            Self::Keyword => SexpShape::Keyword,
+            Self::Str => SexpShape::String,
+            Self::Int => SexpShape::Int,
+            Self::Float => SexpShape::Float,
+            Self::Bool => SexpShape::Bool,
+        }
+    }
+}
+
+impl fmt::Display for AtomKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+/// Decode a canonical [`AtomKind`] label back into the typed variant
+/// — `Ok(kind)` when the input matches one of the six canonical
+/// lowercase literals exactly (`"symbol"` / `"keyword"` / `"string"` /
+/// `"int"` / `"float"` / `"bool"` — byte-equal, case-sensitive), and
+/// [`Err(UnknownAtomKind)`] for every other string (typos, non-
+/// canonical capitalizations, labels from the [`SexpShape`] superset
+/// vocabulary that DO NOT correspond to an atomic kind — `"nil"` /
+/// `"list"` / `"quote"` / `"quasiquote"` / `"unquote"` /
+/// `"unquote-splice"` — which are structurally outside the atom
+/// algebra and must reject).
+///
+/// Round-trip invariant pinned by
+/// `atom_kind_label_round_trips_through_from_str`: for every variant
+/// `k` in [`AtomKind::ALL`], `k.label().parse() == Ok(k)`. The decode
+/// is a linear sweep over [`AtomKind::ALL`] keyed on [`AtomKind::label`]
+/// so the canonical literals live at ONE site (the `label` arms) rather
+/// than at TWO sites (`label` + a per-variant `from_str` arm) — adding
+/// a seventh variant extends only [`AtomKind::ALL`] + [`AtomKind::label`],
+/// NOT a third per-variant literal site. Same shape every sibling
+/// closed-set `FromStr` in this workspace uses
+/// ([`crate::error::SexpShape`]'s `FromStr`, `RequestorKind::from_str`,
+/// `ReceiptKind::from_str`, `AllocationPhase::from_str`,
+/// `ConditionKind::from_str`, `ProcessPhase::from_str`, …).
+///
+/// Open-by-design callers that want to drop the typed-error face of
+/// the decode and reach for `Option<AtomKind>` compose
+/// `label.parse().ok()` exactly as the `tatara-process` siblings'
+/// `known_kind()`-shaped projections do.
+///
+/// Containment relationship to [`SexpShape::FromStr`]: every successful
+/// decode through this projection is ALSO a successful decode through
+/// [`SexpShape`]'s `FromStr` (the atomic subset is structurally
+/// embedded), and the resulting variants project to each other through
+/// [`AtomKind::sexp_shape`]. The converse is NOT true — `SexpShape`
+/// decodes `"nil"` / `"list"` / `"quote"` / `"quasiquote"` / `"unquote"`
+/// / `"unquote-splice"`, which have NO atomic-kind preimage and rightly
+/// reject through this method. Pinned by
+/// `atom_kind_from_str_rejects_non_atom_sexp_shape_labels`.
+impl std::str::FromStr for AtomKind {
+    type Err = UnknownAtomKind;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.label() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownAtomKind(s.to_owned()))
+    }
+}
+
+/// Typed parse failure for [`AtomKind`]'s [`std::str::FromStr`] —
+/// carries the offending input verbatim so an operator-facing
+/// diagnostic surfaces the bad value, not a normalized form.
+/// Symmetric to every sibling `Unknown*` error in the workspace
+/// ([`crate::error::UnknownSexpShape`],
+/// `tatara_process::allocation::UnknownRequestorKind`,
+/// `tatara_process::receipt::UnknownReceiptKind`,
+/// `tatara_process::phase::UnknownPhase`,
+/// `tatara_process::boundary::UnknownConditionKind`,
+/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
+/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
+/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
+/// diagnostics that hand the offending input back unchanged to the
+/// human.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("unknown atom kind: {0}")]
+pub struct UnknownAtomKind(pub String);
 
 impl Sexp {
     pub fn symbol(s: impl Into<String>) -> Self {
@@ -2779,5 +3182,444 @@ mod tests {
         assert_eq!(Sexp::int(1).to_string(), "1");
         assert_eq!(Sexp::int(0).to_string(), "0");
         assert_eq!(Sexp::int(-42).to_string(), "-42");
+    }
+
+    // ── AtomKind + Atom::kind: closed-set atomic-payload projection ─────
+    //
+    // `AtomKind` is the closed-set typed discriminator for `Atom`'s six
+    // payload variants — `Symbol`, `Keyword`, `Str`, `Int`, `Float`,
+    // `Bool`. It is the atomic-payload peer of `QuoteForm` (the four
+    // homoiconic prefix wrappers), and the two closed sets together
+    // carve every non-Nil non-List arm of `SexpShape`'s twelve-variant
+    // closed set via their typed `sexp_shape` projections. Lifting the
+    // (Atom variant, byte-discriminator, canonical-label,
+    // SexpShape variant) quadruple onto ONE typed algebra collapses:
+    //   - `Hash for Atom`'s six byte literals (0/1/2/3/4/5) onto
+    //     `AtomKind::hash_discriminator` via `self.kind()` — ONE arm
+    //     at the discriminator site;
+    //   - `domain::sexp_shape`'s six `Atom::X(_) → SexpShape::X` arms
+    //     onto `a.kind().sexp_shape()` — ONE arm at the projection
+    //     site;
+    //   - any future LSP / REPL / metric-aggregator consumer that
+    //     needs to round-trip a rendered diagnostic label back into
+    //     the typed discriminator onto `AtomKind::FromStr` — ONE
+    //     decode site keyed on `AtomKind::ALL` + `AtomKind::label`.
+    //
+    // Tests below pin:
+    //   (a) `Atom::kind` projects every Atom variant to its typed
+    //       discriminator, regardless of inner payload contents;
+    //   (b) `AtomKind::ALL` enumerates every variant EXACTLY ONCE;
+    //   (c) `AtomKind::label` returns the canonical
+    //       lowercase / kebab string for every variant — byte-for-byte
+    //       identical to the corresponding `SexpShape::label`;
+    //   (d) `Display for AtomKind` delegates to `label`;
+    //   (e) `AtomKind::hash_discriminator` returns the same byte
+    //       values the pre-lift `Hash for Atom` arms emitted
+    //       (0/1/2/3/4/5) — pin the cache-key contract so a
+    //       regression that drifts a discriminator silently
+    //       invalidates every cached macro expansion fails loudly
+    //       here;
+    //   (f) `AtomKind::sexp_shape` projects every variant to the
+    //       matching `SexpShape` — the typed pairing the
+    //       `domain::sexp_shape` collapse relies on;
+    //   (g) `AtomKind::FromStr` round-trips every variant through its
+    //       label; rejects non-canonical capitalizations, empty input,
+    //       and the non-atom `SexpShape` labels (`"nil"`, `"list"`,
+    //       `"quote"`, `"quasiquote"`, `"unquote"`, `"unquote-splice"`);
+    //   (h) `UnknownAtomKind` carries the offending input verbatim and
+    //       renders the `#[error(...)]` annotation byte-exactly;
+    //   (i) `Hash for Atom` produces byte-identical hashes for every
+    //       atomic variant as the pre-lift implementation — pin the
+    //       cache-key contract end-to-end so the post-lift routing
+    //       through `AtomKind::hash_discriminator` cannot drift the
+    //       cache;
+    //   (j) the cross-projection composition law
+    //       `crate::domain::sexp_shape(&Sexp::Atom(a)) ==
+    //       a.kind().sexp_shape()` holds for every atomic kind.
+
+    #[test]
+    fn atom_kind_projects_each_atom_variant_to_typed_marker() {
+        // The structural identity `Atom::kind` establishes:
+        // `Symbol(_) → AtomKind::Symbol`, `Keyword(_) →
+        // AtomKind::Keyword`, etc. Pin every arm with a representative
+        // payload + an empty / boundary payload so a regression that
+        // matches on the payload rather than the variant identity
+        // (e.g. a typo that routes `Str("")` to a different marker
+        // than `Str("nonempty")`) surfaces immediately.
+        assert_eq!(Atom::Symbol("foo".into()).kind(), AtomKind::Symbol);
+        assert_eq!(Atom::Symbol(String::new()).kind(), AtomKind::Symbol);
+        assert_eq!(Atom::Keyword("k".into()).kind(), AtomKind::Keyword);
+        assert_eq!(Atom::Str("s".into()).kind(), AtomKind::Str);
+        assert_eq!(Atom::Str(String::new()).kind(), AtomKind::Str);
+        assert_eq!(Atom::Int(0).kind(), AtomKind::Int);
+        assert_eq!(Atom::Int(i64::MIN).kind(), AtomKind::Int);
+        assert_eq!(Atom::Int(i64::MAX).kind(), AtomKind::Int);
+        assert_eq!(Atom::Float(0.0).kind(), AtomKind::Float);
+        assert_eq!(Atom::Float(f64::NAN).kind(), AtomKind::Float);
+        assert_eq!(Atom::Float(f64::INFINITY).kind(), AtomKind::Float);
+        assert_eq!(Atom::Bool(true).kind(), AtomKind::Bool);
+        assert_eq!(Atom::Bool(false).kind(), AtomKind::Bool);
+    }
+
+    #[test]
+    fn atom_kind_all_is_unique_and_complete() {
+        // Closed-set posture: `ALL` enumerates every reachable variant
+        // EXACTLY ONCE — no duplicates, no omissions. The `[Self; 6]`
+        // array literal in the declaration forces the arity at compile
+        // time; this test catches the orthogonal failure modes — a
+        // future variant added at the type without being added to ALL
+        // (silently dropped from every consumer's sweep), or a typo
+        // that duplicates an entry (silently double-counted). Same
+        // truth-table pinning every sibling closed-set lift in the
+        // workspace uses (`SexpShape::ALL`, `RequestorKind::ALL`,
+        // `ReceiptKind::ALL`, `ConditionKind::ALL`, `ProcessPhase::ALL`,
+        // `ChannelKind::ALL`, …).
+        assert_eq!(AtomKind::ALL.len(), 6);
+        let mut sorted: Vec<&str> = AtomKind::ALL.iter().map(|k| k.label()).collect();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(sorted, deduped, "AtomKind::ALL must not contain duplicates");
+        assert_eq!(
+            sorted,
+            vec!["bool", "float", "int", "keyword", "string", "symbol"],
+            "AtomKind::ALL must cover every reachable Atom payload kind"
+        );
+    }
+
+    #[test]
+    fn atom_kind_label_renders_canonical_string_for_every_variant() {
+        // Pin every variant's canonical `&'static str` projection — a
+        // regression that drifts any label (typo `"sym"` for
+        // `"symbol"`, swap of `"int"` ↔ `"float"`, capitalization
+        // drift `"String"` for `"string"`, or the `Str → "string"`
+        // boundary rename being reversed to a literal `"str"`) fails-
+        // loudly here. The six labels are byte-for-byte identical to
+        // the corresponding `SexpShape::label` arms so the typed
+        // diagnostic vocabulary stays unified across the AtomKind ⊂
+        // SexpShape containment.
+        assert_eq!(AtomKind::Symbol.label(), "symbol");
+        assert_eq!(AtomKind::Keyword.label(), "keyword");
+        assert_eq!(AtomKind::Str.label(), "string");
+        assert_eq!(AtomKind::Int.label(), "int");
+        assert_eq!(AtomKind::Float.label(), "float");
+        assert_eq!(AtomKind::Bool.label(), "bool");
+    }
+
+    #[test]
+    fn atom_kind_label_agrees_with_sexp_shape_label_for_every_atom_arm() {
+        // CROSS-PROJECTION VOCABULARY CONTRACT: each `AtomKind`
+        // variant's `label()` is byte-for-byte identical to the
+        // corresponding `SexpShape` variant's `label()` (after the
+        // `Str → String` typed-variant rename which is intentional
+        // — the wire vocabulary is `"string"` on both axes). Pin the
+        // six-way agreement so a future label rename on EITHER side
+        // (a SexpShape `"string"` → `"str"` drift, or an AtomKind
+        // `"int"` → `"i64"` drift) fails-loudly here, NOT silently
+        // at every cross-axis consumer. The pairing is load-bearing
+        // for the typed-projection composition
+        // `AtomKind::sexp_shape().label() == AtomKind::label()`.
+        for kind in AtomKind::ALL {
+            assert_eq!(
+                kind.label(),
+                kind.sexp_shape().label(),
+                "label vocabulary drift between AtomKind::{kind:?} \
+                 and its SexpShape projection",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_kind_display_matches_label_for_every_variant() {
+        // Pin Display-equals-label: any future
+        // `#[error("... got {got}")]` annotation that threads through
+        // this projection projects through Display, and Display
+        // delegates to `label()`. A regression that introduces a
+        // Display impl that deviates from `label()` (e.g. capitalizing
+        // one variant) would drift any future diagnostic surface;
+        // this test pins the contract. Sibling posture to
+        // `sexp_shape_display_matches_label_for_every_variant` in
+        // `error.rs`.
+        assert_eq!(format!("{}", AtomKind::Symbol), "symbol");
+        assert_eq!(format!("{}", AtomKind::Keyword), "keyword");
+        assert_eq!(format!("{}", AtomKind::Str), "string");
+        assert_eq!(format!("{}", AtomKind::Int), "int");
+        assert_eq!(format!("{}", AtomKind::Float), "float");
+        assert_eq!(format!("{}", AtomKind::Bool), "bool");
+    }
+
+    #[test]
+    fn atom_kind_hash_discriminator_pins_legacy_atom_cache_key_bytes() {
+        // CACHE-KEY CONTRACT: pre-lift `Hash for Atom` used the literal
+        // byte values 0/1/2/3/4/5 for Symbol/Keyword/Str/Int/Float/Bool
+        // as the per-variant discriminator. The macro-expansion cache
+        // (`Expander::cache`) keys on Hash; ANY change to a
+        // discriminator byte silently invalidates every cached
+        // expansion across the substrate. Pin the six legacy values
+        // explicitly so a regression that re-numbers them surfaces
+        // immediately — the `AtomKind` algebra MUST preserve the prior
+        // byte mapping bit-for-bit. Sibling posture to
+        // `quote_form_hash_discriminator_pins_legacy_cache_key_bytes`
+        // on the quote-family axis.
+        assert_eq!(AtomKind::Symbol.hash_discriminator(), 0);
+        assert_eq!(AtomKind::Keyword.hash_discriminator(), 1);
+        assert_eq!(AtomKind::Str.hash_discriminator(), 2);
+        assert_eq!(AtomKind::Int.hash_discriminator(), 3);
+        assert_eq!(AtomKind::Float.hash_discriminator(), 4);
+        assert_eq!(AtomKind::Bool.hash_discriminator(), 5);
+    }
+
+    #[test]
+    fn atom_kind_hash_discriminator_bytes_are_pairwise_disjoint() {
+        // Closed-set injectivity: the six discriminator bytes must
+        // partition `{0, 1, 2, 3, 4, 5}` injectively so two distinct
+        // `Atom` variants never produce the SAME hash discriminator —
+        // a violation here means the cache could conflate two atomic
+        // kinds with identical payloads (`Symbol("x")` and `Str("x")`
+        // would silently share a cache slot). Sibling pin to
+        // `atom_kind_all_is_unique_and_complete` on the label axis.
+        let bytes: Vec<u8> = AtomKind::ALL
+            .iter()
+            .map(|k| k.hash_discriminator())
+            .collect();
+        let mut sorted = bytes.clone();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "AtomKind hash discriminator bytes must be pairwise disjoint"
+        );
+        assert_eq!(sorted, vec![0, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn atom_kind_sexp_shape_pins_canonical_shape_identity_for_every_variant() {
+        // CLOSED-SET SHAPE-PROJECTION CONTRACT: each `AtomKind` variant
+        // projects to its matching `SexpShape` variant — load-bearing
+        // for the (Atom variant, SexpShape variant) pairing the
+        // substrate's outer-shape projection `domain::sexp_shape` routes
+        // through. Sibling-arm sweep so the six pairings stay
+        // load-bearing under reordering refactors. A regression that
+        // drifts ONE arm (e.g. routes `AtomKind::Int` to
+        // `SexpShape::Float`) surfaces here immediately rather than as
+        // a silent operator-facing diagnostic drift at every
+        // `LispError::TypeMismatch.got` slot for an atomic witness.
+        // Sibling posture to
+        // `quote_form_sexp_shape_pins_canonical_shape_identity_for_every_variant`.
+        assert_eq!(AtomKind::Symbol.sexp_shape(), SexpShape::Symbol);
+        assert_eq!(AtomKind::Keyword.sexp_shape(), SexpShape::Keyword);
+        assert_eq!(AtomKind::Str.sexp_shape(), SexpShape::String);
+        assert_eq!(AtomKind::Int.sexp_shape(), SexpShape::Int);
+        assert_eq!(AtomKind::Float.sexp_shape(), SexpShape::Float);
+        assert_eq!(AtomKind::Bool.sexp_shape(), SexpShape::Bool);
+    }
+
+    #[test]
+    fn atom_kind_label_round_trips_through_from_str() {
+        // Bidirectional `label` ↔ `FromStr` contract: for every variant
+        // in ALL, `kind.label().parse() == Ok(kind)`. A regression that
+        // drifts the (variant, literal) pairing at ONE arm of `label`
+        // (typo, capitalization drift) OR at the `FromStr` decode body
+        // (off-by-one, missing variant in the sweep) fails-loudly here.
+        // The canonical-literal site is singular (`label`) so the
+        // round-trip is the only way the typed surface and the
+        // rendered diagnostic literal can drift apart — pinning it
+        // here means they cannot. Sibling posture to
+        // `sexp_shape_label_round_trips_through_from_str`.
+        for kind in AtomKind::ALL {
+            let parsed: AtomKind = kind
+                .label()
+                .parse()
+                .expect("every ALL variant's label must round-trip through FromStr");
+            assert_eq!(
+                parsed,
+                kind,
+                "FromStr({}) must round-trip to the same variant",
+                kind.label()
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_atom_kind_carries_offending_input_verbatim() {
+        // Operator-facing diagnostic contract: the offending input
+        // lands in the typed error verbatim — no normalization, no
+        // case-folding, no truncation. Pin the exact `#[error(...)]`
+        // rendering AND the typed `.0` field projection so a future
+        // refactor that normalizes (e.g. `.to_lowercase()`) before
+        // building the error or that drops the input fails-loudly
+        // here. Symmetric to every sibling `Unknown*` carrier in the
+        // workspace.
+        let err: UnknownAtomKind = "Symbol".parse::<AtomKind>().expect_err(
+            "capitalized `Symbol` must NOT decode — labels are byte-equal case-sensitive",
+        );
+        assert_eq!(err.0, "Symbol");
+        assert_eq!(format!("{err}"), "unknown atom kind: Symbol");
+
+        let err: UnknownAtomKind = "str"
+            .parse::<AtomKind>()
+            .expect_err("`str` is not a canonical AtomKind label — `string` is");
+        assert_eq!(err.0, "str");
+        assert_eq!(format!("{err}"), "unknown atom kind: str");
+
+        let err: UnknownAtomKind = ""
+            .parse::<AtomKind>()
+            .expect_err("empty input must NOT decode to an AtomKind");
+        assert_eq!(err.0, "");
+        assert_eq!(format!("{err}"), "unknown atom kind: ");
+    }
+
+    #[test]
+    fn atom_kind_from_str_rejects_non_atom_sexp_shape_labels() {
+        // CROSS-AXIS GUARD: `SexpShape::label()`'s vocabulary is the
+        // SUPERSET of `AtomKind::label()`'s — every AtomKind label
+        // decodes successfully through SexpShape's FromStr to the
+        // matching SexpShape variant (because the typed projections
+        // agree), but the SIX non-atom SexpShape labels (`"nil"`,
+        // `"list"`, `"quote"`, `"quasiquote"`, `"unquote"`,
+        // `"unquote-splice"`) MUST reject through AtomKind's FromStr
+        // — they have no atomic-kind preimage. A FromStr that
+        // silently accepted `"list"` as an AtomKind would corrupt
+        // the typed identity downstream of any future diagnostic
+        // round-trip. Pin BOTH directions: the six atom labels
+        // decode successfully (and to the matching `AtomKind`
+        // variant), the six non-atom labels reject.
+        assert_eq!("symbol".parse::<AtomKind>().unwrap(), AtomKind::Symbol);
+        assert_eq!("keyword".parse::<AtomKind>().unwrap(), AtomKind::Keyword);
+        assert_eq!("string".parse::<AtomKind>().unwrap(), AtomKind::Str);
+        assert_eq!("int".parse::<AtomKind>().unwrap(), AtomKind::Int);
+        assert_eq!("float".parse::<AtomKind>().unwrap(), AtomKind::Float);
+        assert_eq!("bool".parse::<AtomKind>().unwrap(), AtomKind::Bool);
+
+        // Non-atom SexpShape labels (the six structural shapes
+        // OUTSIDE the AtomKind closed set) must reject.
+        for label in [
+            "nil",
+            "list",
+            "quote",
+            "quasiquote",
+            "unquote",
+            "unquote-splice",
+        ] {
+            assert!(
+                label.parse::<AtomKind>().is_err(),
+                "non-atom SexpShape label {label:?} must NOT decode to an AtomKind",
+            );
+        }
+
+        // Sanity: typed peers' labels (`UnquoteForm::marker`'s
+        // `,` / `,@` punctuation, `ExpectedKwargShape`'s
+        // `"number"` / `"list of strings"` vocabulary) live on
+        // different axes and MUST reject too — pin the closed-set
+        // boundary.
+        for label in [",", ",@", "number", "list of strings", "atom", "Atom"] {
+            assert!(
+                label.parse::<AtomKind>().is_err(),
+                "cross-axis label {label:?} must NOT decode to an AtomKind",
+            );
+        }
+    }
+
+    #[test]
+    fn hash_for_atom_preserves_legacy_discriminator_bytes() {
+        // CACHE-KEY CONTRACT (Hash side): pin that the lifted
+        // `Hash for Atom` impl produces byte-identical hashes for the
+        // six atomic variants as the pre-lift implementation. We
+        // compute the expected hash via a SECOND hasher that manually
+        // drives the pre-lift `<discr>u8.hash(h); <inner>.hash(h)`
+        // sequence (with `Float`'s `to_bits()` projection preserved
+        // and `String` payloads hashed via `String::hash`), then
+        // compare. A regression that drifts the discriminator OR
+        // re-orders the (discr, inner) sequence surfaces here as a
+        // hash-value mismatch. Sibling posture to
+        // `hash_for_sexp_preserves_legacy_quote_family_discriminator_bytes`
+        // on the quote-family axis.
+        use std::collections::hash_map::DefaultHasher;
+
+        let payload = String::from("payload");
+
+        // Helper: hash the legacy `<discr>u8.hash(h); <inner>` shape
+        // through a fresh DefaultHasher and finish.
+        let legacy_hash = |atom: &Atom, expected_discr: u8| -> u64 {
+            let mut h = DefaultHasher::new();
+            expected_discr.hash(&mut h);
+            match atom {
+                Atom::Symbol(s) | Atom::Keyword(s) | Atom::Str(s) => s.hash(&mut h),
+                Atom::Int(n) => n.hash(&mut h),
+                Atom::Float(f) => f.to_bits().hash(&mut h),
+                Atom::Bool(b) => b.hash(&mut h),
+            }
+            h.finish()
+        };
+
+        // (label, atom, pre-lift discriminator byte)
+        let cases: &[(&str, Atom, u8)] = &[
+            ("symbol", Atom::Symbol(payload.clone()), 0u8),
+            ("keyword", Atom::Keyword(payload.clone()), 1u8),
+            ("str", Atom::Str(payload.clone()), 2u8),
+            ("int", Atom::Int(42), 3u8),
+            ("float", Atom::Float(1.5), 4u8),
+            ("bool-true", Atom::Bool(true), 5u8),
+            ("bool-false", Atom::Bool(false), 5u8),
+        ];
+
+        for (label, atom, expected_discr) in cases {
+            let mut via_impl = DefaultHasher::new();
+            atom.hash(&mut via_impl);
+
+            let via_legacy = legacy_hash(atom, *expected_discr);
+
+            assert_eq!(
+                via_impl.finish(),
+                via_legacy,
+                "Hash for Atom drifted from legacy \
+                 (discr={expected_discr}, inner) sequence at {label}"
+            );
+        }
+    }
+
+    #[test]
+    fn atom_kind_composes_with_domain_sexp_shape_for_every_atomic_arm() {
+        // PATH-UNIFORMITY / COMPOSITION-LAW CONTRACT: the substrate's
+        // outer-shape projection `domain::sexp_shape` now routes the
+        // six atomic arms through `Atom::kind` + `AtomKind::sexp_shape`.
+        // Pin that the composed projection produces the SAME
+        // `SexpShape` variant that the pre-lift inline six-arm match
+        // produced for every `Atom` payload. A regression that drifts
+        // ONE arm of either `Atom::kind` (e.g. routes `Atom::Int(_)`
+        // through `AtomKind::Float`) or `AtomKind::sexp_shape` (e.g.
+        // routes `AtomKind::Symbol` through `SexpShape::Keyword`)
+        // surfaces as an immediate inequality between
+        // `domain::sexp_shape(&Sexp::Atom(a))` and
+        // `a.kind().sexp_shape()` — and since both projections are
+        // load-bearing for the diagnostic surface, the test pins both
+        // sides of the typed algebra at once. Sibling posture to
+        // `quote_form_sexp_shape_paired_with_as_quote_form_preserves_
+        // pre_lift_pairing_for_every_sexp` on the quote-family axis.
+        let cases: &[(Atom, SexpShape)] = &[
+            (Atom::Symbol("x".into()), SexpShape::Symbol),
+            (Atom::Keyword("k".into()), SexpShape::Keyword),
+            (Atom::Str("s".into()), SexpShape::String),
+            (Atom::Int(7), SexpShape::Int),
+            (Atom::Float(2.5), SexpShape::Float),
+            (Atom::Bool(true), SexpShape::Bool),
+        ];
+        for (atom, expected_shape) in cases {
+            let via_composed = atom.kind().sexp_shape();
+            assert_eq!(
+                via_composed, *expected_shape,
+                "Atom::kind().sexp_shape() drifted for {atom:?}"
+            );
+            // Cross-projection identity with the public
+            // `domain::sexp_shape` projection — pins that the lifted
+            // arm routes through `AtomKind` exactly as the inline
+            // arms did pre-lift.
+            let via_domain = crate::domain::sexp_shape(&Sexp::Atom(atom.clone()));
+            assert_eq!(
+                via_domain, via_composed,
+                "domain::sexp_shape vs Atom::kind().sexp_shape() drift for {atom:?}"
+            );
+        }
     }
 }

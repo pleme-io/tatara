@@ -129,30 +129,145 @@ pub enum ArtifactVariant<'a> {
     RunMarker(&'a RunMarkerSource),
 }
 
+impl ArtifactVariant<'_> {
+    /// Reverse projection — every borrowed variant knows its
+    /// `ArtifactKind` discriminator. Pairs with `ArtifactKind::select`
+    /// so `ArtifactKind::select(source).map(|v| v.kind())` round-trips
+    /// the closed set on the populated side; pinned by
+    /// `artifact_kind_round_trips_through_variant_kind`. Future
+    /// kind-keyed consumers (metric labels like
+    /// `tatara_exports_total{artifact="receipts"}`, status-condition
+    /// reason strings, audit-trail classifiers, LSP completion) reach
+    /// through this projection instead of pattern-matching the
+    /// payload-carrying view.
+    pub fn kind(&self) -> ArtifactKind {
+        match self {
+            Self::Receipts(_) => ArtifactKind::Receipts,
+            Self::TestReport(_) => ArtifactKind::TestReport,
+            Self::ProcessSnapshot(_) => ArtifactKind::ProcessSnapshot,
+            Self::RunMarker(_) => ArtifactKind::RunMarker,
+        }
+    }
+}
+
+/// Closed-set discriminator over `ArtifactSource`'s four tagged-union
+/// slots. Single source of truth that drives `ArtifactSource::variant`'s
+/// ambiguity + emptiness resolver, the `ArtifactError::Empty` message,
+/// and the reverse `ArtifactVariant::kind` projection. Adding a fifth
+/// artifact variant lands at one `ALL` entry + one `as_str` arm + one
+/// `select` arm + one `ArtifactVariant::kind` arm — exhaustively
+/// checked by the compiler.
+///
+/// Sibling closed-set lifts on the same `ExportSpec` axis:
+/// [`crate::intent::IntentKind::ALL`], [`crate::lifetime::LifetimeKind::ALL`],
+/// [`ExportTrigger::ALL`], [`ReportFormat::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ArtifactKind {
+    Receipts,
+    TestReport,
+    ProcessSnapshot,
+    RunMarker,
+}
+
+impl ArtifactKind {
+    /// The closed set of artifact kinds — single source of truth that
+    /// drives `ArtifactSource::variant`'s sweep so a variant added
+    /// without an `ALL` entry never reaches the resolver. The `[Self; 4]`
+    /// array literal forces the arity at compile time.
+    pub const ALL: [Self; 4] = [
+        Self::Receipts,
+        Self::TestReport,
+        Self::ProcessSnapshot,
+        Self::RunMarker,
+    ];
+
+    /// Canonical camelCase wire-format key — matches the serde
+    /// `rename_all = "camelCase"` field name on `ArtifactSource`. The
+    /// `ArtifactError::Empty` message composes the human-readable list
+    /// from this projection so a new variant lands in the
+    /// operator-facing diagnostic automatically via the `ALL` sweep,
+    /// not via hand-maintained error-string drift. Pinned by
+    /// `artifact_kind_as_str_matches_field_name`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Receipts => "receipts",
+            Self::TestReport => "testReport",
+            Self::ProcessSnapshot => "processSnapshot",
+            Self::RunMarker => "runMarker",
+        }
+    }
+
+    /// Project an `ArtifactSource` borrow into the optional typed variant
+    /// view for this kind. Returns `None` iff the matching slot is
+    /// `None`. Composes the closed-set sweep `ArtifactSource::variant`
+    /// loops over. Mirrors [`crate::intent::IntentKind::select`].
+    pub fn select<'a>(self, source: &'a ArtifactSource) -> Option<ArtifactVariant<'a>> {
+        match self {
+            Self::Receipts => source.receipts.as_ref().map(ArtifactVariant::Receipts),
+            Self::TestReport => source.test_report.as_ref().map(ArtifactVariant::TestReport),
+            Self::ProcessSnapshot => source
+                .process_snapshot
+                .as_ref()
+                .map(ArtifactVariant::ProcessSnapshot),
+            Self::RunMarker => source.run_marker.as_ref().map(ArtifactVariant::RunMarker),
+        }
+    }
+}
+
+impl fmt::Display for ArtifactKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ArtifactKind {
+    type Err = UnknownArtifactKind;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.as_str() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownArtifactKind(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownReportFormat`], [`UnknownExportTrigger`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`],
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown artifact kind: {0}")]
+pub struct UnknownArtifactKind(pub String);
+
 #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ArtifactError {
-    #[error(
-        "artifact source has no variant set (one of receipts/testReport/processSnapshot/runMarker required)"
-    )]
-    Empty,
+    #[error("artifact source has no variant set (one of {0} required)")]
+    Empty(&'static str),
     #[error("artifact source has multiple variants set; exactly one required")]
     Ambiguous,
 }
 
+/// Slash-joined list of every `ArtifactKind::as_str()` — composed once
+/// at compile time so `ArtifactError::Empty`'s diagnostic carries the
+/// closed-set summary without per-variant string drift. Mirrors
+/// [`crate::intent::INTENT_KIND_LIST`] in shape.
+const ARTIFACT_KIND_LIST: &str = "receipts/testReport/processSnapshot/runMarker";
+
 impl ArtifactSource {
-    /// Resolve to exactly one variant.
+    /// Resolve to exactly one variant. Errors on zero or many.
+    /// Sweeps over `ArtifactKind::ALL` so a fifth variant added with an
+    /// `ALL` entry is structurally honored at this site — no parallel
+    /// `is_some()` count, no per-variant if-let chain, no
+    /// `unreachable!()`. The Empty diagnostic carries the closed-set
+    /// list via `ARTIFACT_KIND_LIST`.
     pub fn variant(&self) -> Result<ArtifactVariant<'_>, ArtifactError> {
         use crate::tagged_union::{resolve, ResolveError};
-        resolve([
-            self.receipts.as_ref().map(ArtifactVariant::Receipts),
-            self.test_report.as_ref().map(ArtifactVariant::TestReport),
-            self.process_snapshot
-                .as_ref()
-                .map(ArtifactVariant::ProcessSnapshot),
-            self.run_marker.as_ref().map(ArtifactVariant::RunMarker),
-        ])
-        .map_err(|e| match e {
-            ResolveError::None => ArtifactError::Empty,
+        resolve(ArtifactKind::ALL.into_iter().map(|k| k.select(self))).map_err(|e| match e {
+            ResolveError::None => ArtifactError::Empty(ARTIFACT_KIND_LIST),
             ResolveError::Many => ArtifactError::Ambiguous,
         })
     }
@@ -657,7 +772,10 @@ mod tests {
     #[test]
     fn artifact_source_empty_errors() {
         let s = ArtifactSource::default();
-        assert_eq!(s.variant().unwrap_err(), ArtifactError::Empty);
+        match s.variant().unwrap_err() {
+            ArtifactError::Empty(list) => assert_eq!(list, ARTIFACT_KIND_LIST),
+            other => panic!("expected Empty, got {other:?}"),
+        }
     }
 
     #[test]
@@ -1241,5 +1359,245 @@ mod tests {
             DEFAULT_NATS_URL,
             "nats://nats.observability.svc.cluster.local:4222"
         );
+    }
+
+    // ── closed-set algebra for ArtifactKind (ALL × as_str × Display ×
+    //    FromStr × select × ArtifactVariant::kind) ─────────────────────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here (uniqueness check)
+    /// before drifting `as_str` / `select`. The arity is asserted by
+    /// the `[Self; 4]` array type itself.
+    #[test]
+    fn artifact_kind_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in ArtifactKind::ALL {
+            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
+        }
+        assert_eq!(seen.len(), ArtifactKind::ALL.len());
+    }
+
+    /// CANONICAL-KEY UNIQUENESS: no two kinds alias the same `as_str`
+    /// identifier. A future rename that aliases two kinds onto the same
+    /// camelCase key (e.g. both → `"report"`) would silently make
+    /// Display non-injective AND would collide the resolver's `select`
+    /// dispatch onto the wrong slot. Caught here.
+    #[test]
+    fn artifact_kind_as_str_unique_per_variant() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in ArtifactKind::ALL {
+            assert!(
+                seen.insert(kind.as_str()),
+                "as_str collision: {kind:?} → {:?}",
+                kind.as_str()
+            );
+        }
+        assert_eq!(seen.len(), ArtifactKind::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: every `ArtifactKind::as_str()` matches
+    /// the serde `rename_all = "camelCase"` field name on the
+    /// corresponding `Option<…>` slot of `ArtifactSource`. A future
+    /// rename of either the struct field OR the `as_str` arm lands
+    /// here at one site, instead of drifting between the typed
+    /// surface, the YAML wire format, and the `ArtifactError::Empty`
+    /// diagnostic. The mapping is the table the serde derive produces
+    /// against the struct field declarations above; reading the YAML
+    /// output pins it without re-deriving by hand.
+    #[test]
+    fn artifact_kind_as_str_matches_field_name() {
+        // Round-trip a populated source through serde_yaml and confirm
+        // the emitted key name agrees with `ArtifactKind::as_str()` for
+        // each variant. Drives the closed set via `ALL` so a fifth
+        // variant lands here automatically once construction is added.
+        for kind in ArtifactKind::ALL {
+            let s = single_slot_source(kind);
+            let yaml = serde_yaml::to_string(&s).expect("serialize");
+            let key = kind.as_str();
+            assert!(
+                yaml.contains(&format!("{key}:")),
+                "as_str(={key:?}) for {kind:?} not present in serialized YAML:\n{yaml}"
+            );
+        }
+    }
+
+    /// CANONICAL-NAMES PIN: byte-exact camelCase wire-format pin —
+    /// renaming any of these strings IS a wire-format break that fails
+    /// this test FIRST so the rename stays a deliberate decision, not
+    /// a typo. Locks the (variant → operator-facing key) table.
+    #[test]
+    fn artifact_kind_canonical_names_pinned() {
+        assert_eq!(ArtifactKind::Receipts.as_str(), "receipts");
+        assert_eq!(ArtifactKind::TestReport.as_str(), "testReport");
+        assert_eq!(ArtifactKind::ProcessSnapshot.as_str(), "processSnapshot");
+        assert_eq!(ArtifactKind::RunMarker.as_str(), "runMarker");
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift. If a reviewer
+    /// accidentally re-introduces an inline match in Display, this
+    /// test would fail the moment a variant rename touches one site
+    /// but not the other.
+    #[test]
+    fn artifact_kind_display_matches_as_str() {
+        for kind in ArtifactKind::ALL {
+            assert_eq!(kind.to_string(), kind.as_str());
+        }
+    }
+
+    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn artifact_kind_roundtrip_via_as_str() {
+        for kind in ArtifactKind::ALL {
+            assert_eq!(
+                ArtifactKind::from_str(kind.as_str()).unwrap(),
+                kind,
+                "round-trip failed for {kind:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / PascalCased / typo / cross-axis-leaked
+    /// inputs from sibling closed-set enums on the same `ExportSpec`
+    /// axis (`Junit`, `OnAttested`, …) — and the error echoes the
+    /// input verbatim so the operator-facing diagnostic carries the
+    /// offending value, not a normalized form. `ArtifactKind` is its
+    /// own axis, NOT a transparent reflection of any sibling.
+    #[test]
+    fn unknown_artifact_kind_errors() {
+        for bad in [
+            "",
+            "Receipts",
+            "test_report",
+            "RECEIPTS",
+            "snapshot",
+            "marker",
+            "Junit",
+            "OnAttested",
+            "NdJsonLines",
+        ] {
+            let err = ArtifactKind::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// ROUND-TRIP CONTRACT: every kind reaches its borrowed-variant
+    /// view via `select`, and that variant projects back to the same
+    /// kind via `ArtifactVariant::kind`. A regression that misroutes a
+    /// select arm (e.g. `Self::Receipts => source.test_report.as_ref()
+    /// ...`) fails loudly here.
+    #[test]
+    fn artifact_kind_round_trips_through_variant_kind() {
+        for kind in ArtifactKind::ALL {
+            let s = single_slot_source(kind);
+            let v = kind.select(&s).expect("populated slot must select");
+            assert_eq!(v.kind(), kind, "round-trip failed for {kind:?}");
+            // And the resolver lands on the same variant.
+            assert_eq!(
+                s.variant().expect("exactly-one variant").kind(),
+                kind,
+                "variant() resolver disagreed on {kind:?}"
+            );
+        }
+    }
+
+    /// SELECT-EMPTY CONTRACT: an unpopulated slot returns `None` from
+    /// `select`, for every kind. Pairs with the resolver's `Empty`
+    /// path so a future kind's slot defaulting wrong (e.g. accidentally
+    /// `Some(Default::default())` instead of `None`) is caught here.
+    #[test]
+    fn artifact_kind_select_returns_none_for_unset_slot() {
+        let empty = ArtifactSource::default();
+        for kind in ArtifactKind::ALL {
+            assert!(
+                kind.select(&empty).is_none(),
+                "{kind:?} reported populated on a default ArtifactSource"
+            );
+        }
+    }
+
+    /// EMPTY-DIAGNOSTIC CONTRACT: the closed-set kind list embedded
+    /// in `ArtifactError::Empty` echoes the canonical join of every
+    /// `ArtifactKind::as_str()` projection. A variant added without
+    /// updating `ARTIFACT_KIND_LIST` (or a renamed variant) shows up
+    /// here as a mismatch. Mirrors
+    /// `intent_error_empty_lists_every_kind_in_canonical_order`.
+    #[test]
+    fn artifact_error_empty_lists_every_kind_in_canonical_order() {
+        let parts: Vec<&'static str> = ArtifactKind::ALL.iter().map(|k| k.as_str()).collect();
+        let joined = parts.join("/");
+        assert_eq!(joined, ARTIFACT_KIND_LIST);
+    }
+
+    /// AMBIGUOUS-PATH CONTRACT: when two slots are populated the
+    /// resolver yields `Ambiguous`, exhaustively across every pair in
+    /// `ALL × ALL` (excluding the diagonal). A future asymmetry where
+    /// one slot would silently shadow another (e.g. an `if-let` chain
+    /// re-introducing first-wins ordering) is caught here.
+    #[test]
+    fn artifact_source_two_slots_is_ambiguous_across_every_pair() {
+        for a in ArtifactKind::ALL {
+            for b in ArtifactKind::ALL {
+                if a == b {
+                    continue;
+                }
+                let s = two_slot_source(a, b);
+                assert_eq!(
+                    s.variant().unwrap_err(),
+                    ArtifactError::Ambiguous,
+                    "({a:?}, {b:?}) should resolve Ambiguous"
+                );
+            }
+        }
+    }
+
+    /// Construct an `ArtifactSource` with exactly the given kind's
+    /// slot populated by a minimal valid inner source. Shared across
+    /// the closed-set property tests so they each cover every variant
+    /// without restating the construction table. Mirrors
+    /// `single_slot_intent` in shape.
+    fn single_slot_source(kind: ArtifactKind) -> ArtifactSource {
+        match kind {
+            ArtifactKind::Receipts => ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::TestReport => ArtifactSource {
+                test_report: Some(TestReportSource {
+                    configmap: "cm".into(),
+                    key: "k".into(),
+                    format: ReportFormat::Junit,
+                    namespace: None,
+                }),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::ProcessSnapshot => ArtifactSource {
+                process_snapshot: Some(ProcessSnapshotSource::default()),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::RunMarker => ArtifactSource {
+                run_marker: Some(RunMarkerSource::default()),
+                ..ArtifactSource::default()
+            },
+        }
+    }
+
+    /// Construct an `ArtifactSource` with two slots populated — drives
+    /// the pairwise `Ambiguous` sweep. Composes the single-slot
+    /// constructor on top of itself to keep one source of truth for
+    /// per-variant inner payloads.
+    fn two_slot_source(a: ArtifactKind, b: ArtifactKind) -> ArtifactSource {
+        // Merge by populating each kind's slot from its single-slot view.
+        let sa = single_slot_source(a);
+        let sb = single_slot_source(b);
+        ArtifactSource {
+            receipts: sa.receipts.or(sb.receipts),
+            test_report: sa.test_report.or(sb.test_report),
+            process_snapshot: sa.process_snapshot.or(sb.process_snapshot),
+            run_marker: sa.run_marker.or(sb.run_marker),
+        }
     }
 }

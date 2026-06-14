@@ -263,23 +263,54 @@ impl fmt::Display for RequestorKind {
 /// shape is pinned), `Err(UnknownRequestorKind)` for any other string
 /// (open operator-registered kinds, typos, future-version kinds).
 /// Round-trip invariant pinned by
-/// `requestor_kind_from_str_round_trips_canonical_names`:
+/// [`requestor_kind_is_well_formed_closed_set`]:
 /// `k.as_str().parse() == Ok(k)` for every variant. Open-by-design
 /// callers prefer [`Requestor::known_kind`]'s `Option<RequestorKind>`
 /// shape, which collapses the typed `Err` into a `None` so open kinds
-/// stay open. Lifted onto a linear sweep over [`Self::ALL`] keyed on
-/// [`Self::as_str`] so the canonical literals live at ONE site (the
-/// `as_str` arms) rather than at TWO sites — adding a fifth kind
-/// extends only `ALL` + `as_str`, NOT a per-variant `from_str` arm.
+/// stay open. Body delegates to
+/// [`tatara_lisp::ClosedSet::parse_label`]'s default linear sweep over
+/// [`Self::ALL`] keyed on [`Self::as_str`] (via the `label` projection)
+/// so the canonical literals live at ONE site (the `as_str` arms)
+/// rather than at TWO sites — adding a fifth kind extends only `ALL` +
+/// `as_str`, NOT a per-variant `from_str` arm.
 impl FromStr for RequestorKind {
     type Err = UnknownRequestorKind;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.as_str() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownRequestorKind(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`RequestorKind`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from this enum's
+/// [`std::str::FromStr::from_str`] body into ONE place
+/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
+/// with every other `tatara-process` closed-set implementor
+/// ([`AllocationPhase`], [`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`],
+/// [`crate::spec::MustReachPhase`],
+/// [`crate::boundary::ConditionKind`],
+/// [`crate::intent::WorkloadKind`],
+/// [`crate::lifetime::TeardownPolicy`],
+/// [`crate::signal::SighupStrategy`],
+/// [`crate::pool::ReplacementPolicy`],
+/// [`crate::pool::MemberState`],
+/// [`crate::pool::PoolPhase`],
+/// [`crate::pool::ReturnPolicy`]). The trait method `label`
+/// delegates to the inherent [`RequestorKind::as_str`] — the inherent
+/// name (kebab-case `as_str`) stays the load-bearing wire-vocabulary
+/// projection that matches the `tatara-github-watcher` factory + the
+/// CRD printcolumns + the `PoolSelector.kinds` filter verbatim, while
+/// the trait method gives generic consumers a STABLE name (`label`)
+/// across the workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for RequestorKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownRequestorKind;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownRequestorKind(s.to_owned())
     }
 }
 
@@ -491,12 +522,39 @@ impl fmt::Display for AllocationPhase {
 impl FromStr for AllocationPhase {
     type Err = UnknownAllocationPhase;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for phase in Self::ALL {
-            if s == phase.as_str() {
-                return Ok(phase);
-            }
-        }
-        Err(UnknownAllocationPhase(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`AllocationPhase`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from this enum's
+/// [`std::str::FromStr::from_str`] body into ONE place
+/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
+/// with every other `tatara-process` closed-set implementor
+/// ([`RequestorKind`], [`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`],
+/// [`crate::spec::MustReachPhase`],
+/// [`crate::boundary::ConditionKind`],
+/// [`crate::intent::WorkloadKind`],
+/// [`crate::lifetime::TeardownPolicy`],
+/// [`crate::signal::SighupStrategy`],
+/// [`crate::pool::PoolPhase`]). The trait method `label` delegates to
+/// the inherent [`AllocationPhase::as_str`] — the inherent name
+/// (PascalCase `as_str`) stays the load-bearing wire-vocabulary
+/// projection that matches the serde rename + the CRD `enum:`
+/// enumeration the allocation reconciler stamps on the
+/// `ephemeralallocations.tatara.pleme.io` schema verbatim, while the
+/// trait method gives generic consumers a STABLE name (`label`)
+/// across the workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for AllocationPhase {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownAllocationPhase;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownAllocationPhase(s.to_owned())
     }
 }
 
@@ -579,13 +637,23 @@ mod tests {
     /// added without an `ALL` entry fails here via the uniqueness
     /// check before drifting `FromStr` or the sweep tests below. The
     /// arity is asserted by the `[Self; 7]` array type itself.
+    ///
+    /// Structural well-formedness of [`AllocationPhase`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants
+    /// (`ALL` is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `allocation_phase_all_is_unique_and_complete` +
+    /// `allocation_phase_roundtrip_via_as_str` + the empty-input arm
+    /// of `unknown_allocation_phase_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this
+    /// helper exercises the same code path the allocation reconciler
+    /// hits when parsing a CRD `enum:`-validated value back to the
+    /// typed phase.
     #[test]
-    fn allocation_phase_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for phase in AllocationPhase::ALL {
-            assert!(seen.insert(phase), "duplicate variant in ALL: {phase:?}");
-        }
-        assert_eq!(seen.len(), AllocationPhase::ALL.len());
+    fn allocation_phase_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<AllocationPhase>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -620,28 +688,18 @@ mod tests {
         }
     }
 
-    /// Every variant in `ALL` round-trips through `as_str` ↔
-    /// `FromStr`. Adding a variant without extending the canonical
-    /// projection fails here.
-    #[test]
-    fn allocation_phase_roundtrip_via_as_str() {
-        for phase in AllocationPhase::ALL {
-            assert_eq!(
-                AllocationPhase::from_str(phase.as_str()).unwrap(),
-                phase,
-                "round-trip failed for {phase:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
-    /// error echoes the input verbatim so the operator-facing
-    /// diagnostic carries the offending value, not a normalized form.
+    /// projection — lowercased / typo / unrelated — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// carries the offending value, not a normalized form. The
+    /// empty-input arm is pinned by
+    /// [`allocation_phase_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownAllocationPhase`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_allocation_phase_errors() {
         for bad in [
-            "",
             "pending",
             "BOUND",
             "no-matching-pool",
@@ -717,29 +775,24 @@ mod tests {
 
     // ── RequestorKind closed-set truth-table ─────────────────────────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness
-    /// check before drifting `FromStr` or the sweep tests below. The
+    /// Structural well-formedness of [`RequestorKind`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants
+    /// (`ALL` is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `requestor_kind_all_enumerates_each_variant_exactly_once`
+    /// + `requestor_kind_from_str_round_trips_canonical_names` + the
+    /// empty-input arm of `requestor_kind_from_str_rejects_open_kinds`.
+    /// `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path
+    /// [`Requestor::known_kind`]'s `Option<RequestorKind>` collapse
+    /// rides on when classifying inbound `Requestor.kind` strings. The
     /// arity is asserted by the `[Self; 4]` array type itself.
     #[test]
-    fn requestor_kind_all_enumerates_each_variant_exactly_once() {
-        use std::collections::HashSet;
-
-        let all = RequestorKind::ALL;
-        assert_eq!(all.len(), 4, "ALL arity must match the closed set");
-
-        let mut seen: HashSet<RequestorKind> = HashSet::new();
-        for k in all {
-            assert!(seen.insert(k), "duplicate variant in ALL: {k:?}");
-        }
-        for k in [
-            RequestorKind::GithubPr,
-            RequestorKind::Manual,
-            RequestorKind::CiRun,
-            RequestorKind::Scheduled,
-        ] {
-            assert!(all.contains(&k), "variant {k:?} unreachable through ALL");
-        }
+    fn requestor_kind_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<RequestorKind>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` is injective across the closed
@@ -772,27 +825,20 @@ mod tests {
         assert_eq!(RequestorKind::Scheduled.as_str(), "scheduled");
     }
 
-    /// Every variant in `ALL` round-trips through `as_str` ↔
-    /// `FromStr`. Adding a variant without extending the canonical
-    /// projection fails here.
-    #[test]
-    fn requestor_kind_from_str_round_trips_canonical_names() {
-        for k in RequestorKind::ALL {
-            assert_eq!(k.as_str().parse::<RequestorKind>(), Ok(k));
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased-mismatch / typo / unrelated —
-    /// and the error echoes the input verbatim so the operator-facing
+    /// projection — lowercased-mismatch / typo / unrelated — and the
+    /// error echoes the input verbatim so the operator-facing
     /// diagnostic carries the offending value, not a normalized form.
     /// The schema is open at the wire layer (operators MAY register
     /// new kinds and `Requestor::known_kind` collapses them to
-    /// `None`), but the closed-set view is byte-exact.
+    /// `None`), but the closed-set view is byte-exact. The empty-input
+    /// arm is pinned by [`requestor_kind_is_well_formed_closed_set`]
+    /// via the `tatara_lisp::ClosedSet` testkit; the cases here pin
+    /// the verbatim-echo contract on the [`UnknownRequestorKind`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn requestor_kind_from_str_rejects_open_kinds() {
         for bad in [
-            "",
             "github_pr",
             "GithubPr",
             "operator-custom-kind",

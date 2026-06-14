@@ -1949,6 +1949,46 @@ pub enum UnquoteForm {
 }
 
 impl UnquoteForm {
+    /// The closed set of two template-marker syntactic forms — single
+    /// source of truth that drives the [`Self::marker`] / [`fmt::Display`]
+    /// projection AND the [`FromStr`] decode sweep keyed on
+    /// [`Self::marker`]. Adding a hypothetical third variant (e.g. a
+    /// `,~` reverse-unquote, a `,?` conditional-unquote) lands at one
+    /// [`Self::ALL`] entry + one [`Self::marker`] arm — exhaustively
+    /// checked by the compiler (the `[Self; 2]` array literal forces
+    /// the arity) AND by the per-variant truth-table tests below.
+    ///
+    /// Sibling closed-set lift to every other typed-shape enum the
+    /// substrate carries: this crate's own [`SexpShape::ALL`] (the
+    /// twelve reachable outer shapes — superset on the structural axis
+    /// of the `Sexp` algebra), [`crate::ast::AtomKind::ALL`] (the six
+    /// atomic-payload kinds — peer axis on the same algebra),
+    /// [`crate::ast::QuoteForm`] (the four homoiconic prefix-wrappers
+    /// — superset of THIS enum's two template markers via the 2-of-4
+    /// projection [`crate::ast::QuoteForm::as_unquote_form`]), and the
+    /// cross-crate `tatara-process` family (`ConditionKind::ALL`,
+    /// `ProcessPhase::ALL`, `ProcessSignal::ALL`, `ChannelKind::ALL`,
+    /// `IntentKind::ALL`, `LifetimeKind::ALL`, `RequestorKind::ALL`,
+    /// `ReceiptKind::ALL`, …) every one of which paired its typed
+    /// projection with `ALL` before this lift.
+    ///
+    /// Future consumers that compose against `ALL`: LSP / REPL
+    /// completion for the operator-facing rendered template-marker
+    /// (every `compile error in {prefix}…:` substring in `LispError`'s
+    /// rendered diagnostics for a template-substitution rejection keys
+    /// on this set's projection through [`Self::marker`]);
+    /// `tatara-check` coverage assertions over which template markers
+    /// reach a `NonSymbolUnquoteTarget` / `UnboundTemplateVar` arm at
+    /// all — the typed sweep replaces a per-callsite vocabulary of two
+    /// `&'static str` literals; any future audit-trail metric jointly
+    /// labeled by [`Self::marker`] (e.g.
+    /// `tatara_lisp_unbound_template_var_total{prefix=","}`) — the
+    /// metric label set IS [`Self::ALL`] mapped through
+    /// [`Self::marker`]; any future structural rewriter (typed
+    /// analogue of MLIR's `op.walk<UnquoteFormOp>()`) that wants to
+    /// sweep over every template marker in a typed sequence.
+    pub const ALL: [Self; 2] = [Self::Unquote, Self::Splice];
+
     /// Project the typed `UnquoteForm` to the canonical `&'static str`
     /// literal — feeds the `LispError::UnboundTemplateVar` /
     /// `LispError::NonSymbolUnquoteTarget` Display rendering via the
@@ -1958,6 +1998,19 @@ impl UnquoteForm {
     /// parallel to how `MacroDefHead::keyword()` and
     /// `CompilerSpecIoStage::operation()` / `label()` feed their respective
     /// `LispError::*` Display impls.
+    ///
+    /// The bidirectional contract is anchored by tests:
+    /// `unquote_form_marker_renders_canonical_literal_for_each_variant`
+    /// pins each variant's canonical literal so a typo in any arm
+    /// fails-loudly,
+    /// `unquote_form_display_renders_canonical_marker_for_each_variant`
+    /// pins Display-equals-marker so any `#[error("... {prefix}")]`
+    /// annotation that threads through this projection projects
+    /// byte-for-byte, and
+    /// `unquote_form_marker_round_trips_through_from_str` pins the
+    /// `marker` ↔ [`Self::FromStr`] round-trip for every variant in
+    /// [`Self::ALL`] so the typed surface and the rendered diagnostic
+    /// literal cannot drift.
     #[must_use]
     pub fn marker(self) -> &'static str {
         match self {
@@ -1972,6 +2025,83 @@ impl std::fmt::Display for UnquoteForm {
         f.write_str(self.marker())
     }
 }
+
+/// Decode a canonical [`UnquoteForm`] marker back into the typed variant
+/// — `Ok(form)` when the input matches one of the two canonical
+/// punctuation literals exactly (`","` for [`UnquoteForm::Unquote`],
+/// `",@"` for [`UnquoteForm::Splice`] — byte-equal, case-irrelevant for
+/// punctuation), and [`Err(UnknownUnquoteForm)`] for every other string
+/// (an empty input, a stray prefix character `"'"` / `` "`" `` from the
+/// sibling [`crate::ast::QuoteForm`] superset whose vocabulary covers
+/// the OTHER two homoiconic prefixes, a typo `",,"` / `",@@"`, a label
+/// from the [`SexpShape`] vocabulary the punctuation axis is
+/// structurally outside of — `"unquote"` / `"unquote-splice"` are the
+/// `SexpShape` projections of the SAME closed set on a DIFFERENT axis
+/// and rightly reject here, kept distinct by design).
+///
+/// Round-trip invariant pinned by
+/// `unquote_form_marker_round_trips_through_from_str`: for every
+/// variant `f` in [`UnquoteForm::ALL`], `f.marker().parse() == Ok(f)`.
+/// The decode is a linear sweep over [`UnquoteForm::ALL`] keyed on
+/// [`UnquoteForm::marker`] so the canonical literals live at ONE site
+/// (the `marker` arms) rather than at TWO sites (`marker` + a
+/// per-variant `from_str` arm) — adding a third variant extends only
+/// [`UnquoteForm::ALL`] + [`UnquoteForm::marker`], NOT a third
+/// per-variant literal site. Same shape every sibling closed-set
+/// `FromStr` in this workspace uses ([`SexpShape::FromStr`],
+/// [`crate::ast::AtomKind::FromStr`],
+/// `RequestorKind::from_str`, `ReceiptKind::from_str`,
+/// `AllocationPhase::from_str`, `ConditionKind::from_str`,
+/// `ProcessPhase::from_str`, …).
+///
+/// Open-by-design callers that want to drop the typed-error face of
+/// the decode and reach for `Option<UnquoteForm>` compose
+/// `marker.parse().ok()` exactly as the `tatara-process` siblings'
+/// `known_kind()`-shaped projections do.
+///
+/// Cross-axis relationship to [`SexpShape::FromStr`]: the two closed
+/// sets project the SAME two `Sexp::Unquote` / `Sexp::UnquoteSplice`
+/// constructors on DISTINCT axes — `SexpShape` decodes the
+/// `"unquote"` / `"unquote-splice"` structural-identity labels (what
+/// the operator wrote at the macro-template surface, named as a
+/// reader-shape identity), while [`UnquoteForm`] decodes the `","` /
+/// `",@"` punctuation markers (how the prefix looks in source text).
+/// Both axes share the same closed-set cardinality (2) and project
+/// from the same underlying `Sexp` variants, but their vocabularies
+/// are intentionally disjoint — a regression that conflates the two
+/// would let `",".parse::<SexpShape>()` succeed or
+/// `"unquote".parse::<UnquoteForm>()` succeed, silently bifurcating
+/// the substrate's diagnostic surface. Pinned by
+/// `unquote_form_from_str_rejects_sexp_shape_labels_on_template_marker_axis`.
+impl std::str::FromStr for UnquoteForm {
+    type Err = UnknownUnquoteForm;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        for form in Self::ALL {
+            if s == form.marker() {
+                return Ok(form);
+            }
+        }
+        Err(UnknownUnquoteForm(s.to_owned()))
+    }
+}
+
+/// Typed parse failure for [`UnquoteForm`]'s [`std::str::FromStr`] —
+/// carries the offending input verbatim so an operator-facing
+/// diagnostic surfaces the bad value, not a normalized form.
+/// Symmetric to every sibling `Unknown*` error in the workspace
+/// ([`UnknownSexpShape`], [`crate::ast::UnknownAtomKind`],
+/// `tatara_process::allocation::UnknownRequestorKind`,
+/// `tatara_process::receipt::UnknownReceiptKind`,
+/// `tatara_process::phase::UnknownPhase`,
+/// `tatara_process::boundary::UnknownConditionKind`,
+/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
+/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
+/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
+/// diagnostics that hand the offending input back unchanged to the
+/// human.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("unknown unquote form: {0}")]
+pub struct UnknownUnquoteForm(pub String);
 
 /// Closed-set identifier for a kwargs-path projection — the `form:` label
 /// shape that a typed-entry kwarg failure renders into the `compile error
@@ -2731,7 +2861,8 @@ mod tests {
         optional_param_malformed_suffix, paren_suffix, rest_param_missing_name_suffix,
         rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
         unknown_kwarg_suffix, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
-        OptionalParamMalformedReason, SexpShape, SexpWitness, UnknownSexpShape, UnquoteForm,
+        OptionalParamMalformedReason, SexpShape, SexpWitness, UnknownSexpShape, UnknownUnquoteForm,
+        UnquoteForm,
     };
 
     #[test]
@@ -7632,5 +7763,146 @@ mod tests {
             }
             _ => panic!("both must be TypeMismatch"),
         }
+    }
+
+    // ── UnquoteForm: ALL closure + FromStr round-trip ──────────────────
+    //
+    // `UnquoteForm` (the two template-marker syntactic forms `,` and
+    // `,@`) joins the substrate's closed-set algebra family —
+    // `SexpShape::ALL` + `FromStr`, `AtomKind::ALL` + `FromStr`,
+    // `RequestorKind::ALL` + `FromStr`, etc. — by lifting the canonical
+    // `&'static str` marker literal vocabulary onto ONE site
+    // (`Self::marker` keyed by `Self::ALL`) the operator-facing decode
+    // path inverts. Pre-lift the punctuation vocabulary lived ONLY
+    // in `marker()`'s match arms; post-lift the SAME vocabulary
+    // round-trips through `FromStr` keyed on the closed set, so the
+    // typed surface and the rendered diagnostic literal cannot drift.
+    // Same posture as `sexp_shape_label_round_trips_through_from_str`
+    // / `atom_kind_label_round_trips_through_from_str`.
+
+    #[test]
+    fn unquote_form_all_is_unique_and_complete() {
+        // Closed-set posture: `ALL` enumerates every reachable variant
+        // EXACTLY ONCE — no duplicates, no omissions. The `[Self; 2]`
+        // array literal in the declaration forces the arity at compile
+        // time; this test catches the orthogonal failure modes — a
+        // future variant added at the type without being added to ALL
+        // (silently dropped from every consumer's sweep), or a typo
+        // that duplicates an entry (silently double-counted). Same
+        // truth-table pinning every sibling closed-set lift in the
+        // workspace uses (SexpShape::ALL, AtomKind::ALL,
+        // RequestorKind::ALL, ReceiptKind::ALL, ConditionKind::ALL, …).
+        assert_eq!(UnquoteForm::ALL.len(), 2);
+        let mut sorted: Vec<&str> = UnquoteForm::ALL.iter().map(|f| f.marker()).collect();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "UnquoteForm::ALL must not contain duplicates"
+        );
+        assert_eq!(
+            sorted,
+            vec![",", ",@"],
+            "UnquoteForm::ALL must cover both template-marker syntactic forms"
+        );
+    }
+
+    #[test]
+    fn unquote_form_marker_round_trips_through_from_str() {
+        // Bidirectional `marker` ↔ `FromStr` contract: for every
+        // variant in ALL, `form.marker().parse() == Ok(form)`. A
+        // regression that drifts the (variant, literal) pairing at
+        // ONE arm of `marker` (typo, `,,` instead of `,`, `, @` with
+        // a stray space) OR at the `FromStr` decode body (off-by-one,
+        // missing variant in the sweep) fails-loudly here. The
+        // canonical-literal site is singular (`marker`) so the
+        // round-trip is the only way the typed surface and the
+        // rendered diagnostic literal can drift apart — pinning it
+        // here means they cannot.
+        for form in UnquoteForm::ALL {
+            let parsed: UnquoteForm = form
+                .marker()
+                .parse()
+                .expect("every ALL variant's marker must round-trip through FromStr");
+            assert_eq!(
+                parsed,
+                form,
+                "FromStr({}) must round-trip to the same variant",
+                form.marker()
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_unquote_form_carries_offending_input_verbatim() {
+        // Operator-facing diagnostic contract: the offending input
+        // lands in the typed error verbatim — no normalization, no
+        // truncation, no whitespace coercion. Pin the exact
+        // `#[error(...)]` rendering AND the typed `.0` field
+        // projection so a future refactor that normalizes (e.g.
+        // `.trim()`) before building the error or that drops the
+        // input fails-loudly here. Symmetric to every sibling
+        // `Unknown*` carrier in the workspace
+        // ([`UnknownSexpShape`], [`crate::ast::UnknownAtomKind`],
+        // `tatara_process::allocation::UnknownRequestorKind`, …).
+        let err: UnknownUnquoteForm = ",,"
+            .parse::<UnquoteForm>()
+            .expect_err("doubled comma `,,` is not a canonical template marker");
+        assert_eq!(err.0, ",,");
+        assert_eq!(format!("{err}"), "unknown unquote form: ,,");
+
+        let err: UnknownUnquoteForm = ",@@"
+            .parse::<UnquoteForm>()
+            .expect_err("doubled-at `,@@` is not a canonical template marker");
+        assert_eq!(err.0, ",@@");
+        assert_eq!(format!("{err}"), "unknown unquote form: ,@@");
+
+        let err: UnknownUnquoteForm = ""
+            .parse::<UnquoteForm>()
+            .expect_err("empty input must NOT decode to an UnquoteForm");
+        assert_eq!(err.0, "");
+        assert_eq!(format!("{err}"), "unknown unquote form: ");
+    }
+
+    #[test]
+    fn unquote_form_from_str_rejects_sexp_shape_labels_on_template_marker_axis() {
+        // Cross-axis guard: [`SexpShape`] projects the SAME two
+        // `Sexp::Unquote` / `Sexp::UnquoteSplice` constructors as
+        // [`UnquoteForm`] does, but onto a DIFFERENT vocabulary —
+        // `"unquote"` / `"unquote-splice"` (structural-identity labels)
+        // vs `","` / `",@"` (punctuation markers). The two axes share
+        // the same closed-set cardinality (2) but their vocabularies
+        // are intentionally disjoint. A `FromStr` that silently
+        // accepted `"unquote"` as an `UnquoteForm` would corrupt the
+        // typed identity at the diagnostic boundary. Pin BOTH
+        // directions: the SAME punctuation labels (`,` / `,@`) decode
+        // through [`UnquoteForm`] but NOT through [`SexpShape`]; the
+        // SAME structural labels (`"unquote"` / `"unquote-splice"`)
+        // decode through [`SexpShape`] but NOT through [`UnquoteForm`].
+        // Anchors the cross-axis disjointness from BOTH sides so a
+        // regression that conflates the two axes' vocabularies fails
+        // here.
+        assert_eq!(",".parse::<UnquoteForm>().unwrap(), UnquoteForm::Unquote);
+        assert_eq!(",@".parse::<UnquoteForm>().unwrap(), UnquoteForm::Splice);
+
+        // The structural-identity labels project the SAME variants on
+        // the SexpShape axis but are NOT canonical UnquoteForm markers.
+        assert!("unquote".parse::<UnquoteForm>().is_err());
+        assert!("unquote-splice".parse::<UnquoteForm>().is_err());
+
+        // Sibling homoiconic-prefix-wrapper markers (`'` for quote,
+        // `` ` `` for quasiquote) belong to the WIDER QuoteForm
+        // superset on the SAME punctuation axis — they MUST reject
+        // here because UnquoteForm carves the 2-of-4 template-
+        // substitution subset of QuoteForm's 4-prefix closed set.
+        assert!("'".parse::<UnquoteForm>().is_err());
+        assert!("`".parse::<UnquoteForm>().is_err());
+
+        // Whitespace-padded markers are NOT canonical — the
+        // round-trip must be exact byte-for-byte against `marker()`.
+        assert!(" ,".parse::<UnquoteForm>().is_err());
+        assert!(", ".parse::<UnquoteForm>().is_err());
+        assert!(", @".parse::<UnquoteForm>().is_err());
     }
 }

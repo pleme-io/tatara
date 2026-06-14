@@ -54,11 +54,12 @@ pub mod prelude {
     };
     pub use crate::ephemeral::{compile_ephemeral_source, EphemeralSpec};
     pub use crate::export::{
-        ArtifactError, ArtifactKind, ArtifactSource, ArtifactVariant, ChannelError, ChannelVariant,
-        ExportSpec, ExportTrigger, HttpEventChannel, NatsSubjectChannel, ProcessSnapshotSource,
-        ReceiptsSource, ReportFormat, ReportPayloadShape, RunMarkerSource, StdoutChannel,
-        TestReportSource, UnknownArtifactKind, UnknownExportTrigger, UnknownReportFormat,
-        VectorChannel, DEFAULT_NATS_URL, DEFAULT_VECTOR_INGEST,
+        ArtifactError, ArtifactKind, ArtifactSource, ArtifactVariant, ChannelError, ChannelKind,
+        ChannelVariant, ExportSpec, ExportTrigger, HttpEventChannel, NatsSubjectChannel,
+        ProcessSnapshotSource, ReceiptsSource, ReportFormat, ReportPayloadShape, RunMarkerSource,
+        StdoutChannel, TestReportSource, UnknownArtifactKind, UnknownChannelKind,
+        UnknownExportTrigger, UnknownReportFormat, VectorChannel, DEFAULT_NATS_URL,
+        DEFAULT_VECTOR_INGEST,
     };
     pub use crate::hostname::{
         ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameError,

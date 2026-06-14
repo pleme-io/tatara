@@ -552,24 +552,139 @@ pub enum ChannelVariant<'a> {
     Stdout(&'a StdoutChannel),
 }
 
+impl ChannelVariant<'_> {
+    /// Reverse projection — every borrowed channel variant knows its
+    /// `ChannelKind` discriminator. Pairs with [`ChannelKind::select`]
+    /// so `ChannelKind::select(channel).map(|v| v.kind())` round-trips
+    /// the closed set on the populated side; pinned by
+    /// `channel_kind_round_trips_through_variant_kind`. Future
+    /// kind-keyed consumers (metric labels like
+    /// `tatara_exports_total{channel="natsSubject"}`, status-condition
+    /// reason strings, audit-trail classifiers, LSP completion) reach
+    /// through this projection instead of pattern-matching the
+    /// payload-carrying view. Mirrors
+    /// [`ArtifactVariant::kind`] and [`crate::intent::IntentVariant::kind`].
+    pub fn kind(&self) -> ChannelKind {
+        match self {
+            Self::HttpEvent(_) => ChannelKind::HttpEvent,
+            Self::NatsSubject(_) => ChannelKind::NatsSubject,
+            Self::Stdout(_) => ChannelKind::Stdout,
+        }
+    }
+}
+
+/// Closed-set discriminator over `VectorChannel`'s three tagged-union
+/// slots. Single source of truth that drives `VectorChannel::variant`'s
+/// ambiguity + emptiness resolver, the `ChannelError::Empty` message,
+/// and the reverse `ChannelVariant::kind` projection. Adding a fourth
+/// channel variant lands at one `ALL` entry + one `as_str` arm + one
+/// `select` arm + one `ChannelVariant::kind` arm — exhaustively
+/// checked by the compiler.
+///
+/// Sibling closed-set lifts on the same `ExportSpec` axis:
+/// [`ArtifactKind::ALL`], [`ExportTrigger::ALL`], [`ReportFormat::ALL`],
+/// [`ReportPayloadShape::ALL`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ChannelKind {
+    HttpEvent,
+    NatsSubject,
+    Stdout,
+}
+
+impl ChannelKind {
+    /// The closed set of channel kinds — single source of truth that
+    /// drives `VectorChannel::variant`'s sweep so a variant added
+    /// without an `ALL` entry never reaches the resolver. The
+    /// `[Self; 3]` array literal forces the arity at compile time.
+    pub const ALL: [Self; 3] = [Self::HttpEvent, Self::NatsSubject, Self::Stdout];
+
+    /// Canonical camelCase wire-format key — matches the serde
+    /// `rename_all = "camelCase"` field name on `VectorChannel`. The
+    /// `ChannelError::Empty` message composes the human-readable list
+    /// from this projection so a new variant lands in the
+    /// operator-facing diagnostic automatically via the `ALL` sweep,
+    /// not via hand-maintained error-string drift. Pinned by
+    /// `channel_kind_as_str_matches_field_name`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::HttpEvent => "httpEvent",
+            Self::NatsSubject => "natsSubject",
+            Self::Stdout => "stdout",
+        }
+    }
+
+    /// Project a `VectorChannel` borrow into the optional typed variant
+    /// view for this kind. Returns `None` iff the matching slot is
+    /// `None`. Composes the closed-set sweep `VectorChannel::variant`
+    /// loops over. Mirrors [`ArtifactKind::select`] +
+    /// [`crate::intent::IntentKind::select`] +
+    /// [`crate::lifetime::LifetimeKind::select`].
+    pub fn select<'a>(self, channel: &'a VectorChannel) -> Option<ChannelVariant<'a>> {
+        match self {
+            Self::HttpEvent => channel.http_event.as_ref().map(ChannelVariant::HttpEvent),
+            Self::NatsSubject => channel
+                .nats_subject
+                .as_ref()
+                .map(ChannelVariant::NatsSubject),
+            Self::Stdout => channel.stdout.as_ref().map(ChannelVariant::Stdout),
+        }
+    }
+}
+
+impl fmt::Display for ChannelKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ChannelKind {
+    type Err = UnknownChannelKind;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.as_str() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownChannelKind(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`UnknownArtifactKind`], [`UnknownReportFormat`],
+/// [`UnknownExportTrigger`],
+/// [`crate::lifetime::UnknownTeardownPolicy`],
+/// [`crate::boundary::UnknownConditionKind`],
+/// [`crate::phase::UnknownPhase`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown channel kind: {0}")]
+pub struct UnknownChannelKind(pub String);
+
 #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ChannelError {
-    #[error("vector channel has no variant set (one of httpEvent/natsSubject/stdout required)")]
-    Empty,
+    #[error("vector channel has no variant set (one of {0} required)")]
+    Empty(&'static str),
     #[error("vector channel has multiple variants set; exactly one required")]
     Ambiguous,
 }
 
+/// Slash-joined list of every `ChannelKind::as_str()` — composed once
+/// at compile time so `ChannelError::Empty`'s diagnostic carries the
+/// closed-set summary without per-variant string drift. Mirrors
+/// [`ARTIFACT_KIND_LIST`] in shape.
+const CHANNEL_KIND_LIST: &str = "httpEvent/natsSubject/stdout";
+
 impl VectorChannel {
+    /// Resolve to exactly one channel variant. Errors on zero or many.
+    /// Sweeps over `ChannelKind::ALL` so a fourth variant added with an
+    /// `ALL` entry is structurally honored at this site — no parallel
+    /// `is_some()` count, no per-variant if-let chain, no
+    /// `unreachable!()`. The Empty diagnostic carries the closed-set
+    /// list via `CHANNEL_KIND_LIST`.
     pub fn variant(&self) -> Result<ChannelVariant<'_>, ChannelError> {
         use crate::tagged_union::{resolve, ResolveError};
-        resolve([
-            self.http_event.as_ref().map(ChannelVariant::HttpEvent),
-            self.nats_subject.as_ref().map(ChannelVariant::NatsSubject),
-            self.stdout.as_ref().map(ChannelVariant::Stdout),
-        ])
-        .map_err(|e| match e {
-            ResolveError::None => ChannelError::Empty,
+        resolve(ChannelKind::ALL.into_iter().map(|k| k.select(self))).map_err(|e| match e {
+            ResolveError::None => ChannelError::Empty(CHANNEL_KIND_LIST),
             ResolveError::Many => ChannelError::Ambiguous,
         })
     }
@@ -805,7 +920,10 @@ mod tests {
     #[test]
     fn vector_channel_empty_errors() {
         let c = VectorChannel::default();
-        assert_eq!(c.variant().unwrap_err(), ChannelError::Empty);
+        match c.variant().unwrap_err() {
+            ChannelError::Empty(list) => assert_eq!(list, CHANNEL_KIND_LIST),
+            other => panic!("expected Empty, got {other:?}"),
+        }
     }
 
     #[test]
@@ -1551,6 +1669,234 @@ mod tests {
                     "({a:?}, {b:?}) should resolve Ambiguous"
                 );
             }
+        }
+    }
+
+    // ── closed-set algebra for ChannelKind (ALL × as_str × Display ×
+    //    FromStr × select × ChannelVariant::kind) ─────────────────────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here (uniqueness check)
+    /// before drifting `as_str` / `select`. The arity is asserted by
+    /// the `[Self; 3]` array type itself.
+    #[test]
+    fn channel_kind_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in ChannelKind::ALL {
+            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
+        }
+        assert_eq!(seen.len(), ChannelKind::ALL.len());
+    }
+
+    /// CANONICAL-KEY UNIQUENESS: no two kinds alias the same `as_str`
+    /// identifier. A future rename that aliases two kinds onto the same
+    /// camelCase key would silently make Display non-injective AND
+    /// would collide the resolver's `select` dispatch onto the wrong
+    /// slot. Caught here.
+    #[test]
+    fn channel_kind_as_str_unique_per_variant() {
+        let mut seen = std::collections::HashSet::new();
+        for kind in ChannelKind::ALL {
+            assert!(
+                seen.insert(kind.as_str()),
+                "as_str collision: {kind:?} → {:?}",
+                kind.as_str()
+            );
+        }
+        assert_eq!(seen.len(), ChannelKind::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: every `ChannelKind::as_str()` matches
+    /// the serde `rename_all = "camelCase"` field name on the
+    /// corresponding `Option<…>` slot of `VectorChannel`. A future
+    /// rename of either the struct field OR the `as_str` arm lands
+    /// here at one site, instead of drifting between the typed
+    /// surface, the YAML wire format, and the `ChannelError::Empty`
+    /// diagnostic.
+    #[test]
+    fn channel_kind_as_str_matches_field_name() {
+        for kind in ChannelKind::ALL {
+            let c = single_slot_channel(kind);
+            let yaml = serde_yaml::to_string(&c).expect("serialize");
+            let key = kind.as_str();
+            assert!(
+                yaml.contains(&format!("{key}:")),
+                "as_str(={key:?}) for {kind:?} not present in serialized YAML:\n{yaml}"
+            );
+        }
+    }
+
+    /// CANONICAL-NAMES PIN: byte-exact camelCase wire-format pin —
+    /// renaming any of these strings IS a wire-format break that fails
+    /// this test FIRST so the rename stays a deliberate decision, not
+    /// a typo. Locks the (variant → operator-facing key) table.
+    #[test]
+    fn channel_kind_canonical_names_pinned() {
+        assert_eq!(ChannelKind::HttpEvent.as_str(), "httpEvent");
+        assert_eq!(ChannelKind::NatsSubject.as_str(), "natsSubject");
+        assert_eq!(ChannelKind::Stdout.as_str(), "stdout");
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift.
+    #[test]
+    fn channel_kind_display_matches_as_str() {
+        for kind in ChannelKind::ALL {
+            assert_eq!(kind.to_string(), kind.as_str());
+        }
+    }
+
+    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn channel_kind_roundtrip_via_as_str() {
+        for kind in ChannelKind::ALL {
+            assert_eq!(
+                ChannelKind::from_str(kind.as_str()).unwrap(),
+                kind,
+                "round-trip failed for {kind:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / PascalCased / typo / cross-axis-leaked
+    /// inputs from sibling closed-set enums on the same `ExportSpec`
+    /// axis (`Receipts`, `OnAttested`, `Junit`, …) — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// carries the offending value, not a normalized form.
+    /// `ChannelKind` is its own axis, NOT a transparent reflection of
+    /// any sibling.
+    #[test]
+    fn unknown_channel_kind_errors() {
+        for bad in [
+            "",
+            "HttpEvent",
+            "http_event",
+            "HTTPEVENT",
+            "nats",
+            "STDOUT",
+            "Receipts",
+            "OnAttested",
+            "Junit",
+            "NdJsonLines",
+        ] {
+            let err = ChannelKind::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// ROUND-TRIP CONTRACT: every kind reaches its borrowed-variant
+    /// view via `select`, and that variant projects back to the same
+    /// kind via `ChannelVariant::kind`. A regression that misroutes a
+    /// select arm (e.g. `Self::HttpEvent => channel.nats_subject ...`)
+    /// fails loudly here.
+    #[test]
+    fn channel_kind_round_trips_through_variant_kind() {
+        for kind in ChannelKind::ALL {
+            let c = single_slot_channel(kind);
+            let v = kind.select(&c).expect("populated slot must select");
+            assert_eq!(v.kind(), kind, "round-trip failed for {kind:?}");
+            // And the resolver lands on the same variant.
+            assert_eq!(
+                c.variant().expect("exactly-one variant").kind(),
+                kind,
+                "variant() resolver disagreed on {kind:?}"
+            );
+        }
+    }
+
+    /// SELECT-EMPTY CONTRACT: an unpopulated slot returns `None` from
+    /// `select`, for every kind. Pairs with the resolver's `Empty`
+    /// path so a future kind's slot defaulting wrong (e.g. accidentally
+    /// `Some(Default::default())` instead of `None`) is caught here.
+    #[test]
+    fn channel_kind_select_returns_none_for_unset_slot() {
+        let empty = VectorChannel::default();
+        for kind in ChannelKind::ALL {
+            assert!(
+                kind.select(&empty).is_none(),
+                "{kind:?} reported populated on a default VectorChannel"
+            );
+        }
+    }
+
+    /// EMPTY-DIAGNOSTIC CONTRACT: the closed-set kind list embedded
+    /// in `ChannelError::Empty` echoes the canonical join of every
+    /// `ChannelKind::as_str()` projection. A variant added without
+    /// updating `CHANNEL_KIND_LIST` (or a renamed variant) shows up
+    /// here as a mismatch. Mirrors
+    /// `artifact_error_empty_lists_every_kind_in_canonical_order`.
+    #[test]
+    fn channel_error_empty_lists_every_kind_in_canonical_order() {
+        let parts: Vec<&'static str> = ChannelKind::ALL.iter().map(|k| k.as_str()).collect();
+        let joined = parts.join("/");
+        assert_eq!(joined, CHANNEL_KIND_LIST);
+    }
+
+    /// AMBIGUOUS-PATH CONTRACT: when two slots are populated the
+    /// resolver yields `Ambiguous`, exhaustively across every pair in
+    /// `ALL × ALL` (excluding the diagonal). A future asymmetry where
+    /// one slot would silently shadow another (e.g. an `if-let` chain
+    /// re-introducing first-wins ordering) is caught here.
+    #[test]
+    fn vector_channel_two_slots_is_ambiguous_across_every_pair() {
+        for a in ChannelKind::ALL {
+            for b in ChannelKind::ALL {
+                if a == b {
+                    continue;
+                }
+                let c = two_slot_channel(a, b);
+                assert_eq!(
+                    c.variant().unwrap_err(),
+                    ChannelError::Ambiguous,
+                    "({a:?}, {b:?}) should resolve Ambiguous"
+                );
+            }
+        }
+    }
+
+    /// Construct a `VectorChannel` with exactly the given kind's slot
+    /// populated by a minimal valid inner channel. Shared across the
+    /// closed-set property tests so they each cover every variant
+    /// without restating the construction table. Mirrors
+    /// `single_slot_source` in shape.
+    fn single_slot_channel(kind: ChannelKind) -> VectorChannel {
+        match kind {
+            ChannelKind::HttpEvent => VectorChannel {
+                http_event: Some(HttpEventChannel {
+                    endpoint: None,
+                    signal_type: "x".into(),
+                }),
+                ..VectorChannel::default()
+            },
+            ChannelKind::NatsSubject => VectorChannel {
+                nats_subject: Some(NatsSubjectChannel {
+                    subject: "s".into(),
+                    stream: "S".into(),
+                    url: None,
+                }),
+                ..VectorChannel::default()
+            },
+            ChannelKind::Stdout => VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+        }
+    }
+
+    /// Construct a `VectorChannel` with two slots populated — drives
+    /// the pairwise `Ambiguous` sweep. Composes the single-slot
+    /// constructor on top of itself to keep one source of truth for
+    /// per-variant inner payloads.
+    fn two_slot_channel(a: ChannelKind, b: ChannelKind) -> VectorChannel {
+        let ca = single_slot_channel(a);
+        let cb = single_slot_channel(b);
+        VectorChannel {
+            http_event: ca.http_event.or(cb.http_event),
+            nats_subject: ca.nats_subject.or(cb.nats_subject),
+            stdout: ca.stdout.or(cb.stdout),
         }
     }
 

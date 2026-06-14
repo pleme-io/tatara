@@ -228,12 +228,37 @@ impl fmt::Display for ConvergencePointType {
 impl FromStr for ConvergencePointType {
     type Err = UnknownConvergencePointType;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for t in Self::ALL {
-            if s == t.as_str() {
-                return Ok(t);
-            }
-        }
-        Err(UnknownConvergencePointType(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ConvergencePointType`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from this enum's
+/// [`std::str::FromStr::from_str`] body into ONE place
+/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
+/// with every other `tatara-process` closed-set implementor
+/// ([`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`],
+/// [`crate::spec::MustReachPhase`],
+/// [`crate::boundary::ConditionKind`],
+/// [`crate::intent::WorkloadKind`],
+/// [`crate::lifetime::TeardownPolicy`],
+/// [`crate::signal::SighupStrategy`]). The trait method `label`
+/// delegates to the inherent [`ConvergencePointType::as_str`] — the
+/// inherent name (PascalCase `as_str`) stays the load-bearing wire-
+/// vocabulary projection that matches the serde rename + the CRD
+/// `enum:` enumeration + the operator-facing diagnostic verbatim,
+/// while the trait method gives generic consumers a STABLE name
+/// (`label`) across the 36+ closed-set implementors.
+impl tatara_lisp::ClosedSet for ConvergencePointType {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownConvergencePointType;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownConvergencePointType(s.to_owned())
     }
 }
 
@@ -459,12 +484,21 @@ impl fmt::Display for SubstrateType {
 impl FromStr for SubstrateType {
     type Err = UnknownSubstrateType;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for t in Self::ALL {
-            if s == t.as_str() {
-                return Ok(t);
-            }
-        }
-        Err(UnknownSubstrateType(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`SubstrateType`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
+/// [`ConvergencePointType`] for the canonical retrofit narrative.
+impl tatara_lisp::ClosedSet for SubstrateType {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownSubstrateType;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownSubstrateType(s.to_owned())
     }
 }
 
@@ -642,12 +676,21 @@ impl fmt::Display for HorizonKind {
 impl FromStr for HorizonKind {
     type Err = UnknownHorizonKind;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for k in Self::ALL {
-            if s == k.as_str() {
-                return Ok(k);
-            }
-        }
-        Err(UnknownHorizonKind(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`HorizonKind`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
+/// [`ConvergencePointType`] for the canonical retrofit narrative.
+impl tatara_lisp::ClosedSet for HorizonKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownHorizonKind;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownHorizonKind(s.to_owned())
     }
 }
 
@@ -815,12 +858,21 @@ impl fmt::Display for OptimizationDirection {
 impl FromStr for OptimizationDirection {
     type Err = UnknownOptimizationDirection;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for d in Self::ALL {
-            if s == d.as_str() {
-                return Ok(d);
-            }
-        }
-        Err(UnknownOptimizationDirection(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`OptimizationDirection`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
+/// [`ConvergencePointType`] for the canonical retrofit narrative.
+impl tatara_lisp::ClosedSet for OptimizationDirection {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownOptimizationDirection;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownOptimizationDirection(s.to_owned())
     }
 }
 
@@ -940,12 +992,21 @@ impl fmt::Display for CalmClassification {
 impl FromStr for CalmClassification {
     type Err = UnknownCalmClassification;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for c in Self::ALL {
-            if s == c.as_str() {
-                return Ok(c);
-            }
-        }
-        Err(UnknownCalmClassification(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`CalmClassification`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
+/// [`ConvergencePointType`] for the canonical retrofit narrative.
+impl tatara_lisp::ClosedSet for CalmClassification {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownCalmClassification;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownCalmClassification(s.to_owned())
     }
 }
 
@@ -1564,17 +1625,24 @@ mod tests {
     // ── closed-set algebra contracts for ConvergencePointType
     //    (ALL × as_str × FromStr × arity-pair × predicate triple) ────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness
-    /// check before drifting `FromStr` or the sweep tests below. The
-    /// arity is asserted by the `[Self; 8]` array type itself.
+    /// Structural well-formedness of [`ConvergencePointType`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through `label ↔
+    /// parse_label`, labels are pairwise distinct, `""` is outside
+    /// the closed set) at ONE call site. Replaces the hand-derived
+    /// `convergence_point_type_all_is_unique_and_complete` +
+    /// `convergence_point_type_roundtrip_via_as_str` + the empty-
+    /// input arm of `unknown_convergence_point_type_errors`.
+    /// `FromStr` delegates to `<Self as tatara_lisp::ClosedSet>::parse_label`,
+    /// so this helper exercises the same code path the reconciler
+    /// hits when parsing a CRD `enum:`-validated value back to the
+    /// typed point-type. The forced `[Self; 8]` array literal on
+    /// `ConvergencePointType::ALL` still pins the cardinality at the
+    /// declaration site.
     #[test]
-    fn convergence_point_type_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for t in ConvergencePointType::ALL {
-            assert!(seen.insert(t), "duplicate variant in ALL: {t:?}");
-        }
-        assert_eq!(seen.len(), ConvergencePointType::ALL.len());
+    fn convergence_point_type_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<ConvergencePointType>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -1609,28 +1677,18 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn convergence_point_type_roundtrip_via_as_str() {
-        for t in ConvergencePointType::ALL {
-            assert_eq!(
-                ConvergencePointType::from_str(t.as_str()).unwrap(),
-                t,
-                "round-trip failed for {t:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings outside the canonical projection —
-    /// empty / lowercased / typo / cross-axis-leaked — and the error
-    /// echoes the input verbatim so the operator-facing diagnostic
-    /// surfaces the bad value, not a normalized form.
+    /// lowercased / typo / cross-axis-leaked — and the error echoes
+    /// the input verbatim so the operator-facing diagnostic surfaces
+    /// the bad value, not a normalized form. The empty-input arm is
+    /// pinned by [`convergence_point_type_is_well_formed_closed_set`]
+    /// via the `tatara_lisp::ClosedSet` testkit; the cases here pin
+    /// the verbatim-echo contract on the
+    /// [`UnknownConvergencePointType`] newtype, which the trait's
+    /// `make_unknown` can't see.
     #[test]
     fn unknown_convergence_point_type_errors() {
         for bad in [
-            "",
             "gate",       // lowercased
             "GATE",       // uppercased
             "Transformr", // typo
@@ -1821,17 +1879,16 @@ mod tests {
     // ── closed-set algebra contracts for SubstrateType
     //    (ALL × as_str × FromStr × predicate triple × bridge) ─────────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness
-    /// check before drifting `FromStr` or the sweep tests below. The
-    /// arity is asserted by the `[Self; 8]` array type itself.
+    /// Structural well-formedness of [`SubstrateType`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — see
+    /// [`convergence_point_type_is_well_formed_closed_set`] for the
+    /// canonical lift narrative. Replaces
+    /// `substrate_type_all_is_unique_and_complete` +
+    /// `substrate_type_roundtrip_via_as_str` + the empty-input arm
+    /// of `unknown_substrate_type_errors`.
     #[test]
-    fn substrate_type_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for t in SubstrateType::ALL {
-            assert!(seen.insert(t), "duplicate variant in ALL: {t:?}");
-        }
-        assert_eq!(seen.len(), SubstrateType::ALL.len());
+    fn substrate_type_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<SubstrateType>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -1869,28 +1926,18 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s
-    /// sweep of `ALL` fails here.
-    #[test]
-    fn substrate_type_roundtrip_via_as_str() {
-        for t in SubstrateType::ALL {
-            assert_eq!(
-                SubstrateType::from_str(t.as_str()).unwrap(),
-                t,
-                "round-trip failed for {t:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings outside the canonical projection —
-    /// empty / lowercased / typo / cross-axis-leaked — and the error
-    /// echoes the input verbatim so the operator-facing diagnostic
-    /// surfaces the bad value, not a normalized form.
+    /// lowercased / typo / cross-axis-leaked — and the error echoes
+    /// the input verbatim so the operator-facing diagnostic surfaces
+    /// the bad value, not a normalized form. The empty-input arm is
+    /// pinned by [`substrate_type_is_well_formed_closed_set`] via
+    /// the `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownSubstrateType`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_substrate_type_errors() {
         for bad in [
-            "", "compute",  // lowercased
+            "compute",  // lowercased
             "COMPUTE",  // uppercased
             "Computte", // typo
             "Database", "Steady",   // PoolPhase-axis leak
@@ -2007,17 +2054,16 @@ mod tests {
     // ── closed-set algebra contracts for CalmClassification
     //    (ALL × as_str × FromStr × requires_coordination × bridge) ─────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness
-    /// check before drifting `FromStr` or the sweep tests below. The
-    /// arity is asserted by the `[Self; 2]` array type itself.
+    /// Structural well-formedness of [`CalmClassification`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — see
+    /// [`convergence_point_type_is_well_formed_closed_set`] for the
+    /// canonical lift narrative. Replaces
+    /// `calm_classification_all_is_unique_and_complete` +
+    /// `calm_classification_roundtrip_via_as_str` + the empty-input
+    /// arm of `unknown_calm_classification_errors`.
     #[test]
-    fn calm_classification_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for c in CalmClassification::ALL {
-            assert!(seen.insert(c), "duplicate variant in ALL: {c:?}");
-        }
-        assert_eq!(seen.len(), CalmClassification::ALL.len());
+    fn calm_classification_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<CalmClassification>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -2055,28 +2101,18 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s
-    /// sweep of `ALL` fails here.
-    #[test]
-    fn calm_classification_roundtrip_via_as_str() {
-        for c in CalmClassification::ALL {
-            assert_eq!(
-                CalmClassification::from_str(c.as_str()).unwrap(),
-                c,
-                "round-trip failed for {c:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings outside the canonical projection —
-    /// empty / lowercased / typo / cross-axis-leaked — and the error
-    /// echoes the input verbatim so the operator-facing diagnostic
-    /// surfaces the bad value, not a normalized form.
+    /// lowercased / typo / cross-axis-leaked — and the error echoes
+    /// the input verbatim so the operator-facing diagnostic surfaces
+    /// the bad value, not a normalized form. The empty-input arm is
+    /// pinned by [`calm_classification_is_well_formed_closed_set`]
+    /// via the `tatara_lisp::ClosedSet` testkit; the cases here pin
+    /// the verbatim-echo contract on the
+    /// [`UnknownCalmClassification`] newtype, which the trait's
+    /// `make_unknown` can't see.
     #[test]
     fn unknown_calm_classification_errors() {
         for bad in [
-            "",
             "monotone",     // lowercased
             "MONOTONE",     // uppercased
             "Mono",         // typo
@@ -2172,17 +2208,16 @@ mod tests {
     // ── closed-set algebra contracts for OptimizationDirection
     //    (ALL × as_str × FromStr × prefers_lower × is_improvement) ───
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness
-    /// check before drifting `FromStr` or the sweep tests below. The
-    /// arity is asserted by the `[Self; 2]` array type itself.
+    /// Structural well-formedness of [`OptimizationDirection`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — see
+    /// [`convergence_point_type_is_well_formed_closed_set`] for the
+    /// canonical lift narrative. Replaces
+    /// `optimization_direction_all_is_unique_and_complete` +
+    /// `optimization_direction_roundtrip_via_as_str` + the empty-
+    /// input arm of `unknown_optimization_direction_errors`.
     #[test]
-    fn optimization_direction_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for d in OptimizationDirection::ALL {
-            assert!(seen.insert(d), "duplicate variant in ALL: {d:?}");
-        }
-        assert_eq!(seen.len(), OptimizationDirection::ALL.len());
+    fn optimization_direction_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<OptimizationDirection>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -2220,28 +2255,19 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s
-    /// sweep of `ALL` fails here.
-    #[test]
-    fn optimization_direction_roundtrip_via_as_str() {
-        for d in OptimizationDirection::ALL {
-            assert_eq!(
-                OptimizationDirection::from_str(d.as_str()).unwrap(),
-                d,
-                "round-trip failed for {d:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings outside the canonical projection —
-    /// empty / lowercased / typo / cross-axis-leaked — and the error
-    /// echoes the input verbatim so the operator-facing diagnostic
-    /// surfaces the bad value, not a normalized form.
+    /// lowercased / typo / cross-axis-leaked — and the error echoes
+    /// the input verbatim so the operator-facing diagnostic surfaces
+    /// the bad value, not a normalized form. The empty-input arm is
+    /// pinned by [`optimization_direction_is_well_formed_closed_set`]
+    /// via the `tatara_lisp::ClosedSet` testkit; the cases here pin
+    /// the verbatim-echo contract on the
+    /// [`UnknownOptimizationDirection`] newtype, which the trait's
+    /// `make_unknown` can't see.
     #[test]
     fn unknown_optimization_direction_errors() {
         for bad in [
-            "", "minimize", // lowercased
+            "minimize", // lowercased
             "MINIMIZE", // uppercased
             "Minimze",  // typo
             "Lower",    // synonym, not canonical
@@ -2423,17 +2449,16 @@ mod tests {
     // ── closed-set algebra contracts for HorizonKind
     //    (ALL × as_str × FromStr × terminates × requires_metric_axes) ──
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness
-    /// check before drifting `FromStr` or the sweep tests below. The
-    /// arity is asserted by the `[Self; 2]` array type itself.
+    /// Structural well-formedness of [`HorizonKind`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — see
+    /// [`convergence_point_type_is_well_formed_closed_set`] for the
+    /// canonical lift narrative. Replaces
+    /// `horizon_kind_all_is_unique_and_complete` +
+    /// `horizon_kind_roundtrip_via_as_str` + the empty-input arm of
+    /// `unknown_horizon_kind_errors`.
     #[test]
-    fn horizon_kind_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for k in HorizonKind::ALL {
-            assert!(seen.insert(k), "duplicate variant in ALL: {k:?}");
-        }
-        assert_eq!(seen.len(), HorizonKind::ALL.len());
+    fn horizon_kind_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<HorizonKind>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -2471,28 +2496,17 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s
-    /// sweep of `ALL` fails here.
-    #[test]
-    fn horizon_kind_roundtrip_via_as_str() {
-        for k in HorizonKind::ALL {
-            assert_eq!(
-                HorizonKind::from_str(k.as_str()).unwrap(),
-                k,
-                "round-trip failed for {k:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings outside the canonical projection —
-    /// empty / lowercased / typo / cross-axis-leaked — and the error
-    /// echoes the input verbatim so the operator-facing diagnostic
-    /// surfaces the bad value, not a normalized form.
+    /// lowercased / typo / cross-axis-leaked — and the error echoes
+    /// the input verbatim so the operator-facing diagnostic surfaces
+    /// the bad value, not a normalized form. The empty-input arm is
+    /// pinned by [`horizon_kind_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownHorizonKind`] newtype,
+    /// which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_horizon_kind_errors() {
         for bad in [
-            "",
             "bounded",   // lowercased
             "BOUNDED",   // uppercased
             "Boundd",    // typo

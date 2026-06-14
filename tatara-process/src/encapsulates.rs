@@ -94,34 +94,165 @@ pub enum EncapsulationKindVariant<'a> {
     BareWorkload(&'a BareWorkload),
 }
 
+impl EncapsulationKindVariant<'_> {
+    /// Reverse projection — every borrowed variant knows its
+    /// [`EncapsulationTarget`] discriminator. Pairs with
+    /// [`EncapsulationTarget::select`] so
+    /// `EncapsulationTarget::select(kind).map(|v| v.target())`
+    /// round-trips the closed set on the populated side; pinned by
+    /// `encapsulation_target_round_trips_through_variant_target`.
+    /// Future target-keyed consumers (metric labels like
+    /// `tatara_encapsulations_total{target="existingHelmRelease"}`,
+    /// status reason strings, audit-trail classifiers, LSP completion
+    /// lists) reach through this projection instead of pattern-matching
+    /// the payload-carrying view.
+    pub fn target(&self) -> EncapsulationTarget {
+        match self {
+            Self::ExistingHelmRelease(_) => EncapsulationTarget::ExistingHelmRelease,
+            Self::ExistingKustomization(_) => EncapsulationTarget::ExistingKustomization,
+            Self::BareWorkload(_) => EncapsulationTarget::BareWorkload,
+        }
+    }
+}
+
+/// Closed-set discriminator over `EncapsulationKind`'s three tagged-union
+/// slots. Single source of truth that drives `EncapsulationKind::variant`'s
+/// ambiguity + emptiness resolver, the `EncapsulationKindError::Empty`
+/// diagnostic message, and the reverse `EncapsulationKindVariant::target`
+/// projection. Adding a fourth encapsulation target (e.g., a future
+/// `ExistingNamespace`, `ExistingDaemonSet`, or `ExistingService`) lands
+/// at one `ALL` entry + one `as_str` arm + one `select` arm + one
+/// `EncapsulationKindVariant::target` arm — exhaustively checked by the
+/// compiler.
+///
+/// The (open authoring surface, closed typed discriminator) split mirrors
+/// every other multi-Option tagged union on this `ProcessSpec` axis:
+/// [`crate::intent::IntentKind`] discriminates [`crate::intent::Intent`];
+/// [`crate::lifetime::LifetimeKind`] discriminates
+/// [`crate::lifetime::Lifetime`];
+/// [`crate::export::ArtifactKind`] discriminates
+/// [`crate::export::ArtifactSource`];
+/// [`crate::export::ChannelKind`] discriminates
+/// [`crate::export::VectorChannel`]. The carrier here is named
+/// `EncapsulationKind` (not `Encapsulation`) because it predates the
+/// closed-set lift convention; `EncapsulationTarget` is the typed
+/// discriminator the rest of the typescape projects through, named for
+/// the semantic role each variant plays (a target of encapsulation).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EncapsulationTarget {
+    ExistingHelmRelease,
+    ExistingKustomization,
+    BareWorkload,
+}
+
+impl EncapsulationTarget {
+    /// The closed set of encapsulation targets — single source of truth
+    /// that drives `EncapsulationKind::variant`'s sweep so a variant
+    /// added without an `ALL` entry never reaches the resolver. The
+    /// `[Self; 3]` array literal forces the arity at compile time.
+    pub const ALL: [Self; 3] = [
+        Self::ExistingHelmRelease,
+        Self::ExistingKustomization,
+        Self::BareWorkload,
+    ];
+
+    /// Canonical camelCase wire-format key — matches the serde
+    /// `rename_all = "camelCase"` field name on the corresponding
+    /// `Option<…>` slot of `EncapsulationKind`. The
+    /// `EncapsulationKindError::Empty` diagnostic composes the
+    /// human-readable list from this projection so a new variant lands
+    /// in the operator-facing diagnostic automatically via the `ALL`
+    /// sweep, not via hand-maintained error-string drift. Pinned by
+    /// `encapsulation_target_as_str_matches_field_name`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ExistingHelmRelease => "existingHelmRelease",
+            Self::ExistingKustomization => "existingKustomization",
+            Self::BareWorkload => "bareWorkload",
+        }
+    }
+
+    /// Project an `EncapsulationKind` borrow into the optional typed
+    /// variant view for this target. Returns `None` iff the matching
+    /// slot is `None`. Composes the closed-set sweep
+    /// `EncapsulationKind::variant` loops over. Mirrors
+    /// [`crate::intent::IntentKind::select`],
+    /// [`crate::lifetime::LifetimeKind::select`],
+    /// [`crate::export::ArtifactKind::select`], and
+    /// [`crate::export::ChannelKind::select`].
+    pub fn select<'a>(self, kind: &'a EncapsulationKind) -> Option<EncapsulationKindVariant<'a>> {
+        match self {
+            Self::ExistingHelmRelease => kind
+                .existing_helm_release
+                .as_ref()
+                .map(EncapsulationKindVariant::ExistingHelmRelease),
+            Self::ExistingKustomization => kind
+                .existing_kustomization
+                .as_ref()
+                .map(EncapsulationKindVariant::ExistingKustomization),
+            Self::BareWorkload => kind
+                .bare_workload
+                .as_ref()
+                .map(EncapsulationKindVariant::BareWorkload),
+        }
+    }
+}
+
+impl fmt::Display for EncapsulationTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for EncapsulationTarget {
+    type Err = UnknownEncapsulationTarget;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for target in Self::ALL {
+            if s == target.as_str() {
+                return Ok(target);
+            }
+        }
+        Err(UnknownEncapsulationTarget(s.to_string()))
+    }
+}
+
+/// Typed parse failure carrying the offending input verbatim so the
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to [`crate::export::UnknownArtifactKind`],
+/// [`crate::export::UnknownChannelKind`], [`UnknownEncapsulationMode`],
+/// [`crate::lifetime::UnknownTeardownPolicy`].
+#[derive(Debug, thiserror::Error)]
+#[error("unknown encapsulation target: {0}")]
+pub struct UnknownEncapsulationTarget(pub String);
+
 #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum EncapsulationKindError {
-    #[error(
-        "encapsulation kind has no variant set (one of \
-         existingHelmRelease/existingKustomization/bareWorkload required)"
-    )]
-    Empty,
+    #[error("encapsulation kind has no variant set (one of {0} required)")]
+    Empty(&'static str),
     #[error("encapsulation kind has multiple variants set; exactly one required")]
     Ambiguous,
 }
 
+/// Slash-joined list of every `EncapsulationTarget::as_str()` — composed
+/// once at compile time so `EncapsulationKindError::Empty`'s diagnostic
+/// carries the closed-set summary without per-variant string drift.
+/// Mirrors [`crate::intent::INTENT_KIND_LIST`] /
+/// [`crate::export::ARTIFACT_KIND_LIST`] in shape; pinned by
+/// `encapsulation_kind_error_empty_lists_every_target_in_canonical_order`.
+const ENCAPSULATION_TARGET_LIST: &str = "existingHelmRelease/existingKustomization/bareWorkload";
+
 impl EncapsulationKind {
-    /// Resolve to exactly one variant.
+    /// Resolve to exactly one variant. Errors on zero or many.
+    ///
+    /// Sweeps over [`EncapsulationTarget::ALL`] so a fourth variant added
+    /// with an `ALL` entry is structurally honored at this site — no
+    /// parallel `is_some()` count, no per-variant if-let chain, no
+    /// `unreachable!()`. The Empty diagnostic carries the closed-set
+    /// list via `ENCAPSULATION_TARGET_LIST`.
     pub fn variant(&self) -> Result<EncapsulationKindVariant<'_>, EncapsulationKindError> {
         use crate::tagged_union::{resolve, ResolveError};
-        resolve([
-            self.existing_helm_release
-                .as_ref()
-                .map(EncapsulationKindVariant::ExistingHelmRelease),
-            self.existing_kustomization
-                .as_ref()
-                .map(EncapsulationKindVariant::ExistingKustomization),
-            self.bare_workload
-                .as_ref()
-                .map(EncapsulationKindVariant::BareWorkload),
-        ])
-        .map_err(|e| match e {
-            ResolveError::None => EncapsulationKindError::Empty,
+        resolve(EncapsulationTarget::ALL.into_iter().map(|t| t.select(self))).map_err(|e| match e {
+            ResolveError::None => EncapsulationKindError::Empty(ENCAPSULATION_TARGET_LIST),
             ResolveError::Many => EncapsulationKindError::Ambiguous,
         })
     }
@@ -301,7 +432,10 @@ mod tests {
     #[test]
     fn kind_empty_errors() {
         let k = EncapsulationKind::default();
-        assert_eq!(k.variant().unwrap_err(), EncapsulationKindError::Empty);
+        assert_eq!(
+            k.variant().unwrap_err(),
+            EncapsulationKindError::Empty(ENCAPSULATION_TARGET_LIST)
+        );
     }
 
     #[test]
@@ -560,5 +694,259 @@ mod tests {
             tatara_lisp::compile_named::<EncapsulatesSpec>(src).expect("compile");
         let d = &defs[0];
         assert_eq!(d.spec.mode, EncapsulationMode::Manage);
+    }
+
+    // ── closed-set algebra for EncapsulationTarget (ALL × as_str ×
+    //    Display × FromStr × select × EncapsulationKindVariant::target) ─
+
+    /// Construct an `EncapsulationKind` with one slot populated — the
+    /// composable construction table the closed-set property tests
+    /// loop over. Mirrors `single_slot_source` in
+    /// [`crate::export`] in shape.
+    fn single_slot_kind(target: EncapsulationTarget) -> EncapsulationKind {
+        match target {
+            EncapsulationTarget::ExistingHelmRelease => EncapsulationKind {
+                existing_helm_release: Some(ExistingHelmRelease {
+                    namespace: "ns".into(),
+                    name: "hr".into(),
+                    release_name: "rel".into(),
+                }),
+                ..EncapsulationKind::default()
+            },
+            EncapsulationTarget::ExistingKustomization => EncapsulationKind {
+                existing_kustomization: Some(ExistingKustomization {
+                    namespace: "ns".into(),
+                    name: "ks".into(),
+                }),
+                ..EncapsulationKind::default()
+            },
+            EncapsulationTarget::BareWorkload => {
+                let mut sel = BTreeMap::new();
+                sel.insert("app".into(), "x".into());
+                EncapsulationKind {
+                    bare_workload: Some(BareWorkload {
+                        namespace: "ns".into(),
+                        selector: sel,
+                    }),
+                    ..EncapsulationKind::default()
+                }
+            }
+        }
+    }
+
+    /// Construct an `EncapsulationKind` with two slots populated — drives
+    /// the pairwise `Ambiguous` sweep. Composes the single-slot
+    /// constructor on top of itself to keep one source of truth for
+    /// per-variant inner payloads.
+    fn two_slot_kind(a: EncapsulationTarget, b: EncapsulationTarget) -> EncapsulationKind {
+        let ka = single_slot_kind(a);
+        let kb = single_slot_kind(b);
+        EncapsulationKind {
+            existing_helm_release: ka.existing_helm_release.or(kb.existing_helm_release),
+            existing_kustomization: ka.existing_kustomization.or(kb.existing_kustomization),
+            bare_workload: ka.bare_workload.or(kb.bare_workload),
+        }
+    }
+
+    /// `ALL` is the source of truth — pin its closure so a variant added
+    /// without an `ALL` entry fails here (via the uniqueness check)
+    /// before drifting `as_str` / `select` / `target`. The arity is
+    /// asserted by the `[Self; 3]` array type itself.
+    #[test]
+    fn encapsulation_target_all_is_unique_and_complete() {
+        let mut seen = std::collections::HashSet::new();
+        for t in EncapsulationTarget::ALL {
+            assert!(seen.insert(t), "duplicate variant in ALL: {t:?}");
+        }
+        assert_eq!(seen.len(), EncapsulationTarget::ALL.len());
+    }
+
+    /// CANONICAL-KEY UNIQUENESS: no two targets alias the same `as_str`
+    /// identifier. A future rename that aliases two targets onto the
+    /// same camelCase key would silently make Display non-injective AND
+    /// would collide the resolver's `select` dispatch onto the wrong
+    /// slot. Caught here.
+    #[test]
+    fn encapsulation_target_as_str_unique_per_variant() {
+        let mut seen = std::collections::HashSet::new();
+        for t in EncapsulationTarget::ALL {
+            assert!(
+                seen.insert(t.as_str()),
+                "as_str collision: {t:?} → {:?}",
+                t.as_str()
+            );
+        }
+        assert_eq!(seen.len(), EncapsulationTarget::ALL.len());
+    }
+
+    /// CANONICAL-KEY CONTRACT: every `EncapsulationTarget::as_str()`
+    /// matches the serde `rename_all = "camelCase"` field name on the
+    /// corresponding `Option<…>` slot of `EncapsulationKind`. A future
+    /// rename of either the struct field OR the `as_str` arm lands here
+    /// at one site, instead of drifting between the typed surface, the
+    /// YAML wire format, and the `EncapsulationKindError::Empty`
+    /// diagnostic. Drives the closed set via `ALL`.
+    #[test]
+    fn encapsulation_target_as_str_matches_field_name() {
+        for t in EncapsulationTarget::ALL {
+            let k = single_slot_kind(t);
+            let yaml = serde_yaml::to_string(&k).expect("serialize");
+            let key = t.as_str();
+            assert!(
+                yaml.contains(&format!("{key}:")),
+                "as_str(={key:?}) for {t:?} not present in serialized YAML:\n{yaml}"
+            );
+        }
+    }
+
+    /// CANONICAL-NAMES PIN: byte-exact camelCase wire-format pin —
+    /// renaming any of these strings IS a wire-format break that fails
+    /// this test FIRST so the rename stays a deliberate decision, not a
+    /// typo. Locks the (variant → operator-facing key) table.
+    #[test]
+    fn encapsulation_target_canonical_names_pinned() {
+        assert_eq!(
+            EncapsulationTarget::ExistingHelmRelease.as_str(),
+            "existingHelmRelease"
+        );
+        assert_eq!(
+            EncapsulationTarget::ExistingKustomization.as_str(),
+            "existingKustomization"
+        );
+        assert_eq!(EncapsulationTarget::BareWorkload.as_str(), "bareWorkload");
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift. If a reviewer
+    /// accidentally re-introduces an inline match in Display, this test
+    /// would fail the moment a variant rename touches one site but not
+    /// the other.
+    #[test]
+    fn encapsulation_target_display_matches_as_str() {
+        for t in EncapsulationTarget::ALL {
+            assert_eq!(t.to_string(), t.as_str());
+        }
+    }
+
+    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
+    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
+    /// of `ALL` fails here.
+    #[test]
+    fn encapsulation_target_roundtrip_via_as_str() {
+        for t in EncapsulationTarget::ALL {
+            assert_eq!(
+                EncapsulationTarget::from_str(t.as_str()).unwrap(),
+                t,
+                "round-trip failed for {t:?}"
+            );
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical projection
+    /// — empty / PascalCased / typo / cross-axis-leaked inputs from
+    /// sibling closed-set enums on the same `ProcessSpec` axis
+    /// (`Manage`, `Adopt`, `Observe`, `OnAttested`, …) — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// carries the offending value, not a normalized form.
+    /// `EncapsulationTarget` is its own axis, NOT a transparent
+    /// reflection of any sibling.
+    #[test]
+    fn unknown_encapsulation_target_errors() {
+        for bad in [
+            "",
+            "ExistingHelmRelease",
+            "existing_helm_release",
+            "EXISTINGHELMRELEASE",
+            "helmRelease",
+            "kustomization",
+            "Manage",
+            "Adopt",
+            "Observe",
+            "OnAttested",
+        ] {
+            let err = EncapsulationTarget::from_str(bad).unwrap_err();
+            assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    /// ROUND-TRIP CONTRACT: every target reaches its borrowed-variant
+    /// view via `select`, and that variant projects back to the same
+    /// target via `EncapsulationKindVariant::target`. A regression that
+    /// misroutes a `select` arm (e.g.
+    /// `Self::ExistingHelmRelease => kind.existing_kustomization
+    /// .as_ref()...`) fails loudly here. Also pins that the resolver
+    /// lands on the same target.
+    #[test]
+    fn encapsulation_target_round_trips_through_variant_target() {
+        for t in EncapsulationTarget::ALL {
+            let k = single_slot_kind(t);
+            let v = t.select(&k).expect("populated slot must select");
+            assert_eq!(v.target(), t, "round-trip failed for {t:?}");
+            assert_eq!(
+                k.variant().expect("exactly-one variant").target(),
+                t,
+                "variant() resolver disagreed on {t:?}"
+            );
+        }
+    }
+
+    /// SELECT-EMPTY CONTRACT: an unpopulated slot returns `None` from
+    /// `select`, for every target. Pairs with the resolver's `Empty`
+    /// path so a future target's slot defaulting wrong (e.g.
+    /// accidentally `Some(Default::default())` instead of `None`) is
+    /// caught here.
+    #[test]
+    fn encapsulation_target_select_returns_none_for_unset_slot() {
+        let empty = EncapsulationKind::default();
+        for t in EncapsulationTarget::ALL {
+            assert!(
+                t.select(&empty).is_none(),
+                "{t:?} reported populated on a default EncapsulationKind"
+            );
+        }
+    }
+
+    /// EMPTY-DIAGNOSTIC CONTRACT: the closed-set target list embedded
+    /// in `EncapsulationKindError::Empty` echoes the canonical join of
+    /// every `EncapsulationTarget::as_str()` projection. A variant
+    /// added without updating `ENCAPSULATION_TARGET_LIST` (or a renamed
+    /// variant) shows up here as a mismatch. Mirrors
+    /// `artifact_error_empty_lists_every_kind_in_canonical_order`.
+    #[test]
+    fn encapsulation_kind_error_empty_lists_every_target_in_canonical_order() {
+        let parts: Vec<&'static str> = EncapsulationTarget::ALL
+            .iter()
+            .map(|t| t.as_str())
+            .collect();
+        let joined = parts.join("/");
+        assert_eq!(joined, ENCAPSULATION_TARGET_LIST);
+        // And the diagnostic carries that exact list.
+        let err = EncapsulationKind::default().variant().unwrap_err();
+        assert_eq!(
+            err,
+            EncapsulationKindError::Empty(ENCAPSULATION_TARGET_LIST)
+        );
+    }
+
+    /// AMBIGUOUS-PATH CONTRACT: when two slots are populated the
+    /// resolver yields `Ambiguous`, exhaustively across every pair in
+    /// `ALL × ALL` (excluding the diagonal). A future asymmetry where
+    /// one slot would silently shadow another (e.g. an `if-let` chain
+    /// re-introducing first-wins ordering) is caught here.
+    #[test]
+    fn encapsulation_kind_two_slots_is_ambiguous_across_every_pair() {
+        for a in EncapsulationTarget::ALL {
+            for b in EncapsulationTarget::ALL {
+                if a == b {
+                    continue;
+                }
+                let k = two_slot_kind(a, b);
+                assert_eq!(
+                    k.variant().unwrap_err(),
+                    EncapsulationKindError::Ambiguous,
+                    "({a:?}, {b:?}) should resolve Ambiguous"
+                );
+            }
+        }
     }
 }

@@ -49,8 +49,8 @@ pub mod prelude {
     pub use crate::crd::{Process, ProcessSpec, ProcessStatus};
     pub use crate::encapsulates::{
         BareWorkload, EncapsulatesSpec, EncapsulationKind, EncapsulationKindError,
-        EncapsulationKindVariant, EncapsulationMode, ExistingHelmRelease, ExistingKustomization,
-        UnknownEncapsulationMode,
+        EncapsulationKindVariant, EncapsulationMode, EncapsulationTarget, ExistingHelmRelease,
+        ExistingKustomization, UnknownEncapsulationMode, UnknownEncapsulationTarget,
     };
     pub use crate::ephemeral::{compile_ephemeral_source, EphemeralSpec};
     pub use crate::export::{

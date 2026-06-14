@@ -62,3 +62,10 @@ pub use error::{
 };
 pub use macro_expand::{Expander, MacroDef, MacroParams, OptionalParam};
 pub use reader::read;
+// `#[derive(ClosedSet)]` proc-macro — same name as the trait, different
+// namespace (proc-macros vs. types), so they coexist cleanly under one
+// import. Mirrors `DeriveTataraDomain` sitting next to the trait
+// `TataraDomain`; emits the 4-line `impl ClosedSet` + 4-line
+// `impl FromStr` plumbing the workspace-wide closed-set-enum cohort
+// re-derives byte-for-byte.
+pub use tatara_lisp_derive::ClosedSet as DeriveClosedSet;

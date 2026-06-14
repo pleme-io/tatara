@@ -43,7 +43,180 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, LitStr, Meta, Type};
+use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, Ident, LitStr, Meta, Type};
+
+/// `#[derive(ClosedSet)]` — emit the substrate-wide
+/// [`tatara_lisp::ClosedSet`] impl + the matching [`std::str::FromStr`]
+/// delegation for any enum carrying the closed-set-enum idiom (the
+/// four-piece `ALL` + projection + `Unknown` + `FromStr` shape).
+///
+/// Lifts the 4-line `impl ClosedSet` + 4-line `impl FromStr` boilerplate
+/// that 29+ workspace-wide implementors re-derive byte-for-byte — the
+/// per-implementor content stays at the inherent `ALL` constant and the
+/// inherent projection method (`as_str`, `label`, `prefix`, `marker`,
+/// `keyword`, …), while the trait-impl plumbing collapses onto ONE
+/// derive line.
+///
+/// ## Attributes
+///
+/// - `#[closed_set(via = "as_str")]` — name of the inherent projection
+///   method the trait's [`tatara_lisp::ClosedSet::label`] delegates to.
+///   Defaults to `"label"`. Domain-canonical names
+///   (`tatara_process`'s `as_str`, `tatara_lisp::ast::QuoteForm::prefix`,
+///   `tatara_lisp::error::UnquoteForm::marker`,
+///   `tatara_lisp::error::MacroDefHead::keyword`) stay load-bearing.
+/// - `#[closed_set(unknown = "UnknownX")]` — name of the
+///   per-implementor `Unknown` carrier struct
+///   [`tatara_lisp::ClosedSet::make_unknown`] constructs. Defaults to
+///   `"Unknown{EnumName}"` — matches the substrate-wide naming
+///   convention (`UnknownChannelKind` for `ChannelKind`).
+/// - `#[closed_set(no_from_str)]` — suppress the generated
+///   `impl FromStr`. Use for enums that already carry a bespoke
+///   `FromStr` shape (e.g. [`tatara_lisp::error::CompilerSpecIoStage`]'s
+///   compound `"{operation}: {label}"` key, which keys on a projection
+///   PAIR rather than a single label).
+///
+/// ## Implementor requirements
+///
+/// The derive expects the enum to expose at the inherent surface:
+///
+/// 1. `pub const ALL: [Self; N] = [...]` — forced-arity array literal.
+/// 2. A `fn projection(self) -> &'static str` method whose name matches
+///    `via` (defaults to `label`).
+/// 3. A `pub struct UnknownX(pub String)` in the same module whose name
+///    matches `unknown` (defaults to `Unknown{EnumName}`).
+///
+/// The derive emits:
+///
+/// ```ignore
+/// impl ::tatara_lisp::ClosedSet for $name {
+///     const ALL: &'static [Self] = &Self::ALL;
+///     type Unknown = $unknown;
+///     fn label(self) -> &'static str { Self::$via(self) }
+///     fn make_unknown(s: &str) -> Self::Unknown {
+///         $unknown(::std::string::String::from(s))
+///     }
+/// }
+///
+/// impl ::core::str::FromStr for $name {
+///     type Err = $unknown;
+///     fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
+///         <Self as ::tatara_lisp::ClosedSet>::parse_label(s)
+///     }
+/// }
+/// ```
+///
+/// ## Theory grounding
+///
+/// THEORY.md §VI.1 — generation over composition; the derive IS the
+/// generative shape — new closed-set enums add ONE `#[derive(ClosedSet)]`
+/// line + the attribute that names their inherent projection method
+/// instead of re-deriving the eight-line `impl ClosedSet` + `impl FromStr`
+/// pair byte-for-byte. The per-implementor `Unknown` carrier stays
+/// hand-rolled (its `#[error("unknown <thing>: {0}")]` annotation IS
+/// per-implementor content), but the trait-impl plumbing it threads
+/// through collapses onto the derive.
+#[proc_macro_derive(ClosedSet, attributes(closed_set))]
+pub fn derive_closed_set(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident.clone();
+
+    if !matches!(input.data, Data::Enum(_)) {
+        return syn::Error::new_spanned(
+            &name,
+            "ClosedSet may only be derived on enums (the closed-set-enum idiom)",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let cfg = match parse_closed_set_attrs(&input.attrs, &name) {
+        Ok(c) => c,
+        Err(err) => return err.to_compile_error().into(),
+    };
+
+    let via_ident = Ident::new(&cfg.via, name.span());
+    let unknown_ident = Ident::new(&cfg.unknown, name.span());
+
+    let from_str_impl = if cfg.no_from_str {
+        TokenStream2::new()
+    } else {
+        quote! {
+            impl ::core::str::FromStr for #name {
+                type Err = #unknown_ident;
+                fn from_str(
+                    s: &::core::primitive::str,
+                ) -> ::core::result::Result<Self, Self::Err> {
+                    <Self as ::tatara_lisp::ClosedSet>::parse_label(s)
+                }
+            }
+        }
+    };
+
+    let expanded = quote! {
+        impl ::tatara_lisp::ClosedSet for #name {
+            const ALL: &'static [Self] = &Self::ALL;
+            type Unknown = #unknown_ident;
+            fn label(self) -> &'static ::core::primitive::str {
+                Self::#via_ident(self)
+            }
+            fn make_unknown(
+                s: &::core::primitive::str,
+            ) -> Self::Unknown {
+                #unknown_ident(::std::string::String::from(s))
+            }
+        }
+
+        #from_str_impl
+    };
+
+    expanded.into()
+}
+
+struct ClosedSetCfg {
+    via: String,
+    unknown: String,
+    no_from_str: bool,
+}
+
+fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<ClosedSetCfg> {
+    let mut via: Option<String> = None;
+    let mut unknown: Option<String> = None;
+    let mut no_from_str = false;
+    for attr in attrs {
+        if !attr.path().is_ident("closed_set") {
+            continue;
+        }
+        let Meta::List(list) = &attr.meta else {
+            continue;
+        };
+        list.parse_nested_meta(|meta| {
+            if meta.path.is_ident("via") {
+                let value = meta.value()?;
+                let s: LitStr = value.parse()?;
+                via = Some(s.value());
+                Ok(())
+            } else if meta.path.is_ident("unknown") {
+                let value = meta.value()?;
+                let s: LitStr = value.parse()?;
+                unknown = Some(s.value());
+                Ok(())
+            } else if meta.path.is_ident("no_from_str") {
+                no_from_str = true;
+                Ok(())
+            } else {
+                Err(meta.error(
+                    "unknown #[closed_set(...)] key — expected `via`, `unknown`, or `no_from_str`",
+                ))
+            }
+        })?;
+    }
+    Ok(ClosedSetCfg {
+        via: via.unwrap_or_else(|| "label".to_string()),
+        unknown: unknown.unwrap_or_else(|| format!("Unknown{name}")),
+        no_from_str,
+    })
+}
 
 #[proc_macro_derive(TataraDomain, attributes(tatara))]
 pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {

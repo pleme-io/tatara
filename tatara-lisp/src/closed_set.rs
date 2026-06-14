@@ -116,13 +116,40 @@
 /// (`<Self as ClosedSet>::parse_label(s)`), and the per-implementor
 /// `Unknown<TypeName>` carrier flows through [`Self::make_unknown`].
 ///
-/// ## Why not a derive macro
+/// ## `#[derive(ClosedSet)]` proc-macro
 ///
-/// The trait surface is intentionally hand-impl-friendly (four
-/// methods, no associated types beyond `Unknown`). A future
-/// `#[derive(ClosedSet)]` proc-macro can land additively in
-/// `tatara-lisp-derive` without changing this surface — implementors
-/// just stop writing the four-line impl by hand.
+/// The trait surface is hand-impl-friendly (four methods, no
+/// associated types beyond `Unknown`); for implementors that follow
+/// the substrate-wide naming convention the
+/// [`#[derive(ClosedSet)]`](tatara_lisp_derive::ClosedSet) proc-macro
+/// (re-exported as [`crate::DeriveClosedSet`]) collapses the 4-line
+/// `impl ClosedSet` + 4-line `impl FromStr` boilerplate onto ONE
+/// derive line + a `#[closed_set(via = "<projection>")]` attribute
+/// that names the inherent projection method:
+///
+/// ```ignore
+/// #[derive(Clone, Copy, ..., tatara_lisp::DeriveClosedSet)]
+/// #[closed_set(via = "as_str")]
+/// pub enum ChannelKind { HttpEvent, NatsSubject, Stdout }
+///
+/// impl ChannelKind {
+///     pub const ALL: [Self; 3] = [Self::HttpEvent, Self::NatsSubject, Self::Stdout];
+///     pub const fn as_str(self) -> &'static str { ... }
+/// }
+///
+/// #[derive(Debug, thiserror::Error)]
+/// #[error("unknown channel kind: {0}")]
+/// pub struct UnknownChannelKind(pub String);
+/// ```
+///
+/// The derive expects: `pub const ALL: [Self; N]`, an inherent
+/// projection method whose name matches the `via` attribute
+/// (defaults to `"label"`), and a struct named
+/// `Unknown{EnumName}(pub String)` in the same module (overridable
+/// via `#[closed_set(unknown = "...")]`). Bespoke `FromStr` shapes
+/// (e.g. [`crate::error::CompilerSpecIoStage`]'s compound
+/// `"{operation}: {label}"` key) can suppress the generated
+/// `FromStr` via `#[closed_set(no_from_str)]`.
 pub trait ClosedSet: Sized + Copy + 'static {
     /// The closed set — every variant the enum carries, in
     /// declaration order. Implementors typically delegate to an

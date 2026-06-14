@@ -248,12 +248,33 @@ impl fmt::Display for ReplacementPolicy {
 impl FromStr for ReplacementPolicy {
     type Err = UnknownReplacementPolicy;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for policy in Self::ALL {
-            if s == policy.as_str() {
-                return Ok(policy);
-            }
-        }
-        Err(UnknownReplacementPolicy(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ReplacementPolicy`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from [`std::str::FromStr::from_str`]
+/// into ONE place ([`tatara_lisp::ClosedSet::parse_label`]'s default
+/// body) shared with every other `tatara-process` closed-set
+/// implementor ([`crate::lifetime::TeardownPolicy`],
+/// [`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`], …). `label` delegates to
+/// the inherent [`ReplacementPolicy::as_str`] — the inherent name
+/// (PascalCase `as_str`) stays the load-bearing wire-vocabulary
+/// projection that matches the serde rename + the
+/// `tatara-pool-reconciler::desired::PoolConvergence` Pause reason
+/// emission verbatim, while the trait method gives generic consumers
+/// a STABLE name (`label`) across the workspace-wide closed-set
+/// implementors.
+impl tatara_lisp::ClosedSet for ReplacementPolicy {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownReplacementPolicy;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownReplacementPolicy(s.to_owned())
     }
 }
 
@@ -456,12 +477,29 @@ impl fmt::Display for MemberState {
 impl FromStr for MemberState {
     type Err = UnknownMemberState;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for state in Self::ALL {
-            if s == state.as_str() {
-                return Ok(state);
-            }
-        }
-        Err(UnknownMemberState(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`MemberState`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — symmetric retrofit to
+/// [`ReplacementPolicy`] above. The trait method `label` delegates to
+/// the inherent [`MemberState::as_str`] so the
+/// `pool_phase_from_members` supply calc can keep keying on
+/// `counts_toward_supply` against the typed variant while a generic
+/// `T: ClosedSet` consumer (a future status-aggregator that walks
+/// every pool-axis closed-set, an arch-synthesizer completion engine
+/// that suggests every `:state` value, the canonical Lisp keyword
+/// completer) traverses the closed set without knowing this enum
+/// lives in `tatara-process::pool`.
+impl tatara_lisp::ClosedSet for MemberState {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownMemberState;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownMemberState(s.to_owned())
     }
 }
 
@@ -606,12 +644,30 @@ impl fmt::Display for PoolPhase {
 impl FromStr for PoolPhase {
     type Err = UnknownPoolPhase;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for phase in Self::ALL {
-            if s == phase.as_str() {
-                return Ok(phase);
-            }
-        }
-        Err(UnknownPoolPhase(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`PoolPhase`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — symmetric retrofit to
+/// [`MemberState`] above and to its sibling phase enums
+/// ([`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`]) already on the trait.
+/// `label` delegates to the inherent [`PoolPhase::as_str`] so the
+/// operator-facing `phase={phase}` Display composition keeps reading
+/// the same canonical PascalCase projection while a generic
+/// `T: ClosedSet` consumer (a status-aggregator filter, the
+/// `feira pool list --healthy` predicate, a future SSE event router)
+/// can walk every variant without knowing the closed set lives in
+/// `tatara-process::pool`.
+impl tatara_lisp::ClosedSet for PoolPhase {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownPoolPhase;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownPoolPhase(s.to_owned())
     }
 }
 
@@ -735,12 +791,29 @@ impl fmt::Display for ReturnPolicy {
 impl FromStr for ReturnPolicy {
     type Err = UnknownReturnPolicy;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for policy in Self::ALL {
-            if s == policy.as_str() {
-                return Ok(policy);
-            }
-        }
-        Err(UnknownReturnPolicy(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ReturnPolicy`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — symmetric retrofit to
+/// [`ReplacementPolicy`] (the on-failure sibling on the same
+/// `EphemeralPool` axis) and to [`crate::lifetime::TeardownPolicy`]
+/// (the *release*-time counterpart for non-pooled ephemeral envs).
+/// `label` delegates to the inherent [`ReturnPolicy::as_str`] so the
+/// `tatara-pool-reconciler::return_policy::plan_return` dispatch
+/// keeps reading the canonical PascalCase projection that matches
+/// the CRD `enum:` literal verbatim, while a generic `T: ClosedSet`
+/// consumer plugs in without knowing the enum lives in
+/// `tatara-process::pool`.
+impl tatara_lisp::ClosedSet for ReturnPolicy {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownReturnPolicy;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownReturnPolicy(s.to_owned())
     }
 }
 
@@ -945,17 +1018,21 @@ mod tests {
     // ── closed-set algebra contracts for ReplacementPolicy
     //    (ALL × as_str × FromStr × predicate-pair) ────────────────────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness
-    /// check before drifting `FromStr` or the sweep tests below.
-    /// The arity is asserted by the `[Self; 3]` array type itself.
+    /// Structural well-formedness of [`ReplacementPolicy`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `replacement_policy_all_is_unique_and_complete` +
+    /// `replacement_policy_roundtrip_via_as_str` + the empty-input arm
+    /// of `unknown_replacement_policy_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the pool reconciler hits when
+    /// parsing a CRD `enum:`-validated value back to the typed policy.
     #[test]
-    fn replacement_policy_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for policy in ReplacementPolicy::ALL {
-            assert!(seen.insert(policy), "duplicate variant in ALL: {policy:?}");
-        }
-        assert_eq!(seen.len(), ReplacementPolicy::ALL.len());
+    fn replacement_policy_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<ReplacementPolicy>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -992,28 +1069,18 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn replacement_policy_roundtrip_via_as_str() {
-        for policy in ReplacementPolicy::ALL {
-            assert_eq!(
-                ReplacementPolicy::from_str(policy.as_str()).unwrap(),
-                policy,
-                "round-trip failed for {policy:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
+    /// projection — lowercased / typo / cross-axis-leaked — and the
     /// error echoes the input verbatim so the operator-facing
     /// diagnostic carries the offending value, not a normalized form.
+    /// The empty-input arm is pinned by
+    /// [`replacement_policy_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownReplacementPolicy`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_replacement_policy_errors() {
         for bad in [
-            "",
             "replaceimmediate",
             "PAUSEPOOL",
             "Replace-Immediate",
@@ -1116,17 +1183,13 @@ mod tests {
     // ── closed-set algebra contracts for ReturnPolicy
     //    (ALL × as_str × FromStr × predicate-pair) ────────────────────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness
-    /// check before drifting `FromStr` or the sweep tests below.
-    /// The arity is asserted by the `[Self; 3]` array type itself.
+    /// Structural well-formedness of [`ReturnPolicy`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — testkit lift
+    /// symmetric to [`replacement_policy_is_well_formed_closed_set`]
+    /// above.
     #[test]
-    fn return_policy_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for policy in ReturnPolicy::ALL {
-            assert!(seen.insert(policy), "duplicate variant in ALL: {policy:?}");
-        }
-        assert_eq!(seen.len(), ReturnPolicy::ALL.len());
+    fn return_policy_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<ReturnPolicy>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -1161,28 +1224,16 @@ mod tests {
         }
     }
 
-    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending the canonical projection
-    /// fails here.
-    #[test]
-    fn return_policy_roundtrip_via_as_str() {
-        for policy in ReturnPolicy::ALL {
-            assert_eq!(
-                ReturnPolicy::from_str(policy.as_str()).unwrap(),
-                policy,
-                "round-trip failed for {policy:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
+    /// projection — lowercased / typo / cross-axis-leaked — and the
     /// error echoes the input verbatim so the operator-facing
     /// diagnostic carries the offending value, not a normalized form.
+    /// The empty-input arm is pinned by
+    /// [`return_policy_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit.
     #[test]
     fn unknown_return_policy_errors() {
         for bad in [
-            "",
             "replace",
             "RESET",
             "Re-place",
@@ -1270,17 +1321,13 @@ mod tests {
     // ── closed-set algebra contracts for MemberState
     //    (ALL × as_str × FromStr × predicate pair) ────────────────────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness check
-    /// before drifting `FromStr` or the sweep tests below. The arity is
-    /// asserted by the `[Self; 5]` array type itself.
+    /// Structural well-formedness of [`MemberState`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — testkit lift
+    /// symmetric to [`replacement_policy_is_well_formed_closed_set`]
+    /// and [`return_policy_is_well_formed_closed_set`] above.
     #[test]
-    fn member_state_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for state in MemberState::ALL {
-            assert!(seen.insert(state), "duplicate variant in ALL: {state:?}");
-        }
-        assert_eq!(seen.len(), MemberState::ALL.len());
+    fn member_state_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<MemberState>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -1317,28 +1364,21 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn member_state_roundtrip_via_as_str() {
-        for state in MemberState::ALL {
-            assert_eq!(
-                MemberState::from_str(state.as_str()).unwrap(),
-                state,
-                "round-trip failed for {state:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / cross-axis-leaked — and
+    /// projection — lowercased / typo / cross-axis-leaked — and
     /// the error echoes the input verbatim so the operator-facing
     /// diagnostic carries the offending value, not a normalized form.
+    /// The empty-input arm is pinned by
+    /// [`member_state_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit. The cross-axis leak cases
+    /// pin the closed-set REJECTION contract that the trait can't see:
+    /// `"ReplaceImmediate"`, `"Reset"`, and `"Attested"` are valid
+    /// labels for sibling enums (`ReplacementPolicy`, `ReturnPolicy`,
+    /// `ProcessPhase`) but MUST reject here, because the codomains
+    /// are disjoint.
     #[test]
     fn unknown_member_state_errors() {
         for bad in [
-            "",
             "free",
             "SPAWNING",
             "Free-State",
@@ -1427,17 +1467,12 @@ mod tests {
     // ── closed-set algebra contracts for PoolPhase
     //    (ALL × as_str × FromStr × predicate pair) ────────────────────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness check
-    /// before drifting `FromStr` or the sweep tests below. The arity is
-    /// asserted by the `[Self; 6]` array type itself.
+    /// Structural well-formedness of [`PoolPhase`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — testkit lift
+    /// symmetric to [`member_state_is_well_formed_closed_set`] above.
     #[test]
-    fn pool_phase_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for phase in PoolPhase::ALL {
-            assert!(seen.insert(phase), "duplicate variant in ALL: {phase:?}");
-        }
-        assert_eq!(seen.len(), PoolPhase::ALL.len());
+    fn pool_phase_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<PoolPhase>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -1473,28 +1508,19 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn pool_phase_roundtrip_via_as_str() {
-        for phase in PoolPhase::ALL {
-            assert_eq!(
-                PoolPhase::from_str(phase.as_str()).unwrap(),
-                phase,
-                "round-trip failed for {phase:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / cross-axis-leaked — and
+    /// projection — lowercased / typo / cross-axis-leaked — and
     /// the error echoes the input verbatim so the operator-facing
     /// diagnostic carries the offending value, not a normalized form.
+    /// The empty-input arm is pinned by
+    /// [`pool_phase_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit. The cross-axis leak cases
+    /// (`"Free"`, `"Replace"`, `"Attested"`, `"HoldFailed"`) pin the
+    /// closed-set REJECTION contract that the trait can't see — those
+    /// are valid sibling-axis labels but MUST reject here.
     #[test]
     fn unknown_pool_phase_errors() {
         for bad in [
-            "",
             "steady",
             "SCALINGUP",
             "Scaling-Up",

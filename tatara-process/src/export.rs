@@ -224,12 +224,34 @@ impl fmt::Display for ArtifactKind {
 impl FromStr for ArtifactKind {
     type Err = UnknownArtifactKind;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.as_str() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownArtifactKind(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ArtifactKind`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from [`std::str::FromStr::from_str`]
+/// into ONE place ([`tatara_lisp::ClosedSet::parse_label`]'s default body)
+/// shared with every other `tatara-process` closed-set implementor
+/// ([`ReportFormat`], [`ChannelKind`], [`ExportTrigger`],
+/// [`crate::pool::ReplacementPolicy`], [`crate::pool::MemberState`],
+/// [`crate::pool::PoolPhase`], [`crate::pool::ReturnPolicy`],
+/// [`crate::lifetime::TeardownPolicy`], [`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`], …). `label` delegates to
+/// the inherent [`ArtifactKind::as_str`] — the inherent name (camelCase
+/// `as_str`) stays the load-bearing wire-vocabulary projection that
+/// matches the serde rename + the `ArtifactSource` struct-field name +
+/// the `ArtifactError::Empty` diagnostic verbatim, while the trait
+/// method gives generic consumers a STABLE name (`label`) across the
+/// workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for ArtifactKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownArtifactKind;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownArtifactKind(s.to_owned())
     }
 }
 
@@ -499,12 +521,29 @@ impl fmt::Display for ReportFormat {
 impl FromStr for ReportFormat {
     type Err = UnknownReportFormat;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for format in Self::ALL {
-            if s == format.as_str() {
-                return Ok(format);
-            }
-        }
-        Err(UnknownReportFormat(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ReportFormat`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from [`std::str::FromStr::from_str`]
+/// into ONE place ([`tatara_lisp::ClosedSet::parse_label`]'s default body)
+/// shared with every other `tatara-process` closed-set implementor
+/// ([`ArtifactKind`], [`ChannelKind`], [`ExportTrigger`], …). `label`
+/// delegates to the inherent [`ReportFormat::as_str`] — the inherent
+/// name (PascalCase `as_str`) stays the load-bearing wire-vocabulary
+/// projection that matches the serde rename verbatim, while the trait
+/// method gives generic consumers a STABLE name (`label`) across the
+/// workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for ReportFormat {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownReportFormat;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownReportFormat(s.to_owned())
     }
 }
 
@@ -640,12 +679,30 @@ impl fmt::Display for ChannelKind {
 impl FromStr for ChannelKind {
     type Err = UnknownChannelKind;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.as_str() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownChannelKind(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ChannelKind`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from [`std::str::FromStr::from_str`]
+/// into ONE place ([`tatara_lisp::ClosedSet::parse_label`]'s default body)
+/// shared with every other `tatara-process` closed-set implementor
+/// ([`ArtifactKind`], [`ReportFormat`], [`ExportTrigger`], …). `label`
+/// delegates to the inherent [`ChannelKind::as_str`] — the inherent
+/// name (camelCase `as_str`) stays the load-bearing wire-vocabulary
+/// projection that matches the serde rename + the `VectorChannel`
+/// struct-field name + the `ChannelError::Empty` diagnostic verbatim,
+/// while the trait method gives generic consumers a STABLE name
+/// (`label`) across the workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for ChannelKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownChannelKind;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownChannelKind(s.to_owned())
     }
 }
 
@@ -860,12 +917,30 @@ impl fmt::Display for ExportTrigger {
 impl FromStr for ExportTrigger {
     type Err = UnknownExportTrigger;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for trigger in Self::ALL {
-            if s == trigger.as_str() {
-                return Ok(trigger);
-            }
-        }
-        Err(UnknownExportTrigger(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ExportTrigger`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from [`std::str::FromStr::from_str`]
+/// into ONE place ([`tatara_lisp::ClosedSet::parse_label`]'s default body)
+/// shared with every other `tatara-process` closed-set implementor
+/// ([`ArtifactKind`], [`ReportFormat`], [`ChannelKind`], …). `label`
+/// delegates to the inherent [`ExportTrigger::as_str`] — the inherent
+/// name (PascalCase `as_str`) stays the load-bearing wire-vocabulary
+/// projection that matches the serde rename + the `fires_on`
+/// terminal-phase dispatch's reason-string emission verbatim, while
+/// the trait method gives generic consumers a STABLE name (`label`)
+/// across the workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for ExportTrigger {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownExportTrigger;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownExportTrigger(s.to_owned())
     }
 }
 
@@ -977,20 +1052,21 @@ mod tests {
     //    fires_on(phase)) ─
 
     /// `ALL` is the source of truth for the resolver / `FromStr` sweep
-    /// — pin its closure so a variant added without an `ALL` entry
-    /// fails here (via the uniqueness check) before drifting `as_str` /
-    /// `fires_on`. The arity is asserted by the `[Self; 3]` array type
-    /// itself.
+    /// Structural well-formedness of [`ExportTrigger`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `export_trigger_all_is_unique_and_complete` +
+    /// `export_trigger_roundtrip_via_as_str` + the empty-input arm of
+    /// `unknown_export_trigger_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the reconciler hits when parsing
+    /// a CRD `enum:`-validated value back to the typed trigger.
     #[test]
-    fn export_trigger_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for trigger in ExportTrigger::ALL {
-            assert!(
-                seen.insert(trigger),
-                "duplicate variant in ALL: {trigger:?}"
-            );
-        }
-        assert_eq!(seen.len(), ExportTrigger::ALL.len());
+    fn export_trigger_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<ExportTrigger>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -1028,29 +1104,19 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn export_trigger_roundtrip_via_as_str() {
-        use std::str::FromStr;
-        for trigger in ExportTrigger::ALL {
-            assert_eq!(
-                ExportTrigger::from_str(trigger.as_str()).unwrap(),
-                trigger,
-                "round-trip failed for {trigger:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
-    /// error echoes the input verbatim so the operator-facing
-    /// diagnostic carries the offending value, not a normalized form.
+    /// projection — lowercased / typo / unrelated — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// carries the offending value, not a normalized form. The
+    /// empty-input arm is pinned by
+    /// [`export_trigger_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownExportTrigger`] newtype,
+    /// which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_export_trigger_errors() {
         use std::str::FromStr;
-        for bad in ["", "onAttested", "ALWAYS", "Never", "OnSuccess"] {
+        for bad in ["onAttested", "ALWAYS", "Never", "OnSuccess"] {
             let err = ExportTrigger::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }
@@ -1163,18 +1229,21 @@ mod tests {
     // ── closed-set algebra for ReportFormat (ALL × as_str × FromStr ×
     //    payload_shape) ─
 
-    /// `ALL` is the source of truth for the `FromStr` sweep + the
-    /// `payload_shape` truth-table test — pin its closure so a variant
-    /// added without an `ALL` entry fails here (via the uniqueness
-    /// check) before drifting `as_str` / `payload_shape`. The arity is
-    /// asserted by the `[Self; 4]` array type itself.
+    /// Structural well-formedness of [`ReportFormat`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `report_format_all_is_unique_and_complete` +
+    /// `report_format_roundtrip_via_as_str` + the empty-input arm of
+    /// `unknown_report_format_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the export worker hits when
+    /// parsing a CRD `enum:`-validated value back to the typed format.
     #[test]
-    fn report_format_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for format in ReportFormat::ALL {
-            assert!(seen.insert(format), "duplicate variant in ALL: {format:?}");
-        }
-        assert_eq!(seen.len(), ReportFormat::ALL.len());
+    fn report_format_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<ReportFormat>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -1208,27 +1277,18 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn report_format_roundtrip_via_as_str() {
-        for format in ReportFormat::ALL {
-            assert_eq!(
-                ReportFormat::from_str(format.as_str()).unwrap(),
-                format,
-                "round-trip failed for {format:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
-    /// error echoes the input verbatim so the operator-facing
-    /// diagnostic carries the offending value, not a normalized form.
+    /// projection — lowercased / typo / unrelated — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// carries the offending value, not a normalized form. The
+    /// empty-input arm is pinned by
+    /// [`report_format_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownReportFormat`] newtype,
+    /// which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_report_format_errors() {
-        for bad in ["", "junit", "JUNIT", "tap", "Yaml", "TomlV1"] {
+        for bad in ["junit", "JUNIT", "tap", "Yaml", "TomlV1"] {
             let err = ReportFormat::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }
@@ -1482,17 +1542,21 @@ mod tests {
     // ── closed-set algebra for ArtifactKind (ALL × as_str × Display ×
     //    FromStr × select × ArtifactVariant::kind) ─────────────────────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here (uniqueness check)
-    /// before drifting `as_str` / `select`. The arity is asserted by
-    /// the `[Self; 4]` array type itself.
+    /// Structural well-formedness of [`ArtifactKind`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `artifact_kind_all_is_unique_and_complete` +
+    /// `artifact_kind_roundtrip_via_as_str` + the empty-input arm of
+    /// `unknown_artifact_kind_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the export worker hits when
+    /// parsing a CRD `enum:`-validated value back to the typed kind.
     #[test]
-    fn artifact_kind_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for kind in ArtifactKind::ALL {
-            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
-        }
-        assert_eq!(seen.len(), ArtifactKind::ALL.len());
+    fn artifact_kind_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<ArtifactKind>();
     }
 
     /// CANONICAL-KEY UNIQUENESS: no two kinds alias the same `as_str`
@@ -1563,31 +1627,21 @@ mod tests {
         }
     }
 
-    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn artifact_kind_roundtrip_via_as_str() {
-        for kind in ArtifactKind::ALL {
-            assert_eq!(
-                ArtifactKind::from_str(kind.as_str()).unwrap(),
-                kind,
-                "round-trip failed for {kind:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / PascalCased / typo / cross-axis-leaked
-    /// inputs from sibling closed-set enums on the same `ExportSpec`
-    /// axis (`Junit`, `OnAttested`, …) — and the error echoes the
-    /// input verbatim so the operator-facing diagnostic carries the
+    /// projection — PascalCased / typo / cross-axis-leaked inputs
+    /// from sibling closed-set enums on the same `ExportSpec` axis
+    /// (`Junit`, `OnAttested`, …) — and the error echoes the input
+    /// verbatim so the operator-facing diagnostic carries the
     /// offending value, not a normalized form. `ArtifactKind` is its
-    /// own axis, NOT a transparent reflection of any sibling.
+    /// own axis, NOT a transparent reflection of any sibling. The
+    /// empty-input arm is pinned by
+    /// [`artifact_kind_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownArtifactKind`] newtype,
+    /// which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_artifact_kind_errors() {
         for bad in [
-            "",
             "Receipts",
             "test_report",
             "RECEIPTS",
@@ -1675,17 +1729,21 @@ mod tests {
     // ── closed-set algebra for ChannelKind (ALL × as_str × Display ×
     //    FromStr × select × ChannelVariant::kind) ─────────────────────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here (uniqueness check)
-    /// before drifting `as_str` / `select`. The arity is asserted by
-    /// the `[Self; 3]` array type itself.
+    /// Structural well-formedness of [`ChannelKind`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `channel_kind_all_is_unique_and_complete` +
+    /// `channel_kind_roundtrip_via_as_str` + the empty-input arm of
+    /// `unknown_channel_kind_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the export worker hits when
+    /// parsing a CRD `enum:`-validated value back to the typed kind.
     #[test]
-    fn channel_kind_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for kind in ChannelKind::ALL {
-            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
-        }
-        assert_eq!(seen.len(), ChannelKind::ALL.len());
+    fn channel_kind_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<ChannelKind>();
     }
 
     /// CANONICAL-KEY UNIQUENESS: no two kinds alias the same `as_str`
@@ -1746,32 +1804,21 @@ mod tests {
         }
     }
 
-    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn channel_kind_roundtrip_via_as_str() {
-        for kind in ChannelKind::ALL {
-            assert_eq!(
-                ChannelKind::from_str(kind.as_str()).unwrap(),
-                kind,
-                "round-trip failed for {kind:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / PascalCased / typo / cross-axis-leaked
-    /// inputs from sibling closed-set enums on the same `ExportSpec`
-    /// axis (`Receipts`, `OnAttested`, `Junit`, …) — and the error
-    /// echoes the input verbatim so the operator-facing diagnostic
-    /// carries the offending value, not a normalized form.
-    /// `ChannelKind` is its own axis, NOT a transparent reflection of
-    /// any sibling.
+    /// projection — PascalCased / typo / cross-axis-leaked inputs
+    /// from sibling closed-set enums on the same `ExportSpec` axis
+    /// (`Receipts`, `OnAttested`, `Junit`, …) — and the error echoes
+    /// the input verbatim so the operator-facing diagnostic carries
+    /// the offending value, not a normalized form. `ChannelKind` is
+    /// its own axis, NOT a transparent reflection of any sibling. The
+    /// empty-input arm is pinned by
+    /// [`channel_kind_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownChannelKind`] newtype,
+    /// which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_channel_kind_errors() {
         for bad in [
-            "",
             "HttpEvent",
             "http_event",
             "HTTPEVENT",

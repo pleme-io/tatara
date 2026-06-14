@@ -4,14 +4,15 @@
 //! `QuoteForm`, `SexpShape`, `MacroDefHead`, `UnquoteForm`,
 //! `KwargPathKind`, `ExpectedKwargShape`, `CompilerSpecIoStage` in
 //! this crate; `ProcessPhase`, `ConditionKind`, `IntentKind`,
-//! `LifetimeKind`, `TeardownPolicy`, `ProcessSignal`, `ChannelKind`,
-//! `ArtifactKind`, `ReceiptKind`, `RequestorKind`,
+//! `LifetimeKind`, `TeardownPolicy`, `ProcessSignal`,
+//! `ArtifactKind`, `ReportFormat`, `ChannelKind`, `ExportTrigger`,
+//! `ReceiptKind`, `RequestorKind`,
 //! `AllocationPhase`, `CalmClassification`, `OptimizationDirection`,
 //! `HorizonKind`, `SubstrateType`, `ConvergencePointType`,
 //! `DataClassification`, `MemberState`, `PoolPhase`,
 //! `ReplacementPolicy`, `ReturnPolicy`, `AutoTerminateKind`,
 //! `TerminateReasonKind`, `SelectStrategyKind`, `EncapsulationMode`,
-//! `EncapsulationTarget`, `ReportFormat`, `ExportTrigger`,
+//! `EncapsulationTarget`,
 //! `VerificationPhase`, `WorkloadKind`, `MustReachPhase`,
 //! `SighupStrategy`, `BreatheDimensionKind`, `MatrixTarget`,
 //! `ReportPayloadShape`, … in `tatara-process`). Each one independently

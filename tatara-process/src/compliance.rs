@@ -132,12 +132,25 @@ impl fmt::Display for VerificationPhase {
 impl FromStr for VerificationPhase {
     type Err = UnknownVerificationPhase;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for phase in Self::ALL {
-            if s == phase.as_str() {
-                return Ok(phase);
-            }
-        }
-        Err(UnknownVerificationPhase(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`VerificationPhase`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — same four-method contract every
+/// closed-set implementor in the workspace plugs into. The trait
+/// method `label` delegates to the inherent
+/// [`VerificationPhase::as_str`] (which matches the serde
+/// `rename_all = "PascalCase"` projection AND the CRD `enum:`
+/// enumeration verbatim — pinned by `verification_phase_as_str_matches_serde`).
+impl tatara_lisp::ClosedSet for VerificationPhase {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownVerificationPhase;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownVerificationPhase(s.to_owned())
     }
 }
 
@@ -211,24 +224,34 @@ mod tests {
 
     // ── closed-set algebra contracts (ALL × as_str × FromStr × gates_phase) ──
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness
-    /// check before drifting `FromStr` or the sweep tests below.
-    /// The arity is asserted by the `[Self; 3]` array type itself.
+    /// Structural well-formedness of [`VerificationPhase`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants
+    /// (`ALL` is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the
+    /// hand-derived `verification_phase_all_is_unique_and_complete` +
+    /// `verification_phase_roundtrip_via_as_str` + the empty-input
+    /// arm of the per-implementor unknown-error test. `FromStr`
+    /// delegates to `<Self as tatara_lisp::ClosedSet>::parse_label`,
+    /// so this helper exercises the same code path the reconciler
+    /// hits when parsing a CRD `enum:`-validated value back to the
+    /// typed phase.
     #[test]
-    fn verification_phase_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for phase in VerificationPhase::ALL {
-            assert!(seen.insert(phase), "duplicate variant in ALL: {phase:?}");
-        }
-        assert_eq!(seen.len(), VerificationPhase::ALL.len());
+    fn verification_phase_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<VerificationPhase>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
     /// output verbatim for every variant. A future variant rename
     /// (or an `as_str` arm typo) lands here at one site, instead of
     /// drifting between the typed surface and the YAML wire format
-    /// the reconciler / operator both read.
+    /// the reconciler / operator both read. NOT lifted into the
+    /// `ClosedSet` testkit — `serde_json` is NOT a `tatara-lisp`
+    /// dependency, and per-implementor serde-shape choices (PascalCase
+    /// for CRD enums, snake_case for camelCase carriers, lowercase
+    /// for Lisp keyword projections) make a generic helper a
+    /// category error.
     #[test]
     fn verification_phase_as_str_matches_serde() {
         for phase in VerificationPhase::ALL {
@@ -255,28 +278,19 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn verification_phase_roundtrip_via_as_str() {
-        for phase in VerificationPhase::ALL {
-            assert_eq!(
-                VerificationPhase::from_str(phase.as_str()).unwrap(),
-                phase,
-                "round-trip failed for {phase:?}"
-            );
-        }
-    }
-
-    /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
-    /// error echoes the input verbatim so the operator-facing
-    /// diagnostic carries the offending value, not a normalized form.
+    /// `FromStr` rejects domain-specific non-canonical inputs and
+    /// the error echoes the input VERBATIM so the operator-facing
+    /// diagnostic carries the offending value. Kept per-implementor
+    /// because the verbatim-payload contract is a property of the
+    /// per-enum `Unknown<X>(pub String)` newtype, not of the trait's
+    /// structural surface. (The empty-input arm is now lifted into
+    /// `verification_phase_is_well_formed_closed_set`; the
+    /// case-drifted / hyphenated / extinct-variant arms stay here as
+    /// they're representative non-canonical inputs the operator
+    /// might supply.)
     #[test]
     fn unknown_verification_phase_errors() {
         for bad in [
-            "",
             "plantime",
             "ATBOUNDARY",
             "Plan-Time",

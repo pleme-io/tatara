@@ -190,6 +190,103 @@ pub trait ClosedSet: Sized + Copy + 'static {
     }
 }
 
+/// Generic well-formedness contract for a [`ClosedSet`] implementor —
+/// the substrate-wide testkit helper that lifts the three structural
+/// invariants every per-implementor test module re-derived byte-for-byte
+/// pre-lift onto ONE call site:
+///
+/// 1. `T::ALL` is non-empty — a closed-set with zero variants is a
+///    degenerate codomain [`ClosedSet::parse_label`] can never succeed
+///    on; an empty `ALL` is a structural bug at the type-system
+///    boundary, not a runtime accident.
+/// 2. Every variant in `T::ALL` round-trips through
+///    [`ClosedSet::label`] → [`ClosedSet::parse_label`] back to itself —
+///    the workspace-wide `*_roundtrip_via_as_str` invariant lifted from
+///    the per-implementor test surface (`ProcessPhase`,
+///    `VerificationPhase`, `MustReachPhase`, `IntentKind`, `LifetimeKind`,
+///    …) onto the trait.
+/// 3. The labels of `T::ALL` are pairwise distinct — distinctness feeds
+///    [`ClosedSet::parse_label`]'s linear sweep: a duplicate would
+///    silently fold two variants into one at the round-trip boundary
+///    (the sweep returns the FIRST matching variant). The workspace-wide
+///    `*_all_is_unique_and_complete` invariant lifted from the
+///    per-implementor `HashSet`-sweep test onto the trait.
+/// 4. The empty string `""` is OUTSIDE the closed set —
+///    `parse_label("")` returns [`Err`]. This is implied by (2) + (3)
+///    when no implementor's `label()` projects to `""`, but checking it
+///    directly catches a regression where an implementor accidentally
+///    introduced an empty label as a variant projection.
+///
+/// Per-implementor domain-specific tests STAY in the implementor's
+/// test module — the `gates_phase` truth tables, the
+/// `can_transition_to` state-machine contracts, the serde wire-format
+/// coherence sweeps, the signal-shaped `short_str` dual-projection
+/// matches — those project per-variant content the trait's structural
+/// contract can't see. This helper lifts ONLY the structural three (+1)
+/// every implementor copies.
+///
+/// Marked `#[track_caller]` so a failure points at the per-implementor
+/// test's call site rather than at this helper, giving the operator a
+/// stable signal about which closed-set implementor regressed.
+///
+/// Usage from any per-implementor test module in any crate that
+/// depends on `tatara-lisp` (this crate, `tatara-process`,
+/// `tatara-domains`, future closed-set implementors):
+///
+/// ```text
+/// #[test]
+/// fn process_phase_is_well_formed_closed_set() {
+///     tatara_lisp::closed_set::assert_closed_set_well_formed::<ProcessPhase>();
+/// }
+/// ```
+///
+/// THEORY.md §V.1 — knowable platform; the three structural test
+/// invariants were known patterns carried by convention across 36+
+/// per-implementor test modules. This helper makes them a TYPED
+/// CONSEQUENCE of the [`ClosedSet`] contract — any future implementor
+/// that calls this helper inherits the contract without re-deriving
+/// the three assertions.
+#[track_caller]
+pub fn assert_closed_set_well_formed<T>()
+where
+    T: ClosedSet + PartialEq + core::fmt::Debug,
+{
+    let type_name = core::any::type_name::<T>();
+    assert!(
+        !T::ALL.is_empty(),
+        "{type_name}: T::ALL is empty — a closed-set with zero variants is degenerate",
+    );
+    for &v in T::ALL {
+        let label = v.label();
+        match T::parse_label(label) {
+            Ok(decoded) => assert_eq!(
+                decoded, v,
+                "{type_name}: round-trip {label:?} → variant decoded to a different variant",
+            ),
+            Err(_) => {
+                panic!("{type_name}: round-trip {label:?} → variant rejected by parse_label",)
+            }
+        }
+    }
+    let mut labels: Vec<&'static str> = T::ALL
+        .iter()
+        .copied()
+        .map(<T as ClosedSet>::label)
+        .collect();
+    let total = labels.len();
+    labels.sort_unstable();
+    labels.dedup();
+    assert_eq!(
+        labels.len(),
+        total,
+        "{type_name}: duplicate labels in T::ALL — the parse_label sweep would fold two variants into one",
+    );
+    assert!(
+        T::parse_label("").is_err(),
+        "{type_name}: empty string is a valid label — a closed-set whose codomain includes \"\" is degenerate",
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::ClosedSet;
@@ -295,6 +392,21 @@ mod tests {
         // convention.
         let rejection = <StubKind as ClosedSet>::parse_label("Alpha");
         assert_eq!(rejection, Err(UnknownStubKind("Alpha".to_owned())));
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_passes_for_stub() {
+        // The testkit helper's happy path — `StubKind`'s three
+        // variants are pairwise distinct, round-trip through the
+        // trait's `parse_label` ↔ `label`, and reject `""`. This is
+        // the call any per-implementor test module makes in lieu of
+        // re-deriving the three structural assertions
+        // (`*_all_is_unique_and_complete`, `*_roundtrip_via_as_str`,
+        // empty-rejection) byte-for-byte. A regression in any of the
+        // three invariants fails this assertion in isolation from
+        // any real substrate enum so the testkit's contract stays
+        // independent of per-implementor truth tables.
+        super::assert_closed_set_well_formed::<StubKind>();
     }
 
     #[test]

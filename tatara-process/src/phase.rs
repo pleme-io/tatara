@@ -175,12 +175,35 @@ impl std::fmt::Display for ProcessPhase {
 impl std::str::FromStr for ProcessPhase {
     type Err = UnknownPhase;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for phase in Self::ALL {
-            if s == phase.as_str() {
-                return Ok(phase);
-            }
-        }
-        Err(UnknownPhase(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ProcessPhase`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// lifts the linear-sweep for-loop from this enum's
+/// [`std::str::FromStr::from_str`] body into ONE place
+/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared with
+/// every other closed-set implementor in the workspace
+/// ([`tatara_lisp::AtomKind`], [`tatara_lisp::QuoteForm`],
+/// [`tatara_lisp::SexpShape`], [`tatara_lisp::MacroDefHead`],
+/// [`tatara_lisp::UnquoteForm`], [`tatara_lisp::KwargPathKind`],
+/// [`tatara_lisp::ExpectedKwargShape`], …).
+///
+/// The trait method `label` delegates to the inherent
+/// [`ProcessPhase::as_str`] — the inherent name (PascalCase
+/// `as_str`) stays the load-bearing wire-vocabulary projection that
+/// matches the serde rename + the CRD enum verbatim, while the trait
+/// method gives generic consumers a STABLE name (`label`) across the
+/// 36+ closed-set implementors in the workspace.
+impl tatara_lisp::ClosedSet for ProcessPhase {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownPhase;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownPhase(s.to_owned())
     }
 }
 
@@ -279,26 +302,39 @@ mod tests {
 
     // ── closed-set algebra contracts (ALL × as_str × FromStr) ────────
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` (or vice versa)
-    /// fails here.
+    /// Structural well-formedness of [`ProcessPhase`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants
+    /// (`ALL` is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the
+    /// hand-derived `all_phases_roundtrip_via_as_str` +
+    /// `all_is_unique_and_complete` + the empty-input arm of the
+    /// per-implementor unknown-error test — those three sites
+    /// re-derived byte-for-byte across 36+ closed-set implementors
+    /// pre-lift; this helper lifts them all onto the trait so any
+    /// future closed-set implementor inherits the contract by
+    /// implementing the trait + calling this one helper, with no
+    /// HashSet sweep or `FromStr` round-trip loop to copy.
+    ///
+    /// `FromStr` delegates to `<Self as tatara_lisp::ClosedSet>::parse_label`,
+    /// so this helper exercises the exact code path the operator hits
+    /// when parsing an annotation / status-field value back to the
+    /// typed phase.
     #[test]
-    fn all_phases_roundtrip_via_as_str() {
-        use std::str::FromStr;
-        for phase in super::ProcessPhase::ALL {
-            assert_eq!(
-                super::ProcessPhase::from_str(phase.as_str()).unwrap(),
-                phase,
-                "round-trip failed for {phase:?}",
-            );
-        }
+    fn process_phase_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<super::ProcessPhase>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future
     /// callers reach for either projection without drift. If a
     /// reviewer accidentally re-introduces an inline match in
     /// Display, this test would fail the moment a variant rename
-    /// touches one site but not the other.
+    /// touches one site but not the other. NOT lifted into the
+    /// `ClosedSet` testkit because `Display` is a per-implementor
+    /// concern (the trait can't provide a default `Display` impl in
+    /// stable Rust) and the projection's choice (`as_str` vs.
+    /// inherent label vs. tagged-Debug) is domain-specific.
     #[test]
     fn display_matches_as_str() {
         for phase in super::ProcessPhase::ALL {
@@ -306,27 +342,25 @@ mod tests {
         }
     }
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here (uniqueness check)
-    /// before drifting `FromStr` or the sweep tests above. The arity
-    /// is asserted by the array type itself (`[Self; 11]`).
-    #[test]
-    fn all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for phase in super::ProcessPhase::ALL {
-            assert!(seen.insert(phase), "duplicate variant in ALL: {phase:?}");
-        }
-        assert_eq!(seen.len(), super::ProcessPhase::ALL.len());
-    }
-
-    /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
-    /// error echoes the input verbatim so the operator-facing
-    /// diagnostic carries the offending value, not a normalized form.
+    /// `FromStr` rejects domain-specific bad inputs — case-drifted /
+    /// typo / extinct-variant — and the error echoes the input
+    /// VERBATIM so the operator-facing diagnostic carries the
+    /// offending value, not a normalized form. Kept per-implementor
+    /// because the verbatim-payload contract is a property of the
+    /// per-enum `Unknown<X>(pub String)` newtype, not of the trait's
+    /// structural surface — the trait's `make_unknown(s: &str)`
+    /// hook lets a future implementor swap the carrier for a
+    /// structured diagnostic without changing the trait contract, so
+    /// the payload-echo invariant lives with the implementor that
+    /// chose the newtype shape. (The empty-input arm is now lifted
+    /// into `process_phase_is_well_formed_closed_set`; the
+    /// case-drifted / typo / extinct-variant arms stay here as
+    /// they're representative non-canonical inputs the operator
+    /// might supply.)
     #[test]
     fn unknown_phase_errors() {
         use std::str::FromStr;
-        for bad in ["", "attested", "FAILED", "Cancelled", "Reapped"] {
+        for bad in ["attested", "FAILED", "Cancelled", "Reapped"] {
             let err = super::ProcessPhase::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }

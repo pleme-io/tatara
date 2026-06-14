@@ -55,8 +55,8 @@ pub use env::Env;
 pub use error::{
     CompilerSpecIoStage, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
     OptionalParamMalformedReason, Result, SexpShape, TemplateInvariantKind,
-    UnknownExpectedKwargShape, UnknownMacroDefHead, UnknownSexpShape, UnknownUnquoteForm,
-    UnquoteForm,
+    UnknownCompilerSpecIoStage, UnknownExpectedKwargShape, UnknownMacroDefHead, UnknownSexpShape,
+    UnknownUnquoteForm, UnquoteForm,
 };
 pub use macro_expand::{Expander, MacroDef, MacroParams, OptionalParam};
 pub use reader::read;

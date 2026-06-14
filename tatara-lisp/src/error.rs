@@ -1650,7 +1650,162 @@ impl CompilerSpecIoStage {
             Self::LoadFromDiskDeserialize => "deserialize",
         }
     }
+
+    /// Closed-set enumeration of every reachable [`CompilerSpecIoStage`]
+    /// variant — the four (operation, label) pairs the disk-persistence
+    /// surface emits (`realize_to_disk` × {`serialize`, `write`} ⊎
+    /// `load_from_disk` × {`read`, `deserialize`}). The `[Self; 4]`
+    /// array literal forces the arity so a fifth pair — a hypothetical
+    /// `LoadFromStrDeserialize` once an in-memory `load_from_str` lands,
+    /// or a `RealizeToDiskAtomicReplace` if the realize path grows a
+    /// crash-safe-rename stage — cannot be added at the type without
+    /// extending this constant.
+    ///
+    /// Sibling closed-set lift to every other typed-shape enum the
+    /// substrate carries: this crate's own [`ExpectedKwargShape::ALL`]
+    /// (the seven reachable expected-kwarg shapes — single-projection
+    /// closed set), [`SexpShape::ALL`] (the twelve reachable observed-
+    /// Sexp shapes — single-projection closed set), [`MacroDefHead::ALL`]
+    /// (the three reachable macro-definition heads), [`UnquoteForm::ALL`]
+    /// (the two reachable template-marker forms),
+    /// [`crate::ast::AtomKind::ALL`], [`crate::ast::QuoteForm::ALL`], and
+    /// across the workspace `ConditionKind::ALL`, `ProcessPhase::ALL`,
+    /// `RequestorKind::ALL`, `ReceiptKind::ALL`, … . What's distinct here:
+    /// this is the substrate's first *compound-key* closed set — the
+    /// reachable identity is the PAIR `(operation, label)`, not either
+    /// projection alone (`operation` partitions ALL into 2-of-2 halves,
+    /// `label` is bijective with ALL by accident of the current four
+    /// variants). [`FromStr`] keys on the compound rendering so the
+    /// cross-product reachability constraint — only 4 of the 8
+    /// conceivable `(operation, label)` pairs are reachable, e.g.
+    /// `(load_from_disk, write)` is structurally absurd — becomes a
+    /// load-bearing property of the parse boundary, not a runtime
+    /// re-assertion at the helper.
+    ///
+    /// Future consumers that compose against [`Self::ALL`]: LSP / REPL
+    /// completion for the operator-facing rendered (operation, label)
+    /// pairs (every `compile error in X: Y: ...` substring in
+    /// `LispError::CompilerSpecIo` keys on this set's projection through
+    /// [`Self::operation`] and [`Self::label`]); `tatara-check` coverage
+    /// assertions over which disk-persistence stages reach a
+    /// [`LispError::CompilerSpecIo`] site at all — the typed sweep
+    /// replaces a hand-rolled `match`-over-string vocabulary at consumer
+    /// boundaries; any future audit-trail metric jointly labeled by
+    /// [`Self::operation`] × [`Self::label`] (e.g.
+    /// `tatara_lisp_compiler_spec_io_total{operation="realize_to_disk",
+    /// stage="serialize"}`) — the metric label set IS [`Self::ALL`]
+    /// mapped through the projection pair.
+    pub const ALL: [Self; 4] = [
+        Self::RealizeToDiskSerialize,
+        Self::RealizeToDiskWrite,
+        Self::LoadFromDiskRead,
+        Self::LoadFromDiskDeserialize,
+    ];
 }
+
+/// Standalone rendering of a [`CompilerSpecIoStage`] in the canonical
+/// compound `"{operation}: {label}"` form — byte-for-byte the same
+/// substring that lands inside the
+/// [`LispError::CompilerSpecIo`] diagnostic between `"compile error in
+/// "` and `": {message}"`. Pinning Display to the compound form means a
+/// consumer that extracts the (operation, label) prefix from a rendered
+/// diagnostic — for example by `s.strip_prefix("compile error in ")
+/// .and_then(|t| t.rsplit_once(": "))` — round-trips the captured
+/// substring through [`FromStr`] back into the typed variant exactly.
+///
+/// The compound form is load-bearing: `label` alone would be bijective
+/// with the current four variants (`"serialize"` / `"write"` / `"read"`
+/// / `"deserialize"`) but a future fifth variant like
+/// `LoadFromStrDeserialize` would collide with `LoadFromDiskDeserialize`
+/// on `label` alone. Display-ing the compound key means the bijection
+/// survives the closed-set extension without a label-disambiguation
+/// dance.
+impl std::fmt::Display for CompilerSpecIoStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.operation(), self.label())
+    }
+}
+
+/// Decode a canonical [`CompilerSpecIoStage`] compound key
+/// `"{operation}: {label}"` back into the typed variant — `Ok(stage)`
+/// when the input matches the [`Display`] rendering of one of the four
+/// variants in [`CompilerSpecIoStage::ALL`] byte-for-byte (case-sensitive
+/// because the labels are the rendered diagnostic surface and any case
+/// drift would silently bifurcate the round-trip), and
+/// [`Err(UnknownCompilerSpecIoStage)`] for every other string.
+///
+/// Crucially the decode REJECTS the four conceivable-but-unreachable
+/// cross-product pairs — `"realize_to_disk: read"`,
+/// `"realize_to_disk: deserialize"`, `"load_from_disk: serialize"`,
+/// `"load_from_disk: write"` — because none of those pairs appears in
+/// [`CompilerSpecIoStage::ALL`]. The cross-product reachability
+/// constraint, previously a Code-level invariant (only the four call
+/// sites in `compiler_spec.rs` construct stages, each construction
+/// site pairs the correct operation with the correct stage), becomes
+/// a type-level invariant: the parse boundary refuses to deserialize
+/// an unreachable pair.
+///
+/// Partial keys — `"serialize"` alone, `"realize_to_disk"` alone — also
+/// reject. The `": "` separator must appear at least once for the
+/// decode to consider any variant; otherwise the diagnostic substring
+/// shape isn't a compound key at all.
+///
+/// Round-trip invariant pinned by
+/// `compiler_spec_io_stage_compound_key_round_trips_through_from_str`:
+/// for every variant `s` in [`CompilerSpecIoStage::ALL`],
+/// `s.to_string().parse() == Ok(s)`. The compound-rendering site is
+/// singular (the [`Display`] impl projects through [`Self::operation`]
+/// and [`Self::label`]) so the round-trip is the only way the typed
+/// surface and the rendered diagnostic literal can drift apart —
+/// pinning it here means they cannot. Mirror of every sibling
+/// closed-set round-trip in the workspace ([`SexpShape::from_str`],
+/// [`ExpectedKwargShape::from_str`], [`MacroDefHead::from_str`],
+/// [`UnquoteForm::from_str`], `RequestorKind::from_str`,
+/// `ReceiptKind::from_str`, `ConditionKind::from_str`,
+/// `ProcessPhase::from_str`, …) — the difference is the compound-key
+/// shape rather than a single label, which sharpens the closed-set
+/// constraint from "cardinality matches the variant count" to
+/// "cardinality matches the variant count AND the projection product
+/// is partial, not total."
+impl std::str::FromStr for CompilerSpecIoStage {
+    type Err = UnknownCompilerSpecIoStage;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let Some((op, lbl)) = s.split_once(": ") else {
+            return Err(UnknownCompilerSpecIoStage(s.to_owned()));
+        };
+        for stage in Self::ALL {
+            if op == stage.operation() && lbl == stage.label() {
+                return Ok(stage);
+            }
+        }
+        Err(UnknownCompilerSpecIoStage(s.to_owned()))
+    }
+}
+
+/// Typed parse failure for [`CompilerSpecIoStage`]'s
+/// [`std::str::FromStr`] — carries the offending input verbatim so an
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to every sibling `Unknown*` error in the workspace
+/// ([`UnknownExpectedKwargShape`], [`UnknownSexpShape`],
+/// [`UnknownMacroDefHead`], [`UnknownUnquoteForm`],
+/// [`crate::ast::UnknownAtomKind`], [`crate::ast::UnknownQuoteForm`],
+/// `tatara_process::allocation::UnknownRequestorKind`,
+/// `tatara_process::receipt::UnknownReceiptKind`,
+/// `tatara_process::phase::UnknownPhase`,
+/// `tatara_process::boundary::UnknownConditionKind`,
+/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
+/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
+/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
+/// diagnostics that hand the offending input back unchanged to the
+/// human.
+///
+/// The rendered `"unknown compiler spec io stage: <input>"` substring
+/// is what LSP / REPL diagnostic capture binds to — substring-matching
+/// `"unknown compiler spec io stage: "` filters this rejection class
+/// without binding to the specific input.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("unknown compiler spec io stage: {0}")]
+pub struct UnknownCompilerSpecIoStage(pub String);
 
 /// Closed-set identifier for a bytecode-runtime invariant violation
 /// surfaced by `macro_expand.rs::apply_compiled`. Encodes the four
@@ -6844,6 +6999,206 @@ mod tests {
         assert_eq!(stage, copied);
         assert_eq!(stage, super::CompilerSpecIoStage::LoadFromDiskRead);
         assert_ne!(stage, super::CompilerSpecIoStage::RealizeToDiskWrite);
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_all_is_unique_and_complete() {
+        // Closed-set posture: `ALL` enumerates every reachable variant
+        // EXACTLY ONCE — no duplicates, no omissions. The `[Self; 4]`
+        // array literal in the declaration forces the arity at compile
+        // time; this test catches the orthogonal failure modes — a
+        // future variant added at the type without being added to ALL
+        // (silently dropped from every consumer's sweep), or a typo
+        // that duplicates an entry (silently double-counted). Same
+        // truth-table pinning every sibling closed-set lift in the
+        // workspace uses (ExpectedKwargShape::ALL, SexpShape::ALL,
+        // MacroDefHead::ALL, UnquoteForm::ALL, …).
+        //
+        // The asserted compound keys are the canonical (operation,
+        // label) pairs the disk-persistence surface emits — the four
+        // entries are the reachable cells of the `operation × label`
+        // cross-product, and the four-out-of-eight partiality is the
+        // load-bearing thing: `realize_to_disk × {read, deserialize}`
+        // and `load_from_disk × {serialize, write}` are conceivable
+        // but unreachable, and `FromStr` enforces that asymmetry at
+        // the parse boundary.
+        assert_eq!(super::CompilerSpecIoStage::ALL.len(), 4);
+        let mut sorted: Vec<String> = super::CompilerSpecIoStage::ALL
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "CompilerSpecIoStage::ALL must not contain duplicates"
+        );
+        assert_eq!(
+            sorted,
+            vec![
+                "load_from_disk: deserialize".to_string(),
+                "load_from_disk: read".to_string(),
+                "realize_to_disk: serialize".to_string(),
+                "realize_to_disk: write".to_string(),
+            ],
+            "CompilerSpecIoStage::ALL must cover every reachable (operation, label) pair"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_display_matches_diagnostic_prefix() {
+        // Pin standalone Display to the canonical compound key — the
+        // exact substring that lands between `"compile error in "` and
+        // `": {message}"` inside the LispError::CompilerSpecIo
+        // rendering. Consumers that extract the (operation, label)
+        // prefix from a rendered diagnostic (LSP code-actions, REPL
+        // replay) round-trip the captured substring through `FromStr`
+        // back into the typed variant exactly. A regression that
+        // drifts either side (Display's separator, the LispError's
+        // `#[error(...)]` annotation, the projection methods) fails
+        // loudly here because both renderings must agree.
+        for stage in super::CompilerSpecIoStage::ALL {
+            let standalone = stage.to_string();
+            let full = format!(
+                "{}",
+                LispError::CompilerSpecIo {
+                    stage,
+                    message: "MSG".into()
+                }
+            );
+            let prefix = full
+                .strip_prefix("compile error in ")
+                .expect("legacy rendering prefix must hold");
+            let extracted = prefix
+                .strip_suffix(": MSG")
+                .expect("legacy rendering suffix must hold");
+            assert_eq!(
+                extracted, standalone,
+                "extracted prefix `{extracted}` must equal standalone Display `{standalone}`"
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_compound_key_round_trips_through_from_str() {
+        // Bidirectional `Display` ↔ `FromStr` contract: for every
+        // variant in ALL, `stage.to_string().parse() == Ok(stage)`. A
+        // regression that drifts the (variant, compound-key) pairing
+        // at the `Display` impl (typo, missing separator, swapped
+        // projection order) OR at the `FromStr` decode body (off-by-
+        // one, missing variant in the sweep) fails-loudly here. The
+        // canonical-key site is singular (`Display` projects through
+        // `operation()` and `label()`) so the round-trip is the only
+        // way the typed surface and the rendered diagnostic literal
+        // can drift apart — pinning it here means they cannot. Mirror
+        // of `expected_kwarg_shape_label_round_trips_through_from_str`
+        // and every sibling closed-set round-trip in the workspace —
+        // the difference is the compound-key shape rather than a
+        // single label.
+        for stage in super::CompilerSpecIoStage::ALL {
+            let key = stage.to_string();
+            let parsed: super::CompilerSpecIoStage = key
+                .parse()
+                .expect("every ALL variant's compound key must round-trip through FromStr");
+            assert_eq!(
+                parsed, stage,
+                "FromStr({key}) must round-trip to the same variant"
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_from_str_rejects_partial_and_unreachable_keys() {
+        // The compound-key shape is load-bearing: `FromStr` rejects
+        // partial keys (one of the two projection slots alone),
+        // separator-less inputs, AND the four conceivable-but-
+        // unreachable cross-product pairs that the disk-persistence
+        // surface does NOT emit. The partial-rejection turns the
+        // call-site invariant ("only the four call sites in
+        // `compiler_spec.rs` construct stages, each pairs the correct
+        // operation with the correct stage") into a parse-boundary
+        // invariant ("the four reachable pairs are structurally
+        // distinct from the four unreachable ones").
+        //
+        // Without this guard a future LSP that captures the prefix
+        // `"load_from_disk: write"` from a hand-crafted (corrupted)
+        // log and replays it through `FromStr` would silently round-
+        // trip an unreachable identity into the typed enum.
+        for partial in [
+            "serialize",
+            "write",
+            "read",
+            "deserialize",
+            "realize_to_disk",
+            "load_from_disk",
+            "",
+        ] {
+            partial.parse::<super::CompilerSpecIoStage>().expect_err(
+                "partial key (one projection slot alone, or empty) must NOT decode to a variant",
+            );
+        }
+        for unreachable in [
+            "realize_to_disk: read",
+            "realize_to_disk: deserialize",
+            "load_from_disk: serialize",
+            "load_from_disk: write",
+        ] {
+            unreachable
+                .parse::<super::CompilerSpecIoStage>()
+                .expect_err(
+                "conceivable-but-unreachable (operation, label) pair must NOT decode to a variant",
+            );
+        }
+        // Sanity: each reachable pair still decodes.
+        assert_eq!(
+            "realize_to_disk: serialize"
+                .parse::<super::CompilerSpecIoStage>()
+                .unwrap(),
+            super::CompilerSpecIoStage::RealizeToDiskSerialize
+        );
+        assert_eq!(
+            "load_from_disk: deserialize"
+                .parse::<super::CompilerSpecIoStage>()
+                .unwrap(),
+            super::CompilerSpecIoStage::LoadFromDiskDeserialize
+        );
+    }
+
+    #[test]
+    fn unknown_compiler_spec_io_stage_carries_offending_input_verbatim() {
+        // Operator-facing diagnostic contract: the offending input
+        // lands in the typed error verbatim — no normalization, no
+        // case-folding, no truncation. Pin the exact `#[error(...)]`
+        // rendering AND the typed `.0` field projection so a future
+        // refactor that normalizes (e.g. `.to_lowercase()`) before
+        // building the error or that drops the input fails-loudly
+        // here. Symmetric to every sibling `Unknown*` carrier in the
+        // workspace (`UnknownExpectedKwargShape`, `UnknownSexpShape`,
+        // `UnknownMacroDefHead`, …).
+        let err: super::UnknownCompilerSpecIoStage = "Realize_to_disk: serialize"
+            .parse::<super::CompilerSpecIoStage>()
+            .expect_err("capitalized operation must NOT decode — keys are byte-equal");
+        assert_eq!(err.0, "Realize_to_disk: serialize");
+        assert_eq!(
+            format!("{err}"),
+            "unknown compiler spec io stage: Realize_to_disk: serialize"
+        );
+
+        let err: super::UnknownCompilerSpecIoStage = "load_from_disk: write"
+            .parse::<super::CompilerSpecIoStage>()
+            .expect_err("unreachable cross-product pair must NOT decode");
+        assert_eq!(err.0, "load_from_disk: write");
+        assert_eq!(
+            format!("{err}"),
+            "unknown compiler spec io stage: load_from_disk: write"
+        );
+
+        let err: super::UnknownCompilerSpecIoStage = ""
+            .parse::<super::CompilerSpecIoStage>()
+            .expect_err("empty input must NOT decode to a CompilerSpecIoStage");
+        assert_eq!(err.0, "");
+        assert_eq!(format!("{err}"), "unknown compiler spec io stage: ");
     }
 
     // ── TemplateInvariantKind + TemplateInvariant variant ───────────

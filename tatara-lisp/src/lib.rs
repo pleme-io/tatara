@@ -53,10 +53,10 @@ pub use compile::{
 pub use diagnostic::{format_diagnostic, line_col, LineCol};
 pub use env::Env;
 pub use error::{
-    CompilerSpecIoStage, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
+    CompilerSpecIoStage, ExpectedKwargShape, KwargPath, KwargPathKind, LispError, MacroDefHead,
     OptionalParamMalformedReason, Result, SexpShape, TemplateInvariantKind,
-    UnknownCompilerSpecIoStage, UnknownExpectedKwargShape, UnknownMacroDefHead, UnknownSexpShape,
-    UnknownUnquoteForm, UnquoteForm,
+    UnknownCompilerSpecIoStage, UnknownExpectedKwargShape, UnknownKwargPathKind,
+    UnknownMacroDefHead, UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
 };
 pub use macro_expand::{Expander, MacroDef, MacroParams, OptionalParam};
 pub use reader::read;

@@ -2469,6 +2469,36 @@ impl KwargPath {
             idx,
         }
     }
+
+    /// Discriminator projection — strips the payload and returns the
+    /// closed-set [`KwargPathKind`]. The same shape every sibling
+    /// payload-carrying closed-set enum in the workspace projects through
+    /// (e.g. `tatara_process::lifetime_clock::AutoTerminate::kind` →
+    /// [`crate::error::KwargPath`]'s tatara-process cousin
+    /// `AutoTerminateKind`, `TerminateReason::kind` →
+    /// `TerminateReasonKind`, `crate::matrix::SelectStrategy::kind` →
+    /// `SelectStrategyKind`).
+    ///
+    /// Consumers that group [`LispError::TypeMismatch`] /
+    /// [`LispError::KwargDeserialize`] failures by path-shape
+    /// CATEGORY rather than full path identity (failure-cluster metrics
+    /// labelled `path_kind=named` / `path_kind=item` / `path_kind=slot`,
+    /// an LSP that surfaces "this is a per-item failure" before drilling
+    /// into the bracket-suffix, a future `tatara-check` diagnostic
+    /// histogram that buckets by kind) project through this method
+    /// instead of destructuring the variant and discarding the payload at
+    /// every site. Adding a fourth path shape (e.g., `:<key>.<field>`
+    /// for nested-struct kwarg failures or `:<key>::<variant>` for
+    /// sum-typed kwarg failures) requires extending [`KwargPathKind`],
+    /// which rustc-enforces matching at this projection.
+    #[must_use]
+    pub const fn kind(&self) -> KwargPathKind {
+        match self {
+            Self::Named(_) => KwargPathKind::Named,
+            Self::Item { .. } => KwargPathKind::Item,
+            Self::Slot(_) => KwargPathKind::Slot,
+        }
+    }
 }
 
 impl std::fmt::Display for KwargPath {
@@ -2480,6 +2510,124 @@ impl std::fmt::Display for KwargPath {
         }
     }
 }
+
+/// The closed set of [`KwargPath`] kinds — the discriminator view,
+/// payload-stripped, that sibling closed-set lifts in this crate carry
+/// (see [`SexpShape`], [`ExpectedKwargShape`], [`MacroDefHead`],
+/// [`UnquoteForm`], [`CompilerSpecIoStage`], [`TemplateInvariantKind`]).
+///
+/// Mirrors the workspace-wide [`payload-carrier, payload-stripped kind]
+/// pairing — `AutoTerminate` / `AutoTerminateKind`, `TerminateReason` /
+/// `TerminateReasonKind`, `SelectStrategy` / `SelectStrategyKind`,
+/// `ChannelVariant` / `ChannelKind`, `ArtifactVariant` / `ArtifactKind`,
+/// `EncapsulationTarget` / `EncapsulationKind`. [`KwargPath`] owns the
+/// per-variant payload (`key: String`, `idx: usize`); [`KwargPathKind`]
+/// is the `Copy`-able discriminator view callers reach when they want
+/// the CATEGORY without the payload.
+///
+/// Drives the `label` / [`Display`] / [`FromStr`] triad over [`Self::ALL`]
+/// so a new variant added with an `ALL` entry automatically extends the
+/// parser, the canonical wire-format projection, and any future
+/// metrics-label / failure-cluster bucket that needs to enumerate the
+/// kwargs-path categories. The `[Self; 3]` array literal forces the arity
+/// so a fourth variant — a hypothetical `Field` for nested-struct kwarg
+/// failures (`:<key>.<field>`) or `Variant` for sum-typed kwarg failures
+/// (`:<key>::<variant>`) — cannot land without bumping the constant.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the
+/// payload-stripped kind becomes a TYPE rather than three byte-identical
+/// `matches!` discriminator literals scattered across consumers.
+/// THEORY.md §VI.1 — generation over composition; the typed kind enum
+/// lands the structural-completeness floor for the path-shape category
+/// surface, parallel to how [`KwargPath`] lands it for the path-identity
+/// surface, [`ExpectedKwargShape`] for the expected-shape surface, etc.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum KwargPathKind {
+    /// The kind-view of [`KwargPath::Named`] — `:<key>` failures at a
+    /// named kwarg (typed-atom extractors, `Option<T>` paths).
+    Named,
+    /// The kind-view of [`KwargPath::Item`] — `:<key>[<idx>]` failures
+    /// at the Nth item of a list-typed kwarg
+    /// (`extract_string_list` per-item).
+    Item,
+    /// The kind-view of [`KwargPath::Slot`] — `kwargs[<idx>]` failures
+    /// at a kwargs slice slot before a key was known
+    /// (`parse_kwargs`'s slot-must-be-a-keyword gate).
+    Slot,
+}
+
+impl KwargPathKind {
+    /// The closed set — single source of truth for [`Self::label`] /
+    /// [`Display`] / [`FromStr`]. The `[Self; 3]` arity is forced at the
+    /// declaration so a fourth variant cannot land without bumping the
+    /// constant.
+    pub const ALL: [Self; 3] = [Self::Named, Self::Item, Self::Slot];
+
+    /// Project the typed [`KwargPathKind`] to the canonical `&'static str`
+    /// literal — lowercase byte-equal to the variant name (`"named"` /
+    /// `"item"` / `"slot"`). The labels are kept distinct from the
+    /// [`KwargPath::Display`] renderings (`":<key>"` / `":<key>[<idx>]"`
+    /// / `"kwargs[<idx>]"`) because this projection names the CATEGORY,
+    /// not the rendered identity — a metrics label `path_kind="named"`
+    /// makes more sense at the kind boundary than a path-prefix template
+    /// would.
+    ///
+    /// Same shape every sibling kind-projection in the workspace uses
+    /// (`AutoTerminateKind::as_str`, `TerminateReasonKind::as_str`,
+    /// [`SexpShape::label`], [`ExpectedKwargShape::label`]).
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Named => "named",
+            Self::Item => "item",
+            Self::Slot => "slot",
+        }
+    }
+}
+
+impl std::fmt::Display for KwargPathKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+/// Decode a canonical [`KwargPathKind`] label back into the typed
+/// variant — `Ok(kind)` when the input matches one of the three
+/// canonical lowercase literals exactly (`"named"` / `"item"` /
+/// `"slot"`), and [`Err(UnknownKwargPathKind)`] for every other string
+/// (typos, capitalized variants, kwargs-path RENDERINGS — `":foo"` /
+/// `":foo[0]"` / `"kwargs[0]"` reject because those name path
+/// IDENTITIES, not kind categories).
+///
+/// Round-trip invariant pinned by
+/// `kwarg_path_kind_label_round_trips_through_from_str`: for every
+/// variant `k` in [`KwargPathKind::ALL`], `k.label().parse() == Ok(k)`.
+/// The decode is a linear sweep over [`KwargPathKind::ALL`] keyed on
+/// [`KwargPathKind::label`] so the canonical literals live at ONE site.
+impl std::str::FromStr for KwargPathKind {
+    type Err = UnknownKwargPathKind;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.label() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownKwargPathKind(s.to_owned()))
+    }
+}
+
+/// Typed parse failure for [`KwargPathKind`]'s [`std::str::FromStr`] —
+/// carries the offending input verbatim so an operator-facing diagnostic
+/// surfaces the bad value, not a normalized form. Symmetric to every
+/// sibling `Unknown*` error in the workspace ([`UnknownExpectedKwargShape`],
+/// [`UnknownSexpShape`], [`UnknownMacroDefHead`], [`UnknownUnquoteForm`],
+/// [`UnknownCompilerSpecIoStage`], …) — the joint shape
+/// (`#[error("unknown <thing>: {0}")]`, `pub struct ...(pub String)`) is
+/// the substrate-wide idiom for parse-rejection diagnostics that hand
+/// the offending input back unchanged to the human.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("unknown kwarg path kind: {0}")]
+pub struct UnknownKwargPathKind(pub String);
 
 /// Closed-set identifier for the `expected:` slot of a
 /// `LispError::TypeMismatch` diagnostic — the seven reachable
@@ -3246,9 +3394,10 @@ mod tests {
         missing_head_symbol_suffix, optional_marker_repeated_suffix,
         optional_param_malformed_suffix, paren_suffix, rest_param_missing_name_suffix,
         rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
-        unknown_kwarg_suffix, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
-        OptionalParamMalformedReason, SexpShape, SexpWitness, UnknownExpectedKwargShape,
-        UnknownMacroDefHead, UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
+        unknown_kwarg_suffix, ExpectedKwargShape, KwargPath, KwargPathKind, LispError,
+        MacroDefHead, OptionalParamMalformedReason, SexpShape, SexpWitness,
+        UnknownExpectedKwargShape, UnknownKwargPathKind, UnknownMacroDefHead, UnknownSexpShape,
+        UnknownUnquoteForm, UnquoteForm,
     };
 
     #[test]
@@ -7945,6 +8094,179 @@ mod tests {
             format!("{err}"),
             "compile error in kwargs[2]: expected keyword, got string"
         );
+    }
+
+    // ── KwargPathKind closed-set lift ───────────────────────────────────
+    //
+    // Sibling discriminator view of `KwargPath` — the payload-stripped
+    // closed set of path-shape CATEGORIES (`Named` / `Item` / `Slot`).
+    // Same shape every sibling payload-carrying closed-set enum in the
+    // workspace pairs with (`AutoTerminate` / `AutoTerminateKind`,
+    // `TerminateReason` / `TerminateReasonKind`, `SelectStrategy` /
+    // `SelectStrategyKind`, `ChannelVariant` / `ChannelKind`). Consumers
+    // that bucket type-mismatch failures by path-shape category (metrics
+    // labels `path_kind=named` etc., a future tatara-check failure
+    // histogram, an LSP that switches UI before drilling into the
+    // bracket suffix) project through `KwargPath::kind` instead of
+    // pattern-matching the full payload and discarding it at every site.
+
+    #[test]
+    fn kwarg_path_kind_all_is_unique_and_complete() {
+        // Closed-set posture: `ALL` enumerates every reachable variant
+        // EXACTLY ONCE — no duplicates, no omissions. The `[Self; 3]`
+        // array literal in the declaration forces the arity at compile
+        // time; this test catches the orthogonal failure modes — a
+        // future variant added at the type without being added to ALL
+        // (silently dropped from every consumer's sweep), or a typo
+        // that duplicates an entry (silently double-counted). Same
+        // truth-table pinning every sibling closed-set lift in the
+        // workspace uses (ExpectedKwargShape::ALL, SexpShape::ALL,
+        // MacroDefHead::ALL, CompilerSpecIoStage::ALL,
+        // AutoTerminateKind::ALL, SelectStrategyKind::ALL, …).
+        assert_eq!(KwargPathKind::ALL.len(), 3);
+        let mut sorted: Vec<&str> = KwargPathKind::ALL.iter().map(|k| k.label()).collect();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "KwargPathKind::ALL must not contain duplicates"
+        );
+        assert_eq!(
+            sorted,
+            vec!["item", "named", "slot"],
+            "KwargPathKind::ALL must cover every reachable path-shape category"
+        );
+    }
+
+    #[test]
+    fn kwarg_path_kind_label_round_trips_through_from_str() {
+        // Bidirectional `label` ↔ `FromStr` contract: for every variant
+        // in ALL, `kind.label().parse() == Ok(kind)`. A regression that
+        // drifts the (variant, literal) pairing at ONE arm of `label`
+        // (typo, capitalization drift) OR at the `FromStr` decode body
+        // (off-by-one, missing variant in the sweep) fails-loudly here.
+        // The canonical-literal site is singular (`label`) so the
+        // round-trip is the only way the typed surface and the rendered
+        // category literal can drift apart — pinning it here means they
+        // cannot. Mirror of `expected_kwarg_shape_label_round_trips_…`
+        // and every sibling closed-set round-trip in the workspace.
+        for kind in KwargPathKind::ALL {
+            let parsed: KwargPathKind = kind
+                .label()
+                .parse()
+                .expect("every ALL variant's label must round-trip through FromStr");
+            assert_eq!(
+                parsed,
+                kind,
+                "FromStr({}) must round-trip to the same variant",
+                kind.label()
+            );
+        }
+    }
+
+    #[test]
+    fn kwarg_path_kind_display_matches_label_for_every_variant() {
+        // Display delegates to `label` — pin the byte-for-byte equality
+        // for every variant so a future Display impl that diverges from
+        // the canonical projection (e.g., re-adds a prefix like
+        // `"kind=named"`) fails-loudly here. Same posture as
+        // `expected_kwarg_shape_display_matches_label_for_every_variant`.
+        for kind in KwargPathKind::ALL {
+            assert_eq!(format!("{kind}"), kind.label());
+        }
+    }
+
+    #[test]
+    fn unknown_kwarg_path_kind_carries_offending_input_verbatim() {
+        // Operator-facing diagnostic contract: the offending input lands
+        // in the typed error verbatim — no normalization, no case-folding,
+        // no truncation. Pin the exact `#[error(...)]` rendering AND the
+        // typed `.0` field projection so a future refactor that
+        // normalizes (e.g. `.to_lowercase()`) before building the error
+        // or that drops the input fails-loudly here. Symmetric to every
+        // sibling `Unknown*` carrier in the workspace.
+        let err: UnknownKwargPathKind = "Named".parse::<KwargPathKind>().expect_err(
+            "capitalized `Named` must NOT decode — labels are byte-equal case-sensitive",
+        );
+        assert_eq!(err.0, "Named");
+        assert_eq!(format!("{err}"), "unknown kwarg path kind: Named");
+
+        // A kwargs-path RENDERING (`:foo`) is NOT a kind label — the
+        // CATEGORY axis is orthogonal to the IDENTITY axis; FromStr must
+        // reject rendered identities, not silently coerce them.
+        let err: UnknownKwargPathKind = ":foo"
+            .parse::<KwargPathKind>()
+            .expect_err("`:foo` is a KwargPath rendering, not a KwargPathKind label");
+        assert_eq!(err.0, ":foo");
+        assert_eq!(format!("{err}"), "unknown kwarg path kind: :foo");
+
+        let err: UnknownKwargPathKind = ""
+            .parse::<KwargPathKind>()
+            .expect_err("empty input must NOT decode to a KwargPathKind");
+        assert_eq!(err.0, "");
+        assert_eq!(format!("{err}"), "unknown kwarg path kind: ");
+    }
+
+    #[test]
+    fn kwarg_path_kind_projects_each_variant_to_canonical_kind() {
+        // Load-bearing discriminator contract: `KwargPath::kind()` strips
+        // the payload and projects to the canonical `KwargPathKind`
+        // variant for each `KwargPath` shape. A regression that swaps
+        // arms (e.g., `Named` → `KwargPathKind::Slot`) fails-loudly here
+        // AND breaks every consumer that buckets by category. Symmetric
+        // to `AutoTerminate::kind` and `TerminateReason::kind` in
+        // tatara-process.
+        assert_eq!(KwargPath::named("threshold").kind(), KwargPathKind::Named);
+        assert_eq!(KwargPath::item("steps", 3).kind(), KwargPathKind::Item);
+        assert_eq!(KwargPath::Slot(2).kind(), KwargPathKind::Slot);
+    }
+
+    #[test]
+    fn kwarg_path_kind_is_copy_and_hash_for_metrics_label_ergonomics() {
+        // `KwargPathKind` derives Clone + Copy + Debug + PartialEq + Eq
+        // + Hash so consumers that use the kind as a metrics-label key
+        // (failure-cluster histogram keyed by `path_kind`), a HashMap
+        // key (per-category counter), or a Copy-able discriminator in a
+        // hot loop (kind projection in a kwarg-gate batching loop) reach
+        // for the type without `.clone()` overhead. `String`-carrying
+        // `KwargPath` is intentionally NOT `Copy`; `KwargPathKind` IS —
+        // the split is the whole point of the discriminator view. A
+        // regression that drops Copy or Hash breaks compilation here.
+        let k = KwargPathKind::Named;
+        let k_copy = k; // Copy
+        assert_eq!(k, k_copy);
+        let _: String = format!("{k:?}"); // Debug
+        let mut s: std::collections::HashSet<KwargPathKind> = std::collections::HashSet::new();
+        s.insert(KwargPathKind::Named);
+        s.insert(KwargPathKind::Item);
+        s.insert(KwargPathKind::Slot);
+        s.insert(KwargPathKind::Named); // duplicate insert is a no-op (Hash + Eq)
+        assert_eq!(s.len(), 3);
+    }
+
+    #[test]
+    fn kwarg_path_kind_label_does_not_overlap_kwarg_path_display_renderings() {
+        // Cross-axis guard: the CATEGORY labels (`"named"` / `"item"` /
+        // `"slot"`) are intentionally disjoint from the IDENTITY
+        // renderings (`":<key>"` / `":<key>[<idx>]"` / `"kwargs[<idx>]"`)
+        // so a consumer that confuses the two surfaces (e.g., parses
+        // `kind.label()` as a `KwargPath` rendering, or parses a rendered
+        // path as a kind label) fails-loudly through `FromStr` rejection
+        // in both directions. Pin the non-overlap so a future label
+        // rename that drifts into the rendering vocabulary (e.g.,
+        // renaming `Slot`'s label to `"kwargs"`) fails-loudly here.
+        for kind in KwargPathKind::ALL {
+            let label = kind.label();
+            assert!(
+                !label.starts_with(':'),
+                "kind label {label:?} must not start with `:` (would collide with KwargPath::Named/Item rendering)"
+            );
+            assert!(
+                !label.contains('['),
+                "kind label {label:?} must not contain `[` (would collide with KwargPath::Item/Slot rendering)"
+            );
+        }
     }
 
     // ── ExpectedKwargShape closed-set lift ──────────────────────────────

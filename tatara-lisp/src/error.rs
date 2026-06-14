@@ -2048,12 +2048,29 @@ impl std::fmt::Display for MacroDefHead {
 impl std::str::FromStr for MacroDefHead {
     type Err = UnknownMacroDefHead;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        for head in Self::ALL {
-            if s == head.keyword() {
-                return Ok(head);
-            }
-        }
-        Err(UnknownMacroDefHead(s.to_owned()))
+        <Self as crate::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`MacroDefHead`] into the substrate-wide [`crate::ClosedSet`]
+/// trait — the four-method contract that lifts the linear-sweep
+/// for-loop from the [`MacroDefHead::from_str`] body into ONE place
+/// (`ClosedSet::parse_label`'s default body).
+///
+/// The trait method `label` delegates to the inherent
+/// [`MacroDefHead::keyword`] — the inherent name stays the
+/// domain-canonical projection (the macro-definition reserved word:
+/// `"defmacro"` / `"defpoint-template"` / `"defcheck"`), while the
+/// trait method gives generic consumers a STABLE name (`label`) to
+/// bind to.
+impl crate::ClosedSet for MacroDefHead {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownMacroDefHead;
+    fn label(self) -> &'static str {
+        MacroDefHead::keyword(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownMacroDefHead(s.to_owned())
     }
 }
 
@@ -2341,12 +2358,34 @@ impl std::fmt::Display for UnquoteForm {
 impl std::str::FromStr for UnquoteForm {
     type Err = UnknownUnquoteForm;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        for form in Self::ALL {
-            if s == form.marker() {
-                return Ok(form);
-            }
-        }
-        Err(UnknownUnquoteForm(s.to_owned()))
+        <Self as crate::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`UnquoteForm`] into the substrate-wide [`crate::ClosedSet`]
+/// trait — the four-method contract that lifts the linear-sweep
+/// for-loop from the [`UnquoteForm::from_str`] body into ONE place
+/// (`ClosedSet::parse_label`'s default body).
+///
+/// The trait method `label` delegates to the inherent
+/// [`UnquoteForm::marker`] — the inherent name stays the
+/// domain-canonical projection (the template-substitution punctuation
+/// marker: `","` / `",@"`), while the trait method gives generic
+/// consumers a STABLE name (`label`) to bind to. The marker-axis
+/// vocabulary stays intentionally disjoint from the structural-axis
+/// [`SexpShape`] vocabulary (`"unquote"` / `"unquote-splice"`) — both
+/// closed sets project the same `Sexp::Unquote` / `Sexp::UnquoteSplice`
+/// constructors on different axes, and the disjointness contract
+/// holds at the trait surface exactly because each implementor's
+/// `label` projects its own inherent axis-vocabulary.
+impl crate::ClosedSet for UnquoteForm {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownUnquoteForm;
+    fn label(self) -> &'static str {
+        UnquoteForm::marker(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownUnquoteForm(s.to_owned())
     }
 }
 
@@ -2607,12 +2646,32 @@ impl std::fmt::Display for KwargPathKind {
 impl std::str::FromStr for KwargPathKind {
     type Err = UnknownKwargPathKind;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.label() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownKwargPathKind(s.to_owned()))
+        <Self as crate::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`KwargPathKind`] into the substrate-wide [`crate::ClosedSet`]
+/// trait — the four-method contract that lifts the linear-sweep
+/// for-loop from the [`KwargPathKind::from_str`] body into ONE place
+/// (`ClosedSet::parse_label`'s default body).
+///
+/// The trait method `label` delegates to the inherent
+/// [`KwargPathKind::label`] — the inherent name happens to coincide
+/// with the trait method name here, but the delegation is still
+/// explicit so the SAME wiring shape applies whether the inherent
+/// projection is named `label` (this enum,
+/// [`ExpectedKwargShape`], [`SexpShape`], [`crate::ast::AtomKind`]),
+/// `prefix` ([`crate::ast::QuoteForm`]), `marker` ([`UnquoteForm`]),
+/// `keyword` ([`MacroDefHead`]), or `as_str` (the `tatara-process`
+/// PascalCase family).
+impl crate::ClosedSet for KwargPathKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownKwargPathKind;
+    fn label(self) -> &'static str {
+        KwargPathKind::label(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownKwargPathKind(s.to_owned())
     }
 }
 
@@ -2859,12 +2918,30 @@ impl std::fmt::Display for ExpectedKwargShape {
 impl std::str::FromStr for ExpectedKwargShape {
     type Err = UnknownExpectedKwargShape;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        for shape in Self::ALL {
-            if s == shape.label() {
-                return Ok(shape);
-            }
-        }
-        Err(UnknownExpectedKwargShape(s.to_owned()))
+        <Self as crate::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ExpectedKwargShape`] into the substrate-wide
+/// [`crate::ClosedSet`] trait — the four-method contract that lifts
+/// the linear-sweep for-loop from the [`ExpectedKwargShape::from_str`]
+/// body into ONE place (`ClosedSet::parse_label`'s default body).
+///
+/// The trait method `label` delegates to the inherent
+/// [`ExpectedKwargShape::label`] — the inherent name coincides with
+/// the trait method name here. The trait plug exposes the seven
+/// reachable expected-shape labels to generic consumers (a future
+/// kwarg-extractor coverage report, an LSP completion source for the
+/// `:<key>` slot's expected-shape diagnostic, …) without forcing the
+/// consumer to import the per-implementor inherent constant.
+impl crate::ClosedSet for ExpectedKwargShape {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownExpectedKwargShape;
+    fn label(self) -> &'static str {
+        ExpectedKwargShape::label(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownExpectedKwargShape(s.to_owned())
     }
 }
 
@@ -3091,12 +3168,30 @@ impl std::fmt::Display for SexpShape {
 impl std::str::FromStr for SexpShape {
     type Err = UnknownSexpShape;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        for shape in Self::ALL {
-            if s == shape.label() {
-                return Ok(shape);
-            }
-        }
-        Err(UnknownSexpShape(s.to_owned()))
+        <Self as crate::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`SexpShape`] into the substrate-wide [`crate::ClosedSet`]
+/// trait — the four-method contract that lifts the linear-sweep
+/// for-loop from the [`SexpShape::from_str`] body into ONE place
+/// (`ClosedSet::parse_label`'s default body).
+///
+/// The trait method `label` delegates to the inherent
+/// [`SexpShape::label`] — the inherent name coincides with the trait
+/// method name here. The trait plug exposes the twelve reachable
+/// `Sexp` outer shapes to generic consumers (a metrics tagger over
+/// `tatara_lisp_type_mismatch_total{got=<shape>}`, a typed-rewriter
+/// dispatch over the structural axis, …) without forcing the consumer
+/// to import the per-implementor inherent constant.
+impl crate::ClosedSet for SexpShape {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownSexpShape;
+    fn label(self) -> &'static str {
+        SexpShape::label(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownSexpShape(s.to_owned())
     }
 }
 

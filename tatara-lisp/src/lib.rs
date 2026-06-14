@@ -25,6 +25,7 @@
 extern crate self as tatara_lisp;
 
 pub mod ast;
+pub mod closed_set;
 pub mod compile;
 pub mod compiler_spec;
 pub mod diagnostic;
@@ -46,6 +47,7 @@ pub use domain::{DomainHandler, TataraDomain};
 pub use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 
 pub use ast::{iter_calls_to, Atom, AtomKind, QuoteForm, Sexp, UnknownAtomKind, UnknownQuoteForm};
+pub use closed_set::ClosedSet;
 pub use compile::{
     compile_named, compile_named_from_forms, compile_typed, compile_typed_from_forms,
     NamedDefinition,

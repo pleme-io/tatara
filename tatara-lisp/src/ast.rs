@@ -486,12 +486,32 @@ impl fmt::Display for AtomKind {
 impl std::str::FromStr for AtomKind {
     type Err = UnknownAtomKind;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.label() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownAtomKind(s.to_owned()))
+        <Self as crate::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`AtomKind`] into the substrate-wide [`crate::ClosedSet`]
+/// trait — the four-method contract that lifts the linear-sweep
+/// for-loop from the [`AtomKind::from_str`] body into ONE place
+/// (`ClosedSet::parse_label`'s default body) shared with every other
+/// closed-set implementor in the workspace
+/// ([`crate::ast::QuoteForm`], [`crate::error::SexpShape`],
+/// [`crate::error::MacroDefHead`], [`crate::error::UnquoteForm`],
+/// [`crate::error::KwargPathKind`], [`crate::error::ExpectedKwargShape`],
+/// `tatara_process::{ProcessPhase, ConditionKind, IntentKind, ...}`).
+///
+/// The trait method `label` delegates to the inherent
+/// [`AtomKind::label`] — the inherent name stays the domain-canonical
+/// projection while the trait method gives generic consumers a
+/// STABLE name (`label`) to bind to.
+impl crate::ClosedSet for AtomKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownAtomKind;
+    fn label(self) -> &'static str {
+        AtomKind::label(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownAtomKind(s.to_owned())
     }
 }
 
@@ -1518,12 +1538,32 @@ impl fmt::Display for QuoteForm {
 impl std::str::FromStr for QuoteForm {
     type Err = UnknownQuoteForm;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        for form in Self::ALL {
-            if s == form.prefix() {
-                return Ok(form);
-            }
-        }
-        Err(UnknownQuoteForm(s.to_owned()))
+        <Self as crate::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`QuoteForm`] into the substrate-wide [`crate::ClosedSet`]
+/// trait — the four-method contract that lifts the linear-sweep
+/// for-loop from the [`QuoteForm::from_str`] body into ONE place
+/// (`ClosedSet::parse_label`'s default body).
+///
+/// The trait method `label` delegates to the inherent
+/// [`QuoteForm::prefix`] — the inherent name stays the
+/// domain-canonical projection (the homoiconic reader-form prefix:
+/// `"'"`, `` "`" ``, `","`, `",@"`), while the trait method gives
+/// generic consumers a STABLE name (`label`) to bind to. The
+/// labels-as-prefixes here are punctuation, not vocabulary; that
+/// distinction stays load-bearing through the `prefix` inherent
+/// method but flattens at the trait surface where all closed-set
+/// implementors share one method name.
+impl crate::ClosedSet for QuoteForm {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownQuoteForm;
+    fn label(self) -> &'static str {
+        QuoteForm::prefix(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownQuoteForm(s.to_owned())
     }
 }
 

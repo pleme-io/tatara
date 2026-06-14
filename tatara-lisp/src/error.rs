@@ -2307,6 +2307,50 @@ pub enum SexpShape {
 }
 
 impl SexpShape {
+    /// The closed set of reachable `Sexp` outermost shapes — single
+    /// source of truth that drives the [`Self::label`] / [`fmt::Display`]
+    /// projection AND the [`FromStr`] decode sweep keyed on
+    /// [`Self::label`]. Adding a hypothetical thirteenth variant (e.g.
+    /// `Vector` for `#(...)` reader syntax, `Map` for `{...}`, or
+    /// `Char` for `#\x`) lands at one `ALL` entry + one `label` arm —
+    /// exhaustively checked by the compiler (the `[Self; 12]` array
+    /// literal forces the arity) AND by the per-variant truth-table
+    /// tests below. Sibling closed-set lift to every other typed-shape
+    /// enum the substrate carries: this crate's own [`UnquoteForm`]
+    /// (the four template markers — the only other closed set on the
+    /// `Sexp` algebra with `Sexp variant ↔ enum variant` parity), and
+    /// the cross-crate `tatara-process` family
+    /// (`ConditionKind::ALL`, `ProcessPhase::ALL`,
+    /// `ProcessSignal::ALL`, `ChannelKind::ALL`, `IntentKind::ALL`,
+    /// …) every one of which paired its typed projection with `ALL`
+    /// before this lift.
+    ///
+    /// Future consumers that compose against `ALL`:
+    /// - LSP / REPL completion for the operator-facing rendered
+    ///   shape label (every `expected X, got Y` substring in
+    ///   `LispError`'s rendered diagnostics keys on this set);
+    /// - `tatara-check` coverage assertions over which `SexpShape`
+    ///   variants reach a `TypeMismatch.got` arm at all;
+    /// - any future audit-trail metric jointly labeled by
+    ///   `SexpShape::label` (e.g.
+    ///   `tatara_lisp_type_mismatch_total{got="symbol"}`) — the
+    ///   metric label set IS [`Self::ALL`] mapped through
+    ///   [`Self::label`].
+    pub const ALL: [Self; 12] = [
+        Self::Nil,
+        Self::Symbol,
+        Self::Keyword,
+        Self::String,
+        Self::Int,
+        Self::Float,
+        Self::Bool,
+        Self::List,
+        Self::Quote,
+        Self::Quasiquote,
+        Self::Unquote,
+        Self::UnquoteSplice,
+    ];
+
     /// Project the typed `SexpShape` to the canonical `&'static str`
     /// literal — feeds the `LispError::TypeMismatch` /
     /// `LispError::NamedFormNonSymbolName` Display rendering via the
@@ -2320,9 +2364,13 @@ impl SexpShape {
     /// The bidirectional contract is anchored by tests:
     /// `sexp_shape_label_renders_canonical_string_for_every_variant` pins
     /// each variant's canonical literal so a typo in any arm fails-loudly,
-    /// and `sexp_shape_display_matches_label_for_every_variant` pins
+    /// `sexp_shape_display_matches_label_for_every_variant` pins
     /// Display-equals-label so the `#[error(...)]` annotation's `{got}`
-    /// slot projects byte-for-byte through this method.
+    /// slot projects byte-for-byte through this method, and
+    /// `sexp_shape_label_round_trips_through_from_str` pins the
+    /// `label` ↔ `FromStr` round-trip for every variant in
+    /// [`Self::ALL`] so the typed surface and the rendered diagnostic
+    /// literal cannot drift.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
@@ -2347,6 +2395,63 @@ impl std::fmt::Display for SexpShape {
         f.write_str(self.label())
     }
 }
+
+/// Decode a canonical `SexpShape` label back into the typed variant —
+/// `Ok(shape)` when the input matches one of the twelve canonical
+/// kebab-/lowercase literals exactly (byte-equal, case-sensitive — the
+/// labels are the rendered diagnostic surface and any case drift would
+/// silently bifurcate the round-trip), `Err(UnknownSexpShape)` for
+/// every other string (typos, non-canonical capitalizations, labels
+/// from a sibling closed set like `ExpectedKwargShape::label()` whose
+/// vocabulary overlaps on `"keyword"` / `"string"` / `"int"` / `"bool"`
+/// / `"list"` but DOES NOT overlap on `"number"` / `"list of strings"`,
+/// reader spellings the lift would have to extend to cover).
+///
+/// Round-trip invariant pinned by
+/// `sexp_shape_label_round_trips_through_from_str`: for every variant
+/// `s` in [`SexpShape::ALL`], `s.label().parse() == Ok(s)`. The decode
+/// is a linear sweep over [`SexpShape::ALL`] keyed on [`SexpShape::label`]
+/// so the canonical literals live at ONE site (the `label` arms) rather
+/// than at TWO sites (`label` + a per-variant `from_str` arm) — adding
+/// a thirteenth variant extends only [`SexpShape::ALL`] +
+/// [`SexpShape::label`], NOT a third per-variant literal site. Same
+/// shape every sibling closed-set `FromStr` in this workspace uses
+/// (`RequestorKind::from_str`, `ReceiptKind::from_str`,
+/// `AllocationPhase::from_str`, `ConditionKind::from_str`,
+/// `ProcessPhase::from_str`, …).
+///
+/// Open-by-design callers that want to drop the typed-error face of
+/// the decode and reach for `Option<SexpShape>` compose
+/// `label.parse().ok()` exactly as the `tatara-process` siblings'
+/// `known_kind()`-shaped projections do.
+impl std::str::FromStr for SexpShape {
+    type Err = UnknownSexpShape;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        for shape in Self::ALL {
+            if s == shape.label() {
+                return Ok(shape);
+            }
+        }
+        Err(UnknownSexpShape(s.to_owned()))
+    }
+}
+
+/// Typed parse failure for [`SexpShape`]'s [`std::str::FromStr`] —
+/// carries the offending input verbatim so an operator-facing
+/// diagnostic surfaces the bad value, not a normalized form.
+/// Symmetric to every sibling `Unknown*` error in the workspace
+/// (`tatara_process::allocation::UnknownRequestorKind`,
+/// `tatara_process::receipt::UnknownReceiptKind`,
+/// `tatara_process::phase::UnknownPhase`,
+/// `tatara_process::boundary::UnknownConditionKind`,
+/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
+/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct ...(pub
+/// String)`) is the substrate-wide idiom for parse-rejection
+/// diagnostics that hand the offending input back unchanged to the
+/// human.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("unknown sexp shape: {0}")]
+pub struct UnknownSexpShape(pub String);
 
 /// Typed witness of an offending `Sexp` at a typed-entry rejection
 /// boundary — the joint identity (shape + literal) the substrate's
@@ -2626,7 +2731,7 @@ mod tests {
         optional_param_malformed_suffix, paren_suffix, rest_param_missing_name_suffix,
         rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
         unknown_kwarg_suffix, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
-        OptionalParamMalformedReason, SexpShape, SexpWitness, UnquoteForm,
+        OptionalParamMalformedReason, SexpShape, SexpWitness, UnknownSexpShape, UnquoteForm,
     };
 
     #[test]
@@ -7366,6 +7471,131 @@ mod tests {
             format!("{err}"),
             "compile error in defpoint: positional NAME must be a symbol or string (got list)"
         );
+    }
+
+    #[test]
+    fn sexp_shape_all_is_unique_and_complete() {
+        // Closed-set posture: `ALL` enumerates every reachable variant
+        // EXACTLY ONCE — no duplicates, no omissions. The `[Self; 12]`
+        // array literal in the declaration forces the arity at compile
+        // time; this test catches the orthogonal failure modes — a
+        // future variant added at the type without being added to ALL
+        // (silently dropped from every consumer's sweep), or a typo
+        // that duplicates an entry (silently double-counted). Same
+        // truth-table pinning every sibling closed-set lift in the
+        // workspace uses (RequestorKind::ALL, ReceiptKind::ALL,
+        // ConditionKind::ALL, ProcessPhase::ALL, ChannelKind::ALL, …).
+        assert_eq!(SexpShape::ALL.len(), 12);
+        let mut sorted: Vec<&str> = SexpShape::ALL.iter().map(|s| s.label()).collect();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "SexpShape::ALL must not contain duplicates"
+        );
+        assert_eq!(
+            sorted,
+            vec![
+                "bool",
+                "float",
+                "int",
+                "keyword",
+                "list",
+                "nil",
+                "quasiquote",
+                "quote",
+                "string",
+                "symbol",
+                "unquote",
+                "unquote-splice",
+            ],
+            "SexpShape::ALL must cover every reachable Sexp outermost shape"
+        );
+    }
+
+    #[test]
+    fn sexp_shape_label_round_trips_through_from_str() {
+        // Bidirectional `label` ↔ `FromStr` contract: for every
+        // variant in ALL, `shape.label().parse() == Ok(shape)`. A
+        // regression that drifts the (variant, literal) pairing at
+        // ONE arm of `label` (typo, capitalization drift) OR at the
+        // `FromStr` decode body (off-by-one, missing variant in the
+        // sweep) fails-loudly here. The canonical-literal site is
+        // singular (`label`) so the round-trip is the only way the
+        // typed surface and the rendered diagnostic literal can
+        // drift apart — pinning it here means they cannot.
+        for shape in SexpShape::ALL {
+            let parsed: SexpShape = shape
+                .label()
+                .parse()
+                .expect("every ALL variant's label must round-trip through FromStr");
+            assert_eq!(
+                parsed,
+                shape,
+                "FromStr({}) must round-trip to the same variant",
+                shape.label()
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_sexp_shape_carries_offending_input_verbatim() {
+        // Operator-facing diagnostic contract: the offending input
+        // lands in the typed error verbatim — no normalization, no
+        // case-folding, no truncation. Pin the exact `#[error(...)]`
+        // rendering AND the typed `.0` field projection so a future
+        // refactor that normalizes (e.g. `.to_lowercase()`) before
+        // building the error or that drops the input fails-loudly
+        // here. Symmetric to every sibling `Unknown*` carrier in the
+        // workspace.
+        let err: UnknownSexpShape = "Symbol".parse::<SexpShape>().expect_err(
+            "capitalized `Symbol` must NOT decode — labels are byte-equal case-sensitive",
+        );
+        assert_eq!(err.0, "Symbol");
+        assert_eq!(format!("{err}"), "unknown sexp shape: Symbol");
+
+        let err: UnknownSexpShape = "number"
+            .parse::<SexpShape>()
+            .expect_err("`number` is ExpectedKwargShape's vocabulary, not SexpShape's");
+        assert_eq!(err.0, "number");
+        assert_eq!(format!("{err}"), "unknown sexp shape: number");
+
+        let err: UnknownSexpShape = ""
+            .parse::<SexpShape>()
+            .expect_err("empty input must NOT decode to a SexpShape");
+        assert_eq!(err.0, "");
+        assert_eq!(format!("{err}"), "unknown sexp shape: ");
+    }
+
+    #[test]
+    fn sexp_shape_from_str_accepts_only_canonical_labels() {
+        // Cross-axis guard: `ExpectedKwargShape::label()`'s vocabulary
+        // overlaps with `SexpShape::label()` on five of seven entries
+        // (`keyword` / `string` / `int` / `bool` / `list`) and DOES
+        // NOT overlap on two (`number` / `list of strings`). The
+        // overlap is intentional — both axes are projections of the
+        // same `Sexp` algebra at typed-entry gates — but the
+        // non-overlap is the load-bearing part: a `FromStr` that
+        // silently accepts `"number"` as a `SexpShape` would corrupt
+        // the typed identity. Pin BOTH directions: the overlap
+        // decodes successfully (and to the matching `SexpShape`
+        // variant), the non-overlap rejects.
+        assert_eq!("keyword".parse::<SexpShape>().unwrap(), SexpShape::Keyword);
+        assert_eq!("string".parse::<SexpShape>().unwrap(), SexpShape::String);
+        assert_eq!("int".parse::<SexpShape>().unwrap(), SexpShape::Int);
+        assert_eq!("bool".parse::<SexpShape>().unwrap(), SexpShape::Bool);
+        assert_eq!("list".parse::<SexpShape>().unwrap(), SexpShape::List);
+
+        assert!("number".parse::<SexpShape>().is_err());
+        assert!("list of strings".parse::<SexpShape>().is_err());
+
+        // Sanity: every UnquoteForm marker literal (`,` / `,@` / etc.)
+        // is also NOT a SexpShape label — the marker projection lives
+        // on a different axis (the rendered punctuation) than the
+        // shape label (the structural identity).
+        assert!(",".parse::<SexpShape>().is_err());
+        assert!(",@".parse::<SexpShape>().is_err());
     }
 
     #[test]

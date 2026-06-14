@@ -207,12 +207,29 @@ impl fmt::Display for EncapsulationTarget {
 impl FromStr for EncapsulationTarget {
     type Err = UnknownEncapsulationTarget;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for target in Self::ALL {
-            if s == target.as_str() {
-                return Ok(target);
-            }
-        }
-        Err(UnknownEncapsulationTarget(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`EncapsulationTarget`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
+/// [`crate::receipt::ReceiptKind`] for the four-method-contract
+/// commentary. `label` delegates to the inherent
+/// [`EncapsulationTarget::as_str`] — the inherent name (the camelCase
+/// `as_str`) stays the load-bearing wire-vocabulary projection that
+/// matches the serde `rename_all = "camelCase"` field names on
+/// [`EncapsulationKind`] AND the `ENCAPSULATION_TARGET_LIST`
+/// slash-joined operator diagnostic verbatim, while the trait method
+/// gives generic consumers a STABLE name (`label`) across the
+/// workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for EncapsulationTarget {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownEncapsulationTarget;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownEncapsulationTarget(s.to_owned())
     }
 }
 
@@ -392,12 +409,29 @@ impl fmt::Display for EncapsulationMode {
 impl FromStr for EncapsulationMode {
     type Err = UnknownEncapsulationMode;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for mode in Self::ALL {
-            if s == mode.as_str() {
-                return Ok(mode);
-            }
-        }
-        Err(UnknownEncapsulationMode(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`EncapsulationMode`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
+/// [`EncapsulationTarget`] for the four-method-contract commentary.
+/// `label` delegates to the inherent [`EncapsulationMode::as_str`] —
+/// the inherent name (the PascalCase `as_str`) stays the load-bearing
+/// wire-vocabulary projection that matches the serde
+/// `rename_all = "PascalCase"` external-tag form on the wire AND the
+/// reconciler's `mode: {Manage,Adopt,Observe}` status-condition reason
+/// strings verbatim, while the trait method gives generic consumers a
+/// STABLE name (`label`) across the workspace-wide closed-set
+/// implementors.
+impl tatara_lisp::ClosedSet for EncapsulationMode {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownEncapsulationMode;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownEncapsulationMode(s.to_owned())
     }
 }
 
@@ -486,18 +520,21 @@ mod tests {
     // ── closed-set algebra for EncapsulationMode (ALL × as_str ×
     //    Display × FromStr × emits_workload × preserves_release_name) ─
 
-    /// `ALL` is the source of truth for the resolver / `FromStr` sweep
-    /// — pin its closure so a variant added without an `ALL` entry
-    /// fails here (via the uniqueness check) before drifting `as_str`
-    /// / `emits_workload` / `preserves_release_name`. The arity is
-    /// asserted by the `[Self; 3]` array type itself.
+    /// Structural well-formedness of [`EncapsulationMode`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `mode_all_is_unique_and_complete` +
+    /// `mode_roundtrip_via_as_str` + the empty-input arm of
+    /// `unknown_encapsulation_mode_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the reconciler hits when parsing a
+    /// CRD `enum:`-validated `mode` value back to the typed mode.
     #[test]
-    fn mode_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for mode in EncapsulationMode::ALL {
-            assert!(seen.insert(mode), "duplicate variant in ALL: {mode:?}");
-        }
-        assert_eq!(seen.len(), EncapsulationMode::ALL.len());
+    fn mode_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<EncapsulationMode>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -534,29 +571,19 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn mode_roundtrip_via_as_str() {
-        use std::str::FromStr;
-        for mode in EncapsulationMode::ALL {
-            assert_eq!(
-                EncapsulationMode::from_str(mode.as_str()).unwrap(),
-                mode,
-                "round-trip failed for {mode:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / unrelated — and the
-    /// error echoes the input verbatim so the operator-facing
-    /// diagnostic carries the offending value, not a normalized form.
+    /// projection — lowercased / typo / unrelated — and the error
+    /// echoes the input verbatim so the operator-facing diagnostic
+    /// carries the offending value, not a normalized form. The
+    /// empty-input arm is pinned by
+    /// [`mode_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownEncapsulationMode`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_encapsulation_mode_errors() {
         use std::str::FromStr;
-        for bad in ["", "manage", "ADOPT", "Observed", "Wrap"] {
+        for bad in ["manage", "ADOPT", "Observed", "Wrap"] {
             let err = EncapsulationMode::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }
@@ -748,17 +775,22 @@ mod tests {
         }
     }
 
-    /// `ALL` is the source of truth — pin its closure so a variant added
-    /// without an `ALL` entry fails here (via the uniqueness check)
-    /// before drifting `as_str` / `select` / `target`. The arity is
-    /// asserted by the `[Self; 3]` array type itself.
+    /// Structural well-formedness of [`EncapsulationTarget`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `encapsulation_target_all_is_unique_and_complete` +
+    /// `encapsulation_target_roundtrip_via_as_str` + the empty-input
+    /// arm of `unknown_encapsulation_target_errors`. `FromStr`
+    /// delegates to `<Self as tatara_lisp::ClosedSet>::parse_label`, so
+    /// this helper exercises the same code path the
+    /// `EncapsulationKind::variant` resolver hits when keying on a
+    /// camelCase target name back to the typed target.
     #[test]
-    fn encapsulation_target_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for t in EncapsulationTarget::ALL {
-            assert!(seen.insert(t), "duplicate variant in ALL: {t:?}");
-        }
-        assert_eq!(seen.len(), EncapsulationTarget::ALL.len());
+    fn encapsulation_target_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<EncapsulationTarget>();
     }
 
     /// CANONICAL-KEY UNIQUENESS: no two targets alias the same `as_str`
@@ -828,32 +860,21 @@ mod tests {
         }
     }
 
-    /// Every variant in `ALL` round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn encapsulation_target_roundtrip_via_as_str() {
-        for t in EncapsulationTarget::ALL {
-            assert_eq!(
-                EncapsulationTarget::from_str(t.as_str()).unwrap(),
-                t,
-                "round-trip failed for {t:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical projection
-    /// — empty / PascalCased / typo / cross-axis-leaked inputs from
-    /// sibling closed-set enums on the same `ProcessSpec` axis
-    /// (`Manage`, `Adopt`, `Observe`, `OnAttested`, …) — and the error
-    /// echoes the input verbatim so the operator-facing diagnostic
-    /// carries the offending value, not a normalized form.
-    /// `EncapsulationTarget` is its own axis, NOT a transparent
-    /// reflection of any sibling.
+    /// — PascalCased / typo / cross-axis-leaked inputs from sibling
+    /// closed-set enums on the same `ProcessSpec` axis (`Manage`,
+    /// `Adopt`, `Observe`, `OnAttested`, …) — and the error echoes the
+    /// input verbatim so the operator-facing diagnostic carries the
+    /// offending value, not a normalized form. `EncapsulationTarget`
+    /// is its own axis, NOT a transparent reflection of any sibling.
+    /// The empty-input arm is pinned by
+    /// [`encapsulation_target_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownEncapsulationTarget`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_encapsulation_target_errors() {
         for bad in [
-            "",
             "ExistingHelmRelease",
             "existing_helm_release",
             "EXISTINGHELMRELEASE",

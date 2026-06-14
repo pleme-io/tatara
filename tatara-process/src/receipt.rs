@@ -195,7 +195,6 @@ impl ReceiptKind {
             Self::NixBuild => "nix-build",
         }
     }
-
 }
 
 /// Decode a `kind` string into the typed variant — `Ok(kind)` when the
@@ -215,12 +214,34 @@ impl ReceiptKind {
 impl FromStr for ReceiptKind {
     type Err = UnknownReceiptKind;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.as_str() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownReceiptKind(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`ReceiptKind`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
+/// collapses the linear-sweep for-loop from [`std::str::FromStr::from_str`]
+/// into ONE place ([`tatara_lisp::ClosedSet::parse_label`]'s default body)
+/// shared with every other `tatara-process` closed-set implementor
+/// ([`crate::export::ArtifactKind`], [`crate::export::ReportFormat`],
+/// [`crate::export::ChannelKind`], [`crate::export::ExportTrigger`],
+/// [`crate::pool::ReplacementPolicy`], [`crate::pool::MemberState`],
+/// [`crate::pool::PoolPhase`], [`crate::pool::ReturnPolicy`],
+/// [`crate::lifetime::TeardownPolicy`], [`crate::phase::ProcessPhase`],
+/// [`crate::compliance::VerificationPhase`], …). `label` delegates to
+/// the inherent [`ReceiptKind::as_str`] — the inherent name (the
+/// kebab-case `as_str`) stays the load-bearing wire-vocabulary
+/// projection that matches `ReceiptEnvelope::kind`'s published literals
+/// verbatim, while the trait method gives generic consumers a STABLE
+/// name (`label`) across the workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for ReceiptKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownReceiptKind;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownReceiptKind(s.to_owned())
     }
 }
 
@@ -680,25 +701,22 @@ generated_at:  2026-05-19T12:00:00Z
 
     // ── ReceiptKind closed-set truth-table ───────────────────────────
 
+    /// Structural well-formedness of [`ReceiptKind`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `receipt_kind_all_enumerates_each_variant_exactly_once`
+    /// + `receipt_kind_from_str_round_trips_canonical_names` + the
+    /// empty-input arm of `receipt_kind_from_str_rejects_open_kinds`.
+    /// `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path operators hit when parsing a wire
+    /// `kind` field back to the typed kind.
     #[test]
-    fn receipt_kind_all_enumerates_each_variant_exactly_once() {
-        use std::collections::HashSet;
-
-        let all = ReceiptKind::ALL;
-        assert_eq!(all.len(), 4, "ALL arity must match the closed set");
-
-        let mut seen: HashSet<ReceiptKind> = HashSet::new();
-        for k in all {
-            assert!(seen.insert(k), "duplicate variant in ALL: {k:?}");
-        }
-        for k in [
-            ReceiptKind::ClosedLoopAuth,
-            ReceiptKind::DbMigration,
-            ReceiptKind::TestSuite,
-            ReceiptKind::NixBuild,
-        ] {
-            assert!(all.contains(&k), "variant {k:?} unreachable through ALL");
-        }
+    fn receipt_kind_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<ReceiptKind>();
     }
 
     #[test]
@@ -725,19 +743,17 @@ generated_at:  2026-05-19T12:00:00Z
     }
 
     #[test]
-    fn receipt_kind_from_str_round_trips_canonical_names() {
-        for k in ReceiptKind::ALL {
-            assert_eq!(k.as_str().parse::<ReceiptKind>(), Ok(k));
-        }
-    }
-
-    #[test]
     fn receipt_kind_from_str_rejects_open_kinds() {
-        // Empty / future / typo / wrong-case all surface a typed
+        // Future / typo / wrong-case all surface a typed
         // UnknownReceiptKind carrying the offending input verbatim
         // (operator-facing diagnostic); the schema is open at the
-        // wire layer, but the closed-set view is byte-exact.
-        for bad in ["", "closed_loop_auth", "ClosedLoopAuth", "operator-custom-kind"] {
+        // wire layer, but the closed-set view is byte-exact. The
+        // empty-input arm is pinned by
+        // [`receipt_kind_is_well_formed_closed_set`] via the
+        // `tatara_lisp::ClosedSet` testkit; the cases here pin the
+        // verbatim-echo contract on the [`UnknownReceiptKind`] newtype,
+        // which the trait's `make_unknown` can't see.
+        for bad in ["closed_loop_auth", "ClosedLoopAuth", "operator-custom-kind"] {
             let err = bad.parse::<ReceiptKind>().unwrap_err();
             assert_eq!(err, UnknownReceiptKind(bad.to_string()));
         }

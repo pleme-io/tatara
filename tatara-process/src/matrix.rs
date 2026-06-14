@@ -338,12 +338,27 @@ impl fmt::Display for SelectStrategyKind {
 impl FromStr for SelectStrategyKind {
     type Err = UnknownSelectStrategyKind;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for kind in Self::ALL {
-            if s == kind.as_str() {
-                return Ok(kind);
-            }
-        }
-        Err(UnknownSelectStrategyKind(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`SelectStrategyKind`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
+/// [`crate::receipt::ReceiptKind`] for the four-method-contract
+/// commentary. `label` delegates to the inherent
+/// [`SelectStrategyKind::as_str`] — the inherent name (the PascalCase
+/// `as_str`) stays the load-bearing wire-vocabulary projection that
+/// matches the serde external-tag form on `SelectStrategy` verbatim,
+/// while the trait method gives generic consumers a STABLE name
+/// (`label`) across the workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for SelectStrategyKind {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownSelectStrategyKind;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownSelectStrategyKind(s.to_owned())
     }
 }
 
@@ -1821,33 +1836,23 @@ mod tests {
     // every probe shape (the load-bearing perf lift: count without
     // materializing the cartesian product).
 
+    /// Structural well-formedness of [`SelectStrategyKind`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `select_strategy_kind_all_enumerates_each_variant_exactly_once`
+    /// + `select_strategy_kind_from_str_round_trips_canonical_names` +
+    /// the empty-input arm of
+    /// `select_strategy_kind_from_str_rejects_unknown_with_verbatim_input`.
+    /// `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the matrix sweep hits when reading
+    /// a `SelectStrategy` external-tag back to the typed kind.
     #[test]
-    fn select_strategy_kind_all_enumerates_each_variant_exactly_once() {
-        // CLOSED-SET ARITY CONTRACT: `SelectStrategyKind::ALL` covers
-        // every variant exactly once. The `[Self; 2]` array literal
-        // pins the arity at compile time; this sweep additionally pins
-        // that none of the two entries is a duplicate (every variant's
-        // `as_str` appears exactly once in the projected set) and that
-        // every declared variant is reachable through `ALL`. Sibling
-        // closed-set contract to every other `ALL`-keyed enum in this
-        // crate (see `MatrixTarget`, `BreatheDimensionKind`,
-        // `TerminateReasonKind`, …).
-        let names: Vec<&'static str> = SelectStrategyKind::ALL.iter().map(|k| k.as_str()).collect();
-        assert_eq!(names.len(), 2, "ALL must enumerate exactly 2 variants");
-        let mut sorted = names.clone();
-        sorted.sort_unstable();
-        sorted.dedup();
-        assert_eq!(
-            sorted.len(),
-            names.len(),
-            "ALL must contain no duplicate variants ({names:?})"
-        );
-        for named in [SelectStrategyKind::Cartesian, SelectStrategyKind::Explicit] {
-            assert!(
-                SelectStrategyKind::ALL.contains(&named),
-                "{named:?} missing from ALL"
-            );
-        }
+    fn select_strategy_kind_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<SelectStrategyKind>();
     }
 
     #[test]
@@ -1902,32 +1907,18 @@ mod tests {
     }
 
     #[test]
-    fn select_strategy_kind_from_str_round_trips_canonical_names() {
-        // ROUND-TRIP CONTRACT: `FromStr(as_str(v)) == Ok(v)` for every
-        // variant. Pins the closed-set inverse property the canonical
-        // wire-format projection promises — a regression that drifts
-        // `from_str`'s match arms (e.g. accepts only lowercase) breaks
-        // the round-trip the typed kind exposes to any future consumer
-        // that decodes the wire string back to the typed variant.
-        for kind in SelectStrategyKind::ALL {
-            assert_eq!(
-                SelectStrategyKind::from_str(kind.as_str()),
-                Ok(kind),
-                "from_str(as_str({kind:?})) must round-trip"
-            );
-        }
-    }
-
-    #[test]
     fn select_strategy_kind_from_str_rejects_unknown_with_verbatim_input() {
         // UNKNOWN-INPUT CONTRACT: parsing a non-canonical string fails
         // with a typed `UnknownSelectStrategyKind` carrying the input
         // verbatim — operators see the bad value, not a normalized
         // form. Sibling shape to every `Unknown*` parse error in this
         // crate (e.g. `UnknownPhase`, `UnknownTeardownPolicy`,
-        // `UnknownTerminateReasonKind`).
+        // `UnknownTerminateReasonKind`). The empty-input arm is pinned
+        // by [`select_strategy_kind_is_well_formed_closed_set`] via the
+        // `tatara_lisp::ClosedSet` testkit; the cases here pin the
+        // verbatim-echo contract on the [`UnknownSelectStrategyKind`]
+        // newtype, which the trait's `make_unknown` can't see.
         for bad in [
-            "",
             "cartesian", // wrong case
             "explicit",  // wrong case
             "Latin",

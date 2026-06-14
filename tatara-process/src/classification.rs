@@ -1182,12 +1182,28 @@ impl fmt::Display for DataClassification {
 impl FromStr for DataClassification {
     type Err = UnknownDataClassification;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        for class in Self::ALL {
-            if s == class.as_str() {
-                return Ok(class);
-            }
-        }
-        Err(UnknownDataClassification(s.to_string()))
+        <Self as tatara_lisp::ClosedSet>::parse_label(s)
+    }
+}
+
+/// Plug [`DataClassification`] into the substrate-wide
+/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
+/// [`ConvergencePointType`] for the four-method-contract commentary.
+/// `label` delegates to the inherent [`DataClassification::as_str`] —
+/// the inherent name (the PascalCase `as_str`) stays the load-bearing
+/// wire-vocabulary projection that matches the serde
+/// `rename_all = "PascalCase"` output AND the CRD `enum:` enumeration
+/// the Process schema stamps on `spec.classification.dataClassification`
+/// verbatim, while the trait method gives generic consumers a STABLE
+/// name (`label`) across the workspace-wide closed-set implementors.
+impl tatara_lisp::ClosedSet for DataClassification {
+    const ALL: &'static [Self] = &Self::ALL;
+    type Unknown = UnknownDataClassification;
+    fn label(self) -> &'static str {
+        Self::as_str(self)
+    }
+    fn make_unknown(s: &str) -> Self::Unknown {
+        UnknownDataClassification(s.to_owned())
     }
 }
 
@@ -1378,17 +1394,22 @@ mod tests {
     // ── closed-set algebra contracts for DataClassification
     //    (ALL × as_str × FromStr × rank × predicate pair) ────────────
 
-    /// `ALL` is the source of truth — pin its closure so a variant
-    /// added without an `ALL` entry fails here via the uniqueness check
-    /// before drifting `FromStr` or the sweep tests below. The arity is
-    /// asserted by the `[Self; 6]` array type itself.
+    /// Structural well-formedness of [`DataClassification`] as a
+    /// [`tatara_lisp::ClosedSet`] implementor — the workspace-wide
+    /// testkit lift that pins all three structural invariants (`ALL`
+    /// is non-empty, every variant round-trips through
+    /// `label ↔ parse_label`, labels are pairwise distinct, `""` is
+    /// outside the closed set) at ONE call site. Replaces the hand-
+    /// derived `data_classification_all_is_unique_and_complete` +
+    /// `data_classification_roundtrip_via_as_str` + the empty-input arm
+    /// of `unknown_data_classification_errors`. `FromStr` delegates to
+    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// exercises the same code path the reconciler hits when parsing a
+    /// CRD `enum:`-validated `dataClassification` value back to the
+    /// typed classification.
     #[test]
-    fn data_classification_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for class in DataClassification::ALL {
-            assert!(seen.insert(class), "duplicate variant in ALL: {class:?}");
-        }
-        assert_eq!(seen.len(), DataClassification::ALL.len());
+    fn data_classification_is_well_formed_closed_set() {
+        tatara_lisp::assert_closed_set_well_formed::<DataClassification>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase
@@ -1425,28 +1446,18 @@ mod tests {
         }
     }
 
-    /// Every variant in ALL round-trips through `as_str` ↔ `FromStr`.
-    /// Adding a variant without extending `as_str` / `FromStr`'s sweep
-    /// of `ALL` fails here.
-    #[test]
-    fn data_classification_roundtrip_via_as_str() {
-        for class in DataClassification::ALL {
-            assert_eq!(
-                DataClassification::from_str(class.as_str()).unwrap(),
-                class,
-                "round-trip failed for {class:?}"
-            );
-        }
-    }
-
     /// `FromStr` rejects strings that aren't in the canonical
-    /// projection — empty / lowercased / typo / cross-axis-leaked — and
-    /// the error echoes the input verbatim so the operator-facing
+    /// projection — lowercased / typo / cross-axis-leaked — and the
+    /// error echoes the input verbatim so the operator-facing
     /// diagnostic carries the offending value, not a normalized form.
+    /// The empty-input arm is pinned by
+    /// [`data_classification_is_well_formed_closed_set`] via the
+    /// `tatara_lisp::ClosedSet` testkit; the cases here pin the
+    /// verbatim-echo contract on the [`UnknownDataClassification`]
+    /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_data_classification_errors() {
         for bad in [
-            "",
             "pii",          // lowercased
             "PII",          // uppercased
             "PersonalData", // typo

@@ -1087,6 +1087,57 @@ pub enum QuoteForm {
 }
 
 impl QuoteForm {
+    /// The closed set of four homoiconic prefix-wrappers — single
+    /// source of truth that drives every per-variant projection
+    /// ([`Self::prefix`] / [`fmt::Display`], [`Self::hash_discriminator`],
+    /// [`Self::as_unquote_form`], [`Self::iac_forge_tag`],
+    /// [`Self::sexp_shape`], [`Self::wrap`], and the [`Self::FromStr`]
+    /// decode sweep keyed on [`Self::prefix`]).
+    ///
+    /// Adding a hypothetical fifth homoiconic prefix-wrapper (e.g.
+    /// a `,~` reverse-unquote, a `,?` conditional-unquote, or a
+    /// `#'` Common-Lisp function-quote literal) lands at one
+    /// [`Self::ALL`] entry plus one arm per projection — exhaustively
+    /// checked by the compiler (the `[Self; 4]` array literal forces
+    /// the arity) AND by the per-variant truth-table tests below.
+    ///
+    /// Sibling closed-set lift to every other typed-shape enum the
+    /// substrate carries: this crate's own
+    /// [`crate::error::SexpShape::ALL`] (the twelve reachable outer
+    /// shapes — superset of this enum's four via [`Self::sexp_shape`]),
+    /// [`AtomKind::ALL`] (the six atomic-payload kinds — peer axis
+    /// on the same algebra, also a 6-of-12 carving of `SexpShape`),
+    /// [`crate::error::UnquoteForm::ALL`] (the two template-substitution
+    /// markers — proper 2-of-4 subset of THIS enum via
+    /// [`Self::as_unquote_form`]), and the cross-crate `tatara-process`
+    /// family (`ConditionKind::ALL`, `ProcessPhase::ALL`,
+    /// `ProcessSignal::ALL`, `ChannelKind::ALL`, `IntentKind::ALL`,
+    /// `LifetimeKind::ALL`, `RequestorKind::ALL`, `ReceiptKind::ALL`,
+    /// …) every one of which paired its typed projection with `ALL`
+    /// before this lift.
+    ///
+    /// Future consumers that compose against `ALL`: LSP / REPL
+    /// completion for the operator-facing rendered homoiconic prefix
+    /// (every `'`/`` ` ``/`,`/`,@` substring an authoring tool would
+    /// surface in a completion list keys on this set's projection
+    /// through [`Self::prefix`]); `tatara-check` coverage assertions
+    /// over which quote-family wrappers reach a `Sexp::Display` /
+    /// `Hash for Sexp` / `as_unquote_form` consumer arm at all — the
+    /// typed sweep replaces a per-callsite vocabulary of four
+    /// `&'static str` / `u8` literals; any future audit-trail metric
+    /// jointly labeled by [`Self::prefix`] (e.g.
+    /// `tatara_lisp_quote_family_total{prefix="'"}`) — the metric
+    /// label set IS [`Self::ALL`] mapped through [`Self::prefix`];
+    /// any future structural rewriter (typed analogue of MLIR's
+    /// `op.walk<QuoteFormOp>()`) that wants to sweep over every
+    /// quote-family wrapper in a typed sequence.
+    pub const ALL: [Self; 4] = [
+        Self::Quote,
+        Self::Quasiquote,
+        Self::Unquote,
+        Self::UnquoteSplice,
+    ];
+
     /// Canonical `&'static str` prefix that paired with the variant
     /// renders the homoiconic form — `"'"` for [`Self::Quote`],
     /// `` "`" `` for [`Self::Quasiquote`], `","` for [`Self::Unquote`],
@@ -1399,6 +1450,101 @@ impl QuoteForm {
         }
     }
 }
+
+impl fmt::Display for QuoteForm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.prefix())
+    }
+}
+
+/// Decode a canonical [`QuoteForm`] prefix back into the typed variant —
+/// `Ok(form)` when the input matches one of the four canonical
+/// punctuation literals exactly (`"'"` for [`QuoteForm::Quote`],
+/// `` "`" `` for [`QuoteForm::Quasiquote`], `","` for
+/// [`QuoteForm::Unquote`], `",@"` for [`QuoteForm::UnquoteSplice`] —
+/// byte-equal, case-irrelevant for punctuation), and
+/// [`Err(UnknownQuoteForm)`] for every other string (an empty input,
+/// a typo `"''"` / `",,"` / `",@@"`, a label from the
+/// [`crate::error::SexpShape`] vocabulary the punctuation axis is
+/// structurally outside of — `"quote"` / `"quasiquote"` / `"unquote"`
+/// / `"unquote-splice"` are the [`SexpShape`] projections of the SAME
+/// closed set on a DIFFERENT axis and rightly reject here, kept
+/// distinct by design, AND the [`Self::iac_forge_tag`] projections
+/// `"unquote-splicing"` that key the iac-forge canonical-form axis on
+/// yet another distinct vocabulary).
+///
+/// Round-trip invariant pinned by
+/// `quote_form_prefix_round_trips_through_from_str`: for every variant
+/// `f` in [`QuoteForm::ALL`], `f.prefix().parse() == Ok(f)`. The decode
+/// is a linear sweep over [`QuoteForm::ALL`] keyed on
+/// [`QuoteForm::prefix`] so the canonical literals live at ONE site
+/// (the `prefix` arms) rather than at TWO sites (`prefix` + a
+/// per-variant `from_str` arm) — adding a fifth variant extends only
+/// [`QuoteForm::ALL`] + [`QuoteForm::prefix`], NOT a third per-variant
+/// literal site. Same shape every sibling closed-set `FromStr` in this
+/// workspace uses ([`crate::error::SexpShape::FromStr`],
+/// [`AtomKind::FromStr`], [`crate::error::UnquoteForm::FromStr`],
+/// `RequestorKind::from_str`, `ReceiptKind::from_str`,
+/// `AllocationPhase::from_str`, `ConditionKind::from_str`,
+/// `ProcessPhase::from_str`, …).
+///
+/// Open-by-design callers that want to drop the typed-error face of
+/// the decode and reach for `Option<QuoteForm>` compose
+/// `prefix.parse().ok()` exactly as the `tatara-process` siblings'
+/// `known_kind()`-shaped projections do.
+///
+/// Cross-axis relationship to [`crate::error::SexpShape::FromStr`] AND
+/// [`crate::error::UnquoteForm::FromStr`]: all three closed sets
+/// project from a shared subset of the substrate's `Sexp` algebra on
+/// DISTINCT vocabularies — [`SexpShape`] decodes the
+/// `"quote"`/`"quasiquote"`/`"unquote"`/`"unquote-splice"`
+/// structural-identity labels (what the operator wrote at the
+/// macro-template surface, named as a reader-shape identity),
+/// [`UnquoteForm`] decodes the 2-of-4 subset of punctuation markers
+/// `","`/`",@"` (the template-substitution subset), and [`QuoteForm`]
+/// decodes the FULL 4-of-4 punctuation markers
+/// `"'"`/`` "`" ``/`","`/`",@"` (every homoiconic prefix the reader
+/// recognizes). Containment relationship: every successful
+/// [`UnquoteForm::from_str`] input is ALSO a successful
+/// [`QuoteForm::from_str`] input AND vice versa for the matching
+/// 2-of-4 subset projected through [`Self::as_unquote_form`]. Pinned
+/// by `quote_form_from_str_extends_unquote_form_from_str_on_the_2_of_4_subset`.
+/// A regression that conflates the structural-label and the
+/// punctuation-marker axes (e.g. `"quote".parse::<QuoteForm>()`
+/// silently succeeding by mistaking a [`SexpShape`] label for a
+/// homoiconic-prefix literal) would silently bifurcate the
+/// substrate's diagnostic surface. Pinned by
+/// `quote_form_from_str_rejects_sexp_shape_labels_on_homoiconic_prefix_axis`.
+impl std::str::FromStr for QuoteForm {
+    type Err = UnknownQuoteForm;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        for form in Self::ALL {
+            if s == form.prefix() {
+                return Ok(form);
+            }
+        }
+        Err(UnknownQuoteForm(s.to_owned()))
+    }
+}
+
+/// Typed parse failure for [`QuoteForm`]'s [`std::str::FromStr`] —
+/// carries the offending input verbatim so an operator-facing
+/// diagnostic surfaces the bad value, not a normalized form.
+/// Symmetric to every sibling `Unknown*` error in the workspace
+/// ([`crate::error::UnknownSexpShape`],
+/// [`crate::error::UnknownUnquoteForm`], [`UnknownAtomKind`],
+/// `tatara_process::allocation::UnknownRequestorKind`,
+/// `tatara_process::receipt::UnknownReceiptKind`,
+/// `tatara_process::phase::UnknownPhase`,
+/// `tatara_process::boundary::UnknownConditionKind`,
+/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
+/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
+/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
+/// diagnostics that hand the offending input back unchanged to the
+/// human.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("unknown quote form: {0}")]
+pub struct UnknownQuoteForm(pub String);
 
 /// Iterate over the argument tails of every form in `forms` whose call head
 /// matches `keyword` — the *slice-side* sibling of [`Sexp::as_call_to`].
@@ -3133,6 +3279,186 @@ mod tests {
             assert_eq!(
                 projected.1, &inner_body,
                 "wrap→as_quote_form drifted at inner body for variant {qf:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_all_is_unique_and_complete() {
+        // CLOSED-SET TRUTH-TABLE: pin that `QuoteForm::ALL` carries
+        // exactly the four reachable quote-family wrappers — no duplicates,
+        // byte-equal coverage of `{Quote, Quasiquote, Unquote, UnquoteSplice}`.
+        // The `[Self; 4]` array-literal arity already binds the count at
+        // compile time; this test pins the *identity* of each slot so a
+        // future re-ordering refactor (e.g. swapping `Unquote` and
+        // `UnquoteSplice` positions) that leaves the cardinality intact
+        // still fails loudly. Sibling discipline to
+        // `unquote_form_all_is_unique_and_complete` (the 2-of-4 subset
+        // sibling) and `atom_kind_all_is_unique_and_complete` (the peer
+        // atomic-payload axis).
+        assert_eq!(QuoteForm::ALL.len(), 4);
+        let mut sorted: Vec<&str> = QuoteForm::ALL.iter().map(|qf| qf.prefix()).collect();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "QuoteForm::ALL must not contain duplicates"
+        );
+        assert_eq!(
+            sorted,
+            vec!["'", ",", ",@", "`"],
+            "QuoteForm::ALL must cover every reachable homoiconic prefix-wrapper"
+        );
+    }
+
+    #[test]
+    fn quote_form_display_matches_prefix_for_every_variant() {
+        // DISPLAY-EQUALS-PREFIX CONTRACT: pin that
+        // `<QuoteForm as fmt::Display>::fmt` projects through
+        // `QuoteForm::prefix` byte-for-byte for every variant in
+        // `QuoteForm::ALL`. The Display impl is the canonical rendering
+        // surface a future diagnostic annotation (`#[error("... {prefix}")]`
+        // shape) threads through; pinning the equality here means a
+        // regression that drifts EITHER the Display arm OR the `prefix`
+        // arm independently surfaces at this test rather than silently
+        // bifurcating the operator-facing rendered marker. Sibling
+        // discipline to `unquote_form_display_renders_canonical_marker_
+        // for_each_variant` (the 2-of-4 subset sibling) and
+        // `atom_kind_display_matches_label_for_every_variant` (the peer
+        // atomic-payload axis).
+        for qf in QuoteForm::ALL {
+            assert_eq!(
+                qf.to_string(),
+                qf.prefix(),
+                "Display rendering for {qf:?} diverged from prefix() projection"
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_prefix_round_trips_through_from_str() {
+        // BIDIRECTIONAL ROUND-TRIP: pin the structural identity
+        // `qf.prefix().parse() == Ok(qf)` for every variant in
+        // `QuoteForm::ALL`. This is the canonical law binding the
+        // marker→string projection (`prefix`) to its string→marker dual
+        // (`FromStr`). A regression that drifts EITHER side — `prefix`
+        // routing `Quote` to `` "`" ``, OR `FromStr` decoding `"'"` to
+        // `Quasiquote` — surfaces as a round-trip mismatch here. Sweep
+        // all four variants so the round-trip stays load-bearing across
+        // the closed set. Same posture as the
+        // `unquote_form_marker_round_trips_through_from_str` sibling on
+        // the 2-of-4 template-substitution subset axis and
+        // `atom_kind_label_round_trips_through_from_str` on the peer
+        // atomic-payload axis.
+        for qf in QuoteForm::ALL {
+            let prefix = qf.prefix();
+            let decoded: QuoteForm = prefix
+                .parse()
+                .expect("canonical prefix must decode through FromStr");
+            assert_eq!(
+                decoded, qf,
+                "FromStr ↔ prefix round-trip drifted for variant {qf:?} (prefix {prefix:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_quote_form_carries_offending_input_verbatim() {
+        // TYPED PARSE-FAILURE CONTRACT: pin the exact rendered shape of
+        // `UnknownQuoteForm`'s `#[error(...)]` annotation AND the
+        // verbatim `.0` field projection — no normalization, no case-
+        // folding, no whitespace trimming. The error is part of the
+        // substrate-wide `Unknown*` parse-rejection family
+        // (`UnknownSexpShape`, `UnknownAtomKind`, `UnknownUnquoteForm`,
+        // `UnknownRequestorKind`, `UnknownReceiptKind`, `UnknownPhase`,
+        // `UnknownConditionKind`, `UnknownTeardownPolicy`, …) and the
+        // joint rendered shape (`"unknown <thing>: {0}"`) is the
+        // operator-facing diagnostic idiom every member preserves. A
+        // regression that case-folds, trims, or strips the offending
+        // input would silently rewrite an operator's literal value at
+        // the diagnostic boundary — fails loudly here.
+        let offending = "not-a-quote-prefix";
+        let err: UnknownQuoteForm = offending
+            .parse::<QuoteForm>()
+            .expect_err("non-canonical input must reject through FromStr");
+        assert_eq!(
+            err.0, offending,
+            "offending input was not preserved verbatim"
+        );
+        assert_eq!(
+            err.to_string(),
+            "unknown quote form: not-a-quote-prefix",
+            "Display rendering diverged from the substrate-wide Unknown* idiom"
+        );
+    }
+
+    #[test]
+    fn quote_form_from_str_rejects_sexp_shape_labels_on_homoiconic_prefix_axis() {
+        // CROSS-AXIS DISJOINTNESS: pin that `QuoteForm::FromStr` decodes
+        // the homoiconic punctuation markers `'` / `` ` `` / `,` / `,@`
+        // but rejects the `SexpShape` structural-identity vocabulary
+        // (`"quote"` / `"quasiquote"` / `"unquote"` / `"unquote-splice"`)
+        // AND the `iac_forge_tag` cross-crate canonical-form vocabulary
+        // (`"quote"` / `"quasiquote"` / `"unquote"` / `"unquote-splicing"`).
+        // The three closed sets project the SAME four `Sexp::*` quote-
+        // family constructors on DISTINCT axes — a regression that
+        // conflated them would let `"quote".parse::<QuoteForm>()` succeed
+        // (silently bifurcating the diagnostic surface) or
+        // `"'".parse::<SexpShape>()` succeed (silently colliding the
+        // punctuation and structural-identity vocabularies). Sibling
+        // discipline to `unquote_form_from_str_rejects_sexp_shape_labels_
+        // on_template_marker_axis` (the 2-of-4 subset's matching
+        // cross-axis pin).
+        use crate::error::SexpShape;
+        for shape in [
+            SexpShape::Quote,
+            SexpShape::Quasiquote,
+            SexpShape::Unquote,
+            SexpShape::UnquoteSplice,
+        ] {
+            let label = shape.label();
+            assert!(
+                label.parse::<QuoteForm>().is_err(),
+                "SexpShape label {label:?} unexpectedly decoded through QuoteForm::FromStr — cross-axis vocabulary collision"
+            );
+        }
+        for qf in QuoteForm::ALL {
+            let tag = qf.iac_forge_tag();
+            assert!(
+                tag.parse::<QuoteForm>().is_err(),
+                "iac_forge_tag {tag:?} unexpectedly decoded through QuoteForm::FromStr — cross-axis vocabulary collision"
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_from_str_extends_unquote_form_from_str_on_the_2_of_4_subset() {
+        // SUBSET-CONTAINMENT CONTRACT: pin that every successful
+        // `UnquoteForm::FromStr` input is ALSO a successful
+        // `QuoteForm::FromStr` input, AND the resulting variants project
+        // to each other through `QuoteForm::as_unquote_form` (the 2-of-4
+        // subset gate). This binds the two homoiconic-prefix axes
+        // (`UnquoteForm`'s 2-of-2 template-substitution subset and
+        // `QuoteForm`'s full 4-of-4 quote-family) at the FromStr
+        // boundary: a regression that drifts EITHER FromStr's vocabulary
+        // from the other (e.g. `UnquoteForm::FromStr` adding a spelling
+        // `","` rejects in `QuoteForm::FromStr` would surface) fails
+        // loudly here. Composition law: for every `uf` in
+        // `UnquoteForm::ALL`, `uf.marker().parse::<QuoteForm>()` is
+        // `Ok(qf)` where `qf.as_unquote_form() == Some(uf)`.
+        use crate::error::UnquoteForm;
+        for uf in UnquoteForm::ALL {
+            let marker = uf.marker();
+            let qf: QuoteForm = marker.parse().unwrap_or_else(|_| {
+                panic!(
+                    "UnquoteForm marker {marker:?} for {uf:?} did not decode through QuoteForm::FromStr — 2-of-4 subset containment violated"
+                )
+            });
+            assert_eq!(
+                qf.as_unquote_form(),
+                Some(uf),
+                "QuoteForm decoded from {marker:?} did not project back to UnquoteForm::{uf:?} via as_unquote_form"
             );
         }
     }

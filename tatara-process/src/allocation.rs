@@ -87,7 +87,16 @@ pub struct AllocationSpec {
 #[serde(rename_all = "camelCase")]
 pub struct Requestor {
     /// Discriminator: `"github-pr"`, `"manual"`, `"ci-run"`,
-    /// `"scheduled"`, …
+    /// `"scheduled"`, … The wire shape is open by design — operators
+    /// may register their own kinds and the [`crate::pool::PoolSelector`]
+    /// matches on raw string equality. The substrate's own emitters
+    /// stamp one of the four canonical kebab-case kinds enumerated by
+    /// [`RequestorKind::ALL`]; [`Requestor::known_kind`] projects the
+    /// open wire field through that closed-set view at ONE site so
+    /// future kind-keyed consumers (pool dashboards, completion lists,
+    /// audit-trail classifiers) sweep the typed variants without
+    /// re-implementing `match self.kind.as_str()` arm-by-arm. Sibling
+    /// shape to [`crate::receipt::ReceiptEnvelope::known_kind`].
     pub kind: String,
 
     /// Optional repo identifier (e.g., `"pleme-io/akeyless-deployment"`).
@@ -117,6 +126,191 @@ pub struct Requestor {
     /// Free-form actor — username, CI runner ID, etc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor: Option<String>,
+}
+
+impl Requestor {
+    /// Decode [`Self::kind`] into the typed [`RequestorKind`] variant
+    /// when the wire string matches one of the four substrate-emitted
+    /// canonical kebab-case kinds; `None` when the kind is an
+    /// operator-registered open string (the schema is open by design —
+    /// every allocation remains a valid allocation, but only typed
+    /// kinds participate in closed-set dispatch). The (open `String`,
+    /// closed-typed view) split lets future kind-keyed consumers
+    /// (pool-selector classifiers, dashboard completion, audit-trail
+    /// classifiers) sweep the typed variants without touching the
+    /// open-by-design wire shape. Lifted as the canonical decode site
+    /// so no consumer re-implements the `match self.kind.as_str()` arm-
+    /// by-arm — the closed-set sweep happens through
+    /// [`RequestorKind::from_str`] at ONE site. Sibling shape to
+    /// [`crate::receipt::ReceiptEnvelope::known_kind`].
+    #[must_use]
+    pub fn known_kind(&self) -> Option<RequestorKind> {
+        self.kind.parse().ok()
+    }
+}
+
+/// Closed-set view over the substrate-emitted canonical
+/// [`Requestor::kind`] wire strings — the four kebab-case
+/// discriminators every pleme-io requestor stamps onto an
+/// [`EphemeralAllocation`]: `github-pr` (the [`tatara_github_watcher`-
+/// authored](../../tatara-github-watcher/src/allocation_factory.rs)
+/// PR-driven path), `manual` (operator-authored via `feira allocation
+/// request …`), `ci-run` (non-PR CI driver), and `scheduled` (a
+/// cron-style emitter). The wire field stays `pub kind: String` on
+/// [`Requestor`] so operators can register their own kinds without a
+/// schema bump; this enum is the typed view future kind-keyed
+/// consumers (pool dashboards, LSP completion, audit-trail
+/// classifiers) sweep against.
+///
+/// Pre-lift the four canonical kinds existed only as `&'static str`
+/// literals at four scattered sites — the documentation header on
+/// [`Requestor::kind`], the [`crate::pool::PoolSelector::kinds`]
+/// docstring, the `tatara-github-watcher` allocation factory, and the
+/// per-test `kind: "github-pr".into()` fixtures. A rename of one
+/// canonical kind (e.g. `"github-pr"` → `"github-pull-request"`) had
+/// no compile-time link to the others, so the documentation drifted
+/// independently of the emitter, and the [`PoolSelector::matches`]
+/// kind-filter silently kept matching the old spelling forever. Post-
+/// lift the (canonical-name, typed-variant) pairing binds at ONE site
+/// ([`Self::as_str`]); the `From<RequestorKind> for String` bridge
+/// lets emitters compose `Requestor { kind: RequestorKind::GithubPr.into(), … }`
+/// so the four canonical strings stop appearing as bare `&'static str`
+/// literals at author sites.
+///
+/// Adding a fifth kind (e.g. `Slack` → `"slack"`, `Webhook` →
+/// `"webhook"`) lands at one [`Self::ALL`] entry + one [`Self::as_str`]
+/// arm — exhaustively checked by the compiler (the `[Self; 4]` array
+/// literal forces the arity) AND by the per-variant truth-table tests
+/// below.
+///
+/// Sibling closed-set `ALL`-keyed lifts across the crate:
+/// [`crate::receipt::ReceiptKind::ALL`] (the four substrate-emitted
+/// receipt kinds — direct shape peer, same open-wire + closed-view
+/// split), [`AllocationPhase::ALL`], [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::signal::ProcessSignal::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`],
+/// [`crate::lifetime::TeardownPolicy::ALL`],
+/// [`crate::lifetime::LifetimeKind::ALL`],
+/// [`crate::intent::IntentKind::ALL`],
+/// [`crate::lifetime_clock::TerminateReasonKind::ALL`].
+///
+/// Theory anchor: THEORY.md §III — the typescape; the substrate's own
+/// requestor kinds become a TYPE rather than four `&'static str`
+/// literals at every author + docstring + fixture site. THEORY.md
+/// §V.1 — knowable platform; the closed-set view turns "which kinds
+/// does the substrate actually emit" from a grep job into a method
+/// the compiler enforces exhaustively at every dispatch site.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RequestorKind {
+    /// GitHub pull-request webhook — `tatara-github-watcher` stamps
+    /// this on every allocation built from a `PullRequestEvent`.
+    GithubPr,
+    /// Operator-authored allocation — `feira allocation request …`
+    /// and any hand-crafted CR.
+    Manual,
+    /// Non-PR CI driver — a pipeline run that wants an ephemeral env
+    /// without an associated pull request.
+    CiRun,
+    /// Cron-style scheduled emitter — periodic allocation creation
+    /// (e.g. nightly drift detection).
+    Scheduled,
+}
+
+impl RequestorKind {
+    /// The closed set of substrate-emitted requestor kinds — single
+    /// source of truth that drives the [`Self::from_str`] decode sweep
+    /// AND any future enumeration consumer (pool-selector classifiers,
+    /// dashboard completion, `tatara-check` kind enumeration). Adding
+    /// a fifth variant (e.g. `Slack` → `"slack"`) lands at one `ALL`
+    /// entry + one `as_str` arm — exhaustively checked by the compiler
+    /// (the `[Self; 4]` array literal forces the arity) AND by the
+    /// per-variant truth-table tests below.
+    pub const ALL: [Self; 4] = [Self::GithubPr, Self::Manual, Self::CiRun, Self::Scheduled];
+
+    /// Canonical kebab-case wire-format kind — the literal that lands
+    /// in [`Requestor::kind`] when this variant authors the request.
+    /// Pinned to four byte-exact strings the substrate has already
+    /// published (the `tatara-github-watcher` factory, the operator
+    /// fixtures in this file, the `PoolSelector.kinds` filter, the
+    /// CRD printcolumns) — renaming any one is a wire-format change,
+    /// not a typed-internal refactor, and the
+    /// `requestor_kind_canonical_names_pinned` truth-table test fails
+    /// first to keep the substrate honest. Used by [`fmt::Display`]
+    /// (single source of truth) and as the `String` projection that
+    /// `From<RequestorKind> for String` ([`Self::into`]) composes so
+    /// emitters can spell `Requestor { kind: RequestorKind::GithubPr.into(), … }`
+    /// without re-typing the canonical literal at every author site.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::GithubPr => "github-pr",
+            Self::Manual => "manual",
+            Self::CiRun => "ci-run",
+            Self::Scheduled => "scheduled",
+        }
+    }
+}
+
+impl fmt::Display for RequestorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Decode a [`Requestor::kind`] string into the typed variant —
+/// `Ok(kind)` when the string matches one of the four canonical
+/// kebab-case literals exactly (byte-equal, case-sensitive — the wire
+/// shape is pinned), `Err(UnknownRequestorKind)` for any other string
+/// (open operator-registered kinds, typos, future-version kinds).
+/// Round-trip invariant pinned by
+/// `requestor_kind_from_str_round_trips_canonical_names`:
+/// `k.as_str().parse() == Ok(k)` for every variant. Open-by-design
+/// callers prefer [`Requestor::known_kind`]'s `Option<RequestorKind>`
+/// shape, which collapses the typed `Err` into a `None` so open kinds
+/// stay open. Lifted onto a linear sweep over [`Self::ALL`] keyed on
+/// [`Self::as_str`] so the canonical literals live at ONE site (the
+/// `as_str` arms) rather than at TWO sites — adding a fifth kind
+/// extends only `ALL` + `as_str`, NOT a per-variant `from_str` arm.
+impl FromStr for RequestorKind {
+    type Err = UnknownRequestorKind;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for kind in Self::ALL {
+            if s == kind.as_str() {
+                return Ok(kind);
+            }
+        }
+        Err(UnknownRequestorKind(s.to_string()))
+    }
+}
+
+/// Typed parse failure for [`RequestorKind::from_str`] — carries the
+/// offending input verbatim so an operator-facing diagnostic surfaces
+/// the bad value, not a normalized form. Symmetric to every sibling
+/// `Unknown*` error in this crate (e.g. [`UnknownAllocationPhase`],
+/// [`crate::receipt::UnknownReceiptKind`],
+/// [`crate::phase::UnknownPhase`],
+/// [`crate::lifetime::UnknownTeardownPolicy`]).
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error("unknown requestor kind: {0}")]
+pub struct UnknownRequestorKind(pub String);
+
+impl From<RequestorKind> for String {
+    /// Composes [`RequestorKind::as_str`] into an owned `String` so
+    /// every `impl Into<String>` API surface (the `kind:` field
+    /// initializer on [`Requestor`] most notably) accepts the typed
+    /// variant transparently — the call site stays
+    /// `kind: RequestorKind::GithubPr.into()` and the typed → wire
+    /// bridge runs through ONE place. Sibling shape to
+    /// [`crate::receipt::ReceiptKind`]'s `From for String`.
+    fn from(k: RequestorKind) -> Self {
+        k.as_str().to_owned()
+    }
+}
+
+impl From<RequestorKind> for &'static str {
+    fn from(k: RequestorKind) -> Self {
+        k.as_str()
+    }
 }
 
 /// `EphemeralAllocation.status` — observed allocation state.
@@ -519,6 +713,170 @@ mod tests {
         assert_eq!(d, AllocationPhase::Pending);
         assert!(!d.is_terminal());
         assert!(d.needs_pool_routing());
+    }
+
+    // ── RequestorKind closed-set truth-table ─────────────────────────
+
+    /// `ALL` is the source of truth — pin its closure so a variant
+    /// added without an `ALL` entry fails here via the uniqueness
+    /// check before drifting `FromStr` or the sweep tests below. The
+    /// arity is asserted by the `[Self; 4]` array type itself.
+    #[test]
+    fn requestor_kind_all_enumerates_each_variant_exactly_once() {
+        use std::collections::HashSet;
+
+        let all = RequestorKind::ALL;
+        assert_eq!(all.len(), 4, "ALL arity must match the closed set");
+
+        let mut seen: HashSet<RequestorKind> = HashSet::new();
+        for k in all {
+            assert!(seen.insert(k), "duplicate variant in ALL: {k:?}");
+        }
+        for k in [
+            RequestorKind::GithubPr,
+            RequestorKind::Manual,
+            RequestorKind::CiRun,
+            RequestorKind::Scheduled,
+        ] {
+            assert!(all.contains(&k), "variant {k:?} unreachable through ALL");
+        }
+    }
+
+    /// CANONICAL-KEY CONTRACT: `as_str` is injective across the closed
+    /// set — two variants can't share a wire-format literal (which
+    /// would alias under Display + FromStr + the `kind:` filter on
+    /// `PoolSelector`).
+    #[test]
+    fn requestor_kind_as_str_unique_per_variant() {
+        use std::collections::HashSet;
+
+        let names: Vec<&'static str> = RequestorKind::ALL.iter().map(|k| k.as_str()).collect();
+        let unique: HashSet<&&'static str> = names.iter().collect();
+        assert_eq!(
+            unique.len(),
+            names.len(),
+            "non-injective as_str — Display would alias: {names:?}"
+        );
+    }
+
+    /// Byte-exact wire-format pin — renaming any of these is a wire-
+    /// format change (the `tatara-github-watcher` emitter, the CRD
+    /// printcolumns, the `PoolSelector.kinds` filter strings, the
+    /// per-test `kind: "…".into()` fixtures all depend on these
+    /// literals), not a typed-internal refactor.
+    #[test]
+    fn requestor_kind_canonical_names_pinned() {
+        assert_eq!(RequestorKind::GithubPr.as_str(), "github-pr");
+        assert_eq!(RequestorKind::Manual.as_str(), "manual");
+        assert_eq!(RequestorKind::CiRun.as_str(), "ci-run");
+        assert_eq!(RequestorKind::Scheduled.as_str(), "scheduled");
+    }
+
+    /// Every variant in `ALL` round-trips through `as_str` ↔
+    /// `FromStr`. Adding a variant without extending the canonical
+    /// projection fails here.
+    #[test]
+    fn requestor_kind_from_str_round_trips_canonical_names() {
+        for k in RequestorKind::ALL {
+            assert_eq!(k.as_str().parse::<RequestorKind>(), Ok(k));
+        }
+    }
+
+    /// `FromStr` rejects strings that aren't in the canonical
+    /// projection — empty / lowercased-mismatch / typo / unrelated —
+    /// and the error echoes the input verbatim so the operator-facing
+    /// diagnostic carries the offending value, not a normalized form.
+    /// The schema is open at the wire layer (operators MAY register
+    /// new kinds and `Requestor::known_kind` collapses them to
+    /// `None`), but the closed-set view is byte-exact.
+    #[test]
+    fn requestor_kind_from_str_rejects_open_kinds() {
+        for bad in [
+            "",
+            "github_pr",
+            "GithubPr",
+            "operator-custom-kind",
+            "ci_run",
+            "Scheduled",
+        ] {
+            let err = bad.parse::<RequestorKind>().unwrap_err();
+            assert_eq!(err, UnknownRequestorKind(bad.to_string()));
+        }
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future
+    /// callers reach for either projection without drift (Display is
+    /// what operator-facing diagnostics compose against).
+    #[test]
+    fn requestor_kind_display_delegates_to_as_str() {
+        for k in RequestorKind::ALL {
+            assert_eq!(format!("{k}"), k.as_str());
+        }
+    }
+
+    /// The `String` projection that `From<RequestorKind> for String`
+    /// ([`RequestorKind::into`]) composes is byte-equal to `as_str`.
+    /// This is the typed → wire bridge — emitters spell
+    /// `kind: RequestorKind::GithubPr.into()` and the canonical
+    /// literal is materialized at ONE place.
+    #[test]
+    fn requestor_kind_into_string_matches_as_str() {
+        for k in RequestorKind::ALL {
+            let s: String = k.into();
+            assert_eq!(s, k.as_str());
+        }
+    }
+
+    /// The typed → wire → typed round-trip: composing a `Requestor`
+    /// with `kind: RequestorKind::X.into()` produces an object whose
+    /// `known_kind()` decodes back to `X`. Pins the bridge invariant
+    /// at the `Requestor` boundary, not just at `RequestorKind`.
+    #[test]
+    fn known_kind_decodes_built_requestors() {
+        for k in RequestorKind::ALL {
+            let r = Requestor {
+                kind: k.into(),
+                repo: None,
+                branch: None,
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            };
+            assert_eq!(r.known_kind(), Some(k), "round-trip failed for {k:?}");
+        }
+    }
+
+    /// Open-by-design: a custom operator-registered kind still
+    /// stamps a valid `Requestor` (no schema rejection), it just
+    /// doesn't project through the closed-set typed view. Mirrors
+    /// `ReceiptEnvelope::known_kind`'s open-kind posture.
+    #[test]
+    fn known_kind_returns_none_for_open_kinds() {
+        let r = Requestor {
+            kind: "operator-custom-kind".into(),
+            repo: None,
+            branch: None,
+            pr_number: None,
+            sha: None,
+            pr_labels: vec![],
+            actor: None,
+        };
+        assert_eq!(r.known_kind(), None);
+    }
+
+    /// The four canonical literals match every previously-published
+    /// fixture / doc anchor in this crate — pinning the bridge to
+    /// existing call sites so any drift fails here before the next
+    /// release ships.
+    #[test]
+    fn requestor_kind_matches_existing_fixture_literals() {
+        // The `requestor_minimum_shape_round_trips` fixture above
+        // composes `kind: "github-pr".into()` verbatim.
+        assert_eq!(RequestorKind::GithubPr.as_str(), "github-pr");
+        // The `allocation_spec_omits_optional_fields` fixture below
+        // composes `kind: "manual".into()` verbatim.
+        assert_eq!(RequestorKind::Manual.as_str(), "manual");
     }
 
     #[test]

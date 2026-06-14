@@ -54,8 +54,9 @@ pub use diagnostic::{format_diagnostic, line_col, LineCol};
 pub use env::Env;
 pub use error::{
     CompilerSpecIoStage, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
-    OptionalParamMalformedReason, Result, SexpShape, TemplateInvariantKind, UnknownMacroDefHead,
-    UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
+    OptionalParamMalformedReason, Result, SexpShape, TemplateInvariantKind,
+    UnknownExpectedKwargShape, UnknownMacroDefHead, UnknownSexpShape, UnknownUnquoteForm,
+    UnquoteForm,
 };
 pub use macro_expand::{Expander, MacroDef, MacroParams, OptionalParam};
 pub use reader::read;

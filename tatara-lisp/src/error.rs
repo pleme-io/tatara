@@ -2428,6 +2428,56 @@ pub enum ExpectedKwargShape {
 }
 
 impl ExpectedKwargShape {
+    /// The closed set of seven reachable expected-kwarg shapes — single
+    /// source of truth that drives the [`Self::label`] / [`fmt::Display`]
+    /// projection AND the [`FromStr`] decode sweep keyed on
+    /// [`Self::label`]. Adding a hypothetical eighth variant (e.g.
+    /// `Float` once `extract_float` stops accepting integers, `Symbol`
+    /// if a future extractor accepts only `Sexp::Atom(Symbol)`, or a
+    /// parameterized `ListOf(Box<Self>)` for nested-typed-vec
+    /// extractors) lands at one [`Self::ALL`] entry + one [`Self::label`]
+    /// arm — exhaustively checked by the compiler (the `[Self; 7]`
+    /// array literal forces the arity) AND by the per-variant
+    /// truth-table tests below.
+    ///
+    /// Sibling closed-set lift to every other typed-shape enum the
+    /// substrate carries: this crate's own [`SexpShape::ALL`] (the
+    /// twelve reachable outer shapes the reader can produce — peer
+    /// axis on the same `Sexp` algebra, whose vocabulary overlaps
+    /// with this set on five of seven entries — `"keyword"`,
+    /// `"string"`, `"int"`, `"bool"`, `"list"` — and does NOT overlap
+    /// on two — `"number"` ⊎ `"list of strings"`; the overlap is
+    /// intentional and pinned by the cross-axis tests), and across
+    /// the workspace ([`MacroDefHead::ALL`], [`UnquoteForm::ALL`],
+    /// [`crate::ast::AtomKind::ALL`], [`crate::ast::QuoteForm::ALL`],
+    /// `ConditionKind::ALL`, `ProcessPhase::ALL`,
+    /// `ProcessSignal::ALL`, `ChannelKind::ALL`, `IntentKind::ALL`,
+    /// `LifetimeKind::ALL`, `RequestorKind::ALL`, `ReceiptKind::ALL`,
+    /// …) every one of which paired its typed projection with `ALL`
+    /// before this lift.
+    ///
+    /// Future consumers that compose against `ALL`: LSP / REPL
+    /// completion for the operator-facing rendered expected-shape
+    /// label (every `expected X, ...` substring in `LispError`'s
+    /// rendered diagnostics keys on this set's projection through
+    /// [`Self::label`]); `tatara-check` coverage assertions over
+    /// which expected-shape variants reach a `TypeMismatch.expected`
+    /// arm at all — the typed sweep replaces the per-call-site
+    /// vocabulary of seven `&'static str` literals; any future
+    /// audit-trail metric jointly labeled by [`Self::label`] (e.g.
+    /// `tatara_lisp_type_mismatch_total{expected="number"}`) — the
+    /// metric label set IS [`Self::ALL`] mapped through
+    /// [`Self::label`].
+    pub const ALL: [Self; 7] = [
+        Self::Keyword,
+        Self::String,
+        Self::Int,
+        Self::Number,
+        Self::Bool,
+        Self::List,
+        Self::ListOfStrings,
+    ];
+
     /// Project the typed `ExpectedKwargShape` to the canonical
     /// `&'static str` literal — feeds the `LispError::TypeMismatch`
     /// Display rendering via the `#[error(...)]` annotation. The
@@ -2435,15 +2485,20 @@ impl ExpectedKwargShape {
     /// project through this method into the `expected {expected}` slot
     /// of the `#[error(...)]` annotation without an allocation,
     /// parallel to how `MacroDefHead::keyword()`,
-    /// `UnquoteForm::marker()`, and `CompilerSpecIoStage::operation()`
-    /// / `label()` feed their respective `LispError::*` Display impls.
+    /// `UnquoteForm::marker()`, [`SexpShape::label`], and
+    /// `CompilerSpecIoStage::operation()` / `label()` feed their
+    /// respective `LispError::*` Display impls.
     ///
     /// The bidirectional contract is anchored by tests:
     /// `label_renders_canonical_string_for_every_variant` pins each
     /// variant's canonical literal so a typo in any arm fails-loudly,
-    /// and `display_matches_label_for_every_variant` pins
+    /// `display_matches_label_for_every_variant` pins
     /// Display-equals-label so the `#[error(...)]` annotation's
-    /// `{expected}` slot projects byte-for-byte through this method.
+    /// `{expected}` slot projects byte-for-byte through this method,
+    /// and `expected_kwarg_shape_label_round_trips_through_from_str`
+    /// pins the `label` ↔ [`FromStr`] round-trip for every variant in
+    /// [`Self::ALL`] so the typed surface and the rendered diagnostic
+    /// literal cannot drift.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
@@ -2463,6 +2518,72 @@ impl std::fmt::Display for ExpectedKwargShape {
         f.write_str(self.label())
     }
 }
+
+/// Decode a canonical [`ExpectedKwargShape`] label back into the typed
+/// variant — `Ok(shape)` when the input matches one of the seven
+/// canonical lowercase literals exactly (`"keyword"` / `"string"` /
+/// `"int"` / `"number"` / `"bool"` / `"list"` / `"list of strings"` —
+/// byte-equal, case-sensitive because the labels are the rendered
+/// diagnostic surface and any case drift would silently bifurcate the
+/// round-trip), and [`Err(UnknownExpectedKwargShape)`] for every other
+/// string (typos, non-canonical capitalizations, labels from the
+/// sibling [`SexpShape`] vocabulary whose seven non-overlapping
+/// entries — `"nil"` / `"symbol"` / `"float"` / `"quote"` /
+/// `"quasiquote"` / `"unquote"` / `"unquote-splice"` — name
+/// structural-Sexp identities the typed-entry kwarg gate cannot
+/// `expect`).
+///
+/// Round-trip invariant pinned by
+/// `expected_kwarg_shape_label_round_trips_through_from_str`: for
+/// every variant `s` in [`ExpectedKwargShape::ALL`], `s.label().parse()
+/// == Ok(s)`. The decode is a linear sweep over
+/// [`ExpectedKwargShape::ALL`] keyed on [`ExpectedKwargShape::label`]
+/// so the canonical literals live at ONE site (the `label` arms) rather
+/// than at TWO sites (`label` plus a per-variant `from_str` arm) —
+/// adding an eighth variant extends only [`ExpectedKwargShape::ALL`]
+/// and [`ExpectedKwargShape::label`], NOT a per-variant `from_str` arm.
+/// Same shape every sibling closed-set `FromStr` in this workspace uses
+/// (`SexpShape::from_str`, `UnquoteForm::from_str`,
+/// `MacroDefHead::from_str`, `AtomKind::from_str`,
+/// `QuoteForm::from_str`, `RequestorKind::from_str`,
+/// `ReceiptKind::from_str`, `AllocationPhase::from_str`,
+/// `ConditionKind::from_str`, `ProcessPhase::from_str`, …).
+///
+/// Open-by-design callers that want to drop the typed-error face of
+/// the decode and reach for `Option<ExpectedKwargShape>` compose
+/// `label.parse().ok()` exactly as the `tatara-process` siblings'
+/// `known_kind()`-shaped projections do.
+impl std::str::FromStr for ExpectedKwargShape {
+    type Err = UnknownExpectedKwargShape;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        for shape in Self::ALL {
+            if s == shape.label() {
+                return Ok(shape);
+            }
+        }
+        Err(UnknownExpectedKwargShape(s.to_owned()))
+    }
+}
+
+/// Typed parse failure for [`ExpectedKwargShape`]'s
+/// [`std::str::FromStr`] — carries the offending input verbatim so an
+/// operator-facing diagnostic surfaces the bad value, not a normalized
+/// form. Symmetric to every sibling `Unknown*` error in the workspace
+/// ([`UnknownSexpShape`], [`UnknownMacroDefHead`],
+/// [`UnknownUnquoteForm`], [`crate::ast::UnknownAtomKind`],
+/// [`crate::ast::UnknownQuoteForm`],
+/// `tatara_process::allocation::UnknownRequestorKind`,
+/// `tatara_process::receipt::UnknownReceiptKind`,
+/// `tatara_process::phase::UnknownPhase`,
+/// `tatara_process::boundary::UnknownConditionKind`,
+/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
+/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
+/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
+/// diagnostics that hand the offending input back unchanged to the
+/// human.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("unknown expected kwarg shape: {0}")]
+pub struct UnknownExpectedKwargShape(pub String);
 
 /// Closed-set identifier for the outermost shape of a `Sexp` — the twelve
 /// reachable shapes the reader can produce (`Nil` ⊎ `Symbol` ⊎ `Keyword` ⊎
@@ -2971,8 +3092,8 @@ mod tests {
         optional_param_malformed_suffix, paren_suffix, rest_param_missing_name_suffix,
         rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
         unknown_kwarg_suffix, ExpectedKwargShape, KwargPath, LispError, MacroDefHead,
-        OptionalParamMalformedReason, SexpShape, SexpWitness, UnknownMacroDefHead,
-        UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
+        OptionalParamMalformedReason, SexpShape, SexpWitness, UnknownExpectedKwargShape,
+        UnknownMacroDefHead, UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
     };
 
     #[test]
@@ -7591,6 +7712,155 @@ mod tests {
             }
             _ => panic!("both must be TypeMismatch"),
         }
+    }
+
+    #[test]
+    fn expected_kwarg_shape_all_is_unique_and_complete() {
+        // Closed-set posture: `ALL` enumerates every reachable variant
+        // EXACTLY ONCE — no duplicates, no omissions. The `[Self; 7]`
+        // array literal in the declaration forces the arity at compile
+        // time; this test catches the orthogonal failure modes — a
+        // future variant added at the type without being added to ALL
+        // (silently dropped from every consumer's sweep), or a typo
+        // that duplicates an entry (silently double-counted). Same
+        // truth-table pinning every sibling closed-set lift in the
+        // workspace uses (SexpShape::ALL, MacroDefHead::ALL,
+        // UnquoteForm::ALL, RequestorKind::ALL, ReceiptKind::ALL,
+        // ConditionKind::ALL, ProcessPhase::ALL, ChannelKind::ALL, …).
+        assert_eq!(ExpectedKwargShape::ALL.len(), 7);
+        let mut sorted: Vec<&str> = ExpectedKwargShape::ALL.iter().map(|s| s.label()).collect();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "ExpectedKwargShape::ALL must not contain duplicates"
+        );
+        assert_eq!(
+            sorted,
+            vec![
+                "bool",
+                "int",
+                "keyword",
+                "list",
+                "list of strings",
+                "number",
+                "string",
+            ],
+            "ExpectedKwargShape::ALL must cover every reachable expected-shape label"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_label_round_trips_through_from_str() {
+        // Bidirectional `label` ↔ `FromStr` contract: for every
+        // variant in ALL, `shape.label().parse() == Ok(shape)`. A
+        // regression that drifts the (variant, literal) pairing at
+        // ONE arm of `label` (typo, capitalization drift) OR at the
+        // `FromStr` decode body (off-by-one, missing variant in the
+        // sweep) fails-loudly here. The canonical-literal site is
+        // singular (`label`) so the round-trip is the only way the
+        // typed surface and the rendered diagnostic literal can drift
+        // apart — pinning it here means they cannot. Mirror of
+        // `sexp_shape_label_round_trips_through_from_str` and every
+        // sibling closed-set round-trip in the workspace.
+        for shape in ExpectedKwargShape::ALL {
+            let parsed: ExpectedKwargShape = shape
+                .label()
+                .parse()
+                .expect("every ALL variant's label must round-trip through FromStr");
+            assert_eq!(
+                parsed,
+                shape,
+                "FromStr({}) must round-trip to the same variant",
+                shape.label()
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_expected_kwarg_shape_carries_offending_input_verbatim() {
+        // Operator-facing diagnostic contract: the offending input
+        // lands in the typed error verbatim — no normalization, no
+        // case-folding, no truncation. Pin the exact `#[error(...)]`
+        // rendering AND the typed `.0` field projection so a future
+        // refactor that normalizes (e.g. `.to_lowercase()`) before
+        // building the error or that drops the input fails-loudly
+        // here. Symmetric to every sibling `Unknown*` carrier in the
+        // workspace.
+        let err: UnknownExpectedKwargShape = "Number".parse::<ExpectedKwargShape>().expect_err(
+            "capitalized `Number` must NOT decode — labels are byte-equal case-sensitive",
+        );
+        assert_eq!(err.0, "Number");
+        assert_eq!(format!("{err}"), "unknown expected kwarg shape: Number");
+
+        let err: UnknownExpectedKwargShape = "float"
+            .parse::<ExpectedKwargShape>()
+            .expect_err("`float` is SexpShape's vocabulary, not ExpectedKwargShape's");
+        assert_eq!(err.0, "float");
+        assert_eq!(format!("{err}"), "unknown expected kwarg shape: float");
+
+        let err: UnknownExpectedKwargShape = ""
+            .parse::<ExpectedKwargShape>()
+            .expect_err("empty input must NOT decode to an ExpectedKwargShape");
+        assert_eq!(err.0, "");
+        assert_eq!(format!("{err}"), "unknown expected kwarg shape: ");
+    }
+
+    #[test]
+    fn expected_kwarg_shape_from_str_accepts_only_canonical_labels() {
+        // Cross-axis guard: `SexpShape::label()`'s vocabulary overlaps
+        // with `ExpectedKwargShape::label()` on five of seven entries
+        // (`keyword` / `string` / `int` / `bool` / `list`) and DOES
+        // NOT overlap on the structural-only `nil` / `symbol` /
+        // `float` / `quote` / `quasiquote` / `unquote` / `unquote-splice`
+        // entries — those name Sexp identities the typed-entry kwarg
+        // gate cannot `expect`. The overlap is intentional — both
+        // axes are projections of the same `Sexp` algebra at typed-
+        // entry gates — but the non-overlap is the load-bearing part:
+        // a `FromStr` that silently accepts `"float"` as an
+        // `ExpectedKwargShape` would corrupt the typed identity. Pin
+        // BOTH directions: the overlap decodes successfully (and to
+        // the matching `ExpectedKwargShape` variant), the non-overlap
+        // rejects. Symmetric to `sexp_shape_from_str_accepts_only_
+        // canonical_labels` from the other axis.
+        assert_eq!(
+            "keyword".parse::<ExpectedKwargShape>().unwrap(),
+            ExpectedKwargShape::Keyword
+        );
+        assert_eq!(
+            "string".parse::<ExpectedKwargShape>().unwrap(),
+            ExpectedKwargShape::String
+        );
+        assert_eq!(
+            "int".parse::<ExpectedKwargShape>().unwrap(),
+            ExpectedKwargShape::Int
+        );
+        assert_eq!(
+            "bool".parse::<ExpectedKwargShape>().unwrap(),
+            ExpectedKwargShape::Bool
+        );
+        assert_eq!(
+            "list".parse::<ExpectedKwargShape>().unwrap(),
+            ExpectedKwargShape::List
+        );
+        // Non-overlap: SexpShape-only labels reject through FromStr.
+        for sexp_only in ["nil", "symbol", "float", "quote", "quasiquote", "unquote"] {
+            sexp_only.parse::<ExpectedKwargShape>().unwrap_err();
+        }
+        // ExpectedKwargShape-only labels: `number` and `list of strings`
+        // decode here but reject through SexpShape::FromStr — the
+        // non-overlap axis is symmetric.
+        assert_eq!(
+            "number".parse::<ExpectedKwargShape>().unwrap(),
+            ExpectedKwargShape::Number
+        );
+        assert_eq!(
+            "list of strings".parse::<ExpectedKwargShape>().unwrap(),
+            ExpectedKwargShape::ListOfStrings
+        );
+        "number".parse::<SexpShape>().unwrap_err();
+        "list of strings".parse::<SexpShape>().unwrap_err();
     }
 
     // ── SexpShape closed-set lift ───────────────────────────────────────

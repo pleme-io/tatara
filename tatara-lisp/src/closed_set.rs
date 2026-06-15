@@ -150,6 +150,18 @@
 /// (e.g. [`crate::error::CompilerSpecIoStage`]'s compound
 /// `"{operation}: {label}"` key) can suppress the generated
 /// `FromStr` via `#[closed_set(no_from_str)]`.
+///
+/// Implementors that want the carrier ITSELF generated drop the
+/// hand-rolled `pub struct UnknownX(pub String)` block and add
+/// `#[closed_set(generate_unknown)]` — the derive then emits the
+/// carrier with `Debug + Clone + PartialEq + Eq + thiserror::Error`
+/// derives and the substrate-wide
+/// `#[error("unknown <spaced-lowercase enum name>: {0}")]`
+/// annotation (`ChannelKind` → "unknown channel kind: {0}",
+/// `ReplacementPolicy` → "unknown replacement policy: {0}"). For
+/// irregular labels (`MacroDefHead` → "macro definition head",
+/// `MustReachPhase` → "must-reach phase") pin the operator-facing
+/// wording with `#[closed_set(generate_unknown = "...")]`.
 pub trait ClosedSet: Sized + Copy + 'static {
     /// The closed set — every variant the enum carries, in
     /// declaration order. Implementors typically delegate to an

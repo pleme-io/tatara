@@ -75,6 +75,24 @@ use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, Ident, LitStr
 ///   `FromStr` shape (e.g. [`tatara_lisp::error::CompilerSpecIoStage`]'s
 ///   compound `"{operation}: {label}"` key, which keys on a projection
 ///   PAIR rather than a single label).
+/// - `#[closed_set(generate_unknown)]` /
+///   `#[closed_set(generate_unknown = "<label>")]` — emit the
+///   `pub struct Unknown{EnumName}(pub String)` parse-rejection
+///   carrier alongside the trait impl. The carrier derives
+///   `Debug + Clone + PartialEq + Eq + thiserror::Error` and renders
+///   `#[error("unknown <label>: {0}")]`. The bare form derives
+///   `<label>` by spacing the PascalCase enum name into lowercase
+///   words (`ChannelKind` → "channel kind", `ReplacementPolicy` →
+///   "replacement policy"); the `= "..."` form pins an explicit label
+///   for irregular cases (`MacroDefHead` wants "macro definition
+///   head" rather than the auto-derived "macro def head";
+///   `MustReachPhase` wants "must-reach phase"). The 3-line
+///   `pub struct Unknown{EnumName}(pub String)` declaration (plus its
+///   thiserror derives + `#[error(...)]` annotation) is the
+///   substrate-wide closed-set-enum idiom's last hand-rolled piece;
+///   this attribute collapses it onto the derive so a 40+ enum
+///   cohort emits the carrier through ONE generative shape rather
+///   than re-deriving the boilerplate at each declaration site.
 ///
 /// ## Implementor requirements
 ///
@@ -84,7 +102,9 @@ use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, Ident, LitStr
 /// 2. A `fn projection(self) -> &'static str` method whose name matches
 ///    `via` (defaults to `label`).
 /// 3. A `pub struct UnknownX(pub String)` in the same module whose name
-///    matches `unknown` (defaults to `Unknown{EnumName}`).
+///    matches `unknown` (defaults to `Unknown{EnumName}`) — UNLESS
+///    `#[closed_set(generate_unknown)]` is set, in which case the
+///    derive emits the struct itself.
 ///
 /// The derive emits:
 ///
@@ -153,6 +173,15 @@ pub fn derive_closed_set(input: TokenStream) -> TokenStream {
         }
     };
 
+    let unknown_struct_decl = match &cfg.generate_unknown {
+        GenerateUnknown::Skip => TokenStream2::new(),
+        GenerateUnknown::Auto => {
+            let label = pascal_to_spaced_lowercase(&name.to_string());
+            emit_unknown_struct(&unknown_ident, &label)
+        }
+        GenerateUnknown::Explicit(label) => emit_unknown_struct(&unknown_ident, label),
+    };
+
     let expanded = quote! {
         impl ::tatara_lisp::ClosedSet for #name {
             const ALL: &'static [Self] = &Self::ALL;
@@ -168,21 +197,177 @@ pub fn derive_closed_set(input: TokenStream) -> TokenStream {
         }
 
         #from_str_impl
+
+        #unknown_struct_decl
     };
 
     expanded.into()
+}
+
+/// Emit the `pub struct UnknownX(pub String)` parse-rejection carrier
+/// for `#[closed_set(generate_unknown[ = "label"])]`. The shape is the
+/// substrate-wide closed-set-enum carrier idiom: `Debug + Clone +
+/// PartialEq + Eq + thiserror::Error` derives with an
+/// `#[error("unknown <label>: {0}")]` annotation that surfaces the
+/// offending input verbatim. Lifted into ONE helper so every
+/// generated carrier flows through ONE composition site — a
+/// regression that drifts the derive set or the message shape
+/// between two generated carriers is structurally impossible.
+fn emit_unknown_struct(unknown_ident: &Ident, label: &str) -> TokenStream2 {
+    let msg = format!("unknown {label}: {{0}}");
+    quote! {
+        #[derive(
+            ::core::fmt::Debug,
+            ::core::clone::Clone,
+            ::core::cmp::PartialEq,
+            ::core::cmp::Eq,
+            ::thiserror::Error,
+        )]
+        #[error(#msg)]
+        pub struct #unknown_ident(pub ::std::string::String);
+    }
+}
+
+/// Project a PascalCase identifier into the substrate-wide
+/// spaced-lowercase label `#[closed_set(generate_unknown)]` threads
+/// into the auto-derived `#[error("unknown <label>: {0}")]`
+/// annotation. Mirrors the workspace-wide hand-rolled convention
+/// across 40+ closed-set carriers (`ChannelKind` →
+/// "channel kind", `ReplacementPolicy` → "replacement policy",
+/// `CompilerSpecIoStage` → "compiler spec io stage").
+///
+/// A run of contiguous uppercase characters projects byte-for-byte to
+/// lowercase without inserting interior spaces; a space is emitted
+/// only at the lowercase→uppercase boundary. Irregular labels
+/// (`MacroDefHead` → "macro definition head" with "Def" expanded;
+/// `MustReachPhase` → "must-reach phase" with a hyphen) fall outside
+/// the projection's codomain and require the explicit
+/// `#[closed_set(generate_unknown = "...")]` override.
+fn pascal_to_spaced_lowercase(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 2);
+    let mut prev_was_lower = false;
+    for c in name.chars() {
+        if c.is_ascii_uppercase() {
+            if prev_was_lower {
+                out.push(' ');
+            }
+            out.push(c.to_ascii_lowercase());
+            prev_was_lower = false;
+        } else {
+            out.push(c);
+            prev_was_lower = c.is_ascii_lowercase();
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod pascal_to_spaced_lowercase_tests {
+    use super::pascal_to_spaced_lowercase;
+
+    #[test]
+    fn regular_two_word_names_split_at_the_word_boundary() {
+        // The bread-and-butter case across 30+ closed-set carriers —
+        // PascalCase with a single internal capital splits at the
+        // capital. The retrofit cohort
+        // (`ChannelKind`/`ArtifactKind`/`ReportFormat`/`ExportTrigger`)
+        // all live in this case so the auto-derived label matches
+        // the workspace-wide convention without an explicit override.
+        assert_eq!(pascal_to_spaced_lowercase("ChannelKind"), "channel kind");
+        assert_eq!(pascal_to_spaced_lowercase("ArtifactKind"), "artifact kind");
+        assert_eq!(pascal_to_spaced_lowercase("ReportFormat"), "report format");
+        assert_eq!(
+            pascal_to_spaced_lowercase("ExportTrigger"),
+            "export trigger",
+        );
+        assert_eq!(
+            pascal_to_spaced_lowercase("ReplacementPolicy"),
+            "replacement policy",
+        );
+    }
+
+    #[test]
+    fn three_word_names_split_at_every_word_boundary() {
+        // Closed-set names with three PascalCase tokens
+        // (`CompilerSpecIoStage`, `OptimizationDirection`,
+        // `ConvergencePointType`) split at every lowercase→uppercase
+        // boundary. The split is internal — the trailing PascalCase
+        // tokens stay as separate words rather than collapsing into
+        // the previous one.
+        assert_eq!(
+            pascal_to_spaced_lowercase("OptimizationDirection"),
+            "optimization direction",
+        );
+        assert_eq!(
+            pascal_to_spaced_lowercase("ConvergencePointType"),
+            "convergence point type",
+        );
+    }
+
+    #[test]
+    fn contiguous_uppercase_runs_collapse_to_lowercase_without_inner_spaces() {
+        // Acronyms run together rather than fan out per letter —
+        // `CompilerSpecIoStage` projects "compiler spec io stage"
+        // (the "Io" run stays as "io" rather than "i o"). Pinned by
+        // the substrate-wide hand-rolled labels:
+        // `error.rs`'s `UnknownCompilerSpecIoStage` carries the
+        // message "unknown compiler spec io stage: {0}" verbatim, and
+        // the auto-derive must match it bit-for-bit so a retrofit
+        // doesn't drift the operator-facing wording.
+        assert_eq!(
+            pascal_to_spaced_lowercase("CompilerSpecIoStage"),
+            "compiler spec io stage",
+        );
+    }
+
+    #[test]
+    fn single_word_names_stay_lowercase_with_no_spaces() {
+        // A single PascalCase token (no internal capital) projects
+        // to a single lowercase word — no leading space, no
+        // mid-word split. Covers degenerate-but-valid cases like a
+        // future `Signal` or `Kind` enum name.
+        assert_eq!(pascal_to_spaced_lowercase("Signal"), "signal");
+        assert_eq!(pascal_to_spaced_lowercase("Kind"), "kind");
+    }
+
+    #[test]
+    fn empty_input_projects_to_empty_string() {
+        // Empty-input contract — projecting `""` yields `""` rather
+        // than a leading space or a panic. Defensive case the
+        // attribute parser shouldn't reach (the derive runs on a
+        // named enum), but pinning it here keeps the helper's
+        // contract independent of the caller's discipline.
+        assert_eq!(pascal_to_spaced_lowercase(""), "");
+    }
 }
 
 struct ClosedSetCfg {
     via: String,
     unknown: String,
     no_from_str: bool,
+    generate_unknown: GenerateUnknown,
+}
+
+/// `#[closed_set(generate_unknown[ = "label"])]` parse outcome.
+///
+/// `Skip` keeps the existing convention (implementor hand-rolls the
+/// `pub struct UnknownX(pub String)` carrier alongside the enum).
+/// `Auto` emits the carrier with the spaced-lowercase projection of
+/// the enum name as the `#[error(...)]` label. `Explicit(label)` emits
+/// the carrier with an operator-pinned label that overrides the
+/// PascalCase split (for irregular cases like `MacroDefHead` →
+/// "macro definition head").
+enum GenerateUnknown {
+    Skip,
+    Auto,
+    Explicit(String),
 }
 
 fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<ClosedSetCfg> {
     let mut via: Option<String> = None;
     let mut unknown: Option<String> = None;
     let mut no_from_str = false;
+    let mut generate_unknown = GenerateUnknown::Skip;
     for attr in attrs {
         if !attr.path().is_ident("closed_set") {
             continue;
@@ -204,9 +389,26 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
             } else if meta.path.is_ident("no_from_str") {
                 no_from_str = true;
                 Ok(())
+            } else if meta.path.is_ident("generate_unknown") {
+                // Both bare `generate_unknown` (auto-derived label)
+                // and `generate_unknown = "explicit label"` (pinned
+                // label) sit on ONE attribute key — the parser
+                // dispatches on whether `meta.value()` succeeds so the
+                // attribute surface stays single-keyed (no
+                // `auto_label`/`label` bifurcation that would force
+                // the operator to think about which of two
+                // attributes is canonical).
+                generate_unknown = match meta.value() {
+                    Ok(value) => {
+                        let s: LitStr = value.parse()?;
+                        GenerateUnknown::Explicit(s.value())
+                    }
+                    Err(_) => GenerateUnknown::Auto,
+                };
+                Ok(())
             } else {
                 Err(meta.error(
-                    "unknown #[closed_set(...)] key — expected `via`, `unknown`, or `no_from_str`",
+                    "unknown #[closed_set(...)] key — expected `via`, `unknown`, `no_from_str`, or `generate_unknown`",
                 ))
             }
         })?;
@@ -215,6 +417,7 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
         via: via.unwrap_or_else(|| "label".to_string()),
         unknown: unknown.unwrap_or_else(|| format!("Unknown{name}")),
         no_from_str,
+        generate_unknown,
     })
 }
 

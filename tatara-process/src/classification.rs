@@ -2,7 +2,6 @@
 //! `From`/`Into` bridges to `tatara_core::domain::classification`.
 
 use std::fmt;
-use std::str::FromStr;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -43,8 +42,20 @@ pub struct Classification {
 /// convergent (N→1) — so future DAG composition / edge-cardinality
 /// validators dispatch on a typed projection rather than re-deriving
 /// from variant names.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    tatara_lisp::DeriveClosedSet,
+)]
 #[serde(rename_all = "PascalCase")]
+#[closed_set(via = "as_str", generate_unknown)]
 pub enum ConvergencePointType {
     /// 1 input → 1 output (linear conversion).
     Transform,
@@ -225,55 +236,27 @@ impl fmt::Display for ConvergencePointType {
     }
 }
 
-impl FromStr for ConvergencePointType {
-    type Err = UnknownConvergencePointType;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        <Self as tatara_lisp::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`ConvergencePointType`] into the substrate-wide
-/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
-/// collapses the linear-sweep for-loop from this enum's
-/// [`std::str::FromStr::from_str`] body into ONE place
-/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
-/// with every other `tatara-process` closed-set implementor
-/// ([`crate::phase::ProcessPhase`],
-/// [`crate::compliance::VerificationPhase`],
-/// [`crate::spec::MustReachPhase`],
-/// [`crate::boundary::ConditionKind`],
-/// [`crate::intent::WorkloadKind`],
-/// [`crate::lifetime::TeardownPolicy`],
-/// [`crate::signal::SighupStrategy`]). The trait method `label`
-/// delegates to the inherent [`ConvergencePointType::as_str`] — the
-/// inherent name (PascalCase `as_str`) stays the load-bearing wire-
-/// vocabulary projection that matches the serde rename + the CRD
-/// `enum:` enumeration + the operator-facing diagnostic verbatim,
-/// while the trait method gives generic consumers a STABLE name
-/// (`label`) across the 36+ closed-set implementors.
-impl tatara_lisp::ClosedSet for ConvergencePointType {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownConvergencePointType;
-    fn label(self) -> &'static str {
-        Self::as_str(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownConvergencePointType(s.to_owned())
-    }
-}
-
-/// Typed parse failure carrying the offending input verbatim so the
-/// operator-facing diagnostic surfaces the bad value, not a normalized
-/// form. Symmetric to [`UnknownDataClassification`],
-/// [`crate::pool::UnknownMemberState`], [`crate::pool::UnknownPoolPhase`],
-/// [`crate::pool::UnknownReplacementPolicy`],
-/// [`crate::lifetime::UnknownTeardownPolicy`],
-/// [`crate::boundary::UnknownConditionKind`],
-/// [`crate::phase::UnknownPhase`],
-/// [`crate::signal::UnknownSighupStrategy`].
-#[derive(Debug, thiserror::Error)]
-#[error("unknown convergence point type: {0}")]
-pub struct UnknownConvergencePointType(pub String);
+// `impl FromStr for ConvergencePointType` +
+// `impl tatara_lisp::ClosedSet for ConvergencePointType` +
+// `pub struct UnknownConvergencePointType(pub String)` are all generated
+// by `#[derive(tatara_lisp::DeriveClosedSet)]` +
+// `#[closed_set(via = "as_str", generate_unknown)]` on the enum
+// declaration above. `label` delegates to the inherent
+// `ConvergencePointType::as_str` — the inherent name (PascalCase
+// `as_str`) stays the load-bearing wire-vocabulary projection that
+// matches the serde `rename_all = "PascalCase"` output AND the CRD
+// `enum:` enumeration the Process schema stamps on
+// `spec.classification.pointType` verbatim, while generic
+// `T: ClosedSet` consumers reach the STABLE workspace-wide name
+// (`label`). The auto-derived carrier label "convergence point type"
+// matches the prior hand-rolled `#[error("unknown convergence point
+// type: {0}")]` annotation byte-for-byte. Symmetric to the other five
+// classification-axis closed-sets in this file
+// (`SubstrateType` / `HorizonKind` / `OptimizationDirection` /
+// `CalmClassification` / `DataClassification`) AND every other
+// `#[derive(DeriveClosedSet)]` implementor across the workspace
+// (`crate::pool::{ReplacementPolicy,MemberState,PoolPhase,ReturnPolicy}`,
+// `crate::export::{ArtifactKind,ReportFormat,ChannelKind,ExportTrigger}`).
 
 /// Edge cardinality of a [`ConvergencePointType`]'s input or output.
 ///
@@ -352,9 +335,21 @@ impl fmt::Display for Arity {
 /// what they observe) read a typed projection rather than
 /// re-deriving from variant names.
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    tatara_lisp::DeriveClosedSet,
 )]
 #[serde(rename_all = "PascalCase")]
+#[closed_set(via = "as_str", generate_unknown)]
 pub enum SubstrateType {
     Financial,
     Compute,
@@ -481,40 +476,15 @@ impl fmt::Display for SubstrateType {
     }
 }
 
-impl FromStr for SubstrateType {
-    type Err = UnknownSubstrateType;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        <Self as tatara_lisp::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`SubstrateType`] into the substrate-wide
-/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
-/// [`ConvergencePointType`] for the canonical retrofit narrative.
-impl tatara_lisp::ClosedSet for SubstrateType {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownSubstrateType;
-    fn label(self) -> &'static str {
-        Self::as_str(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownSubstrateType(s.to_owned())
-    }
-}
-
-/// Typed parse failure carrying the offending input verbatim so the
-/// operator-facing diagnostic surfaces the bad value, not a normalized
-/// form. Symmetric to [`UnknownConvergencePointType`],
-/// [`UnknownDataClassification`], [`crate::pool::UnknownMemberState`],
-/// [`crate::pool::UnknownPoolPhase`],
-/// [`crate::pool::UnknownReplacementPolicy`],
-/// [`crate::lifetime::UnknownTeardownPolicy`],
-/// [`crate::boundary::UnknownConditionKind`],
-/// [`crate::phase::UnknownPhase`],
-/// [`crate::signal::UnknownSighupStrategy`].
-#[derive(Debug, thiserror::Error)]
-#[error("unknown substrate type: {0}")]
-pub struct UnknownSubstrateType(pub String);
+// `impl FromStr for SubstrateType` +
+// `impl tatara_lisp::ClosedSet for SubstrateType` +
+// `pub struct UnknownSubstrateType(pub String)` are all generated by
+// `#[derive(tatara_lisp::DeriveClosedSet)]` +
+// `#[closed_set(via = "as_str", generate_unknown)]` on the enum
+// declaration above. The auto-derived carrier label "substrate type"
+// matches the prior hand-rolled `#[error("unknown substrate type:
+// {0}")]` annotation byte-for-byte. See the retrofit comment block on
+// [`ConvergencePointType`] for the canonical narrative.
 
 /// How long the point runs. Flattened struct-of-optionals so the OpenAPI
 /// schema carries a single `kind` discriminator without per-variant merge.
@@ -564,8 +534,21 @@ pub struct Horizon {
 /// `Some(_)` iff the kind requires them, so the implicit invariant
 /// the optionality encodes becomes a checkable per-kind predicate
 /// instead of operator folklore.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    Default,
+    tatara_lisp::DeriveClosedSet,
+)]
 #[serde(rename_all = "PascalCase")]
+#[closed_set(via = "as_str", generate_unknown)]
 pub enum HorizonKind {
     /// Has a fixed point — distance reaches 0 and terminates.
     #[default]
@@ -673,42 +656,15 @@ impl fmt::Display for HorizonKind {
     }
 }
 
-impl FromStr for HorizonKind {
-    type Err = UnknownHorizonKind;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        <Self as tatara_lisp::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`HorizonKind`] into the substrate-wide
-/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
-/// [`ConvergencePointType`] for the canonical retrofit narrative.
-impl tatara_lisp::ClosedSet for HorizonKind {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownHorizonKind;
-    fn label(self) -> &'static str {
-        Self::as_str(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownHorizonKind(s.to_owned())
-    }
-}
-
-/// Typed parse failure carrying the offending input verbatim so the
-/// operator-facing diagnostic surfaces the bad value, not a normalized
-/// form. Symmetric to [`UnknownConvergencePointType`],
-/// [`UnknownSubstrateType`], [`UnknownDataClassification`],
-/// [`UnknownCalmClassification`], [`UnknownOptimizationDirection`],
-/// [`crate::pool::UnknownMemberState`],
-/// [`crate::pool::UnknownPoolPhase`],
-/// [`crate::pool::UnknownReplacementPolicy`],
-/// [`crate::lifetime::UnknownTeardownPolicy`],
-/// [`crate::boundary::UnknownConditionKind`],
-/// [`crate::phase::UnknownPhase`],
-/// [`crate::signal::UnknownSighupStrategy`].
-#[derive(Debug, thiserror::Error)]
-#[error("unknown horizon kind: {0}")]
-pub struct UnknownHorizonKind(pub String);
+// `impl FromStr for HorizonKind` +
+// `impl tatara_lisp::ClosedSet for HorizonKind` +
+// `pub struct UnknownHorizonKind(pub String)` are all generated by
+// `#[derive(tatara_lisp::DeriveClosedSet)]` +
+// `#[closed_set(via = "as_str", generate_unknown)]` on the enum
+// declaration above. The auto-derived carrier label "horizon kind"
+// matches the prior hand-rolled `#[error("unknown horizon kind:
+// {0}")]` annotation byte-for-byte. See the retrofit comment block on
+// [`ConvergencePointType`] for the canonical narrative.
 
 impl Horizon {
     pub fn bounded() -> Self {
@@ -752,8 +708,21 @@ impl Horizon {
 /// one?" rather than re-deriving `<` vs `>` from the variant name
 /// at every consumer site (rate-window evaluators, breathe-band
 /// regression detectors, asymptotic-health probes).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    Default,
+    tatara_lisp::DeriveClosedSet,
+)]
 #[serde(rename_all = "PascalCase")]
+#[closed_set(via = "as_str", generate_unknown)]
 pub enum OptimizationDirection {
     /// Cost / latency / error rate — lower is better. The default for
     /// an under-specified `Asymptotic` horizon so an unannotated
@@ -855,42 +824,16 @@ impl fmt::Display for OptimizationDirection {
     }
 }
 
-impl FromStr for OptimizationDirection {
-    type Err = UnknownOptimizationDirection;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        <Self as tatara_lisp::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`OptimizationDirection`] into the substrate-wide
-/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
-/// [`ConvergencePointType`] for the canonical retrofit narrative.
-impl tatara_lisp::ClosedSet for OptimizationDirection {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownOptimizationDirection;
-    fn label(self) -> &'static str {
-        Self::as_str(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownOptimizationDirection(s.to_owned())
-    }
-}
-
-/// Typed parse failure carrying the offending input verbatim so the
-/// operator-facing diagnostic surfaces the bad value, not a normalized
-/// form. Symmetric to [`UnknownConvergencePointType`],
-/// [`UnknownSubstrateType`], [`UnknownDataClassification`],
-/// [`UnknownCalmClassification`],
-/// [`crate::pool::UnknownMemberState`],
-/// [`crate::pool::UnknownPoolPhase`],
-/// [`crate::pool::UnknownReplacementPolicy`],
-/// [`crate::lifetime::UnknownTeardownPolicy`],
-/// [`crate::boundary::UnknownConditionKind`],
-/// [`crate::phase::UnknownPhase`],
-/// [`crate::signal::UnknownSighupStrategy`].
-#[derive(Debug, thiserror::Error)]
-#[error("unknown optimization direction: {0}")]
-pub struct UnknownOptimizationDirection(pub String);
+// `impl FromStr for OptimizationDirection` +
+// `impl tatara_lisp::ClosedSet for OptimizationDirection` +
+// `pub struct UnknownOptimizationDirection(pub String)` are all
+// generated by `#[derive(tatara_lisp::DeriveClosedSet)]` +
+// `#[closed_set(via = "as_str", generate_unknown)]` on the enum
+// declaration above. The auto-derived carrier label
+// "optimization direction" matches the prior hand-rolled
+// `#[error("unknown optimization direction: {0}")]` annotation
+// byte-for-byte. See the retrofit comment block on
+// [`ConvergencePointType`] for the canonical narrative.
 
 /// CALM theorem classification — determines whether coordination is required.
 ///
@@ -915,8 +858,21 @@ pub struct UnknownOptimizationDirection(pub String);
 /// dispatch on `calm.requires_coordination()` (Raft for non-monotone
 /// writes; gossip for monotone ones) reads this projection rather
 /// than re-deriving from variant names.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    Default,
+    tatara_lisp::DeriveClosedSet,
+)]
 #[serde(rename_all = "PascalCase")]
+#[closed_set(via = "as_str", generate_unknown)]
 pub enum CalmClassification {
     /// Can be distributed without coordination (CALM ⇒ the program
     /// computes a monotone function).
@@ -989,41 +945,16 @@ impl fmt::Display for CalmClassification {
     }
 }
 
-impl FromStr for CalmClassification {
-    type Err = UnknownCalmClassification;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        <Self as tatara_lisp::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`CalmClassification`] into the substrate-wide
-/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
-/// [`ConvergencePointType`] for the canonical retrofit narrative.
-impl tatara_lisp::ClosedSet for CalmClassification {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownCalmClassification;
-    fn label(self) -> &'static str {
-        Self::as_str(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownCalmClassification(s.to_owned())
-    }
-}
-
-/// Typed parse failure carrying the offending input verbatim so the
-/// operator-facing diagnostic surfaces the bad value, not a normalized
-/// form. Symmetric to [`UnknownConvergencePointType`],
-/// [`UnknownSubstrateType`], [`UnknownDataClassification`],
-/// [`crate::pool::UnknownMemberState`],
-/// [`crate::pool::UnknownPoolPhase`],
-/// [`crate::pool::UnknownReplacementPolicy`],
-/// [`crate::lifetime::UnknownTeardownPolicy`],
-/// [`crate::boundary::UnknownConditionKind`],
-/// [`crate::phase::UnknownPhase`],
-/// [`crate::signal::UnknownSighupStrategy`].
-#[derive(Debug, thiserror::Error)]
-#[error("unknown calm classification: {0}")]
-pub struct UnknownCalmClassification(pub String);
+// `impl FromStr for CalmClassification` +
+// `impl tatara_lisp::ClosedSet for CalmClassification` +
+// `pub struct UnknownCalmClassification(pub String)` are all generated
+// by `#[derive(tatara_lisp::DeriveClosedSet)]` +
+// `#[closed_set(via = "as_str", generate_unknown)]` on the enum
+// declaration above. The auto-derived carrier label
+// "calm classification" matches the prior hand-rolled
+// `#[error("unknown calm classification: {0}")]` annotation
+// byte-for-byte. See the retrofit comment block on
+// [`ConvergencePointType`] for the canonical narrative.
 
 /// Data sensitivity, drives compliance baseline selection.
 ///
@@ -1051,8 +982,10 @@ pub struct UnknownCalmClassification(pub String);
     Deserialize,
     JsonSchema,
     Default,
+    tatara_lisp::DeriveClosedSet,
 )]
 #[serde(rename_all = "PascalCase")]
+#[closed_set(via = "as_str", generate_unknown)]
 pub enum DataClassification {
     Public,
     #[default]
@@ -1179,46 +1112,16 @@ impl fmt::Display for DataClassification {
     }
 }
 
-impl FromStr for DataClassification {
-    type Err = UnknownDataClassification;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        <Self as tatara_lisp::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`DataClassification`] into the substrate-wide
-/// [`tatara_lisp::ClosedSet`] trait — see the impl block on
-/// [`ConvergencePointType`] for the four-method-contract commentary.
-/// `label` delegates to the inherent [`DataClassification::as_str`] —
-/// the inherent name (the PascalCase `as_str`) stays the load-bearing
-/// wire-vocabulary projection that matches the serde
-/// `rename_all = "PascalCase"` output AND the CRD `enum:` enumeration
-/// the Process schema stamps on `spec.classification.dataClassification`
-/// verbatim, while the trait method gives generic consumers a STABLE
-/// name (`label`) across the workspace-wide closed-set implementors.
-impl tatara_lisp::ClosedSet for DataClassification {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownDataClassification;
-    fn label(self) -> &'static str {
-        Self::as_str(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownDataClassification(s.to_owned())
-    }
-}
-
-/// Typed parse failure carrying the offending input verbatim so the
-/// operator-facing diagnostic surfaces the bad value, not a normalized
-/// form. Symmetric to [`crate::pool::UnknownMemberState`],
-/// [`crate::pool::UnknownPoolPhase`],
-/// [`crate::pool::UnknownReplacementPolicy`],
-/// [`crate::lifetime::UnknownTeardownPolicy`],
-/// [`crate::boundary::UnknownConditionKind`],
-/// [`crate::phase::UnknownPhase`],
-/// [`crate::signal::UnknownSighupStrategy`].
-#[derive(Debug, thiserror::Error)]
-#[error("unknown data classification: {0}")]
-pub struct UnknownDataClassification(pub String);
+// `impl FromStr for DataClassification` +
+// `impl tatara_lisp::ClosedSet for DataClassification` +
+// `pub struct UnknownDataClassification(pub String)` are all generated
+// by `#[derive(tatara_lisp::DeriveClosedSet)]` +
+// `#[closed_set(via = "as_str", generate_unknown)]` on the enum
+// declaration above. The auto-derived carrier label
+// "data classification" matches the prior hand-rolled
+// `#[error("unknown data classification: {0}")]` annotation
+// byte-for-byte. See the retrofit comment block on
+// [`ConvergencePointType`] for the canonical narrative.
 
 // ───────────────────────────── bridges to tatara-core ─────────────────
 
@@ -1368,6 +1271,11 @@ impl From<core_compl::DataClassification> for DataClassification {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // The closed-set tests below call `T::from_str(bad)` via the
+    // derive-generated `FromStr` impls — bring the trait into scope at
+    // the test module so the lib body doesn't carry an otherwise-unused
+    // `use std::str::FromStr;` at the file head.
+    use std::str::FromStr;
 
     #[test]
     fn bridges_roundtrip() {
@@ -1472,6 +1380,23 @@ mod tests {
             let err = DataClassification::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }
+    }
+
+    /// AUTO-DERIVED LABEL CONTRACT: the `#[closed_set(generate_unknown)]`
+    /// attribute emits the carrier with the substrate-wide
+    /// `#[error("unknown data classification: {0}")]` annotation
+    /// auto-derived from the PascalCase enum name (via
+    /// `pascal_to_spaced_lowercase`). Pins the projection
+    /// byte-for-byte against the prior hand-rolled annotation so a
+    /// regression in the derive's label helper would surface here
+    /// rather than silently drifting the operator-facing diagnostic.
+    /// Mirrors the matching tests on
+    /// `crate::export::{ChannelKind,ReportFormat,ExportTrigger}` (commit
+    /// b487465).
+    #[test]
+    fn unknown_data_classification_message_matches_substrate_convention() {
+        let err = UnknownDataClassification("foo".to_string());
+        assert_eq!(err.to_string(), "unknown data classification: foo");
     }
 
     /// TRUTH-TABLE CONTRACT: the predicate pair agrees with the
@@ -1714,6 +1639,17 @@ mod tests {
             let err = ConvergencePointType::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }
+    }
+
+    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
+    /// label "convergence point type" against the prior hand-rolled
+    /// `#[error("unknown convergence point type: {0}")]` annotation
+    /// byte-for-byte. See `unknown_data_classification_message_matches_substrate_convention`
+    /// for the contract rationale.
+    #[test]
+    fn unknown_convergence_point_type_message_matches_substrate_convention() {
+        let err = UnknownConvergencePointType("foo".to_string());
+        assert_eq!(err.to_string(), "unknown convergence point type: foo");
     }
 
     /// TRUTH-TABLE CONTRACT: the predicate triple agrees with the
@@ -1963,6 +1899,17 @@ mod tests {
         }
     }
 
+    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
+    /// label "substrate type" against the prior hand-rolled
+    /// `#[error("unknown substrate type: {0}")]` annotation
+    /// byte-for-byte. See `unknown_data_classification_message_matches_substrate_convention`
+    /// for the contract rationale.
+    #[test]
+    fn unknown_substrate_type_message_matches_substrate_convention() {
+        let err = UnknownSubstrateType("foo".to_string());
+        assert_eq!(err.to_string(), "unknown substrate type: foo");
+    }
+
     /// TRUTH-TABLE CONTRACT: the predicate triple agrees with the
     /// documented per-variant plane role. Pinning this table at one
     /// site means any future compliance-baseline selector reads the
@@ -2142,6 +2089,17 @@ mod tests {
         }
     }
 
+    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
+    /// label "calm classification" against the prior hand-rolled
+    /// `#[error("unknown calm classification: {0}")]` annotation
+    /// byte-for-byte. See `unknown_data_classification_message_matches_substrate_convention`
+    /// for the contract rationale.
+    #[test]
+    fn unknown_calm_classification_message_matches_substrate_convention() {
+        let err = UnknownCalmClassification("foo".to_string());
+        assert_eq!(err.to_string(), "unknown calm classification: foo");
+    }
+
     /// CALM-THEOREM TRUTH-TABLE CONTRACT: `requires_coordination`
     /// implements the biconditional half of Hellerstein's CALM
     /// theorem — `Monotone ⇒ false` and `NonMonotone ⇒ true`.
@@ -2297,6 +2255,17 @@ mod tests {
             let err = OptimizationDirection::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }
+    }
+
+    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
+    /// label "optimization direction" against the prior hand-rolled
+    /// `#[error("unknown optimization direction: {0}")]` annotation
+    /// byte-for-byte. See `unknown_data_classification_message_matches_substrate_convention`
+    /// for the contract rationale.
+    #[test]
+    fn unknown_optimization_direction_message_matches_substrate_convention() {
+        let err = UnknownOptimizationDirection("foo".to_string());
+        assert_eq!(err.to_string(), "unknown optimization direction: foo");
     }
 
     /// TRUTH-TABLE CONTRACT: `prefers_lower` is the boolean
@@ -2536,6 +2505,17 @@ mod tests {
             let err = HorizonKind::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
         }
+    }
+
+    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
+    /// label "horizon kind" against the prior hand-rolled
+    /// `#[error("unknown horizon kind: {0}")]` annotation byte-for-byte.
+    /// See `unknown_data_classification_message_matches_substrate_convention`
+    /// for the contract rationale.
+    #[test]
+    fn unknown_horizon_kind_message_matches_substrate_convention() {
+        let err = UnknownHorizonKind("foo".to_string());
+        assert_eq!(err.to_string(), "unknown horizon kind: foo");
     }
 
     /// LOAD-BEARING TRUTH-TABLE: `terminates` is the boolean

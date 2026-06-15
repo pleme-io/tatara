@@ -61,7 +61,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], defau
 # CLI output formatting + TUI
 comfy-table = "7"
 crossterm = "0.28"
-egaku-term = { git = "https://github.com/pleme-io/egaku-term", tag = "v0.2.1" , version = "0.1" }
+egaku-term = { git = "https://github.com/pleme-io/egaku-term", tag = "v0.2.1" , version = "0.2" }
 egaku = { git = "https://github.com/pleme-io/egaku" , version = "0.1" }
 diff = "0.1"
 

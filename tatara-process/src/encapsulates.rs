@@ -842,6 +842,7 @@ mod tests {
     /// newtype, which the trait's `make_unknown` can't see.
     #[test]
     fn unknown_encapsulation_target_errors() {
+        use std::str::FromStr;
         for bad in [
             "ExistingHelmRelease",
             "existing_helm_release",

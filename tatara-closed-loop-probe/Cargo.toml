@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Typed receipt envelope + Process types
-tatara-process = { path = "../tatara-process" }
+tatara-process = { path = "../tatara-process" , version = "0.2.65" }
 
 # K8s API for ConfigMap PATCH (no shell wrapping kubectl)
 kube = { version = "0.99", features = ["runtime", "client"] }

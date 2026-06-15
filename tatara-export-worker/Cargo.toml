@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Typed ExportSpec + ReceiptEnvelope + ProcessSpec
-tatara-process = { path = "../tatara-process" }
+tatara-process = { path = "../tatara-process" , version = "0.2.65" }
 
 # K8s API — read ConfigMaps + Process status, patch the receipt ConfigMap
 kube = { version = "0.99", features = ["runtime", "client"] }

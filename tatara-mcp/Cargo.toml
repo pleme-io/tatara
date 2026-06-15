@@ -7,7 +7,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-core = { path = "../tatara-core" }
+tatara-core = { path = "../tatara-core" , version = "0.2.65" }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

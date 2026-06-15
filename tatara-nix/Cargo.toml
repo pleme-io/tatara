@@ -7,9 +7,9 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-lisp = { path = "../tatara-lisp" }
-tatara-lisp-derive = { path = "../tatara-lisp-derive" }
-tatara-lattice = { path = "../tatara-lattice" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.2.65" }
+tatara-lattice = { path = "../tatara-lattice" , version = "0.2.65" }
 
 # Canonical hashing for StorePath + attestation
 blake3 = "1"

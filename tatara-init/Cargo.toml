@@ -7,9 +7,9 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-lisp = { path = "../tatara-lisp" }
-tatara-lisp-derive = { path = "../tatara-lisp-derive" }
-tatara-eval = { path = "../tatara-eval" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.2.65" }
+tatara-eval = { path = "../tatara-eval" , version = "0.2.65" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

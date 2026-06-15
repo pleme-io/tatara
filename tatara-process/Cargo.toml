@@ -7,10 +7,10 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-core = { path = "../tatara-core" }
+tatara-core = { path = "../tatara-core" , version = "0.2.65" }
 # Lisp surface — `#[derive(TataraDomain)]` + `compile_source` live here now.
-tatara-lisp = { path = "../tatara-lisp" }
-tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.2.65" }
 
 # K8s + CRD derive
 kube = { version = "0.99", features = ["runtime", "derive", "client"] }

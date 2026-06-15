@@ -7,7 +7,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-lisp = { path = "../tatara-lisp" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
 serde = { version = "1", features = ["derive"] }
 # The `#[derive(TataraDomain)]`-generated code for non-basic types (enums,
 # nested structs, Vec<Nested>) calls `::serde_json::from_value`, so users

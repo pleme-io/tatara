@@ -38,7 +38,7 @@ tracing = "0.1"
 # every sub-config impls shikumi::TieredConfig (bare/discovered/
 # prescribed_default). Operators reach via `tatara config-show
 # <tier>` + TATARA_TIER env var. Pillar 12.
-shikumi = { git = "https://github.com/pleme-io/shikumi", branch = "main" }
+shikumi = { git = "https://github.com/pleme-io/shikumi", branch = "main" , version = "0.1" }
 
 # Raft types (for cluster types: NodeId, BasicNode).
 # Pinned at =0.9.22 — see tatara-cli/Cargo.toml for the rationale

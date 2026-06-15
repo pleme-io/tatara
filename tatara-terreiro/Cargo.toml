@@ -7,10 +7,10 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-lisp = { path = "../tatara-lisp" }
-tatara-lisp-derive = { path = "../tatara-lisp-derive" }
-tatara-eval = { path = "../tatara-eval" }
-tatara-nix = { path = "../tatara-nix" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.2.65" }
+tatara-eval = { path = "../tatara-eval" , version = "0.2.65" }
+tatara-nix = { path = "../tatara-nix" , version = "0.2.65" }
 
 # Arena allocation — the terreiro's namesake. One Bump per sealed environment.
 bumpalo = { version = "3", features = ["collections"] }
@@ -27,7 +27,7 @@ serde_json = "1"
 thiserror = "2"
 
 # Nord-themed CLI UX for the tatara-terreiro binary.
-tatara-ui = { path = "../tatara-ui" }
+tatara-ui = { path = "../tatara-ui" , version = "0.2.65" }
 
 [dev-dependencies]
 tempfile = "3"

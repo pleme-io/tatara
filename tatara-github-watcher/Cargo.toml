@@ -15,7 +15,7 @@ name = "tatara_github_watcher"
 path = "src/lib.rs"
 
 [dependencies]
-tatara-process = { path = "../tatara-process" }
+tatara-process = { path = "../tatara-process" , version = "0.2.65" }
 
 # HTTP server
 axum = { version = "0.8", features = ["json", "macros"] }

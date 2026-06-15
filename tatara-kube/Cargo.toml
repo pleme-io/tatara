@@ -12,7 +12,7 @@ standalone = ["dep:clap", "dep:tracing-subscriber"]
 crds = ["dep:schemars"]
 
 [dependencies]
-tatara-core = { path = "../tatara-core" }
+tatara-core = { path = "../tatara-core" , version = "0.2.65" }
 
 # Kubernetes
 kube = { version = "0.99", features = ["runtime", "derive", "client"] }

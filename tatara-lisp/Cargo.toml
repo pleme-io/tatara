@@ -7,7 +7,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.2.65" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -16,7 +16,7 @@ blake3 = "1"
 
 # Feature-gated interop with iac-forge's canonical SExpr (for BLAKE3
 # attestation + render cache reuse). Turn on with `--features iac-forge`.
-iac-forge = { git = "https://github.com/pleme-io/iac-forge", optional = true }
+iac-forge = { git = "https://github.com/pleme-io/iac-forge", optional = true , version = "0.1" }
 
 [features]
 default = []

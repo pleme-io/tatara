@@ -14,7 +14,7 @@ wireguard = []     # WireGuard mesh via mamorigami
 wasi = ["dep:wasmtime", "dep:wasmtime-wasi"]
 
 [dependencies]
-tatara-core = { path = "../tatara-core" }
+tatara-core = { path = "../tatara-core" , version = "0.2.65" }
 
 # Error handling
 anyhow = "1.0"

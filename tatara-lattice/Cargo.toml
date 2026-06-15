@@ -7,8 +7,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-core = { path = "../tatara-core" }
-tatara-process = { path = "../tatara-process" }
+tatara-core = { path = "../tatara-core" , version = "0.2.65" }
+tatara-process = { path = "../tatara-process" , version = "0.2.65" }
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["chrono"] }
 

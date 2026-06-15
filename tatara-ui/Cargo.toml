@@ -7,8 +7,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-lisp = { path = "../tatara-lisp" }
-tatara-lisp-derive = { path = "../tatara-lisp-derive" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.2.65" }
 
 blake3 = "1"
 hex = "0.4"

@@ -7,8 +7,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-lisp = { path = "../tatara-lisp" }
-tatara-nix = { path = "../tatara-nix" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
+tatara-nix = { path = "../tatara-nix" , version = "0.2.65" }
 
 # Arena allocation — one Bump per evaluation frame when caller opts in.
 bumpalo = { version = "3", features = ["collections"] }

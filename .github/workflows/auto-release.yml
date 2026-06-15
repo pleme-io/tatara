@@ -1,11 +1,5 @@
 name: auto-release
 
-# Three-line consumer shim. Every push to main runs the pleme-io
-# substrate Rust-workspace auto-release pipeline (bump workspace
-# version → commit → tag → push → publish-each-member to crates.io
-# in dep order). The reusable workflow lives at
-# pleme-io/substrate/.github/workflows/rust-auto-release.yml.
-
 on:
   push:
     branches: [main]

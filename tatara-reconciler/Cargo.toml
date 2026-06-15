@@ -19,18 +19,18 @@ name = "tatara-check"
 path = "src/bin/tatara-check.rs"
 
 [dependencies]
-tatara-core = { path = "../tatara-core" }
-tatara-process = { path = "../tatara-process" }
-tatara-lattice = { path = "../tatara-lattice" }
-tatara-lisp = { path = "../tatara-lisp" }
-tatara-domains = { path = "../tatara-domains" }
+tatara-core = { path = "../tatara-core" , version = "0.2.65" }
+tatara-process = { path = "../tatara-process" , version = "0.2.65" }
+tatara-lattice = { path = "../tatara-lattice" , version = "0.2.65" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
+tatara-domains = { path = "../tatara-domains" , version = "0.2.65" }
 
 # Typed config + hot-reload (XDG discovery + env override + ArcSwap).
 # Git-sourced rather than path — the substrate's Nix image build
 # sandbox uses tatara/src as the root context, so external path deps
 # can't resolve. Use a path override during local-only iteration via
 # `[patch."https://github.com/pleme-io/shikumi"]` in this file.
-shikumi = { git = "https://github.com/pleme-io/shikumi" }
+shikumi = { git = "https://github.com/pleme-io/shikumi" , version = "0.1" }
 
 # For tatara-check — CustomResourceExt + serde_yaml come from deps above.
 

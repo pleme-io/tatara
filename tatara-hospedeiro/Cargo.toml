@@ -11,11 +11,11 @@ name = "tatara_hospedeiro"
 path = "src/lib.rs"
 
 [dependencies]
-tatara-build-remote = { path = "../tatara-build-remote" }
-tatara-wasm         = { path = "../tatara-wasm" }
-tatara-hvf          = { path = "../tatara-hvf" }
-tatara-vm           = { path = "../tatara-vm" }
-tatara-process      = { path = "../tatara-process" }
+tatara-build-remote = { path = "../tatara-build-remote" , version = "0.2.65" }
+tatara-wasm         = { path = "../tatara-wasm" , version = "0.2.65" }
+tatara-hvf          = { path = "../tatara-hvf" , version = "0.2.65" }
+tatara-vm           = { path = "../tatara-vm" , version = "0.2.65" }
+tatara-process      = { path = "../tatara-process" , version = "0.2.65" }
 
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -7,8 +7,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-core = { path = "../tatara-core" }
-tatara-engine = { path = "../tatara-engine" }
+tatara-core = { path = "../tatara-core" , version = "0.2.65" }
+tatara-engine = { path = "../tatara-engine" , version = "0.2.65" }
 
 # Error handling
 anyhow = "1.0"

@@ -7,18 +7,18 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tatara-lisp = { path = "../tatara-lisp" }
-tatara-lisp-derive = { path = "../tatara-lisp-derive" }
-tatara-nix = { path = "../tatara-nix" }
-tatara-os = { path = "../tatara-os" }
-tatara-ui = { path = "../tatara-ui" }
-tatara-wasm = { path = "../tatara-wasm" }
-tatara-build-remote = { path = "../tatara-build-remote" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
+tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.2.65" }
+tatara-nix = { path = "../tatara-nix" , version = "0.2.65" }
+tatara-os = { path = "../tatara-os" , version = "0.2.65" }
+tatara-ui = { path = "../tatara-ui" , version = "0.2.65" }
+tatara-wasm = { path = "../tatara-wasm" , version = "0.2.65" }
+tatara-build-remote = { path = "../tatara-build-remote" , version = "0.2.65" }
 
 # Typed-dispatcher catalog integration
 # (theory/UNIFIED-COMPUTING-MODEL.md §VI).
-gen-platform = { git = "https://github.com/pleme-io/gen", branch = "main" }
-gen-types = { git = "https://github.com/pleme-io/gen", branch = "main" }
+gen-platform = { git = "https://github.com/pleme-io/gen", branch = "main" , version = "0.1" }
+gen-types = { git = "https://github.com/pleme-io/gen", branch = "main" , version = "0.1" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

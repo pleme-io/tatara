@@ -162,6 +162,18 @@
 /// irregular labels (`MacroDefHead` → "macro definition head",
 /// `MustReachPhase` → "must-reach phase") pin the operator-facing
 /// wording with `#[closed_set(generate_unknown = "...")]`.
+///
+/// Implementors whose Display impl matches the substrate-wide
+/// 5-line `f.write_str(self.<via>())` shape (28+ enums on the
+/// PascalCase wire-format axis re-derive this byte-for-byte) drop
+/// the hand-rolled `impl fmt::Display for X` block and add
+/// `#[closed_set(display)]` — the derive then emits
+/// `impl fmt::Display for X { f.write_str(Self::<via>(*self)) }`
+/// alongside the trait impl, so the `<via> ⇄ Display ⇄ FromStr`
+/// triad emits through ONE generative shape per enum. Implementors
+/// with a bespoke Display body (e.g. structured-reason formatters
+/// that compose more than the canonical wire label) keep their
+/// hand-rolled block and leave the flag off.
 pub trait ClosedSet: Sized + Copy + 'static {
     /// The closed set — every variant the enum carries, in
     /// declaration order. Implementors typically delegate to an

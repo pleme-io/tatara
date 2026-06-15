@@ -93,6 +93,26 @@ use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, Ident, LitStr
 ///   this attribute collapses it onto the derive so a 40+ enum
 ///   cohort emits the carrier through ONE generative shape rather
 ///   than re-deriving the boilerplate at each declaration site.
+/// - `#[closed_set(display)]` — emit the substrate-wide
+///   `impl ::core::fmt::Display for $name { f.write_str(Self::$via(*self)) }`
+///   block alongside the trait impl. The 5-line Display block (the
+///   `impl fmt::Display`, the `fn fmt`, the `f.write_str(self.$via())`
+///   body) appears 28+ times across `tatara-process` /
+///   `tatara-lisp` byte-for-byte — every closed-set carrier on a
+///   PascalCase wire-format axis composes its operator-facing
+///   diagnostic through Display rather than through a hard-coded
+///   literal that would silently rot when a variant gets renamed.
+///   The attribute collapses the 5-line block onto ONE flag so the
+///   `as_str` ⇄ Display ⇄ `FromStr` triad emits through ONE
+///   generative shape per closed-set enum.
+///   The emission requires `Self: ::core::marker::Copy` (the
+///   `ClosedSet` trait already requires it). Set the flag in
+///   combination with `via` to pin Display onto the inherent
+///   projection rather than the trait method; without the flag the
+///   implementor keeps its hand-rolled Display block (e.g. for a
+///   bespoke Display shape like
+///   [`tatara_process::lifetime_clock::TerminateReason`]'s
+///   structured-reason formatter).
 ///
 /// ## Implementor requirements
 ///
@@ -182,6 +202,21 @@ pub fn derive_closed_set(input: TokenStream) -> TokenStream {
         GenerateUnknown::Explicit(label) => emit_unknown_struct(&unknown_ident, label),
     };
 
+    let display_impl = if cfg.display {
+        quote! {
+            impl ::core::fmt::Display for #name {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.write_str(Self::#via_ident(*self))
+                }
+            }
+        }
+    } else {
+        TokenStream2::new()
+    };
+
     let expanded = quote! {
         impl ::tatara_lisp::ClosedSet for #name {
             const ALL: &'static [Self] = &Self::ALL;
@@ -199,6 +234,8 @@ pub fn derive_closed_set(input: TokenStream) -> TokenStream {
         #from_str_impl
 
         #unknown_struct_decl
+
+        #display_impl
     };
 
     expanded.into()
@@ -346,6 +383,13 @@ struct ClosedSetCfg {
     unknown: String,
     no_from_str: bool,
     generate_unknown: GenerateUnknown,
+    /// `#[closed_set(display)]` — emit the substrate-wide
+    /// `impl fmt::Display { f.write_str(Self::$via(*self)) }` block.
+    /// 28+ workspace-wide closed-set enums on PascalCase wire-format
+    /// axes (the `as_str ⇄ Display ⇄ FromStr` triad) re-derive this
+    /// 5-line block byte-for-byte; flipping the flag at the derive
+    /// site collapses the block onto ONE generative shape.
+    display: bool,
 }
 
 /// `#[closed_set(generate_unknown[ = "label"])]` parse outcome.
@@ -368,6 +412,7 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
     let mut unknown: Option<String> = None;
     let mut no_from_str = false;
     let mut generate_unknown = GenerateUnknown::Skip;
+    let mut display = false;
     for attr in attrs {
         if !attr.path().is_ident("closed_set") {
             continue;
@@ -406,9 +451,12 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
                     Err(_) => GenerateUnknown::Auto,
                 };
                 Ok(())
+            } else if meta.path.is_ident("display") {
+                display = true;
+                Ok(())
             } else {
                 Err(meta.error(
-                    "unknown #[closed_set(...)] key — expected `via`, `unknown`, `no_from_str`, or `generate_unknown`",
+                    "unknown #[closed_set(...)] key — expected `via`, `unknown`, `no_from_str`, `generate_unknown`, or `display`",
                 ))
             }
         })?;
@@ -418,6 +466,7 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
         unknown: unknown.unwrap_or_else(|| format!("Unknown{name}")),
         no_from_str,
         generate_unknown,
+        display,
     })
 }
 

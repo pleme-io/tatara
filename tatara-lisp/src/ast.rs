@@ -3,7 +3,6 @@
 use crate::error::{SexpShape, UnquoteForm};
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use thiserror::Error;
 
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
@@ -223,7 +222,8 @@ impl Atom {
 /// pairing across `SexpShape::label`'s six atom-subset arms) — well
 /// past the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
 /// named.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, tatara_lisp_derive::ClosedSet)]
+#[closed_set(via = "label", display, generate_unknown = "atom kind")]
 pub enum AtomKind {
     /// `Atom::Symbol(_)` — `"symbol"` diagnostic label, byte `0u8`
     /// hash discriminator, projects to [`SexpShape::Symbol`].
@@ -439,99 +439,23 @@ impl AtomKind {
     }
 }
 
-impl fmt::Display for AtomKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.label())
-    }
-}
-
-/// Decode a canonical [`AtomKind`] label back into the typed variant
-/// — `Ok(kind)` when the input matches one of the six canonical
-/// lowercase literals exactly (`"symbol"` / `"keyword"` / `"string"` /
-/// `"int"` / `"float"` / `"bool"` — byte-equal, case-sensitive), and
-/// [`Err(UnknownAtomKind)`] for every other string (typos, non-
-/// canonical capitalizations, labels from the [`SexpShape`] superset
-/// vocabulary that DO NOT correspond to an atomic kind — `"nil"` /
-/// `"list"` / `"quote"` / `"quasiquote"` / `"unquote"` /
-/// `"unquote-splice"` — which are structurally outside the atom
-/// algebra and must reject).
-///
-/// Round-trip invariant pinned by
-/// `atom_kind_label_round_trips_through_from_str`: for every variant
-/// `k` in [`AtomKind::ALL`], `k.label().parse() == Ok(k)`. The decode
-/// is a linear sweep over [`AtomKind::ALL`] keyed on [`AtomKind::label`]
-/// so the canonical literals live at ONE site (the `label` arms) rather
-/// than at TWO sites (`label` + a per-variant `from_str` arm) — adding
-/// a seventh variant extends only [`AtomKind::ALL`] + [`AtomKind::label`],
-/// NOT a third per-variant literal site. Same shape every sibling
-/// closed-set `FromStr` in this workspace uses
-/// ([`crate::error::SexpShape`]'s `FromStr`, `RequestorKind::from_str`,
-/// `ReceiptKind::from_str`, `AllocationPhase::from_str`,
-/// `ConditionKind::from_str`, `ProcessPhase::from_str`, …).
-///
-/// Open-by-design callers that want to drop the typed-error face of
-/// the decode and reach for `Option<AtomKind>` compose
-/// `label.parse().ok()` exactly as the `tatara-process` siblings'
-/// `known_kind()`-shaped projections do.
-///
-/// Containment relationship to [`SexpShape::FromStr`]: every successful
-/// decode through this projection is ALSO a successful decode through
-/// [`SexpShape`]'s `FromStr` (the atomic subset is structurally
-/// embedded), and the resulting variants project to each other through
-/// [`AtomKind::sexp_shape`]. The converse is NOT true — `SexpShape`
-/// decodes `"nil"` / `"list"` / `"quote"` / `"quasiquote"` / `"unquote"`
-/// / `"unquote-splice"`, which have NO atomic-kind preimage and rightly
-/// reject through this method. Pinned by
-/// `atom_kind_from_str_rejects_non_atom_sexp_shape_labels`.
-impl std::str::FromStr for AtomKind {
-    type Err = UnknownAtomKind;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        <Self as crate::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`AtomKind`] into the substrate-wide [`crate::ClosedSet`]
-/// trait — the four-method contract that lifts the linear-sweep
-/// for-loop from the [`AtomKind::from_str`] body into ONE place
-/// (`ClosedSet::parse_label`'s default body) shared with every other
-/// closed-set implementor in the workspace
-/// ([`crate::ast::QuoteForm`], [`crate::error::SexpShape`],
-/// [`crate::error::MacroDefHead`], [`crate::error::UnquoteForm`],
-/// [`crate::error::KwargPathKind`], [`crate::error::ExpectedKwargShape`],
-/// `tatara_process::{ProcessPhase, ConditionKind, IntentKind, ...}`).
-///
-/// The trait method `label` delegates to the inherent
-/// [`AtomKind::label`] — the inherent name stays the domain-canonical
-/// projection while the trait method gives generic consumers a
-/// STABLE name (`label`) to bind to.
-impl crate::ClosedSet for AtomKind {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownAtomKind;
-    fn label(self) -> &'static str {
-        AtomKind::label(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownAtomKind(s.to_owned())
-    }
-}
-
-/// Typed parse failure for [`AtomKind`]'s [`std::str::FromStr`] —
-/// carries the offending input verbatim so an operator-facing
-/// diagnostic surfaces the bad value, not a normalized form.
-/// Symmetric to every sibling `Unknown*` error in the workspace
-/// ([`crate::error::UnknownSexpShape`],
-/// `tatara_process::allocation::UnknownRequestorKind`,
-/// `tatara_process::receipt::UnknownReceiptKind`,
-/// `tatara_process::phase::UnknownPhase`,
-/// `tatara_process::boundary::UnknownConditionKind`,
-/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
-/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
-/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
-/// diagnostics that hand the offending input back unchanged to the
-/// human.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
-#[error("unknown atom kind: {0}")]
-pub struct UnknownAtomKind(pub String);
+// `impl fmt::Display for AtomKind` + `impl std::str::FromStr for AtomKind`
+// + `impl crate::ClosedSet for AtomKind` + `pub struct UnknownAtomKind(pub
+// String)` are generated by `#[derive(tatara_lisp_derive::ClosedSet)]` on
+// the enum declaration above. `label` delegates to the inherent
+// `AtomKind::label` via `#[closed_set(via = "label")]` so the
+// domain-canonical lowercase-vocabulary projection stays load-bearing (the
+// six labels `"symbol" / "keyword" / "string" / "int" / "float" / "bool"`
+// match the `SexpShape` atomic-subset labels byte-for-byte AND the
+// diagnostic-rendering shape `LispError::TypeMismatch.got` keys on
+// verbatim). The `display` flag emits the substrate-wide
+// `f.write_str(Self::label(*self))` block. `#[closed_set(generate_unknown =
+// "atom kind")]` emits the typed parse-rejection carrier with the
+// substrate-wide `Debug + Clone + PartialEq + Eq + thiserror::Error`
+// derives and the `#[error("unknown atom kind: {0}")]` annotation
+// byte-for-byte; the explicit label pins the pre-lift wording even though
+// the auto-derived `pascal_to_spaced_lowercase("AtomKind")` projects to
+// the same `"atom kind"` literal.
 
 impl Sexp {
     pub fn symbol(s: impl Into<String>) -> Self {
@@ -1083,7 +1007,8 @@ impl Sexp {
 /// for the quote-family surface, parallel to how `UnquoteForm` lands it
 /// for the template-marker subset and `MacroDefHead` for the
 /// macro-definition-head surface.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, tatara_lisp_derive::ClosedSet)]
+#[closed_set(via = "prefix", display, generate_unknown = "quote form")]
 pub enum QuoteForm {
     /// `'x` — literal-quote prefix. The `'` marker; the inner expression
     /// is NOT subject to macro substitution. Projects to NO
@@ -1471,120 +1396,31 @@ impl QuoteForm {
     }
 }
 
-impl fmt::Display for QuoteForm {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.prefix())
-    }
-}
+// `impl fmt::Display for QuoteForm` is generated by
+// `#[derive(tatara_lisp_derive::ClosedSet)]` + `#[closed_set(display)]` on
+// the enum declaration above — emits the substrate-wide
+// `f.write_str(Self::prefix(*self))` block byte-for-byte.
 
-/// Decode a canonical [`QuoteForm`] prefix back into the typed variant —
-/// `Ok(form)` when the input matches one of the four canonical
-/// punctuation literals exactly (`"'"` for [`QuoteForm::Quote`],
-/// `` "`" `` for [`QuoteForm::Quasiquote`], `","` for
-/// [`QuoteForm::Unquote`], `",@"` for [`QuoteForm::UnquoteSplice`] —
-/// byte-equal, case-irrelevant for punctuation), and
-/// [`Err(UnknownQuoteForm)`] for every other string (an empty input,
-/// a typo `"''"` / `",,"` / `",@@"`, a label from the
-/// [`crate::error::SexpShape`] vocabulary the punctuation axis is
-/// structurally outside of — `"quote"` / `"quasiquote"` / `"unquote"`
-/// / `"unquote-splice"` are the [`SexpShape`] projections of the SAME
-/// closed set on a DIFFERENT axis and rightly reject here, kept
-/// distinct by design, AND the [`Self::iac_forge_tag`] projections
-/// `"unquote-splicing"` that key the iac-forge canonical-form axis on
-/// yet another distinct vocabulary).
-///
-/// Round-trip invariant pinned by
-/// `quote_form_prefix_round_trips_through_from_str`: for every variant
-/// `f` in [`QuoteForm::ALL`], `f.prefix().parse() == Ok(f)`. The decode
-/// is a linear sweep over [`QuoteForm::ALL`] keyed on
-/// [`QuoteForm::prefix`] so the canonical literals live at ONE site
-/// (the `prefix` arms) rather than at TWO sites (`prefix` + a
-/// per-variant `from_str` arm) — adding a fifth variant extends only
-/// [`QuoteForm::ALL`] + [`QuoteForm::prefix`], NOT a third per-variant
-/// literal site. Same shape every sibling closed-set `FromStr` in this
-/// workspace uses ([`crate::error::SexpShape::FromStr`],
-/// [`AtomKind::FromStr`], [`crate::error::UnquoteForm::FromStr`],
-/// `RequestorKind::from_str`, `ReceiptKind::from_str`,
-/// `AllocationPhase::from_str`, `ConditionKind::from_str`,
-/// `ProcessPhase::from_str`, …).
-///
-/// Open-by-design callers that want to drop the typed-error face of
-/// the decode and reach for `Option<QuoteForm>` compose
-/// `prefix.parse().ok()` exactly as the `tatara-process` siblings'
-/// `known_kind()`-shaped projections do.
-///
-/// Cross-axis relationship to [`crate::error::SexpShape::FromStr`] AND
-/// [`crate::error::UnquoteForm::FromStr`]: all three closed sets
-/// project from a shared subset of the substrate's `Sexp` algebra on
-/// DISTINCT vocabularies — [`SexpShape`] decodes the
-/// `"quote"`/`"quasiquote"`/`"unquote"`/`"unquote-splice"`
-/// structural-identity labels (what the operator wrote at the
-/// macro-template surface, named as a reader-shape identity),
-/// [`UnquoteForm`] decodes the 2-of-4 subset of punctuation markers
-/// `","`/`",@"` (the template-substitution subset), and [`QuoteForm`]
-/// decodes the FULL 4-of-4 punctuation markers
-/// `"'"`/`` "`" ``/`","`/`",@"` (every homoiconic prefix the reader
-/// recognizes). Containment relationship: every successful
-/// [`UnquoteForm::from_str`] input is ALSO a successful
-/// [`QuoteForm::from_str`] input AND vice versa for the matching
-/// 2-of-4 subset projected through [`Self::as_unquote_form`]. Pinned
-/// by `quote_form_from_str_extends_unquote_form_from_str_on_the_2_of_4_subset`.
-/// A regression that conflates the structural-label and the
-/// punctuation-marker axes (e.g. `"quote".parse::<QuoteForm>()`
-/// silently succeeding by mistaking a [`SexpShape`] label for a
-/// homoiconic-prefix literal) would silently bifurcate the
-/// substrate's diagnostic surface. Pinned by
-/// `quote_form_from_str_rejects_sexp_shape_labels_on_homoiconic_prefix_axis`.
-impl std::str::FromStr for QuoteForm {
-    type Err = UnknownQuoteForm;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        <Self as crate::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`QuoteForm`] into the substrate-wide [`crate::ClosedSet`]
-/// trait — the four-method contract that lifts the linear-sweep
-/// for-loop from the [`QuoteForm::from_str`] body into ONE place
-/// (`ClosedSet::parse_label`'s default body).
-///
-/// The trait method `label` delegates to the inherent
-/// [`QuoteForm::prefix`] — the inherent name stays the
-/// domain-canonical projection (the homoiconic reader-form prefix:
-/// `"'"`, `` "`" ``, `","`, `",@"`), while the trait method gives
-/// generic consumers a STABLE name (`label`) to bind to. The
-/// labels-as-prefixes here are punctuation, not vocabulary; that
-/// distinction stays load-bearing through the `prefix` inherent
-/// method but flattens at the trait surface where all closed-set
-/// implementors share one method name.
-impl crate::ClosedSet for QuoteForm {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownQuoteForm;
-    fn label(self) -> &'static str {
-        QuoteForm::prefix(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownQuoteForm(s.to_owned())
-    }
-}
-
-/// Typed parse failure for [`QuoteForm`]'s [`std::str::FromStr`] —
-/// carries the offending input verbatim so an operator-facing
-/// diagnostic surfaces the bad value, not a normalized form.
-/// Symmetric to every sibling `Unknown*` error in the workspace
-/// ([`crate::error::UnknownSexpShape`],
-/// [`crate::error::UnknownUnquoteForm`], [`UnknownAtomKind`],
-/// `tatara_process::allocation::UnknownRequestorKind`,
-/// `tatara_process::receipt::UnknownReceiptKind`,
-/// `tatara_process::phase::UnknownPhase`,
-/// `tatara_process::boundary::UnknownConditionKind`,
-/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
-/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
-/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
-/// diagnostics that hand the offending input back unchanged to the
-/// human.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
-#[error("unknown quote form: {0}")]
-pub struct UnknownQuoteForm(pub String);
+// `impl std::str::FromStr for QuoteForm` + `impl crate::ClosedSet for
+// QuoteForm` + `pub struct UnknownQuoteForm(pub String)` are generated by
+// `#[derive(tatara_lisp_derive::ClosedSet)]` on the enum declaration
+// above. `label` delegates to the inherent `QuoteForm::prefix` via
+// `#[closed_set(via = "prefix")]` so the domain-canonical
+// reader-punctuation projection (`"'" / "`" / "," / ",@"`) stays
+// load-bearing at the inherent surface while the trait surface unifies
+// every closed-set implementor's projection name onto `label`.
+// `#[closed_set(generate_unknown = "quote form")]` emits the typed
+// parse-rejection carrier with the substrate-wide `Debug + Clone +
+// PartialEq + Eq + thiserror::Error` derives and the `#[error("unknown
+// quote form: {0}")]` annotation byte-for-byte; the explicit label pins
+// the pre-lift wording even though the auto-derived
+// `pascal_to_spaced_lowercase("QuoteForm")` projects to the same
+// `"quote form"` literal. The FromStr decode is a linear sweep over
+// `QuoteForm::ALL` keyed on `prefix`: every successful decode round-trips
+// through `prefix()`, cross-axis labels from `SexpShape` (`"quote" /
+// "quasiquote" / ...`) and `iac_forge_tag` (`"unquote-splicing"`) reject —
+// pinned by `quote_form_prefix_round_trips_through_from_str` +
+// `quote_form_from_str_rejects_sexp_shape_labels_on_homoiconic_prefix_axis`.
 
 /// Iterate over the argument tails of every form in `forms` whose call head
 /// matches `keyword` — the *slice-side* sibling of [`Sexp::as_call_to`].
@@ -3434,6 +3270,25 @@ mod tests {
     }
 
     #[test]
+    fn quote_form_is_well_formed_closed_set() {
+        // Structural contract: QuoteForm's four variants are pairwise
+        // distinct, round-trip through the trait's `label` ↔
+        // `parse_label`, and reject the empty string — the
+        // workspace-wide `assert_closed_set_well_formed::<T>()` testkit
+        // pinned across every `tatara-process` closed-set implementor
+        // (`AllocationPhase`, `RequestorKind`, `ProcessPhase`,
+        // `ConditionKind`, `WorkloadKind`, …). The substrate-level
+        // assertion runs on the auto-derived `impl ClosedSet for
+        // QuoteForm` emitted by `#[derive(tatara_lisp_derive::ClosedSet)]`
+        // — a regression that drifts the derive's `make_unknown`
+        // delegation, the `via = "prefix"` projection
+        // (`"'" / "`" / "," / ",@"`), or the variant listing forced
+        // through `Self::ALL` fails-loudly here in isolation from the
+        // per-variant truth tables above.
+        crate::assert_closed_set_well_formed::<QuoteForm>();
+    }
+
+    #[test]
     fn quote_form_from_str_rejects_sexp_shape_labels_on_homoiconic_prefix_axis() {
         // CROSS-AXIS DISJOINTNESS: pin that `QuoteForm::FromStr` decodes
         // the homoiconic punctuation markers `'` / `` ` `` / `,` / `,@`
@@ -3885,6 +3740,24 @@ mod tests {
                 "cross-axis label {label:?} must NOT decode to an AtomKind",
             );
         }
+    }
+
+    #[test]
+    fn atom_kind_is_well_formed_closed_set() {
+        // Structural contract: AtomKind's six variants are pairwise
+        // distinct, round-trip through the trait's `label` ↔
+        // `parse_label`, and reject the empty string — the
+        // workspace-wide `assert_closed_set_well_formed::<T>()` testkit
+        // pinned across every `tatara-process` closed-set implementor
+        // (`AllocationPhase`, `RequestorKind`, `ProcessPhase`,
+        // `ConditionKind`, `WorkloadKind`, …). The substrate-level
+        // assertion runs on the auto-derived `impl ClosedSet for
+        // AtomKind` emitted by `#[derive(tatara_lisp_derive::ClosedSet)]`
+        // — a regression that drifts the derive's `make_unknown`
+        // delegation, the `via = "label"` projection, or the variant
+        // listing forced through `Self::ALL` fails-loudly here in
+        // isolation from the per-variant truth tables above.
+        crate::assert_closed_set_well_formed::<AtomKind>();
     }
 
     #[test]

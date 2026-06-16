@@ -1,8 +1,5 @@
 //! `ProcessSpec` sub-structures — IdentitySpec, DependsOn, SignalPolicy.
 
-use std::fmt;
-use std::str::FromStr;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -48,8 +45,21 @@ pub struct DependsOn {
 /// [`crate::boundary::ConditionKind::ALL`],
 /// [`crate::phase::ProcessPhase::ALL`],
 /// [`crate::signal::ProcessSignal::ALL`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    Default,
+    tatara_lisp::DeriveClosedSet,
+)]
 #[serde(rename_all = "PascalCase")]
+#[closed_set(via = "as_str", display, generate_unknown = "must-reach phase")]
 pub enum MustReachPhase {
     Running,
     #[default]
@@ -97,61 +107,33 @@ impl MustReachPhase {
     }
 }
 
-impl fmt::Display for MustReachPhase {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for MustReachPhase {
-    type Err = UnknownMustReachPhase;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        <Self as tatara_lisp::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`MustReachPhase`] into the substrate-wide
-/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
-/// collapses the linear-sweep for-loop from this enum's
-/// [`std::str::FromStr::from_str`] body into ONE place
-/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
-/// with every other `tatara-process` closed-set implementor
-/// ([`crate::phase::ProcessPhase`],
-/// [`crate::compliance::VerificationPhase`],
-/// [`crate::lifetime::TeardownPolicy`],
-/// [`crate::signal::SighupStrategy`], …). The trait method `label`
-/// delegates to the inherent [`MustReachPhase::as_str`] — the
-/// inherent name (PascalCase `as_str`) stays the load-bearing wire-
-/// vocabulary projection that matches the serde rename AND the
-/// canonical [`ProcessPhase::as_str`] of the phase it gates against
-/// (pinned by `must_reach_phase_as_str_matches_process_phase_as_str`),
-/// while the trait method gives generic consumers a STABLE name
-/// (`label`) across the 36+ closed-set implementors.
-impl tatara_lisp::ClosedSet for MustReachPhase {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownMustReachPhase;
-    fn label(self) -> &'static str {
-        Self::as_str(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownMustReachPhase(s.to_owned())
-    }
-}
+// `impl FromStr for MustReachPhase` +
+// `impl tatara_lisp::ClosedSet for MustReachPhase` +
+// `impl fmt::Display for MustReachPhase` +
+// `pub struct UnknownMustReachPhase(pub String)` are all generated
+// by `#[derive(tatara_lisp::DeriveClosedSet)]` + `#[closed_set(via =
+// "as_str", display, generate_unknown = "must-reach phase")]` on
+// the enum declaration above. `label` delegates to the inherent
+// `MustReachPhase::as_str` — the PascalCase wire-vocabulary
+// projection stays load-bearing (matches the serde rename AND the
+// canonical `ProcessPhase::as_str` of the phase this variant gates
+// against, pinned by
+// `must_reach_phase_as_str_matches_process_phase_as_str`), while
+// generic `T: ClosedSet` consumers reach the STABLE workspace-wide
+// name (`label`). The explicit `generate_unknown = "must-reach
+// phase"` label carries the hyphenated wording that the
+// auto-derived `pascal_to_spaced_lowercase("MustReachPhase")` →
+// "must reach phase" projection cannot produce — the prior
+// hand-rolled `#[error("unknown must-reach phase: {0}")]`
+// annotation kept the hyphen, and the explicit attribute preserves
+// it through the lift. Symmetric to every other
+// `#[derive(DeriveClosedSet)]` implementor across the crate.
 
 impl From<MustReachPhase> for ProcessPhase {
     fn from(v: MustReachPhase) -> Self {
         v.as_process_phase()
     }
 }
-
-/// Typed parse failure carrying the offending input verbatim so the
-/// operator-facing diagnostic surfaces the bad value, not a normalized
-/// form. Symmetric to [`crate::phase::UnknownPhase`],
-/// [`crate::lifetime::UnknownTeardownPolicy`], and
-/// [`crate::boundary::UnknownConditionKind`].
-#[derive(Debug, thiserror::Error)]
-#[error("unknown must-reach phase: {0}")]
-pub struct UnknownMustReachPhase(pub String);
 
 /// Signal policy — how the Process responds to signals.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -291,6 +273,7 @@ mod tests {
     /// trait's structural surface can't express.
     #[test]
     fn unknown_must_reach_phase_errors() {
+        use std::str::FromStr;
         for bad in [
             "running", "ATTESTED", "Atested", "Pending", "Failed", "Reaped",
         ] {

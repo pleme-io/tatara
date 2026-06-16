@@ -105,8 +105,21 @@ pub struct UnknownSignal(pub String);
 /// [`ProcessSignal::ALL`] (parser triad), [`crate::phase::ProcessPhase::ALL`]
 /// (target codomain), [`crate::spec::MustReachPhase::ALL`] (typed subset of
 /// ProcessPhase).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    Default,
+    tatara_lisp::DeriveClosedSet,
+)]
 #[serde(rename_all = "PascalCase")]
+#[closed_set(via = "as_str", generate_unknown, display)]
 pub enum SighupStrategy {
     /// Running → Reconverging → Execing without tearing down resources.
     #[default]
@@ -167,55 +180,28 @@ impl SighupStrategy {
     }
 }
 
-impl std::fmt::Display for SighupStrategy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl std::str::FromStr for SighupStrategy {
-    type Err = UnknownSighupStrategy;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        <Self as tatara_lisp::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`SighupStrategy`] into the substrate-wide
-/// [`tatara_lisp::ClosedSet`] trait — the four-method contract that
-/// collapses the linear-sweep for-loop from this enum's
-/// [`std::str::FromStr::from_str`] body into ONE place
-/// ([`tatara_lisp::ClosedSet::parse_label`]'s default body) shared
-/// with every other `tatara-process` closed-set implementor
-/// ([`crate::phase::ProcessPhase`],
-/// [`crate::compliance::VerificationPhase`],
-/// [`crate::lifetime::TeardownPolicy`], …).
-///
-/// [`ProcessSignal`] is NOT a `ClosedSet` implementor — its `FromStr`
-/// keys on a compound projection (`as_str` || `short_str`) with
-/// case-insensitive uppercase normalization rather than a single
-/// canonical label, the same exemption pattern as
-/// [`tatara_lisp::CompilerSpecIoStage`]'s compound `(operation,
-/// label)` key. Only [`SighupStrategy`] (single PascalCase label, no
-/// normalization) plugs in here.
-impl tatara_lisp::ClosedSet for SighupStrategy {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownSighupStrategy;
-    fn label(self) -> &'static str {
-        Self::as_str(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownSighupStrategy(s.to_owned())
-    }
-}
-
-/// Typed parse failure carrying the offending input verbatim so the
-/// operator-facing diagnostic surfaces the bad value, not a normalized
-/// form. Symmetric to [`UnknownSignal`], [`crate::phase::UnknownPhase`],
-/// [`crate::spec::UnknownMustReachPhase`], and
-/// [`crate::boundary::UnknownConditionKind`].
-#[derive(Debug, thiserror::Error)]
-#[error("unknown sighup strategy: {0}")]
-pub struct UnknownSighupStrategy(pub String);
+// `impl FromStr for SighupStrategy` +
+// `impl tatara_lisp::ClosedSet for SighupStrategy` +
+// `impl std::fmt::Display for SighupStrategy` +
+// `pub struct UnknownSighupStrategy(pub String)` are all generated
+// by `#[derive(tatara_lisp::DeriveClosedSet)]` + `#[closed_set(via =
+// "as_str", generate_unknown, display)]` on the enum declaration
+// above. `label` delegates to the inherent
+// `SighupStrategy::as_str` — the PascalCase wire-vocabulary
+// projection stays load-bearing (matches the serde
+// `rename_all = "PascalCase"` projection verbatim), while generic
+// `T: ClosedSet` consumers reach the STABLE workspace-wide name
+// (`label`). The auto-derived carrier label "sighup strategy"
+// matches the prior hand-rolled `#[error("unknown sighup strategy:
+// {0}")]` annotation byte-for-byte.
+//
+// [`ProcessSignal`] is NOT a `ClosedSet` implementor — its
+// `FromStr` keys on a compound projection (`as_str` || `short_str`)
+// with case-insensitive uppercase normalization rather than a
+// single canonical label, the same exemption pattern as
+// [`tatara_lisp::CompilerSpecIoStage`]'s compound `(operation,
+// label)` key. Only [`SighupStrategy`] (single PascalCase label, no
+// normalization) plugs into the derive here.
 
 #[cfg(test)]
 mod tests {

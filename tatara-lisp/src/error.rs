@@ -1912,7 +1912,8 @@ impl TemplateInvariantKind {
 /// floor for the macro-definition-head surface, parallel to how
 /// `CompilerSpecIoStage` lands it for the disk-persistence surface and
 /// `TemplateInvariantKind` for the bytecode-runtime surface.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, tatara_lisp_derive::ClosedSet)]
+#[closed_set(via = "keyword", display, generate_unknown = "macro definition head")]
 pub enum MacroDefHead {
     /// `(defmacro NAME (PARAMS) BODY)` — the canonical Lisp-style macro
     /// definition.
@@ -2002,96 +2003,29 @@ impl MacroDefHead {
     }
 }
 
-impl std::fmt::Display for MacroDefHead {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.keyword())
-    }
-}
-
-/// Decode a canonical [`MacroDefHead`] keyword back into the typed
-/// variant — `Ok(head)` when the input matches one of the three
-/// canonical keyword literals exactly (`"defmacro"`,
-/// `"defpoint-template"`, `"defcheck"` — byte-equal, case-sensitive
-/// because the keywords are operator-facing reader vocabulary and any
-/// case drift would silently bifurcate the round-trip), and
-/// [`Err(UnknownMacroDefHead)`] for every other string (typos, the
-/// non-canonical capitalization `"Defmacro"`, the
-/// non-existent-but-near `"defmacroo"` / `"defcheckk"`, a sibling
-/// authoring-surface keyword like `"defpoint"` that names a
-/// definition-form NOT a definition-template, a `SexpShape` label like
-/// `"symbol"` that names a structural identity NOT a defmacro head).
-///
-/// Round-trip invariant pinned by
-/// `macro_def_head_keyword_round_trips_through_from_str`: for every
-/// variant `h` in [`MacroDefHead::ALL`], `h.keyword().parse() ==
-/// Ok(h)`. The decode is a linear sweep over [`MacroDefHead::ALL`]
-/// keyed on [`MacroDefHead::keyword`] so the three canonical literals
-/// live at ONE site (the `keyword` arms) rather than at TWO sites
-/// (`keyword` + per-variant `from_str` arms). Adding a fourth variant
-/// extends only [`MacroDefHead::ALL`] + [`MacroDefHead::keyword`],
-/// NOT a per-variant `from_str` arm. Same shape every sibling
-/// closed-set `FromStr` in this workspace uses ([`SexpShape::FromStr`],
-/// [`UnquoteForm::FromStr`], [`crate::ast::AtomKind::FromStr`],
-/// [`crate::ast::QuoteForm::FromStr`],
-/// `RequestorKind::from_str`, `ReceiptKind::from_str`,
-/// `AllocationPhase::from_str`, `ConditionKind::from_str`,
-/// `ProcessPhase::from_str`, …).
-///
-/// Cross-face relationship to [`MacroDefHead::from_keyword`]: the
-/// `Option`-faced projection ([`crate::ast::Sexp::as_call_to_any`]'s
-/// decoder slot) and the typed-error projection (this `FromStr`) are
-/// the SAME closed-set sweep with different rejection-face polarities.
-/// `from_keyword` delegates to `parse().ok()` so the closed-set sweep
-/// lives at ONE site (this impl); a regression that drifts the two
-/// faces would fail
-/// `macro_def_head_from_keyword_matches_from_str_for_every_input`.
-impl std::str::FromStr for MacroDefHead {
-    type Err = UnknownMacroDefHead;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        <Self as crate::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`MacroDefHead`] into the substrate-wide [`crate::ClosedSet`]
-/// trait — the four-method contract that lifts the linear-sweep
-/// for-loop from the [`MacroDefHead::from_str`] body into ONE place
-/// (`ClosedSet::parse_label`'s default body).
-///
-/// The trait method `label` delegates to the inherent
-/// [`MacroDefHead::keyword`] — the inherent name stays the
-/// domain-canonical projection (the macro-definition reserved word:
-/// `"defmacro"` / `"defpoint-template"` / `"defcheck"`), while the
-/// trait method gives generic consumers a STABLE name (`label`) to
-/// bind to.
-impl crate::ClosedSet for MacroDefHead {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownMacroDefHead;
-    fn label(self) -> &'static str {
-        MacroDefHead::keyword(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownMacroDefHead(s.to_owned())
-    }
-}
-
-/// Typed parse failure for [`MacroDefHead`]'s [`std::str::FromStr`] —
-/// carries the offending input verbatim so an operator-facing
-/// diagnostic surfaces the bad value, not a normalized form.
-/// Symmetric to every sibling `Unknown*` error in the workspace
-/// ([`UnknownSexpShape`], [`crate::ast::UnknownAtomKind`],
-/// [`crate::ast::UnknownQuoteForm`], [`UnknownUnquoteForm`],
-/// `tatara_process::allocation::UnknownRequestorKind`,
-/// `tatara_process::receipt::UnknownReceiptKind`,
-/// `tatara_process::phase::UnknownPhase`,
-/// `tatara_process::boundary::UnknownConditionKind`,
-/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
-/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
-/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
-/// diagnostics that hand the offending input back unchanged to the
-/// human.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
-#[error("unknown macro definition head: {0}")]
-pub struct UnknownMacroDefHead(pub String);
+// `impl std::fmt::Display for MacroDefHead` + `impl std::str::FromStr
+// for MacroDefHead` + `impl crate::ClosedSet for MacroDefHead` +
+// `pub struct UnknownMacroDefHead(pub String)` are generated by
+// `#[derive(tatara_lisp_derive::ClosedSet)]` on the enum declaration
+// above. `label` delegates to the inherent `MacroDefHead::keyword` via
+// `#[closed_set(via = "keyword")]` so the domain-canonical
+// reserved-word projection (`"defmacro"` / `"defpoint-template"` /
+// `"defcheck"`) stays load-bearing at the inherent surface while the
+// trait surface unifies every closed-set implementor's projection name
+// onto `label`. The `display` flag emits the substrate-wide
+// `f.write_str(Self::keyword(*self))` block.
+// `#[closed_set(generate_unknown = "macro definition head")]` emits the
+// typed parse-rejection carrier with the substrate-wide `Debug + Clone
+// + PartialEq + Eq + thiserror::Error` derives and the `#[error("unknown
+// macro definition head: {0}")]` annotation byte-for-byte; the explicit
+// label overrides the auto-derived
+// `pascal_to_spaced_lowercase("MacroDefHead")` (`"macro def head"`)
+// which abbreviates `Def` rather than expanding it to `definition`,
+// pinning the pre-lift operator-facing wording. The FromStr decode is
+// a linear sweep over `MacroDefHead::ALL` keyed on `keyword`; round-trip
+// + cross-axis rejection (`"defpoint"` / `"symbol"`) pinned by
+// `macro_def_head_keyword_round_trips_through_from_str` +
+// `macro_def_head_from_str_rejects_cross_axis_vocabularies`.
 
 /// Closed-set identifier for the way a `Sexp::List` entry in a macro's
 /// `&optional` section failed to match the canonical `(NAME DEFAULT)`
@@ -2219,7 +2153,8 @@ impl OptionalParamMalformedReason {
 /// THEORY.md §II.1 invariant 1 (typed entry): a non-symbol unquote target /
 /// an unbound template var is exactly the failure mode the typed-entry gate
 /// exists to reject, and the marker identity is part of the proof.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, tatara_lisp_derive::ClosedSet)]
+#[closed_set(via = "marker", display, generate_unknown = "unquote form")]
 pub enum UnquoteForm {
     /// `,x` — single-value substitution. The `,` marker; the inner symbol
     /// is substituted with its bound value at template expansion.
@@ -2302,110 +2237,33 @@ impl UnquoteForm {
     }
 }
 
-impl std::fmt::Display for UnquoteForm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.marker())
-    }
-}
-
-/// Decode a canonical [`UnquoteForm`] marker back into the typed variant
-/// — `Ok(form)` when the input matches one of the two canonical
-/// punctuation literals exactly (`","` for [`UnquoteForm::Unquote`],
-/// `",@"` for [`UnquoteForm::Splice`] — byte-equal, case-irrelevant for
-/// punctuation), and [`Err(UnknownUnquoteForm)`] for every other string
-/// (an empty input, a stray prefix character `"'"` / `` "`" `` from the
-/// sibling [`crate::ast::QuoteForm`] superset whose vocabulary covers
-/// the OTHER two homoiconic prefixes, a typo `",,"` / `",@@"`, a label
-/// from the [`SexpShape`] vocabulary the punctuation axis is
-/// structurally outside of — `"unquote"` / `"unquote-splice"` are the
-/// `SexpShape` projections of the SAME closed set on a DIFFERENT axis
-/// and rightly reject here, kept distinct by design).
-///
-/// Round-trip invariant pinned by
-/// `unquote_form_marker_round_trips_through_from_str`: for every
-/// variant `f` in [`UnquoteForm::ALL`], `f.marker().parse() == Ok(f)`.
-/// The decode is a linear sweep over [`UnquoteForm::ALL`] keyed on
-/// [`UnquoteForm::marker`] so the canonical literals live at ONE site
-/// (the `marker` arms) rather than at TWO sites (`marker` + a
-/// per-variant `from_str` arm) — adding a third variant extends only
-/// [`UnquoteForm::ALL`] + [`UnquoteForm::marker`], NOT a third
-/// per-variant literal site. Same shape every sibling closed-set
-/// `FromStr` in this workspace uses ([`SexpShape::FromStr`],
-/// [`crate::ast::AtomKind::FromStr`],
-/// `RequestorKind::from_str`, `ReceiptKind::from_str`,
-/// `AllocationPhase::from_str`, `ConditionKind::from_str`,
-/// `ProcessPhase::from_str`, …).
-///
-/// Open-by-design callers that want to drop the typed-error face of
-/// the decode and reach for `Option<UnquoteForm>` compose
-/// `marker.parse().ok()` exactly as the `tatara-process` siblings'
-/// `known_kind()`-shaped projections do.
-///
-/// Cross-axis relationship to [`SexpShape::FromStr`]: the two closed
-/// sets project the SAME two `Sexp::Unquote` / `Sexp::UnquoteSplice`
-/// constructors on DISTINCT axes — `SexpShape` decodes the
-/// `"unquote"` / `"unquote-splice"` structural-identity labels (what
-/// the operator wrote at the macro-template surface, named as a
-/// reader-shape identity), while [`UnquoteForm`] decodes the `","` /
-/// `",@"` punctuation markers (how the prefix looks in source text).
-/// Both axes share the same closed-set cardinality (2) and project
-/// from the same underlying `Sexp` variants, but their vocabularies
-/// are intentionally disjoint — a regression that conflates the two
-/// would let `",".parse::<SexpShape>()` succeed or
-/// `"unquote".parse::<UnquoteForm>()` succeed, silently bifurcating
-/// the substrate's diagnostic surface. Pinned by
-/// `unquote_form_from_str_rejects_sexp_shape_labels_on_template_marker_axis`.
-impl std::str::FromStr for UnquoteForm {
-    type Err = UnknownUnquoteForm;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        <Self as crate::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`UnquoteForm`] into the substrate-wide [`crate::ClosedSet`]
-/// trait — the four-method contract that lifts the linear-sweep
-/// for-loop from the [`UnquoteForm::from_str`] body into ONE place
-/// (`ClosedSet::parse_label`'s default body).
-///
-/// The trait method `label` delegates to the inherent
-/// [`UnquoteForm::marker`] — the inherent name stays the
-/// domain-canonical projection (the template-substitution punctuation
-/// marker: `","` / `",@"`), while the trait method gives generic
-/// consumers a STABLE name (`label`) to bind to. The marker-axis
-/// vocabulary stays intentionally disjoint from the structural-axis
-/// [`SexpShape`] vocabulary (`"unquote"` / `"unquote-splice"`) — both
-/// closed sets project the same `Sexp::Unquote` / `Sexp::UnquoteSplice`
-/// constructors on different axes, and the disjointness contract
-/// holds at the trait surface exactly because each implementor's
-/// `label` projects its own inherent axis-vocabulary.
-impl crate::ClosedSet for UnquoteForm {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownUnquoteForm;
-    fn label(self) -> &'static str {
-        UnquoteForm::marker(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownUnquoteForm(s.to_owned())
-    }
-}
-
-/// Typed parse failure for [`UnquoteForm`]'s [`std::str::FromStr`] —
-/// carries the offending input verbatim so an operator-facing
-/// diagnostic surfaces the bad value, not a normalized form.
-/// Symmetric to every sibling `Unknown*` error in the workspace
-/// ([`UnknownSexpShape`], [`crate::ast::UnknownAtomKind`],
-/// `tatara_process::allocation::UnknownRequestorKind`,
-/// `tatara_process::receipt::UnknownReceiptKind`,
-/// `tatara_process::phase::UnknownPhase`,
-/// `tatara_process::boundary::UnknownConditionKind`,
-/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
-/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
-/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
-/// diagnostics that hand the offending input back unchanged to the
-/// human.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
-#[error("unknown unquote form: {0}")]
-pub struct UnknownUnquoteForm(pub String);
+// `impl std::fmt::Display for UnquoteForm` + `impl std::str::FromStr
+// for UnquoteForm` + `impl crate::ClosedSet for UnquoteForm` +
+// `pub struct UnknownUnquoteForm(pub String)` are generated by
+// `#[derive(tatara_lisp_derive::ClosedSet)]` on the enum declaration
+// above. `label` delegates to the inherent `UnquoteForm::marker` via
+// `#[closed_set(via = "marker")]` so the domain-canonical
+// punctuation-marker projection (`","` / `",@"`) stays load-bearing at
+// the inherent surface while the trait surface unifies every
+// closed-set implementor's projection name onto `label`. The marker
+// axis stays intentionally disjoint from the structural-axis
+// `SexpShape` vocabulary (`"unquote"` / `"unquote-splice"`); the
+// disjointness contract holds at the trait surface exactly because
+// each implementor's `label` projects its own inherent
+// axis-vocabulary. The `display` flag emits the substrate-wide
+// `f.write_str(Self::marker(*self))` block.
+// `#[closed_set(generate_unknown = "unquote form")]` emits the typed
+// parse-rejection carrier with the substrate-wide `Debug + Clone +
+// PartialEq + Eq + thiserror::Error` derives and the `#[error("unknown
+// unquote form: {0}")]` annotation byte-for-byte; the explicit label
+// matches the auto-derived `pascal_to_spaced_lowercase("UnquoteForm")`
+// projection byte-for-byte but pins the pre-lift wording against any
+// future change to the projection helper's behavior on this name. The
+// FromStr decode is a linear sweep over `UnquoteForm::ALL` keyed on
+// `marker`; round-trip + cross-axis rejection (`"unquote"` /
+// `"unquote-splice"`) pinned by
+// `unquote_form_marker_round_trips_through_from_str` +
+// `unquote_form_from_str_rejects_sexp_shape_labels_on_template_marker_axis`.
 
 /// Closed-set identifier for a kwargs-path projection — the `form:` label
 /// shape that a typed-entry kwarg failure renders into the `compile error
@@ -2580,7 +2438,8 @@ impl std::fmt::Display for KwargPath {
 /// lands the structural-completeness floor for the path-shape category
 /// surface, parallel to how [`KwargPath`] lands it for the path-identity
 /// surface, [`ExpectedKwargShape`] for the expected-shape surface, etc.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, tatara_lisp_derive::ClosedSet)]
+#[closed_set(via = "label", display, generate_unknown = "kwarg path kind")]
 pub enum KwargPathKind {
     /// The kind-view of [`KwargPath::Named`] — `:<key>` failures at a
     /// named kwarg (typed-atom extractors, `Option<T>` paths).
@@ -2624,69 +2483,26 @@ impl KwargPathKind {
     }
 }
 
-impl std::fmt::Display for KwargPathKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label())
-    }
-}
-
-/// Decode a canonical [`KwargPathKind`] label back into the typed
-/// variant — `Ok(kind)` when the input matches one of the three
-/// canonical lowercase literals exactly (`"named"` / `"item"` /
-/// `"slot"`), and [`Err(UnknownKwargPathKind)`] for every other string
-/// (typos, capitalized variants, kwargs-path RENDERINGS — `":foo"` /
-/// `":foo[0]"` / `"kwargs[0]"` reject because those name path
-/// IDENTITIES, not kind categories).
-///
-/// Round-trip invariant pinned by
-/// `kwarg_path_kind_label_round_trips_through_from_str`: for every
-/// variant `k` in [`KwargPathKind::ALL`], `k.label().parse() == Ok(k)`.
-/// The decode is a linear sweep over [`KwargPathKind::ALL`] keyed on
-/// [`KwargPathKind::label`] so the canonical literals live at ONE site.
-impl std::str::FromStr for KwargPathKind {
-    type Err = UnknownKwargPathKind;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        <Self as crate::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`KwargPathKind`] into the substrate-wide [`crate::ClosedSet`]
-/// trait — the four-method contract that lifts the linear-sweep
-/// for-loop from the [`KwargPathKind::from_str`] body into ONE place
-/// (`ClosedSet::parse_label`'s default body).
-///
-/// The trait method `label` delegates to the inherent
-/// [`KwargPathKind::label`] — the inherent name happens to coincide
-/// with the trait method name here, but the delegation is still
-/// explicit so the SAME wiring shape applies whether the inherent
-/// projection is named `label` (this enum,
-/// [`ExpectedKwargShape`], [`SexpShape`], [`crate::ast::AtomKind`]),
-/// `prefix` ([`crate::ast::QuoteForm`]), `marker` ([`UnquoteForm`]),
-/// `keyword` ([`MacroDefHead`]), or `as_str` (the `tatara-process`
-/// PascalCase family).
-impl crate::ClosedSet for KwargPathKind {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownKwargPathKind;
-    fn label(self) -> &'static str {
-        KwargPathKind::label(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownKwargPathKind(s.to_owned())
-    }
-}
-
-/// Typed parse failure for [`KwargPathKind`]'s [`std::str::FromStr`] —
-/// carries the offending input verbatim so an operator-facing diagnostic
-/// surfaces the bad value, not a normalized form. Symmetric to every
-/// sibling `Unknown*` error in the workspace ([`UnknownExpectedKwargShape`],
-/// [`UnknownSexpShape`], [`UnknownMacroDefHead`], [`UnknownUnquoteForm`],
-/// [`UnknownCompilerSpecIoStage`], …) — the joint shape
-/// (`#[error("unknown <thing>: {0}")]`, `pub struct ...(pub String)`) is
-/// the substrate-wide idiom for parse-rejection diagnostics that hand
-/// the offending input back unchanged to the human.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
-#[error("unknown kwarg path kind: {0}")]
-pub struct UnknownKwargPathKind(pub String);
+// `impl std::fmt::Display for KwargPathKind` + `impl std::str::FromStr
+// for KwargPathKind` + `impl crate::ClosedSet for KwargPathKind` +
+// `pub struct UnknownKwargPathKind(pub String)` are generated by
+// `#[derive(tatara_lisp_derive::ClosedSet)]` on the enum declaration
+// above. `label` delegates to the inherent `KwargPathKind::label` via
+// `#[closed_set(via = "label")]` — the inherent name coincides with
+// the trait method name here, but the delegation stays explicit so the
+// SAME wiring shape applies whether the inherent projection is named
+// `label` / `prefix` / `marker` / `keyword` / `as_str`. The `display`
+// flag emits the substrate-wide `f.write_str(Self::label(*self))` block.
+// `#[closed_set(generate_unknown = "kwarg path kind")]` emits the typed
+// parse-rejection carrier with the substrate-wide `Debug + Clone +
+// PartialEq + Eq + thiserror::Error` derives and the `#[error("unknown
+// kwarg path kind: {0}")]` annotation byte-for-byte; the explicit label
+// matches the auto-derived `pascal_to_spaced_lowercase("KwargPathKind")`
+// projection byte-for-byte but pins the pre-lift wording. Round-trip +
+// cross-axis rejection (path-rendering literals `":foo"` / `":foo[0]"` /
+// `"kwargs[0]"`) pinned by
+// `kwarg_path_kind_label_round_trips_through_from_str` +
+// `unknown_kwarg_path_kind_carries_offending_input_verbatim`.
 
 /// Closed-set identifier for the `expected:` slot of a
 /// `LispError::TypeMismatch` diagnostic — the seven reachable
@@ -2751,7 +2567,8 @@ pub struct UnknownKwargPathKind(pub String);
 /// kwarg gate fired, and the typed enum makes that identity first-
 /// class as load-bearing data on the variant rather than as a
 /// projection-to-String at the helper boundary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, tatara_lisp_derive::ClosedSet)]
+#[closed_set(via = "label", display, generate_unknown = "expected kwarg shape")]
 pub enum ExpectedKwargShape {
     /// `"keyword"` — emitted by `parse_kwargs`'s
     /// "this-position-must-be-a-keyword" gate when an even-position
@@ -2875,95 +2692,29 @@ impl ExpectedKwargShape {
     }
 }
 
-impl std::fmt::Display for ExpectedKwargShape {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label())
-    }
-}
-
-/// Decode a canonical [`ExpectedKwargShape`] label back into the typed
-/// variant — `Ok(shape)` when the input matches one of the seven
-/// canonical lowercase literals exactly (`"keyword"` / `"string"` /
-/// `"int"` / `"number"` / `"bool"` / `"list"` / `"list of strings"` —
-/// byte-equal, case-sensitive because the labels are the rendered
-/// diagnostic surface and any case drift would silently bifurcate the
-/// round-trip), and [`Err(UnknownExpectedKwargShape)`] for every other
-/// string (typos, non-canonical capitalizations, labels from the
-/// sibling [`SexpShape`] vocabulary whose seven non-overlapping
-/// entries — `"nil"` / `"symbol"` / `"float"` / `"quote"` /
-/// `"quasiquote"` / `"unquote"` / `"unquote-splice"` — name
-/// structural-Sexp identities the typed-entry kwarg gate cannot
-/// `expect`).
-///
-/// Round-trip invariant pinned by
-/// `expected_kwarg_shape_label_round_trips_through_from_str`: for
-/// every variant `s` in [`ExpectedKwargShape::ALL`], `s.label().parse()
-/// == Ok(s)`. The decode is a linear sweep over
-/// [`ExpectedKwargShape::ALL`] keyed on [`ExpectedKwargShape::label`]
-/// so the canonical literals live at ONE site (the `label` arms) rather
-/// than at TWO sites (`label` plus a per-variant `from_str` arm) —
-/// adding an eighth variant extends only [`ExpectedKwargShape::ALL`]
-/// and [`ExpectedKwargShape::label`], NOT a per-variant `from_str` arm.
-/// Same shape every sibling closed-set `FromStr` in this workspace uses
-/// (`SexpShape::from_str`, `UnquoteForm::from_str`,
-/// `MacroDefHead::from_str`, `AtomKind::from_str`,
-/// `QuoteForm::from_str`, `RequestorKind::from_str`,
-/// `ReceiptKind::from_str`, `AllocationPhase::from_str`,
-/// `ConditionKind::from_str`, `ProcessPhase::from_str`, …).
-///
-/// Open-by-design callers that want to drop the typed-error face of
-/// the decode and reach for `Option<ExpectedKwargShape>` compose
-/// `label.parse().ok()` exactly as the `tatara-process` siblings'
-/// `known_kind()`-shaped projections do.
-impl std::str::FromStr for ExpectedKwargShape {
-    type Err = UnknownExpectedKwargShape;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        <Self as crate::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`ExpectedKwargShape`] into the substrate-wide
-/// [`crate::ClosedSet`] trait — the four-method contract that lifts
-/// the linear-sweep for-loop from the [`ExpectedKwargShape::from_str`]
-/// body into ONE place (`ClosedSet::parse_label`'s default body).
-///
-/// The trait method `label` delegates to the inherent
-/// [`ExpectedKwargShape::label`] — the inherent name coincides with
-/// the trait method name here. The trait plug exposes the seven
-/// reachable expected-shape labels to generic consumers (a future
-/// kwarg-extractor coverage report, an LSP completion source for the
-/// `:<key>` slot's expected-shape diagnostic, …) without forcing the
-/// consumer to import the per-implementor inherent constant.
-impl crate::ClosedSet for ExpectedKwargShape {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownExpectedKwargShape;
-    fn label(self) -> &'static str {
-        ExpectedKwargShape::label(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownExpectedKwargShape(s.to_owned())
-    }
-}
-
-/// Typed parse failure for [`ExpectedKwargShape`]'s
-/// [`std::str::FromStr`] — carries the offending input verbatim so an
-/// operator-facing diagnostic surfaces the bad value, not a normalized
-/// form. Symmetric to every sibling `Unknown*` error in the workspace
-/// ([`UnknownSexpShape`], [`UnknownMacroDefHead`],
-/// [`UnknownUnquoteForm`], [`crate::ast::UnknownAtomKind`],
-/// [`crate::ast::UnknownQuoteForm`],
-/// `tatara_process::allocation::UnknownRequestorKind`,
-/// `tatara_process::receipt::UnknownReceiptKind`,
-/// `tatara_process::phase::UnknownPhase`,
-/// `tatara_process::boundary::UnknownConditionKind`,
-/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
-/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct
-/// ...(pub String)`) is the substrate-wide idiom for parse-rejection
-/// diagnostics that hand the offending input back unchanged to the
-/// human.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
-#[error("unknown expected kwarg shape: {0}")]
-pub struct UnknownExpectedKwargShape(pub String);
+// `impl std::fmt::Display for ExpectedKwargShape` +
+// `impl std::str::FromStr for ExpectedKwargShape` +
+// `impl crate::ClosedSet for ExpectedKwargShape` +
+// `pub struct UnknownExpectedKwargShape(pub String)` are generated by
+// `#[derive(tatara_lisp_derive::ClosedSet)]` on the enum declaration
+// above. `label` delegates to the inherent `ExpectedKwargShape::label`
+// via `#[closed_set(via = "label")]` — the inherent name coincides
+// with the trait method name here; the delegation stays explicit so
+// the SAME wiring shape applies whether the inherent projection is
+// `label` / `prefix` / `marker` / `keyword` / `as_str`. The `display`
+// flag emits the substrate-wide `f.write_str(Self::label(*self))`
+// block. `#[closed_set(generate_unknown = "expected kwarg shape")]`
+// emits the typed parse-rejection carrier with the substrate-wide
+// `Debug + Clone + PartialEq + Eq + thiserror::Error` derives and the
+// `#[error("unknown expected kwarg shape: {0}")]` annotation
+// byte-for-byte; the explicit label matches the auto-derived
+// `pascal_to_spaced_lowercase("ExpectedKwargShape")` projection
+// byte-for-byte but pins the pre-lift wording. Round-trip + cross-axis
+// rejection (`SexpShape` structural labels `"nil"` / `"symbol"` /
+// `"float"` / `"quote"` / `"quasiquote"` / `"unquote"` /
+// `"unquote-splice"`) pinned by
+// `expected_kwarg_shape_label_round_trips_through_from_str` +
+// `expected_kwarg_shape_from_str_accepts_only_canonical_labels`.
 
 /// Closed-set identifier for the outermost shape of a `Sexp` — the twelve
 /// reachable shapes the reader can produce (`Nil` ⊎ `Symbol` ⊎ `Keyword` ⊎
@@ -3019,7 +2770,8 @@ pub struct UnknownExpectedKwargShape(pub String);
 /// of the proof of WHAT the typed-entry gate observed, and the typed enum
 /// makes that identity first-class as load-bearing data on the variant
 /// rather than as a projection-to-`&'static str` at the helper boundary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, tatara_lisp_derive::ClosedSet)]
+#[closed_set(via = "label", display, generate_unknown = "sexp shape")]
 pub enum SexpShape {
     /// `"nil"` — `Sexp::Nil`.
     Nil,
@@ -3131,86 +2883,27 @@ impl SexpShape {
     }
 }
 
-impl std::fmt::Display for SexpShape {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label())
-    }
-}
-
-/// Decode a canonical `SexpShape` label back into the typed variant —
-/// `Ok(shape)` when the input matches one of the twelve canonical
-/// kebab-/lowercase literals exactly (byte-equal, case-sensitive — the
-/// labels are the rendered diagnostic surface and any case drift would
-/// silently bifurcate the round-trip), `Err(UnknownSexpShape)` for
-/// every other string (typos, non-canonical capitalizations, labels
-/// from a sibling closed set like `ExpectedKwargShape::label()` whose
-/// vocabulary overlaps on `"keyword"` / `"string"` / `"int"` / `"bool"`
-/// / `"list"` but DOES NOT overlap on `"number"` / `"list of strings"`,
-/// reader spellings the lift would have to extend to cover).
-///
-/// Round-trip invariant pinned by
-/// `sexp_shape_label_round_trips_through_from_str`: for every variant
-/// `s` in [`SexpShape::ALL`], `s.label().parse() == Ok(s)`. The decode
-/// is a linear sweep over [`SexpShape::ALL`] keyed on [`SexpShape::label`]
-/// so the canonical literals live at ONE site (the `label` arms) rather
-/// than at TWO sites (`label` + a per-variant `from_str` arm) — adding
-/// a thirteenth variant extends only [`SexpShape::ALL`] +
-/// [`SexpShape::label`], NOT a third per-variant literal site. Same
-/// shape every sibling closed-set `FromStr` in this workspace uses
-/// (`RequestorKind::from_str`, `ReceiptKind::from_str`,
-/// `AllocationPhase::from_str`, `ConditionKind::from_str`,
-/// `ProcessPhase::from_str`, …).
-///
-/// Open-by-design callers that want to drop the typed-error face of
-/// the decode and reach for `Option<SexpShape>` compose
-/// `label.parse().ok()` exactly as the `tatara-process` siblings'
-/// `known_kind()`-shaped projections do.
-impl std::str::FromStr for SexpShape {
-    type Err = UnknownSexpShape;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        <Self as crate::ClosedSet>::parse_label(s)
-    }
-}
-
-/// Plug [`SexpShape`] into the substrate-wide [`crate::ClosedSet`]
-/// trait — the four-method contract that lifts the linear-sweep
-/// for-loop from the [`SexpShape::from_str`] body into ONE place
-/// (`ClosedSet::parse_label`'s default body).
-///
-/// The trait method `label` delegates to the inherent
-/// [`SexpShape::label`] — the inherent name coincides with the trait
-/// method name here. The trait plug exposes the twelve reachable
-/// `Sexp` outer shapes to generic consumers (a metrics tagger over
-/// `tatara_lisp_type_mismatch_total{got=<shape>}`, a typed-rewriter
-/// dispatch over the structural axis, …) without forcing the consumer
-/// to import the per-implementor inherent constant.
-impl crate::ClosedSet for SexpShape {
-    const ALL: &'static [Self] = &Self::ALL;
-    type Unknown = UnknownSexpShape;
-    fn label(self) -> &'static str {
-        SexpShape::label(self)
-    }
-    fn make_unknown(s: &str) -> Self::Unknown {
-        UnknownSexpShape(s.to_owned())
-    }
-}
-
-/// Typed parse failure for [`SexpShape`]'s [`std::str::FromStr`] —
-/// carries the offending input verbatim so an operator-facing
-/// diagnostic surfaces the bad value, not a normalized form.
-/// Symmetric to every sibling `Unknown*` error in the workspace
-/// (`tatara_process::allocation::UnknownRequestorKind`,
-/// `tatara_process::receipt::UnknownReceiptKind`,
-/// `tatara_process::phase::UnknownPhase`,
-/// `tatara_process::boundary::UnknownConditionKind`,
-/// `tatara_process::lifetime::UnknownTeardownPolicy`, …) — the joint
-/// shape (`#[error("unknown <thing>: {0}")]`, `pub struct ...(pub
-/// String)`) is the substrate-wide idiom for parse-rejection
-/// diagnostics that hand the offending input back unchanged to the
-/// human.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
-#[error("unknown sexp shape: {0}")]
-pub struct UnknownSexpShape(pub String);
+// `impl std::fmt::Display for SexpShape` + `impl std::str::FromStr for
+// SexpShape` + `impl crate::ClosedSet for SexpShape` +
+// `pub struct UnknownSexpShape(pub String)` are generated by
+// `#[derive(tatara_lisp_derive::ClosedSet)]` on the enum declaration
+// above. `label` delegates to the inherent `SexpShape::label` via
+// `#[closed_set(via = "label")]` — the inherent name coincides with
+// the trait method name here; the delegation stays explicit so the
+// SAME wiring shape applies whether the inherent projection is `label`
+// / `prefix` / `marker` / `keyword` / `as_str`. The `display` flag
+// emits the substrate-wide `f.write_str(Self::label(*self))` block.
+// `#[closed_set(generate_unknown = "sexp shape")]` emits the typed
+// parse-rejection carrier with the substrate-wide `Debug + Clone +
+// PartialEq + Eq + thiserror::Error` derives and the `#[error("unknown
+// sexp shape: {0}")]` annotation byte-for-byte; the explicit label
+// matches the auto-derived `pascal_to_spaced_lowercase("SexpShape")`
+// projection byte-for-byte but pins the pre-lift wording. Round-trip
+// + cross-axis rejection (`ExpectedKwargShape` labels `"number"` /
+// `"list of strings"` whose vocabulary partially overlaps SexpShape on
+// five of seven entries) pinned by
+// `sexp_shape_label_round_trips_through_from_str` +
+// `sexp_shape_from_str_accepts_only_canonical_labels`.
 
 /// Typed witness of an offending `Sexp` at a typed-entry rejection
 /// boundary — the joint identity (shape + literal) the substrate's
@@ -9298,5 +8991,87 @@ mod tests {
         assert!("def-macro".parse::<MacroDefHead>().is_err());
         assert!("defun".parse::<MacroDefHead>().is_err());
         assert!("define-syntax".parse::<MacroDefHead>().is_err());
+    }
+
+    #[test]
+    fn macro_def_head_is_well_formed_closed_set() {
+        // Structural contract: MacroDefHead's three variants are
+        // pairwise distinct, round-trip through the trait's `label` ↔
+        // `parse_label`, and reject the empty string — the
+        // workspace-wide `assert_closed_set_well_formed::<T>()` testkit
+        // pinned across every `tatara-process` closed-set implementor
+        // AND every prior tatara-lisp retrofit (`AtomKind`, `QuoteForm`).
+        // The substrate-level assertion runs on the auto-derived
+        // `impl ClosedSet for MacroDefHead` emitted by
+        // `#[derive(tatara_lisp_derive::ClosedSet)]` — a regression
+        // that drifts the derive's `make_unknown` delegation, the
+        // `via = "keyword"` projection (`"defmacro"` /
+        // `"defpoint-template"` / `"defcheck"`), or the variant
+        // listing forced through `Self::ALL` fails-loudly here in
+        // isolation from the per-variant truth tables above.
+        crate::assert_closed_set_well_formed::<MacroDefHead>();
+    }
+
+    #[test]
+    fn unquote_form_is_well_formed_closed_set() {
+        // Structural contract: UnquoteForm's two variants are pairwise
+        // distinct, round-trip through the trait's `label` ↔
+        // `parse_label`, and reject the empty string. The substrate-
+        // level assertion runs on the auto-derived `impl ClosedSet
+        // for UnquoteForm` emitted by
+        // `#[derive(tatara_lisp_derive::ClosedSet)]` — a regression
+        // that drifts the `via = "marker"` projection (`","` /
+        // `",@"`) or conflates the punctuation-axis vocabulary with
+        // the structural-axis SexpShape vocabulary
+        // (`"unquote"` / `"unquote-splice"`) fails-loudly here. The
+        // cross-axis disjointness check stays at
+        // `unquote_form_from_str_rejects_sexp_shape_labels_on_template_marker_axis`;
+        // THIS test pins the in-axis well-formedness floor.
+        crate::assert_closed_set_well_formed::<UnquoteForm>();
+    }
+
+    #[test]
+    fn kwarg_path_kind_is_well_formed_closed_set() {
+        // Structural contract: KwargPathKind's three variants are
+        // pairwise distinct, round-trip through the trait's `label` ↔
+        // `parse_label`, and reject the empty string. The substrate-
+        // level assertion runs on the auto-derived `impl ClosedSet
+        // for KwargPathKind` emitted by
+        // `#[derive(tatara_lisp_derive::ClosedSet)]` — a regression
+        // that drifts the `via = "label"` projection (`"named"` /
+        // `"item"` / `"slot"`) or the variant listing forced through
+        // `Self::ALL` fails-loudly here.
+        crate::assert_closed_set_well_formed::<KwargPathKind>();
+    }
+
+    #[test]
+    fn expected_kwarg_shape_is_well_formed_closed_set() {
+        // Structural contract: ExpectedKwargShape's seven variants are
+        // pairwise distinct, round-trip through the trait's `label` ↔
+        // `parse_label`, and reject the empty string. The substrate-
+        // level assertion runs on the auto-derived `impl ClosedSet
+        // for ExpectedKwargShape` emitted by
+        // `#[derive(tatara_lisp_derive::ClosedSet)]` — a regression
+        // that drifts the `via = "label"` projection (`"keyword"` /
+        // `"string"` / `"int"` / `"number"` / `"bool"` / `"list"` /
+        // `"list of strings"`) fails-loudly here.
+        crate::assert_closed_set_well_formed::<ExpectedKwargShape>();
+    }
+
+    #[test]
+    fn sexp_shape_is_well_formed_closed_set() {
+        // Structural contract: SexpShape's twelve variants are
+        // pairwise distinct, round-trip through the trait's `label` ↔
+        // `parse_label`, and reject the empty string. The substrate-
+        // level assertion runs on the auto-derived `impl ClosedSet
+        // for SexpShape` emitted by
+        // `#[derive(tatara_lisp_derive::ClosedSet)]` — a regression
+        // that drifts the `via = "label"` projection (`"nil"` /
+        // `"symbol"` / `"keyword"` / `"string"` / `"int"` / `"float"`
+        // / `"bool"` / `"list"` / `"quote"` / `"quasiquote"` /
+        // `"unquote"` / `"unquote-splice"`) or the variant listing
+        // forced through `Self::ALL` (cardinality 12 = every reachable
+        // outer `Sexp` shape) fails-loudly here.
+        crate::assert_closed_set_well_formed::<SexpShape>();
     }
 }

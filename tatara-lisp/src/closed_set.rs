@@ -181,6 +181,47 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// literal pins the cardinality at the declaration site.
     const ALL: &'static [Self];
 
+    /// The substrate-wide spaced-lowercase NAME of the closed set —
+    /// the noun phrase the parse-rejection diagnostic threads into
+    /// `"unknown {SET_LABEL}: {input}"` and the typed companion the
+    /// trait exposes to generic consumers (metrics taggers, REPL /
+    /// LSP completion bars, exhaustive-listing renderers) that want
+    /// to name the set without re-deriving the projection at every
+    /// call site.
+    ///
+    /// The substrate-wide convention pins this projection at TWO
+    /// sites pre-lift: (1) the auto-derived `pub struct
+    /// Unknown{EnumName}(pub String)` carrier's `#[error("unknown
+    /// <label>: {0}")]` annotation that
+    /// `#[closed_set(generate_unknown[ = "<label>"])]` emits, and
+    /// (2) per-implementor `_message_matches_substrate_convention`
+    /// test bodies that pin the rendered diagnostic byte-for-byte.
+    /// Lifting the label onto the trait means BOTH sites read from
+    /// ONE generative origin — the derive computes the label once,
+    /// emits it into the carrier's `#[error(...)]` annotation, AND
+    /// exposes it through this const so [`assert_closed_set_well_formed`]
+    /// can pin the rendered diagnostic shape generically through
+    /// the trait rather than through 33+ per-implementor literal
+    /// assertions.
+    ///
+    /// Implementors auto-derive the projection from the PascalCase
+    /// enum name via the derive's `pascal_to_spaced_lowercase`
+    /// helper (`ChannelKind` → `"channel kind"`, `ReplacementPolicy`
+    /// → `"replacement policy"`); for irregular labels
+    /// (`MacroDefHead` → `"macro definition head"`, `MustReachPhase`
+    /// → `"must-reach phase"`) pin the operator-facing wording via
+    /// `#[closed_set(generate_unknown = "...")]` and the derive
+    /// threads the SAME label into both the carrier's `#[error(...)]`
+    /// annotation AND this const. An explicit
+    /// `#[closed_set(set_label = "...")]` override exists for the
+    /// degenerate case where an implementor wants to bind the
+    /// trait's set name independently of the carrier's diagnostic
+    /// label (no production implementor reaches for this today; the
+    /// axis exists for the same reason `via` does — a typed escape
+    /// hatch the derive surface exposes rather than forcing the
+    /// implementor to hand-roll the impl).
+    const SET_LABEL: &'static str;
+
     /// The typed parse-rejection carrier this implementor emits when
     /// [`Self::parse_label`] is handed a non-canonical input. The
     /// substrate-wide convention is the
@@ -268,13 +309,28 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///    when no implementor's `label()` projects to `""`, but checking it
 ///    directly catches a regression where an implementor accidentally
 ///    introduced an empty label as a variant projection.
+/// 5. [`ClosedSet::SET_LABEL`] is non-empty AND the typed parse-rejection
+///    carrier's [`core::fmt::Display`] rendering threads it into the
+///    substrate-wide `"unknown {SET_LABEL}: {input}"` shape verbatim —
+///    the per-implementor `_message_matches_substrate_convention` test
+///    that 13+ implementors pin byte-for-byte (`UnknownEncapsulationTarget`
+///    → `"unknown encapsulation target: foo"`, `UnknownArtifactKind` →
+///    `"unknown artifact kind: foo"`, …) lifted onto the trait so the
+///    diagnostic-shape contract emits from ONE generative origin (the
+///    derive's `emit_unknown_struct` helper) AND verifies through ONE
+///    typed contract (this assertion). A regression that drifts the
+///    rendering between two implementors (a future derive emitter that
+///    changes the prefix, a hand-rolled carrier whose `#[error(...)]`
+///    annotation omits the noun phrase) fails this assertion on the
+///    affected implementor without needing 33+ per-implementor literal
+///    tests to catch the drift independently.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
 /// `can_transition_to` state-machine contracts, the serde wire-format
 /// coherence sweeps, the signal-shaped `short_str` dual-projection
 /// matches — those project per-variant content the trait's structural
-/// contract can't see. This helper lifts ONLY the structural three (+1)
+/// contract can't see. This helper lifts ONLY the structural four (+1)
 /// every implementor copies.
 ///
 /// Marked `#[track_caller]` so a failure points at the per-implementor
@@ -302,6 +358,7 @@ pub trait ClosedSet: Sized + Copy + 'static {
 pub fn assert_closed_set_well_formed<T>()
 where
     T: ClosedSet + PartialEq + core::fmt::Debug,
+    T::Unknown: core::fmt::Display,
 {
     let type_name = core::any::type_name::<T>();
     assert!(
@@ -337,6 +394,33 @@ where
         T::parse_label("").is_err(),
         "{type_name}: empty string is a valid label — a closed-set whose codomain includes \"\" is degenerate",
     );
+    // (5) — SET_LABEL non-empty + carrier renders the substrate-wide
+    // `"unknown {SET_LABEL}: {input}"` shape verbatim. The probe
+    // input `"__assert_closed_set_well_formed_probe__"` is chosen
+    // to be lexically distinct from every conceivable canonical
+    // variant label across the substrate (PascalCase wire form,
+    // kebab-case keyword form, punctuation marker form) so the
+    // sweep `T::parse_label` walks rejects unambiguously and lands
+    // in the `make_unknown` carrier — the rendering this assertion
+    // pins is the carrier's `Display`, not a `parse_label` Ok-arm.
+    assert!(
+        !T::SET_LABEL.is_empty(),
+        "{type_name}: T::SET_LABEL is empty — the substrate-wide diagnostic shape needs a noun phrase to render `unknown <set>: <input>`",
+    );
+    let probe = "__assert_closed_set_well_formed_probe__";
+    let rendered = T::make_unknown(probe).to_string();
+    let expected = {
+        let mut out = String::with_capacity("unknown : ".len() + T::SET_LABEL.len() + probe.len());
+        out.push_str("unknown ");
+        out.push_str(T::SET_LABEL);
+        out.push_str(": ");
+        out.push_str(probe);
+        out
+    };
+    assert_eq!(
+        rendered, expected,
+        "{type_name}: parse-rejection carrier's Display drifted from the substrate-wide `unknown {{SET_LABEL}}: {{input}}` shape — the derive's `#[error(...)]` annotation and the trait's SET_LABEL const must thread the SAME noun phrase",
+    );
 }
 
 #[cfg(test)]
@@ -357,6 +441,18 @@ mod tests {
     #[derive(Debug, PartialEq, Eq)]
     struct UnknownStubKind(pub String);
 
+    impl core::fmt::Display for UnknownStubKind {
+        // Mirrors the substrate-wide `#[derive(thiserror::Error)] +
+        // #[error("unknown <SET_LABEL>: {0}")]` shape the
+        // `#[closed_set(generate_unknown)]` proc-macro emits — the
+        // stub stays independent of `thiserror` (and the derive) so
+        // the trait's contract holds for hand-impl'd carriers too,
+        // not just the auto-derived majority.
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            write!(f, "unknown stub kind: {}", self.0)
+        }
+    }
+
     impl StubKind {
         const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
 
@@ -371,6 +467,7 @@ mod tests {
 
     impl ClosedSet for StubKind {
         const ALL: &'static [Self] = &Self::ALL;
+        const SET_LABEL: &'static str = "stub kind";
         type Unknown = UnknownStubKind;
         fn label(self) -> &'static str {
             StubKind::label(self)
@@ -459,6 +556,73 @@ mod tests {
         // any real substrate enum so the testkit's contract stays
         // independent of per-implementor truth tables.
         super::assert_closed_set_well_formed::<StubKind>();
+    }
+
+    #[test]
+    fn set_label_threads_into_substrate_wide_diagnostic_shape() {
+        // The closed-set name as a typed surface — `T::SET_LABEL` IS
+        // the noun phrase the substrate-wide `"unknown {SET_LABEL}:
+        // {input}"` diagnostic threads into. Pinning the
+        // `<stub_kind, "unknown stub kind: <input>">` correspondence
+        // here means every per-implementor `_message_matches_substrate_
+        // convention` test (13+ across the workspace) is a structural
+        // CONSEQUENCE of two simpler invariants: (1) the trait's
+        // `SET_LABEL` const equals the spaced-lowercase enum name
+        // (auto-derived) or its operator-pinned override, and (2)
+        // the carrier's Display renders the substrate-wide prefix
+        // verbatim around the offending input. Drift between the
+        // two surfaces (a future derive change that emits a different
+        // prefix, a hand-rolled carrier that omits the noun phrase)
+        // fails the well-formedness sweep on every implementor that
+        // calls `assert_closed_set_well_formed`, not just the
+        // implementors whose tests independently pin the literal.
+        assert_eq!(<StubKind as ClosedSet>::SET_LABEL, "stub kind");
+        let rendered = <StubKind as ClosedSet>::make_unknown("delta").to_string();
+        assert_eq!(rendered, "unknown stub kind: delta");
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_set_label_and_carrier_display() {
+        // The well-formedness sweep's (5) clause — the carrier's
+        // Display MUST thread `T::SET_LABEL` verbatim through the
+        // substrate-wide `"unknown {SET_LABEL}: {input}"` shape. A
+        // hand-impl'd implementor whose Display drops the noun phrase
+        // (or substitutes a different one) fails the sweep loudly
+        // rather than silently bifurcating the substrate-wide
+        // diagnostic surface. Pinning the failure path here keeps the
+        // testkit's (5) clause guaranteed-to-fire — a regression that
+        // makes the assertion permissive (e.g. a future "either of
+        // two acceptable shapes" relaxation) breaks this stub-level
+        // contract before any per-implementor sweep runs.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedKind(pub String);
+        impl core::fmt::Display for UnknownDriftedKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                // Deliberately wrong shape — uses "invalid" instead
+                // of the substrate-wide "unknown" prefix.
+                write!(f, "invalid drifted kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted kind";
+            type Unknown = UnknownDriftedKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedKind(s.to_owned())
+            }
+        }
+        let outcome = std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a carrier whose Display drifted from the substrate-wide shape",
+        );
     }
 
     #[test]

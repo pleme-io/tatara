@@ -178,6 +178,39 @@ pub fn derive_closed_set(input: TokenStream) -> TokenStream {
     let via_ident = Ident::new(&cfg.via, name.span());
     let unknown_ident = Ident::new(&cfg.unknown, name.span());
 
+    // Resolve the SET_LABEL the derive threads into BOTH the trait's
+    // `const SET_LABEL` AND the carrier's `#[error("unknown <label>:
+    // {0}")]` annotation. The priority chain is the typed-escape-hatch
+    // shape every other axis on this derive carries:
+    //   1. `#[closed_set(set_label = "...")]` — explicit override at
+    //      the trait surface, independent of the carrier's annotation.
+    //      No production implementor reaches for this today; the axis
+    //      exists for the degenerate case where an implementor wants
+    //      to bind the trait's set name independently of the carrier's
+    //      diagnostic label (a future structured-diagnostic carrier
+    //      that wraps a richer payload than `pub String`).
+    //   2. `#[closed_set(generate_unknown = "<label>")]` — the same
+    //      label the carrier's `#[error(...)]` annotation already
+    //      pins, threaded through to the trait surface so the two
+    //      surfaces emit from ONE generative origin. Covers irregular
+    //      labels (`MacroDefHead` → "macro definition head",
+    //      `MustReachPhase` → "must-reach phase") whose operator-
+    //      pinned wording diverges from the auto-derived projection.
+    //   3. `#[closed_set(generate_unknown)]` / `Skip` — auto-derive
+    //      via `pascal_to_spaced_lowercase` on the enum name. Covers
+    //      the regular case (`ChannelKind` → "channel kind",
+    //      `ReplacementPolicy` → "replacement policy"); also the
+    //      fallback for `Skip` so an implementor that hand-rolls the
+    //      carrier still gets a typed SET_LABEL without touching the
+    //      derive attribute surface.
+    let set_label = match (&cfg.set_label, &cfg.generate_unknown) {
+        (Some(explicit), _) => explicit.clone(),
+        (None, GenerateUnknown::Explicit(label)) => label.clone(),
+        (None, GenerateUnknown::Auto | GenerateUnknown::Skip) => {
+            pascal_to_spaced_lowercase(&name.to_string())
+        }
+    };
+
     let from_str_impl = if cfg.no_from_str {
         TokenStream2::new()
     } else {
@@ -195,11 +228,13 @@ pub fn derive_closed_set(input: TokenStream) -> TokenStream {
 
     let unknown_struct_decl = match &cfg.generate_unknown {
         GenerateUnknown::Skip => TokenStream2::new(),
-        GenerateUnknown::Auto => {
-            let label = pascal_to_spaced_lowercase(&name.to_string());
-            emit_unknown_struct(&unknown_ident, &label)
+        GenerateUnknown::Auto | GenerateUnknown::Explicit(_) => {
+            // The carrier's `#[error(...)]` annotation reads from the
+            // SAME resolved `set_label` the trait const reads from —
+            // a regression at one site cannot drift from the other,
+            // because both flow from the SAME local binding.
+            emit_unknown_struct(&unknown_ident, &set_label)
         }
-        GenerateUnknown::Explicit(label) => emit_unknown_struct(&unknown_ident, label),
     };
 
     let display_impl = if cfg.display {
@@ -220,6 +255,7 @@ pub fn derive_closed_set(input: TokenStream) -> TokenStream {
     let expanded = quote! {
         impl ::tatara_lisp::ClosedSet for #name {
             const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static ::core::primitive::str = #set_label;
             type Unknown = #unknown_ident;
             fn label(self) -> &'static ::core::primitive::str {
                 Self::#via_ident(self)
@@ -390,6 +426,19 @@ struct ClosedSetCfg {
     /// 5-line block byte-for-byte; flipping the flag at the derive
     /// site collapses the block onto ONE generative shape.
     display: bool,
+    /// `#[closed_set(set_label = "...")]` — explicit override for the
+    /// trait's [`tatara_lisp::ClosedSet::SET_LABEL`] const. Defaults
+    /// to the label `#[closed_set(generate_unknown[ = "..."])]`
+    /// already pinned (or the auto-derived
+    /// `pascal_to_spaced_lowercase(name)` for the bare / `Skip`
+    /// cases) so the trait surface and the carrier's `#[error(...)]`
+    /// annotation emit from ONE generative origin. The override
+    /// exists for the degenerate case where an implementor wants to
+    /// bind the trait's set name independently of the carrier's
+    /// diagnostic label (a future structured-diagnostic carrier that
+    /// wraps a richer payload than `pub String`) — no production
+    /// implementor reaches for it today.
+    set_label: Option<String>,
 }
 
 /// `#[closed_set(generate_unknown[ = "label"])]` parse outcome.
@@ -413,6 +462,7 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
     let mut no_from_str = false;
     let mut generate_unknown = GenerateUnknown::Skip;
     let mut display = false;
+    let mut set_label: Option<String> = None;
     for attr in attrs {
         if !attr.path().is_ident("closed_set") {
             continue;
@@ -454,9 +504,14 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
             } else if meta.path.is_ident("display") {
                 display = true;
                 Ok(())
+            } else if meta.path.is_ident("set_label") {
+                let value = meta.value()?;
+                let s: LitStr = value.parse()?;
+                set_label = Some(s.value());
+                Ok(())
             } else {
                 Err(meta.error(
-                    "unknown #[closed_set(...)] key — expected `via`, `unknown`, `no_from_str`, `generate_unknown`, or `display`",
+                    "unknown #[closed_set(...)] key — expected `via`, `unknown`, `no_from_str`, `generate_unknown`, `display`, or `set_label`",
                 ))
             }
         })?;
@@ -467,6 +522,7 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
         no_from_str,
         generate_unknown,
         display,
+        set_label,
     })
 }
 

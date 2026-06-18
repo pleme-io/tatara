@@ -887,15 +887,14 @@ mod tests {
     /// every `EncapsulationTarget::as_str()` projection. A variant
     /// added without updating `ENCAPSULATION_TARGET_LIST` (or a renamed
     /// variant) shows up here as a mismatch. Mirrors
-    /// `artifact_error_empty_lists_every_kind_in_canonical_order`.
+    /// `artifact_error_empty_lists_every_kind_in_canonical_order` —
+    /// routes through [`tatara_lisp::ClosedSet::labels_joined`].
     #[test]
     fn encapsulation_kind_error_empty_lists_every_target_in_canonical_order() {
-        let parts: Vec<&'static str> = EncapsulationTarget::ALL
-            .iter()
-            .map(|t| t.as_str())
-            .collect();
-        let joined = parts.join("/");
-        assert_eq!(joined, ENCAPSULATION_TARGET_LIST);
+        assert_eq!(
+            <EncapsulationTarget as tatara_lisp::ClosedSet>::labels_joined("/"),
+            ENCAPSULATION_TARGET_LIST,
+        );
         // And the diagnostic carries that exact list.
         let err = EncapsulationKind::default().variant().unwrap_err();
         assert_eq!(

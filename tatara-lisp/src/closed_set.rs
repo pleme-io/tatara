@@ -319,6 +319,86 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// Render the closed set's canonical labels joined by `sep` — the
+    /// substrate-wide candidate-list-as-string shape consumers thread
+    /// into structured-rejection diagnostics (`expected one of:
+    /// nix/flux/lisp/container/aplicacao/guest`, `allowed: :name,
+    /// :threshold`, `targets are kustomization|helm-release|deployment`).
+    ///
+    /// Default body composes [`Self::labels`] with
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// — the rendering is a typed CONSEQUENCE of `Self::ALL` +
+    /// `Self::label` + the chosen separator. Implementors override only
+    /// when the join surface needs to diverge from the natural
+    /// `labels().join(sep)` shape (no production implementor reaches for
+    /// this today — the axis exists for the same reason `via`,
+    /// `set_label`, `labels`, `suggest_closest`, `parse_label_with_hint`
+    /// overrides exist: a typed escape hatch the trait surface exposes
+    /// rather than forcing the implementor to hand-roll the impl).
+    ///
+    /// The substrate-wide `let parts: Vec<&'static str> = T::ALL.iter()
+    /// .map(label).collect(); parts.join(sep)` shape recurred at FOUR
+    /// `tatara-process` test sites pre-lift
+    /// (`intent_error_empty_lists_every_kind_in_canonical_order`,
+    /// `artifact_error_empty_lists_every_kind_in_canonical_order`,
+    /// `channel_error_empty_lists_every_kind_in_canonical_order`,
+    /// `encapsulation_kind_error_empty_lists_every_target_in_canonical_order`)
+    /// each materializing the labels vec inline and asserting the join
+    /// against a hand-rolled `*_KIND_LIST` / `*_TARGET_LIST` constant —
+    /// past the ≥3 PRIME-DIRECTIVE trigger. Post-lift each test site
+    /// reduces to a single `T::labels_joined(sep)` call and the
+    /// candidate-list-as-string rendering binds at ONE trait method
+    /// every closed-set consumer can lean on without re-deriving the
+    /// `iter().map().collect().join()` triple.
+    ///
+    /// Production sites that need a `&'static str` (a hand-rolled
+    /// `INTENT_KIND_LIST = "nix/flux/lisp/container/aplicacao/guest"`
+    /// constant stored in an error variant slot) keep their per-site
+    /// cached literal — this method runs at runtime and allocates a
+    /// `String`, so it does NOT replace the `const &'static str` shape
+    /// inline. Instead it stands as the canonical generative origin the
+    /// per-site cached literal is pinned against (via the existing
+    /// `*_error_empty_lists_every_kind_in_canonical_order` tests, now
+    /// routing through this method), so a regression that drifts the
+    /// production `&'static str` from the canonical join fails-loudly
+    /// at the test site without per-implementor inline materialization.
+    ///
+    /// Future consumers — a metrics tagger that wants
+    /// `expected_one_of=intent_kinds:nix,flux,lisp,…` in a Prometheus
+    /// label, an LSP completion-bar renderer that wants
+    /// `nix | flux | lisp | …` separators, a `tatara-check` diagnostic
+    /// that wants `expected one of: nix, flux, lisp` for a
+    /// natural-language rendering — bind to ONE trait method instead of
+    /// hand-rolling the `iter+map+collect+join` triple at each call
+    /// site, and the closed-set projection's separator surface evolves
+    /// at ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §V.1 — knowable platform; the joined-candidate-list
+    /// shape was a known idiom carried by convention across 4+ test
+    /// sites + indirectly across 4+ production `&'static str`
+    /// constants. Lifting the join onto the trait makes the shape a
+    /// TYPED CONSEQUENCE of [`Self::labels`] + the chosen separator —
+    /// generic consumers see ONE method, not ONE join-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// joined-candidate-list rendering emerges from the composition of
+    /// THREE substrate primitives ([`Self::ALL`], [`Self::label`], the
+    /// caller-supplied separator) rather than as a per-implementor
+    /// inline `collect().join()` triple. A future tightening of the
+    /// candidate-list shape (a future Oxford-comma "..., or X" surface,
+    /// a future Unicode-aware separator) lands at ONE primitive and
+    /// propagates to every closed-set consumer.
+    ///
+    /// Frontier inspiration: Idris's `show` on closed-set enumerations
+    /// — the candidate list emits as a single typed projection on the
+    /// finite-type universe rather than per-instance inline rendering.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::labels`] surface with the
+    /// `slice::join` standard-library primitive — no new dep, no new
+    /// IR layer.
+    fn labels_joined(sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::labels().join(sep)
+    }
+
     /// Project `needle` onto the closest variant whose
     /// [`Self::label`] sits within the substrate-wide bounded edit
     /// distance — the typed bridge between an unrecognized input and
@@ -533,6 +613,21 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///    the unrecognizable probe fails this clause loudly rather than
 ///    silently bifurcating the structured-diagnostic surface every
 ///    `parse_label_with_hint` consumer routes through.
+/// 8. [`ClosedSet::labels_joined`] composes [`ClosedSet::labels`] with
+///    [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+///    verbatim — the joined-candidate-list rendering every
+///    diagnostic / metrics consumer routes through emits at ONE
+///    trait body. The sweep walks three representative separators
+///    (`"/"`, `", "`, `"|"`) so a drift in any one of the three
+///    rendering surfaces (slash for the substrate's `INTENT_KIND_LIST`-
+///    shaped production constants, comma-space for diagnostic
+///    `expected one of: ...` shapes, pipe for grammar-style lists)
+///    fails the testkit on every implementor. The default trait body
+///    satisfies the clause for free; the assertion catches a future
+///    implementor whose override returns a different join shape (a
+///    different separator threading, a subset of labels) loudly
+///    rather than silently bifurcating the candidate-list-as-string
+///    rendering every consumer routes through.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -684,6 +779,29 @@ where
                 "{type_name}: parse_label_with_hint fabricated a `did you mean ...?` hint for the unrecognizable probe — the conservative-suggestion contract demands `None` for inputs beyond the bounded edit distance",
             );
         }
+    }
+    // (8) — `T::labels_joined(sep)` composes `T::labels()` with
+    // `slice::join` verbatim. The default trait body satisfies the
+    // clause for free; the assertion catches a future implementor
+    // whose override drifts from the natural
+    // `labels().join(sep)` shape (a degenerate axis the trait
+    // surface exposes for the same reason `via` / `set_label` /
+    // `labels` / `suggest_closest` / `parse_label_with_hint`
+    // overrides exist — a typed escape hatch rather than forcing
+    // the implementor to hand-roll the impl). Sweep three
+    // representative separators (the slash, comma-space, and pipe
+    // shapes the substrate's existing production sites lean on)
+    // so a drift in any one of the three rendering surfaces
+    // (slash for `INTENT_KIND_LIST`-shaped lists, comma-space for
+    // diagnostic `expected one of: ...` shapes, pipe for ergonomic
+    // grammar-style lists) fails the testkit on every implementor.
+    for sep in ["/", ", ", "|"] {
+        let lifted = T::labels_joined(sep);
+        let natural = T::labels().join(sep);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::labels_joined({sep:?}) drifted from T::labels().join({sep:?}) — the joined-candidate-list rendering every diagnostic / metrics consumer routes through no longer matches the natural labels-projection",
+        );
     }
 }
 
@@ -926,6 +1044,119 @@ mod tests {
         assert_eq!(
             <StubKind as ClosedSet>::labels(),
             vec!["alpha", "beta", "gamma"],
+        );
+    }
+
+    #[test]
+    fn labels_joined_renders_labels_through_chosen_separator() {
+        // The joined-candidate-list surface — `T::labels_joined(sep)`
+        // composes `T::labels()` with `slice::join` verbatim. Pinning
+        // the rendering across THREE representative separators
+        // (slash for `INTENT_KIND_LIST`-shaped production constants
+        // the substrate's `IntentError::Empty` / `ArtifactError::Empty` /
+        // `ChannelError::Empty` / `EncapsulationKindError::Empty`
+        // diagnostics carry; comma-space for natural-language
+        // `expected one of: ...` shapes; pipe for grammar-style
+        // alternative lists) means a regression that drifts the
+        // composition at the trait method (a future override that
+        // strips a label, threads a different separator, sorts the
+        // labels alphabetically rather than preserving declaration
+        // order) fails this contract before any per-implementor surface
+        // depends on the rendering downstream.
+        assert_eq!(
+            <StubKind as ClosedSet>::labels_joined("/"),
+            "alpha/beta/gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::labels_joined(", "),
+            "alpha, beta, gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::labels_joined("|"),
+            "alpha|beta|gamma",
+        );
+    }
+
+    #[test]
+    fn labels_joined_threads_empty_separator_into_a_concatenated_run() {
+        // Edge case — an empty separator concatenates the labels
+        // without delimitation. The `slice::join` primitive handles
+        // this naturally; pinning it here means a future override
+        // that special-cases the empty-separator path (an over-eager
+        // optimization that returns a constant, a normalization step
+        // that swaps `""` for `", "`) fails-loudly rather than
+        // silently bifurcating the candidate-list rendering. The
+        // joined output stays a valid `String` — `slice::join` does
+        // not allocate per-separator-byte when the separator is empty.
+        assert_eq!(<StubKind as ClosedSet>::labels_joined(""), "alphabetagamma",);
+    }
+
+    #[test]
+    fn labels_joined_threads_multi_char_separator_verbatim() {
+        // Multi-character separator — `slice::join` interpolates the
+        // separator between each pair of labels verbatim. Pinning
+        // this here means a future override that re-encodes /
+        // normalizes the separator (a strip-whitespace pass, an
+        // escape-special-chars pass) fails-loudly rather than
+        // silently bifurcating the candidate-list rendering. The
+        // " -> " separator is the shape a state-machine diagnostic
+        // (`expected one of: alpha -> beta -> gamma`) would lean on,
+        // so the multi-char path stays tested even though no
+        // production implementor reaches for it today.
+        assert_eq!(
+            <StubKind as ClosedSet>::labels_joined(" -> "),
+            "alpha -> beta -> gamma",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_labels_joined_and_composition() {
+        // The well-formedness sweep's (8) clause —
+        // `T::labels_joined(sep)` MUST compose `T::labels()` with
+        // `slice::join` verbatim across every representative
+        // separator. A hand-impl'd implementor whose override drifts
+        // the composition (drops a label, threads a different
+        // separator, sorts labels alphabetically rather than
+        // preserving declaration order) fails the sweep loudly
+        // rather than silently bifurcating the joined-candidate-list
+        // surface every consumer routes through. Pinning the failure
+        // path here keeps the testkit's (8) clause guaranteed-to-fire
+        // — a regression that makes the assertion permissive (e.g. a
+        // future "any superset" relaxation) breaks this stub-level
+        // contract before any per-implementor sweep runs.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedJoinKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedJoinKind(pub String);
+        impl core::fmt::Display for UnknownDriftedJoinKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted join kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedJoinKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted join kind";
+            type Unknown = UnknownDriftedJoinKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedJoinKind(s.to_owned())
+            }
+            fn labels_joined(_sep: &str) -> String {
+                // Drifted override — returns a hard-coded literal
+                // that ignores the caller-supplied separator and the
+                // implementor's actual labels surface.
+                String::from("WRONG")
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedJoinKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a labels_joined override drifted from the natural labels-join composition",
         );
     }
 

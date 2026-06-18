@@ -1611,12 +1611,14 @@ mod tests {
     /// `ArtifactKind::as_str()` projection. A variant added without
     /// updating `ARTIFACT_KIND_LIST` (or a renamed variant) shows up
     /// here as a mismatch. Mirrors
-    /// `intent_error_empty_lists_every_kind_in_canonical_order`.
+    /// `intent_error_empty_lists_every_kind_in_canonical_order` —
+    /// routes through [`tatara_lisp::ClosedSet::labels_joined`].
     #[test]
     fn artifact_error_empty_lists_every_kind_in_canonical_order() {
-        let parts: Vec<&'static str> = ArtifactKind::ALL.iter().map(|k| k.as_str()).collect();
-        let joined = parts.join("/");
-        assert_eq!(joined, ARTIFACT_KIND_LIST);
+        assert_eq!(
+            <ArtifactKind as tatara_lisp::ClosedSet>::labels_joined("/"),
+            ARTIFACT_KIND_LIST,
+        );
     }
 
     /// AMBIGUOUS-PATH CONTRACT: when two slots are populated the
@@ -1780,12 +1782,14 @@ mod tests {
     /// `ChannelKind::as_str()` projection. A variant added without
     /// updating `CHANNEL_KIND_LIST` (or a renamed variant) shows up
     /// here as a mismatch. Mirrors
-    /// `artifact_error_empty_lists_every_kind_in_canonical_order`.
+    /// `artifact_error_empty_lists_every_kind_in_canonical_order` —
+    /// routes through [`tatara_lisp::ClosedSet::labels_joined`].
     #[test]
     fn channel_error_empty_lists_every_kind_in_canonical_order() {
-        let parts: Vec<&'static str> = ChannelKind::ALL.iter().map(|k| k.as_str()).collect();
-        let joined = parts.join("/");
-        assert_eq!(joined, CHANNEL_KIND_LIST);
+        assert_eq!(
+            <ChannelKind as tatara_lisp::ClosedSet>::labels_joined("/"),
+            CHANNEL_KIND_LIST,
+        );
     }
 
     /// AMBIGUOUS-PATH CONTRACT: when two slots are populated the

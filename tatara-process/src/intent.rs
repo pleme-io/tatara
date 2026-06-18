@@ -718,6 +718,14 @@ mod tests {
     /// `IntentKind::as_str()` projection. A variant added without
     /// updating `INTENT_KIND_LIST` (or a renamed variant) shows up
     /// here as a mismatch.
+    ///
+    /// `IntentKind` does NOT (yet) implement
+    /// [`tatara_lisp::ClosedSet`] — its sibling closed-set enums
+    /// (`ArtifactKind`, `ChannelKind`, `EncapsulationTarget`) DO,
+    /// and their parallel `*_lists_every_kind_in_canonical_order`
+    /// tests route through `T::labels_joined("/")`. Promoting
+    /// `IntentKind` onto the trait would let this test follow the
+    /// same shape; it stays inline until that promotion lands.
     #[test]
     fn intent_error_empty_lists_every_kind_in_canonical_order() {
         let parts: Vec<&'static str> = IntentKind::ALL.iter().map(|k| k.as_str()).collect();

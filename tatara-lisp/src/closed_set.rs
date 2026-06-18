@@ -288,14 +288,10 @@ pub trait ClosedSet: Sized + Copy + 'static {
     ///
     /// The substrate-wide
     /// `T::ALL.iter().map(|v| v.label()).collect::<Vec<_>>()` shape
-    /// 10+ implementor sites re-derive byte-for-byte
-    /// (`tatara_process::intent::tests::intent_kind_canonical_names_pinned`,
-    /// `tatara_process::receipt::tests::receipt_kind_canonical_names_pinned`,
-    /// `tatara_process::matrix::tests::matrix_target_all_covers_every_variant`,
-    /// `tatara_process::allocation::tests::requestor_kind_as_str_unique_per_variant`,
-    /// `tatara_lisp::ast::tests::quote_form_all_covers_every_variant`,
-    /// `tatara_lisp::error::tests::macro_def_head_all_covers_every_variant`,
-    /// …) lifted into ONE generic projection. Generic consumers
+    /// per-implementor test modules re-derived byte-for-byte
+    /// (the `*_canonical_names_pinned` / `*_all_is_unique_and_complete`
+    /// truth-table tests across `tatara-process` + `tatara-lisp`,
+    /// pre-lift) lifted into ONE generic projection. Generic consumers
     /// (REPL exhaustive-listing diagnostics, LSP completion bars,
     /// `tatara_lisp::domain::suggest`-keyed near-match suggesters)
     /// take `T: ClosedSet` and call `T::labels()` rather than

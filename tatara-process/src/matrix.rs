@@ -1840,27 +1840,6 @@ mod tests {
     }
 
     #[test]
-    fn select_strategy_kind_as_str_unique_per_variant() {
-        // UNIQUENESS CONTRACT: no two variants alias the same canonical
-        // name — Display would be non-injective and FromStr would be
-        // non-deterministic otherwise. Sweep over `ALL × ALL` pinning
-        // strict inequality for distinct variants.
-        for a in SelectStrategyKind::ALL {
-            for b in SelectStrategyKind::ALL {
-                if a == b {
-                    assert_eq!(a.as_str(), b.as_str());
-                } else {
-                    assert_ne!(
-                        a.as_str(),
-                        b.as_str(),
-                        "distinct variants {a:?}/{b:?} must not alias as_str"
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
     fn select_strategy_kind_display_matches_as_str() {
         // DISPLAY-CANONICAL CONTRACT: `Display` projects through
         // `as_str()` byte-for-byte. Pins the canonical-form posture

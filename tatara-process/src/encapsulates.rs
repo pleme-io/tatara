@@ -765,24 +765,6 @@ mod tests {
         tatara_lisp::assert_closed_set_well_formed::<EncapsulationTarget>();
     }
 
-    /// CANONICAL-KEY UNIQUENESS: no two targets alias the same `as_str`
-    /// identifier. A future rename that aliases two targets onto the
-    /// same camelCase key would silently make Display non-injective AND
-    /// would collide the resolver's `select` dispatch onto the wrong
-    /// slot. Caught here.
-    #[test]
-    fn encapsulation_target_as_str_unique_per_variant() {
-        let mut seen = std::collections::HashSet::new();
-        for t in EncapsulationTarget::ALL {
-            assert!(
-                seen.insert(t.as_str()),
-                "as_str collision: {t:?} → {:?}",
-                t.as_str()
-            );
-        }
-        assert_eq!(seen.len(), EncapsulationTarget::ALL.len());
-    }
-
     /// CANONICAL-KEY CONTRACT: every `EncapsulationTarget::as_str()`
     /// matches the serde `rename_all = "camelCase"` field name on the
     /// corresponding `Option<…>` slot of `EncapsulationKind`. A future

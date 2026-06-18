@@ -1491,24 +1491,6 @@ mod tests {
         tatara_lisp::assert_closed_set_well_formed::<ArtifactKind>();
     }
 
-    /// CANONICAL-KEY UNIQUENESS: no two kinds alias the same `as_str`
-    /// identifier. A future rename that aliases two kinds onto the same
-    /// camelCase key (e.g. both → `"report"`) would silently make
-    /// Display non-injective AND would collide the resolver's `select`
-    /// dispatch onto the wrong slot. Caught here.
-    #[test]
-    fn artifact_kind_as_str_unique_per_variant() {
-        let mut seen = std::collections::HashSet::new();
-        for kind in ArtifactKind::ALL {
-            assert!(
-                seen.insert(kind.as_str()),
-                "as_str collision: {kind:?} → {:?}",
-                kind.as_str()
-            );
-        }
-        assert_eq!(seen.len(), ArtifactKind::ALL.len());
-    }
-
     /// CANONICAL-KEY CONTRACT: every `ArtifactKind::as_str()` matches
     /// the serde `rename_all = "camelCase"` field name on the
     /// corresponding `Option<…>` slot of `ArtifactSource`. A future
@@ -1677,24 +1659,6 @@ mod tests {
     #[test]
     fn channel_kind_is_well_formed_closed_set() {
         tatara_lisp::assert_closed_set_well_formed::<ChannelKind>();
-    }
-
-    /// CANONICAL-KEY UNIQUENESS: no two kinds alias the same `as_str`
-    /// identifier. A future rename that aliases two kinds onto the same
-    /// camelCase key would silently make Display non-injective AND
-    /// would collide the resolver's `select` dispatch onto the wrong
-    /// slot. Caught here.
-    #[test]
-    fn channel_kind_as_str_unique_per_variant() {
-        let mut seen = std::collections::HashSet::new();
-        for kind in ChannelKind::ALL {
-            assert!(
-                seen.insert(kind.as_str()),
-                "as_str collision: {kind:?} → {:?}",
-                kind.as_str()
-            );
-        }
-        assert_eq!(seen.len(), ChannelKind::ALL.len());
     }
 
     /// CANONICAL-KEY CONTRACT: every `ChannelKind::as_str()` matches

@@ -732,23 +732,6 @@ mod tests {
         tatara_lisp::assert_closed_set_well_formed::<RequestorKind>();
     }
 
-    /// CANONICAL-KEY CONTRACT: `as_str` is injective across the closed
-    /// set — two variants can't share a wire-format literal (which
-    /// would alias under Display + FromStr + the `kind:` filter on
-    /// `PoolSelector`).
-    #[test]
-    fn requestor_kind_as_str_unique_per_variant() {
-        use std::collections::HashSet;
-
-        let names: Vec<&'static str> = RequestorKind::ALL.iter().map(|k| k.as_str()).collect();
-        let unique: HashSet<&&'static str> = names.iter().collect();
-        assert_eq!(
-            unique.len(),
-            names.len(),
-            "non-injective as_str — Display would alias: {names:?}"
-        );
-    }
-
     /// Byte-exact wire-format pin — renaming any of these is a wire-
     /// format change (the `tatara-github-watcher` emitter, the CRD
     /// printcolumns, the `PoolSelector.kinds` filter strings, the

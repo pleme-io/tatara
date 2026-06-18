@@ -849,21 +849,6 @@ mod tests {
         );
     }
 
-    /// `as_str` is unique per variant — two kinds can never collide on
-    /// the same wire-string, so a future kind-keyed metrics label or
-    /// `status.conditions[].reason` field never aliases.
-    #[test]
-    fn auto_terminate_kind_as_str_unique_per_variant() {
-        let mut seen = std::collections::HashSet::new();
-        for kind in AutoTerminateKind::ALL {
-            assert!(
-                seen.insert(kind.as_str()),
-                "as_str collision for {kind:?}: {}",
-                kind.as_str(),
-            );
-        }
-    }
-
     /// BYTE-EXACT canonical wire-format pin — renaming either of the two
     /// canonical strings is a wire-format change that fails this test
     /// FIRST so it stays a deliberate change, not a silent rename that

@@ -669,19 +669,6 @@ generated_at:  2026-05-19T12:00:00Z
     }
 
     #[test]
-    fn receipt_kind_as_str_unique_per_variant() {
-        use std::collections::HashSet;
-
-        let names: Vec<&'static str> = ReceiptKind::ALL.iter().map(|k| k.as_str()).collect();
-        let unique: HashSet<&&'static str> = names.iter().collect();
-        assert_eq!(
-            unique.len(),
-            names.len(),
-            "non-injective as_str — Display would alias: {names:?}"
-        );
-    }
-
-    #[test]
     fn receipt_kind_canonical_names_pinned() {
         // Byte-exact wire-format pin — renaming any of these is a
         // wire-format change, not a typed-internal refactor.

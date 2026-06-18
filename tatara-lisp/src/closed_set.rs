@@ -379,6 +379,87 @@ pub trait ClosedSet: Sized + Copy + 'static {
         let target = crate::domain::suggest(needle, &candidates)?;
         Self::ALL.iter().copied().find(|v| v.label() == target)
     }
+
+    /// Decode `s` into the typed variant, threading a typed
+    /// [`Self::suggest_closest`] hint into the rejection envelope —
+    /// the structured-diagnostic surface that composes
+    /// [`Self::parse_label`] + [`Self::suggest_closest`] into ONE
+    /// call a downstream LSP / `tatara-check` consumer takes as
+    /// `T: ClosedSet`.
+    ///
+    /// On exact match returns `Ok(v)` — the hint slot stays absent
+    /// because [`Self::suggest_closest`] is "near-miss only" by
+    /// contract (a successful parse short-circuits before
+    /// [`Self::suggest_closest`] runs, so the substrate-wide
+    /// "did you mean …?" surface never double-emits the same
+    /// variant once as a successful decode and once as a hint).
+    /// On miss returns `Err((unknown, hint))` where `unknown` is
+    /// the same typed carrier [`Self::parse_label`] would have
+    /// emitted (preserving the substrate-wide
+    /// `"unknown {SET_LABEL}: {input}"` rendering through
+    /// [`core::fmt::Display`]) and `hint` is the typed variant
+    /// [`Self::suggest_closest`] keys on — `Some(v)` when a
+    /// canonical label sits within the substrate-wide bounded edit
+    /// distance, `None` when no candidate qualifies (the
+    /// conservative-suggestion contract — silent over guessing).
+    ///
+    /// The Err shape `(Self::Unknown, Option<Self>)` is deliberately
+    /// asymmetric: the typed carrier is the load-bearing payload
+    /// (the substrate-wide rejection surface every existing
+    /// implementor's parse boundary emits), while the hint is a
+    /// renderable-only adornment a downstream consumer threads next
+    /// to the rejection ("did you mean `Failed`?" next to the
+    /// `"unknown process phase: Failing"` shape) WITHOUT replacing
+    /// the typed rejection itself. Generic consumers that don't
+    /// care about the hint take `.0` (the typed carrier); consumers
+    /// that DO can render `did you mean <v.label()>?` from the
+    /// hint without re-deriving the metric / the candidate-list
+    /// materialization at each consumer site.
+    ///
+    /// Default body composes [`Self::parse_label`] and
+    /// [`Self::suggest_closest`] verbatim — the structured shape is
+    /// a typed CONSEQUENCE of the two pre-existing primitives, not
+    /// a third codepath. Implementors override only when the
+    /// composition needs to diverge (no production implementor
+    /// reaches for this today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` overrides exist — a typed
+    /// escape hatch the trait surface exposes rather than forcing
+    /// the implementor to hand-roll the impl).
+    ///
+    /// THEORY.md §III — the typescape; the structured rejection
+    /// becomes a typed projection on the trait rather than a
+    /// per-consumer hand-rolled (`parse_label(s).map_err(|e| (e,
+    /// Self::suggest_closest(s)))`) call at every parse boundary.
+    /// THEORY.md §V.1 — knowable platform; the "did you mean …?"
+    /// surface emits at ONE primitive ([`crate::domain::suggest`])
+    /// the substrate already routes diagnostics through, and the
+    /// composition that threads it next to the typed rejection
+    /// emits at ONE trait body that every closed-set enum inherits
+    /// through zero additional source.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// structured-diagnostic shape emerges from the composition of
+    /// FOUR substrate primitives ([`Self::ALL`], [`Self::label`],
+    /// [`Self::make_unknown`], [`crate::domain::suggest`]) rather
+    /// than as a per-implementor structured-error impl. A future
+    /// LSP / `tatara-check` consumer takes `T: ClosedSet` and
+    /// renders a typed `"did you mean <variant>?"` next to a
+    /// rejection without binding to a per-implementor structured
+    /// carrier shape.
+    ///
+    /// Frontier inspiration: rustc's `MultiSpan` typed-diagnostic
+    /// surface — the structured rejection carries both the typed
+    /// payload AND the typed adornment slot, with the adornment
+    /// rendered next to (not in place of) the typed rejection.
+    /// Translation through pleme-io primitives: a pure default
+    /// method composing the trait's existing
+    /// [`Self::parse_label`] + [`Self::suggest_closest`] surfaces
+    /// — no new primitive, no new dep, no new IR layer.
+    fn parse_label_with_hint(s: &str) -> Result<Self, (Self::Unknown, Option<Self>)> {
+        match Self::parse_label(s) {
+            Ok(v) => Ok(v),
+            Err(unknown) => Err((unknown, Self::suggest_closest(s))),
+        }
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -435,6 +516,27 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///    drifted override fails this clause loudly rather than silently
 ///    bifurcating the candidate-list surface every
 ///    `suggest_closest` consumer routes through.
+/// 7. [`ClosedSet::parse_label_with_hint`] composes [`ClosedSet::parse_label`]
+///    and [`ClosedSet::suggest_closest`] verbatim — every variant in
+///    `T::ALL` decodes to `Ok(v)` through the structured surface
+///    (the hint slot is structurally absent on the Ok arm), and the
+///    sweep's reserved probe input rejects with the SAME typed
+///    carrier [`ClosedSet::parse_label`] would have emitted (same
+///    [`core::fmt::Display`] rendering — the substrate-wide
+///    `"unknown {SET_LABEL}: {input}"` shape) AND with a `None`
+///    hint slot (the probe sits beyond [`ClosedSet::suggest_closest`]'s
+///    bounded edit distance by construction — its 38-char body shares
+///    no characters with any plausible canonical label). The default
+///    trait body satisfies the clause for free; the assertion catches
+///    a future implementor whose `parse_label_with_hint` override
+///    drifts from the natural composition (a degenerate axis the
+///    trait surface exposes for the same reason `via` / `set_label` /
+///    `labels` overrides exist — a typed escape hatch rather than
+///    forcing the implementor to hand-roll the impl). A drifted
+///    override that emits the wrong carrier OR fabricates a hint for
+///    the unrecognizable probe fails this clause loudly rather than
+///    silently bifurcating the structured-diagnostic surface every
+///    `parse_label_with_hint` consumer routes through.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -549,6 +651,44 @@ where
         labels, natural,
         "{type_name}: T::labels() drifted from T::ALL.iter().copied().map(label).collect() — the labels-list surface every `suggest_closest` consumer walks over no longer matches the natural ALL-projection",
     );
+    // (7) — `T::parse_label_with_hint` composes `parse_label` +
+    // `suggest_closest` verbatim. Every variant decodes to `Ok(v)`
+    // through the structured surface; the probe rejects with the
+    // SAME carrier shape `parse_label` emits AND with a `None` hint
+    // slot (the 38-char probe sits beyond `suggest_closest`'s
+    // bounded edit distance by construction — no plausible canonical
+    // label shares enough characters with the reserved probe to fall
+    // inside the bound-3 window). The default trait body satisfies
+    // the clause for free; the assertion catches an override that
+    // drifts the composition.
+    for &v in T::ALL {
+        let label = v.label();
+        match T::parse_label_with_hint(label) {
+            Ok(decoded) => assert_eq!(
+                decoded, v,
+                "{type_name}: parse_label_with_hint round-trip {label:?} → variant decoded to a different variant",
+            ),
+            Err(_) => panic!(
+                "{type_name}: parse_label_with_hint round-trip {label:?} → variant rejected by parse_label_with_hint",
+            ),
+        }
+    }
+    match T::parse_label_with_hint(probe) {
+        Ok(_) => panic!(
+            "{type_name}: parse_label_with_hint accepted the reserved probe input — the structured surface MUST reject every input outside the closed set",
+        ),
+        Err((carrier, hint)) => {
+            assert_eq!(
+                carrier.to_string(),
+                expected,
+                "{type_name}: parse_label_with_hint's Err carrier drifted from the substrate-wide `unknown {{SET_LABEL}}: {{input}}` shape — the override emits a different carrier than `parse_label` would",
+            );
+            assert!(
+                hint.is_none(),
+                "{type_name}: parse_label_with_hint fabricated a `did you mean ...?` hint for the unrecognizable probe — the conservative-suggestion contract demands `None` for inputs beyond the bounded edit distance",
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -842,6 +982,121 @@ mod tests {
         // when the input is unrecognizable, the diagnostic stays
         // silent rather than emitting an unrelated suggestion.
         assert_eq!(<StubKind as ClosedSet>::suggest_closest("xxxxxxxx"), None,);
+    }
+
+    #[test]
+    fn parse_label_with_hint_returns_ok_variant_for_exact_match() {
+        // The exact-match arm — `parse_label_with_hint("alpha")`
+        // returns `Ok(Alpha)`, NOT `Err((_, Some(Alpha)))`. The Ok
+        // arm carries the variant alone (no hint adornment) because
+        // the substrate-wide "did you mean …?" surface is
+        // near-miss-only by contract: a successful decode is the
+        // CANONICAL match, not a near-miss that happens to coincide
+        // with a canonical label. Pinning the contract here means a
+        // generic structured-diagnostic consumer that takes
+        // `parse_label_with_hint(s).err()` and walks the hint slot
+        // can rely on the slot being absent for successful decodes
+        // — the structured surface doesn't double-emit the variant.
+        assert_eq!(
+            <StubKind as ClosedSet>::parse_label_with_hint("alpha"),
+            Ok(StubKind::Alpha),
+        );
+    }
+
+    #[test]
+    fn parse_label_with_hint_returns_unknown_with_hint_for_near_miss() {
+        // The near-miss arm — a single-edit perturbation of a
+        // canonical label decodes to `Err((unknown, Some(variant)))`
+        // through the structured surface. The carrier preserves the
+        // input verbatim (`UnknownStubKind("alpa")`) so the typed
+        // rejection rendering stays load-bearing; the hint adornment
+        // (`Some(Alpha)`) is the typed variant a downstream LSP /
+        // `tatara-check` consumer renders next to the rejection.
+        // Pinning the structured shape here means a generic consumer
+        // can take `parse_label_with_hint(s).err()` and pattern-
+        // match `(carrier, Some(hint))` to render `"unknown stub
+        // kind: alpa\n  did you mean alpha?"` without re-deriving
+        // the suggestion metric / the candidate-list materialization
+        // at every call site.
+        let outcome = <StubKind as ClosedSet>::parse_label_with_hint("alpa");
+        assert_eq!(
+            outcome,
+            Err((UnknownStubKind("alpa".to_owned()), Some(StubKind::Alpha))),
+        );
+    }
+
+    #[test]
+    fn parse_label_with_hint_returns_unknown_without_hint_for_far_miss() {
+        // The conservative-suggestion arm — an input whose closest
+        // label sits beyond the substrate-wide bounded edit distance
+        // returns `Err((unknown, None))` rather than `Err((unknown,
+        // Some(best_of_the_bunch)))`. The carrier still preserves
+        // the input verbatim (the typed rejection surface stays
+        // load-bearing); the hint slot stays absent (`None`) so the
+        // "did you mean …?" surface doesn't fabricate an
+        // unrelated suggestion. Pinning the contract here means a
+        // generic structured-diagnostic consumer that takes the hint
+        // slot can rely on its presence as a signal — the operator
+        // sees `did you mean …?` only when the substrate has a
+        // typed near-miss to point at.
+        let outcome = <StubKind as ClosedSet>::parse_label_with_hint("xxxxxxxx");
+        assert_eq!(outcome, Err((UnknownStubKind("xxxxxxxx".to_owned()), None)),);
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_parse_label_with_hint_and_composition() {
+        // The well-formedness sweep's (7) clause —
+        // `parse_label_with_hint` MUST compose `parse_label` +
+        // `suggest_closest` verbatim. A hand-impl'd implementor
+        // whose override drifts the composition (returns the wrong
+        // carrier on the Err arm, fabricates a hint for the
+        // unrecognizable probe, accepts the probe as `Ok`) fails the
+        // sweep loudly rather than silently bifurcating the
+        // structured-diagnostic surface every consumer routes
+        // through. Pinning the failure path here keeps the
+        // testkit's (7) clause guaranteed-to-fire — a regression
+        // that makes the assertion permissive (e.g. a future "best
+        // of the bunch" relaxation that emits a hint for any input)
+        // breaks this stub-level contract before any per-implementor
+        // sweep runs.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedHintKind {
+            Only,
+        }
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedHintKind(pub String);
+        impl core::fmt::Display for UnknownDriftedHintKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted hint kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedHintKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted hint kind";
+            type Unknown = UnknownDriftedHintKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedHintKind(s.to_owned())
+            }
+            fn parse_label_with_hint(_s: &str) -> Result<Self, (Self::Unknown, Option<Self>)> {
+                // Drifted override — fabricates a hint for every
+                // input, including the unrecognizable probe the
+                // testkit's clause (7) reserves. Fails the
+                // conservative-suggestion contract.
+                Err((
+                    UnknownDriftedHintKind(String::from("any")),
+                    Some(Self::Only),
+                ))
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedHintKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a parse_label_with_hint override that fabricated a hint for the unrecognizable probe",
+        );
     }
 
     #[test]

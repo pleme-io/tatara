@@ -1050,13 +1050,26 @@ pub struct CompiledTemplate {
 /// _substitute_path` only covered well-positioned splice bodies. After this
 /// gate every `,@-outside-list` body is rejected at registration time on
 /// both paths with ONE structural variant (`LispError::SpliceOutsideList`).
+///
+/// The gate routes through [`Sexp::as_unquote`] — the typed-marker
+/// projection that pairs `Sexp::UnquoteSplice ↔ UnquoteForm::Splice` at
+/// ONE structural query — matching `Some((UnquoteForm::Splice, inner))`
+/// rather than the per-arm `Sexp::UnquoteSplice(inner)` literal that
+/// recurred at three sites pre-lift (`compile_node` Subst/Splice arms,
+/// `substitute` top-level + list-inner). Sibling shape to `substitute`'s
+/// list-inner Splice arm — both use the same `Some((UnquoteForm::Splice,
+/// inner))` shape; `substitute`'s top-level arm uses the wider
+/// `Some((kind, inner))` and dispatches inside on `kind`. After this lift
+/// every production-site recognizer of "is this an `,@X` form" routes
+/// through ONE typed-marker projection rather than re-deriving the
+/// (Sexp variant, UnquoteForm variant) pair inline.
 pub fn compile_template(def: &MacroDef) -> Result<CompiledTemplate> {
     // Walk the body's substitution projection — the inner of the outer
     // quasi-quote when present, the body verbatim otherwise — through the
     // shared `MacroDef::template_body` primitive the substitute path also
     // routes on. Same projection, both strategies, by construction.
     let body = def.template_body();
-    if let Sexp::UnquoteSplice(inner) = body {
+    if let Some((UnquoteForm::Splice, inner)) = body.as_unquote() {
         return Err(splice_outside_list(inner));
     }
     let names = def.params.names();
@@ -1108,8 +1121,20 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
 }
 
 fn contains_unquote(node: &Sexp) -> bool {
+    // Route the unquote-family recognition through [`Sexp::as_unquote`] —
+    // the typed-marker projection — so the family check shares ONE
+    // structural query with every other production-site recognizer of
+    // `,X` / `,@X` (`compile_template` top-level gate, `compile_node`'s
+    // per-arm dispatch, `substitute` top-level + list-inner arms). The
+    // inner is irrelevant here (the short-circuit only cares "is this an
+    // unquote-family wrapper?"), so the projection's `.is_some()` face is
+    // the natural shape; the recursion into Quote/Quasiquote/List stays
+    // inline because those wrapper variants belong to a different family
+    // (no `QuoteForm` typed marker exists yet).
+    if node.as_unquote().is_some() {
+        return true;
+    }
     match node {
-        Sexp::Unquote(_) | Sexp::UnquoteSplice(_) => true,
         Sexp::List(items) => items.iter().any(contains_unquote),
         Sexp::Quote(inner) | Sexp::Quasiquote(inner) => contains_unquote(inner),
         _ => false,
@@ -9093,5 +9118,121 @@ mod tests {
             }
             other => panic!("expected UnboundTemplateVar, got: {other:?}"),
         }
+    }
+
+    // ── compile_template + contains_unquote path-uniformity through as_unquote ──
+    //
+    // The prior `as_unquote` projection lift (eb00684) routed `compile_node`'s
+    // two arms and `substitute`'s top-level + list-inner arms through the
+    // typed-marker projection but LEFT `compile_template`'s top-level
+    // splice-outside-list gate and `contains_unquote`'s family check inline
+    // matching `Sexp::UnquoteSplice(inner)` / `Sexp::Unquote(_) |
+    // Sexp::UnquoteSplice(_)`. After this lift both production sites route
+    // through `as_unquote`: `compile_template` matches `Some((UnquoteForm::
+    // Splice, inner))` (same shape as `substitute`'s list-inner Splice arm),
+    // `contains_unquote` uses `as_unquote().is_some()` for the family check.
+    // Every production-site recognizer of an unquote-family wrapper now
+    // shares ONE typed-marker projection — the (Sexp variant, UnquoteForm
+    // variant) pairing for `,@-outside-list` is bound at ONE structural
+    // query across all FOUR reachable splice-recognition sites, and a future
+    // regression that drifts the marker pairing at any production site
+    // becomes a type error at the helper boundary rather than a silent
+    // per-site divergence.
+
+    #[test]
+    fn compile_template_splice_outside_list_routes_through_as_unquote_typed_marker() {
+        // The bytecode path's `compile_template` gate pre-rejects top-level
+        // `,@X` bodies via `as_unquote()` matching `Some((UnquoteForm::Splice,
+        // inner))`. Pre-lift the arm was `if let Sexp::UnquoteSplice(inner) =
+        // body` — the LAST production-site inline `Sexp::UnquoteSplice(_)`
+        // match outside the projection itself. Post-lift the (Sexp variant,
+        // UnquoteForm variant) pairing for the splice-outside-list gate is
+        // bound at ONE projection function across all three reachable
+        // emission sites (compile_template top-level, substitute top-level,
+        // substitute list-inner). Path-uniformity guard at the new boundary:
+        // the bytecode-path compile-time gate now routes through the same
+        // shape `substitute`'s list-inner Splice arm uses.
+        //
+        // `(defmacro bad (xs) \`,@xs)` — the body's outer quasi-quote is
+        // peeled by `template_body`, leaving `,@xs` at top level for
+        // `compile_template` to gate before `compile_node` walks anything.
+        // The bytecode strategy is default-on (`Expander::new()` sets
+        // `compile_templates: true`), so the gate fires at
+        // `register_macro_def` time.
+        let mut e = Expander::new();
+        let err = e
+            .expand_program(read("(defmacro bad (xs) `,@xs)").unwrap())
+            .expect_err("compile_template must reject top-level ,@X via as_unquote");
+        assert!(
+            matches!(err, crate::error::LispError::SpliceOutsideList { .. }),
+            "expected SpliceOutsideList through as_unquote, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn compile_template_accepts_top_level_unquote_through_as_unquote_typed_marker() {
+        // Negative control on the typed-marker dispatch at `compile_template`'s
+        // top-level gate. A top-level `,X` body (Unquote, NOT Splice) is a
+        // valid template — `compile_node` lowers it to a single `Subst(idx)`
+        // op. The new `Some((UnquoteForm::Splice, inner))` pattern at the
+        // gate MUST NOT fire on the Unquote variant — only Splice — so the
+        // typed marker is observably load-bearing: a regression that drifts
+        // the pattern from `UnquoteForm::Splice` to the wider
+        // `Some((_, inner))` would mis-reject `(defmacro id (x) ,x)` here.
+        //
+        // `(defmacro id (x) ,x) (id 42)` — `id`'s body is bare `,x` at top
+        // level; `compile_template` admits it via the typed-marker gate,
+        // `compile_node` emits `Subst(0)`, and the call expands to `42`.
+        let src = "(defmacro id (x) ,x) (id 42)";
+        let mut e = Expander::new();
+        let expanded = e
+            .expand_program(read(src).unwrap())
+            .expect("top-level ,X body must compile through as_unquote-typed gate");
+        assert_eq!(expanded, vec![Sexp::int(42)]);
+    }
+
+    #[test]
+    fn contains_unquote_routes_through_as_unquote_for_unquote_family_recognition() {
+        // The fast-path optimizer in `compile_node` short-circuits on
+        // `contains_unquote(node)` — true iff the subtree carries an
+        // unquote-family wrapper. Pre-lift the family check inlined
+        // `Sexp::Unquote(_) | Sexp::UnquoteSplice(_) => true`; post-lift it
+        // routes through `as_unquote().is_some()`. Pin path-uniformity at
+        // the family-recognition boundary: every production-site unquote
+        // recognizer (compile_template's gate, compile_node's per-arm
+        // dispatch, substitute's top-level + list-inner arms, AND this
+        // fast-path predicate) now shares ONE typed-marker projection.
+        //
+        // Both variants must trigger the fast-path bail — the optimizer's
+        // gate keys on the family, not the inner. The recursion into
+        // Quote/Quasiquote/List subtrees ALSO observes the same family
+        // gate at every level, so a `,@xs` buried under a `\`...` outer
+        // wrapper still fires it.
+        let bare_unquote = Sexp::Unquote(Box::new(Sexp::symbol("x")));
+        let bare_splice = Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs")));
+        let nested = Sexp::Quasiquote(Box::new(Sexp::List(vec![
+            Sexp::symbol("foo"),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+        ])));
+        // The projection's `is_some()` face MUST agree with the pre-lift
+        // `matches!()` discriminant on every variant — closed-set guarantee
+        // shared with `as_unquote`'s contract pin in `ast.rs`.
+        assert!(super::contains_unquote(&bare_unquote));
+        assert!(super::contains_unquote(&bare_splice));
+        assert!(super::contains_unquote(&nested));
+        // Negative control: shapes the projection rejects (Nil, Atom,
+        // bare List, Quote-family without inner unquote) must NOT trigger
+        // the fast-path bail — the projection's None face stays observably
+        // distinct from its Some face.
+        assert!(!super::contains_unquote(&Sexp::Nil));
+        assert!(!super::contains_unquote(&Sexp::symbol("plain")));
+        assert!(!super::contains_unquote(&Sexp::int(5)));
+        assert!(!super::contains_unquote(&Sexp::List(vec![
+            Sexp::symbol("plain"),
+            Sexp::int(1),
+        ])));
+        assert!(!super::contains_unquote(&Sexp::Quote(Box::new(
+            Sexp::symbol("inert")
+        ))));
     }
 }

@@ -1356,22 +1356,14 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: the `#[closed_set(generate_unknown)]`
-    /// attribute emits the carrier with the substrate-wide
-    /// `#[error("unknown data classification: {0}")]` annotation
-    /// auto-derived from the PascalCase enum name (via
-    /// `pascal_to_spaced_lowercase`). Pins the projection
-    /// byte-for-byte against the prior hand-rolled annotation so a
-    /// regression in the derive's label helper would surface here
-    /// rather than silently drifting the operator-facing diagnostic.
-    /// Mirrors the matching tests on
-    /// `crate::export::{ChannelKind,ReportFormat,ExportTrigger}` (commit
-    /// b487465).
-    #[test]
-    fn unknown_data_classification_message_matches_substrate_convention() {
-        let err = UnknownDataClassification("foo".to_string());
-        assert_eq!(err.to_string(), "unknown data classification: foo");
-    }
+    // `unknown_data_classification_message_matches_substrate_convention`
+    // removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<DataClassification>()`
+    // verifies the substrate-wide `"unknown {SET_LABEL}: {input}"`
+    // shape generically (called from
+    // `data_classification_is_well_formed_closed_set` above); the
+    // `SET_LABEL` projection is pinned by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests`.
 
     /// TRUTH-TABLE CONTRACT: the predicate pair agrees with the
     /// documented per-variant compliance role. Pinning this table at
@@ -1615,16 +1607,14 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
-    /// label "convergence point type" against the prior hand-rolled
-    /// `#[error("unknown convergence point type: {0}")]` annotation
-    /// byte-for-byte. See `unknown_data_classification_message_matches_substrate_convention`
-    /// for the contract rationale.
-    #[test]
-    fn unknown_convergence_point_type_message_matches_substrate_convention() {
-        let err = UnknownConvergencePointType("foo".to_string());
-        assert_eq!(err.to_string(), "unknown convergence point type: foo");
-    }
+    // `unknown_convergence_point_type_message_matches_substrate_convention`
+    // removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<ConvergencePointType>()`
+    // verifies the substrate-wide `"unknown {SET_LABEL}: {input}"`
+    // shape generically (called from
+    // `convergence_point_type_is_well_formed_closed_set` above); the
+    // `SET_LABEL` projection is pinned by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests`.
 
     /// TRUTH-TABLE CONTRACT: the predicate triple agrees with the
     /// documented per-variant topology role. Pinning this table at
@@ -1873,16 +1863,14 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
-    /// label "substrate type" against the prior hand-rolled
-    /// `#[error("unknown substrate type: {0}")]` annotation
-    /// byte-for-byte. See `unknown_data_classification_message_matches_substrate_convention`
-    /// for the contract rationale.
-    #[test]
-    fn unknown_substrate_type_message_matches_substrate_convention() {
-        let err = UnknownSubstrateType("foo".to_string());
-        assert_eq!(err.to_string(), "unknown substrate type: foo");
-    }
+    // `unknown_substrate_type_message_matches_substrate_convention`
+    // removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<SubstrateType>()`
+    // verifies the substrate-wide `"unknown {SET_LABEL}: {input}"`
+    // shape generically (called from
+    // `substrate_type_is_well_formed_closed_set` above); the
+    // `SET_LABEL` projection is pinned by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests`.
 
     /// TRUTH-TABLE CONTRACT: the predicate triple agrees with the
     /// documented per-variant plane role. Pinning this table at one
@@ -2063,16 +2051,14 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
-    /// label "calm classification" against the prior hand-rolled
-    /// `#[error("unknown calm classification: {0}")]` annotation
-    /// byte-for-byte. See `unknown_data_classification_message_matches_substrate_convention`
-    /// for the contract rationale.
-    #[test]
-    fn unknown_calm_classification_message_matches_substrate_convention() {
-        let err = UnknownCalmClassification("foo".to_string());
-        assert_eq!(err.to_string(), "unknown calm classification: foo");
-    }
+    // `unknown_calm_classification_message_matches_substrate_convention`
+    // removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<CalmClassification>()`
+    // verifies the substrate-wide `"unknown {SET_LABEL}: {input}"`
+    // shape generically (called from
+    // `calm_classification_is_well_formed_closed_set` above); the
+    // `SET_LABEL` projection is pinned by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests`.
 
     /// CALM-THEOREM TRUTH-TABLE CONTRACT: `requires_coordination`
     /// implements the biconditional half of Hellerstein's CALM
@@ -2231,16 +2217,14 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
-    /// label "optimization direction" against the prior hand-rolled
-    /// `#[error("unknown optimization direction: {0}")]` annotation
-    /// byte-for-byte. See `unknown_data_classification_message_matches_substrate_convention`
-    /// for the contract rationale.
-    #[test]
-    fn unknown_optimization_direction_message_matches_substrate_convention() {
-        let err = UnknownOptimizationDirection("foo".to_string());
-        assert_eq!(err.to_string(), "unknown optimization direction: foo");
-    }
+    // `unknown_optimization_direction_message_matches_substrate_convention`
+    // removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<OptimizationDirection>()`
+    // verifies the substrate-wide `"unknown {SET_LABEL}: {input}"`
+    // shape generically (called from
+    // `optimization_direction_is_well_formed_closed_set` above); the
+    // `SET_LABEL` projection is pinned by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests`.
 
     /// TRUTH-TABLE CONTRACT: `prefers_lower` is the boolean
     /// partition `Minimize ⇒ true`, `Maximize ⇒ false`. Pinning this
@@ -2481,16 +2465,14 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: pins the auto-derived carrier
-    /// label "horizon kind" against the prior hand-rolled
-    /// `#[error("unknown horizon kind: {0}")]` annotation byte-for-byte.
-    /// See `unknown_data_classification_message_matches_substrate_convention`
-    /// for the contract rationale.
-    #[test]
-    fn unknown_horizon_kind_message_matches_substrate_convention() {
-        let err = UnknownHorizonKind("foo".to_string());
-        assert_eq!(err.to_string(), "unknown horizon kind: foo");
-    }
+    // `unknown_horizon_kind_message_matches_substrate_convention`
+    // removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<HorizonKind>()`
+    // verifies the substrate-wide `"unknown {SET_LABEL}: {input}"`
+    // shape generically (called from
+    // `horizon_kind_is_well_formed_closed_set` above); the
+    // `SET_LABEL` projection is pinned by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests`.
 
     /// LOAD-BEARING TRUTH-TABLE: `terminates` is the boolean
     /// partition `Bounded ⇒ true`, `Asymptotic ⇒ false`. Pinning

@@ -267,7 +267,9 @@ impl RequestorKind {
 // `#[derive(tatara_lisp::DeriveClosedSet)]` + `#[closed_set(generate_unknown)]`
 // on the enum declaration above. The auto-derived label `"requestor kind"`
 // matches the prior hand-rolled `#[error("unknown requestor kind: {0}")]`
-// verbatim — pinned by `unknown_requestor_kind_message_matches_substrate_convention`.
+// verbatim — pinned generically by clause (5) of
+// `tatara_lisp::assert_closed_set_well_formed::<RequestorKind>()` (called
+// from `requestor_kind_is_well_formed_closed_set` in the test module).
 // Symmetric to every sibling `Unknown*` error in this crate (e.g.
 // [`UnknownAllocationPhase`], [`crate::receipt::UnknownReceiptKind`],
 // [`crate::phase::UnknownPhase`], [`crate::lifetime::UnknownTeardownPolicy`]).
@@ -489,7 +491,9 @@ impl AllocationPhase {
 // `#[derive(tatara_lisp::DeriveClosedSet)]` + `#[closed_set(generate_unknown)]`
 // on the enum declaration above. The auto-derived label `"allocation phase"`
 // matches the prior hand-rolled `#[error("unknown allocation phase: {0}")]`
-// verbatim — pinned by `unknown_allocation_phase_message_matches_substrate_convention`.
+// verbatim — pinned generically by clause (5) of
+// `tatara_lisp::assert_closed_set_well_formed::<AllocationPhase>()` (called
+// from `allocation_phase_is_well_formed_closed_set` in the test module).
 // Symmetric to [`crate::pool::UnknownReplacementPolicy`],
 // [`crate::pool::UnknownReturnPolicy`],
 // [`crate::lifetime::UnknownTeardownPolicy`],
@@ -858,35 +862,16 @@ mod tests {
         assert_eq!(RequestorKind::Manual.as_str(), "manual");
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: the `#[closed_set(generate_unknown)]`
-    /// attribute emits the carrier with the substrate-wide
-    /// `#[error("unknown requestor kind: {0}")]` annotation auto-derived
-    /// from the PascalCase enum name (via `pascal_to_spaced_lowercase`).
-    /// Pins the projection byte-for-byte against the prior hand-rolled
-    /// annotation so a regression in the derive's label helper would
-    /// surface here rather than silently drifting the operator-facing
-    /// diagnostic — sibling shape to
-    /// `unknown_allocation_phase_message_matches_substrate_convention`
-    /// below + every `unknown_<thing>_message_matches_substrate_convention`
-    /// in `classification.rs` / `pool.rs` / `export.rs`.
-    #[test]
-    fn unknown_requestor_kind_message_matches_substrate_convention() {
-        let err = UnknownRequestorKind("foo".to_string());
-        assert_eq!(err.to_string(), "unknown requestor kind: foo");
-    }
-
-    /// AUTO-DERIVED LABEL CONTRACT: the `#[closed_set(generate_unknown)]`
-    /// attribute emits the carrier with the substrate-wide
-    /// `#[error("unknown allocation phase: {0}")]` annotation auto-derived
-    /// from the PascalCase enum name. Pins the projection byte-for-byte
-    /// against the prior hand-rolled annotation — see
-    /// `unknown_requestor_kind_message_matches_substrate_convention`
-    /// for the rationale.
-    #[test]
-    fn unknown_allocation_phase_message_matches_substrate_convention() {
-        let err = UnknownAllocationPhase("foo".to_string());
-        assert_eq!(err.to_string(), "unknown allocation phase: foo");
-    }
+    // Per-implementor `unknown_X_message_matches_substrate_convention`
+    // tests removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<T>()` now verifies
+    // the substrate-wide `"unknown {SET_LABEL}: {input}"` carrier shape
+    // generically (called above on `RequestorKind` /
+    // `AllocationPhase` through their `*_is_well_formed_closed_set`
+    // sites). The `SET_LABEL` projection is pinned independently by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests` —
+    // together the two contracts guarantee the operator-facing
+    // diagnostic without needing per-enum literal pins.
 
     #[test]
     fn allocation_spec_omits_optional_fields() {

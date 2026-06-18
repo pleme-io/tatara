@@ -1037,17 +1037,13 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: the
-    /// `#[closed_set(generate_unknown)]` attribute emits the carrier
-    /// with the substrate-wide `#[error("unknown export trigger: {0}")]`
-    /// annotation auto-derived from the PascalCase enum name. See
-    /// `unknown_channel_kind_message_matches_substrate_convention` for
-    /// the contract rationale.
-    #[test]
-    fn unknown_export_trigger_message_matches_substrate_convention() {
-        let err = UnknownExportTrigger("foo".to_string());
-        assert_eq!(err.to_string(), "unknown export trigger: foo");
-    }
+    // `unknown_export_trigger_message_matches_substrate_convention`
+    // removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<ExportTrigger>()`
+    // verifies the substrate-wide `"unknown {SET_LABEL}: {input}"`
+    // shape generically (called from `trigger_is_well_formed_closed_set`
+    // above); the `SET_LABEL` projection is pinned by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests`.
 
     /// TRUTH-TABLE CONTRACT: `fires_on(phase)` agrees with the
     /// documented (trigger, phase) -> bool table for every (3 × 11)
@@ -1222,17 +1218,13 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: the
-    /// `#[closed_set(generate_unknown)]` attribute emits the carrier
-    /// with the substrate-wide `#[error("unknown report format: {0}")]`
-    /// annotation auto-derived from the PascalCase enum name. See
-    /// `unknown_channel_kind_message_matches_substrate_convention` for
-    /// the contract rationale.
-    #[test]
-    fn unknown_report_format_message_matches_substrate_convention() {
-        let err = UnknownReportFormat("foo".to_string());
-        assert_eq!(err.to_string(), "unknown report format: foo");
-    }
+    // `unknown_report_format_message_matches_substrate_convention`
+    // removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<ReportFormat>()`
+    // verifies the substrate-wide `"unknown {SET_LABEL}: {input}"`
+    // shape generically (called from `report_format_is_well_formed_closed_set`
+    // above); the `SET_LABEL` projection is pinned by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests`.
 
     /// TRUTH-TABLE CONTRACT: `payload_shape` agrees with the documented
     /// shape table for every variant in `ALL`. A new variant whose
@@ -1776,22 +1768,13 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: the
-    /// `#[closed_set(generate_unknown)]` attribute emits the carrier
-    /// with the substrate-wide `#[error("unknown channel kind: {0}")]`
-    /// annotation auto-derived from the PascalCase enum name. Pinning
-    /// the Display output byte-for-byte against the prior hand-rolled
-    /// message means a regression in `pascal_to_spaced_lowercase`
-    /// (the derive's helper) would fail here rather than silently
-    /// drifting the operator-facing diagnostic. Sibling pins on the
-    /// same auto-derive contract:
-    /// `unknown_report_format_message_matches_substrate_convention`,
-    /// `unknown_export_trigger_message_matches_substrate_convention`.
-    #[test]
-    fn unknown_channel_kind_message_matches_substrate_convention() {
-        let err = UnknownChannelKind("foo".to_string());
-        assert_eq!(err.to_string(), "unknown channel kind: foo");
-    }
+    // `unknown_channel_kind_message_matches_substrate_convention`
+    // removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<ChannelKind>()`
+    // verifies the substrate-wide `"unknown {SET_LABEL}: {input}"`
+    // shape generically (called from `channel_kind_is_well_formed_closed_set`
+    // above); the `SET_LABEL` projection is pinned by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests`.
 
     /// ROUND-TRIP CONTRACT: every kind reaches its borrowed-variant
     /// view via `select`, and that variant projects back to the same

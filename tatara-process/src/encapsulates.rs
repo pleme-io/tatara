@@ -214,7 +214,9 @@ impl EncapsulationTarget {
 // `#[derive(tatara_lisp::DeriveClosedSet)]` + `#[closed_set(generate_unknown)]`
 // on the enum declaration above. The auto-derived label `"encapsulation target"`
 // matches the prior hand-rolled `#[error("unknown encapsulation target: {0}")]`
-// verbatim — pinned by `unknown_encapsulation_target_message_matches_substrate_convention`.
+// verbatim — pinned generically by clause (5) of
+// `tatara_lisp::assert_closed_set_well_formed::<EncapsulationTarget>()` (called
+// from `encapsulation_target_is_well_formed_closed_set` in the test module).
 // Symmetric to [`UnknownEncapsulationMode`], [`crate::export::UnknownArtifactKind`],
 // [`crate::export::UnknownChannelKind`], and
 // [`crate::lifetime::UnknownTeardownPolicy`].
@@ -407,7 +409,9 @@ impl EncapsulationMode {
 // `#[derive(tatara_lisp::DeriveClosedSet)]` + `#[closed_set(generate_unknown)]`
 // on the enum declaration above. The auto-derived label `"encapsulation mode"`
 // matches the prior hand-rolled `#[error("unknown encapsulation mode: {0}")]`
-// verbatim — pinned by `unknown_encapsulation_mode_message_matches_substrate_convention`.
+// verbatim — pinned generically by clause (5) of
+// `tatara_lisp::assert_closed_set_well_formed::<EncapsulationMode>()` (called
+// from `mode_is_well_formed_closed_set` in the test module).
 // Symmetric to [`UnknownEncapsulationTarget`], [`crate::export::UnknownExportTrigger`],
 // [`crate::lifetime::UnknownTeardownPolicy`],
 // [`crate::boundary::UnknownConditionKind`], and
@@ -940,46 +944,14 @@ mod tests {
         }
     }
 
-    /// AUTO-DERIVED LABEL CONTRACT: the
-    /// `#[derive(tatara_lisp::DeriveClosedSet)]` +
-    /// `#[closed_set(generate_unknown)]` proc-macro emits the carrier
-    /// with the substrate-wide `#[error("unknown <spaced-lowercase
-    /// enum name>: {0}")]` annotation. Pin the resulting Display
-    /// rendering verbatim so a future regression at the derive's
-    /// `pascal_to_spaced_lowercase` projection (or at the `EnumName`
-    /// → carrier-name `Unknown{Name}` mapping) cannot drift the
-    /// operator-facing diagnostic — the legacy hand-rolled
-    /// `#[error("unknown encapsulation target: {0}")]` annotation
-    /// renders byte-for-byte identical post-lift. Sibling pinning
-    /// shape to
-    /// `unknown_requestor_kind_message_matches_substrate_convention`
-    /// (`allocation.rs`) +
-    /// `unknown_convergence_point_type_message_matches_substrate_convention`
-    /// (`classification.rs`) + every other
-    /// `unknown_<thing>_message_matches_substrate_convention` across
-    /// the `#[closed_set(generate_unknown)]` cohort.
-    #[test]
-    fn unknown_encapsulation_target_message_matches_substrate_convention() {
-        let err = UnknownEncapsulationTarget("foo".to_string());
-        assert_eq!(err.to_string(), "unknown encapsulation target: foo");
-    }
-
-    /// Sibling of
-    /// `unknown_encapsulation_target_message_matches_substrate_convention`
-    /// for the second closed-set carrier on this file's
-    /// `ProcessSpec` axis — `EncapsulationMode` projects to
-    /// "encapsulation mode" through the derive's
-    /// `pascal_to_spaced_lowercase` projection, matching the legacy
-    /// hand-rolled `#[error("unknown encapsulation mode: {0}")]`
-    /// annotation byte-for-byte. A regression that drifts ONE of the
-    /// two carriers' label (e.g. a future derive emitter that
-    /// inflects "Mode" differently from "Target") fails here in
-    /// isolation from the structural well-formedness sweep that
-    /// `mode_is_well_formed_closed_set` /
-    /// `encapsulation_target_is_well_formed_closed_set` pin upstream.
-    #[test]
-    fn unknown_encapsulation_mode_message_matches_substrate_convention() {
-        let err = UnknownEncapsulationMode("foo".to_string());
-        assert_eq!(err.to_string(), "unknown encapsulation mode: foo");
-    }
+    // Per-implementor `unknown_X_message_matches_substrate_convention`
+    // tests removed — clause (5) of
+    // `tatara_lisp::assert_closed_set_well_formed::<T>()` now verifies
+    // the substrate-wide `"unknown {SET_LABEL}: {input}"` carrier shape
+    // generically (called above on `EncapsulationTarget` /
+    // `EncapsulationMode` through their `*_is_well_formed_closed_set`
+    // sites). The `SET_LABEL` projection is pinned independently by
+    // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests` —
+    // together the two contracts guarantee the operator-facing
+    // diagnostic without needing per-enum literal pins.
 }

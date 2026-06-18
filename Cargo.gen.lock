@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "cargo_lock_sha256": "6b8569e663627c6b00c977bcbd28436f02faff0eaa0b363f08dfd0f02cfe32ed",
+  "cargo_lock_sha256": "2c3eec054e602d6055018e8dc327db5987fd69509c9e93d2a8ac23baa9b331bb",
   "target_resolves": {
     "base": {
       "Inflector-0.11.4": {
@@ -723,10 +723,8 @@
             "name": "axum",
             "package_key": "axum-0.8.9",
             "kind": "normal",
-            "features": [
-              "ws"
-            ],
-            "uses_default_features": true,
+            "features": [],
+            "uses_default_features": false,
             "optional": false,
             "target": "cfg(target_arch = \"wasm32\")",
             "tree": "target"
@@ -3415,7 +3413,9 @@
             "name": "crossterm",
             "package_key": "crossterm-0.29.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "windows"
+            ],
             "uses_default_features": false,
             "optional": true,
             "target": "cfg(windows)",
@@ -11614,9 +11614,11 @@
             "name": "ring",
             "package_key": "ring-0.17.14",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "wasm32_unknown_unknown_js"
+            ],
             "uses_default_features": true,
-            "optional": true,
+            "optional": false,
             "target": "cfg(all(target_family = \"wasm\", target_os = \"unknown\"))",
             "tree": "target"
           },
@@ -12559,7 +12561,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": true,
+            "optional": false,
             "target": "cfg(target_arch = \"wasm32\")",
             "tree": "target"
           },
@@ -14239,7 +14241,9 @@
             "name": "notify",
             "package_key": "notify-8.2.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "macos_kqueue"
+            ],
             "uses_default_features": false,
             "optional": false,
             "target": "cfg(target_os = \"macos\")",
@@ -14924,7 +14928,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": true,
+            "optional": false,
             "target": "cfg(windows)",
             "tree": "target"
           },
@@ -14972,7 +14976,7 @@
           "std"
         ]
       },
-      "tatara-api-0.2.71": {
+      "tatara-api-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -15065,7 +15069,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15075,7 +15079,7 @@
           },
           {
             "name": "tatara_engine",
-            "package_key": "tatara-engine-0.2.71",
+            "package_key": "tatara-engine-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15170,7 +15174,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-build-remote-0.2.71": {
+      "tatara-build-remote-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -15218,7 +15222,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-cli-0.2.71": {
+      "tatara-cli-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -15452,7 +15456,7 @@
           },
           {
             "name": "tatara_api",
-            "package_key": "tatara-api-0.2.71",
+            "package_key": "tatara-api-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15462,7 +15466,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15472,7 +15476,7 @@
           },
           {
             "name": "tatara_engine",
-            "package_key": "tatara-engine-0.2.71",
+            "package_key": "tatara-engine-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15587,7 +15591,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-closed-loop-probe-0.2.71": {
+      "tatara-closed-loop-probe-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -15726,7 +15730,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.71",
+            "package_key": "tatara-process-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15783,7 +15787,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-core-0.2.71": {
+      "tatara-core-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -15949,7 +15953,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-domains-0.2.71": {
+      "tatara-domains-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -15975,7 +15979,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15987,7 +15991,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-eval-0.2.71": {
+      "tatara-eval-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "bumpalo",
@@ -16025,7 +16029,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16035,7 +16039,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.71",
+            "package_key": "tatara-nix-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16057,7 +16061,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-export-worker-0.2.71": {
+      "tatara-export-worker-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -16196,7 +16200,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.71",
+            "package_key": "tatara-process-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16253,7 +16257,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-github-watcher-0.2.71": {
+      "tatara-github-watcher-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -16403,7 +16407,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.71",
+            "package_key": "tatara-process-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16472,7 +16476,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-hospedeiro-0.2.71": {
+      "tatara-hospedeiro-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -16498,7 +16502,7 @@
           },
           {
             "name": "tatara_build_remote",
-            "package_key": "tatara-build-remote-0.2.71",
+            "package_key": "tatara-build-remote-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16508,7 +16512,7 @@
           },
           {
             "name": "tatara_hvf",
-            "package_key": "tatara-hvf-0.2.71",
+            "package_key": "tatara-hvf-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16518,7 +16522,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.71",
+            "package_key": "tatara-process-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16528,7 +16532,7 @@
           },
           {
             "name": "tatara_vm",
-            "package_key": "tatara-vm-0.2.71",
+            "package_key": "tatara-vm-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16538,7 +16542,7 @@
           },
           {
             "name": "tatara_wasm",
-            "package_key": "tatara-wasm-0.2.71",
+            "package_key": "tatara-wasm-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16570,7 +16574,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-init-0.2.71": {
+      "tatara-init-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "libc",
@@ -16606,7 +16610,7 @@
           },
           {
             "name": "tatara_eval",
-            "package_key": "tatara-eval-0.2.71",
+            "package_key": "tatara-eval-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16616,7 +16620,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16626,7 +16630,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.71",
+            "package_key": "tatara-lisp-derive-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16648,7 +16652,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-kube-0.2.71": {
+      "tatara-kube-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -16774,7 +16778,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16834,7 +16838,7 @@
           "standalone"
         ]
       },
-      "tatara-lattice-0.2.71": {
+      "tatara-lattice-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "schemars",
@@ -16862,7 +16866,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16872,7 +16876,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.71",
+            "package_key": "tatara-process-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16884,7 +16888,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-lisp-0.2.71": {
+      "tatara-lisp-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -16920,7 +16924,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.71",
+            "package_key": "tatara-lisp-derive-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16944,7 +16948,7 @@
           "default"
         ]
       },
-      "tatara-lisp-derive-0.2.71": {
+      "tatara-lisp-derive-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -16982,7 +16986,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-mcp-0.2.71": {
+      "tatara-mcp-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -17008,7 +17012,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17042,7 +17046,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-net-0.2.71": {
+      "tatara-net-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -17122,7 +17126,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17182,7 +17186,7 @@
           "userspace"
         ]
       },
-      "tatara-nix-0.2.71": {
+      "tatara-nix-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -17228,7 +17232,7 @@
           },
           {
             "name": "tatara_lattice",
-            "package_key": "tatara-lattice-0.2.71",
+            "package_key": "tatara-lattice-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17238,7 +17242,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17248,7 +17252,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.71",
+            "package_key": "tatara-lisp-derive-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17511,7 +17515,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-os-0.2.71": {
+      "tatara-os-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -17557,7 +17561,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17567,7 +17571,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.71",
+            "package_key": "tatara-lisp-derive-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17577,7 +17581,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.71",
+            "package_key": "tatara-nix-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17587,7 +17591,7 @@
           },
           {
             "name": "tatara_pkgs",
-            "package_key": "tatara-pkgs-0.2.71",
+            "package_key": "tatara-pkgs-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17609,7 +17613,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-pkgs-0.2.71": {
+      "tatara-pkgs-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -17635,7 +17639,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17645,7 +17649,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.71",
+            "package_key": "tatara-lisp-derive-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17655,7 +17659,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.71",
+            "package_key": "tatara-nix-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17677,7 +17681,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-pool-reconciler-0.2.71": {
+      "tatara-pool-reconciler-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -17868,7 +17872,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17878,7 +17882,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.71",
+            "package_key": "tatara-process-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17935,7 +17939,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-process-0.2.71": {
+      "tatara-process-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -18061,7 +18065,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18071,7 +18075,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18081,7 +18085,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.71",
+            "package_key": "tatara-lisp-derive-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18113,7 +18117,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-reconciler-0.2.71": {
+      "tatara-reconciler-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -18304,7 +18308,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18314,7 +18318,7 @@
           },
           {
             "name": "tatara_domains",
-            "package_key": "tatara-domains-0.2.71",
+            "package_key": "tatara-domains-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18324,7 +18328,7 @@
           },
           {
             "name": "tatara_lattice",
-            "package_key": "tatara-lattice-0.2.71",
+            "package_key": "tatara-lattice-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18334,7 +18338,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18344,7 +18348,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.71",
+            "package_key": "tatara-process-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18401,7 +18405,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-terreiro-0.2.71": {
+      "tatara-terreiro-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -18459,7 +18463,7 @@
           },
           {
             "name": "tatara_eval",
-            "package_key": "tatara-eval-0.2.71",
+            "package_key": "tatara-eval-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18469,7 +18473,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18479,7 +18483,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.71",
+            "package_key": "tatara-lisp-derive-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18489,7 +18493,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.71",
+            "package_key": "tatara-nix-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18499,7 +18503,7 @@
           },
           {
             "name": "tatara_ui",
-            "package_key": "tatara-ui-0.2.71",
+            "package_key": "tatara-ui-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18521,7 +18525,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-testing-0.2.71": {
+      "tatara-testing-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -18581,7 +18585,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.71",
+            "package_key": "tatara-core-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18591,7 +18595,7 @@
           },
           {
             "name": "tatara_engine",
-            "package_key": "tatara-engine-0.2.71",
+            "package_key": "tatara-engine-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18640,7 +18644,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-ui-0.2.71": {
+      "tatara-ui-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -18706,7 +18710,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18716,7 +18720,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.71",
+            "package_key": "tatara-lisp-derive-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18738,7 +18742,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-vm-0.2.71": {
+      "tatara-vm-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -18804,7 +18808,7 @@
           },
           {
             "name": "tatara_build_remote",
-            "package_key": "tatara-build-remote-0.2.71",
+            "package_key": "tatara-build-remote-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18814,7 +18818,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.71",
+            "package_key": "tatara-lisp-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18824,7 +18828,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.71",
+            "package_key": "tatara-lisp-derive-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18834,7 +18838,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.71",
+            "package_key": "tatara-nix-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18844,7 +18848,7 @@
           },
           {
             "name": "tatara_os",
-            "package_key": "tatara-os-0.2.71",
+            "package_key": "tatara-os-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18854,7 +18858,7 @@
           },
           {
             "name": "tatara_ui",
-            "package_key": "tatara-ui-0.2.71",
+            "package_key": "tatara-ui-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18864,7 +18868,7 @@
           },
           {
             "name": "tatara_wasm",
-            "package_key": "tatara-wasm-0.2.71",
+            "package_key": "tatara-wasm-0.2.72",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18886,7 +18890,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-wasm-0.2.71": {
+      "tatara-wasm-0.2.72": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -19358,7 +19362,10 @@
             "name": "mio",
             "package_key": "mio-1.2.1",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "os-ext",
+              "os-poll"
+            ],
             "uses_default_features": false,
             "optional": true,
             "target": "cfg(all(tokio_unstable, target_os = \"linux\"))",
@@ -22432,7 +22439,6 @@
             "kind": "normal",
             "features": [
               "event",
-              "fs",
               "net"
             ],
             "uses_default_features": true,
@@ -24431,7 +24437,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
-                "optional": false,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -24487,7 +24493,7 @@
                   "os-ext"
                 ],
                 "uses_default_features": true,
-                "optional": false,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -25259,7 +25265,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -25269,7 +25275,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -25289,7 +25295,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               }
@@ -25341,7 +25347,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -25351,7 +25357,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -25371,7 +25377,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               }
@@ -25609,7 +25615,7 @@
               "OSX_10_9"
             ]
           },
-          "tatara-engine-0.2.71": {
+          "tatara-engine-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -25847,7 +25853,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.71",
+                "package_key": "tatara-core-0.2.72",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -25929,7 +25935,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.71": {
+          "tatara-hvf-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "applevisor",
@@ -26953,7 +26959,7 @@
                   "os-ext"
                 ],
                 "uses_default_features": true,
-                "optional": false,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -27095,7 +27101,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -27105,7 +27111,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -27125,7 +27131,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -27148,6 +27154,8 @@
                 "package_key": "linux-raw-sys-0.4.15",
                 "kind": "normal",
                 "features": [
+                  "elf",
+                  "errno",
                   "general",
                   "ioctl",
                   "no_std"
@@ -27205,7 +27213,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -27215,7 +27223,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -27235,7 +27243,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -27258,6 +27266,9 @@
                 "package_key": "linux-raw-sys-0.12.1",
                 "kind": "normal",
                 "features": [
+                  "auxvec",
+                  "elf",
+                  "errno",
                   "general",
                   "ioctl",
                   "no_std"
@@ -27379,7 +27390,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.71": {
+          "tatara-engine-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -27607,7 +27618,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.71",
+                "package_key": "tatara-core-0.2.72",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -27689,7 +27700,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.71": {
+          "tatara-hvf-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -28717,7 +28728,7 @@
                   "os-ext"
                 ],
                 "uses_default_features": true,
-                "optional": false,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -28859,7 +28870,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -28869,7 +28880,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -28889,7 +28900,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -28912,6 +28923,8 @@
                 "package_key": "linux-raw-sys-0.4.15",
                 "kind": "normal",
                 "features": [
+                  "elf",
+                  "errno",
                   "general",
                   "ioctl",
                   "no_std"
@@ -28969,7 +28982,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -28979,7 +28992,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -28999,7 +29012,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -29022,6 +29035,9 @@
                 "package_key": "linux-raw-sys-0.12.1",
                 "kind": "normal",
                 "features": [
+                  "auxvec",
+                  "elf",
+                  "errno",
                   "general",
                   "ioctl",
                   "no_std"
@@ -29143,7 +29159,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.71": {
+          "tatara-engine-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -29371,7 +29387,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.71",
+                "package_key": "tatara-core-0.2.72",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -29453,7 +29469,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.71": {
+          "tatara-hvf-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -30793,7 +30809,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
-                "optional": false,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -30849,7 +30865,7 @@
                   "os-ext"
                 ],
                 "uses_default_features": true,
-                "optional": false,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -31601,7 +31617,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -31611,7 +31627,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -31631,7 +31647,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               }
@@ -31683,7 +31699,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -31693,7 +31709,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -31713,7 +31729,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               }
@@ -31951,7 +31967,7 @@
               "OSX_10_9"
             ]
           },
-          "tatara-engine-0.2.71": {
+          "tatara-engine-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -32189,7 +32205,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.71",
+                "package_key": "tatara-core-0.2.72",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -32271,7 +32287,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.71": {
+          "tatara-hvf-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -33389,7 +33405,7 @@
                   "os-ext"
                 ],
                 "uses_default_features": true,
-                "optional": false,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -33511,7 +33527,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -33521,7 +33537,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -33541,7 +33557,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -33564,6 +33580,8 @@
                 "package_key": "linux-raw-sys-0.4.15",
                 "kind": "normal",
                 "features": [
+                  "elf",
+                  "errno",
                   "general",
                   "ioctl",
                   "no_std"
@@ -33621,7 +33639,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -33631,7 +33649,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -33651,7 +33669,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -33674,6 +33692,9 @@
                 "package_key": "linux-raw-sys-0.12.1",
                 "kind": "normal",
                 "features": [
+                  "auxvec",
+                  "elf",
+                  "errno",
                   "general",
                   "ioctl",
                   "no_std"
@@ -33795,7 +33816,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.71": {
+          "tatara-engine-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -34023,7 +34044,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.71",
+                "package_key": "tatara-core-0.2.72",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -34105,7 +34126,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.71": {
+          "tatara-hvf-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -35237,7 +35258,7 @@
                   "os-ext"
                 ],
                 "uses_default_features": true,
-                "optional": false,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -35359,7 +35380,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -35369,7 +35390,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -35389,7 +35410,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", target_arch = \"s390x\"), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -35412,6 +35433,8 @@
                 "package_key": "linux-raw-sys-0.4.15",
                 "kind": "normal",
                 "features": [
+                  "elf",
+                  "errno",
                   "general",
                   "ioctl",
                   "no_std"
@@ -35469,7 +35492,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -35479,7 +35502,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(windows)",
                 "tree": "target"
               },
@@ -35499,7 +35522,7 @@
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
-                "optional": true,
+                "optional": false,
                 "target": "cfg(all(not(windows), any(rustix_use_libc, miri, not(all(target_os = \"linux\", any(target_endian = \"little\", any(target_arch = \"s390x\", target_arch = \"powerpc\")), any(target_arch = \"arm\", all(target_arch = \"aarch64\", target_pointer_width = \"64\"), target_arch = \"riscv64\", all(rustix_use_experimental_asm, target_arch = \"powerpc\"), all(rustix_use_experimental_asm, target_arch = \"powerpc64\"), all(rustix_use_experimental_asm, target_arch = \"s390x\"), all(rustix_use_experimental_asm, target_arch = \"mips\"), all(rustix_use_experimental_asm, target_arch = \"mips32r6\"), all(rustix_use_experimental_asm, target_arch = \"mips64\"), all(rustix_use_experimental_asm, target_arch = \"mips64r6\"), target_arch = \"x86\", all(target_arch = \"x86_64\", target_pointer_width = \"64\")))))))",
                 "tree": "target"
               },
@@ -35522,6 +35545,9 @@
                 "package_key": "linux-raw-sys-0.12.1",
                 "kind": "normal",
                 "features": [
+                  "auxvec",
+                  "elf",
+                  "errno",
                   "general",
                   "ioctl",
                   "no_std"
@@ -35643,7 +35669,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.71": {
+          "tatara-engine-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -35871,7 +35897,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.71",
+                "package_key": "tatara-core-0.2.72",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -35953,7 +35979,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.71": {
+          "tatara-hvf-0.2.72": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -38030,21 +38056,21 @@
       "edition": "2018",
       "build_script": "build.rs"
     },
-    "tatara-api-0.2.71": {
+    "tatara-api-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_api",
         "path": "src/lib.rs"
       }
     },
-    "tatara-build-remote-0.2.71": {
+    "tatara-build-remote-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_build_remote",
         "path": "src/lib.rs"
       }
     },
-    "tatara-cli-0.2.71": {
+    "tatara-cli-0.2.72": {
       "edition": "2021",
       "binaries": [
         {
@@ -38053,7 +38079,7 @@
         }
       ]
     },
-    "tatara-closed-loop-probe-0.2.71": {
+    "tatara-closed-loop-probe-0.2.72": {
       "edition": "2021",
       "binaries": [
         {
@@ -38062,21 +38088,21 @@
         }
       ]
     },
-    "tatara-core-0.2.71": {
+    "tatara-core-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_core",
         "path": "src/lib.rs"
       }
     },
-    "tatara-domains-0.2.71": {
+    "tatara-domains-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_domains",
         "path": "src/lib.rs"
       }
     },
-    "tatara-engine-0.2.71": {
+    "tatara-engine-0.2.72": {
       "edition": "2021",
       "build_script": "build.rs",
       "lib_target": {
@@ -38084,14 +38110,14 @@
         "path": "src/lib.rs"
       }
     },
-    "tatara-eval-0.2.71": {
+    "tatara-eval-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_eval",
         "path": "src/lib.rs"
       }
     },
-    "tatara-export-worker-0.2.71": {
+    "tatara-export-worker-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_export_worker",
@@ -38104,7 +38130,7 @@
         }
       ]
     },
-    "tatara-github-watcher-0.2.71": {
+    "tatara-github-watcher-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_github_watcher",
@@ -38117,21 +38143,21 @@
         }
       ]
     },
-    "tatara-hospedeiro-0.2.71": {
+    "tatara-hospedeiro-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_hospedeiro",
         "path": "src/lib.rs"
       }
     },
-    "tatara-hvf-0.2.71": {
+    "tatara-hvf-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_hvf",
         "path": "src/lib.rs"
       }
     },
-    "tatara-init-0.2.71": {
+    "tatara-init-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_init",
@@ -38144,7 +38170,7 @@
         }
       ]
     },
-    "tatara-kube-0.2.71": {
+    "tatara-kube-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_kube",
@@ -38157,21 +38183,21 @@
         }
       ]
     },
-    "tatara-lattice-0.2.71": {
+    "tatara-lattice-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_lattice",
         "path": "src/lib.rs"
       }
     },
-    "tatara-lisp-0.2.71": {
+    "tatara-lisp-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_lisp",
         "path": "src/lib.rs"
       }
     },
-    "tatara-lisp-derive-0.2.71": {
+    "tatara-lisp-derive-0.2.72": {
       "edition": "2021",
       "proc_macro": true,
       "lib_target": {
@@ -38179,21 +38205,21 @@
         "path": "src/lib.rs"
       }
     },
-    "tatara-mcp-0.2.71": {
+    "tatara-mcp-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_mcp",
         "path": "src/lib.rs"
       }
     },
-    "tatara-net-0.2.71": {
+    "tatara-net-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_net",
         "path": "src/lib.rs"
       }
     },
-    "tatara-nix-0.2.71": {
+    "tatara-nix-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_nix",
@@ -38217,21 +38243,21 @@
         }
       ]
     },
-    "tatara-os-0.2.71": {
+    "tatara-os-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_os",
         "path": "src/lib.rs"
       }
     },
-    "tatara-pkgs-0.2.71": {
+    "tatara-pkgs-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_pkgs",
         "path": "src/lib.rs"
       }
     },
-    "tatara-pool-reconciler-0.2.71": {
+    "tatara-pool-reconciler-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_pool_reconciler",
@@ -38244,7 +38270,7 @@
         }
       ]
     },
-    "tatara-process-0.2.71": {
+    "tatara-process-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_process",
@@ -38257,7 +38283,7 @@
         }
       ]
     },
-    "tatara-reconciler-0.2.71": {
+    "tatara-reconciler-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_reconciler",
@@ -38278,7 +38304,7 @@
         }
       ]
     },
-    "tatara-terreiro-0.2.71": {
+    "tatara-terreiro-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_terreiro",
@@ -38291,21 +38317,21 @@
         }
       ]
     },
-    "tatara-testing-0.2.71": {
+    "tatara-testing-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_testing",
         "path": "src/lib.rs"
       }
     },
-    "tatara-ui-0.2.71": {
+    "tatara-ui-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_ui",
         "path": "src/lib.rs"
       }
     },
-    "tatara-vm-0.2.71": {
+    "tatara-vm-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_vm",
@@ -38322,7 +38348,7 @@
         }
       ]
     },
-    "tatara-wasm-0.2.71": {
+    "tatara-wasm-0.2.72": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_wasm",

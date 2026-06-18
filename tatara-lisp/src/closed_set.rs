@@ -281,6 +281,104 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
         Err(Self::make_unknown(s))
     }
+
+    /// Collect every variant's canonical [`Self::label`] into a
+    /// freshly-allocated `Vec<&'static str>` — `Self::ALL`'s elements
+    /// projected through [`Self::label`], in declaration order.
+    ///
+    /// The substrate-wide
+    /// `T::ALL.iter().map(|v| v.label()).collect::<Vec<_>>()` shape
+    /// 10+ implementor sites re-derive byte-for-byte
+    /// (`tatara_process::intent::tests::intent_kind_canonical_names_pinned`,
+    /// `tatara_process::receipt::tests::receipt_kind_canonical_names_pinned`,
+    /// `tatara_process::matrix::tests::matrix_target_all_covers_every_variant`,
+    /// `tatara_process::allocation::tests::requestor_kind_as_str_unique_per_variant`,
+    /// `tatara_lisp::ast::tests::quote_form_all_covers_every_variant`,
+    /// `tatara_lisp::error::tests::macro_def_head_all_covers_every_variant`,
+    /// …) lifted into ONE generic projection. Generic consumers
+    /// (REPL exhaustive-listing diagnostics, LSP completion bars,
+    /// `tatara_lisp::domain::suggest`-keyed near-match suggesters)
+    /// take `T: ClosedSet` and call `T::labels()` rather than
+    /// hand-rolling the `ALL.iter().map().collect()` triple at each
+    /// call site.
+    ///
+    /// Default body walks [`Self::ALL`] and applies [`Self::label`];
+    /// implementors override only when the labels surface diverges
+    /// from `Self::ALL`'s natural projection (no production implementor
+    /// reaches for this today — the override axis exists for the
+    /// degenerate case where an implementor's `labels()` surface
+    /// names a subset of `Self::ALL` distinct from what `label()`
+    /// projects).
+    ///
+    /// THEORY.md §V.1 — knowable platform; the labels list was a
+    /// known idiom carried by convention across 10+ implementor
+    /// sites. Lifting it onto the trait makes the projection a TYPED
+    /// CONSEQUENCE of [`Self::ALL`] + [`Self::label`] — generic
+    /// consumers see ONE method, not ONE projection-shape-per-crate.
+    fn labels() -> ::std::vec::Vec<&'static str> {
+        Self::ALL
+            .iter()
+            .copied()
+            .map(<Self as ClosedSet>::label)
+            .collect()
+    }
+
+    /// Project `needle` onto the closest variant whose
+    /// [`Self::label`] sits within the substrate-wide bounded edit
+    /// distance — the typed bridge between an unrecognized input and
+    /// the "did you mean …?" diagnostic surface.
+    ///
+    /// Wires [`crate::domain::suggest`] (the workspace-wide
+    /// Levenshtein primitive — bound 1 for ≤3 chars, 2 for ≤7 chars,
+    /// 3 for ≥8 chars, lexicographic tie-break) into the
+    /// [`ClosedSet`] surface so every closed-set parse rejection can
+    /// thread a typed hint without re-deriving the metric / the
+    /// candidate-list materialization at each consumer site. An
+    /// exact match returns [`None`] — that path lives at
+    /// [`Self::parse_label`]; this method exists for near-misses.
+    /// Inputs beyond the bound return [`None`] so the "did you mean
+    /// …?" surface stays conservative rather than guessing.
+    ///
+    /// Default body walks [`Self::labels`], calls
+    /// [`crate::domain::suggest`], and re-keys the suggested label
+    /// onto its [`Self::ALL`] variant. Implementors override only
+    /// when the suggestion metric needs to diverge from the
+    /// substrate-wide Levenshtein bound (no production implementor
+    /// reaches for this today; the axis exists for a future
+    /// implementor whose canonical labels embed punctuation /
+    /// case-sensitive Unicode where the default metric would
+    /// systematically miss).
+    ///
+    /// THEORY.md §V.1 — knowable platform; the "did you mean …?"
+    /// suggestion shape ships at ONE primitive ([`crate::domain::suggest`])
+    /// the substrate already routes kwarg + domain-keyword
+    /// diagnostics through. Lifting the closed-set bridge onto this
+    /// trait extends the SAME primitive's reach to every closed-set
+    /// enum without forcing each consumer to re-derive the
+    /// candidate-list shape.
+    ///
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// suggest-closest behavior emerges from the composition of
+    /// THREE substrate primitives ([`Self::ALL`], [`Self::label`],
+    /// [`crate::domain::suggest`]) rather than as a per-implementor
+    /// edit-distance impl. Future improvements to the suggestion
+    /// metric (a future Damerau-Levenshtein lift, a future
+    /// case-insensitive override) edit ONE primitive and propagate to
+    /// every closed-set consumer.
+    ///
+    /// Frontier inspiration: rustc's `find_best_match_for_name` on
+    /// `Symbol`s, Idris's elaborator-reflection hint pass over its
+    /// constructor namespace, Roslyn's `SymbolMatcher` over typed
+    /// member tables — bounded edit-distance over a closed symbol
+    /// table threaded into the parse-rejection diagnostic. Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's [`Self::labels`] iterator with the substrate's
+    /// existing [`crate::domain::suggest`] metric.
+    fn suggest_closest(needle: &str) -> Option<Self> {
+        let candidates = Self::labels();
+        let target = crate::domain::suggest(needle, &candidates)?;
+        Self::ALL.iter().copied().find(|v| v.label() == target)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -324,6 +422,19 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///    annotation omits the noun phrase) fails this assertion on the
 ///    affected implementor without needing 33+ per-implementor literal
 ///    tests to catch the drift independently.
+/// 6. [`ClosedSet::labels`] equals the natural
+///    `Self::ALL.iter().copied().map(label).collect()` projection — the
+///    labels-list surface generic consumers (REPL exhaustive listers,
+///    LSP completion bars, [`ClosedSet::suggest_closest`]'s
+///    candidate-list) walk over. The default trait body satisfies the
+///    clause for free; the assertion catches a future implementor
+///    whose `labels()` override diverges from `ALL`'s natural
+///    projection (a degenerate axis the trait surface exposes for the
+///    same reason `via` / `set_label` exist — a typed escape hatch
+///    rather than forcing the implementor to hand-roll the impl). A
+///    drifted override fails this clause loudly rather than silently
+///    bifurcating the candidate-list surface every
+///    `suggest_closest` consumer routes through.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -420,6 +531,23 @@ where
     assert_eq!(
         rendered, expected,
         "{type_name}: parse-rejection carrier's Display drifted from the substrate-wide `unknown {{SET_LABEL}}: {{input}}` shape — the derive's `#[error(...)]` annotation and the trait's SET_LABEL const must thread the SAME noun phrase",
+    );
+    // (6) — `T::labels()` matches `T::ALL.iter().copied().map(label).collect()`.
+    // The default trait body satisfies the clause for free; the
+    // assertion catches a future implementor whose override drifts
+    // from the natural `ALL`-projection surface every
+    // `suggest_closest` consumer walks over. Length AND
+    // index-by-index match — neither alone catches "different labels,
+    // same length" drift nor "right labels, wrong order" drift.
+    let labels = T::labels();
+    let natural: Vec<&'static str> = T::ALL
+        .iter()
+        .copied()
+        .map(<T as ClosedSet>::label)
+        .collect();
+    assert_eq!(
+        labels, natural,
+        "{type_name}: T::labels() drifted from T::ALL.iter().copied().map(label).collect() — the labels-list surface every `suggest_closest` consumer walks over no longer matches the natural ALL-projection",
     );
 }
 
@@ -645,5 +773,123 @@ mod tests {
         sorted.sort_unstable();
         sorted.dedup();
         assert_eq!(sorted.len(), labels.len());
+    }
+
+    #[test]
+    fn labels_collects_each_variants_canonical_label_in_declaration_order() {
+        // The labels-list surface — `T::labels()` is the substrate-wide
+        // candidate list every generic consumer walks (the REPL
+        // exhaustive lister, the LSP completion bar, the
+        // `suggest_closest` did-you-mean keyer). Pinning the projection
+        // here means a regression that re-orders / subsets the
+        // candidate list (a future implementor whose override drops
+        // a variant from the labels surface, an unsynchronized
+        // refactor that swaps two `ALL` entries without updating the
+        // labels projection) fails this contract before any
+        // per-implementor test surfaces the drift downstream.
+        assert_eq!(
+            <StubKind as ClosedSet>::labels(),
+            vec!["alpha", "beta", "gamma"],
+        );
+    }
+
+    #[test]
+    fn suggest_closest_recovers_variant_from_single_edit_typo() {
+        // The did-you-mean bridge — a single-edit perturbation of a
+        // canonical label (`alpha` → `alpa`, one deletion) decodes to
+        // the original variant through the typed `suggest_closest`
+        // surface. The bound scales with input length (1 for ≤3 chars,
+        // 2 for ≤7 chars, 3 for ≥8 chars) so a 5-char "alpa" sits
+        // inside the bound-2 window for "alpha". Pinning the recovery
+        // path here keeps the substrate-wide Levenshtein primitive's
+        // bridge into ClosedSet honest — a regression that changes the
+        // bound (a future "stricter near-miss" gate) breaks this
+        // stub-level contract before any per-implementor surface
+        // depends on the suggestion semantics.
+        assert_eq!(
+            <StubKind as ClosedSet>::suggest_closest("alpa"),
+            Some(StubKind::Alpha),
+        );
+    }
+
+    #[test]
+    fn suggest_closest_returns_none_for_exact_match() {
+        // The exact-match contract — `suggest_closest("alpha")`
+        // returns `None`, NOT `Some(Alpha)`, because the did-you-mean
+        // primitive exists for near-misses only; the exact-match
+        // path lives at [`ClosedSet::parse_label`]. Pinning the
+        // contract here means a generic diagnostic consumer that
+        // chains "parse_label OR suggest_closest" doesn't double-emit
+        // the same variant (once as a successful decode, once as a
+        // suggested hint). Mirrors `tatara_lisp::domain::suggest`'s
+        // `candidate == needle { continue; }` arm — the substrate's
+        // suggestion surface is uniformly "near-miss only" rather
+        // than "best match including self".
+        assert_eq!(<StubKind as ClosedSet>::suggest_closest("alpha"), None,);
+    }
+
+    #[test]
+    fn suggest_closest_returns_none_for_input_outside_suggestion_bound() {
+        // The conservative-suggestion contract — an input whose
+        // closest label sits beyond the substrate-wide bounded edit
+        // distance returns `None` rather than "best of the bunch".
+        // The bound for an 8-char input ("xxxxxxxx") is 3; every
+        // candidate label ("alpha"/5, "beta"/4, "gamma"/5) sits at
+        // edit distance ≥4 (Levenshtein doesn't reduce below the
+        // length difference for disjoint character sets). Pinning the
+        // "conservative" semantics here keeps the substrate's
+        // "did you mean …?" surface from guessing for the operator —
+        // when the input is unrecognizable, the diagnostic stays
+        // silent rather than emitting an unrelated suggestion.
+        assert_eq!(<StubKind as ClosedSet>::suggest_closest("xxxxxxxx"), None,);
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_labels_and_all_projection() {
+        // The well-formedness sweep's (6) clause — `T::labels()`
+        // MUST equal the natural
+        // `T::ALL.iter().copied().map(label).collect()` projection.
+        // A hand-impl'd implementor whose override returns a
+        // different shape (a subset, a re-ordering, an externally
+        // sourced label list) fails the sweep loudly rather than
+        // silently bifurcating the candidate-list surface every
+        // `suggest_closest` consumer walks over. Pinning the failure
+        // path here keeps the testkit's (6) clause guaranteed-to-fire
+        // — a regression that makes the assertion permissive
+        // (e.g. a future "any superset" relaxation) breaks this
+        // stub-level contract before any per-implementor sweep runs.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedLabelsKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedLabelsKind(pub String);
+        impl core::fmt::Display for UnknownDriftedLabelsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted labels kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedLabelsKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted labels kind";
+            type Unknown = UnknownDriftedLabelsKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedLabelsKind(s.to_owned())
+            }
+            fn labels() -> Vec<&'static str> {
+                // Drifted override — returns a label that doesn't
+                // appear in `ALL.iter().map(label)`.
+                vec!["wrong"]
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedLabelsKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a labels() override drifted from the natural ALL-projection",
+        );
     }
 }

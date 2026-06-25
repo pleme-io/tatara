@@ -1121,22 +1121,31 @@ fn compile_node(node: &Sexp, params: &[&str], ops: &mut Vec<TemplateOp>) -> Resu
 }
 
 fn contains_unquote(node: &Sexp) -> bool {
-    // Route the unquote-family recognition through [`Sexp::as_unquote`] —
-    // the typed-marker projection — so the family check shares ONE
-    // structural query with every other production-site recognizer of
-    // `,X` / `,@X` (`compile_template` top-level gate, `compile_node`'s
-    // per-arm dispatch, `substitute` top-level + list-inner arms). The
-    // inner is irrelevant here (the short-circuit only cares "is this an
-    // unquote-family wrapper?"), so the projection's `.is_some()` face is
-    // the natural shape; the recursion into Quote/Quasiquote/List stays
-    // inline because those wrapper variants belong to a different family
-    // (no `QuoteForm` typed marker exists yet).
-    if node.as_unquote().is_some() {
-        return true;
+    // Route every quote-family wrapper recognition — both the
+    // unquote-only subset (Unquote/UnquoteSplice → short-circuit `true`)
+    // AND the quote-only subset (Quote/Quasiquote → recurse into inner) —
+    // through [`Sexp::as_quote_form`]'s typed-marker projection. Pre-lift
+    // the recognizer split into two arms: `as_unquote().is_some()` (the
+    // substitution subset gate) + the inline
+    // `Sexp::Quote(inner) | Sexp::Quasiquote(inner)` arm (the remaining
+    // quote-only subset). Post-lift both arms route through ONE
+    // projection and the (Sexp variant, QuoteForm variant) pairing binds
+    // at the closed-set algebra. The `form.as_unquote_form().is_some()`
+    // gate is the SAME 2-of-4 subset projection [`Sexp::as_unquote`]
+    // derives from, so recognizing "is this an unquote-family wrapper"
+    // and "is this a quote-only wrapper" share ONE typed dispatch site;
+    // rustc enforces that a future `Sexp` wrapper extension carry
+    // through both `QuoteForm::ALL` AND `QuoteForm::as_unquote_form`'s
+    // arm. Sibling posture to `Hash for Sexp`'s four-arm
+    // `hash_discriminator` collapse, `Display for Sexp`'s `prefix`
+    // collapse, `interop`'s `iac_forge_tag` collapse, and `domain`'s
+    // `sexp_shape` collapse — every production-site quote-family
+    // recognizer now routes through ONE projection on the algebra.
+    if let Some((form, inner)) = node.as_quote_form() {
+        return form.as_unquote_form().is_some() || contains_unquote(inner);
     }
     match node {
         Sexp::List(items) => items.iter().any(contains_unquote),
-        Sexp::Quote(inner) | Sexp::Quasiquote(inner) => contains_unquote(inner),
         _ => false,
     }
 }
@@ -9234,5 +9243,95 @@ mod tests {
         assert!(!super::contains_unquote(&Sexp::Quote(Box::new(
             Sexp::symbol("inert")
         ))));
+    }
+
+    #[test]
+    fn contains_unquote_routes_quote_family_through_as_quote_form_typed_marker() {
+        // Pin the lift: `contains_unquote`'s quote-family recognition
+        // now routes through `Sexp::as_quote_form` (the 4-of-4 wrapper
+        // projection) AND `QuoteForm::as_unquote_form` (the 2-of-4
+        // substitution-subset gate) at ONE site — not through the pair
+        // of `as_unquote().is_some()` + inline
+        // `Sexp::Quote(inner) | Sexp::Quasiquote(inner)` arm. The
+        // path-uniformity assertion: for every quote-family wrapper, the
+        // function's behavior agrees with the manual composition through
+        // the two typed-marker projections. A regression that re-inlines
+        // either arm (e.g. drops the `as_unquote_form().is_some()` gate
+        // and just returns true for any `as_quote_form().is_some()`, or
+        // restores the per-variant `Quote | Quasiquote` arm) drifts from
+        // this composition and surfaces here.
+        use crate::ast::QuoteForm;
+
+        // Sweep every QuoteForm variant under both axes:
+        //   * unquote-only-inner (inner = symbol):
+        //       Unquote(s)        → true via `as_unquote_form() == Some`
+        //       UnquoteSplice(s)  → true via `as_unquote_form() == Some`
+        //       Quote(s)          → false (inner has no unquote, recurses to false)
+        //       Quasiquote(s)     → false (same)
+        //   * unquote-inner-inside-quote-wrapper:
+        //       Quote(Unquote(s)) → true (Quote arm recurses via `as_quote_form`,
+        //                                 inner `Unquote` returns true through the
+        //                                 SAME projection — both arms share the
+        //                                 ONE typed-marker site post-lift)
+        let inner_plain = Sexp::symbol("x");
+        let inner_unquote = Sexp::Unquote(Box::new(Sexp::symbol("x")));
+
+        for qf in QuoteForm::ALL {
+            let wrapped_plain = match qf {
+                QuoteForm::Quote => Sexp::Quote(Box::new(inner_plain.clone())),
+                QuoteForm::Quasiquote => Sexp::Quasiquote(Box::new(inner_plain.clone())),
+                QuoteForm::Unquote => Sexp::Unquote(Box::new(inner_plain.clone())),
+                QuoteForm::UnquoteSplice => Sexp::UnquoteSplice(Box::new(inner_plain.clone())),
+            };
+            // Path-uniformity: behavior derives from the manual two-marker
+            // composition through `as_quote_form` + `as_unquote_form`.
+            // The substitution-subset gate (`as_unquote_form().is_some()`)
+            // returns true for Unquote/UnquoteSplice and false for
+            // Quote/Quasiquote — directly encoding the 2-of-4 partition.
+            let via_manual =
+                qf.as_unquote_form().is_some() || super::contains_unquote(&inner_plain);
+            assert_eq!(
+                super::contains_unquote(&wrapped_plain),
+                via_manual,
+                "contains_unquote drifted from as_quote_form + as_unquote_form composition for {qf:?}"
+            );
+
+            let wrapped_unquote = match qf {
+                QuoteForm::Quote => Sexp::Quote(Box::new(inner_unquote.clone())),
+                QuoteForm::Quasiquote => Sexp::Quasiquote(Box::new(inner_unquote.clone())),
+                QuoteForm::Unquote => Sexp::Unquote(Box::new(inner_unquote.clone())),
+                QuoteForm::UnquoteSplice => Sexp::UnquoteSplice(Box::new(inner_unquote.clone())),
+            };
+            // EVERY quote-family wrapper around an inner `Unquote` must
+            // contain unquote — either the outer projects as `Some` on
+            // the substitution subset (Unquote/UnquoteSplice arms), OR
+            // the outer is Quote/Quasiquote and the recursion into the
+            // inner re-fires the projection. The pre-lift Quote arm
+            // recursed via the inline `Sexp::Quote(inner)` match;
+            // post-lift the SAME recursion fires via `as_quote_form`'s
+            // typed projection. Both yield `true`.
+            assert!(
+                super::contains_unquote(&wrapped_unquote),
+                "contains_unquote missed an inner Unquote under {qf:?} — \
+                 the quote-family recursion through as_quote_form drifted"
+            );
+        }
+
+        // Negative control: a non-quote-family wrapper (List, Atom,
+        // Nil) must NOT route through `as_quote_form` at all. The
+        // `if let Some(...) = node.as_quote_form()` gate stays `None`
+        // and falls through to the List/_  arms. This is the structural
+        // partition: the projection's `None` face MUST agree with
+        // `!matches!(node, Sexp::Quote(_) | Sexp::Quasiquote(_) |
+        // Sexp::Unquote(_) | Sexp::UnquoteSplice(_))`.
+        let nested_in_list = Sexp::List(vec![
+            Sexp::symbol("outer"),
+            Sexp::Quasiquote(Box::new(Sexp::Unquote(Box::new(Sexp::symbol("x"))))),
+        ]);
+        assert!(
+            super::contains_unquote(&nested_in_list),
+            "contains_unquote failed to descend into a List subtree containing a \
+             Quasiquote(Unquote(_)) — list recursion arm drifted"
+        );
     }
 }

@@ -1394,10 +1394,35 @@ pub fn sexp_to_json(s: &Sexp) -> Result<JValue> {
                 JValue::Array(items.iter().map(sexp_to_json).collect::<Result<Vec<_>>>()?)
             }
         }
-        Sexp::Quote(inner)
-        | Sexp::Quasiquote(inner)
-        | Sexp::Unquote(inner)
-        | Sexp::UnquoteSplice(inner) => sexp_to_json(inner)?,
+        // The four quote-family variants share the `Sexp::* →
+        // sexp_to_json(inner)?` recurse-on-inner shape — all route
+        // through `Sexp::as_quote_form`'s typed-marker projection so
+        // the per-variant (Sexp variant, inner: &Sexp) pairing binds
+        // at ONE site on the `Sexp` algebra rather than four
+        // byte-identical inline arms here. The marker is discarded
+        // (`_`) by design: this projection erases the quote-form
+        // identity into JSON, and the round-trip via `json_to_sexp`
+        // re-emits the inner without an enclosing wrapper. Sibling
+        // posture to `sexp_shape`'s arm at line 602 (the canonical
+        // discard-the-marker, project-the-inner shape), and to every
+        // OTHER quote-family consumer the substrate carries that
+        // routes through `as_quote_form` / its derived `as_unquote`
+        // 2-of-4 subset (`Hash for Sexp`'s `hash_discriminator`,
+        // `Display for Sexp`'s `prefix`, `interop::iac_forge_tag`,
+        // `contains_unquote`'s family check, `compile_template`'s
+        // splice-outside-list gate, `compile_node`'s per-arm
+        // bytecode emission, `substitute`'s top-level + list-inner
+        // arms). A future homoiconic prefix-wrapper extension
+        // (`QuoteForm::*Future*`) extends `as_quote_form`'s arm
+        // alongside this match's discriminator union — exhaustively
+        // checked at the algebra rather than re-derived per
+        // consumer.
+        Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) | Sexp::UnquoteSplice(_) => {
+            let (_, inner) = s
+                .as_quote_form()
+                .expect("matched quote-family variant must project to Some via as_quote_form");
+            sexp_to_json(inner)?
+        }
     })
 }
 
@@ -2120,6 +2145,105 @@ mod tests {
         // element because `json_to_sexp` writes kwargs in iteration order
         // and `sexp_to_json` reads them back in the same order).
         assert_eq!(back, json);
+    }
+
+    #[test]
+    fn sexp_to_json_routes_quote_family_arms_through_as_quote_form_typed_marker() {
+        // PATH-UNIFORMITY CONTRACT: the lifted `sexp_to_json` routes
+        // its four quote-family arms through `Sexp::as_quote_form()`,
+        // discarding the marker and recursing on the inner — the
+        // same typed-marker dispatch `sexp_shape` lifts at line 602.
+        // Pin the new boundary three ways across `QuoteForm::ALL` so
+        // a regression that drifts ONE variant's recurse-on-inner
+        // shape from the others (e.g. an arm that mis-routes the
+        // marker as the recursion subject, or drops the recursion
+        // entirely returning the inner verbatim with the wrapper
+        // collapsed to JSON null) fails-loudly here:
+        //
+        //   (1) sweep `QuoteForm::ALL`, wrapping a non-trivial
+        //       kwargs inner (`(:name "payload")`) — the inner
+        //       MUST project to the same JSON object regardless of
+        //       which quote-family wrapper sits at the outer node.
+        //       Catches a regression that mis-routes ONE variant
+        //       (e.g. `Sexp::Quote(_)` arm returns `JValue::Null`
+        //       instead of recursing) without the others.
+        //   (2) sweep `QuoteForm::ALL`, asserting `as_quote_form`'s
+        //       typed-marker projection AGREES with the constructor
+        //       branch — proves the lifted arm and the algebra
+        //       projection share ONE pairing of (Sexp variant,
+        //       QuoteForm variant) and a regression that drifts the
+        //       pairing surfaces here, not in production.
+        //   (3) sweep `QuoteForm::ALL`, asserting
+        //       `sexp_to_json(wrap_qf(inner)) ==
+        //       sexp_to_json(as_quote_form(wrap_qf(inner)).inner)`
+        //       — proves the lifted recursion target IS the
+        //       `as_quote_form`-projected inner (not a clone, not a
+        //       stale closure binding, not the outer node itself).
+        //
+        // Sibling posture to `sexp_shape`'s path-uniformity test at
+        // line 2203 (the canonical reference shape for this lift).
+        use crate::ast::QuoteForm;
+        let inner = Sexp::List(vec![Sexp::keyword("name"), Sexp::string("payload")]);
+        let expected = sexp_to_json(&inner).expect("inner must serialize cleanly");
+
+        for qf in QuoteForm::ALL {
+            let wrapped = qf.wrap(inner.clone());
+            let via_lifted =
+                sexp_to_json(&wrapped).expect("quote-family wrapper must serialize cleanly");
+            assert_eq!(
+                via_lifted, expected,
+                "sexp_to_json drifted from `sexp_to_json(inner)` at quote-family marker {qf:?}"
+            );
+            let (marker, projected_inner) = wrapped
+                .as_quote_form()
+                .expect("quote-family wrapper must project through as_quote_form");
+            assert_eq!(
+                marker, qf,
+                "as_quote_form drifted the typed marker at {qf:?}"
+            );
+            let via_composed =
+                sexp_to_json(projected_inner).expect("projected inner must serialize cleanly");
+            assert_eq!(
+                via_lifted, via_composed,
+                "sexp_to_json drifted from as_quote_form + recurse(inner) at {qf:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_to_json_quote_family_arms_recurse_on_inner_not_outer() {
+        // INTENT-PIN: pre-lift the four quote-family arms each
+        // pattern-bound `inner` and recursed on `inner`, NEVER on the
+        // outer wrapper. Post-lift the recursion target comes from
+        // `as_quote_form`'s projection tuple. Pin that this binding
+        // semantic is observable end-to-end: a `,@'inner-form` shape
+        // — `UnquoteSplice` wrapping `Quote` wrapping a kwargs list
+        // — MUST collapse through BOTH wrappers and project the
+        // innermost kwargs list as the JSON object, NOT either
+        // wrapper's JSON-Null projection. A regression that lifted
+        // the recursion onto `s` (the outer wrapper) instead of the
+        // `as_quote_form`-projected inner would infinite-loop here
+        // (or, with the stack-overflow guard, produce a stack
+        // overflow); a regression that collapsed the wrappers
+        // independently would skip the inner recursion and emit
+        // partial JSON. The double-wrapper exercises BOTH the
+        // outermost `as_quote_form` projection AND the recursive
+        // step's projection — the same shape `compile_node`'s
+        // bytecode emission exercises when a quasi-quote template
+        // nests inside another quasi-quote.
+        let inner_payload = Sexp::List(vec![Sexp::keyword("k"), Sexp::int(42)]);
+        let expected = serde_json::json!({ "k": 42 });
+        // ,@'(...) — UnquoteSplice wraps Quote wraps the kwargs list.
+        let doubly_wrapped =
+            Sexp::UnquoteSplice(Box::new(Sexp::Quote(Box::new(inner_payload.clone()))));
+        let via_lifted =
+            sexp_to_json(&doubly_wrapped).expect("double-wrapper must serialize cleanly");
+        assert_eq!(
+            via_lifted, expected,
+            "sexp_to_json must recurse THROUGH every quote-family wrapper and \
+             project the innermost shape — a regression that lifted recursion \
+             onto the outer wrapper would diverge or emit JSON null here"
+        );
     }
 
     // ── Type-mismatch diagnostics name both expected and got ───────────

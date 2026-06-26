@@ -168,7 +168,20 @@ fn parse<I: Iterator<Item = Spanned>>(
         // exhaustiveness over the closed enum.
         Some((Token::Quoted(qf), _)) => read_quoted(it, eof_pos, qf),
         Some((Token::Str(s), _)) => Ok(Sexp::Atom(Atom::Str(s))),
-        Some((Token::Atom(s), _)) => Ok(atom_from_str(&s)),
+        // The five-statement classification cascade that lived in
+        // `atom_from_str` lifts onto `Atom::from_lexeme` — the typed-
+        // entry mirror of `fmt::Display for Atom`, `Atom::to_json`, and
+        // `Atom::to_iac_forge_sexpr` on the closed-set `Atom` algebra.
+        // The (lexeme prefix/suffix discipline, typed `Atom` variant)
+        // pairing now binds at ONE site on the algebra rather than at
+        // this reader's free function; adding a fifth structural prefix
+        // (e.g. `"#["` for vector literals, `"#\\x"` for char literals)
+        // extends `Atom::from_lexeme` + the matching `Atom` variant +
+        // each sibling typed-exit projection in lockstep — rustc binds
+        // the four projection families through exhaustiveness over the
+        // closed enum. See `Atom::from_lexeme`'s docstring for the
+        // composition law and the test surface.
+        Some((Token::Atom(s), _)) => Ok(Sexp::Atom(Atom::from_lexeme(&s))),
         None => Err(LispError::Eof { pos: eof_pos }),
     }
 }
@@ -210,25 +223,6 @@ fn read_quoted<I: Iterator<Item = Spanned>>(
 ) -> Result<Sexp> {
     let inner = parse(it, eof_pos)?;
     Ok(qf.wrap(inner))
-}
-
-fn atom_from_str(s: &str) -> Sexp {
-    if s == "#t" {
-        return Sexp::boolean(true);
-    }
-    if s == "#f" {
-        return Sexp::boolean(false);
-    }
-    if let Some(rest) = s.strip_prefix(':') {
-        return Sexp::keyword(rest);
-    }
-    if let Ok(n) = s.parse::<i64>() {
-        return Sexp::int(n);
-    }
-    if let Ok(n) = s.parse::<f64>() {
-        return Sexp::float(n);
-    }
-    Sexp::symbol(s)
 }
 
 #[cfg(test)]
@@ -573,6 +567,62 @@ mod tests {
         match err {
             LispError::UnmatchedOpenParen { pos } => assert_eq!(pos, 1),
             other => panic!("expected UnmatchedOpenParen, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reader_atom_token_arm_routes_through_atom_from_lexeme_for_every_kind() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the reader's
+        // `Token::Atom(s)` arm produces the SAME `Sexp::Atom(_)` value
+        // for every canonical bare-atom source lexeme that
+        // `Sexp::Atom(Atom::from_lexeme(s))` would construct directly.
+        // Pre-lift the per-variant classification cascade lived inline
+        // at the reader's private `atom_from_str` helper; post-lift
+        // the cascade lives on the typed `Atom` algebra as
+        // `Atom::from_lexeme`, and the reader's arm delegates through
+        // ONE `Sexp::Atom(Atom::from_lexeme(&s))` call. A regression
+        // that drifts the outer arm (e.g. wraps the typed `Atom`
+        // through a different `Sexp` constructor, or short-circuits
+        // one variant inline at the reader rather than delegating
+        // through the algebra) surfaces as an inequality here.
+        //
+        // Sweeps every `AtomKind` variant the bare-atom branch can
+        // produce — `Symbol`, `Keyword`, `Int`, `Float`, `Bool` —
+        // alongside the structural-prefix non-matches (default-arm
+        // Symbol classification) AND the load-bearing
+        // `i64`-before-`f64` cascade order. `AtomKind::Str` is absent
+        // because string literals take the reader's distinct
+        // `Token::Str(_)` branch, NOT the `Token::Atom(_)` branch this
+        // arm covers. Sibling-shape pin to
+        // `sexp_atom_display_arm_routes_through_atom_display_for_every_variant`
+        // (in `crate::ast::tests`) — that pins the analogous
+        // typed-exit Display arm routing through `Atom::Display`; this
+        // pins the analogous typed-entry classification arm routing
+        // through `Atom::from_lexeme`. The two together complete the
+        // bidirectional sweep across all FOUR per-`Atom`-variant
+        // production-site projection arms (Display, JSON,
+        // iac-forge canonical attestation, AND now lexeme
+        // classification) onto the closed-set `Atom` algebra.
+        let cases: &[&str] = &[
+            "foo", "defpoint", "seph.1", ":parent", ":kw", "42", "-7", "0", "1", "1.0", "1.5",
+            "-2.5", "1e3", "#t", "#f",
+            "true",  // CLAUDE.md "Lisp bools" — must classify to Symbol, not Bool.
+            "false", // CLAUDE.md "Lisp bools" — must classify to Symbol, not Bool.
+            "+", "a-b",
+        ];
+        for src in cases {
+            let forms = read(src).unwrap_or_else(|e| panic!("reader rejected {src:?}: {e}"));
+            assert_eq!(
+                forms.len(),
+                1,
+                "{src:?} must read as exactly one form, got {forms:?}"
+            );
+            let via_reader = &forms[0];
+            let via_algebra = Sexp::Atom(Atom::from_lexeme(src));
+            assert_eq!(
+                via_reader, &via_algebra,
+                "{src:?}: reader's bare-atom arm drifted from Sexp::Atom(Atom::from_lexeme(_))"
+            );
         }
     }
 }

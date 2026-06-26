@@ -344,6 +344,93 @@ impl Atom {
             Self::Bool(b) => SExpr::Bool(*b),
         }
     }
+
+    /// Classify a bare reader-token lexeme into its typed [`Atom`]
+    /// variant — the typed-ENTRY mirror of the three typed-EXIT
+    /// projections on the [`Atom`] algebra ([`fmt::Display for Atom`],
+    /// [`Self::to_json`], [`Self::to_iac_forge_sexpr`]). Lifts the
+    /// five-statement classification cascade that lived inline at the
+    /// reader's private `atom_from_str` helper onto ONE typed-algebra
+    /// method on the closed-set [`Atom`] algebra; the reader's
+    /// `Token::Atom(s)` arm collapses to `Sexp::Atom(Atom::from_lexeme(&s))`.
+    /// Completes the bidirectional sweep across the four production-site
+    /// per-`Atom`-variant projection shapes (typed-exit Display, JSON,
+    /// iac-forge canonical attestation, AND now typed-entry
+    /// classification) onto the algebra.
+    ///
+    /// Classification rule (byte-identical to the pre-lift reader
+    /// `atom_from_str` cascade):
+    ///   1. `"#t"`/`"#f"` → [`Self::Bool`] — the Scheme bool spellings;
+    ///      bare `true`/`false` re-read as [`Self::Symbol`] (the
+    ///      CLAUDE.md "Lisp bools" warning — every `:values-overlay`
+    ///      payload depends on this for `Value::Bool` round-trip).
+    ///   2. `:foo` (leading `:`) → [`Self::Keyword`] — strips the `:`
+    ///      so the inverse [`fmt::Display`] rule (`Keyword(s) →
+    ///      ":{s}"`) round-trips.
+    ///   3. `i64::from_str` succeeds → [`Self::Int`] — load-bearing
+    ///      ORDERING: tried BEFORE `f64` so `"1"` classifies as
+    ///      [`Self::Int`]`(1)`, NOT [`Self::Float`]`(1.0)`. Typed-int-
+    ///      vs-typed-float distinction at the Display→read boundary
+    ///      is the dual of `fmt_float`'s `.0`-suffix discipline.
+    ///   4. `f64::from_str` succeeds → [`Self::Float`].
+    ///   5. Default → [`Self::Symbol`].
+    ///
+    /// Composition laws (pinned by tests below):
+    ///   * `Atom::from_lexeme(&a.to_string()) == a` for every variant
+    ///     EXCEPT [`Self::Str`] (Display renders Str with quote marks
+    ///     — strings take the reader's `"`-quoted tokenizer branch,
+    ///     NOT the bare-atom branch).
+    ///   * `read(s)` for every canonical bare-atom source lexeme
+    ///     equals `vec![Sexp::Atom(Atom::from_lexeme(s))]` (pinned by
+    ///     `reader_atom_token_arm_routes_through_atom_from_lexeme_for_
+    ///     every_kind` in [`crate::reader::tests`]).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry;
+    /// `atom_from_str` was the typed-entry gate as a free function in
+    /// `reader.rs`, outside the typed `Atom` algebra. Naming it on the
+    /// algebra brings the typed-entry side INTO the same closed-set
+    /// match family the typed-exit projections live on, so a future
+    /// seventh atomic kind (e.g. `Char` for `#\x` reader syntax) lands
+    /// at ONE [`AtomKind::ALL`] entry plus ONE arm here plus ONE arm
+    /// per typed-exit projection — exhaustively checked by rustc
+    /// across all FOUR per-variant projection families. THEORY.md
+    /// §II.1 invariant 2 — free middle; FOUR consumers (typed-entry
+    /// classification, Display rendering, JSON projection, canonical-
+    /// attestation-form projection) now route through ONE
+    /// per-`Atom`-variant projection family on the closed-set algebra.
+    /// THEORY.md §VI.1 — generation over composition; this lift
+    /// completes the bidirectional sweep across the four production
+    /// surfaces the prior runs in this series named.
+    ///
+    /// Frontier inspiration: Racket's `(read-syntax …)` dispatches a
+    /// bare-atom lexeme through a closed-set classifier keyed on
+    /// prefix + parse-as-numeric cascade; `Atom::from_lexeme` is the
+    /// substrate's typed-Rust peer, with [`AtomKind`] standing in for
+    /// Racket's datum-prim taxonomy. MLIR's
+    /// `mlir::AsmParser::parseAttribute` dispatches on the closed-set
+    /// `AttributeKind` so every parser body for a kind lives at ONE
+    /// implementation site; `Atom::from_lexeme` is the
+    /// unstructured-Rust peer on the [`Atom`] algebra for the
+    /// typed-entry classification surface.
+    #[must_use]
+    pub fn from_lexeme(s: &str) -> Self {
+        if s == "#t" {
+            return Self::Bool(true);
+        }
+        if s == "#f" {
+            return Self::Bool(false);
+        }
+        if let Some(rest) = s.strip_prefix(':') {
+            return Self::Keyword(rest.to_owned());
+        }
+        if let Ok(n) = s.parse::<i64>() {
+            return Self::Int(n);
+        }
+        if let Ok(n) = s.parse::<f64>() {
+            return Self::Float(n);
+        }
+        Self::Symbol(s.to_owned())
+    }
 }
 
 /// Closed-set typed discriminator for the six [`Atom`] payload variants —
@@ -1792,9 +1879,9 @@ pub fn iter_calls_to<'a>(
 /// Rust's stdlib `Display` impl for `f64` elides the trailing `.0` for
 /// finite integral values: `format!("{}", 1.0_f64) == "1"`,
 /// `format!("{}", 100.0_f64) == "100"`. The substrate's reader
-/// ([`crate::reader::atom_from_str`]) tries `i64::parse` BEFORE
-/// `f64::parse`, so a bare `1` re-reads as `Atom::Int(1)` — NOT as
-/// `Atom::Float(1.0)`. The default Display rendering therefore drifts the
+/// (via the typed-entry classifier [`Atom::from_lexeme`]) tries
+/// `i64::parse` BEFORE `f64::parse`, so a bare `1` re-reads as
+/// `Atom::Int(1)` — NOT as `Atom::Float(1.0)`. The default Display rendering therefore drifts the
 /// typed identity at the Display→read boundary: `Float(1.0)` round-trips
 /// to `Int(1)` and a regression silently coerces an authoring-surface
 /// `1.0` slot into the typed `Int` track.
@@ -1837,12 +1924,18 @@ fn fmt_float(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// with the `.0` suffix that preserves the typed-`Float`-vs-typed-`Int`
 /// distinction at the Display→read boundary, `Bool(true) → "#t"`,
 /// `Bool(false) → "#f"` (the Scheme bool spellings the reader's
-/// `atom_from_str` dispatches on — `true` / `false` re-read as symbols,
-/// NOT as bools — see the CLAUDE.md "Lisp bools" warning).
+/// typed-entry classifier [`Atom::from_lexeme`] dispatches on — `true`
+/// / `false` re-read as symbols, NOT as bools — see the CLAUDE.md
+/// "Lisp bools" warning).
 ///
 /// This is the *atomic-payload Display surface* — the typed-exit-side
-/// peer of [`crate::reader::atom_from_str`]'s atomic-payload
-/// typed-entry surface. Before this lift the per-variant rendering arms
+/// peer of [`Atom::from_lexeme`]'s atomic-payload typed-entry surface
+/// (the FOURTH and LAST of the per-`Atom`-variant projection sites
+/// lifted onto the closed-set algebra, after the typed-exit Display
+/// [this impl], JSON [`Atom::to_json`], and iac-forge canonical
+/// attestation [`Atom::to_iac_forge_sexpr`] projections — completing
+/// the bidirectional typed-entry/typed-exit sweep). Before this lift
+/// the per-variant rendering arms
 /// lived inline at the `Sexp::Atom(a) => match a { … }` arm of
 /// [`fmt::Display for Sexp`]; routing the outer arm through this impl
 /// lifts the seven inline sub-arms (the Bool variant splits into
@@ -1920,11 +2013,12 @@ fn fmt_float(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// naming the typed primitive on the `Atom` algebra; future runs route
 /// the JSON and iac-forge sites through parallel sibling projections
 /// (`Atom::to_json`, `Atom::to_iac_forge_sexpr`) the same pattern
-/// names. THEORY.md §II.1 invariant 1 — typed entry; the reader's
-/// `atom_from_str` is the typed-entry gate at the atomic-payload
-/// boundary, and this impl is the typed-exit-side mirror — the
-/// closed-set [`AtomKind`] algebra now threads BOTH gates through ONE
-/// projection family, so a regression that drifts one side's
+/// names. THEORY.md §II.1 invariant 1 — typed entry; the substrate's
+/// [`Atom::from_lexeme`] is the typed-entry gate at the atomic-payload
+/// boundary (lifted onto the typed [`Atom`] algebra from the reader's
+/// pre-lift free function), and this impl is the typed-exit-side
+/// mirror — the closed-set [`AtomKind`] algebra now threads BOTH gates
+/// through ONE projection family, so a regression that drifts one side's
 /// per-variant rendering from the other (e.g. extends `Atom` with a
 /// `Char` variant the reader accepts but the writer can't emit) is no
 /// longer a silent two-site divergence — rustc binds both sides to
@@ -4550,5 +4644,178 @@ mod tests {
         assert_eq!(Atom::Float(f64::NAN).to_json(), JValue::Null);
         assert_eq!(Atom::Float(f64::INFINITY).to_json(), JValue::Null);
         assert_eq!(Atom::Float(f64::NEG_INFINITY).to_json(), JValue::Null);
+    }
+
+    #[test]
+    fn atom_from_lexeme_classifies_each_atom_kind_for_canonical_lexeme() {
+        // CANONICAL-CLASSIFICATION CONTRACT: pin that `Atom::from_lexeme`
+        // produces byte-identical typed `Atom` outputs for a canonical
+        // lexeme of each `AtomKind` variant against the pre-lift
+        // `crate::reader::atom_from_str` cascade. Sweeps a representative
+        // lexeme of each variant so a regression that drifts ONE arm
+        // (e.g. swaps `"#t"` to `Atom::Symbol("#t")` silently breaking
+        // every `:values-overlay` payload pinned by the CLAUDE.md bool
+        // warning, or strips `":kw"`'s prefix when classifying to
+        // `Atom::Symbol` rather than `Atom::Keyword`) fails loudly.
+        // Sibling-arm sweep to
+        // `atom_display_renders_each_variant_to_canonical_form` and
+        // `atom_to_json_projects_each_variant_to_canonical_json_value` —
+        // all three pin the typed-algebra at its canonical per-variant
+        // projection. This is the typed-ENTRY side of the bidirectional
+        // sweep; those are the typed-EXIT sides.
+        //
+        // `Atom::Str` is intentionally absent — `Atom::from_lexeme`'s
+        // typed-entry surface processes BARE reader-token lexemes, and
+        // string literals take the reader's `"`-quoted tokenizer branch
+        // (a `Token::Str(_)`, NOT a `Token::Atom(_)`). The reader's
+        // string round-trip is pinned by `string_escapes` in
+        // `crate::reader::tests`.
+        assert_eq!(Atom::from_lexeme("foo"), Atom::Symbol("foo".into()));
+        assert_eq!(
+            Atom::from_lexeme("defpoint"),
+            Atom::Symbol("defpoint".into())
+        );
+        assert_eq!(Atom::from_lexeme("seph.1"), Atom::Symbol("seph.1".into()));
+        assert_eq!(Atom::from_lexeme(":parent"), Atom::Keyword("parent".into()));
+        assert_eq!(Atom::from_lexeme(":kw"), Atom::Keyword("kw".into()));
+        assert_eq!(Atom::from_lexeme("42"), Atom::Int(42));
+        assert_eq!(Atom::from_lexeme("-7"), Atom::Int(-7));
+        assert_eq!(Atom::from_lexeme("0"), Atom::Int(0));
+        assert_eq!(Atom::from_lexeme("1.5"), Atom::Float(1.5));
+        assert_eq!(Atom::from_lexeme("-2.5"), Atom::Float(-2.5));
+        assert_eq!(Atom::from_lexeme("#t"), Atom::Bool(true));
+        assert_eq!(Atom::from_lexeme("#f"), Atom::Bool(false));
+    }
+
+    #[test]
+    fn atom_from_lexeme_prefers_int_over_float_for_integer_lexeme() {
+        // LOAD-BEARING DISPATCH-ORDERING PIN: `Atom::from_lexeme` tries
+        // `i64::from_str` BEFORE `f64::from_str` so a bare `"1"`
+        // classifies as `Atom::Int(1)`, NOT `Atom::Float(1.0)`. The
+        // typed-int-vs-typed-float distinction at the typed-entry
+        // boundary is the dual of `fmt_float`'s `.0`-suffix discipline
+        // on the typed-exit side — together the two projections form
+        // the round-trip identity `from_lexeme(a.to_string()) == a`
+        // for both `Int(_)` and `Float(_)` payloads pinned by
+        // `atom_from_lexeme_round_trips_with_atom_display_for_every_non_str_variant`
+        // below. A regression that reorders the parse-cascade (e.g.
+        // tries `f64::from_str` first, or unifies both via
+        // `f64::from_str` alone since `f64` parse accepts integer
+        // lexemes too) silently demotes every integer authoring slot
+        // into the float track at the reader, corrupting every
+        // downstream `i64` field's serde round-trip without a
+        // structural error to point to.
+        assert_eq!(Atom::from_lexeme("1"), Atom::Int(1));
+        assert_eq!(Atom::from_lexeme("0"), Atom::Int(0));
+        assert_eq!(Atom::from_lexeme("-100"), Atom::Int(-100));
+        // The bare-int lexeme MUST NOT classify to `Atom::Float`.
+        assert_ne!(Atom::from_lexeme("1"), Atom::Float(1.0));
+        // Float lexemes (with explicit `.` or scientific notation)
+        // route through the f64 arm — pin the cascade's fallthrough
+        // ordering so the int-shortcut doesn't swallow them.
+        assert_eq!(Atom::from_lexeme("1.0"), Atom::Float(1.0));
+        assert_eq!(Atom::from_lexeme("1.5"), Atom::Float(1.5));
+        assert_eq!(Atom::from_lexeme("1e3"), Atom::Float(1e3));
+    }
+
+    #[test]
+    fn atom_from_lexeme_routes_unknown_lexeme_to_symbol_default() {
+        // CLOSED-SET DEFAULT-ARM PIN: every lexeme that didn't match a
+        // structural prefix (`"#t"`/`"#f"` for Bool, `":"` prefix for
+        // Keyword) or parse as a number (`i64` then `f64`) classifies
+        // to `Atom::Symbol(_)` by default — the closed-set fallthrough
+        // arm the reader has shipped with from inception. Pin the
+        // default-arm projection so a future refactor that adds a new
+        // structural prefix (e.g. `"#["` for vector literals, `"#\\x"`
+        // for char literals) without updating the default-arm wording
+        // cannot silently drift previously-Symbol lexemes into a new
+        // bucket — the regression surfaces at this test, which sweeps
+        // the structural-prefix non-matches every closed-set extension
+        // must continue to classify as Symbol unless the extension
+        // explicitly claims them. Sibling-shape pin to
+        // `atom_from_lexeme_classifies_each_atom_kind_for_canonical_lexeme`
+        // — that pins the structural-prefix MATCHES, this pins the
+        // structural-prefix NON-MATCHES.
+        //
+        // The CLAUDE.md-pinned `true`/`false` round-trip discipline
+        // also rides this default arm: bare `true`/`false` re-read as
+        // `Atom::Symbol("true")` / `Atom::Symbol("false")` because the
+        // Scheme bool spellings are `"#t"`/`"#f"`. The pin guards the
+        // `serde_json::Value::Bool` field round-trip every
+        // `:values-overlay` payload depends on.
+        assert_eq!(Atom::from_lexeme("foo"), Atom::Symbol("foo".into()));
+        assert_eq!(
+            Atom::from_lexeme("defpoint"),
+            Atom::Symbol("defpoint".into())
+        );
+        // The CLAUDE.md `true`/`false` warning — these lexemes MUST
+        // route through the default Symbol arm, NOT through the Bool
+        // arm. A regression that adds `"true"`/`"false"` recognition
+        // silently flips every `:values-overlay` Bool field to the
+        // wrong serde shape.
+        assert_eq!(Atom::from_lexeme("true"), Atom::Symbol("true".into()));
+        assert_eq!(Atom::from_lexeme("false"), Atom::Symbol("false".into()));
+        // Non-structural-prefix shapes — pin a sampling so the
+        // default arm continues to absorb every shape the prefix
+        // arms haven't claimed.
+        assert_eq!(Atom::from_lexeme("seph.1"), Atom::Symbol("seph.1".into()));
+        assert_eq!(Atom::from_lexeme("a-b"), Atom::Symbol("a-b".into()));
+        assert_eq!(Atom::from_lexeme("+"), Atom::Symbol("+".into()));
+    }
+
+    #[test]
+    fn atom_from_lexeme_round_trips_with_atom_display_for_every_non_str_variant() {
+        // BIDIRECTIONAL TYPED-IDENTITY CONTRACT: render each `Atom`
+        // (excluding `Atom::Str` — see below) via `fmt::Display`, parse
+        // the rendering through `Atom::from_lexeme`, and pin that the
+        // round-trip preserves the typed identity exactly. This is the
+        // typed-exit / typed-entry mirror at the atomic-payload
+        // boundary AT THE ALGEBRA LEVEL — sibling-shape pin to
+        // `atom_display_round_trips_through_reader_preserving_typed_identity`
+        // which exercises the same round-trip through the full reader.
+        // Lifting the typed-entry surface onto `Atom::from_lexeme`
+        // means the round-trip law now lives at the algebra rather
+        // than at the reader's free-function boundary — a future
+        // tool that wants to round-trip an `Atom` through its
+        // canonical lexeme spelling (LSP token-completion, REPL
+        // pretty-printer, structural editor) binds to `from_lexeme` +
+        // `Display` directly without crossing through the reader's
+        // tokenizer.
+        //
+        // `Atom::Str` is intentionally absent — `Display for Atom`
+        // renders `Str(s)` as `"{s:?}"` (debug-quoted, with quote
+        // marks around the content). The quoted form is NOT a bare
+        // reader-token lexeme: it's a `Token::Str(_)` to the
+        // tokenizer, taking a distinct branch. The Str round-trip
+        // through the FULL reader is pinned by `string_escapes` in
+        // `crate::reader::tests`.
+        let cases: &[Atom] = &[
+            Atom::Symbol("foo-bar".into()),
+            Atom::Symbol("defpoint".into()),
+            Atom::Symbol("seph.1".into()),
+            Atom::Keyword("parent".into()),
+            Atom::Keyword("kw".into()),
+            Atom::Int(0),
+            Atom::Int(42),
+            Atom::Int(-7),
+            Atom::Float(1.0),
+            Atom::Float(1.5),
+            Atom::Float(-42.0),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ];
+        for seed in cases {
+            let rendered = seed.to_string();
+            let round_tripped = Atom::from_lexeme(&rendered);
+            assert_eq!(
+                round_tripped.kind(),
+                seed.kind(),
+                "Atom::from_lexeme∘Display drifted variant for {seed:?} via {rendered:?}"
+            );
+            assert_eq!(
+                round_tripped, *seed,
+                "Atom::from_lexeme∘Display drifted payload for {seed:?} via {rendered:?}"
+            );
+        }
     }
 }

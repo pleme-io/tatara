@@ -773,40 +773,81 @@ impl AtomKind {
     /// [`SexpShape::String`] label projection), `"int"` for
     /// [`Self::Int`], `"float"` for [`Self::Float`], `"bool"` for
     /// [`Self::Bool`]. Each label is byte-for-byte identical to the
-    /// corresponding [`SexpShape`] variant's label, so a future
-    /// consumer that holds an [`AtomKind`] and rendered diagnostic
-    /// label can round-trip through this method into the [`SexpShape`]
-    /// supeset's diagnostic vocabulary without re-deriving the
-    /// per-variant string.
+    /// corresponding [`SexpShape`] variant's label — and post-lift this
+    /// agreement is STRUCTURAL rather than two literal-discipline sites
+    /// pinned by a cross-projection test.
+    ///
+    /// Composition law: `AtomKind::label(k) ==
+    /// AtomKind::sexp_shape(k).label()` for every `k: AtomKind`. The
+    /// body composes [`Self::sexp_shape`] (the typed projection lifting
+    /// each AtomKind variant into its peer [`SexpShape`] variant) with
+    /// [`SexpShape::label`] (the canonical `&'static str` projection on
+    /// the supeset's twelve-variant closed set), so the six atomic-arm
+    /// labels live at ONE canonical site ([`SexpShape::label`]) rather
+    /// than at TWO ([`SexpShape::label`] AND a parallel six-arm match
+    /// here, pre-lift). Pre-lift the substrate-wide AtomKind ⊂ SexpShape
+    /// label-vocabulary agreement was enforced by literal discipline at
+    /// the two sites + a cross-projection test
+    /// (`atom_kind_label_agrees_with_sexp_shape_label_for_every_atom_arm`);
+    /// post-lift the agreement is a TYPED CONSEQUENCE of the composition
+    /// — a typo in `SexpShape::label`'s atomic arms is a typo in BOTH
+    /// projections, and the cross-projection test is true by
+    /// construction. Same lift posture as the prior-run
+    /// `Atom::as_X → Atom::as_X` algebra-lift commit (6935416), the
+    /// `from_lexeme` reader-atom lift commit (9b95e64), and the
+    /// `to_iac_forge_sexpr` Atom-arm lift commit (418be51): the typed
+    /// projection sits on the value, and the consumer composes through
+    /// the existing structural pairing rather than re-deriving the
+    /// per-variant literal.
     ///
     /// The `&'static str` lifetime is load-bearing: it lets the
     /// variant project through this method without an allocation,
     /// parallel to how [`SexpShape::label`], [`QuoteForm::prefix`],
     /// [`QuoteForm::iac_forge_tag`], [`UnquoteForm::marker`], and
     /// [`crate::error::ExpectedKwargShape::label`] project their
-    /// respective closed-set surfaces.
+    /// respective closed-set surfaces. The composition preserves the
+    /// no-allocation contract: [`Self::sexp_shape`] returns a `Copy`
+    /// value and [`SexpShape::label`] yields `&'static str`, so the
+    /// `&'static str` projection through the composition allocates
+    /// nothing at runtime.
     ///
     /// The bidirectional contract is anchored by tests:
     /// `atom_kind_label_renders_canonical_string_for_every_variant`
-    /// pins each variant's canonical literal so a typo in any arm
-    /// fails-loudly, `atom_kind_display_matches_label_for_every_variant`
+    /// pins each variant's canonical literal so a typo in
+    /// [`SexpShape::label`]'s atomic arms fails-loudly through this
+    /// projection too, `atom_kind_display_matches_label_for_every_variant`
     /// pins Display-equals-label so any future
     /// `#[error("... got {got}")]` annotation that threads through
     /// this projection projects byte-for-byte, and
     /// `atom_kind_label_round_trips_through_from_str` pins the
     /// `label` ↔ [`Self::FromStr`] round-trip for every variant in
     /// [`Self::ALL`] so the typed surface and the rendered diagnostic
-    /// literal cannot drift.
+    /// literal cannot drift. The post-lift composition contract is
+    /// pinned by
+    /// `atom_kind_label_routes_through_sexp_shape_label_via_sexp_shape_projection`
+    /// — a regression that re-inlines the six atomic-arm literals here
+    /// and silently drifts ONE arm from the [`SexpShape::label`] axis
+    /// fails the routing pin loudly without needing a per-variant
+    /// cross-axis literal sweep.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// AtomKind ⊂ SexpShape label-vocabulary containment becomes a
+    /// TYPED CONSEQUENCE of the [`Self::sexp_shape`] + [`SexpShape::label`]
+    /// composition rather than literal discipline at two sites. THEORY.md
+    /// §VI.1 — generation over composition; the six atomic-arm labels
+    /// live at ONE canonical site ([`SexpShape::label`]) and this method
+    /// generates its identity through the typed-projection composition.
+    /// THEORY.md §II.1 invariant 2 — free middle; FOUR consumers of the
+    /// [`AtomKind`] algebra ([`Hash for Atom`] via
+    /// [`Self::hash_discriminator`], [`crate::domain::sexp_shape`] via
+    /// [`Self::sexp_shape`], the diagnostic-rendering surface via this
+    /// method, and the `ClosedSet`-trait FromStr/Display surface via
+    /// `#[closed_set(via = "label")]`) now route through ONE typed
+    /// closed-set projection family with no per-consumer literal
+    /// duplication.
     #[must_use]
     pub fn label(self) -> &'static str {
-        match self {
-            Self::Symbol => "symbol",
-            Self::Keyword => "keyword",
-            Self::Str => "string",
-            Self::Int => "int",
-            Self::Float => "float",
-            Self::Bool => "bool",
-        }
+        self.sexp_shape().label()
     }
 
     /// Stable, per-variant byte discriminator that paired with the
@@ -4934,12 +4975,87 @@ mod tests {
         // at every cross-axis consumer. The pairing is load-bearing
         // for the typed-projection composition
         // `AtomKind::sexp_shape().label() == AtomKind::label()`.
+        //
+        // Post-lift this contract is structurally true by composition
+        // (`AtomKind::label`'s body IS `self.sexp_shape().label()`),
+        // so the cross-axis sweep is a tautology — the regression
+        // surface lives at `SexpShape::label`'s atomic arms now,
+        // pinned by `atom_kind_label_renders_canonical_string_for_every_variant`
+        // (which keys the same six literals through the composition).
+        // The sweep stays in place as a structural invariant pin in
+        // case a future implementor reverses the lift and re-inlines
+        // the per-variant arms here — drift between the two sites
+        // would re-emerge and this test catches it.
         for kind in AtomKind::ALL {
             assert_eq!(
                 kind.label(),
                 kind.sexp_shape().label(),
                 "label vocabulary drift between AtomKind::{kind:?} \
                  and its SexpShape projection",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_kind_label_routes_through_sexp_shape_label_via_sexp_shape_projection() {
+        // ROUTING-PIN CONTRACT: post-lift `AtomKind::label`'s body
+        // composes `Self::sexp_shape()` with `SexpShape::label()`
+        // verbatim — no inline per-arm literal table. The composition
+        // law `AtomKind::label(k) == AtomKind::sexp_shape(k).label()`
+        // is structurally true for every `k: AtomKind`; pinning the
+        // routing means a regression that re-inlines the six atomic-
+        // arm literals here surfaces as a drift between the inline
+        // copy and the `SexpShape::label` canonical site rather than
+        // surviving silently.
+        //
+        // Six representative cases — one per variant — walked through
+        // the composition manually and through the direct projection,
+        // then byte-compared. A drift in EITHER half of the composition
+        // (a typo in `Self::sexp_shape`'s match arms swapping
+        // `Self::Int → SexpShape::Float`, OR a typo in `SexpShape::label`
+        // dropping the `Int → "int"` arm) fails this assertion AND every
+        // sibling per-arm assertion in
+        // `atom_kind_label_renders_canonical_string_for_every_variant`
+        // — but THIS test names the routing axis explicitly so a
+        // regression to inline-literal-arms shows up as a failure of
+        // the routing pin alongside the per-arm pin.
+        //
+        // Sibling-lift posture to the prior-run routing pins:
+        // `sexp_to_json_object_arm_routes_through_is_kwargs_list_method`
+        // (commit 4a11f5b) pins `Sexp::to_json`'s kwargs gate through
+        // the lifted predicate. This pin extends the same posture to
+        // `AtomKind::label`'s structural routing through the
+        // `Self::sexp_shape() ∘ SexpShape::label` composition.
+        //
+        // Theory anchor: THEORY.md §V.1 — knowable platform; the
+        // label-projection routing is a NAMED structural contract
+        // pinned alongside the per-arm vocabulary contract, so
+        // operators reading the test surface see BOTH the load-bearing
+        // identity AND the load-bearing composition. THEORY.md §VI.1
+        // — generation over composition; the label projection emerges
+        // from the typed pairing rather than per-arm literal discipline,
+        // and the routing pin enforces the lift stays in effect.
+        for kind in AtomKind::ALL {
+            let via_label = kind.label();
+            let via_composition = kind.sexp_shape().label();
+            assert_eq!(
+                via_label, via_composition,
+                "AtomKind::{kind:?}::label() must route through \
+                 Self::sexp_shape().label() — drift here means the \
+                 lift was reverted to inline arms",
+            );
+            // The pointer-equality check pins the composition produces
+            // the SAME `&'static str` (not just a byte-equal copy) for
+            // every variant — proof the routing hits ONE static literal
+            // site (`SexpShape::label`) rather than a parallel inline
+            // table.
+            assert!(
+                std::ptr::eq(via_label.as_ptr(), via_composition.as_ptr()),
+                "AtomKind::{kind:?}::label() must return the SAME \
+                 `&'static str` as Self::sexp_shape().label() — \
+                 pointer drift means the lift composes through a \
+                 parallel literal table rather than routing into the \
+                 canonical SexpShape::label site",
             );
         }
     }

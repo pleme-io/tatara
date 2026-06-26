@@ -323,6 +323,140 @@ pub fn compile_named_from_forms<T: TataraDomain>(
     Expander::new().expand_to_named::<T>(forms)
 }
 
+/// Read + macroexpand + classifier-walk `src` through a fresh `Expander` —
+/// the from-source posture of the fresh-expander typed-decoded classifier
+/// dispatcher, free-function sibling of
+/// [`RealizedCompiler::compile_typed_any`](crate::compiler_spec::RealizedCompiler::compile_typed_any).
+///
+/// Composes [`Expander::new()`](crate::macro_expand::Expander::new) with
+/// [`Expander::expand_source_and_collect_calls_to_any`] — the SAME from-source
+/// typed-decoded primitive `RealizedCompiler::compile_typed_any` routes a
+/// preloaded clone through, here threaded through a brand-new `Expander` so
+/// callers that don't materialize a `CompilerSpec` (one-shot dispatchers, an
+/// LSP that holds an authoring buffer without a realized compiler, a
+/// `tatara-check` runner over a source buffer with no macro library) bind to
+/// ONE free function rather than constructing
+/// `Expander::new().expand_source_and_collect_calls_to_any(…)` themselves at
+/// each call site.
+///
+/// Sibling of [`compile_typed`] (the from-source constant-`T::KEYWORD`
+/// dispatcher) and of [`compile_typed_any_from_forms`] (the from-forms
+/// typed-decoded classifier dispatcher). Together with those two — plus
+/// [`compile_typed_from_forms`] — this free function closes the fresh-
+/// expander dispatcher family at the free-function boundary across BOTH
+/// axes — input posture (from-forms + from-source) × projection form
+/// (constant `T::KEYWORD` + typed-decoded classifier):
+///
+/// |              | constant `T::KEYWORD`               | typed-decoded classifier                  |
+/// |--------------|-------------------------------------|-------------------------------------------|
+/// | from-forms   | [`compile_typed_from_forms`]        | [`compile_typed_any_from_forms`]          |
+/// | from-source  | [`compile_typed`]                   | [`compile_typed_any`] (this)              |
+///
+/// The constant-`T::KEYWORD` column is the typed CONSEQUENCE of the
+/// classifier column: a `compile_typed::<T>(src)` call composes
+/// `compile_typed_any(src, |h| (h == T::KEYWORD).then_some(()), |(), args|
+/// T::compile_from_args(args))`. Both columns route through ONE composition
+/// point on the `Expander` surface (`expand_source_and_collect_calls_to_any`
+/// for from-source; `expand_and_collect_calls_to_any` for from-forms; the
+/// constant-keyword cells are the constant-classifier specialization of the
+/// classifier cells through `expand_source_to_typed` /
+/// `expand_to_typed`). A regression that drifts ONE cell's pipeline from the
+/// others is structurally impossible — every cell binds to ONE composition
+/// point.
+///
+/// Posture parity with [`RealizedCompiler::compile_typed_any`]: where that
+/// method clones the preloaded macro library per call so previously
+/// `:macros`-loaded macros participate in expansion, this free function
+/// starts from `Expander::new()` so the only macros visible to the walk
+/// are those introduced in `src` itself via `(defmacro …)`. The
+/// classifier sees post-expansion heads in BOTH postures — a `(when …)`
+/// macro absorbed during the walk lowers to `(if …)`, and the classifier
+/// dispatches on `if`, NOT on `when`.
+///
+/// The future change that benefits: a `tatara-check` runner that walks
+/// every typed `(defX …)` form in a source buffer with no realized
+/// `CompilerSpec` to clone, dispatching each form by classifier-decoded
+/// kind through the registry — binds to ONE free function rather than
+/// re-constructing `Expander::new().expand_source_and_collect_calls_to_any(…)`
+/// at the call site. An LSP that surfaces "every typed-domain form in
+/// this buffer with its kind tag" without materializing a realized
+/// compiler reaches the SAME free function. A REPL `:dispatch
+/// <classifier> <source>` command for fresh-expander dispatch binds
+/// here as well.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// (fresh × from-source × typed-decoded-classifier) cell of the
+/// dispatcher matrix is bound in ONE place rather than re-derived inline
+/// at every fresh-expander from-source classifier consumer's call site.
+/// THEORY.md §II.1 invariant 1 — typed entry; the classifier-filtered +
+/// caller-projected walk over the freshly-expanded program IS a typed-
+/// entry-batch gate at the free-function boundary, and naming its single
+/// shape lifts the gate from a per-consumer inline derivation to ONE
+/// free function the substrate's diagnostic promotions hang off of.
+/// THEORY.md §II.1 invariant 2 — free middle; all four cells of the
+/// fresh-expander dispatcher matrix route through `Expander::new()` +
+/// the matching `Expander` primitive, so a regression that drifts ONE
+/// cell's pipeline from the others becomes structurally impossible.
+///
+/// Frontier inspiration: Racket's `(eval-string str ns)` against a
+/// fresh empty namespace combined with `syntax-parse`'s typed-choice
+/// repeater on the result — typed program-level dispatch with NO
+/// preloaded macro library is the Racket idiom; this function is the
+/// Rust-typed peer with the typed-decoded classifier composed in,
+/// sibling of [`RealizedCompiler::compile_typed_any`] (the preloaded-
+/// namespace posture).
+pub fn compile_typed_any<R, F, D, T>(src: &str, decode: D, project: F) -> Result<Vec<R>>
+where
+    D: FnMut(&str) -> Option<T>,
+    F: FnMut(T, &[Sexp]) -> Result<R>,
+{
+    Expander::new().expand_source_and_collect_calls_to_any(src, decode, project)
+}
+
+/// Macroexpand + classifier-walk a pre-parsed program through a fresh
+/// `Expander` — the from-forms posture of [`compile_typed_any`].
+///
+/// Composes [`Expander::new()`](crate::macro_expand::Expander::new) with
+/// [`Expander::expand_and_collect_calls_to_any`] — the SAME from-forms
+/// typed-decoded primitive `RealizedCompiler::compile_typed_any_from_forms`
+/// routes a preloaded clone through, here threaded through a brand-new
+/// `Expander` so callers that have already parsed their forms (a
+/// macro-expanded subform, a `Sexp` loaded from disk, an LSP's partial
+/// AST cache across edits, a REPL's already-quoted buffer) and don't need
+/// a preloaded macro library bind to ONE free function rather than
+/// constructing `Expander::new().expand_and_collect_calls_to_any(…)`
+/// themselves at each call site.
+///
+/// Sibling of [`compile_typed_any`] (the from-source posture's
+/// fresh-expander typed-decoded dispatcher) and of
+/// [`compile_typed_from_forms`] (the from-forms posture's fresh-expander
+/// constant-`T::KEYWORD` dispatcher). Closes the (from-forms ×
+/// typed-decoded classifier) cell of the fresh-expander dispatcher
+/// matrix at the free-function boundary — see [`compile_typed_any`]'s
+/// 2×2 table for the matrix shape.
+///
+/// Theory anchor: same as [`compile_typed_any`]. THEORY.md §VI.1
+/// (generation over composition; the (fresh × from-forms × typed-decoded-
+/// classifier) cell of the dispatcher matrix is bound in ONE place
+/// rather than re-derived inline at every fresh-expander from-forms
+/// classifier consumer's call site), THEORY.md §II.1 invariant 1 (typed
+/// entry; the classifier-filtered + caller-projected walk over the
+/// freshly-expanded forms IS a typed-entry-batch gate), THEORY.md §II.1
+/// invariant 2 (free middle; all four cells of the fresh-expander
+/// dispatcher matrix route through `Expander::new()` + the matching
+/// Expander primitive).
+pub fn compile_typed_any_from_forms<R, F, D, T>(
+    forms: Vec<Sexp>,
+    decode: D,
+    project: F,
+) -> Result<Vec<R>>
+where
+    D: FnMut(&str) -> Option<T>,
+    F: FnMut(T, &[Sexp]) -> Result<R>,
+{
+    Expander::new().expand_and_collect_calls_to_any(forms, decode, project)
+}
+
 /// Project a `(<T::KEYWORD> NAME :k v …)` form's argument tail to a typed
 /// [`NamedDefinition<T>`] — the per-form NAME-then-`T::compile_from_args`
 /// split lifted out of [`compile_named_from_forms`]'s inline closure into
@@ -385,7 +519,8 @@ pub(crate) fn named_form_projection<T: TataraDomain>(rest: &[Sexp]) -> Result<Na
 mod tests {
     use super::compile_named;
     use crate::compiler_spec::CompilerSpec;
-    use crate::error::{LispError, SexpShape};
+    use crate::domain::TataraDomain;
+    use crate::error::{LispError, Result, SexpShape};
 
     #[test]
     fn compile_named_emits_named_form_missing_name_for_keyword_only_form() {
@@ -1099,5 +1234,279 @@ mod tests {
             .expect("preloaded from-forms typed primitive must dispatch through the macro");
         assert_eq!(specs.len(), 1);
         assert_eq!(specs[0].name, "via-preloaded-forms");
+    }
+
+    // ── compile_typed_any / compile_typed_any_from_forms — fresh-expander
+    //    free-function siblings of RealizedCompiler::compile_typed_any{,_from_forms}
+    //
+    // Close the fresh-expander dispatcher matrix at the free-function
+    // boundary at the (typed-decoded classifier) column. Each cell routes
+    // through `Expander::new()` + the matching `Expander` primitive
+    // (`expand_source_and_collect_calls_to_any` for from-source;
+    // `expand_and_collect_calls_to_any` for from-forms). The preloaded-
+    // expander sibling (`RealizedCompiler::compile_typed_any` /
+    // `RealizedCompiler::compile_typed_any_from_forms`) routes the SAME
+    // typed-decoded primitive through a per-call cloned preloaded expander.
+
+    #[test]
+    fn compile_typed_any_from_forms_yields_decoded_pairs_in_source_order() {
+        // Pin the typed-decoded yield shape against a closed-set classifier
+        // (a hand-rolled `Op::{Foo, Bar}` enum that rejects one head out of
+        // three) sourced from a pre-parsed `Vec<Sexp>` against a fresh
+        // `Expander`. The classifier-decoded yield walks every matching
+        // call form in source order, threading the typed witness alongside
+        // the args tail through the projection.
+        use super::compile_typed_any_from_forms;
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        enum Op {
+            Foo,
+            Bar,
+        }
+        impl Op {
+            fn from_keyword(h: &str) -> Option<Self> {
+                match h {
+                    "foo" => Some(Self::Foo),
+                    "bar" => Some(Self::Bar),
+                    _ => None,
+                }
+            }
+        }
+        let forms = crate::reader::read("(foo 1) (baz 2) (bar 3) (foo 4)").unwrap();
+        let yielded: Vec<(Op, usize)> = compile_typed_any_from_forms(
+            forms,
+            Op::from_keyword,
+            |op, args| -> Result<(Op, usize)> { Ok((op, args.len())) },
+        )
+        .expect("fresh-expander classifier dispatch must succeed on well-formed forms");
+        assert_eq!(
+            yielded,
+            vec![(Op::Foo, 1), (Op::Bar, 1), (Op::Foo, 1)],
+            "fresh-expander classifier dispatch must yield (decoded, args_len) in source order, skipping baz",
+        );
+    }
+
+    #[test]
+    fn compile_typed_any_skips_non_matching_forms_without_invoking_project() {
+        // Pin the soft-projection contract: the projection MUST NOT run on
+        // any form whose head the classifier rejects (atom, list-with-non-
+        // symbol-head, unrecognized symbol head). A deliberately-panicking
+        // projection across a mix of those shapes survives the walk
+        // because the classifier rejects every form first.
+        use super::compile_typed_any;
+        let src = r#":kw "str" 42 (5 a) (unrecognized x)"#;
+        let yielded: Vec<()> = compile_typed_any(
+            src,
+            |h: &str| match h {
+                "foo" | "bar" => Some(()),
+                _ => None,
+            },
+            |(), _args| -> Result<()> {
+                panic!(
+                    "projection must NOT run on classifier-rejected forms — soft-projection contract"
+                )
+            },
+        )
+        .expect("fresh-expander classifier dispatch must succeed when zero forms match");
+        assert!(
+            yielded.is_empty(),
+            "fresh-expander classifier dispatch must yield empty Vec when zero forms match",
+        );
+    }
+
+    #[test]
+    fn compile_typed_any_short_circuits_on_project_error_at_first_failure() {
+        // Pin the Result short-circuit: a projection that errors on the
+        // SECOND match must NOT run the projection on the THIRD or FOURTH
+        // match. Counter increments per projection call; final counter
+        // equals the failing form's index + 1, not the total match count,
+        // proving the walk short-circuited at the failing form.
+        use super::compile_typed_any_from_forms;
+        use std::cell::Cell;
+        let forms = crate::reader::read("(foo 1) (foo 2) (foo 3) (foo 4)").unwrap();
+        let counter = Cell::new(0_usize);
+        let result: Result<Vec<()>> = compile_typed_any_from_forms(
+            forms,
+            |h: &str| (h == "foo").then_some(()),
+            |(), _args| {
+                let n = counter.get() + 1;
+                counter.set(n);
+                if n == 2 {
+                    Err(LispError::Compile {
+                        form: "foo".into(),
+                        message: "boom".into(),
+                    })
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert!(result.is_err(), "projection error must propagate as Err");
+        assert_eq!(
+            counter.get(),
+            2,
+            "projection must be invoked exactly twice — short-circuit at first failure (index 1 → counter == 2)",
+        );
+    }
+
+    #[test]
+    fn compile_typed_any_short_circuits_at_reader_error_before_classifier_runs() {
+        // Pin the read-then-classifier-then-project ordering with BOTH
+        // decoder and projection explicitly panicking — any post-reader
+        // execution fires the panic. An unbalanced open paren is rejected
+        // at the reader boundary before the classifier walk begins.
+        use super::compile_typed_any;
+        let err = compile_typed_any(
+            "(defcompiler :name \"x\"",
+            |_h: &str| -> Option<()> {
+                panic!("classifier must NOT run when reader rejects source")
+            },
+            |(), _args| -> Result<()> {
+                panic!("projection must NOT run when reader rejects source")
+            },
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, LispError::UnmatchedOpenParen { .. }),
+            "expected LispError::UnmatchedOpenParen short-circuit, got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn compile_typed_any_routes_through_compile_typed_any_from_forms_under_delegation() {
+        // Pin the from-source-delegates-to-from-forms identity at the
+        // free-function boundary: feeding pre-parsed forms through
+        // `compile_typed_any_from_forms` yields the byte-identical
+        // `Vec<R>` that `compile_typed_any` yields on the source those
+        // forms came from. Both routes thread through `Expander::new()` +
+        // the SAME classifier primitive on Expander
+        // (`expand_source_and_collect_calls_to_any` on the from-source
+        // axis composes `read(src)?` with `expand_and_collect_calls_to_any`
+        // on the from-forms axis), so the routing identity is the
+        // structural witness that the substrate's typed-decoded
+        // classifier projection lives at ONE composition point per
+        // input posture per expander posture.
+        use super::{compile_typed_any, compile_typed_any_from_forms};
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        enum Op {
+            Foo,
+            Bar,
+        }
+        impl Op {
+            fn from_keyword(h: &str) -> Option<Self> {
+                match h {
+                    "foo" => Some(Self::Foo),
+                    "bar" => Some(Self::Bar),
+                    _ => None,
+                }
+            }
+        }
+        let src = "(foo 1) (baz 2) (bar 3) (foo 4)";
+        let forms = crate::reader::read(src).expect("read must succeed");
+        let via_source: Vec<(Op, usize)> =
+            compile_typed_any(src, Op::from_keyword, |op, args| -> Result<(Op, usize)> {
+                Ok((op, args.len()))
+            })
+            .expect("from-source must yield Vec<(Op, usize)>");
+        let via_forms: Vec<(Op, usize)> = compile_typed_any_from_forms(
+            forms,
+            Op::from_keyword,
+            |op, args| -> Result<(Op, usize)> { Ok((op, args.len())) },
+        )
+        .expect("from-forms must yield Vec<(Op, usize)>");
+        assert_eq!(
+            via_source, via_forms,
+            "from-source routes through from-forms under delegation — outputs must be byte-identical",
+        );
+    }
+
+    #[test]
+    fn compile_typed_any_expands_defmacro_in_source_before_classifier_runs() {
+        // Pin the `expand_program → classifier` ordering at the
+        // fresh-expander free-function boundary: a `(defmacro emit-foo …)`
+        // in the source absorbs into the fresh expander, then macro calls
+        // expand into `(foo …)`, and the classifier sees the post-
+        // expansion `foo` head. A regression that swapped the ordering
+        // (classifier-before-expand) would skip the macro calls entirely
+        // because their pre-expansion head is `emit-foo`, NOT `foo`.
+        use super::compile_typed_any;
+        let src = "(defmacro emit-foo (x) `(foo ,x)) (emit-foo 1) (emit-foo 2)";
+        let yielded: Vec<usize> = compile_typed_any(
+            src,
+            |h: &str| (h == "foo").then_some(()),
+            |(), args| -> Result<usize> { Ok(args.len()) },
+        )
+        .expect("classifier must see post-expansion foo heads");
+        assert_eq!(
+            yielded,
+            vec![1, 1],
+            "classifier must run after macro expansion — both (emit-foo …) calls lower to (foo …)",
+        );
+    }
+
+    #[test]
+    fn compile_typed_constant_keyword_dispatch_routes_through_compile_typed_any_via_classifier_composition(
+    ) {
+        // Pin the closed-form composition law binding the constant-
+        // `T::KEYWORD` column to the classifier column at the fresh-
+        // expander free-function boundary: `compile_typed::<T>(src)` IS
+        // `compile_typed_any(src, |h| (h == T::KEYWORD).then_some(()),
+        // |(), args| T::compile_from_args(args))` modulo the discarded
+        // `()` typed witness. Both routes thread through `Expander::new()`
+        // and feed the per-form projection the same args tail; pin
+        // `Vec<T>` equality across three representative input shapes
+        // (matching some, matching none, matching with rejection) on the
+        // SAME source.
+        use super::{compile_typed, compile_typed_any};
+        // Mixed source: two well-formed `(defcompiler :name …)` forms,
+        // one form whose head doesn't match the keyword, one form whose
+        // head matches a `defmacro` introduced earlier that lowers to a
+        // matching form.
+        let src = r#"(defcompiler :name "alpha" :dialect "standard")
+                     (foo 1 2)
+                     (defcompiler :name "beta" :dialect "standard")"#;
+        let via_typed = compile_typed::<CompilerSpec>(src).expect("compile_typed must succeed");
+        let via_any: Vec<CompilerSpec> = compile_typed_any(
+            src,
+            |h: &str| (h == CompilerSpec::KEYWORD).then_some(()),
+            |(), args| CompilerSpec::compile_from_args(args),
+        )
+        .expect("compile_typed_any with constant-keyword classifier must succeed");
+        assert_eq!(via_typed.len(), 2);
+        assert_eq!(via_typed.len(), via_any.len());
+        assert_eq!(via_typed[0].name, via_any[0].name);
+        assert_eq!(via_typed[0].name, "alpha");
+        assert_eq!(via_typed[1].name, via_any[1].name);
+        assert_eq!(via_typed[1].name, "beta");
+    }
+
+    #[test]
+    fn compile_typed_any_admits_fnmut_classifier_maintaining_state_across_walk() {
+        // Pin that the classifier slot accepts `FnMut(&str) -> Option<T>`
+        // — a closure that captures mutable state across the batch walk
+        // — not just `Fn` / `fn`. A counter-bumping decoder that mutates
+        // a `Cell<usize>` per head examined survives the walk; the counter
+        // ends equal to the number of (post-expansion) call forms in the
+        // source, exercising the `FnMut` slot the slice-side classifier
+        // primitive carries. A regression that constrained the decoder
+        // to `Fn` would fail to type-check this test.
+        use super::compile_typed_any;
+        use std::cell::Cell;
+        let counter = Cell::new(0_usize);
+        let src = "(foo 1) (bar 2) (foo 3) (qux 4)";
+        let yielded: Vec<()> = compile_typed_any(
+            src,
+            |h: &str| {
+                counter.set(counter.get() + 1);
+                (h == "foo").then_some(())
+            },
+            |(), _args| -> Result<()> { Ok(()) },
+        )
+        .expect("FnMut classifier dispatch must succeed");
+        assert_eq!(yielded.len(), 2, "two (foo …) forms must match");
+        assert_eq!(
+            counter.get(),
+            4,
+            "decoder must be invoked once per call-form head — four call forms in source",
+        );
     }
 }

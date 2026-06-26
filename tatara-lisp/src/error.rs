@@ -2237,23 +2237,108 @@ impl UnquoteForm {
     /// `CompilerSpecIoStage::operation()` / `label()` feed their respective
     /// `LispError::*` Display impls.
     ///
+    /// Composition law: `self.marker() == self.to_quote_form().prefix()`
+    /// for every `self: UnquoteForm`. Pre-lift the body inlined the two
+    /// literals (`","` / `",@"`) as a parallel match-table; the same two
+    /// literals also lived at the matching Unquote/UnquoteSplice arms of
+    /// [`crate::ast::QuoteForm::prefix`]. Post-lift the body composes
+    /// `Self::to_quote_form()` (the typed 2-of-4 subset → superset
+    /// projection) with `crate::ast::QuoteForm::prefix()` (the canonical
+    /// 4-of-4 prefix-string projection), so the two `&'static str`
+    /// literals live at ONE canonical site (`QuoteForm::prefix`'s
+    /// Unquote/UnquoteSplice arms in `ast.rs`) and every consumer of
+    /// `UnquoteForm::marker` (the `ClosedSet`-trait Display/FromStr
+    /// surface via `#[closed_set(via = "marker")]`, the unbound-template
+    /// `did you mean ,@args?` hint suffix in this module's
+    /// `unbound_hint_suffix` helper, the `#[error("... {prefix}")]`
+    /// annotation on `LispError::UnboundTemplateVar` /
+    /// `LispError::NonSymbolUnquoteTarget`, the future LSP / REPL /
+    /// `tatara-check` completion-bar projections that key on the typed
+    /// marker) inherits the canonical vocabulary through the composition
+    /// rather than through a parallel inline table that drifts at the
+    /// next vocabulary rename.
+    ///
+    /// Sibling-shape lift to the prior-run `AtomKind::label` ⊂
+    /// `SexpShape::label` composition (commit 1db697f): both pin the
+    /// invariant that a typed-subset enum's projection on a closed-set
+    /// vocabulary is structurally derived from its parent superset's
+    /// projection, not a parallel literal table the type system happens
+    /// to not catch when the vocabularies drift.
+    ///
     /// The bidirectional contract is anchored by tests:
-    /// `unquote_form_marker_renders_canonical_literal_for_each_variant`
+    /// `unquote_form_marker_projects_canonical_literal_for_each_variant`
     /// pins each variant's canonical literal so a typo in any arm
     /// fails-loudly,
     /// `unquote_form_display_renders_canonical_marker_for_each_variant`
     /// pins Display-equals-marker so any `#[error("... {prefix}")]`
     /// annotation that threads through this projection projects
-    /// byte-for-byte, and
+    /// byte-for-byte,
     /// `unquote_form_marker_round_trips_through_from_str` pins the
     /// `marker` ↔ [`Self::FromStr`] round-trip for every variant in
     /// [`Self::ALL`] so the typed surface and the rendered diagnostic
-    /// literal cannot drift.
+    /// literal cannot drift, and the post-lift composition-routing
+    /// pin
+    /// `unquote_form_marker_routes_through_to_quote_form_prefix_via_composition`
+    /// asserts pointer-equality between `self.marker()` and
+    /// `self.to_quote_form().prefix()` for every variant — so a
+    /// regression that re-inlines the literals as a parallel match-table
+    /// fails the pointer pin even when the rendered bytes still agree
+    /// (the inline-literal-table copy lives at a different `&'static str`
+    /// address).
     #[must_use]
     pub fn marker(self) -> &'static str {
+        self.to_quote_form().prefix()
+    }
+
+    /// Project the 2-of-4 template-substitution subset back to its
+    /// parent [`crate::ast::QuoteForm`] superset — the structural
+    /// inverse of [`crate::ast::QuoteForm::as_unquote_form`]. Returns
+    /// the [`crate::ast::QuoteForm`] variant whose canonical prefix
+    /// string matches this `UnquoteForm`'s marker:
+    /// [`Self::Unquote`] → [`crate::ast::QuoteForm::Unquote`],
+    /// [`Self::Splice`] → [`crate::ast::QuoteForm::UnquoteSplice`].
+    ///
+    /// Total (not `Option`) because every `UnquoteForm` IS a
+    /// `QuoteForm` — the 2-of-4 subset is a subset by inclusion. The
+    /// dual projection [`crate::ast::QuoteForm::as_unquote_form`]
+    /// returns `Option<UnquoteForm>` because the two non-substitution
+    /// variants ([`crate::ast::QuoteForm::Quote`] and
+    /// [`crate::ast::QuoteForm::Quasiquote`]) lie outside the
+    /// substitution subset.
+    ///
+    /// Round-trip identity: `self.to_quote_form().as_unquote_form() ==
+    /// Some(self)` for every `self: UnquoteForm`, pinned by
+    /// `unquote_form_to_quote_form_round_trips_through_as_unquote_form`.
+    /// The dual identity `qf.as_unquote_form().map(|uf|
+    /// uf.to_quote_form()) == qf.as_unquote_form().map(|_| qf)` holds
+    /// by construction (the projection is a section of
+    /// [`crate::ast::QuoteForm::as_unquote_form`] restricted to its
+    /// image — the Unquote/UnquoteSplice variants).
+    ///
+    /// Lifts the (UnquoteForm variant, QuoteForm variant) pairing onto
+    /// the typed algebra so consumers that need the parent superset
+    /// from a substitution-subset value (the `marker` lift's
+    /// composition root, the future hint-suffix pretty-printer's
+    /// `prefix.to_quote_form().prefix()` routing, the future
+    /// canonical-form interop tag that wants to route an `UnquoteForm`
+    /// through `iac_forge_tag` via `to_quote_form().iac_forge_tag()`
+    /// without re-deriving the pairing) bind at ONE typed projection
+    /// rather than at parallel match arms each site re-derives.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// subset-to-superset projection becomes a TYPE projection on the
+    /// substrate algebra. THEORY.md §VI.1 — generation over
+    /// composition; the (UnquoteForm variant, QuoteForm variant)
+    /// pairing emerges from this ONE primitive rather than from
+    /// per-callsite per-variant literals. THEORY.md §II.1 invariant 1 —
+    /// typed entry; the typed subset-to-superset projection IS a
+    /// substrate-owned theorem rather than a hand-inlined match-table
+    /// duplication discipline N sites had to keep in lockstep.
+    #[must_use]
+    pub fn to_quote_form(self) -> crate::ast::QuoteForm {
         match self {
-            Self::Unquote => ",",
-            Self::Splice => ",@",
+            Self::Unquote => crate::ast::QuoteForm::Unquote,
+            Self::Splice => crate::ast::QuoteForm::UnquoteSplice,
         }
     }
 }
@@ -8766,6 +8851,83 @@ mod tests {
         assert!(" ,".parse::<UnquoteForm>().is_err());
         assert!(", ".parse::<UnquoteForm>().is_err());
         assert!(", @".parse::<UnquoteForm>().is_err());
+    }
+
+    #[test]
+    fn unquote_form_to_quote_form_round_trips_through_as_unquote_form() {
+        // Pin the 2-of-4 subset → superset projection as a typed
+        // section of [`crate::ast::QuoteForm::as_unquote_form`]: for
+        // every `uf: UnquoteForm`, `uf.to_quote_form().as_unquote_form()
+        // == Some(uf)`. Closes the (UnquoteForm, QuoteForm) pairing as
+        // a round-trip identity on the typed algebra — pre-lift the
+        // pairing only lived in the existing
+        // `unquote_form_marker_subset_decodes_through_quote_form_from_str`
+        // cross-axis test (which round-tripped through the rendered
+        // marker string + FromStr); post-lift the pairing rides the
+        // typed projection directly so a future regression that drifts
+        // the (UnquoteForm variant, QuoteForm variant) pairing
+        // (e.g., a future arm that maps `UnquoteForm::Splice →
+        // QuoteForm::Unquote`) fails this assertion without depending
+        // on the FromStr decoder sitting between the two.
+        use crate::ast::QuoteForm;
+        for uf in UnquoteForm::ALL {
+            assert_eq!(
+                uf.to_quote_form().as_unquote_form(),
+                Some(uf),
+                "UnquoteForm::{uf:?} → QuoteForm via to_quote_form does not invert through QuoteForm::as_unquote_form — the 2-of-4 subset projection is no longer a section",
+            );
+        }
+
+        // Per-arm pinning of the canonical mapping (the byte-for-byte
+        // pairing the composition `marker == to_quote_form().prefix()`
+        // depends on).
+        assert_eq!(UnquoteForm::Unquote.to_quote_form(), QuoteForm::Unquote);
+        assert_eq!(
+            UnquoteForm::Splice.to_quote_form(),
+            QuoteForm::UnquoteSplice
+        );
+    }
+
+    #[test]
+    fn unquote_form_marker_routes_through_to_quote_form_prefix_via_composition() {
+        // Post-lift composition pin: for every `uf: UnquoteForm`,
+        // `uf.marker()` and `uf.to_quote_form().prefix()` agree on
+        // BOTH axes — (a) byte equality (the rendered diagnostic
+        // literal cannot drift between the two projections); (b)
+        // pointer equality (the canonical `&'static str` literal lives
+        // at ONE site — `QuoteForm::prefix`'s Unquote/UnquoteSplice
+        // arms in `ast.rs` — and `UnquoteForm::marker` routes through
+        // that ONE address via the typed composition).
+        //
+        // The pointer-equality axis is load-bearing: a regression that
+        // re-inlines the literals at `UnquoteForm::marker` as a
+        // parallel match-table fails the pointer pin even when the
+        // rendered bytes still agree (the inline-literal-table copy
+        // lives at a different `&'static str` address — rustc may
+        // de-duplicate identical literals within a single Rust
+        // compilation unit, but the contract this test pins is
+        // routing-through-the-canonical-site, not deduplication-by-the-
+        // optimizer; a future build flag that disables literal dedup
+        // would unmask the regression that the bytes-only assertion
+        // misses). Sibling-shape pin to commit 1db697f's
+        // `atom_kind_label_routes_through_sexp_shape_label_via_sexp_shape_projection`
+        // — both pin the subset's projection through the superset's
+        // canonical site via pointer-equality, the structural invariant
+        // the subset-to-superset composition was lifted to make
+        // load-bearing on the type system rather than on per-callsite
+        // discipline.
+        for uf in UnquoteForm::ALL {
+            let from_marker = uf.marker();
+            let from_composition = uf.to_quote_form().prefix();
+            assert_eq!(
+                from_marker, from_composition,
+                "UnquoteForm::{uf:?}.marker() bytes drifted from .to_quote_form().prefix() bytes — the subset's diagnostic vocabulary is no longer derived from the superset's canonical site",
+            );
+            assert!(
+                std::ptr::eq(from_marker.as_ptr(), from_composition.as_ptr()),
+                "UnquoteForm::{uf:?}.marker() and .to_quote_form().prefix() disagree on `&'static str` address — pointer drift means the lift composes through a parallel literal table rather than routing into the canonical QuoteForm::prefix site",
+            );
+        }
     }
 
     // --- MacroDefHead closed-set FromStr + UnknownMacroDefHead lift ---

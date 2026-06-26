@@ -142,6 +142,103 @@ impl Atom {
             Self::Bool(_) => AtomKind::Bool,
         }
     }
+
+    /// Project the atomic payload to its canonical [`serde_json::Value`]
+    /// rendering — the typed-algebra peer of [`fmt::Display for Atom`] at
+    /// the JSON-projection boundary. Lifts six inline atom arms inside
+    /// [`crate::domain::sexp_to_json`]'s outer match (one
+    /// `Sexp::Atom(Atom::<variant>(payload)) => JValue::<…>(…)` arm
+    /// per [`AtomKind`] variant) onto ONE typed-algebra method that
+    /// every consumer routes through. Sibling-shape lift to the prior
+    /// `Display for Atom` (the canonical-string rendering surface),
+    /// `Hash for Atom` (the cache-key bytes surface via
+    /// [`AtomKind::hash_discriminator`]), and the upcoming
+    /// `Atom::to_iac_forge_sexpr` (the canonical-SExpr rendering
+    /// surface, feature-gated `iac-forge`) — every per-`Atom`-variant
+    /// projection now binds at ONE method on the closed-set algebra
+    /// rather than at six inline arms inside its consumer.
+    ///
+    /// Mapping (preserves the byte-identical pre-lift behavior at the
+    /// `sexp_to_json` callsite):
+    ///   * [`Self::Symbol`] payload `s` → [`serde_json::Value::String`] of
+    ///     `s` cloned (Symbols are enum discriminants — the JSON
+    ///     deserializer reads them as the string-form variant tag).
+    ///   * [`Self::Keyword`] payload `s` → [`serde_json::Value::String`]
+    ///     of `":{s}"` (Keywords prefix with `:` in their canonical
+    ///     wire-form; `json_to_sexp`'s inverse strips the prefix).
+    ///   * [`Self::Str`] payload `s` → [`serde_json::Value::String`] of
+    ///     `s` cloned.
+    ///   * [`Self::Int`] payload `n` → [`serde_json::Value::Number`] of
+    ///     `n` (lossless via `serde_json::Number::from(i64)`).
+    ///   * [`Self::Float`] payload `n` → [`serde_json::Value::Number`] of
+    ///     `n` IFF `n` is finite (NaN / ±∞ collapse to
+    ///     [`serde_json::Value::Null`]; this is JSON's structural
+    ///     inexpressibility of those f64 values, NOT a substrate
+    ///     choice). The NaN/∞→Null branch is pinned at one test below
+    ///     (`atom_to_json_float_nan_and_infinity_collapse_to_null`).
+    ///   * [`Self::Bool`] payload `b` → [`serde_json::Value::Bool`] of
+    ///     `b`.
+    ///
+    /// Bidirectional contract anchored by tests in this module:
+    ///   * `atom_to_json_projects_each_variant_to_canonical_json_value`
+    ///     — sweeps a representative atom of each [`AtomKind`] variant
+    ///     and pins each variant's canonical JValue mapping
+    ///     byte-for-byte against the pre-lift inline rule, so a future
+    ///     regression that drifts ONE arm (e.g. swaps `Symbol`'s
+    ///     mapping to a Number, or drops `Keyword`'s `:` prefix) fails
+    ///     loudly.
+    ///   * `atom_to_json_float_nan_and_infinity_collapse_to_null`
+    ///     — pins the JSON-structural inexpressibility branch at the
+    ///     atom layer directly, so a future Atom-Display-style refactor
+    ///     that bypasses [`serde_json::Number::from_f64`] (e.g. tries
+    ///     to emit `NaN` as the string `"NaN"`) surfaces at the
+    ///     typed-algebra boundary without requiring a Sexp wrap.
+    ///   * `sexp_to_json_atom_arms_route_through_atom_to_json` (in
+    ///     [`crate::domain::tests`]) — pins the lifted boundary:
+    ///     `sexp_to_json(&Sexp::Atom(a.clone())) == Ok(a.to_json())`
+    ///     for every atomic payload variant. Catches a future drift
+    ///     where one surface's per-variant body changes without the
+    ///     other.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the (Atom variant, canonical JValue rendering) pair lived inline
+    /// at the `sexp_to_json` site as six byte-identical arms. The lift
+    /// retires the per-site fan-out onto ONE method on the `Atom`
+    /// algebra. THEORY.md §II.1 invariant 2 — free middle; the typed-
+    /// exit JSON projection, the Display-surface rendering, the
+    /// diagnostic surface, and any future canonical-form surface
+    /// (e.g. `Atom::to_iac_forge_sexpr`) all route through ONE
+    /// per-variant projection family rather than per-callsite
+    /// re-derivation. THEORY.md §V.1 — knowable platform; a future
+    /// seventh atomic kind (e.g. `Char` for `#\x` reader syntax) lands
+    /// at one [`AtomKind::ALL`] entry plus one arm here plus one arm
+    /// per sibling projection — exhaustively checked by the compiler,
+    /// not by per-consumer convention.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::AsmPrinter::printAttribute`
+    /// — the typed-IR attribute printer dispatches on the closed-set
+    /// `AttributeKind` so every printer body for a kind lives at ONE
+    /// implementation site; `Atom::to_json` is the unstructured-Rust
+    /// peer on the `Atom` algebra for the JSON canonical-form surface
+    /// (where `Display for Atom` is the Lisp-canonical-form peer and
+    /// `From<&Sexp> for iac_forge::SExpr` is the canonical-attestation-
+    /// form peer). Racket's `(syntax->datum stx)` then a serializer
+    /// over the datum prim — `to_json` is the substrate's serializer
+    /// at the atomic-payload layer, with the closed-set `AtomKind`
+    /// standing in for Racket's datum-prim taxonomy.
+    #[must_use]
+    pub fn to_json(&self) -> serde_json::Value {
+        match self {
+            Self::Symbol(s) => serde_json::Value::String(s.clone()),
+            Self::Keyword(s) => serde_json::Value::String(format!(":{s}")),
+            Self::Str(s) => serde_json::Value::String(s.clone()),
+            Self::Int(n) => serde_json::Value::Number((*n).into()),
+            Self::Float(n) => serde_json::Number::from_f64(*n)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null),
+            Self::Bool(b) => serde_json::Value::Bool(*b),
+        }
+    }
 }
 
 /// Closed-set typed discriminator for the six [`Atom`] payload variants —
@@ -1662,13 +1759,15 @@ fn fmt_float(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 ///     produces a `fmt::Formatter` body. Post-lift collapses to
 ///     ONE `fmt::Display::fmt(a, f)` delegation.
 ///   * [`crate::domain::sexp_to_json`]'s atom arms — 6 inline arms
-///     producing `serde_json::Value`. Future-lift candidate to a
-///     parallel `Atom::to_json` projection that this impl's sibling
-///     pattern names.
+///     producing `serde_json::Value`. Now lifted onto [`Atom::to_json`]
+///     in the sibling pattern this impl's docstring named; the
+///     `sexp_to_json` site collapses to ONE `Sexp::Atom(a) =>
+///     a.to_json()` arm.
 ///   * [`crate::interop::iac_forge_impl::From<&Sexp> for SExpr`]'s
 ///     atom arm (feature-gated `iac-forge`) — 6 inline arms producing
 ///     `iac_forge::sexpr::SExpr`. Future-lift candidate to a parallel
-///     `Atom::to_iac_forge_sexpr` projection.
+///     `Atom::to_iac_forge_sexpr` projection (the LAST of the three
+///     production-site atom-arm shapes left).
 ///
 /// The (Atom variant, rendered prefix/suffix/body) quadruple now lives
 /// at ONE typed-algebra Display impl rather than at seven inline
@@ -4276,5 +4375,71 @@ mod tests {
                 "Atom::Display→reader drifted payload for {seed:?} via {rendered:?}"
             );
         }
+    }
+
+    #[test]
+    fn atom_to_json_projects_each_variant_to_canonical_json_value() {
+        // CANONICAL-MAPPING CONTRACT: pin that `Atom::to_json` produces
+        // byte-identical `serde_json::Value` outputs for each
+        // `AtomKind` variant as the pre-lift inline arms inside
+        // `crate::domain::sexp_to_json` did. Sweeps a representative
+        // atom of each variant so a regression that drifts ONE arm
+        // (e.g. swaps `Symbol`'s mapping to a Number, or drops
+        // `Keyword`'s `:` prefix that `json_to_sexp`'s inverse strips
+        // — silently breaking every `:values-overlay` payload pinned
+        // by the CLAUDE.md bool warning) fails loudly. Sibling-arm
+        // sweep to `atom_display_renders_each_variant_to_canonical_form`
+        // — both pin the typed-algebra rendering of the atomic
+        // payload at its canonical projection. The float case uses
+        // `1.5` (finite) here; NaN / ±∞ get their own pin below.
+        use serde_json::Value as JValue;
+        assert_eq!(
+            Atom::Symbol("name".into()).to_json(),
+            JValue::String("name".into()),
+        );
+        assert_eq!(
+            Atom::Keyword("parent".into()).to_json(),
+            JValue::String(":parent".into()),
+        );
+        assert_eq!(
+            Atom::Str("body".into()).to_json(),
+            JValue::String("body".into()),
+        );
+        assert_eq!(Atom::Int(42).to_json(), JValue::Number(42i64.into()));
+        assert_eq!(Atom::Int(-7).to_json(), JValue::Number((-7i64).into()));
+        assert_eq!(
+            Atom::Float(1.5).to_json(),
+            JValue::Number(serde_json::Number::from_f64(1.5).unwrap()),
+        );
+        assert_eq!(Atom::Bool(true).to_json(), JValue::Bool(true));
+        assert_eq!(Atom::Bool(false).to_json(), JValue::Bool(false));
+    }
+
+    #[test]
+    fn atom_to_json_float_nan_and_infinity_collapse_to_null() {
+        // JSON-INEXPRESSIBILITY PIN: JSON has no canonical form for
+        // `NaN` / `±∞` — `serde_json::Number::from_f64` returns `None`
+        // for those values, and the substrate's pre-lift behavior at
+        // `sexp_to_json` mapped them to `JValue::Null` via
+        // `unwrap_or(JValue::Null)`. Pin the special-case branch at
+        // the typed-algebra boundary directly so a future refactor
+        // that bypasses `serde_json::Number::from_f64` (e.g. emits
+        // `NaN` as the string `"NaN"`, which the JSON deserializer
+        // would silently re-read as a String at the round-trip
+        // boundary) surfaces at this test without requiring a Sexp
+        // wrap to reproduce. Sibling-shape pin to
+        // `atom_display_renders_integral_float_with_dot_zero_suffix`
+        // — both pin a non-default branch of the float projection's
+        // canonical rendering. The branch IS load-bearing for the
+        // `sexp_to_json` → `serde_json::from_value::<T>` bridge the
+        // derive-macro fallthrough uses: a downstream `f64` field
+        // that the operator wrote `:rate :nan` for collapses to
+        // `JValue::Null` HERE rather than at the serde boundary,
+        // emitting a clean structural diagnostic instead of a JSON
+        // parse error miles downstream.
+        use serde_json::Value as JValue;
+        assert_eq!(Atom::Float(f64::NAN).to_json(), JValue::Null);
+        assert_eq!(Atom::Float(f64::INFINITY).to_json(), JValue::Null);
+        assert_eq!(Atom::Float(f64::NEG_INFINITY).to_json(), JValue::Null);
     }
 }

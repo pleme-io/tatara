@@ -13,7 +13,7 @@ use std::sync::{Mutex, OnceLock};
 
 use serde::de::DeserializeOwned;
 
-use crate::ast::{Atom, Sexp};
+use crate::ast::Sexp;
 use crate::error::{ExpectedKwargShape, KwargPath, LispError, Result, SexpShape, SexpWitness};
 
 /// A Rust type compilable from a Lisp form.
@@ -1364,14 +1364,22 @@ use serde_json::Value as JValue;
 pub fn sexp_to_json(s: &Sexp) -> Result<JValue> {
     Ok(match s {
         Sexp::Nil => JValue::Null,
-        Sexp::Atom(Atom::Symbol(s)) => JValue::String(s.clone()),
-        Sexp::Atom(Atom::Keyword(s)) => JValue::String(format!(":{s}")),
-        Sexp::Atom(Atom::Str(s)) => JValue::String(s.clone()),
-        Sexp::Atom(Atom::Int(n)) => JValue::Number((*n).into()),
-        Sexp::Atom(Atom::Float(n)) => serde_json::Number::from_f64(*n)
-            .map(JValue::Number)
-            .unwrap_or(JValue::Null),
-        Sexp::Atom(Atom::Bool(b)) => JValue::Bool(*b),
+        // The six atomic-payload arms (one per `AtomKind` variant) all
+        // routed through inline `Sexp::Atom(Atom::<variant>(payload))
+        // => JValue::<…>(…)` pattern-binding pre-lift. Post-lift they
+        // bind at ONE typed-algebra method on the closed-set `Atom`
+        // algebra (`Atom::to_json`) that every consumer surfaces
+        // through. Sibling-arm shape to the prior `Display for Atom`
+        // lift (the canonical-string rendering surface) and the
+        // upcoming `Atom::to_iac_forge_sexpr` (the canonical-SExpr
+        // rendering surface, feature-gated `iac-forge`) — every per-
+        // `Atom`-variant projection now binds at ONE method rather
+        // than at six inline arms inside its consumer. A future
+        // seventh atomic kind (e.g. `Char` for `#\x` reader syntax)
+        // extends `AtomKind` + the typed-projection methods once and
+        // this outer arm picks up the new variant for free through
+        // [`Atom::to_json`]'s closed-set match.
+        Sexp::Atom(a) => a.to_json(),
         Sexp::List(items) => {
             if is_kwargs_list(items) {
                 let mut map = serde_json::Map::with_capacity(items.len() / 2);
@@ -2240,6 +2248,78 @@ mod tests {
              project the innermost shape — a regression that lifted recursion \
              onto the outer wrapper would diverge or emit JSON null here"
         );
+    }
+
+    #[test]
+    fn sexp_to_json_atom_arms_route_through_atom_to_json() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the lifted `sexp_to_json`
+        // routes its six atomic-payload arms through the typed-algebra
+        // method [`crate::ast::Atom::to_json`]. Pre-lift the per-variant
+        // body lived inline at six `Sexp::Atom(Atom::<variant>(payload))
+        // => JValue::<…>(…)` arms; post-lift the outer arm delegates to
+        // `a.to_json()` and the per-variant rendering binds at ONE
+        // typed-algebra projection on the `Atom` algebra. A regression
+        // that drifts the outer arm (e.g. re-inlines ONE variant's
+        // rendering without updating `Atom::to_json`, or returns a
+        // wrapping `JValue::Array` instead of delegating) surfaces as
+        // an inequality here. The cases sweep all six [`AtomKind`]
+        // variants. Sibling-arm shape to the quote-family routing test
+        // `sexp_to_json_routes_quote_family_arms_through_as_quote_form_typed_marker`
+        // and the Display-axis routing test
+        // `sexp_atom_display_arm_routes_through_atom_display_for_every_variant`
+        // — all three pin the analogous `Sexp` outer arm routing
+        // through a typed algebra projection.
+        use crate::ast::Atom;
+        let cases: &[Atom] = &[
+            Atom::Symbol("name".into()),
+            Atom::Keyword("kw".into()),
+            Atom::Str("body".into()),
+            Atom::Int(7),
+            Atom::Int(-3),
+            Atom::Float(2.5),
+            Atom::Float(1.0),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ];
+        for atom in cases {
+            let via_sexp = sexp_to_json(&Sexp::Atom(atom.clone()))
+                .expect("atom must serialize cleanly through sexp_to_json");
+            let via_atom = atom.to_json();
+            assert_eq!(
+                via_sexp, via_atom,
+                "sexp_to_json drifted from Atom::to_json for {atom:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_to_json_float_nan_propagates_atom_to_json_null_branch() {
+        // PATH-UNIFORMITY PIN: the float NaN/∞ → `JValue::Null` branch
+        // lives at the typed-algebra primitive `Atom::to_json` post-
+        // lift; pin that `sexp_to_json` composes through it without
+        // an additional wrapping or short-circuit. A regression that
+        // added a separate NaN-handling arm at `sexp_to_json`'s outer
+        // dispatch (re-introducing the per-callsite branch the lift
+        // retires) would diverge here only if the new arm produced a
+        // different value than `Atom::to_json` — by sharing the SAME
+        // expected output the test catches both kinds of drift
+        // (different value at the outer arm; bypassed delegation).
+        use crate::ast::Atom;
+        for f in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let atom = Atom::Float(f);
+            let via_sexp = sexp_to_json(&Sexp::Atom(atom.clone()))
+                .expect("non-finite float atom must serialize cleanly through sexp_to_json");
+            assert_eq!(
+                via_sexp,
+                atom.to_json(),
+                "sexp_to_json NaN/∞ branch drifted from Atom::to_json for {atom:?}"
+            );
+            assert_eq!(
+                via_sexp,
+                serde_json::Value::Null,
+                "non-finite float MUST collapse to JSON Null at the lifted boundary"
+            );
+        }
     }
 
     // ── Type-mismatch diagnostics name both expected and got ───────────

@@ -566,44 +566,19 @@ pub fn kwargs_pos_form(idx: usize) -> crate::error::KwargPath {
 /// drift. When a future run gives `Sexp` source spans, this helper is
 /// the single site that learns to thread `got Y at <pos>`; today's call
 /// sites pick up the span automatically.
+/// Free-function delegate to the [`Sexp::shape`] inherent method on the
+/// `Sexp` algebra. Retained for backwards compatibility with consumers
+/// that import this helper by name (no callers reach in through the
+/// module path post-lift); the inherent method is the canonical site
+/// for the (Sexp variant, SexpShape variant) projection family —
+/// `Atom::kind().sexp_shape()` (atomic axis), `as_quote_form().map(|(qf,
+/// _)| qf.sexp_shape())` (quote-family axis), with `Nil` / `List`
+/// arms projecting to their own `SexpShape` variants directly. See
+/// [`Sexp::shape`]'s docstring for the closed-set composition law and
+/// the THEORY anchors.
 #[must_use]
 pub fn sexp_shape(s: &Sexp) -> SexpShape {
-    match s {
-        Sexp::Nil => SexpShape::Nil,
-        // The six atomic-payload variants share the
-        // `Sexp::Atom(_) → SexpShape::*` shape — all route through
-        // `Atom::kind`'s typed closed-set projection so the per-variant
-        // (Atom variant, SexpShape variant) pairing binds at ONE site on
-        // the closed-set `AtomKind` algebra (`AtomKind::sexp_shape`)
-        // rather than six byte-identical inline arms here. Sibling
-        // posture to the quote-family collapse below (and to
-        // `Hash for Atom`'s six-arm `hash_discriminator` collapse on the
-        // atomic axis, and `Hash for Sexp`'s four-arm `hash_discriminator`
-        // collapse on the quote-family axis). A future seventh atomic
-        // kind (e.g. `Atom::Char` for `#\x` reader syntax) extends
-        // `AtomKind` AND `Atom::kind` together, with rustc binding the
-        // extension through the `AtomKind::sexp_shape` arm here — adding
-        // it at one of the three sites without the other two becomes a
-        // compile error, not a silent drift.
-        Sexp::Atom(a) => a.kind().sexp_shape(),
-        Sexp::List(_) => SexpShape::List,
-        // The four quote-family variants share the
-        // `Sexp::* → SexpShape::*` shape — all route through
-        // `as_quote_form`'s typed-marker projection so the per-variant
-        // (Sexp variant, SexpShape variant) pairing binds at ONE site on
-        // the closed-set `QuoteForm` algebra (`QuoteForm::sexp_shape`)
-        // rather than four byte-identical inline arms here. The
-        // `.expect(_)` is a static-invariant statement (the outer pattern
-        // guarantees the projection lands `Some`) — a future quote-family
-        // extension that drifts `Sexp` AND `QuoteForm` apart fails at
-        // rustc, not at runtime. Sibling posture to `Hash for Sexp`'s
-        // four-arm `hash_discriminator` collapse, `Display for Sexp`'s
-        // `prefix` collapse, and `interop`'s `iac_forge_tag` collapse.
-        Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) | Sexp::UnquoteSplice(_) => {
-            let (qf, _) = s.expect_quote_form();
-            qf.sexp_shape()
-        }
-    }
+    s.shape()
 }
 
 /// Stable, human-readable name of a `Sexp`'s outermost shape — the
@@ -616,7 +591,7 @@ pub fn sexp_shape(s: &Sexp) -> SexpShape {
 /// helper boundary.
 #[must_use]
 pub fn sexp_type_name(s: &Sexp) -> &'static str {
-    sexp_shape(s).label()
+    s.shape().label()
 }
 
 /// Typed projection of a `Sexp` into a `SexpWitness` — the joint
@@ -650,7 +625,7 @@ pub fn sexp_type_name(s: &Sexp) -> &'static str {
 /// the typed-entry gate rejected.
 #[must_use]
 pub fn sexp_witness(s: &Sexp) -> SexpWitness {
-    SexpWitness::new(sexp_shape(s), s.to_string())
+    SexpWitness::new(s.shape(), s.to_string())
 }
 
 /// Suggest the candidate closest to `needle` by Levenshtein distance,
@@ -850,7 +825,7 @@ pub fn type_mismatch(
     LispError::TypeMismatch {
         form,
         expected,
-        got: sexp_shape(got),
+        got: got.shape(),
     }
 }
 

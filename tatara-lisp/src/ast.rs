@@ -1011,6 +1011,84 @@ impl Sexp {
         }
     }
 
+    /// Project this [`Sexp`] to its closed-set [`SexpShape`] outer-shape
+    /// marker — `Nil → SexpShape::Nil`, `Atom(a) → a.kind().sexp_shape()`,
+    /// `List(_) → SexpShape::List`, and each quote-family wrapper routes
+    /// through `as_quote_form().map(|(qf, _)| qf.sexp_shape())`. The
+    /// outer-shape peer on the [`Sexp`] algebra of [`Atom::kind`] (the
+    /// atomic-payload axis) and [`QuoteForm::sexp_shape`] (the
+    /// quote-family axis) — completes the substrate's Sexp-shape
+    /// projection family by lifting the free-function dispatcher
+    /// [`crate::domain::sexp_shape`] onto the typed `Sexp` algebra
+    /// alongside its [`Atom`] / [`QuoteForm`] peers.
+    ///
+    /// Composition law: `s.shape() == crate::domain::sexp_shape(s)` for
+    /// every `s: &Sexp`. The free function continues to exist as a thin
+    /// delegate (its callers in `domain.rs`'s diagnostic-builder paths,
+    /// `compile.rs`'s `TypeMismatch.got` builder, and downstream tests
+    /// route through `s.shape()` after this lift), so the (Sexp variant,
+    /// SexpShape variant) pairing now binds at ONE inherent method on
+    /// the algebra rather than at a free function `domain` consumers
+    /// must reach into the module path to invoke.
+    ///
+    /// Sibling-shape lift to the typed-EXIT projection trio on [`Atom`]
+    /// ([`fmt::Display for Atom`], [`Atom::to_json`],
+    /// [`Atom::to_iac_forge_sexpr`]) and the typed-ENTRY classifier
+    /// ([`Atom::from_lexeme`]): where the atomic-payload algebra carries
+    /// its own per-variant projection family at the atomic-payload
+    /// level, the `Sexp` algebra carries this single outer-shape
+    /// projection that composes through [`Self::as_atom`] +
+    /// [`Atom::kind`] (atomic axis) and [`Self::as_quote_form`] (quote-
+    /// family axis) — every other arm (`Nil`, `List`) projects to its
+    /// own [`SexpShape`] variant directly.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (Sexp variant, SexpShape variant) pairing becomes an inherent
+    /// algebra projection rather than a free function in `domain.rs`,
+    /// so the projection sits next to the rest of the typed `Sexp`
+    /// algebra ([`Self::as_atom`], [`Self::as_list`],
+    /// [`Self::as_quote_form`], [`Self::head_symbol`],
+    /// [`Self::as_call`]) the substrate carries. THEORY.md §II.1
+    /// invariant 2 — free middle; every consumer that needs the
+    /// outer shape (diagnostic builders at
+    /// [`crate::domain::sexp_witness`] / [`crate::domain::missing_head_err`],
+    /// [`crate::compile`]'s `TypeMismatch.got` projection, future LSP /
+    /// REPL / `tatara-check` typed-pattern matchers) now reaches a
+    /// method on the value rather than a free function imported from
+    /// `domain`. THEORY.md §VI.1 — generation over composition; the
+    /// inline dispatch lifted to [`crate::domain::sexp_shape`] is now
+    /// lifted ONE algebra level higher — from the free function to
+    /// the inherent method — so a future `Sexp` variant lands at the
+    /// algebra's match site without a module-path indirection. A
+    /// future extension (e.g. `Sexp::Vector` for `#(...)` reader
+    /// syntax, `Sexp::Map` for `{...}`) extends THIS method + the
+    /// `SexpShape` algebra + the free function's delegation in
+    /// lockstep — exhaustively checked by rustc across the `Sexp`
+    /// match.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::Operation::getName()` —
+    /// the typed-IR operation projects through an inherent method
+    /// to its closed-set name on the operation algebra; `Sexp::shape`
+    /// is the unstructured-Rust peer on the [`Sexp`] algebra for the
+    /// outer-shape projection surface, with [`SexpShape`] standing in
+    /// for MLIR's `OperationName` taxonomy. Racket's `(syntax-e stx)`
+    /// composed with a datum-prim classifier on the closed-set
+    /// syntax-taxonomy projects a syntax object to its outer shape via
+    /// a single primitive on the syntax algebra; `Sexp::shape` is the
+    /// substrate's typed-Rust peer.
+    #[must_use]
+    pub fn shape(&self) -> SexpShape {
+        match self {
+            Self::Nil => SexpShape::Nil,
+            Self::Atom(a) => a.kind().sexp_shape(),
+            Self::List(_) => SexpShape::List,
+            Self::Quote(_) | Self::Quasiquote(_) | Self::Unquote(_) | Self::UnquoteSplice(_) => {
+                let (qf, _) = self.expect_quote_form();
+                qf.sexp_shape()
+            }
+        }
+    }
+
     pub fn as_symbol(&self) -> Option<&str> {
         self.as_atom().and_then(Atom::as_symbol)
     }
@@ -5345,6 +5423,206 @@ mod tests {
                 outer.as_atom(),
                 None,
                 "Sexp::as_atom must reject non-Atom outer shape {outer:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_method_projects_each_outer_arm_to_canonical_sexp_shape() {
+        // CANONICAL-MAPPING CONTRACT: pin that `Sexp::shape()` produces
+        // byte-identical `SexpShape` markers for each outer-arm of the
+        // closed `Sexp` algebra. Sweeps every reachable outer shape
+        // (`Nil`, every `AtomKind` payload, `List`, every `QuoteForm`
+        // wrapper) so a regression that drifts ONE arm (e.g. routes the
+        // `Atom::Keyword` arm through `Atom::kind().sexp_shape()` to the
+        // wrong `SexpShape` variant, or drops the `expect_quote_form`
+        // projection's marker for a quote-family wrapper) fails loudly.
+        // Sibling-arm sweep to
+        // `quote_form_sexp_shape_pins_canonical_shape_identity_for_every_variant`
+        // (the four quote-family arms in isolation) AND
+        // `atom_kind_sexp_shape_pins_canonical_atom_payload_shape_for_every_variant`
+        // (the six atomic-payload arms in isolation) — this test pins
+        // the OUTER projection that COMPOSES both peer algebras + the
+        // `Nil` / `List` arms into ONE typed method on the `Sexp`
+        // algebra.
+        use crate::error::SexpShape;
+        assert_eq!(Sexp::Nil.shape(), SexpShape::Nil);
+        assert_eq!(Sexp::symbol("foo").shape(), SexpShape::Symbol);
+        assert_eq!(Sexp::keyword("k").shape(), SexpShape::Keyword);
+        assert_eq!(Sexp::string("s").shape(), SexpShape::String);
+        assert_eq!(Sexp::int(7).shape(), SexpShape::Int);
+        assert_eq!(Sexp::float(7.5).shape(), SexpShape::Float);
+        assert_eq!(Sexp::boolean(true).shape(), SexpShape::Bool);
+        assert_eq!(Sexp::List(vec![]).shape(), SexpShape::List);
+        assert_eq!(
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]).shape(),
+            SexpShape::List,
+            "non-empty list must project to SexpShape::List — payload count is irrelevant",
+        );
+        assert_eq!(Sexp::Quote(Box::new(Sexp::Nil)).shape(), SexpShape::Quote);
+        assert_eq!(
+            Sexp::Quasiquote(Box::new(Sexp::Nil)).shape(),
+            SexpShape::Quasiquote
+        );
+        assert_eq!(
+            Sexp::Unquote(Box::new(Sexp::Nil)).shape(),
+            SexpShape::Unquote
+        );
+        assert_eq!(
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)).shape(),
+            SexpShape::UnquoteSplice
+        );
+    }
+
+    #[test]
+    fn sexp_shape_method_agrees_with_domain_sexp_shape_for_every_outer_shape() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the inherent
+        // `Sexp::shape()` method agrees with the free-function
+        // delegate `crate::domain::sexp_shape` for every reachable
+        // outer shape. Pre-lift the dispatcher lived as a free
+        // function in `domain.rs`; post-lift the canonical site is
+        // the inherent method on the `Sexp` algebra and the free
+        // function is a one-line delegate. Pin that the delegation
+        // stays byte-for-byte equivalent across every outer arm so a
+        // regression where the free function drifts from the inherent
+        // method (or vice versa) surfaces here immediately. Catches
+        // a future "consolidation" that removes the free function
+        // without updating the method, or vice versa.
+        let samples = [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::int(-1),
+            Sexp::float(7.5),
+            Sexp::float(0.0),
+            Sexp::boolean(true),
+            Sexp::boolean(false),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1), Sexp::int(2)]),
+            Sexp::Quote(Box::new(Sexp::symbol("payload"))),
+            Sexp::Quasiquote(Box::new(Sexp::List(vec![Sexp::symbol("foo")]))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+        ];
+        for s in &samples {
+            let via_method = s.shape();
+            let via_delegate = crate::domain::sexp_shape(s);
+            assert_eq!(
+                via_method, via_delegate,
+                "Sexp::shape and domain::sexp_shape drifted at {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_method_routes_atom_arm_through_atom_kind_sexp_shape_projection() {
+        // PATH-UNIFORMITY CONTRACT (atomic axis): the lifted
+        // `Sexp::shape()` routes its Atom arm through
+        // `Atom::kind().sexp_shape()` — the typed closed-set projection
+        // on the `AtomKind` algebra. Pin that the composition agrees
+        // bit-for-bit with the direct `Sexp::shape()` projection across
+        // every atomic kind variant. A regression in EITHER projection
+        // direction (an `Atom::kind` arm that swaps markers, or an
+        // `AtomKind::sexp_shape` arm that drifts its `SexpShape` mapping)
+        // surfaces here immediately. Sibling shape to
+        // `sexp_shape_method_routes_quote_family_arms_through_quote_form_sexp_shape_projection`
+        // for the quote-family axis.
+        for kind in AtomKind::ALL {
+            let atom = match kind {
+                AtomKind::Symbol => Atom::Symbol("name".into()),
+                AtomKind::Keyword => Atom::Keyword("parent".into()),
+                AtomKind::Str => Atom::Str("body".into()),
+                AtomKind::Int => Atom::Int(42),
+                AtomKind::Float => Atom::Float(1.5),
+                AtomKind::Bool => Atom::Bool(true),
+            };
+            let via_outer = Sexp::Atom(atom.clone()).shape();
+            let via_composed = atom.kind().sexp_shape();
+            assert_eq!(
+                via_outer, via_composed,
+                "Sexp::shape's Atom arm drifted from Atom::kind().sexp_shape() at {kind:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_method_routes_quote_family_arms_through_quote_form_sexp_shape_projection() {
+        // PATH-UNIFORMITY CONTRACT (quote-family axis): the lifted
+        // `Sexp::shape()` routes its four quote-family arms through
+        // `as_quote_form() + QuoteForm::sexp_shape()`. Pin that the
+        // composition agrees bit-for-bit with the direct `Sexp::shape()`
+        // projection across every quote-family wrapper variant. A
+        // regression in EITHER projection direction (an `as_quote_form`
+        // arm that swaps markers, or a `QuoteForm::sexp_shape` arm that
+        // drifts its `SexpShape` mapping) surfaces here immediately.
+        // Mirrors the atomic-axis test
+        // `sexp_shape_method_routes_atom_arm_through_atom_kind_sexp_shape_projection`.
+        let samples = [
+            (
+                Sexp::Quote(Box::new(Sexp::symbol("payload"))),
+                QuoteForm::Quote,
+            ),
+            (
+                Sexp::Quasiquote(Box::new(Sexp::symbol("payload"))),
+                QuoteForm::Quasiquote,
+            ),
+            (
+                Sexp::Unquote(Box::new(Sexp::symbol("payload"))),
+                QuoteForm::Unquote,
+            ),
+            (
+                Sexp::UnquoteSplice(Box::new(Sexp::symbol("payload"))),
+                QuoteForm::UnquoteSplice,
+            ),
+        ];
+        for (sexp, expected_qf) in &samples {
+            let via_outer = sexp.shape();
+            let (qf, _) = sexp
+                .as_quote_form()
+                .expect("quote-family sample must project through as_quote_form");
+            assert_eq!(
+                qf, *expected_qf,
+                "as_quote_form drifted typed marker at {sexp:?}"
+            );
+            let via_composed = qf.sexp_shape();
+            assert_eq!(
+                via_outer, via_composed,
+                "Sexp::shape drifted from as_quote_form + QuoteForm::sexp_shape at {sexp:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_method_label_composes_with_sexp_type_name_for_every_outer_shape() {
+        // COMPOSITION-LAW CONTRACT: `s.shape().label() ==
+        // crate::domain::sexp_type_name(&s)` for every reachable Sexp
+        // outer shape. Post-lift `sexp_type_name` routes through
+        // `s.shape().label()` directly (no longer through the free-
+        // function `sexp_shape`). Pin the composition law so a future
+        // refactor that drifts either projection (e.g. a label typo
+        // in `SexpShape::label`, a change in `sexp_type_name`'s
+        // delegation) surfaces here immediately.
+        let samples = [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::List(vec![]),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ];
+        for s in &samples {
+            assert_eq!(
+                s.shape().label(),
+                crate::domain::sexp_type_name(s),
+                "Sexp::shape().label() must equal domain::sexp_type_name for {s:?}",
             );
         }
     }

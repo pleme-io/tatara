@@ -13,7 +13,7 @@
 //!     This is the shape used by ProcessSpec / `(defpoint name …)`.
 
 use crate::ast::Sexp;
-use crate::domain::{sexp_shape, TataraDomain};
+use crate::domain::TataraDomain;
 use crate::error::{LispError, Result};
 use crate::macro_expand::Expander;
 
@@ -227,7 +227,7 @@ pub type Definition<T> = NamedDefinition<T>;
 fn named_form_non_symbol_name<T: TataraDomain>(got: &Sexp) -> LispError {
     LispError::NamedFormNonSymbolName {
         keyword: T::KEYWORD,
-        got: sexp_shape(got),
+        got: got.shape(),
     }
 }
 

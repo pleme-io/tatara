@@ -808,14 +808,173 @@ impl Expander {
         &mut self,
         forms: Vec<Sexp>,
         keyword: &str,
-        project: F,
+        mut project: F,
     ) -> Result<Vec<R>>
     where
         F: FnMut(&[Sexp]) -> Result<R>,
     {
+        // Routes through the typed-decoded classifier sibling
+        // [`Self::expand_and_collect_calls_to_any`] with a constant-
+        // classifier decoder — the same constant-classifier composition
+        // [`crate::ast::iter_calls_to`] uses to route through
+        // [`crate::ast::iter_calls_to_any`] on the slice algebra. The
+        // discarded `()` typed witness (`then_some(())`) is consumed by
+        // the wrapper projection `|(), args| project(args)` so the
+        // keyword consumer's per-form mapper sees only the args tail,
+        // matching the pre-lift signature exactly. Both the keyword AND
+        // classifier expander walks now share ONE pipeline implementation
+        // (`expand_program + iter_calls_to_any + map + collect`); a
+        // regression that drifts a future debug-mode logger, span-aware
+        // borrow walker, or fused-iterator invariant from one expander
+        // walk to the other becomes structurally impossible.
+        self.expand_and_collect_calls_to_any(
+            forms,
+            |h| (h == keyword).then_some(()),
+            move |(), args| project(args),
+        )
+    }
+
+    /// Compose the expander's program-level expansion with the substrate's
+    /// slice-side typed-decoded classifier projection ([`iter_calls_to_any`])
+    /// and a caller-supplied per-form projection — `expand_program(forms)?`
+    /// followed by `iter_calls_to_any(&expanded, decode).map(|(decoded, args)|
+    /// project(decoded, args)).collect()`, in ONE method on the `Expander`
+    /// surface. The typed-decoded sibling of
+    /// [`Self::expand_and_collect_calls_to`] — where that method filters by
+    /// ONE constant keyword, this method filters AND TYPES by a caller-
+    /// supplied classifier, yielding the typed witness alongside the per-form
+    /// projection's args input.
+    ///
+    /// Closes the substrate's program-level walk family on the `Expander`
+    /// surface at the typed-decoded corner the prior runs' slice-side
+    /// `iter_calls_to_any` lift left open — the (keyword, classifier) 2×2
+    /// of compose-on-iter projections:
+    ///
+    /// |                | per-form algebra            | slice algebra                | expander surface                    |
+    /// |----------------|-----------------------------|------------------------------|-------------------------------------|
+    /// | keyword        | [`Sexp::as_call_to`]        | [`iter_calls_to`]            | [`Self::expand_and_collect_calls_to`] |
+    /// | classifier `F` | [`Sexp::as_call_to_any`]    | [`iter_calls_to_any`]        | `expand_and_collect_calls_to_any` (this) |
+    ///
+    /// The keyword corner now ROUTES through the classifier corner at every
+    /// row: [`Sexp::as_call_to`] = constant-classifier projection of
+    /// [`Sexp::as_call_to_any`]; [`iter_calls_to`] = constant-classifier
+    /// projection of [`iter_calls_to_any`]; [`Self::expand_and_collect_calls_to`]
+    /// = constant-classifier projection of THIS method. The substrate's
+    /// soft-dispatch family is structurally complete at every algebra
+    /// level — per-form, slice, AND expander — so a regression that drifts
+    /// a future debug-mode logger, span-aware borrow walker, or
+    /// fused-iterator invariant from one walk to its sibling at any algebra
+    /// level becomes structurally impossible.
+    ///
+    /// Two plausible future consumer shapes the typed-decoded expander walk
+    /// admits with no boilerplate:
+    ///   * **Closed-set classifier** — `expand_and_collect_calls_to_any(forms,
+    ///     MacroDefHead::from_keyword, |head, args| dispatch(head, args))`
+    ///     macroexpands a program and walks each `(defmacro …)` /
+    ///     `(defpoint-template …)` / `(defcheck …)` form decoded to the typed
+    ///     `MacroDefHead` enum with its args tail. Future `tatara-check`
+    ///     consumers that want "for every macro-definition form in this
+    ///     buffer, dispatch by typed kind" bind to ONE method on the
+    ///     `Expander` rather than the three-step `expand_program +
+    ///     iter_calls_to_any + map + collect` pipeline at each consumer site.
+    ///   * **Live-registry classifier** — `expand_and_collect_calls_to_any(forms,
+    ///     |h| registry.lookup(h), |handler, args| handler.handle(args))`
+    ///     macroexpands a program and walks each form whose head matches a
+    ///     runtime registry, decoded to a handler reference. Future
+    ///     `tatara-check`-shaped runtime dispatchers (the kind already named
+    ///     by [`iter_calls_to_any`]'s docstring as "the natural future
+    ///     consumer") bind to ONE method on the `Expander` rather than the
+    ///     three-step pipeline.
+    ///
+    /// The closed-form composition binding the keyword sibling to this typed-
+    /// decoded primitive is the structural identity every consumer can pin
+    /// against:
+    ///
+    /// ```ignore
+    /// expand_and_collect_calls_to(forms, k, p) ==
+    ///     expand_and_collect_calls_to_any(forms,
+    ///         |h| (h == k).then_some(()),
+    ///         |(), args| p(args))
+    /// ```
+    ///
+    /// `D` is `FnMut(&str) -> Option<T>` — the typed-decoded classifier the
+    /// substrate's per-form algebra already shapes ([`Sexp::as_call_to_any`]
+    /// uses `FnOnce`, the slice algebra and this method use `FnMut` for the
+    /// same reason: the walk calls the decoder once per matching form, and a
+    /// decoder that captures mutable state (a counter, a registry cache, a
+    /// visited-set) maintains that state across the program-level walk).
+    /// `F` is `FnMut(T, &[Sexp]) -> Result<R>` — the per-form projection that
+    /// receives BOTH the typed witness AND the args tail; the keyword sibling
+    /// discards the (unit) typed witness via `|(), args| project(args)`. The
+    /// `Result<R>` projection short-circuits on the first error via
+    /// `Iterator::collect::<Result<Vec<R>, _>>()` so the per-form rejection
+    /// chain fires in source order at the first failing matched form.
+    ///
+    /// `R` is owned by construction — same constraint as the keyword
+    /// sibling. `T` is owned because the underlying [`iter_calls_to_any`]
+    /// requires `T: 'a` where `'a` is the post-expansion `Vec<Sexp>` borrow
+    /// lifetime; consumers projecting to a typed `Copy` enum
+    /// (`MacroDefHead`, a future `AuthoringDirective`) get the value
+    /// directly per form, consumers projecting to a borrowed `&'static str`
+    /// (a closed-set head) project to `&'static str` and inherit the static
+    /// lifetime through the classifier, consumers projecting to a `&Handler`
+    /// (a live-registry classifier) bind through the registry's owned
+    /// borrow with `&self` outliving the walk.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// keyword sibling [`Self::expand_and_collect_calls_to`] is now a
+    /// CONSEQUENCE of this typed-decoded primitive + a constant-classifier
+    /// decoder, parallel to how [`iter_calls_to`] is a consequence of
+    /// [`iter_calls_to_any`] on the slice algebra. The substrate's
+    /// program-level walk family is no longer two parallel implementations
+    /// the type system fails to bind (a future regression that drifts the
+    /// keyword pipeline's instrumentation from the classifier pipeline's
+    /// instrumentation cannot reach the runtime — both compose through ONE
+    /// `expand_program + iter_calls_to_any + map + collect` body, with the
+    /// keyword filter expressed as a closed-form classifier). THEORY.md
+    /// §V.1 — knowable platform; the typed-decoded expander walk becomes a
+    /// NAMED primitive on the substrate's `Expander` surface rather than a
+    /// future re-derived three-step inline pipeline per consumer.
+    /// Authoring tools (REPL, LSP, `tatara-check`) that want to walk a
+    /// program by typed-decoded classifier bind to ONE method on the
+    /// `Expander` instead of re-implementing the composition. THEORY.md
+    /// §II.1 invariant 2 — free middle; both expander-surface dispatchers
+    /// (keyword + classifier) route through the SAME `expand_program +
+    /// iter_calls_to_any + map + collect` composition primitive.
+    ///
+    /// Frontier inspiration: MLIR's `Region::walk<OpInterface,
+    /// OpInterface2, …>([&](auto op) { … })` — the typed-IR walk over a
+    /// region yielding ops decoded to their typed interface witness with
+    /// per-op callback is the MLIR idiom; the substrate's
+    /// `expand_and_collect_calls_to_any` is the unstructured-Rust peer on
+    /// the post-expansion `&[Sexp]` algebra, with `decode: FnMut(&str) ->
+    /// Option<T>` standing in for MLIR's typed-interface dyn-cast bag and
+    /// `project: FnMut(T, &[Sexp]) -> Result<R>` standing in for the
+    /// typed-op callback. Racket's `syntax-parse` `~or* (~datum defX)
+    /// (~datum defY) (head args …)` over an ellipsis-form combined with a
+    /// `#:with name:id` typed-witness binder — the program-level
+    /// typed-decoded filter with per-match handler is the closed-form
+    /// sibling of `syntax-parse`'s typed-choice repeater, translated
+    /// through pleme-io primitives as ONE method on `Expander`. GHC Core's
+    /// `everythingBut :: (a -> a -> a) -> GenericQ (a, Bool) -> GenericQ a`
+    /// — the typed-IR rewriter's program-level fold over a typed
+    /// kind-with-stop selector is named ONCE and every consumer threads
+    /// the per-node typed projection; this method is the typed-decoded
+    /// peer on the `Vec<Sexp>` algebra, with the classifier playing
+    /// `everythingBut`'s typed-selector role.
+    pub fn expand_and_collect_calls_to_any<R, F, D, T>(
+        &mut self,
+        forms: Vec<Sexp>,
+        decode: D,
+        mut project: F,
+    ) -> Result<Vec<R>>
+    where
+        D: FnMut(&str) -> Option<T>,
+        F: FnMut(T, &[Sexp]) -> Result<R>,
+    {
         let expanded = self.expand_program(forms)?;
-        crate::ast::iter_calls_to(&expanded, keyword)
-            .map(project)
+        crate::ast::iter_calls_to_any(&expanded, decode)
+            .map(|(decoded, args)| project(decoded, args))
             .collect()
     }
 
@@ -8262,6 +8421,301 @@ mod tests {
 
         assert_eq!(via_inline, via_method);
         assert_eq!(via_inline, vec![1, 2, 3]);
+    }
+
+    // ── Expander::expand_and_collect_calls_to_any: typed-decoded sibling ──
+    //
+    // The typed-decoded classifier sibling of `expand_and_collect_calls_to`:
+    // composes `expand_program` with `iter_calls_to_any` and a per-form
+    // mapper that receives BOTH the typed witness AND the args tail.
+    // Closes the (keyword, classifier) 2×2 of expander-surface
+    // compose-on-iter projections at the typed-decoded corner the prior
+    // runs' slice-side `iter_calls_to_any` lift left open. The keyword
+    // sibling now ROUTES through this primitive via a constant-classifier
+    // composition — the tests below pin both the typed-decoded primitive's
+    // contract directly AND the routing identity binding the keyword
+    // sibling to it.
+    //
+    // The existing `expand_and_collect_calls_to_*` tests above remain
+    // load-bearing — they pin the keyword sibling's contract through
+    // its ROUTED implementation, so a regression that drifts the routing
+    // composition surfaces at the existing keyword tests too.
+
+    #[test]
+    fn expand_and_collect_calls_to_any_yields_decoded_pair_for_every_matching_form_in_source_order()
+    {
+        // The typed-decoded primitive's happy path: a closed-set
+        // classifier decodes head symbols to a typed enum, and the
+        // per-form projection receives `(decoded, args)` for every
+        // matched form in source order. Sweep across THREE distinct
+        // classifier outcomes — `Foo` / `Bar` / `Baz` — interleaved with
+        // a non-matching form to pin both the typed-witness threading
+        // AND the source-order yield AND the rejection of non-classifier
+        // forms in ONE assertion. The decoder runs once per call form
+        // (`FnMut`); the projection runs once per matched form.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum Op {
+            Foo,
+            Bar,
+            Baz,
+        }
+        let src = "(foo 1)
+                   (bar 2)
+                   (other 99)
+                   (baz 3)
+                   (foo 4)";
+        let forms = read(src).unwrap();
+        let mut e = Expander::new();
+        let pairs: Vec<(Op, i64)> = e
+            .expand_and_collect_calls_to_any(
+                forms,
+                |h| match h {
+                    "foo" => Some(Op::Foo),
+                    "bar" => Some(Op::Bar),
+                    "baz" => Some(Op::Baz),
+                    _ => None,
+                },
+                |op, args| Ok((op, args[0].as_int().unwrap())),
+            )
+            .unwrap();
+        assert_eq!(
+            pairs,
+            vec![(Op::Foo, 1), (Op::Bar, 2), (Op::Baz, 3), (Op::Foo, 4),],
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_any_skips_non_matching_forms_without_invoking_project() {
+        // The soft-projection contract — every shape `iter_calls_to_any`
+        // rejects (non-list, empty list, list whose head is not a
+        // symbol, list whose head decodes through the classifier to
+        // `None`) skips the projection silently. Pin a deliberately-
+        // panicking projection so the assertion fires loudly if a
+        // non-matching form reaches it. The decoder accepts only
+        // `"defmonitor"`; every other shape (atom, list whose head is a
+        // keyword, list whose head is a symbol the decoder rejects)
+        // short-circuits before the projection runs.
+        let src = r#":bare-keyword
+                     "bare-string"
+                     42
+                     ()
+                     (foo bar)
+                     (defmonitor :name "matches")"#;
+        let forms = read(src).unwrap();
+        let mut e = Expander::new();
+        let lengths: Vec<usize> = e
+            .expand_and_collect_calls_to_any(
+                forms,
+                |h| (h == "defmonitor").then_some(()),
+                |(), args| {
+                    // The projection must run EXACTLY once — for the
+                    // single matched form. Any non-matching form that
+                    // reaches the projection panics here.
+                    assert_eq!(args.len(), 2, "projection ran on non-matching form");
+                    Ok(args.len())
+                },
+            )
+            .unwrap();
+        assert_eq!(lengths, vec![2]);
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_any_short_circuits_on_project_error_at_first_failure() {
+        // The Result projection's short-circuit contract — when the
+        // projection returns `Err` on a matched form, the walk
+        // short-circuits and subsequent matched forms are NOT projected.
+        // Pin the source-order short-circuit via a counter the
+        // projection increments before deciding to fail: the counter
+        // sits at exactly the index of the failing form (the second
+        // match), proving the third match never reached the projection.
+        let src = "(foo 1) (foo 2) (foo 3)";
+        let forms = read(src).unwrap();
+        let mut count = 0usize;
+        let mut e = Expander::new();
+        let err = e
+            .expand_and_collect_calls_to_any::<i64, _, _, ()>(
+                forms,
+                |h| (h == "foo").then_some(()),
+                |(), args| {
+                    count += 1;
+                    let v = args[0].as_int().unwrap();
+                    if v == 2 {
+                        return Err(crate::error::LispError::Missing("test-failure"));
+                    }
+                    Ok(v)
+                },
+            )
+            .expect_err("projection must short-circuit on first Err");
+        assert_eq!(
+            count, 2,
+            "projection must have run on first AND failing form, then stopped",
+        );
+        // Sanity: the error is the project-stage rejection — the same
+        // typed `LispError` the projection returned, propagated verbatim.
+        assert!(
+            matches!(err, crate::error::LispError::Missing("test-failure")),
+            "expected the projection's typed Err verbatim, got {err:?}",
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_any_expands_macros_before_filtering_by_classifier() {
+        // Ordering contract — `expand_program` runs BEFORE
+        // `iter_calls_to_any` walks the slice. A `(defmacro …)` form
+        // that emits a classifier-decoded body must have its expanded
+        // body decoded by the classifier (not the unexpanded macro-call
+        // head). Pin the ordering with a macro `(emit-foo n)` that
+        // expands to `(foo :idx n)` — the classifier sees the expanded
+        // `foo` head, not `emit-foo`. Mirrors the parallel keyword test
+        // `expand_and_collect_calls_to_expands_macros_before_filtering_by_keyword`
+        // — the SAME composition contract holds on the typed-decoded
+        // sibling.
+        let src = "(defmacro emit-foo (n) `(foo :idx ,n))
+                   (foo :idx 1)
+                   (emit-foo 2)
+                   (bar :idx 99)
+                   (foo :idx 3)";
+        let forms = read(src).unwrap();
+        let mut e = Expander::new();
+        // Classifier returns `()` for "foo" only; the keyword sibling's
+        // routing identity is the same composition we exercise here
+        // directly.
+        let idxs: Vec<i64> = e
+            .expand_and_collect_calls_to_any(
+                forms,
+                |h| (h == "foo").then_some(()),
+                |(), args| Ok(args[1].as_int().unwrap()),
+            )
+            .unwrap();
+        // 1 from the literal call, 2 from the macro-emitted call, 3 from
+        // the final literal call. The macro-emitted `(foo :idx 2)` is
+        // present BECAUSE `expand_program` ran first.
+        assert_eq!(idxs, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_any_admits_fnmut_classifier_maintaining_state_across_walk() {
+        // The `FnMut` constraint — the slice walk calls the classifier
+        // once per call form, and a decoder that captures mutable state
+        // (a counter, a registry cache, a visited-set) maintains that
+        // state across the walk. Pin the `FnMut` contract with a counter
+        // closure that increments per shape-gate-passing form (calls
+        // whose head is a symbol), asserting the counter equals the
+        // total call count regardless of whether the classifier accepts
+        // each form. Mirrors the parallel slice-side test
+        // `iter_calls_to_any_admits_fnmut_classifier_maintaining_state_across_batch_walk`
+        // — the SAME `FnMut` contract holds on the expander surface.
+        let src = "(foo 1) (bar 2) (foo 3) (bar 4) (foo 5)";
+        let forms = read(src).unwrap();
+        let mut e = Expander::new();
+        let mut classifier_calls = 0usize;
+        let projected: Vec<i64> = e
+            .expand_and_collect_calls_to_any(
+                forms,
+                |h| {
+                    classifier_calls += 1;
+                    (h == "foo").then_some(())
+                },
+                |(), args| Ok(args[0].as_int().unwrap()),
+            )
+            .unwrap();
+        assert_eq!(
+            classifier_calls, 5,
+            "classifier must run once per call form (5 forms, all calls with symbol heads)",
+        );
+        assert_eq!(
+            projected,
+            vec![1, 3, 5],
+            "projection must run only for classifier-accepted forms in source order",
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_routes_through_expand_and_collect_calls_to_any_via_constant_classifier_composition(
+    ) {
+        // Structural identity: the keyword sibling
+        // `expand_and_collect_calls_to` ROUTES through the typed-decoded
+        // primitive via a constant-classifier composition — the
+        // post-lift composition law binding the two siblings:
+        //
+        //   expand_and_collect_calls_to(forms, k, p) ==
+        //       expand_and_collect_calls_to_any(forms,
+        //           |h| (h == k).then_some(()),
+        //           |(), args| p(args))
+        //
+        // Pin shape AND ordering across THREE representative keyword
+        // values: one that matches multiple forms, one that matches
+        // none, one that matches exactly one form. Same mixed input
+        // (literal + macroexpand-emitted + non-matching) the keyword
+        // path-uniformity test exercises, so the routing identity holds
+        // on the SAME input shape the keyword sibling's contract pins.
+        let src = "(defmacro emit-foo (n) `(foo :idx ,n))
+                   (foo :idx 1)
+                   (emit-foo 2)
+                   (bar :idx 99)
+                   (foo :idx 3)";
+        let forms = read(src).unwrap();
+
+        for keyword in ["foo", "bar", "absent"] {
+            let mut exp_keyword = Expander::new();
+            let via_keyword: Vec<i64> = exp_keyword
+                .expand_and_collect_calls_to(forms.clone(), keyword, |args| {
+                    Ok(args[1].as_int().unwrap())
+                })
+                .unwrap();
+            let mut exp_classifier = Expander::new();
+            let via_classifier: Vec<i64> = exp_classifier
+                .expand_and_collect_calls_to_any(
+                    forms.clone(),
+                    |h| (h == keyword).then_some(()),
+                    |(), args| Ok(args[1].as_int().unwrap()),
+                )
+                .unwrap();
+            assert_eq!(
+                via_keyword, via_classifier,
+                "routing identity drifted for keyword {keyword:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_any_short_circuits_on_expand_program_error_before_project_runs()
+    {
+        // The expand_program-stage short-circuit contract — when
+        // `expand_program` rejects (e.g. a `(defmacro …)` form whose
+        // param list is malformed), the walk short-circuits BEFORE the
+        // classifier or projection runs. Pin the ordering with a
+        // deliberately-panicking classifier AND projection: any
+        // post-expand-program execution fires the panic. Mirrors the
+        // parallel keyword test
+        // `expand_and_collect_calls_to_short_circuits_on_expand_program_error_before_project_runs`
+        // — the SAME composition contract holds on the typed-decoded
+        // sibling.
+        // `(defmacro 5 (x) `,x)` — macro NAME slot is an int, not a
+        // symbol; `macro_def_from`'s `defmacro_non_symbol_name` rejection
+        // fires during `expand_program`. Same rejection shape the
+        // parallel keyword test uses, so the ordering contract observed
+        // here is structurally identical to the keyword sibling's.
+        let forms = read("(defmacro 5 (x) `,x) (foo :idx 1)").unwrap();
+        let mut e = Expander::new();
+        let err = e
+            .expand_and_collect_calls_to_any::<(), _, _, ()>(
+                forms,
+                |_h| -> Option<()> {
+                    panic!("classifier must not run when expand_program errors");
+                },
+                |(), _args| {
+                    panic!("project must not run when expand_program errors");
+                },
+            )
+            .expect_err("expand_program error must short-circuit before classifier or project");
+        // Sanity: the error IS an expand_program-stage rejection — not a
+        // classifier or projection error — so the ordering is observable.
+        let rendered = format!("{err}");
+        assert!(
+            rendered.contains("NAME") || rendered.contains("symbol"),
+            "expected expand_program-stage `defmacro-NAME-not-a-symbol` rejection, got {rendered:?}",
+        );
     }
 
     // ── Expander::expand_source_and_collect_calls_to: from-source walk ──

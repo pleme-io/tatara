@@ -43,7 +43,7 @@ pub trait TataraDomain: Sized {
             .ok_or_else(|| missing_head_err(Self::KEYWORD, None))?;
         let head = head_sexp
             .as_symbol()
-            .ok_or_else(|| missing_head_err(Self::KEYWORD, Some(sexp_witness(head_sexp))))?;
+            .ok_or_else(|| missing_head_err(Self::KEYWORD, Some(head_sexp.witness())))?;
         if head != Self::KEYWORD {
             return Err(head_mismatch(Self::KEYWORD, head.to_string()));
         }
@@ -594,38 +594,52 @@ pub fn sexp_type_name(s: &Sexp) -> &'static str {
     s.shape().label()
 }
 
-/// Typed projection of a `Sexp` into a `SexpWitness` — the joint
-/// identity (structural `SexpShape` + renderable `Sexp::Display`
-/// projection) the offending-value side of a typed-entry rejection
-/// owes the operator. Pairs `sexp_shape(_)` with `Sexp::to_string()`
-/// in ONE projection so every error-builder helper that previously
-/// projected `&Sexp → String` via `to_string()` at the variant
-/// boundary — discarding the `SexpShape` — now lifts to ONE primitive
-/// that carries both halves of the identity through the variant slot
-/// directly.
+/// Thin delegate to [`Sexp::witness`] retained for callers that want
+/// the free-function reach — the canonical site is now the inherent
+/// method on the [`Sexp`] algebra. Pairs the typed [`SexpShape`]
+/// (structural identity) with the renderable [`Sexp::Display`]
+/// projection in ONE owned [`SexpWitness`] value so the variant lives
+/// independent of the call frame and crosses thread boundaries
+/// cleanly.
 ///
-/// Sibling of `sexp_shape(&Sexp) -> SexpShape` (the shape-only
-/// projection feeding `TypeMismatch.got` / `NamedFormNonSymbolName.got`)
-/// and `sexp_type_name(&Sexp) -> &'static str` (the `&'static str`-only
-/// projection feeding legacy substring-grep consumers). `sexp_witness`
-/// is the typed JOINT projection — both halves of the identity bundled
-/// into ONE owned `SexpWitness` value so the variant lives independent
-/// of the call frame and crosses thread boundaries cleanly.
+/// Composition law: `sexp_witness(s) == s.witness()` for every
+/// `s: &Sexp`. Pre-lift the dispatcher lived here as the canonical
+/// site; post-lift the inherent method [`Sexp::witness`] is the
+/// canonical site and this free function delegates so existing
+/// callers continue to compile. Same lift posture as
+/// [`super::domain::sexp_shape`] → [`Sexp::shape`] (commit 121bb60):
+/// the algebra-level projection sits on the value, the free
+/// function is a one-line thin delegate. The 8 typed-entry
+/// rejection-builder callers in `macro_expand.rs`
+/// (`non_symbol_unquote_target`, `splice_outside_list`,
+/// `non_symbol_param`, `rest_param_missing_name`,
+/// `rest_param_trailing_tokens`, `optional_param_malformed`,
+/// `defmacro_non_symbol_name`, `defmacro_non_list_params`), the
+/// `missing_head_err` invocation in the `TataraDomain` blanket impl
+/// at line 46, and the typed-exit `rewriter_non_list_err` builder
+/// all route through `s.witness()` after this lift.
+///
+/// Sibling of [`sexp_shape`] (the shape-only projection feeding
+/// `TypeMismatch.got` / `NamedFormNonSymbolName.got`) and
+/// [`sexp_type_name`] (the `&'static str`-only projection feeding
+/// legacy substring-grep consumers). [`Sexp::witness`] is the
+/// typed JOINT projection — both halves of the identity bundled
+/// into ONE owned `SexpWitness` value.
 ///
 /// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
 /// diagnostics. An error that names only the shape leaves the operator
 /// to guess what they wrote; an error that names only the literal
 /// withholds the structural identity tools want to pattern-match on.
 /// The witness names both. THEORY.md §VI.1 — generation over
-/// composition; the seven `got: <sexp>.to_string()` projections at
-/// error-builder boundaries (six in `macro_expand.rs`, one in
-/// `domain.rs::missing_head_err`'s caller) collapse into ONE primitive
-/// parameterized by `&Sexp`. THEORY.md §II.1 invariant 1 — typed
+/// composition; the projection now lives on the typed `Sexp` algebra
+/// alongside `Sexp::shape`, so a future `Sexp` variant lands at the
+/// algebra's match site (via `Sexp::shape`'s exhaustive arm) without
+/// a module-path indirection. THEORY.md §II.1 invariant 1 — typed
 /// entry; the offending Sexp's identity is part of the proof of WHAT
 /// the typed-entry gate rejected.
 #[must_use]
 pub fn sexp_witness(s: &Sexp) -> SexpWitness {
-    SexpWitness::new(s.shape(), s.to_string())
+    s.witness()
 }
 
 /// Suggest the candidate closest to `needle` by Levenshtein distance,
@@ -1627,7 +1641,7 @@ fn serialize_to_json_err<T: TataraDomain>(e: serde_json::Error) -> LispError {
 fn rewriter_non_list_err<T: TataraDomain>(got: &Sexp) -> LispError {
     LispError::RewriterNonList {
         keyword: T::KEYWORD,
-        got: sexp_witness(got),
+        got: got.witness(),
     }
 }
 

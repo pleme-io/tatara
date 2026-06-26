@@ -1,6 +1,6 @@
 //! S-expression AST.
 
-use crate::error::{SexpShape, UnquoteForm};
+use crate::error::{SexpShape, SexpWitness, UnquoteForm};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -1087,6 +1087,85 @@ impl Sexp {
                 qf.sexp_shape()
             }
         }
+    }
+
+    /// Project this `Sexp` to its [`SexpWitness`] — the typed joint
+    /// identity pairing the structural [`SexpShape`] with the
+    /// renderable [`Sexp::Display`] projection in ONE owned value.
+    /// The joint-identity peer on the [`Sexp`] algebra of
+    /// [`Self::shape`] (the structural-shape-only projection) and
+    /// [`fmt::Display for Sexp`] (the rendered-literal-only
+    /// projection) — completes the substrate's Sexp-projection
+    /// family by lifting the free-function dispatcher
+    /// [`crate::domain::sexp_witness`] onto the typed `Sexp` algebra
+    /// alongside its [`Self::shape`] peer.
+    ///
+    /// Composition law: `s.witness() ==
+    /// crate::domain::sexp_witness(s)` for every `s: &Sexp`. The
+    /// free function continues to exist as a thin delegate (its
+    /// callers in `macro_expand.rs`'s 8 typed-entry rejection
+    /// builders, `domain.rs`'s `missing_head_err` caller +
+    /// `rewriter_non_list_err` typed-exit builder, and downstream
+    /// tests route through `s.witness()` after this lift), so the
+    /// (Sexp variant, SexpWitness identity) pairing now binds at
+    /// ONE inherent method on the algebra rather than at a free
+    /// function `domain` consumers must reach into the module path
+    /// to invoke. Body composes the two algebra-level projections
+    /// — `self.shape()` for the structural identity, `self.to_string()`
+    /// for the renderable identity — into ONE
+    /// [`SexpWitness::new`] call. Pre-lift the dispatcher lived as
+    /// a free function in `domain.rs`; post-lift the canonical site
+    /// is the inherent method and the free function delegates
+    /// (mirrors the [`Self::shape`] lift in 121bb60 exactly).
+    ///
+    /// Sibling-shape lift to [`Self::shape`] (the structural-shape
+    /// projection): where `shape()` carries the typed-shape axis on
+    /// the `Sexp` algebra, `witness()` carries the JOINT typed-shape
+    /// and renderable-literal axis — the typed identity an authoring
+    /// tool diagnostic owes the operator AT the typed-entry or
+    /// typed-exit rejection boundary. Every rejection-builder
+    /// helper in `macro_expand.rs` that previously projected `&Sexp`
+    /// through `crate::domain::sexp_witness(_)` at the variant
+    /// boundary now reaches a method on the value rather than a
+    /// free function imported from `domain`.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (Sexp variant, SexpWitness identity) pairing becomes an
+    /// inherent algebra projection rather than a free function in
+    /// `domain.rs`, so the projection sits next to the rest of the
+    /// typed `Sexp` algebra ([`Self::shape`], [`Self::as_atom`],
+    /// [`Self::as_list`], [`Self::as_quote_form`],
+    /// [`Self::head_symbol`], [`Self::as_call`]) the substrate
+    /// carries. THEORY.md §II.1 invariant 2 — free middle; every
+    /// consumer that needs the typed joint identity at a
+    /// rejection-boundary slot (`NonSymbolUnquoteTarget.got`,
+    /// `SpliceOutsideList.got`, `NonSymbolParam.got`,
+    /// `RestParamMissingName.got`, `RestParamTrailingTokens.first`,
+    /// `OptionalParamMalformed.got`, `DefmacroNonSymbolName.got`,
+    /// `DefmacroNonListParams.got`, `MissingHeadSymbol.got`,
+    /// `RewriterNonList.got`, future LSP / REPL / `tatara-check`
+    /// typed-pattern matchers) now reaches a method on the value
+    /// rather than a free function imported from `domain`.
+    /// THEORY.md §VI.1 — generation over composition; the inline
+    /// dispatch lifted to [`crate::domain::sexp_witness`] is now
+    /// lifted ONE algebra level higher — from the free function
+    /// to the inherent method — completing the Sexp-projection
+    /// family alongside [`Self::shape`]. A future `Sexp` variant
+    /// extension (e.g. `Sexp::Vector` for `#(...)` reader syntax,
+    /// `Sexp::Map` for `{...}`) reaches this method through the
+    /// already-lifted [`Self::shape`] + [`fmt::Display for Sexp`]
+    /// pair — no new arm needed here.
+    ///
+    /// Frontier inspiration: MLIR's diagnostic builder pattern —
+    /// `op.emitOpError() << op` projects the offending operation
+    /// through inherent methods (`getName()`, `print()`) into ONE
+    /// diagnostic value; `Sexp::witness` is the unstructured-Rust
+    /// peer on the [`Sexp`] algebra for the joint typed-shape +
+    /// renderable-literal projection surface, with [`SexpWitness`]
+    /// standing in for MLIR's `InFlightDiagnostic` typed payload.
+    #[must_use]
+    pub fn witness(&self) -> SexpWitness {
+        SexpWitness::new(self.shape(), self.to_string())
     }
 
     pub fn as_symbol(&self) -> Option<&str> {
@@ -5625,6 +5704,175 @@ mod tests {
                 "Sexp::shape().label() must equal domain::sexp_type_name for {s:?}",
             );
         }
+    }
+
+    #[test]
+    fn sexp_witness_method_pairs_shape_with_display_for_every_outer_shape() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the inherent
+        // `Sexp::witness()` method projects each reachable outer Sexp
+        // shape to a `SexpWitness` whose `shape` field equals
+        // `s.shape()` AND whose `display` field equals
+        // `s.to_string()` for every variant + payload combination.
+        // Pre-lift the projection lived as a free function in
+        // `domain.rs`; post-lift the canonical site is the inherent
+        // method on the `Sexp` algebra. A regression where the method
+        // drifts EITHER half of the joint identity (a stale `shape`
+        // projection that re-inlines without composing through
+        // `Sexp::shape`, a `display` projection that diverges from
+        // `Sexp::Display`) surfaces here immediately. Sweeps every
+        // outer shape, every atomic payload kind, and every
+        // quote-family wrapper.
+        let samples = [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::int(-1),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::boolean(false),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1), Sexp::int(2)]),
+            Sexp::Quote(Box::new(Sexp::symbol("payload"))),
+            Sexp::Quasiquote(Box::new(Sexp::List(vec![Sexp::symbol("foo")]))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+        ];
+        for s in &samples {
+            let w = s.witness();
+            assert_eq!(
+                w.shape,
+                s.shape(),
+                "Sexp::witness().shape drifted from Sexp::shape() for {s:?}",
+            );
+            assert_eq!(
+                w.display,
+                s.to_string(),
+                "Sexp::witness().display drifted from Sexp::Display for {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_witness_method_agrees_with_domain_sexp_witness_for_every_outer_shape() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the inherent
+        // `Sexp::witness()` method agrees with the free-function
+        // delegate `crate::domain::sexp_witness` for every reachable
+        // outer shape. Pre-lift the dispatcher lived as a free
+        // function in `domain.rs`; post-lift the canonical site is
+        // the inherent method on the `Sexp` algebra and the free
+        // function is a one-line delegate. Pin that the delegation
+        // stays byte-for-byte equivalent across every outer arm so
+        // a regression where the free function drifts from the
+        // inherent method (or vice versa) surfaces here immediately.
+        // Mirrors `sexp_shape_method_agrees_with_domain_sexp_shape_for_every_outer_shape`
+        // for the joint-identity peer projection. Catches a future
+        // "consolidation" that removes the free function without
+        // updating the method, or vice versa.
+        let samples = [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::int(-1),
+            Sexp::float(7.5),
+            Sexp::float(0.0),
+            Sexp::boolean(true),
+            Sexp::boolean(false),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1), Sexp::int(2)]),
+            Sexp::Quote(Box::new(Sexp::symbol("payload"))),
+            Sexp::Quasiquote(Box::new(Sexp::List(vec![Sexp::symbol("foo")]))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+        ];
+        for s in &samples {
+            let via_method = s.witness();
+            let via_delegate = crate::domain::sexp_witness(s);
+            assert_eq!(
+                via_method.shape, via_delegate.shape,
+                "Sexp::witness().shape drifted from domain::sexp_witness().shape at {s:?}",
+            );
+            assert_eq!(
+                via_method.display, via_delegate.display,
+                "Sexp::witness().display drifted from domain::sexp_witness().display at {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_witness_method_routes_through_shape_and_display_projections() {
+        // PATH-UNIFORMITY CONTRACT: the lifted `Sexp::witness()` body
+        // composes the two algebra-level projections `Sexp::shape()`
+        // (structural identity) + `Sexp::Display` (renderable
+        // identity) into ONE `SexpWitness::new(shape, display)`
+        // value. Pin that the composition agrees bit-for-bit with
+        // the direct `SexpWitness::new(s.shape(), s.to_string())`
+        // construction across a sweep covering every outer shape.
+        // A regression in EITHER projection direction (a
+        // `Sexp::witness` arm that bypasses `Sexp::shape` and
+        // re-inlines the dispatch, a `Sexp::witness` arm that
+        // bypasses `Sexp::Display` and re-formats the literal) is
+        // structurally impossible — the typed joint primitive
+        // composes through the typed primitive halves once.
+        // Sibling shape to `sexp_shape_method_routes_atom_arm_through_atom_kind_sexp_shape_projection`
+        // for the joint-identity axis.
+        let samples = [
+            Sexp::Nil,
+            Sexp::symbol("x"),
+            Sexp::keyword("kw"),
+            Sexp::string("text"),
+            Sexp::int(0),
+            Sexp::float(2.5),
+            Sexp::boolean(true),
+            Sexp::List(vec![Sexp::symbol("f"), Sexp::int(1)]),
+            Sexp::Quote(Box::new(Sexp::symbol("q"))),
+            Sexp::Quasiquote(Box::new(Sexp::symbol("qq"))),
+            Sexp::Unquote(Box::new(Sexp::symbol("uq"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("uqs"))),
+        ];
+        for s in &samples {
+            let via_method = s.witness();
+            let via_composed = crate::error::SexpWitness::new(s.shape(), s.to_string());
+            assert_eq!(
+                via_method.shape, via_composed.shape,
+                "Sexp::witness drifted shape from SexpWitness::new(s.shape(), s.to_string()) at {s:?}",
+            );
+            assert_eq!(
+                via_method.display, via_composed.display,
+                "Sexp::witness drifted display from SexpWitness::new(s.shape(), s.to_string()) at {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_witness_distinguishes_int_atom_from_symbol_with_identical_display() {
+        // STRUCTURAL-IDENTITY CONTRACT: `Sexp::int(5)` and
+        // `Sexp::symbol("5")` Display-render identically (`"5"`) but
+        // are STRUCTURALLY DISTINCT — one is `SexpShape::Int`, the
+        // other is `SexpShape::Symbol`. Pin that `Sexp::witness()`
+        // carries the structural identity through the `shape` slot
+        // so the rejection diagnostic distinguishes the two even
+        // when the rendered literal collides. Mirrors the
+        // free-function-delegate sibling test
+        // `sexp_witness_distinguishes_int_atom_from_symbol_with_same_display`
+        // in `domain.rs::tests` — that test pins the delegate; this
+        // one pins the inherent method on the algebra. Both stay
+        // load-bearing across the lifted boundary.
+        let w_int = Sexp::int(5).witness();
+        let w_sym = Sexp::symbol("5").witness();
+        assert_eq!(
+            w_int.display, w_sym.display,
+            "display collision precondition"
+        );
+        assert_ne!(
+            w_int.shape, w_sym.shape,
+            "Sexp::witness must distinguish Int from Symbol via shape even when display collides",
+        );
+        assert_eq!(w_int.shape, crate::error::SexpShape::Int);
+        assert_eq!(w_sym.shape, crate::error::SexpShape::Symbol);
     }
 
     #[test]

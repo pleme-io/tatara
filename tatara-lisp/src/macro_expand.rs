@@ -1904,7 +1904,7 @@ fn unbound_template_var(prefix: UnquoteForm, name: &str, candidates: &[&str]) ->
 fn non_symbol_unquote_target(prefix: UnquoteForm, got: &Sexp) -> LispError {
     LispError::NonSymbolUnquoteTarget {
         prefix,
-        got: crate::domain::sexp_witness(got),
+        got: got.witness(),
     }
 }
 
@@ -2234,7 +2234,7 @@ fn resolve_unquote_in_bindings<'a>(
 /// successfully has the same expansion behavior under either strategy.
 fn splice_outside_list(inner: &Sexp) -> LispError {
     LispError::SpliceOutsideList {
-        got: crate::domain::sexp_witness(inner),
+        got: inner.witness(),
     }
 }
 
@@ -2358,7 +2358,7 @@ fn too_many_macro_args(macro_name: &str, expected: usize, got: usize) -> LispErr
 fn non_symbol_param(position: usize, got: &Sexp) -> LispError {
     LispError::NonSymbolParam {
         position,
-        got: crate::domain::sexp_witness(got),
+        got: got.witness(),
     }
 }
 
@@ -2401,7 +2401,7 @@ fn non_symbol_param(position: usize, got: &Sexp) -> LispError {
 fn rest_param_missing_name(rest_position: usize, got: Option<&Sexp>) -> LispError {
     LispError::RestParamMissingName {
         rest_position,
-        got: got.map(crate::domain::sexp_witness),
+        got: got.map(Sexp::witness),
     }
 }
 
@@ -2434,7 +2434,7 @@ fn rest_param_trailing_tokens(rest_position: usize, trailing: &[Sexp]) -> LispEr
     LispError::RestParamTrailingTokens {
         rest_position,
         extra: trailing.len(),
-        first: crate::domain::sexp_witness(&trailing[0]),
+        first: trailing[0].witness(),
     }
 }
 
@@ -2494,7 +2494,7 @@ fn optional_param_malformed(
 ) -> LispError {
     LispError::OptionalParamMalformed {
         position,
-        got: crate::domain::sexp_witness(got),
+        got: got.witness(),
         reason,
     }
 }
@@ -2605,7 +2605,7 @@ fn defmacro_arity(head: MacroDefHead, arity: usize) -> LispError {
 fn defmacro_non_symbol_name(head: MacroDefHead, got: &Sexp) -> LispError {
     LispError::DefmacroNonSymbolName {
         head,
-        got: crate::domain::sexp_witness(got),
+        got: got.witness(),
     }
 }
 
@@ -2676,7 +2676,7 @@ fn defmacro_non_symbol_name(head: MacroDefHead, got: &Sexp) -> LispError {
 fn defmacro_non_list_params(head: MacroDefHead, got: &Sexp) -> LispError {
     LispError::DefmacroNonListParams {
         head,
-        got: crate::domain::sexp_witness(got),
+        got: got.witness(),
     }
 }
 

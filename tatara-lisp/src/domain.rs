@@ -1167,7 +1167,7 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
 /// the gate from three-site duplication to one rust function the
 /// substrate's diagnostic promotions hang off of.
 fn from_value_with_path<T: DeserializeOwned>(sexp: &Sexp, path: KwargPath) -> Result<T> {
-    let json = sexp_to_json(sexp)?;
+    let json = sexp.to_json()?;
     serde_json::from_value(json).map_err(|e| LispError::KwargDeserialize {
         path,
         message: e.to_string(),
@@ -1335,88 +1335,21 @@ pub fn unknown_domain_keyword(keyword: &str) -> LispError {
 
 use serde_json::Value as JValue;
 
-/// Convert a Sexp to its canonical JSON form.
+/// Thin delegate to [`Sexp::to_json`] retained for callers that want
+/// the free-function reach — the canonical site is now the inherent
+/// method on the [`Sexp`] algebra (sibling-lift posture to
+/// [`super::domain::sexp_shape`] → [`Sexp::shape`] (commit 121bb60)
+/// and [`super::domain::sexp_witness`] → [`Sexp::witness`] (commit
+/// a427e3b)). Rules + round-trip semantics live at
+/// [`Sexp::to_json`]'s docstring.
 ///
-/// Rules:
-///   - Symbols + Keywords → `Value::String`
-///     (symbols are enum discriminants; keywords prefix with `:`)
-///   - Strings, ints, floats, bools → their JSON counterpart
-///   - Lists that look like `:k v :k v …` → `Value::Object`
-///   - Other lists → `Value::Array`
-///   - Quote/Quasiquote/Unquote/UnquoteSplice → convert the inner (strips quote)
-///
-/// Fails on a duplicate keyword inside any nested kwargs-list (e.g.
-/// `(:notify-ref "a" :notify-ref "b")`) — same typed-entry posture
-/// `parse_kwargs` takes at the top level. The round-trip path
-/// (`json_to_sexp` → `sexp_to_json`) is unaffected because
-/// `serde_json::Map` is unique-keyed by construction.
+/// Composition law: `sexp_to_json(s) == s.to_json()` for every `s:
+/// &Sexp`. Pre-lift the dispatcher lived here as the canonical site;
+/// post-lift the inherent method [`Sexp::to_json`] is the canonical
+/// site and this free function delegates so existing callers
+/// continue to compile.
 pub fn sexp_to_json(s: &Sexp) -> Result<JValue> {
-    Ok(match s {
-        Sexp::Nil => JValue::Null,
-        // The six atomic-payload arms (one per `AtomKind` variant) all
-        // routed through inline `Sexp::Atom(Atom::<variant>(payload))
-        // => JValue::<…>(…)` pattern-binding pre-lift. Post-lift they
-        // bind at ONE typed-algebra method on the closed-set `Atom`
-        // algebra (`Atom::to_json`) that every consumer surfaces
-        // through. Sibling-arm shape to the prior `Display for Atom`
-        // lift (the canonical-string rendering surface) and the
-        // upcoming `Atom::to_iac_forge_sexpr` (the canonical-SExpr
-        // rendering surface, feature-gated `iac-forge`) — every per-
-        // `Atom`-variant projection now binds at ONE method rather
-        // than at six inline arms inside its consumer. A future
-        // seventh atomic kind (e.g. `Char` for `#\x` reader syntax)
-        // extends `AtomKind` + the typed-projection methods once and
-        // this outer arm picks up the new variant for free through
-        // [`Atom::to_json`]'s closed-set match.
-        Sexp::Atom(a) => a.to_json(),
-        Sexp::List(items) => {
-            if is_kwargs_list(items) {
-                let mut map = serde_json::Map::with_capacity(items.len() / 2);
-                let mut i = 0;
-                while i + 1 < items.len() {
-                    if let Some(k) = items[i].as_keyword() {
-                        let value = sexp_to_json(&items[i + 1])?;
-                        if map.insert(kebab_to_camel(k), value).is_some() {
-                            return Err(duplicate_kwarg(k));
-                        }
-                        i += 2;
-                    } else {
-                        break;
-                    }
-                }
-                JValue::Object(map)
-            } else {
-                JValue::Array(items.iter().map(sexp_to_json).collect::<Result<Vec<_>>>()?)
-            }
-        }
-        // The four quote-family variants share the `Sexp::* →
-        // sexp_to_json(inner)?` recurse-on-inner shape — all route
-        // through `Sexp::as_quote_form`'s typed-marker projection so
-        // the per-variant (Sexp variant, inner: &Sexp) pairing binds
-        // at ONE site on the `Sexp` algebra rather than four
-        // byte-identical inline arms here. The marker is discarded
-        // (`_`) by design: this projection erases the quote-form
-        // identity into JSON, and the round-trip via `json_to_sexp`
-        // re-emits the inner without an enclosing wrapper. Sibling
-        // posture to `sexp_shape`'s arm at line 602 (the canonical
-        // discard-the-marker, project-the-inner shape), and to every
-        // OTHER quote-family consumer the substrate carries that
-        // routes through `as_quote_form` / its derived `as_unquote`
-        // 2-of-4 subset (`Hash for Sexp`'s `hash_discriminator`,
-        // `Display for Sexp`'s `prefix`, `interop::iac_forge_tag`,
-        // `contains_unquote`'s family check, `compile_template`'s
-        // splice-outside-list gate, `compile_node`'s per-arm
-        // bytecode emission, `substitute`'s top-level + list-inner
-        // arms). A future homoiconic prefix-wrapper extension
-        // (`QuoteForm::*Future*`) extends `as_quote_form`'s arm
-        // alongside this match's discriminator union — exhaustively
-        // checked at the algebra rather than re-derived per
-        // consumer.
-        Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) | Sexp::UnquoteSplice(_) => {
-            let (_, inner) = s.expect_quote_form();
-            sexp_to_json(inner)?
-        }
-    })
+    s.to_json()
 }
 
 /// Convert serde_json back to Sexp — inverse of `sexp_to_json`.
@@ -1447,14 +1380,14 @@ pub fn json_to_sexp(v: &JValue) -> Sexp {
     }
 }
 
-fn is_kwargs_list(items: &[Sexp]) -> bool {
+pub(crate) fn is_kwargs_list(items: &[Sexp]) -> bool {
     !items.is_empty()
         && items.len().is_multiple_of(2)
         && items.iter().step_by(2).all(|s| s.as_keyword().is_some())
 }
 
 /// `must-reach` → `mustReach`, `point-type` → `pointType`.
-fn kebab_to_camel(s: &str) -> String {
+pub(crate) fn kebab_to_camel(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut upper = false;
     for c in s.chars() {

@@ -1168,6 +1168,142 @@ impl Sexp {
         SexpWitness::new(self.shape(), self.to_string())
     }
 
+    /// Project this `Sexp` to its canonical [`serde_json::Value`]
+    /// rendering — the typed-algebra peer of [`Atom::to_json`] at the
+    /// `Sexp` layer. Lifts the free-function dispatcher
+    /// [`crate::domain::sexp_to_json`] onto the typed `Sexp` algebra
+    /// alongside its [`Self::shape`] / [`Self::witness`] sibling
+    /// projections, completing the JSON-projection axis at the
+    /// algebra layer the way [`fmt::Display for Sexp`] completes the
+    /// canonical-string axis. The free function continues to exist
+    /// as a thin delegate (its callers in `tatara-lisp-derive`'s
+    /// derive output route through it via the
+    /// `crate::domain::sexp_to_json` import); the
+    /// `from_value_with_path` private helper in `domain.rs` and the
+    /// recursive sub-calls inside this method route through the
+    /// inherent method directly so the canonical-site indirection
+    /// disappears at every internal callsite.
+    ///
+    /// Rules (preserve byte-identical pre-lift behavior at the
+    /// `sexp_to_json` callsite):
+    ///   - [`Self::Nil`] → [`serde_json::Value::Null`].
+    ///   - [`Self::Atom`] → [`Atom::to_json`] (the typed-algebra
+    ///     peer at the atomic-payload layer; pinned by
+    ///     `sexp_to_json_atom_arms_route_through_atom_to_json` in
+    ///     `domain.rs`).
+    ///   - [`Self::List`] with kwargs shape `(:k v :k v …)` →
+    ///     [`serde_json::Value::Object`] keyed by
+    ///     [`crate::domain::kebab_to_camel`] of each `:k`'s name.
+    ///     A duplicate kebab→camel key inside any nested kwargs-list
+    ///     fails with [`crate::domain::duplicate_kwarg`] — same
+    ///     typed-entry posture
+    ///     [`crate::domain::parse_kwargs`] takes at the top level.
+    ///   - [`Self::List`] otherwise → [`serde_json::Value::Array`]
+    ///     mapping each element through this method recursively.
+    ///   - [`Self::Quote`] / [`Self::Quasiquote`] / [`Self::Unquote`]
+    ///     / [`Self::UnquoteSplice`] → recurse on the inner via
+    ///     [`Self::expect_quote_form`] (strips the wrapper; the
+    ///     round-trip via [`crate::domain::json_to_sexp`] re-emits
+    ///     the inner without an enclosing wrapper). All four arms
+    ///     route through ONE [`Self::as_quote_form`]-derived
+    ///     projection so the per-variant pairing binds at ONE site
+    ///     on the [`QuoteForm`] algebra rather than four
+    ///     byte-identical inline arms.
+    ///
+    /// Composition law: `s.to_json() == crate::domain::sexp_to_json(s)`
+    /// for every `s: &Sexp`. Pre-lift the dispatcher lived as a free
+    /// function in `domain.rs`; post-lift the canonical site is the
+    /// inherent method and the free function delegates (same lift
+    /// posture as [`Self::shape`] in 121bb60 and [`Self::witness`]
+    /// in a427e3b).
+    ///
+    /// Sibling-shape lift to [`Self::shape`] (the structural-shape
+    /// projection), [`Self::witness`] (the joint structural-shape +
+    /// renderable-literal projection), and [`fmt::Display for Sexp`]
+    /// (the renderable-literal projection): where those three carry
+    /// the Lisp-canonical-form / structural-identity axes on the
+    /// algebra, `to_json` carries the JSON canonical-form axis. The
+    /// substrate's `Sexp` algebra now binds ALL THREE canonical-form
+    /// projection surfaces (Lisp Display, JSON, and the feature-gated
+    /// iac-forge `From<&Sexp> for SExpr`) at the algebra layer, with
+    /// per-variant atomic rendering composed through the corresponding
+    /// [`Atom`] projection family (`Atom::Display`, [`Atom::to_json`],
+    /// `Atom::to_iac_forge_sexpr`).
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the inline dispatch the prior runs lifted onto
+    /// [`crate::domain::sexp_to_json`] (the free function) is now
+    /// lifted ONE algebra level higher — from the free function to
+    /// the inherent method — completing the Sexp-projection family
+    /// alongside [`Self::shape`] and [`Self::witness`]. THEORY.md
+    /// §II.1 invariant 2 — free middle; the typed-exit JSON
+    /// projection (every consumer that round-trips a Sexp through
+    /// `serde_json::from_value::<T>` for typed-domain
+    /// deserialization, the typed-rewriter at
+    /// [`crate::domain::TypedRewriter`], the derive macro's
+    /// `compile_from_args` fallthrough, and any future canonical-
+    /// form surface) all route through ONE inherent algebra method
+    /// rather than reach into the `domain` module path for a free
+    /// function. THEORY.md §V.1 — knowable platform; a future
+    /// `Sexp` variant extension (e.g. `Sexp::Vector` for `#(...)`
+    /// reader syntax, `Sexp::Map` for `{...}`) reaches this method
+    /// through the already-lifted [`Self::as_quote_form`] +
+    /// [`Atom::to_json`] pair — one arm added here for the new
+    /// outer-shape variant; rustc enforces the per-variant body is
+    /// named.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::AsmPrinter::printOp` —
+    /// the typed-IR printer dispatches on the closed-set `Op` so
+    /// every printer body for an op lives at ONE implementation site;
+    /// `Sexp::to_json` is the unstructured-Rust peer on the `Sexp`
+    /// algebra for the JSON canonical-form surface (where
+    /// [`fmt::Display for Sexp`] is the Lisp-canonical-form peer
+    /// and `From<&Sexp> for iac_forge::SExpr` is the
+    /// canonical-attestation-form peer). Racket's `(syntax->datum
+    /// stx)` then a serializer over the datum prim — `to_json` is
+    /// the substrate's serializer at the Sexp layer composed
+    /// through [`Atom::to_json`] at the atomic-payload layer, with
+    /// the closed-set [`AtomKind`] standing in for Racket's
+    /// datum-prim taxonomy.
+    pub fn to_json(&self) -> crate::error::Result<serde_json::Value> {
+        Ok(match self {
+            Self::Nil => serde_json::Value::Null,
+            Self::Atom(a) => a.to_json(),
+            Self::List(items) => {
+                if crate::domain::is_kwargs_list(items) {
+                    let mut map = serde_json::Map::with_capacity(items.len() / 2);
+                    let mut i = 0;
+                    while i + 1 < items.len() {
+                        if let Some(k) = items[i].as_keyword() {
+                            let value = items[i + 1].to_json()?;
+                            if map
+                                .insert(crate::domain::kebab_to_camel(k), value)
+                                .is_some()
+                            {
+                                return Err(crate::domain::duplicate_kwarg(k));
+                            }
+                            i += 2;
+                        } else {
+                            break;
+                        }
+                    }
+                    serde_json::Value::Object(map)
+                } else {
+                    serde_json::Value::Array(
+                        items
+                            .iter()
+                            .map(Self::to_json)
+                            .collect::<crate::error::Result<Vec<_>>>()?,
+                    )
+                }
+            }
+            Self::Quote(_) | Self::Quasiquote(_) | Self::Unquote(_) | Self::UnquoteSplice(_) => {
+                let (_, inner) = self.expect_quote_form();
+                inner.to_json()?
+            }
+        })
+    }
+
     pub fn as_symbol(&self) -> Option<&str> {
         self.as_atom().and_then(Atom::as_symbol)
     }
@@ -5983,5 +6119,250 @@ mod tests {
                 "Sexp::as_float widening drifted for Int({n})",
             );
         }
+    }
+
+    #[test]
+    fn sexp_to_json_method_projects_each_outer_arm_to_canonical_json() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the inherent
+        // `Sexp::to_json()` method projects each reachable outer Sexp
+        // shape to a `serde_json::Value` byte-identical to the
+        // pre-lift inline rule at `crate::domain::sexp_to_json`'s
+        // outer match — Nil → Null, Atom → `Atom::to_json` (composed
+        // through the typed-algebra projection), List(kwargs) →
+        // Object keyed by kebab→camel, List(other) → Array, and
+        // each quote-family wrapper → recurse on inner (the wrapper
+        // is structurally erased into JSON). A regression that
+        // drifts ANY outer arm (e.g. emits Nil as `"nil"` instead of
+        // Null, swaps List(kwargs) for Array unconditionally, drops
+        // a quote-family arm's recursion) surfaces here. Pre-lift
+        // the dispatcher lived as a free function in `domain.rs`;
+        // post-lift the canonical site is the inherent method on
+        // the `Sexp` algebra (same posture as the prior
+        // `Sexp::shape` (121bb60) and `Sexp::witness` (a427e3b)
+        // lifts).
+        assert_eq!(
+            Sexp::Nil.to_json().expect("nil to_json"),
+            serde_json::Value::Null,
+        );
+        assert_eq!(
+            Sexp::symbol("foo").to_json().expect("symbol to_json"),
+            serde_json::Value::String("foo".into()),
+        );
+        assert_eq!(
+            Sexp::keyword("k").to_json().expect("keyword to_json"),
+            serde_json::Value::String(":k".into()),
+        );
+        assert_eq!(
+            Sexp::string("body").to_json().expect("string to_json"),
+            serde_json::Value::String("body".into()),
+        );
+        assert_eq!(
+            Sexp::int(7).to_json().expect("int to_json"),
+            serde_json::json!(7),
+        );
+        assert_eq!(
+            Sexp::float(1.5).to_json().expect("float to_json"),
+            serde_json::json!(1.5),
+        );
+        assert_eq!(
+            Sexp::boolean(true).to_json().expect("true to_json"),
+            serde_json::Value::Bool(true),
+        );
+
+        // List(kwargs) → Object with kebab→camel keys.
+        let kwargs = Sexp::List(vec![
+            Sexp::keyword("point-type"),
+            Sexp::symbol("Gate"),
+            Sexp::keyword("must-reach"),
+            Sexp::boolean(true),
+        ]);
+        assert_eq!(
+            kwargs.to_json().expect("kwargs list to_json"),
+            serde_json::json!({"pointType": "Gate", "mustReach": true}),
+        );
+
+        // List(non-kwargs) → Array.
+        let arr = Sexp::List(vec![Sexp::int(1), Sexp::int(2), Sexp::int(3)]);
+        assert_eq!(
+            arr.to_json().expect("non-kwargs list to_json"),
+            serde_json::json!([1, 2, 3]),
+        );
+
+        // Empty list → Array (kwargs guard rejects empty lists).
+        let empty = Sexp::List(vec![]);
+        assert_eq!(
+            empty.to_json().expect("empty list to_json"),
+            serde_json::json!([]),
+        );
+
+        // Quote-family wrappers strip and recurse.
+        let payload = Sexp::List(vec![Sexp::keyword("k"), Sexp::int(42)]);
+        let expected = serde_json::json!({"k": 42});
+        for wrapped in [
+            Sexp::Quote(Box::new(payload.clone())),
+            Sexp::Quasiquote(Box::new(payload.clone())),
+            Sexp::Unquote(Box::new(payload.clone())),
+            Sexp::UnquoteSplice(Box::new(payload.clone())),
+        ] {
+            assert_eq!(
+                wrapped.to_json().expect("quote-family to_json"),
+                expected,
+                "quote-family wrapper {wrapped:?} drifted from inner-recursion shape",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_to_json_method_agrees_with_domain_sexp_to_json_for_every_outer_shape() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the inherent
+        // `Sexp::to_json()` method agrees with the free-function
+        // delegate `crate::domain::sexp_to_json` for every reachable
+        // outer shape. Pre-lift the dispatcher lived as a free
+        // function in `domain.rs`; post-lift the canonical site is
+        // the inherent method and the free function is a one-line
+        // delegate. Pin that the delegation stays byte-for-byte
+        // equivalent across every outer arm so a regression where
+        // the free function drifts from the inherent method (or
+        // vice versa) surfaces here immediately. Mirrors
+        // `sexp_shape_method_agrees_with_domain_sexp_shape_for_every_outer_shape`
+        // and
+        // `sexp_witness_method_agrees_with_domain_sexp_witness_for_every_outer_shape`
+        // for the JSON canonical-form projection peer.
+        let samples = [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::int(-1),
+            Sexp::float(7.5),
+            Sexp::float(0.0),
+            Sexp::boolean(true),
+            Sexp::boolean(false),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1), Sexp::int(2)]),
+            Sexp::List(vec![
+                Sexp::keyword("point-type"),
+                Sexp::symbol("Gate"),
+                Sexp::keyword("must-reach"),
+                Sexp::boolean(true),
+            ]),
+            Sexp::Quote(Box::new(Sexp::symbol("payload"))),
+            Sexp::Quasiquote(Box::new(Sexp::List(vec![Sexp::symbol("foo")]))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+        ];
+        for s in &samples {
+            let via_method = s.to_json().expect("method projection must succeed");
+            let via_delegate =
+                crate::domain::sexp_to_json(s).expect("delegate projection must succeed");
+            assert_eq!(
+                via_method, via_delegate,
+                "Sexp::to_json drifted from domain::sexp_to_json at {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_to_json_method_routes_atom_arm_through_atom_to_json() {
+        // PATH-UNIFORMITY CONTRACT: the lifted `Sexp::to_json()`
+        // body composes through the typed-algebra primitive
+        // [`Atom::to_json`] at the Atom arm — `Sexp::Atom(a).to_json()
+        // == Ok(a.to_json())` for every atomic payload variant. A
+        // regression in EITHER direction (a `Sexp::to_json` arm
+        // that bypasses `Atom::to_json` and re-inlines a per-variant
+        // mapping, or an `Atom::to_json` projection that diverges
+        // from the rendering the outer arm depends on) is
+        // structurally impossible — the typed JSON primitive composes
+        // through the typed primitive halves once. Sibling-shape pin
+        // to `sexp_to_json_atom_arms_route_through_atom_to_json` in
+        // `domain.rs` (the free-function-delegate peer that pinned
+        // the same identity at the pre-lift site).
+        let cases: &[Atom] = &[
+            Atom::Symbol("name".into()),
+            Atom::Keyword("kw".into()),
+            Atom::Str("body".into()),
+            Atom::Int(7),
+            Atom::Int(-3),
+            Atom::Float(2.5),
+            Atom::Float(1.0),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ];
+        for atom in cases {
+            let via_method = Sexp::Atom(atom.clone())
+                .to_json()
+                .expect("atom must serialize through Sexp::to_json");
+            let via_atom = atom.to_json();
+            assert_eq!(
+                via_method, via_atom,
+                "Sexp::to_json Atom arm drifted from Atom::to_json for {atom:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_to_json_method_routes_quote_family_arms_through_inner_recursion() {
+        // PATH-UNIFORMITY CONTRACT: the four quote-family arms each
+        // strip the wrapper and recurse on the projected `inner`
+        // (via `Self::expect_quote_form`), NOT on the outer `self`.
+        // Pin that this binding semantic is observable across all
+        // four wrappers: `wrap_qf(inner).to_json() == inner.to_json()`
+        // for every `QuoteForm` variant. A regression that lifted
+        // the recursion onto `self` (the outer wrapper) instead of
+        // the projected inner would infinite-loop or surface as a
+        // structural mismatch here. Sibling shape to
+        // `sexp_to_json_routes_quote_family_arms_through_as_quote_form_typed_marker`
+        // in `domain.rs::tests` (the free-function-delegate peer)
+        // — both pin the same invariant at the lifted boundary.
+        let inner = Sexp::List(vec![Sexp::keyword("k"), Sexp::int(42)]);
+        let expected = inner.to_json().expect("inner serializes");
+        for wrap in [
+            Sexp::Quote(Box::new(inner.clone())),
+            Sexp::Quasiquote(Box::new(inner.clone())),
+            Sexp::Unquote(Box::new(inner.clone())),
+            Sexp::UnquoteSplice(Box::new(inner.clone())),
+        ] {
+            let via_method = wrap
+                .to_json()
+                .expect("quote-family wrapper must serialize via Sexp::to_json");
+            assert_eq!(
+                via_method, expected,
+                "Sexp::to_json drifted from inner-recursion shape at {wrap:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_to_json_method_rejects_duplicate_kwargs_at_lifted_boundary() {
+        // TYPED-ENTRY CONTRACT: the duplicate-keyword rejection at
+        // the kwargs-list arm fires at the inherent method directly,
+        // not at the delegate — the canonical typed-entry gate lives
+        // on the algebra. Pin that two `:k` entries in the same
+        // kwargs list collapse to `LispError::DuplicateKwarg { key }`
+        // with `key == "notify-ref"` (the kebab spelling, before
+        // kebab→camel conversion — the diagnostic surface matches
+        // the spelling the operator typed). The error type
+        // discriminator is checked via debug-format substring so a
+        // future LispError variant rename doesn't silently break
+        // this pin. Mirrors `sexp_to_json_nested_duplicate_emits_structural_variant`
+        // in `domain.rs::tests` (the free-function delegate peer at
+        // the pre-lift site) at the lifted boundary.
+        let dup = Sexp::List(vec![
+            Sexp::keyword("notify-ref"),
+            Sexp::string("a"),
+            Sexp::keyword("notify-ref"),
+            Sexp::string("b"),
+        ]);
+        let err = dup.to_json().expect_err("duplicate kwarg must reject");
+        let rendered = format!("{err:?}");
+        assert!(
+            rendered.contains("DuplicateKwarg"),
+            "expected DuplicateKwarg variant, got {rendered}",
+        );
+        assert!(
+            rendered.contains("notify-ref"),
+            "expected diagnostic to name the kebab-spelled duplicate key, got {rendered}",
+        );
     }
 }

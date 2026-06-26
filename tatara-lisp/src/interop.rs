@@ -11,22 +11,27 @@
 
 #[cfg(feature = "iac-forge")]
 mod iac_forge_impl {
-    use crate::ast::{Atom, Sexp};
+    use crate::ast::Sexp;
     use iac_forge::sexpr::SExpr;
 
     impl From<&Sexp> for SExpr {
         fn from(s: &Sexp) -> Self {
             match s {
                 Sexp::Nil => SExpr::Nil,
-                Sexp::Atom(a) => match a {
-                    Atom::Symbol(s) => SExpr::Symbol(s.clone()),
-                    // Keywords encoded as `:name` symbols in canonical form.
-                    Atom::Keyword(s) => SExpr::Symbol(format!(":{s}")),
-                    Atom::Str(s) => SExpr::String(s.clone()),
-                    Atom::Int(n) => SExpr::Integer(*n),
-                    Atom::Float(n) => SExpr::Float(*n),
-                    Atom::Bool(b) => SExpr::Bool(*b),
-                },
+                // The atomic-payload rendering lives at the typed
+                // [`Atom::to_iac_forge_sexpr`] projection in `ast.rs` —
+                // the six inline sub-arms (`Symbol → SExpr::Symbol(s)`,
+                // `Keyword → SExpr::Symbol(":{s}")`, `Str →
+                // SExpr::String(s)`, `Int → SExpr::Integer(n)`, `Float →
+                // SExpr::Float(n)`, `Bool → SExpr::Bool(b)`) all bind at
+                // ONE site on the closed-set `Atom` algebra rather than
+                // at this outer arm. Completes the three-surface sweep
+                // (`Display for Atom` for Lisp canonical form,
+                // `Atom::to_json` for JSON, `Atom::to_iac_forge_sexpr`
+                // for iac-forge attestation form) — a future seventh
+                // atomic kind extends the `Atom` projection family ONCE
+                // and rustc enforces matching across every consumer.
+                Sexp::Atom(a) => a.to_iac_forge_sexpr(),
                 Sexp::List(xs) => SExpr::List(xs.iter().map(Self::from).collect()),
                 // The four quote-family wrappers share the
                 // `tagged(<canonical-tag>, inner)` canonical-form shape — all
@@ -66,7 +71,100 @@ mod iac_forge_impl {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use crate::ast::QuoteForm;
+        use crate::ast::{Atom, AtomKind, QuoteForm};
+
+        #[test]
+        fn atom_to_iac_forge_sexpr_projects_each_variant_to_canonical_sexpr() {
+            // CANONICAL-MAPPING CONTRACT: pin that `Atom::to_iac_forge_sexpr`
+            // produces byte-identical `iac_forge::sexpr::SExpr` outputs for
+            // each `AtomKind` variant as the pre-lift inline arms inside
+            // `From<&Sexp> for SExpr` did. Sweeps a representative atom of
+            // each variant so a regression that drifts ONE arm (e.g. swaps
+            // `Symbol`'s mapping to a `String`, drops `Keyword`'s `:`
+            // prefix that downstream BLAKE3 attestation keys hash, or
+            // renames `Str → Integer`) fails loudly. Sibling-arm sweep to
+            // `atom_display_renders_each_variant_to_canonical_form` (the
+            // Lisp canonical-form peer) and
+            // `atom_to_json_projects_each_variant_to_canonical_json_value`
+            // (the JSON canonical-form peer in `ast.rs`) — all three pin
+            // the typed-algebra rendering of the atomic payload at its
+            // canonical projection across the three production surfaces
+            // the substrate carries.
+            assert_eq!(
+                Atom::Symbol("name".into()).to_iac_forge_sexpr(),
+                SExpr::Symbol("name".to_string()),
+            );
+            assert_eq!(
+                Atom::Keyword("parent".into()).to_iac_forge_sexpr(),
+                SExpr::Symbol(":parent".to_string()),
+            );
+            assert_eq!(
+                Atom::Str("body".into()).to_iac_forge_sexpr(),
+                SExpr::String("body".to_string()),
+            );
+            assert_eq!(Atom::Int(42).to_iac_forge_sexpr(), SExpr::Integer(42));
+            assert_eq!(Atom::Int(-7).to_iac_forge_sexpr(), SExpr::Integer(-7));
+            assert_eq!(Atom::Float(1.5).to_iac_forge_sexpr(), SExpr::Float(1.5));
+            assert_eq!(Atom::Bool(true).to_iac_forge_sexpr(), SExpr::Bool(true));
+            assert_eq!(Atom::Bool(false).to_iac_forge_sexpr(), SExpr::Bool(false));
+        }
+
+        #[test]
+        fn sexp_atom_iac_forge_arm_routes_through_atom_to_iac_forge_sexpr() {
+            // LIFTED-BOUNDARY CONTRACT: pin that the outer
+            // `From<&Sexp> for SExpr` impl's Atom arm produces
+            // byte-identical output to direct `Atom::to_iac_forge_sexpr`
+            // invocation for every atomic payload variant. Catches a
+            // regression where the outer arm re-inlines ONE variant's
+            // rendering without updating the typed projection, or vice
+            // versa — the lifted boundary is exactly the invariant
+            // `SExpr::from(&Sexp::Atom(a)) == a.to_iac_forge_sexpr()`.
+            // Sweeps `AtomKind::ALL` so adding a future seventh atomic
+            // kind (e.g. `Char`, `Bigint`) forces the test author to
+            // extend both the closed-set sweep AND the per-variant
+            // projection at the typed-algebra layer; rustc's
+            // exhaustiveness on `Atom`'s match in
+            // `Atom::to_iac_forge_sexpr` enforces the per-variant body
+            // is named, and this test enforces the outer arm's
+            // delegation stays uniform under the addition.
+            //
+            // Sibling-shape pin to
+            // `sexp_to_json_atom_arms_route_through_atom_to_json` (in
+            // `domain.rs`) and the implicit
+            // `Sexp::Atom(a).to_string() == a.to_string()` invariant
+            // pinned by
+            // `sexp_atom_display_arm_routes_through_atom_display_for_every_variant`
+            // (in `ast.rs`) — all three pin the lifted-boundary
+            // identity at the corresponding production surface so a
+            // future drift surfaces at the typed-algebra layer rather
+            // than at every downstream consumer.
+            for kind in AtomKind::ALL {
+                let atom = sample_atom(kind);
+                let via_impl: SExpr = (&Sexp::Atom(atom.clone())).into();
+                let via_projection = atom.to_iac_forge_sexpr();
+                assert_eq!(
+                    via_impl, via_projection,
+                    "From<&Sexp> for SExpr Atom arm drifted from \
+                     Atom::to_iac_forge_sexpr for variant {kind:?}"
+                );
+            }
+        }
+
+        /// Canonical per-variant atomic sample mirroring the shape
+        /// `atom_display_round_trips_through_reader_preserving_typed_identity`
+        /// in `ast.rs` uses — one representative payload for each
+        /// `AtomKind` variant so the boundary tests above can sweep
+        /// the closed set without re-deriving sample literals.
+        fn sample_atom(kind: AtomKind) -> Atom {
+            match kind {
+                AtomKind::Symbol => Atom::Symbol("name".into()),
+                AtomKind::Keyword => Atom::Keyword("parent".into()),
+                AtomKind::Str => Atom::Str("body".into()),
+                AtomKind::Int => Atom::Int(42),
+                AtomKind::Float => Atom::Float(1.5),
+                AtomKind::Bool => Atom::Bool(true),
+            }
+        }
 
         #[test]
         fn quote_family_canonical_form_routes_through_quote_form_iac_forge_tag() {

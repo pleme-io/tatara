@@ -239,6 +239,111 @@ impl Atom {
             Self::Bool(b) => serde_json::Value::Bool(*b),
         }
     }
+
+    /// Project the atomic payload to its canonical
+    /// [`iac_forge::sexpr::SExpr`] rendering — the typed-algebra peer of
+    /// [`fmt::Display for Atom`] and [`Self::to_json`] at the
+    /// canonical-attestation-form boundary. Lifts six inline atom arms
+    /// inside [`crate::interop::iac_forge_impl::From<&Sexp> for SExpr`]'s
+    /// outer match (one `Atom::<variant>(payload) => SExpr::<…>(…)` arm
+    /// per [`AtomKind`] variant) onto ONE typed-algebra method that
+    /// every consumer routes through. Completes the sibling-shape lift
+    /// to [`fmt::Display for Atom`] (the Lisp canonical-form surface)
+    /// and [`Self::to_json`] (the JSON canonical-form surface) — every
+    /// per-`Atom`-variant projection across all THREE production-site
+    /// rendering surfaces now binds at ONE method on the closed-set
+    /// algebra rather than at six inline arms inside its consumer.
+    ///
+    /// Mapping (preserves the byte-identical pre-lift behavior at the
+    /// interop callsite):
+    ///   * [`Self::Symbol`] payload `s` → [`iac_forge::sexpr::SExpr::Symbol`]
+    ///     of `s` cloned.
+    ///   * [`Self::Keyword`] payload `s` → [`iac_forge::sexpr::SExpr::Symbol`]
+    ///     of `":{s}"` (keywords encoded as `:name` symbols in
+    ///     canonical form — same `:` prefix convention as
+    ///     [`Self::to_json`]'s string-prefixed encoding, but at the
+    ///     SExpr::Symbol arm rather than the JSON String value because
+    ///     iac-forge's algebra has no distinct keyword variant).
+    ///   * [`Self::Str`] payload `s` → [`iac_forge::sexpr::SExpr::String`]
+    ///     of `s` cloned.
+    ///   * [`Self::Int`] payload `n` → [`iac_forge::sexpr::SExpr::Integer`]
+    ///     of `n`.
+    ///   * [`Self::Float`] payload `n` → [`iac_forge::sexpr::SExpr::Float`]
+    ///     of `n` (no NaN/∞ collapse — iac-forge's `SExpr::Float` carries
+    ///     `f64` natively; the JSON-structural inexpressibility branch
+    ///     pinned at [`Self::to_json`] does not apply here).
+    ///   * [`Self::Bool`] payload `b` → [`iac_forge::sexpr::SExpr::Bool`]
+    ///     of `b`.
+    ///
+    /// Bidirectional contract anchored by tests in the
+    /// [`crate::interop`] module's `#[cfg(test)] mod tests` block:
+    ///   * `atom_to_iac_forge_sexpr_projects_each_variant_to_canonical_sexpr`
+    ///     — sweeps a representative atom of each [`AtomKind`] variant
+    ///     and pins each variant's canonical SExpr mapping byte-for-byte
+    ///     against the pre-lift inline rule, so a future regression that
+    ///     drifts ONE arm (e.g. swaps `Symbol`'s mapping to a String,
+    ///     drops `Keyword`'s `:` prefix that downstream BLAKE3 attestation
+    ///     keys hash, or renames `Str → Integer`) fails loudly.
+    ///   * `sexp_atom_iac_forge_arm_routes_through_atom_to_iac_forge_sexpr`
+    ///     — pins the lifted boundary:
+    ///     `SExpr::from(&Sexp::Atom(a.clone())) == a.to_iac_forge_sexpr()`
+    ///     for every atomic payload variant. Catches a future drift
+    ///     where the outer `From<&Sexp>` arm re-inlines ONE variant's
+    ///     rendering without updating the typed projection.
+    ///
+    /// Feature-gated on `iac-forge` mirroring the impl in
+    /// [`crate::interop::iac_forge_impl`] — the method's return type
+    /// references [`iac_forge::sexpr::SExpr`], so the projection only
+    /// exists when the consumer crate compiled the optional dependency
+    /// in. Sibling-feature posture to the substrate's
+    /// `#[cfg(feature = "iac-forge")]`-gated `From<&Sexp> for SExpr`
+    /// impl.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the (Atom variant, canonical SExpr rendering) pair lived inline
+    /// at the interop site as six byte-identical arms. The lift retires
+    /// the per-site fan-out onto ONE method on the `Atom` algebra,
+    /// completing the three-surface sweep ([`fmt::Display for Atom`],
+    /// [`Self::to_json`], [`Self::to_iac_forge_sexpr`]) the prior runs
+    /// in this series named. THEORY.md §II.1 invariant 2 — free middle;
+    /// the typed-exit Display rendering, the JSON projection, the
+    /// canonical-attestation-form projection, the diagnostic surface,
+    /// and the cache-key hash surface ALL route through ONE
+    /// per-variant projection family rather than per-callsite
+    /// re-derivation. THEORY.md §V.1 — knowable platform; a future
+    /// seventh atomic kind (e.g. `Char` for `#\x` reader syntax) lands
+    /// at one [`AtomKind::ALL`] entry plus one arm per projection —
+    /// exhaustively checked by the compiler across every consumer
+    /// surface, not by per-consumer convention.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::AsmPrinter::printAttribute`
+    /// dispatches on the closed-set `AttributeKind` so every printer
+    /// body for a kind lives at ONE implementation site;
+    /// `Atom::to_iac_forge_sexpr` is the unstructured-Rust peer on the
+    /// `Atom` algebra for the canonical-attestation-form surface (the
+    /// THIRD and LAST of the three production-site atom-arm shapes
+    /// after `Display for Atom` and `Atom::to_json`). Racket's
+    /// `(syntax->datum stx)` then a serializer over the datum prim —
+    /// `to_iac_forge_sexpr` is the substrate's serializer at the
+    /// atomic-payload layer for the cross-crate attestation algebra,
+    /// with the closed-set `AtomKind` standing in for Racket's
+    /// datum-prim taxonomy.
+    #[cfg(feature = "iac-forge")]
+    #[must_use]
+    pub fn to_iac_forge_sexpr(&self) -> iac_forge::sexpr::SExpr {
+        use iac_forge::sexpr::SExpr;
+        match self {
+            Self::Symbol(s) => SExpr::Symbol(s.clone()),
+            // Keywords encoded as `:name` symbols in canonical form —
+            // same `:` prefix convention as `Atom::to_json`'s
+            // string-prefixed encoding.
+            Self::Keyword(s) => SExpr::Symbol(format!(":{s}")),
+            Self::Str(s) => SExpr::String(s.clone()),
+            Self::Int(n) => SExpr::Integer(*n),
+            Self::Float(n) => SExpr::Float(*n),
+            Self::Bool(b) => SExpr::Bool(*b),
+        }
+    }
 }
 
 /// Closed-set typed discriminator for the six [`Atom`] payload variants —
@@ -1765,9 +1870,13 @@ fn fmt_float(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 ///     a.to_json()` arm.
 ///   * [`crate::interop::iac_forge_impl::From<&Sexp> for SExpr`]'s
 ///     atom arm (feature-gated `iac-forge`) — 6 inline arms producing
-///     `iac_forge::sexpr::SExpr`. Future-lift candidate to a parallel
-///     `Atom::to_iac_forge_sexpr` projection (the LAST of the three
-///     production-site atom-arm shapes left).
+///     `iac_forge::sexpr::SExpr`. Now lifted onto
+///     [`Atom::to_iac_forge_sexpr`] in the sibling pattern this impl's
+///     docstring named; the interop site collapses to ONE
+///     `Sexp::Atom(a) => a.to_iac_forge_sexpr()` arm. THIRD and LAST
+///     of the three production-site atom-arm shapes lifted onto the
+///     typed `Atom` algebra; the sweep across the Lisp / JSON /
+///     iac-forge canonical-form surfaces is complete.
 ///
 /// The (Atom variant, rendered prefix/suffix/body) quadruple now lives
 /// at ONE typed-algebra Display impl rather than at seven inline

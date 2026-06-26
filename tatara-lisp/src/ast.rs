@@ -1168,6 +1168,87 @@ impl Sexp {
         SexpWitness::new(self.shape(), self.to_string())
     }
 
+    /// Project this `Sexp` to its stable, human-readable outer-shape
+    /// label — the `&'static str` axis on the [`Sexp`] algebra. Lifts
+    /// the free-function dispatcher [`crate::domain::sexp_type_name`]
+    /// onto the typed `Sexp` algebra alongside its [`Self::shape`] /
+    /// [`Self::witness`] / [`Self::to_json`] / [`Self::from_json`]
+    /// sibling projections, completing the substrate's
+    /// Sexp-projection family at the canonical-label axis the way
+    /// [`Self::shape`] completes the typed-shape axis and
+    /// [`fmt::Display for Sexp`] completes the canonical-string axis.
+    ///
+    /// Composition law: `s.type_name() == s.shape().label() ==
+    /// crate::domain::sexp_type_name(s)` for every `s: &Sexp`.
+    /// Pre-lift the projection lived as a free function in
+    /// `domain.rs` consumers (in particular the `LispError::TypeMismatch`
+    /// `got` slot in `compile.rs` and the legacy substring-grep
+    /// rejection-message tests) reached across module boundaries to
+    /// invoke; post-lift the canonical site is the inherent method on
+    /// the [`Sexp`] algebra and the free function delegates so existing
+    /// callers continue to compile. Body composes through
+    /// [`Self::shape`] + [`SexpShape::label`] so a future `Sexp`
+    /// variant (e.g. `Sexp::Vector` for `#(...)` reader syntax,
+    /// `Sexp::Map` for `{...}`) lands at one extension site
+    /// ([`Self::shape`]'s exhaustive arm) rather than a parallel
+    /// `&'static str` match — the projection is structurally derived,
+    /// not duplicated.
+    ///
+    /// Sibling-shape lift to [`Self::shape`] (the typed-shape
+    /// projection): where `shape()` carries the typed
+    /// [`SexpShape`] identity (matchable, exhaustive across `Sexp`
+    /// variants), `type_name()` carries the `&'static str` literal
+    /// the rendered diagnostic surface wants (still derived from
+    /// the typed identity, but flattened through
+    /// [`SexpShape::label`] for substring-grep callers and the
+    /// `TypeMismatch.got` slot). The `&'static str` lifetime makes
+    /// the projection cheap to embed in any error variant without
+    /// allocation.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (Sexp variant, `&'static str` label) pairing becomes an
+    /// inherent algebra projection rather than a free function in
+    /// `domain.rs`, so the projection sits next to the rest of the
+    /// typed `Sexp` algebra ([`Self::shape`], [`Self::witness`],
+    /// [`Self::to_json`], [`Self::from_json`], [`Self::as_atom`],
+    /// [`Self::as_list`], [`Self::as_quote_form`],
+    /// [`Self::head_symbol`], [`Self::as_call`]) the substrate
+    /// carries. THEORY.md §II.1 invariant 2 — free middle; every
+    /// consumer that needs the outer-shape label
+    /// (`LispError::TypeMismatch.got` projection in `compile.rs`,
+    /// legacy substring-grep rejection-message tests, future LSP /
+    /// REPL diagnostic surfaces) now reaches a method on the value
+    /// rather than a free function imported from `domain`.
+    /// THEORY.md §VI.1 — generation over composition; the inline
+    /// `s.shape().label()` recipe lifted to
+    /// [`crate::domain::sexp_type_name`] is now lifted ONE algebra
+    /// level higher — from the free function to the inherent
+    /// method — completing the Sexp-projection family alongside
+    /// [`Self::shape`] / [`Self::witness`] / [`Self::to_json`] /
+    /// [`Self::from_json`]. The `domain.rs` `sexp_*` free-function
+    /// namespace is now structurally reserved for free functions
+    /// that genuinely need a `domain`-module reach (registry
+    /// dispatch, kwargs gates, registry suggestions), not
+    /// algebra-layer projections.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::Operation::getName()`
+    /// composed with `OperationName::getStringRef()` — the typed-IR
+    /// operation projects through inherent methods to its closed-set
+    /// label on the operation algebra; `Sexp::type_name` is the
+    /// unstructured-Rust peer on the [`Sexp`] algebra for the
+    /// canonical-label projection surface, with [`SexpShape::label`]
+    /// standing in for MLIR's `OperationName::getStringRef` second
+    /// hop. Racket's `(syntax-name stx)` — the typed inverse of
+    /// `(syntax-e stx)` on the syntax algebra; `Sexp::type_name`
+    /// composes the typed-shape projection with its closed-set
+    /// label projection at the inherent-method site rather than
+    /// the typeclass-method site, matching pleme-io's
+    /// "rust-typed, not trait-typed" idiom for closed-set algebras.
+    #[must_use]
+    pub fn type_name(&self) -> &'static str {
+        self.shape().label()
+    }
+
     /// Project this `Sexp` to its canonical [`serde_json::Value`]
     /// rendering — the typed-algebra peer of [`Atom::to_json`] at the
     /// `Sexp` layer. Lifts the free-function dispatcher
@@ -5971,6 +6052,115 @@ mod tests {
                 s.shape().label(),
                 crate::domain::sexp_type_name(s),
                 "Sexp::shape().label() must equal domain::sexp_type_name for {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_type_name_method_projects_each_outer_arm_to_canonical_label() {
+        // PER-ARM CONTRACT: pin that the inherent `Sexp::type_name()`
+        // method projects each reachable outer Sexp shape to its
+        // canonical `&'static str` label. Pre-lift the projection
+        // lived as a free function `domain::sexp_type_name`; post-
+        // lift the canonical site is the inherent method on the
+        // `Sexp` algebra and the free function delegates. A
+        // regression that drifts a per-arm label (e.g. a typo in
+        // `SexpShape::label`, a stale arm in `Sexp::shape`'s match,
+        // a change in the body away from `self.shape().label()`)
+        // surfaces here immediately. Sweeps every outer shape and
+        // every atomic payload kind so all 8 `SexpShape` variants
+        // are covered.
+        assert_eq!(Sexp::Nil.type_name(), "nil");
+        assert_eq!(Sexp::symbol("foo").type_name(), "symbol");
+        assert_eq!(Sexp::keyword("k").type_name(), "keyword");
+        assert_eq!(Sexp::string("s").type_name(), "string");
+        assert_eq!(Sexp::int(7).type_name(), "int");
+        assert_eq!(Sexp::float(7.5).type_name(), "float");
+        assert_eq!(Sexp::boolean(true).type_name(), "bool");
+        assert_eq!(Sexp::List(vec![]).type_name(), "list");
+        assert_eq!(Sexp::Quote(Box::new(Sexp::Nil)).type_name(), "quote");
+        assert_eq!(
+            Sexp::Quasiquote(Box::new(Sexp::Nil)).type_name(),
+            "quasiquote",
+        );
+        assert_eq!(Sexp::Unquote(Box::new(Sexp::Nil)).type_name(), "unquote");
+        assert_eq!(
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)).type_name(),
+            "unquote-splice",
+        );
+    }
+
+    #[test]
+    fn sexp_type_name_method_composes_through_shape_label_for_every_outer_shape() {
+        // COMPOSITION-LAW CONTRACT: `s.type_name() == s.shape().label()`
+        // for every reachable Sexp outer shape — the method body is
+        // structurally derived through `Self::shape` + `SexpShape::label`
+        // rather than re-matching `Sexp` arms directly. Pin the
+        // composition law so a future refactor that re-inlines the
+        // match (and gains its own drift surface) surfaces here
+        // immediately. Sibling-shape pin to the existing
+        // `sexp_shape_method_label_composes_with_sexp_type_name_for_every_outer_shape`
+        // pin (which pins the inverse direction: the free function
+        // routes through the inherent method).
+        let samples = [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::List(vec![]),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ];
+        for s in &samples {
+            assert_eq!(
+                s.type_name(),
+                s.shape().label(),
+                "Sexp::type_name() must compose through Sexp::shape().label() for {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_type_name_method_agrees_with_domain_sexp_type_name_for_every_outer_shape() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the inherent
+        // `Sexp::type_name()` method agrees with the free-function
+        // delegate `crate::domain::sexp_type_name` for every
+        // reachable outer shape. Pre-lift the dispatcher lived as a
+        // free function in `domain.rs`; post-lift the canonical site
+        // is the inherent method on the `Sexp` algebra and the free
+        // function is a one-line delegate. Pin that the delegation
+        // stays byte-for-byte equivalent across every outer arm so
+        // a regression where the free function drifts from the
+        // inherent method (or vice versa) surfaces here immediately.
+        // Mirrors `sexp_witness_method_agrees_with_domain_sexp_witness_for_every_outer_shape`
+        // for the canonical-label-only peer projection.
+        let samples = [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::int(-1),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::boolean(false),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1), Sexp::int(2)]),
+            Sexp::Quote(Box::new(Sexp::symbol("payload"))),
+            Sexp::Quasiquote(Box::new(Sexp::List(vec![Sexp::symbol("foo")]))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+        ];
+        for s in &samples {
+            assert_eq!(
+                s.type_name(),
+                crate::domain::sexp_type_name(s),
+                "Sexp::type_name() must equal domain::sexp_type_name for {s:?}",
             );
         }
     }

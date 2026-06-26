@@ -581,17 +581,59 @@ pub fn sexp_shape(s: &Sexp) -> SexpShape {
     s.shape()
 }
 
-/// Stable, human-readable name of a `Sexp`'s outermost shape — the
-/// `&'static str` projection of `sexp_shape(_).label()`. Retained for
-/// callers that want the canonical literal directly (e.g. test
-/// assertions on the rendered `expected X, got Y` substring); new code
-/// constructing `LispError::TypeMismatch` / `NamedFormNonSymbolName`
-/// passes through `sexp_shape` directly so the typed identity rides
-/// the variant slot rather than collapsing through the literal at the
+/// Thin delegate to [`Sexp::type_name`] retained for callers that
+/// want the free-function reach — the canonical site is now the
+/// inherent method on the [`Sexp`] algebra. Stable, human-readable
+/// name of a `Sexp`'s outermost shape — the `&'static str`
+/// projection of `s.shape().label()`. Retained for callers that
+/// want the canonical literal directly (e.g. test assertions on the
+/// rendered `expected X, got Y` substring); new code constructing
+/// `LispError::TypeMismatch` / `NamedFormNonSymbolName` passes
+/// through `sexp_shape` directly so the typed identity rides the
+/// variant slot rather than collapsing through the literal at the
 /// helper boundary.
+///
+/// Composition law: `sexp_type_name(s) == s.type_name() ==
+/// s.shape().label()` for every `s: &Sexp`. Pre-lift the dispatcher
+/// lived here as the canonical site; post-lift the inherent method
+/// [`Sexp::type_name`] is the canonical site and this free function
+/// delegates so existing callers continue to compile. Same lift
+/// posture as [`super::domain::sexp_shape`] → [`Sexp::shape`]
+/// (commit 121bb60), [`super::domain::sexp_witness`] →
+/// [`Sexp::witness`] (commit a427e3b), [`super::domain::sexp_to_json`]
+/// → [`Sexp::to_json`] (commit 875ee3b), and
+/// [`super::domain::json_to_sexp`] → [`Sexp::from_json`] (commit
+/// 4a467eb): the algebra-level projection sits on the value, the
+/// free function is a one-line thin delegate. The
+/// `LispError::TypeMismatch.got` projection at
+/// `compile::compile_typed`'s typed-entry rejection site and every
+/// legacy substring-grep rejection-message test routes through
+/// `s.type_name()` after this lift.
+///
+/// Sibling of [`sexp_shape`] (the typed-shape projection feeding
+/// `TypeMismatch.expected` typed slot) and [`sexp_witness`] (the
+/// joint typed-shape + renderable-literal projection feeding
+/// `NamedFormNonSymbolName.got` / `NonSymbolUnquoteTarget.got` /
+/// etc.). [`Sexp::type_name`] is the canonical-label-only
+/// projection — the `&'static str` literal flattened from the
+/// typed identity for substring-grep callers and the
+/// `TypeMismatch.got` slot.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// diagnostics. The canonical-label projection becomes a NAMED
+/// primitive on the substrate's `Sexp` algebra rather than a free
+/// function consumers reach across module boundaries to call.
+/// THEORY.md §VI.1 — generation over composition; the projection now
+/// lives on the typed `Sexp` algebra alongside `Sexp::shape` /
+/// `Sexp::witness` / `Sexp::to_json` / `Sexp::from_json`, so a
+/// future `Sexp` variant lands at the algebra's match site (via
+/// `Sexp::shape`'s exhaustive arm) without a module-path
+/// indirection. THEORY.md §II.1 invariant 1 — typed entry; the
+/// offending Sexp's canonical-label identity is part of the proof
+/// of WHAT the typed-entry gate rejected.
 #[must_use]
 pub fn sexp_type_name(s: &Sexp) -> &'static str {
-    s.shape().label()
+    s.type_name()
 }
 
 /// Thin delegate to [`Sexp::witness`] retained for callers that want

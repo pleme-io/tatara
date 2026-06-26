@@ -433,6 +433,205 @@ impl RealizedCompiler {
     ) -> Result<Vec<NamedDefinition<T>>> {
         self.cloned_preloaded().expand_to_named::<T>(forms)
     }
+
+    /// Read + macroexpand + classifier-walk `src` through THIS
+    /// `RealizedCompiler`'s preloaded macro library — the preloaded-
+    /// expander posture of the typed-decoded classifier dispatcher.
+    /// Routes every expanded form whose head decodes through `decode`
+    /// to its typed witness through `project`, yielding the per-form
+    /// projection in source order. The typed-decoded sibling of
+    /// [`Self::compile_typed`] — where that method filters by ONE
+    /// constant `T::KEYWORD` (with the typed-pair `(T::KEYWORD,
+    /// T::compile_from_args)` bound through the `T: TataraDomain`
+    /// type parameter), this method filters AND TYPES by a caller-
+    /// supplied classifier, yielding the typed witness alongside the
+    /// per-form projection's args input.
+    ///
+    /// Closes the typed-dispatcher matrix on the `RealizedCompiler`
+    /// boundary across (input posture × projection form) — the
+    /// (from-forms, from-source) × (constant T::KEYWORD, typed-decoded
+    /// classifier) 2×2 of preloaded-expander dispatchers:
+    ///
+    /// |              | constant `T::KEYWORD`                    | typed-decoded classifier                              |
+    /// |--------------|------------------------------------------|-------------------------------------------------------|
+    /// | from-forms   | [`Self::compile_typed_from_forms`]       | [`Self::compile_typed_any_from_forms`]                |
+    /// | from-source  | [`Self::compile_typed`]                  | [`Self::compile_typed_any`] (this)                    |
+    ///
+    /// Each cell routes through the matching [`Expander`] primitive on
+    /// a per-call clone of the preloaded library: the constant-keyword
+    /// column threads [`Expander::expand_to_typed`] /
+    /// [`Expander::expand_source_to_typed`] (binding `(T::KEYWORD,
+    /// T::compile_from_args)` through `T`); the typed-decoded
+    /// classifier column threads
+    /// [`Expander::expand_and_collect_calls_to_any`] /
+    /// [`Expander::expand_source_and_collect_calls_to_any`] (binding
+    /// `(decode, project)` through the caller). The constant-keyword
+    /// column is a typed CONSEQUENCE of the classifier column: an
+    /// `expand_to_typed::<T>(forms)` call composes
+    /// `expand_and_collect_calls_to_any(forms, |h| (h ==
+    /// T::KEYWORD).then_some(()), |(), args| T::compile_from_args(args))`
+    /// — the constant-classifier composition that already binds
+    /// `Sexp::as_call_to` to `Sexp::as_call_to_any`, `iter_calls_to`
+    /// to `iter_calls_to_any`, and both `expand_and_collect_calls_to`
+    /// siblings to their `_any` peers.
+    ///
+    /// Two plausible future consumer shapes the preloaded typed-
+    /// decoded dispatcher admits with no boilerplate:
+    ///   * **Closed-set classifier** — a future `tatara-check` /
+    ///     LSP / REPL dispatcher that wants "macroexpand this source
+    ///     through the active compiler's preloaded library, walk every
+    ///     `(defmacro …)` / `(defpoint-template …)` / `(defcheck …)`
+    ///     form decoded to its typed [`crate::error::MacroDefHead`]
+    ///     arm with the args tail" binds to ONE method on the
+    ///     `RealizedCompiler` rather than re-deriving the
+    ///     `cloned_preloaded() + expand_source_and_collect_calls_to_any(…)`
+    ///     two-step chain at every consumer site.
+    ///   * **Live-registry classifier** — a future `tatara-check`
+    ///     runtime dispatcher that wants "macroexpand `checks.lisp`
+    ///     through the active compiler's preloaded library, walk every
+    ///     `(defX …)` form whose keyword is registered AND decode each
+    ///     to its typed-domain handler in ONE preloaded-expander pass"
+    ///     reaches ONE method on the `RealizedCompiler` instead of a
+    ///     two-step chain.
+    ///
+    /// Per-call posture mirrors [`Self::compile_typed`]: the preloaded
+    /// expander is cloned per call so the cache (`Arc<Mutex<HashMap>>`)
+    /// is shared via Arc while per-call `defmacro` absorption stays
+    /// local to the clone — every dispatcher on `RealizedCompiler`
+    /// routes through [`Self::cloned_preloaded`] for the SAME clone
+    /// posture.
+    ///
+    /// `?`-routing through `crate::reader::read` preserves the
+    /// structural ordering of the rejection chain end-to-end: a reader
+    /// error short-circuits BEFORE `expand_program` runs; an
+    /// `expand_program` error short-circuits BEFORE the classifier
+    /// filter walks anything; a per-form `project` error short-circuits
+    /// at the first failing matched form via
+    /// `Iterator::collect::<Result<Vec<R>, _>>()`. Each consumer's
+    /// rejection chain inherits the typed-decoded primitive's shape
+    /// verbatim, now sourced from `&str` via ONE composition point
+    /// (the from-source delegation through
+    /// [`Self::compile_typed_any_from_forms`]).
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the (preloaded × from-source × typed-decoded-classifier) cell
+    /// of the RealizedCompiler dispatcher matrix is bound in ONE place
+    /// rather than re-derived inline at every preloaded classifier
+    /// consumer's call site. THEORY.md §V.1 — knowable platform; the
+    /// preloaded typed-decoded dispatch becomes a NAMED primitive on
+    /// the substrate's `RealizedCompiler` surface rather than a
+    /// re-derived `cloned_preloaded() +
+    /// expand_source_and_collect_calls_to_any(…)` two-step chain at
+    /// every consumer. THEORY.md §II.1 invariant 1 — typed entry; the
+    /// classifier-filtered + caller-projected walk over the preloaded-
+    /// expanded program IS a typed-entry-batch gate at the preloaded
+    /// boundary, and naming its single shape lifts the gate from a
+    /// per-consumer inline derivation to ONE method on
+    /// `RealizedCompiler`. THEORY.md §II.1 invariant 2 — free middle;
+    /// all four cells of the RealizedCompiler typed-dispatcher matrix
+    /// route through `cloned_preloaded()` + the matching Expander
+    /// primitive, so a regression that drifts ONE cell's pipeline from
+    /// the others cannot reach the substrate's runtime.
+    ///
+    /// Frontier inspiration: MLIR's
+    /// `Region::walk<OpInterface>(callback)` against a region loaded
+    /// from a parsed source file — the typed-IR walk over a region
+    /// inside a typed context (the preloaded macro library is the
+    /// substrate's MLIR context analogue, the typed-interface dyn-cast
+    /// bag is the typed-decoded classifier, the per-op callback is the
+    /// per-form `(T, &[Sexp]) -> Result<R>` projection). Racket's
+    /// `(eval-string str ns)` against a namespace populated with the
+    /// preloaded compiler's `require`d macros combined with
+    /// `syntax-parse`'s typed-choice repeater on the result — typed
+    /// program-level dispatch inside a namespace that carries the
+    /// macro library is the Racket idiom; this method is the Rust-
+    /// typed peer with the typed-decoded classifier composed in.
+    pub fn compile_typed_any<R, F, D, T>(&self, src: &str, decode: D, project: F) -> Result<Vec<R>>
+    where
+        D: FnMut(&str) -> Option<T>,
+        F: FnMut(T, &[Sexp]) -> Result<R>,
+    {
+        self.compile_typed_any_from_forms(crate::reader::read(src)?, decode, project)
+    }
+
+    /// Macroexpand + classifier-walk a pre-parsed program through THIS
+    /// `RealizedCompiler`'s preloaded macro library — the from-forms
+    /// posture of [`Self::compile_typed_any`].
+    ///
+    /// Routes through [`Expander::expand_and_collect_calls_to_any`] on
+    /// a clone of the preloaded expander — the SAME typed primitive
+    /// [`Self::compile_typed_any`]'s from-source delegation ultimately
+    /// threads through (
+    /// [`Self::compile_typed_any`] is
+    /// `self.compile_typed_any_from_forms(crate::reader::read(src)?, …)`).
+    /// This method surfaces the second leg of that composition as ONE
+    /// preloaded-posture primitive rather than asking every from-forms
+    /// classifier consumer of a realized compiler to write
+    /// `realized.cloned_preloaded().expand_and_collect_calls_to_any(forms, …)`
+    /// itself (and `cloned_preloaded()` is `pub(crate)`, so external
+    /// consumers can't reach it without an upcall).
+    ///
+    /// Sibling of [`Self::compile_typed_any`] (the from-source posture's
+    /// preloaded typed-decoded dispatcher) and of
+    /// [`Self::compile_typed_from_forms`] (the from-forms posture's
+    /// preloaded constant-`T::KEYWORD` dispatcher). Together with those
+    /// two — plus [`Self::compile_typed_any`]'s from-source delegation
+    /// — this method closes the typed-dispatcher matrix on the
+    /// `RealizedCompiler` boundary at the (from-forms × typed-decoded
+    /// classifier) cell. The matrix is symmetric: every cell routes
+    /// through `cloned_preloaded()` + the matching [`Expander`] primitive
+    /// (constant-`T::KEYWORD` cells through
+    /// [`Expander::expand_to_typed`] /
+    /// [`Expander::expand_source_to_typed`]; typed-decoded classifier
+    /// cells through this method's composed primitive). A regression
+    /// that drifts ONE cell's pipeline from the others is structurally
+    /// impossible — every cell binds to ONE composition point.
+    ///
+    /// Per-call posture matches [`Self::compile_typed_from_forms`]: the
+    /// preloaded expander is cloned per call so cache is shared via
+    /// `Arc<Mutex>` and per-call `defmacro` absorption stays local to
+    /// the clone. A `defmacro` in a pre-parsed form lands in the clone
+    /// exactly as it does in [`Self::compile_typed_any`]'s from-source
+    /// posture — both postures route through this primitive on a
+    /// `cloned_preloaded()`, which composes `expand_program(forms)`
+    /// (the defmacro-absorption + macro-expansion step) with the
+    /// typed-decoded classifier projection.
+    ///
+    /// The future change that benefits: an LSP that maintains a partial
+    /// `Vec<Sexp>` AST cache across edits and wants to re-run a typed-
+    /// decoded classifier dispatch through a preloaded library against
+    /// a modified subtree, a `tatara-check` runner that walks every
+    /// typed `(defX …)` form inside a `(defcheck …)` macro body that's
+    /// already been expanded once and dispatches each by classifier-
+    /// decoded kind, a REPL `:dispatch <classifier> (form …)` command
+    /// that takes already-quoted forms against the active compiler's
+    /// preloaded expander — binds to ONE method on `RealizedCompiler`
+    /// (`compile_typed_any_from_forms(forms, decode, project)`) instead
+    /// of round-tripping through source serialization first.
+    ///
+    /// Theory anchor: same as [`Self::compile_typed_any`]. THEORY.md
+    /// §VI.1 (generation over composition; the (preloaded × from-forms
+    /// × typed-decoded-classifier) cell is bound in ONE place rather
+    /// than re-derived inline at every from-forms preloaded classifier
+    /// consumer's call site), THEORY.md §II.1 invariant 1 (typed
+    /// entry; the classifier-filtered + caller-projected walk IS a
+    /// typed-entry-batch gate at the preloaded boundary), THEORY.md
+    /// §II.1 invariant 2 (free middle; all four cells of the
+    /// RealizedCompiler typed-dispatcher matrix route through
+    /// `cloned_preloaded()` + the matching Expander primitive).
+    pub fn compile_typed_any_from_forms<R, F, D, T>(
+        &self,
+        forms: Vec<Sexp>,
+        decode: D,
+        project: F,
+    ) -> Result<Vec<R>>
+    where
+        D: FnMut(&str) -> Option<T>,
+        F: FnMut(T, &[Sexp]) -> Result<R>,
+    {
+        self.cloned_preloaded()
+            .expand_and_collect_calls_to_any(forms, decode, project)
+    }
 }
 
 /// Realize a `CompilerSpec` in memory.
@@ -1704,5 +1903,348 @@ mod tests {
             matches!(err, LispError::UnmatchedOpenParen { .. }),
             "expected LispError::UnmatchedOpenParen through from-source delegation, got: {err:?}"
         );
+    }
+
+    // ── RealizedCompiler::compile_typed_any / compile_typed_any_from_forms ─
+    //
+    // The typed-decoded classifier dispatcher on the preloaded-expander
+    // posture — closes the (input posture × projection form) 2×2 on the
+    // `RealizedCompiler` boundary at the (typed-decoded classifier) column.
+    // Routes through `Expander::expand_and_collect_calls_to_any` /
+    // `Expander::expand_source_and_collect_calls_to_any` on a per-call
+    // clone of the preloaded library, binding `(decode, project)` through
+    // the caller (parallel to how `compile_typed` / `compile_typed_from_forms`
+    // bind `(T::KEYWORD, T::compile_from_args)` through the `T: TataraDomain`
+    // type parameter).
+
+    #[test]
+    fn realized_compiler_compile_typed_any_from_forms_yields_decoded_pairs_in_source_order() {
+        // Pin the typed-decoded yield shape against a closed-set classifier
+        // (a hand-rolled `Op::{Foo, Bar}` enum that rejects one head out of
+        // three) sourced from a pre-parsed `Vec<Sexp>` against an empty-
+        // preloaded `RealizedCompiler`. The classifier-decoded yield walks
+        // every matching call form in source order, threading the typed
+        // witness alongside the args tail through the projection.
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        enum Op {
+            Foo,
+            Bar,
+        }
+        impl Op {
+            fn from_keyword(h: &str) -> Option<Self> {
+                match h {
+                    "foo" => Some(Self::Foo),
+                    "bar" => Some(Self::Bar),
+                    _ => None,
+                }
+            }
+        }
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let forms = crate::reader::read("(foo 1) (baz 2) (bar 3) (foo 4)").unwrap();
+        let yielded: Vec<(Op, usize)> = parent
+            .compile_typed_any_from_forms(
+                forms,
+                Op::from_keyword,
+                |op, args| -> Result<(Op, usize)> {
+                    let arg_count = args.len();
+                    Ok((op, arg_count))
+                },
+            )
+            .expect("classifier dispatch must succeed on well-formed source");
+        // `baz` is rejected by the classifier; `foo` and `bar` survive in
+        // source order with their args-tail length threaded through.
+        assert_eq!(
+            yielded,
+            vec![(Op::Foo, 1), (Op::Bar, 1), (Op::Foo, 1)],
+            "classifier dispatch must yield (decoded, args_len) in source order, skipping baz",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_any_skips_non_matching_forms_without_invoking_project() {
+        // Pin the soft-projection contract: the projection MUST NOT run on
+        // any form whose head the classifier rejects (atom, list-with-non-
+        // symbol-head, unrecognized symbol head, empty list). A deliberately-
+        // panicking projection across a mix of those shapes survives the
+        // walk because the classifier rejects every form first.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        // Five shapes the classifier MUST reject: a non-list keyword, a
+        // non-list string, a non-list int, a list-with-int-head, and a
+        // list whose head is an unrecognized symbol. No `foo` / `bar`
+        // anywhere — every form rejected by the closed-set classifier.
+        let src = r#":kw "str" 42 (5 a) (unrecognized x)"#;
+        let yielded: Vec<()> = parent
+            .compile_typed_any(
+                src,
+                |h: &str| match h {
+                    "foo" | "bar" => Some(()),
+                    _ => None,
+                },
+                |(), _args| -> Result<()> {
+                    panic!(
+                        "projection must NOT run on classifier-rejected forms — soft-projection contract"
+                    )
+                },
+            )
+            .expect("classifier dispatch must succeed when zero forms match");
+        assert!(
+            yielded.is_empty(),
+            "classifier dispatch must yield empty Vec when zero forms match",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_any_short_circuits_on_project_error_at_first_failure() {
+        // Pin the Result short-circuit: a projection that errors on the
+        // SECOND match must NOT run the projection on the THIRD match.
+        // Counter increments per projection call; final counter equals the
+        // failing form's index + 1, not the total match count, proving the
+        // walk short-circuited at the failing form.
+        use std::cell::Cell;
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let forms = crate::reader::read("(foo 1) (foo 2) (foo 3) (foo 4)").unwrap();
+        let counter = Cell::new(0_usize);
+        let result: Result<Vec<()>> = parent.compile_typed_any_from_forms(
+            forms,
+            |h: &str| (h == "foo").then_some(()),
+            |(), _args| {
+                let n = counter.get() + 1;
+                counter.set(n);
+                if n == 2 {
+                    Err(LispError::Compile {
+                        form: "foo".into(),
+                        message: "boom".into(),
+                    })
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert!(result.is_err(), "projection error must propagate as Err");
+        assert_eq!(
+            counter.get(),
+            2,
+            "projection MUST short-circuit at the failing form — third + fourth (foo …) must NOT be projected",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_any_short_circuits_at_reader_error_before_classifier_runs() {
+        // Pin the structural ordering: a reader error short-circuits BEFORE
+        // the classifier filter or projection runs. Both decoder and projection
+        // explicitly panic — any post-reader execution fires the panic.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let err = parent
+            .compile_typed_any(
+                "(foo :name \"x\"", // unbalanced open paren
+                |_h: &str| -> Option<()> { panic!("classifier must NOT run after reader error") },
+                |(), _args| -> Result<()> { panic!("projection must NOT run after reader error") },
+            )
+            .unwrap_err();
+        assert!(
+            matches!(err, LispError::UnmatchedOpenParen { .. }),
+            "expected LispError::UnmatchedOpenParen through from-source delegation, got: {err:?}",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_any_routes_through_compile_typed_any_from_forms_under_delegation(
+    ) {
+        // Pin the from-source-delegates-to-from-forms identity: a pre-parsed
+        // form list fed through `compile_typed_any_from_forms` yields the
+        // SAME `Vec<R>` that `compile_typed_any(src)` yields on the source
+        // those forms came from. The classifier-decoded primitive lives at
+        // ONE place (the from-forms primitive on `RealizedCompiler`); the
+        // from-source primitive inherits the binding through delegation —
+        // mirrors the routing of `compile_typed` → `compile_typed_from_forms`
+        // and `compile_named` → `compile_named_from_forms` at the same
+        // boundary, and of `Expander::expand_source_and_collect_calls_to_any`
+        // → `Expander::expand_and_collect_calls_to_any` at the expander
+        // boundary.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = "(alpha 1) (beta 2 3) (gamma)";
+        let forms = crate::reader::read(src).unwrap();
+        let decode = |h: &str| match h {
+            "alpha" => Some("A"),
+            "beta" => Some("B"),
+            "gamma" => Some("C"),
+            _ => None,
+        };
+        let project = |tag: &'static str, args: &[Sexp]| -> Result<(&'static str, usize)> {
+            Ok((tag, args.len()))
+        };
+        let via_source = parent
+            .compile_typed_any(src, decode, project)
+            .expect("from-source classifier must yield Vec<R>");
+        let via_forms = parent
+            .compile_typed_any_from_forms(forms, decode, project)
+            .expect("from-forms classifier must yield Vec<R>");
+        assert_eq!(
+            via_source,
+            vec![("A", 1), ("B", 2), ("C", 0)],
+            "from-source classifier must yield (tag, args_len) in source order",
+        );
+        assert_eq!(
+            via_source, via_forms,
+            "from-source and from-forms classifier dispatchers must yield byte-identical Vec<R>",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_any_routes_preloaded_macros_into_classifier_dispatch() {
+        // Pin that the preloaded macro library participates in the
+        // classifier dispatch: a `(when …)` macro defined in the spec's
+        // `:macros` library expands to `(if …)`, and the post-expansion
+        // form's head is `if`, NOT `when`. A classifier that decodes only
+        // `if` therefore yields the macro-expanded form; a classifier that
+        // decodes only `when` yields nothing (the `when` head no longer
+        // exists post-expansion through the preloaded library).
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec!["(defmacro when (c x) `(if ,c ,x))".into()],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = "(when #t (foo)) (when #f (bar))";
+        let via_if: Vec<()> = parent
+            .compile_typed_any(src, |h: &str| (h == "if").then_some(()), |(), _args| Ok(()))
+            .expect("classifier decoding `if` must yield post-expansion forms");
+        assert_eq!(
+            via_if.len(),
+            2,
+            "preloaded macro library must expand (when …) → (if …) before classifier walks heads",
+        );
+        let via_when: Vec<()> = parent
+            .compile_typed_any(
+                src,
+                |h: &str| (h == "when").then_some(()),
+                |(), _args| Ok(()),
+            )
+            .expect("classifier decoding `when` must succeed yielding empty Vec");
+        assert!(
+            via_when.is_empty(),
+            "post-expansion the `when` head no longer exists — classifier must yield empty",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_any_from_forms_does_not_mutate_preloaded_state() {
+        // Pin per-call clone isolation: a `(defmacro …)` absorbed during
+        // `compile_typed_any_from_forms` lands in the per-call CLONE, not
+        // the persistent `preloaded` expander. Two sequential calls on the
+        // same `RealizedCompiler` see ONLY the spec's original `:macros`
+        // library — the macro defined in the first call's source MUST NOT
+        // leak into the second call.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        // First call: defines `local` as a macro and emits a `(local 1)` form.
+        let forms_1 = crate::reader::read("(defmacro local (x) `(emit ,x)) (local 1)").unwrap();
+        let emitted_1: Vec<()> = parent
+            .compile_typed_any_from_forms(
+                forms_1,
+                |h: &str| (h == "emit").then_some(()),
+                |(), _args| Ok(()),
+            )
+            .expect("first call must expand (local 1) → (emit 1) through per-call clone");
+        assert_eq!(
+            emitted_1.len(),
+            1,
+            "first call's classifier must yield exactly 1 (emit …) form post-expansion",
+        );
+        // Second call: NO `(defmacro local …)` definition. The per-call
+        // clone isolation contract says `local` is NOT registered on the
+        // persistent compiler, so `(local 2)` in the second call's source
+        // does NOT expand to `(emit 2)` — its head stays `local` and the
+        // `emit` classifier yields nothing.
+        let forms_2 = crate::reader::read("(local 2)").unwrap();
+        let emitted_2: Vec<()> = parent
+            .compile_typed_any_from_forms(
+                forms_2,
+                |h: &str| (h == "emit").then_some(()),
+                |(), _args| Ok(()),
+            )
+            .expect("second call must succeed even though `local` is undefined on the persistent compiler");
+        assert!(
+            emitted_2.is_empty(),
+            "second call's classifier MUST yield empty — `(defmacro local …)` from first call MUST NOT leak into persistent preloaded",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_typed_any_yields_empty_for_classifier_that_rejects_every_head() {
+        // Pin the trivial-classifier corner: a classifier that rejects EVERY
+        // head (returns `None` unconditionally) yields an empty `Vec<R>` —
+        // no forms reach the projection, even on a source with many calls.
+        // This is the soft-projection contract's degenerate cell.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = "(a) (b) (c) (d) (e)";
+        let yielded: Vec<()> = parent
+            .compile_typed_any(
+                src,
+                |_h: &str| None::<()>,
+                |(), _args| -> Result<()> {
+                    panic!("projection must NOT run when classifier rejects all")
+                },
+            )
+            .expect("trivial-rejecting classifier must yield empty Vec on any source");
+        assert!(yielded.is_empty());
     }
 }

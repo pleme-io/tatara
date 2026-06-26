@@ -1858,6 +1858,18 @@ impl Sexp {
     /// borrowed `&'static str` (a closed-set head) project to
     /// `&'static str` and inherit the static lifetime through the
     /// classifier.
+    ///
+    /// Slice-side sibling: [`iter_calls_to_any`] lifts this per-form
+    /// projection onto a `&[Sexp]`, yielding the `(decoded, &[Sexp])`
+    /// pair of every matching form in source order — the substrate's
+    /// typed-decoded filter over a batch of forms, structurally bound
+    /// to this per-form projection via the closed-form composition
+    /// `iter_calls_to_any(forms, decode) == forms.iter().filter_map(|f|
+    /// f.as_call_to_any(&mut decode))`. The slice-side primitive
+    /// promotes the closure constraint from [`FnOnce`] (per-form, one
+    /// call per invocation) to [`FnMut`] (slice-side, one call per
+    /// element) so a decoder that captures mutable state (a counter, a
+    /// registry cache) maintains state across the batch walk.
     pub fn as_call_to_any<F, T>(&self, decode: F) -> Option<(T, &[Sexp])>
     where
         F: FnOnce(&str) -> Option<T>,
@@ -2670,13 +2682,32 @@ impl QuoteForm {
 /// projections `{head_symbol, as_call, as_call_to, as_call_to_any}` each
 /// answer "what does THIS form's head say?", and the slice-side
 /// `iter_calls_to` extends them to "what do THESE forms' heads say,
-/// projected through one keyword?". The closed-form composition binding
-/// the slice-side projection to its per-form sibling is the structural
-/// identity every consumer can pin against:
+/// projected through one keyword?". Typed-decoded sibling on the
+/// slice algebra: [`iter_calls_to_any`] — the closure-typed extension
+/// of THIS function the same way [`Sexp::as_call_to_any`] extends
+/// [`Sexp::as_call_to`] on the per-form algebra. The (per-form,
+/// slice-side) × (keyword, classifier) 2×2 of soft-dispatch
+/// primitives is closed at the slice corner this lift establishes;
+/// the closed-form composition binding the slice-side projection to
+/// its per-form sibling is the structural identity every consumer
+/// can pin against:
 ///
 /// ```ignore
 /// iter_calls_to(forms, k) == forms.iter().filter_map(|f| f.as_call_to(k))
 /// ```
+///
+/// Post-lift `iter_calls_to`'s body composes
+/// [`iter_calls_to_any`] with a keyword-equality decoder
+/// (`|h| (h == keyword).then_some(())`) and drops the decoded unit, so
+/// the keyword-typed slice walk IS the typed-decoded slice walk
+/// restricted to a constant-keyword classifier. The (slice-side
+/// keyword projection, slice-side typed-decoded projection) pair
+/// binds at ONE filter-and-fuse implementation on the algebra
+/// rather than at two parallel `forms.iter().filter_map(_)` triples
+/// that the type system would not catch when one drifts from the
+/// other (a future emitter that adds debug logging at one site but
+/// not the other, a future span-aware walk that threads borrowed
+/// positional metadata through one site but skips the other).
 ///
 /// The yielded `&[Sexp]` slices borrow `&forms[i][1..]` verbatim — no
 /// copy, no allocation, same lifetime as [`Sexp::as_call_to`]'s tail.
@@ -2724,7 +2755,145 @@ pub fn iter_calls_to<'a>(
     forms: &'a [Sexp],
     keyword: &'a str,
 ) -> impl Iterator<Item = &'a [Sexp]> + 'a {
-    forms.iter().filter_map(move |f| f.as_call_to(keyword))
+    iter_calls_to_any(forms, move |h| (h == keyword).then_some(())).map(|(_, args)| args)
+}
+
+/// Iterate over the `(decoded, args)` pairs of every form in `forms` whose
+/// call head decodes through `decode` — the *slice-side* sibling of
+/// [`Sexp::as_call_to_any`]. Where [`Sexp::as_call_to_any`] answers "is
+/// THIS form a call whose head decodes through `F`, and what are its
+/// arguments?" on ONE form, `iter_calls_to_any` answers "which forms in
+/// this SLICE are calls whose heads decode through `F`, and what do they
+/// decode to alongside their arguments?" on a `&[Sexp]`. Yields
+/// `(decoded, &[Sexp])` for each matching form — the decoded typed
+/// witness alongside the matched form's argument tail (`&form_list[1..]`,
+/// the empty slice for a singleton call like `(K)`); non-matching forms
+/// — every shape [`Sexp::as_call_to_any`] rejects, including calls whose
+/// head is present but `decode` returns `None` for — are skipped silently,
+/// matching the soft-projection posture the per-form sibling carries.
+///
+/// Closes the soft-dispatch family at the slice corner this lift
+/// establishes — the (per-form, slice-side) × (keyword, classifier) 2×2
+/// of soft-dispatch primitives on the `Sexp`/`&[Sexp]` algebras:
+///
+/// |                | per-form              | slice-side               |
+/// |----------------|-----------------------|--------------------------|
+/// | keyword        | [`Sexp::as_call_to`]  | [`iter_calls_to`]        |
+/// | classifier `F` | [`Sexp::as_call_to_any`] | `iter_calls_to_any` (this) |
+///
+/// The keyword corner is the constant-classifier projection of the
+/// classifier corner: [`iter_calls_to`] now composes through THIS
+/// primitive with a `move |h| (h == keyword).then_some(())` decoder
+/// and drops the decoded unit, parallel to how
+/// `Sexp::as_call_to(k) == Sexp::as_call_to_any(|h| (h ==
+/// k).then_some(())).map(|(_, a)| a)` (modulo the discarded `()`) on
+/// the per-form algebra. The slice-side filter-and-fuse implementation
+/// now lives at ONE site, so a regression that drifts a debug-logging
+/// instrumentation, span-aware borrow threading, or fused-iterator
+/// invariant from one slice consumer to the other becomes
+/// structurally impossible.
+///
+/// Two plausible future consumer shapes the typed-decoded slice walk
+/// admits with no boilerplate:
+///   * **Closed-set classifier** — `iter_calls_to_any(forms,
+///     MacroDefHead::from_keyword)` walks a slice yielding `(head: MacroDefHead,
+///     args: &[Sexp])` for every `(defmacro …)` / `(defpoint-template …)`
+///     / `(defcheck …)` form, decoded to the typed `MacroDefHead` enum.
+///     Future LSP / `tatara-check` consumers that surface "every
+///     defmacro-family form in this buffer with its kind tag" bind to
+///     ONE projection rather than a hand-rolled
+///     `forms.iter().filter_map(|f| f.as_call_to_any(MacroDefHead::from_keyword))`
+///     triple at each consumer site.
+///   * **Live-registry classifier** — `iter_calls_to_any(forms, |h|
+///     registry.get(h))` walks a slice yielding `(handler: &Handler,
+///     args: &[Sexp])` for every form whose head matches a runtime
+///     registry. Future REPL / `tatara-check` consumers that route
+///     every form through a registry dispatcher bind to ONE
+///     projection rather than re-deriving the `filter_map` pattern
+///     per consumer surface — sibling shape to
+///     [`Expander::expand`](crate::macro_expand::Expander::expand)'s
+///     per-form `as_call_to_any(|h| self.macros.get(h))` macro-call
+///     dispatch, lifted onto the slice algebra so a batch walk picks
+///     up the same dispatch shape without re-derivation.
+///
+/// The closed-form composition binding the slice-side projection to
+/// its per-form sibling is the structural identity every consumer can
+/// pin against:
+///
+/// ```ignore
+/// iter_calls_to_any(forms, decode) ==
+///     forms.iter().filter_map(|f| f.as_call_to_any(&mut decode))
+/// ```
+///
+/// The yielded `&[Sexp]` slices borrow `&forms[i][1..]` verbatim — no
+/// copy, no allocation, same lifetime as [`Sexp::as_call_to_any`]'s
+/// tail. `T` is owned because `decode` is `FnMut(&str) -> Option<T>`
+/// and a `&'_ str` borrow into the head symbol would not outlive the
+/// helper boundary; consumers projecting to a typed `Copy` enum
+/// (e.g. `MacroDefHead`) get the value directly per form, consumers
+/// projecting to a borrowed `&'static str` (a closed-set head)
+/// project to `&'static str` and inherit the static lifetime through
+/// the classifier. The closure is `FnMut` (rather than the per-form
+/// sibling's `FnOnce`) because the slice walk calls it once per form
+/// — a closure that captures mutable state (a counter, a registry
+/// cache) maintains that state across the batch walk; a closure with
+/// no mutable state is admitted trivially.
+///
+/// The iterator's lifetime `'a` unifies `forms`'s borrow lifetime
+/// with the closure `F`'s captures lifetime: the decoder must outlive
+/// the iterator's borrow of the slice, the typical caller passes a
+/// `'static` decoder (a `fn` item like `MacroDefHead::from_keyword`,
+/// or a closure capturing nothing) which unifies trivially. The
+/// closure captures `decode` by move (the `move` keyword on the
+/// `filter_map` closure), so each invocation re-borrows it as
+/// `&mut decode` and calls [`Sexp::as_call_to_any`] with a fresh
+/// `FnOnce`-coerced borrow — no shared-state hazard, fully
+/// Iterator-fused.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// per-form classifier sibling [`Sexp::as_call_to_any`] has two
+/// production consumers (`macro_def_from` via closed-set classifier
+/// `MacroDefHead::from_keyword`, `Expander::expand` via live-registry
+/// classifier `|h| self.macros.get(h)`) — past the ≥2 PRIME-DIRECTIVE
+/// trigger once the slice-side projection is named. Future
+/// authoring-tool surfaces (LSP buffer walks, `tatara-check` batch
+/// dispatchers, REPL exhaustive listers) join the family without
+/// re-deriving the `filter_map(|f| f.as_call_to_any(_))` triple per
+/// consumer. THEORY.md §V.1 — knowable platform; the slice-side
+/// typed-decoded projection becomes a NAMED primitive on the
+/// substrate's `&[Sexp]` algebra, closing the 2×2 of soft-dispatch
+/// primitives the per-form algebra already establishes. THEORY.md
+/// §II.1 invariant 2 — free middle; the slice-side keyword filter
+/// ([`iter_calls_to`]) now routes through the slice-side classifier
+/// filter (THIS function) via the constant-classifier composition, so
+/// a regression that drifts the keyword filter's instrumentation
+/// from the classifier filter's instrumentation becomes structurally
+/// impossible.
+///
+/// Frontier inspiration: MLIR's
+/// `op.walk<OpInterface, OpInterface2, …>([&](auto op) { … })` — the
+/// typed-IR walk over a region yielding ops decoded to their typed
+/// interface witness IS the slice-side typed-decoded projection on
+/// MLIR's op algebra; `iter_calls_to_any` is the unstructured-Rust
+/// peer on the substrate's typed `&[Sexp]` algebra, with `decode:
+/// FnMut(&str) -> Option<T>` standing in for MLIR's typed-interface
+/// dyn-cast bag. Racket's `syntax-parse` `~or* (~datum defmacro)
+/// (~datum defpoint-template) (~datum defcheck) (head args …)` over
+/// an ellipsis-form — the slice-level matched-set filter decoded to
+/// a typed witness is the closed-form sibling of `~or*`'s
+/// typed-choice repeater, translated through pleme-io primitives as
+/// ONE `iter_calls_to_any(forms, F)` projection.
+pub fn iter_calls_to_any<'a, F, T>(
+    forms: &'a [Sexp],
+    mut decode: F,
+) -> impl Iterator<Item = (T, &'a [Sexp])> + 'a
+where
+    F: FnMut(&str) -> Option<T> + 'a,
+    T: 'a,
+{
+    forms
+        .iter()
+        .filter_map(move |f| f.as_call_to_any(&mut decode))
 }
 
 /// Render an `Atom::Float`'s `f64` value to a form that re-reads as
@@ -3725,6 +3894,352 @@ mod tests {
                 assert_eq!(a.len(), b.len(), "len drift at keyword {k:?}");
             }
         }
+    }
+
+    // ── iter_calls_to_any: the typed-decoded slice-side projection ──────
+    //
+    // `iter_calls_to_any(forms, decode)` lifts the per-form projection
+    // `as_call_to_any` onto a `&[Sexp]`, yielding the `(decoded,
+    // &[Sexp])` pair of every form whose head decodes through `decode`
+    // — the substrate's typed-decoded filter over a batch of forms,
+    // closing the (per-form, slice-side) × (keyword, classifier) 2×2
+    // of soft-dispatch primitives at the slice-side classifier corner.
+    // The slice-side keyword projection `iter_calls_to` now routes
+    // through THIS primitive with a constant-keyword decoder, so the
+    // filter-and-fuse implementation lives at ONE site on the slice
+    // algebra. Tests pin the slice-side primitive's contract directly
+    // alongside the (slice-side keyword, slice-side classifier)
+    // composition law that the keyword projection's re-routing
+    // establishes.
+
+    #[test]
+    fn iter_calls_to_any_yields_decoded_pair_for_every_matching_form_in_slice() {
+        // Three forms: two decode through `Op::from_keyword`, one does
+        // not (the head `"defalert"` is outside the closed set). The
+        // typed-decoded slice walk yields the `(decoded, args)` pair
+        // for each matching form in source order, skipping non-decoding
+        // forms silently — parallel to how `iter_calls_to` yields ONLY
+        // the args slice for keyword-matching forms.
+        #[derive(Debug, PartialEq, Eq)]
+        enum Op {
+            Defmonitor,
+            Defpoint,
+        }
+        impl Op {
+            fn from_keyword(h: &str) -> Option<Self> {
+                match h {
+                    "defmonitor" => Some(Self::Defmonitor),
+                    "defpoint" => Some(Self::Defpoint),
+                    _ => None,
+                }
+            }
+        }
+        let forms = vec![
+            Sexp::List(vec![
+                Sexp::symbol("defmonitor"),
+                Sexp::keyword("name"),
+                Sexp::string("a"),
+            ]),
+            Sexp::List(vec![
+                Sexp::symbol("defalert"),
+                Sexp::keyword("name"),
+                Sexp::string("p"),
+            ]),
+            Sexp::List(vec![
+                Sexp::symbol("defpoint"),
+                Sexp::keyword("name"),
+                Sexp::string("b"),
+            ]),
+        ];
+        let decoded: Vec<(Op, &[Sexp])> = iter_calls_to_any(&forms, Op::from_keyword).collect();
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded[0].0, Op::Defmonitor);
+        assert_eq!(
+            decoded[0].1,
+            &[Sexp::keyword("name"), Sexp::string("a")][..]
+        );
+        assert_eq!(decoded[1].0, Op::Defpoint);
+        assert_eq!(
+            decoded[1].1,
+            &[Sexp::keyword("name"), Sexp::string("b")][..]
+        );
+    }
+
+    #[test]
+    fn iter_calls_to_any_skips_every_shape_per_form_sibling_rejects() {
+        // Every shape `as_call_to_any` rejects, `iter_calls_to_any`
+        // skips: non-list shapes, the empty list, non-symbol-head
+        // lists, AND lists whose head is a symbol the decoder rejects.
+        // Pin the soft-projection contract at the slice level —
+        // parallel to `iter_calls_to_skips_every_non_call_shape_silently`
+        // but with the decoder rejection axis added so the per-form
+        // sibling's two rejection sources (shape-level + decoder-level)
+        // both route through the slice-side filter uniformly.
+        let forms = vec![
+            Sexp::symbol("foo"),
+            Sexp::int(5),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::boolean(true),
+            Sexp::float(1.5),
+            Sexp::Nil,
+            Sexp::Quote(Box::new(Sexp::symbol("foo"))),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(5), Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::keyword("foo"), Sexp::symbol("a")]),
+            // A call whose head IS a symbol but the decoder rejects —
+            // this is the decoder-level rejection axis the per-form
+            // sibling's classifier closure adds beyond the keyword
+            // sibling's `head == k` axis.
+            Sexp::List(vec![Sexp::symbol("unknown-head"), Sexp::int(1)]),
+        ];
+        let decoded: Vec<(&'static str, &[Sexp])> =
+            iter_calls_to_any(&forms, |_h: &str| None::<&'static str>).collect();
+        assert!(
+            decoded.is_empty(),
+            "non-call / decoder-rejecting slice must yield zero items, got {} items",
+            decoded.len()
+        );
+    }
+
+    #[test]
+    fn iter_calls_to_any_yields_empty_args_slice_for_singleton_decoded_call() {
+        // `(defcompiler)` decoded through a classifier that accepts
+        // the head — the args tail is the empty slice. Pin the
+        // empty-tail posture: the typed-decoded slice walk must yield
+        // `(decoded, &[])` for the matching singleton (NOT skip it),
+        // mirroring the per-form sibling's contract — the
+        // (possibly-empty) args slice on a decoded match, NOT `None`
+        // on an empty tail. Parallel to
+        // `iter_calls_to_yields_empty_args_slice_for_singleton_matching_call`
+        // for the keyword sibling and
+        // `as_call_to_any_yields_empty_args_for_singleton_decoded_call`
+        // for the per-form sibling.
+        let forms = vec![Sexp::List(vec![Sexp::symbol("defcompiler")])];
+        let decoded: Vec<(&'static str, &[Sexp])> = iter_calls_to_any(&forms, |h: &str| {
+            (h == "defcompiler").then_some("defcompiler")
+        })
+        .collect();
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0].0, "defcompiler");
+        assert_eq!(decoded[0].1, &[][..]);
+    }
+
+    #[test]
+    fn iter_calls_to_any_yields_nothing_for_empty_slice() {
+        // An empty forms slice yields zero items regardless of
+        // decoder. Pin the slice-side primitive's degenerate boundary:
+        // empty in, empty out — the iterator is fused-empty without
+        // consulting `as_call_to_any` at all. The decoder's body must
+        // never run (we assert with an explicitly-panicking closure
+        // body to prove the fused-empty contract holds before the
+        // per-form sibling is consulted). Parallel to
+        // `iter_calls_to_yields_nothing_for_empty_slice` for the
+        // keyword sibling.
+        let forms: Vec<Sexp> = vec![];
+        let mut iter = iter_calls_to_any(&forms, |_h: &str| -> Option<()> {
+            panic!("decoder must not run on an empty forms slice")
+        });
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn iter_calls_to_any_args_borrow_is_same_pointer_as_per_form_as_call_to_any_tail() {
+        // The structural identity binding `iter_calls_to_any` to its
+        // per-form sibling: each yielded `&[Sexp]` IS the same slice
+        // `as_call_to_any` would return as the tail component for the
+        // corresponding form (pinned via `std::ptr::eq` on `as_ptr()`).
+        // The soft-projection contract is borrow, not clone, AND
+        // `iter_calls_to_any` inherits the contract verbatim from
+        // `as_call_to_any`. Parallel to the
+        // `iter_calls_to_args_borrow_is_same_pointer_as_per_form_as_call_to_tail`
+        // pin for the keyword sibling and the
+        // `as_call_to_any_args_borrow_is_same_pointer_as_as_call_tail`
+        // pin for the per-form sibling.
+        let forms = vec![Sexp::List(vec![
+            Sexp::symbol("defmonitor"),
+            Sexp::keyword("name"),
+            Sexp::string("a"),
+        ])];
+        let (_, via_iter): (&'static str, &[Sexp]) = iter_calls_to_any(&forms, |h: &str| {
+            (h == "defmonitor").then_some("defmonitor")
+        })
+        .next()
+        .expect("one decoded match");
+        let (_, via_per_form): (&'static str, &[Sexp]) = forms[0]
+            .as_call_to_any(|h: &str| (h == "defmonitor").then_some("defmonitor"))
+            .expect("one decoded match");
+        assert!(
+            std::ptr::eq(via_iter.as_ptr(), via_per_form.as_ptr()),
+            "iter_calls_to_any args must borrow the SAME slice as as_call_to_any's tail"
+        );
+        assert_eq!(via_iter.len(), via_per_form.len());
+    }
+
+    #[test]
+    fn iter_calls_to_any_is_the_slice_side_projection_of_as_call_to_any() {
+        // The structural identity the lift establishes:
+        //   iter_calls_to_any(forms, decode) ==
+        //       forms.iter().filter_map(|f| f.as_call_to_any(&mut decode))
+        // Pin shape AND ordering AND pointer-identity across mixed
+        // inputs and a range of decoders (closed-set classifier,
+        // always-accept identity, always-reject `None`, partial
+        // closed-set on a single head) so a regression that drifts
+        // the slice-side projection from its closed-form definition
+        // fails loudly. The six soft-projection primitives —
+        // `head_symbol`, `as_call`, `as_call_to`, `as_call_to_any`,
+        // `iter_calls_to`, AND `iter_calls_to_any` — must agree on
+        // operator-position recognition at every shape/slice they
+        // share. Parallel to
+        // `iter_calls_to_is_the_slice_side_projection_of_as_call_to`
+        // for the keyword sibling.
+        let forms = vec![
+            Sexp::symbol("foo"),
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(1)]),
+            Sexp::Nil,
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(2)]),
+            Sexp::int(99),
+            Sexp::List(vec![Sexp::symbol("b"), Sexp::int(3)]),
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::keyword("a"), Sexp::int(4)]),
+            Sexp::List(vec![Sexp::symbol("c"), Sexp::int(5)]),
+        ];
+        // Closed-set classifier: accept "a" and "c", reject everything
+        // else (including the call whose head is "b", to pin the
+        // decoder-level rejection axis the keyword sibling does not
+        // have).
+        let decode_set =
+            |h: &str| -> Option<&'static str> { matches!(h, "a" | "c").then_some("ac") };
+        let via_iter: Vec<(&'static str, &[Sexp])> =
+            iter_calls_to_any(&forms, decode_set).collect();
+        let via_chain: Vec<(&'static str, &[Sexp])> = forms
+            .iter()
+            .filter_map(|f| f.as_call_to_any(decode_set))
+            .collect();
+        assert_eq!(
+            via_iter.len(),
+            via_chain.len(),
+            "len drift between slice-side and per-form-chain"
+        );
+        for (a, b) in via_iter.iter().zip(via_chain.iter()) {
+            assert_eq!(a.0, b.0, "decoded drift");
+            assert!(
+                std::ptr::eq(a.1.as_ptr(), b.1.as_ptr()),
+                "ptr drift: slice-side does not borrow the SAME tail as the per-form chain"
+            );
+            assert_eq!(a.1.len(), b.1.len(), "len drift");
+        }
+    }
+
+    #[test]
+    fn iter_calls_to_routes_through_iter_calls_to_any_via_constant_classifier_composition() {
+        // The post-lift composition law binding the slice-side
+        // keyword projection to the slice-side classifier projection:
+        //
+        //   iter_calls_to(forms, k) ==
+        //       iter_calls_to_any(forms, |h| (h == k).then_some(())).map(|(_, a)| a)
+        //
+        // Pin shape AND ordering AND pointer-identity across a mixed
+        // slice and three representative keywords (matching some,
+        // matching none, edge-case empty string) so a regression that
+        // drifts `iter_calls_to`'s body away from the typed-decoded
+        // routing (e.g. re-inlines the `forms.iter().filter_map(|f|
+        // f.as_call_to(keyword))` triple directly) fails loudly even
+        // though the rendered slice-of-slices would still match the
+        // keyword sibling's output. The pointer-equality axis is
+        // load-bearing: a regression that re-derives the filter at
+        // both sites would yield byte-identical slices but with
+        // distinct closure-capture state, which the
+        // pointer-identity check rejects only because both routes
+        // share the SAME underlying form-tail borrow chain.
+        //
+        // Sibling-shape lift to prior-run `UnquoteForm::marker` ⊂
+        // `to_quote_form().prefix()` composition (commit 250c001) and
+        // `AtomKind::label` ⊂ `sexp_shape().label()` composition
+        // (commit 1db697f): both pin the invariant that a typed
+        // subset/keyword projection is structurally derived from its
+        // parent superset/classifier projection, not a parallel
+        // implementation the type system happens to not catch when
+        // the two drift.
+        let forms = vec![
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(1)]),
+            Sexp::List(vec![Sexp::symbol("b"), Sexp::int(2)]),
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(3)]),
+            Sexp::List(vec![Sexp::symbol("c"), Sexp::int(4)]),
+            Sexp::int(99),
+        ];
+        for k in ["a", "missing", ""] {
+            let via_keyword: Vec<&[Sexp]> = iter_calls_to(&forms, k).collect();
+            let via_classifier: Vec<&[Sexp]> =
+                iter_calls_to_any(&forms, |h: &str| (h == k).then_some(()))
+                    .map(|(_, a)| a)
+                    .collect();
+            assert_eq!(
+                via_keyword.len(),
+                via_classifier.len(),
+                "len drift between keyword projection and classifier composition for k={k:?}"
+            );
+            for (a, b) in via_keyword.iter().zip(via_classifier.iter()) {
+                assert!(
+                    std::ptr::eq(a.as_ptr(), b.as_ptr()),
+                    "ptr drift at k={k:?}: keyword projection does not share the SAME borrow with the classifier composition"
+                );
+                assert_eq!(a.len(), b.len(), "len drift at k={k:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn iter_calls_to_any_admits_fnmut_classifier_maintaining_state_across_batch_walk() {
+        // The slice-side primitive's `FnMut` constraint (vs the
+        // per-form sibling's `FnOnce`) admits a classifier that
+        // captures mutable state — a counter, a registry cache, a
+        // visited-set. Pin the mutable-state contract: a counter
+        // closure increments once per matching form (NOT once per
+        // call to `f.as_call_to_any(decode)` at every form, since
+        // `as_call_to_any` short-circuits before running `decode` on
+        // non-list / empty-list / non-symbol-head shapes — only forms
+        // that pass the shape gate reach the decoder). The counter's
+        // post-walk value pins the exact number of forms that
+        // (a) passed the shape gate AND (b) had a head matching the
+        // classifier's predicate.
+        let forms = vec![
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(1)]),
+            Sexp::int(99), // not a call — `as_call_to_any` short-circuits, decoder never runs
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(2)]),
+            Sexp::List(vec![Sexp::symbol("b"), Sexp::int(3)]),
+            Sexp::List(vec![]), // empty list — `as_call_to_any` short-circuits before decoder
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(4)]),
+        ];
+        let mut decoder_calls = 0usize;
+        // Consume the iterator into a count (NOT a Vec) so the closure
+        // capture of `decoder_calls` is dropped at the iterator's end,
+        // releasing the mutable borrow before the post-walk assertions
+        // re-read `decoder_calls` immutably. A `Vec<((), &[Sexp])>`
+        // collection would inherit the closure's `'a` lifetime through
+        // the `iter_calls_to_any` return type's unified lifetime
+        // parameter and keep the mutable borrow live across the assert
+        // (the rust-borrow-checker contract — `decoded`'s lifetime
+        // ties to `min(forms, closure)` even though the items
+        // themselves only borrow from `forms`).
+        let decoded_count = iter_calls_to_any(&forms, |h: &str| {
+            decoder_calls += 1;
+            (h == "a").then_some(())
+        })
+        .count();
+        // Three forms have head "a"; one form has head "b"; the
+        // non-call shapes (Int + empty list) short-circuit before the
+        // decoder runs. Decoder is called 4 times (the 4 shape-gate-
+        // passing forms); yields 3 matches.
+        assert_eq!(
+            decoder_calls, 4,
+            "decoder must run once per shape-gate-passing form"
+        );
+        assert_eq!(
+            decoded_count, 3,
+            "three forms decode through the classifier"
+        );
     }
 
     // ── as_unquote: the unquote-family projection ───────────────────────

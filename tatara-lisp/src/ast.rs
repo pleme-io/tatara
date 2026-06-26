@@ -34,9 +34,7 @@ impl Hash for Sexp {
             // forces a corresponding `QuoteForm` extension AND
             // `as_quote_form` arm, with rustc binding the three together.
             Self::Quote(_) | Self::Quasiquote(_) | Self::Unquote(_) | Self::UnquoteSplice(_) => {
-                let (qf, inner) = self
-                    .as_quote_form()
-                    .expect("matched quote-family variant must project to Some via as_quote_form");
+                let (qf, inner) = self.expect_quote_form();
                 qf.hash_discriminator().hash(h);
                 inner.hash(h);
             }
@@ -953,7 +951,75 @@ impl Sexp {
             _ => None,
         }
     }
+
+    /// Quote-family projection, asserted-total face of [`Sexp::as_quote_form`].
+    /// Returns `(QuoteForm, &Sexp)` verbatim — same borrowed-inner posture,
+    /// same closed-set marker — but panics with [`QUOTE_FAMILY_PROJECTION_INVARIANT`]
+    /// instead of yielding `None` for non-quote-family variants. Use AFTER
+    /// an outer pattern match has narrowed the discriminant union to the
+    /// quote family (`Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) |
+    /// Sexp::UnquoteSplice(_)`); the panic message states the invariant the
+    /// caller's outer pattern already proves.
+    ///
+    /// Pre-lift the five production-site quote-family-arm consumers —
+    /// `Hash for Sexp::hash_discriminator`, `Display for Sexp::prefix`,
+    /// `domain::sexp_shape`, `domain::sexp_to_json`, `interop::iac_forge_tag` —
+    /// each carried a verbatim copy of the 4-arm wildcard pattern AND a
+    /// verbatim copy of the inline
+    /// `.as_quote_form().expect("matched quote-family variant must project
+    /// to Some via as_quote_form")` re-projection. The `(pattern, expect
+    /// message)` pair appeared bit-for-bit at FIVE sites. Post-lift the
+    /// expect message lives at ONE named const and the projection-with-
+    /// assertion lives at ONE primitive on the `Sexp` algebra; the five
+    /// callsites collapse to ONE typed query each. A future quote-family
+    /// extension that drifts ONE site's panic text from the others becomes
+    /// structurally impossible (one const, one method); a future site that
+    /// needs the same "outer-narrowed, total projection" shape lands on
+    /// this primitive directly without re-deriving the expect literal.
+    ///
+    /// `#[track_caller]` ensures a panic surfaces the consumer's source
+    /// position, not this projection's — so the diagnostic stays
+    /// load-bearing under the lift.
+    ///
+    /// Sibling posture to the `expect_*` family of typed-projection
+    /// asserted-total faces across the substrate's closed-set algebras
+    /// (`Option::expect`, `Result::expect`) — the assertion is the same
+    /// shape, the message is named on the algebra it asserts about.
+    ///
+    /// # Panics
+    ///
+    /// Panics with [`QUOTE_FAMILY_PROJECTION_INVARIANT`] if `self` is not
+    /// a quote-family variant. The outer pattern match at every caller
+    /// site is the proof of the invariant; the panic is the static
+    /// fall-through for a regression that drifts that proof.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// (4-arm wildcard pattern, expect re-projection) pair appeared bit-
+    /// for-bit at five production sites — well past the ≥2 PRIME-DIRECTIVE
+    /// trigger. THEORY.md §V.1 — knowable platform; the panic message and
+    /// the projection-with-assertion are now ONE named primitive on the
+    /// substrate's `Sexp` algebra, structurally binding the invariant
+    /// across every consumer that asserts an outer narrowing.
+    #[must_use]
+    #[track_caller]
+    pub fn expect_quote_form(&self) -> (QuoteForm, &Sexp) {
+        self.as_quote_form()
+            .expect(QUOTE_FAMILY_PROJECTION_INVARIANT)
+    }
 }
+
+/// Static panic message for [`Sexp::expect_quote_form`]'s asserted-total
+/// face of the quote-family projection. Pre-lift this literal appeared
+/// inline at five `.expect(...)` callsites (`Hash for Sexp`,
+/// `Display for Sexp`, `domain::sexp_shape`, `domain::sexp_to_json`,
+/// `interop::iac_forge_tag`); post-lift it lives at ONE named const so a
+/// regression that drifts the diagnostic at one site silently from the
+/// others becomes structurally impossible. Sibling to the per-projection
+/// asserted-total faces across the substrate's typed algebras — the
+/// message names the invariant the outer pattern proves, not the
+/// substring grep'able by tests.
+pub const QUOTE_FAMILY_PROJECTION_INVARIANT: &str =
+    "matched quote-family variant must project to Some via as_quote_form";
 
 /// Closed-set typed identifier for the four homoiconic prefix-wrappers in
 /// the substrate's `Sexp` algebra — `'x` ([`Sexp::Quote`]), `` `x ``
@@ -1597,9 +1663,7 @@ impl fmt::Display for Sexp {
             // through ONE rust function the reader and the Display impl
             // both bind against.
             Self::Quote(_) | Self::Quasiquote(_) | Self::Unquote(_) | Self::UnquoteSplice(_) => {
-                let (qf, inner) = self
-                    .as_quote_form()
-                    .expect("matched quote-family variant must project to Some via as_quote_form");
+                let (qf, inner) = self.expect_quote_form();
                 write!(f, "{}{inner}", qf.prefix())
             }
         }
@@ -2734,6 +2798,88 @@ mod tests {
         assert!(
             std::ptr::eq(body_qq, inner_ptr_qq),
             "as_quote_form inner pointer drifted (quasiquote arm)"
+        );
+    }
+
+    #[test]
+    fn expect_quote_form_projects_each_quote_family_variant_identically_to_as_quote_form() {
+        // ASSERTED-TOTAL-FACE CONTRACT: `expect_quote_form` is the
+        // asserted-total face of `as_quote_form` — for every quote-family
+        // variant it MUST yield the same `(QuoteForm, &Sexp)` projection
+        // that `as_quote_form` yields wrapped in `Some`. A regression
+        // that drifts the two projections (e.g. a future variant
+        // extension that updates `as_quote_form` but forgets to align
+        // `expect_quote_form`'s body) surfaces here.
+        let inner = Sexp::symbol("payload");
+        for variant in [
+            Sexp::Quote(Box::new(inner.clone())),
+            Sexp::Quasiquote(Box::new(inner.clone())),
+            Sexp::Unquote(Box::new(inner.clone())),
+            Sexp::UnquoteSplice(Box::new(inner.clone())),
+        ] {
+            let via_total = variant.expect_quote_form();
+            let via_soft = variant.as_quote_form().expect("variant is quote-family");
+            assert_eq!(
+                via_total.0, via_soft.0,
+                "expect_quote_form's QuoteForm drifted from as_quote_form's at {variant}"
+            );
+            assert!(
+                std::ptr::eq(via_total.1, via_soft.1),
+                "expect_quote_form's inner pointer drifted from as_quote_form's at {variant}"
+            );
+        }
+    }
+
+    #[test]
+    fn expect_quote_form_panics_with_invariant_const_on_non_quote_family_variants() {
+        // STATIC-INVARIANT CONTRACT: every non-quote-family variant
+        // (Nil, every Atom subkind, List empty + populated) MUST trigger
+        // the asserted-total panic with the named
+        // `QUOTE_FAMILY_PROJECTION_INVARIANT` message. The const-vs-
+        // panic-payload pin catches a future drift where the const is
+        // edited without the projection picking it up (or vice versa).
+        for variant in [
+            Sexp::Nil,
+            Sexp::symbol("x"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(2.5),
+            Sexp::boolean(true),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]),
+        ] {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _ = variant.expect_quote_form();
+            }));
+            let payload = result.expect_err("expect_quote_form must panic on non-quote-family");
+            let msg = payload
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| payload.downcast_ref::<&'static str>().copied())
+                .expect("panic payload must be a string");
+            assert!(
+                msg.contains(QUOTE_FAMILY_PROJECTION_INVARIANT),
+                "expect_quote_form panic message {msg:?} did not name \
+                 QUOTE_FAMILY_PROJECTION_INVARIANT at variant {variant:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn quote_family_projection_invariant_const_matches_legacy_inline_literal() {
+        // CONST-PIN: pre-lift the panic literal "matched quote-family
+        // variant must project to Some via as_quote_form" appeared inline
+        // at FIVE production sites (`Hash for Sexp`, `Display for Sexp`,
+        // `domain::sexp_shape`, `domain::sexp_to_json`,
+        // `interop::iac_forge_tag`). Pin the lifted const to the legacy
+        // inline literal bit-for-bit so a regression that drifts the
+        // const silently from the historical diagnostic string surfaces
+        // here. Sibling shape to `quote_form_hash_discriminator_pins_
+        // legacy_cache_key_bytes` for the discriminator-byte algebra.
+        assert_eq!(
+            QUOTE_FAMILY_PROJECTION_INVARIANT,
+            "matched quote-family variant must project to Some via as_quote_form"
         );
     }
 

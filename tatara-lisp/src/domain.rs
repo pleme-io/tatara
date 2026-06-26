@@ -600,9 +600,7 @@ pub fn sexp_shape(s: &Sexp) -> SexpShape {
         // four-arm `hash_discriminator` collapse, `Display for Sexp`'s
         // `prefix` collapse, and `interop`'s `iac_forge_tag` collapse.
         Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) | Sexp::UnquoteSplice(_) => {
-            let (qf, _) = s
-                .as_quote_form()
-                .expect("matched quote-family variant must project to Some via as_quote_form");
+            let (qf, _) = s.expect_quote_form();
             qf.sexp_shape()
         }
     }
@@ -1418,9 +1416,7 @@ pub fn sexp_to_json(s: &Sexp) -> Result<JValue> {
         // checked at the algebra rather than re-derived per
         // consumer.
         Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) | Sexp::UnquoteSplice(_) => {
-            let (_, inner) = s
-                .as_quote_form()
-                .expect("matched quote-family variant must project to Some via as_quote_form");
+            let (_, inner) = s.expect_quote_form();
             sexp_to_json(inner)?
         }
     })

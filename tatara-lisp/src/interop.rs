@@ -46,9 +46,7 @@ mod iac_forge_impl {
                 | Sexp::Quasiquote(_)
                 | Sexp::Unquote(_)
                 | Sexp::UnquoteSplice(_) => {
-                    let (qf, inner) = s.as_quote_form().expect(
-                        "matched quote-family variant must project to Some via as_quote_form",
-                    );
+                    let (qf, inner) = s.expect_quote_form();
                     tagged(qf.iac_forge_tag(), inner)
                 }
             }

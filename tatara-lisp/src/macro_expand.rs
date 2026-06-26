@@ -1060,17 +1060,152 @@ impl Expander {
     /// namespace that carries the macro library is the Racket idiom; the
     /// substrate's `expand_source_and_collect_calls_to` is the Rust-typed
     /// peer of that, with the typed-keyword projection composed in.
+    ///
+    /// Post-lift the body routes through the typed-decoded sibling
+    /// [`Self::expand_source_and_collect_calls_to_any`] with a
+    /// constant-classifier decoder — the same constant-classifier
+    /// composition [`Self::expand_and_collect_calls_to`] uses to route
+    /// through [`Self::expand_and_collect_calls_to_any`] on the
+    /// from-forms axis, and that [`crate::ast::iter_calls_to`] uses to
+    /// route through [`crate::ast::iter_calls_to_any`] on the slice
+    /// algebra. The discarded `()` typed witness (`then_some(())`) is
+    /// consumed by the wrapper projection `|(), args| project(args)`
+    /// so the keyword consumer's per-form mapper sees only the args
+    /// tail. Both the keyword AND classifier from-source walks now
+    /// share ONE pipeline implementation (`read + expand_program +
+    /// iter_calls_to_any + map + collect`) — a regression that drifts
+    /// a future debug-mode logger, span-aware borrow walker, or
+    /// fused-iterator invariant from one from-source walk to the
+    /// other becomes structurally impossible.
     pub fn expand_source_and_collect_calls_to<R, F>(
         &mut self,
         src: &str,
         keyword: &str,
-        project: F,
+        mut project: F,
     ) -> Result<Vec<R>>
     where
         F: FnMut(&[Sexp]) -> Result<R>,
     {
+        self.expand_source_and_collect_calls_to_any(
+            src,
+            |h| (h == keyword).then_some(()),
+            move |(), args| project(args),
+        )
+    }
+
+    /// Read a source string into top-level forms via [`crate::reader::read`],
+    /// then route the forms through
+    /// [`expand_and_collect_calls_to_any`](Self::expand_and_collect_calls_to_any) —
+    /// the from-source posture of the typed-decoded classifier walk, in
+    /// ONE method on the `Expander` surface. The typed-decoded sibling of
+    /// [`Self::expand_source_and_collect_calls_to`] — where that method
+    /// filters by ONE constant keyword, this method filters AND TYPES by
+    /// a caller-supplied classifier, yielding the typed witness alongside
+    /// the per-form projection's args input. Sourced from `&str` rather
+    /// than a `Vec<Sexp>`.
+    ///
+    /// Closes the substrate's program-level walk family on the `Expander`
+    /// surface across BOTH input postures × BOTH projection forms — the
+    /// (from-forms, from-source) × (keyword, classifier) 2×2 of
+    /// compose-on-iter projections:
+    ///
+    /// |                | from-forms (`Vec<Sexp>`)                                      | from-source (`&str`)                                                |
+    /// |----------------|---------------------------------------------------------------|---------------------------------------------------------------------|
+    /// | keyword        | [`Self::expand_and_collect_calls_to`]                         | [`Self::expand_source_and_collect_calls_to`]                        |
+    /// | classifier `F` | [`Self::expand_and_collect_calls_to_any`]                     | `expand_source_and_collect_calls_to_any` (this)                     |
+    ///
+    /// Each row's keyword corner now ROUTES through the classifier corner
+    /// at every column: [`Self::expand_source_and_collect_calls_to`]'s
+    /// body composes this typed-decoded primitive with a
+    /// `|h| (h == keyword).then_some(())` decoder and the wrapper
+    /// projection `|(), args| project(args)`, parallel to how
+    /// [`Self::expand_and_collect_calls_to`] routes through
+    /// [`Self::expand_and_collect_calls_to_any`] on the from-forms axis
+    /// and [`crate::ast::iter_calls_to`] routes through
+    /// [`crate::ast::iter_calls_to_any`] on the slice algebra. The 2×2
+    /// reduces to ONE pipeline implementation
+    /// (`read + expand_program + iter_calls_to_any + map + collect`)
+    /// every consumer threads its `(decoder, project)` pair through.
+    ///
+    /// Future consumer shapes the typed-decoded from-source primitive
+    /// admits:
+    ///   * **Closed-set classifier** — `expand_source_and_collect_calls_to_any(
+    ///     src, MacroDefHead::from_keyword, |head, args| { … })` walks a
+    ///     source buffer dispatching every `(defmacro …)` / `(defpoint-template …)` /
+    ///     `(defcheck …)` form to its typed `MacroDefHead` arm — exactly the
+    ///     shape a future LSP "find every macro-definition form in this
+    ///     buffer, decode each by typed kind" handler reaches for, sourced
+    ///     from authoring text directly rather than a pre-parsed
+    ///     `Vec<Sexp>`.
+    ///   * **Live-registry classifier** — `expand_source_and_collect_calls_to_any(
+    ///     src, |h| registry.get(h), |handler, args| handler.compile(args))`
+    ///     walks a source buffer dispatching every form whose head is
+    ///     registered to its typed handler — exactly the shape
+    ///     `tatara-check`'s "macroexpand checks.lisp and dispatch every
+    ///     `(defX …)` form through the registered domain dispatcher"
+    ///     walker reaches for, sourced from disk-loaded source text
+    ///     rather than the round-tripped `Vec<Sexp>` the typed
+    ///     dispatchers consume.
+    ///
+    /// `?`-routing through `read` preserves the structural ordering of
+    /// the rejection chain end-to-end: a reader error (lexer / parser /
+    /// unbalanced-paren / unterminated-string) short-circuits BEFORE
+    /// `expand_program` runs; an `expand_program` error short-circuits
+    /// BEFORE the classifier filter walks anything; a per-form `project`
+    /// error short-circuits at the first failing matched form via
+    /// `Iterator::collect::<Result<Vec<R>, _>>()`. Each consumer's
+    /// rejection chain inherits the from-forms typed-decoded primitive's
+    /// shape verbatim, now sourced from `&str` via ONE composition point.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the (from-forms, from-source) × (keyword, classifier) 2×2 closes
+    /// at the from-source classifier corner this method establishes —
+    /// the prior runs' from-forms classifier sibling
+    /// (`expand_and_collect_calls_to_any`, run e47d043) AND from-source
+    /// keyword sibling (`expand_source_and_collect_calls_to`, run
+    /// b477d81) AND slice-side classifier sibling (`iter_calls_to_any`,
+    /// run 38625e3) named three of the four corners; this lift names
+    /// the fourth so the family is structurally complete at every
+    /// algebra level. THEORY.md §V.1 — knowable platform; the
+    /// read-then-classifier-walk composition becomes a NAMED primitive
+    /// on the substrate's `Expander` surface rather than a future
+    /// re-derived `read(src)? + expand_and_collect_calls_to_any(…)`
+    /// two-step chain at every consumer that wants to walk source text
+    /// by typed-decoded classifier. THEORY.md §II.1 invariant 2 — free
+    /// middle; the from-source keyword filter
+    /// (`expand_source_and_collect_calls_to`) now routes through the
+    /// from-source classifier filter via the constant-classifier
+    /// composition, so a regression that drifts the keyword filter's
+    /// instrumentation from the classifier filter's instrumentation
+    /// becomes structurally impossible. The pre-lift inline
+    /// `read(src)? + expand_and_collect_calls_to(forms, keyword, project)`
+    /// chain is now a TYPED CONSEQUENCE of the typed-decoded primitive
+    /// composed with a constant-classifier decoder, not a parallel
+    /// implementation the type system happens to not catch.
+    ///
+    /// Frontier inspiration: Racket's `(eval-string str ns)` against a
+    /// namespace + typed-syntax-class dispatch — the from-source-string
+    /// entry to typed-program evaluation inside a namespace that carries
+    /// the macro library, dispatching by typed syntax-class is the
+    /// Racket idiom; the substrate's
+    /// `expand_source_and_collect_calls_to_any` is the Rust-typed peer
+    /// of that, with the typed-decoded classifier composed in. MLIR's
+    /// `parseSourceFile<Op>(srcFile, ctx)` then `mod.walk<OpInterface>(
+    /// callback)` — the parse-then-typed-walk over a source buffer
+    /// dispatching by typed-interface witness is the MLIR idiom; this
+    /// method is the substrate's typed `&[Sexp]`-algebra peer.
+    pub fn expand_source_and_collect_calls_to_any<R, F, D, T>(
+        &mut self,
+        src: &str,
+        decode: D,
+        project: F,
+    ) -> Result<Vec<R>>
+    where
+        D: FnMut(&str) -> Option<T>,
+        F: FnMut(T, &[Sexp]) -> Result<R>,
+    {
         let forms = crate::reader::read(src)?;
-        self.expand_and_collect_calls_to(forms, keyword, project)
+        self.expand_and_collect_calls_to_any(forms, decode, project)
     }
 
     /// Expand a single form. Top-level macro calls are rewritten; recurses
@@ -8984,6 +9119,272 @@ mod tests {
             .expect("non-matching-only source must collect to empty Vec");
         assert!(out.is_empty(), "no matching forms — empty Vec, got {out:?}");
         assert_eq!(count, 0, "project must never run for non-matching forms");
+    }
+
+    // ── Expander::expand_source_and_collect_calls_to_any — from-source × classifier ─
+    //
+    // The from-source posture of the typed-decoded classifier sibling on
+    // the `Expander` surface — closes the (from-forms, from-source) ×
+    // (keyword, classifier) 2×2 of compose-on-iter projections at the
+    // from-source classifier corner the prior runs left open. The
+    // pre-existing `expand_source_and_collect_calls_to` (from-source ×
+    // keyword) is the constant-classifier projection of this primitive:
+    // its body composes this function with a `|h| (h == keyword).
+    // then_some(())` decoder, so the from-source pipeline lives at ONE
+    // site. These tests pin both the typed-decoded primitive's contract
+    // directly AND the post-lift routing of
+    // `expand_source_and_collect_calls_to` through it.
+
+    #[test]
+    fn expand_source_and_collect_calls_to_any_yields_decoded_pair_for_every_matching_form_in_source_order(
+    ) {
+        // Happy path: a source string with four top-level forms (two
+        // matching "foo", one matching "bar", one rejected-head
+        // "defmonitor") flows through `read` → `expand_program` → the
+        // typed-decoded classifier walk. The closed-set classifier
+        // `Op::from_keyword` admits "foo" and "bar" but rejects
+        // "defmonitor". Pin the typed-decoded yield shape (decoded
+        // witness alongside args tail) AND source-order preservation
+        // sourced from `&str` rather than a pre-parsed `Vec<Sexp>`.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Op {
+            Foo,
+            Bar,
+        }
+        fn op_from_keyword(head: &str) -> Option<Op> {
+            match head {
+                "foo" => Some(Op::Foo),
+                "bar" => Some(Op::Bar),
+                _ => None,
+            }
+        }
+        let src = r#"(foo :idx 1)
+                     (defmonitor :idx 99)
+                     (bar :idx 2)
+                     (foo :idx 3)"#;
+        let mut e = Expander::new();
+        let yielded: Vec<(Op, i64)> = e
+            .expand_source_and_collect_calls_to_any(src, op_from_keyword, |op, args| {
+                Ok((op, args[1].as_int().expect("test args are ints")))
+            })
+            .expect("matching forms must compose through from-source classifier walk");
+        assert_eq!(
+            yielded,
+            vec![(Op::Foo, 1), (Op::Bar, 2), (Op::Foo, 3)],
+            "yields must be in source order, decoded witness paired with per-form mapper output"
+        );
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_any_short_circuits_on_reader_error_before_classifier_runs(
+    ) {
+        // The reader runs BEFORE `expand_program` AND BEFORE the
+        // classifier — so a reader error (an unterminated string)
+        // short-circuits the entire composition and both the classifier
+        // AND `project` must NEVER run. Pin the ordering with BOTH
+        // decoder and projection explicitly panicking — any post-reader
+        // execution fires the panic. Sibling of
+        // `expand_source_and_collect_calls_to_short_circuits_on_reader_error_before_expand_program`
+        // one corner over in the 2×2 (the classifier version of the
+        // same ordering pin).
+        let mut e = Expander::new();
+        let err = e
+            .expand_source_and_collect_calls_to_any::<(), _, _, ()>(
+                "(defmonitor :name \"unbalanced",
+                |_h: &str| -> Option<()> {
+                    panic!("classifier must not run when reader errors at parse time")
+                },
+                |(), _args| -> Result<()> { panic!("project must not run when reader errors") },
+            )
+            .expect_err("reader error must short-circuit before classifier");
+        // Sanity: the error is a reader-stage rejection.
+        let rendered = format!("{err}");
+        assert!(
+            rendered.to_lowercase().contains("string")
+                || rendered.to_lowercase().contains("paren")
+                || rendered.to_lowercase().contains("eof")
+                || rendered.to_lowercase().contains("unexpected")
+                || rendered.to_lowercase().contains("unterminated")
+                || rendered.to_lowercase().contains("unclosed"),
+            "error must be the reader-stage rejection, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_any_short_circuits_on_expand_program_error_before_classifier_runs(
+    ) {
+        // Reader succeeds, but `expand_program` rejects a malformed
+        // `defmacro` head (NAME slot is an int, not a symbol). Pin the
+        // ordering: `expand_program` rejects BEFORE the classifier walks
+        // anything, both decoder AND `project` must NEVER run. Sibling
+        // of the keyword-from-source variant — one corner over in the
+        // 2×2 with both classifier and projection explicitly panicking.
+        let mut e = Expander::new();
+        let err = e
+            .expand_source_and_collect_calls_to_any::<(), _, _, ()>(
+                "(defmacro 5 (x) `,x) (defmonitor :name \"x\")",
+                |_h: &str| -> Option<()> {
+                    panic!("classifier must not run when expand_program errors")
+                },
+                |(), _args| -> Result<()> {
+                    panic!("project must not run when expand_program errors")
+                },
+            )
+            .expect_err("expand_program error must short-circuit before classifier");
+        let rendered = format!("{err}");
+        assert!(
+            rendered.contains("NAME") || rendered.contains("symbol"),
+            "error must be the defmacro-NAME-not-a-symbol rejection, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_any_skips_non_matching_forms_without_invoking_project() {
+        // Path-uniformity for the soft-projection posture inherited
+        // from `iter_calls_to_any`: forms whose head the classifier
+        // rejects are skipped silently, and `project` is never invoked
+        // on them. Pin via an explicitly-panicking projection across a
+        // mix of forms (atom, list-with-non-symbol-head, list with
+        // unrecognized-by-classifier symbol head). A regression that
+        // wrongly invokes `project` on a rejected form fires the panic.
+        let src = r#"bare-atom
+                     (5 :not-a-symbol-head)
+                     (defmonitor :name "decoder-rejects-me")"#;
+        let mut e = Expander::new();
+        // The closed-set classifier admits NOTHING in this source.
+        let out: Vec<()> = e
+            .expand_source_and_collect_calls_to_any::<(), _, _, ()>(
+                src,
+                |_h: &str| -> Option<()> { None },
+                |(), _args| -> Result<()> {
+                    panic!("project must not run for classifier-rejected forms")
+                },
+            )
+            .expect("classifier-rejects-all source must collect to empty Vec");
+        assert!(
+            out.is_empty(),
+            "no classifier-accepted forms — empty Vec, got {out:?}"
+        );
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_any_short_circuits_on_project_error_at_first_failure() {
+        // Reader + `expand_program` + classifier all succeed; the
+        // per-form `project` errors on the SECOND matched form. Pin: the
+        // collect's short-circuit fires at the second match's error, the
+        // third match's `project` is NEVER invoked, and the returned
+        // error is exactly the one the closure raised. Sibling of the
+        // keyword-from-source variant — one corner over in the 2×2.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Op {
+            Foo,
+        }
+        fn op_from_keyword(head: &str) -> Option<Op> {
+            (head == "foo").then_some(Op::Foo)
+        }
+        let src = "(foo :idx 1) (foo :idx 2) (foo :idx 3)";
+        let mut seen = Vec::new();
+        let mut e = Expander::new();
+        let err = e
+            .expand_source_and_collect_calls_to_any::<(), _, _, _>(
+                src,
+                op_from_keyword,
+                |_op: Op, args: &[Sexp]| -> Result<()> {
+                    let n = args[1].as_int().expect("test args are ints");
+                    seen.push(n);
+                    if n == 2 {
+                        Err(LispError::Compile {
+                            form: "test".to_string(),
+                            message: "stop at two".to_string(),
+                        })
+                    } else {
+                        Ok(())
+                    }
+                },
+            )
+            .expect_err("project's error must short-circuit collect");
+        assert_eq!(seen, vec![1, 2], "third match's project must never run");
+        assert!(
+            matches!(err, LispError::Compile { ref message, .. } if message == "stop at two"),
+            "short-circuit must propagate the project's error verbatim, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_routes_through_expand_source_and_collect_calls_to_any_via_constant_classifier_composition(
+    ) {
+        // The post-lift composition law binding the keyword-from-source
+        // sibling to the typed-decoded primitive:
+        //   `expand_source_and_collect_calls_to(src, k, project) ==
+        //    expand_source_and_collect_calls_to_any(src,
+        //        |h| (h == k).then_some(()),
+        //        |(), args| project(args))`
+        // Pin shape AND ordering across THREE representative keywords
+        // (matching some, matching exactly one, matching none) on the
+        // SAME mixed source the keyword path-uniformity test exercises.
+        // A regression that re-implements the keyword-from-source filter
+        // as a parallel `read + expand_and_collect_calls_to` pipeline
+        // (rather than routing through the typed-decoded primitive)
+        // fails the value pin.
+        let src = "(defmacro emit-foo (n) `(foo :idx ,n))
+                   (foo :idx 1)
+                   (emit-foo 2)
+                   (bar :idx 99)
+                   (foo :idx 3)";
+        for k in ["foo", "bar", "missing"] {
+            let mut e_keyword = Expander::new();
+            let via_keyword: Vec<i64> = e_keyword
+                .expand_source_and_collect_calls_to(src, k, |args| Ok(args[1].as_int().unwrap()))
+                .unwrap();
+
+            let mut e_classifier = Expander::new();
+            let via_classifier: Vec<i64> = e_classifier
+                .expand_source_and_collect_calls_to_any(
+                    src,
+                    |h: &str| (h == k).then_some(()),
+                    |(), args: &[Sexp]| Ok(args[1].as_int().unwrap()),
+                )
+                .unwrap();
+
+            assert_eq!(
+                via_keyword, via_classifier,
+                "keyword from-source path must equal classifier from-source path for {k:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn expand_source_and_collect_calls_to_any_expands_macros_before_filtering_by_classifier() {
+        // Critical ordering preserved across the typed-decoded
+        // from-source posture: `defmacro` source registers in
+        // `expand_program`, its call sites expand to a classifier-
+        // accepted form, AND the classifier walk sees both the
+        // macro-emitted form and any directly-authored matches in
+        // source order. Sibling of the keyword-from-source ordering
+        // test, one corner over in the 2×2.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Op {
+            Foo,
+        }
+        fn op_from_keyword(head: &str) -> Option<Op> {
+            (head == "foo").then_some(Op::Foo)
+        }
+        let src = "(defmacro emit-foo (n) `(foo :name ,n))
+                   (emit-foo \"alpha\")
+                   (foo :name \"beta\")";
+        let mut e = Expander::new();
+        let names: Vec<(Op, String)> = e
+            .expand_source_and_collect_calls_to_any(src, op_from_keyword, |op, args| {
+                Ok((op, args[1].as_string().unwrap().to_string()))
+            })
+            .expect("macroexpanded + directly-authored forms must both flow through classifier");
+        assert_eq!(
+            names,
+            vec![
+                (Op::Foo, "alpha".to_string()),
+                (Op::Foo, "beta".to_string()),
+            ]
+        );
     }
 
     // ── expand_source_program — from-source × yield-all primitive ───

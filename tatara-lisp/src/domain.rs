@@ -1418,12 +1418,6 @@ pub fn json_to_sexp(v: &JValue) -> Sexp {
     Sexp::from_json(v)
 }
 
-pub(crate) fn is_kwargs_list(items: &[Sexp]) -> bool {
-    !items.is_empty()
-        && items.len().is_multiple_of(2)
-        && items.iter().step_by(2).all(|s| s.as_keyword().is_some())
-}
-
 /// `must-reach` → `mustReach`, `point-type` → `pointType`.
 pub(crate) fn kebab_to_camel(s: &str) -> String {
     let mut out = String::with_capacity(s.len());

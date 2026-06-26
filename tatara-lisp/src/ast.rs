@@ -959,6 +959,85 @@ impl Sexp {
         }
     }
 
+    /// Structural-shape predicate — `true` iff this is a [`Self::List`]
+    /// whose items form a non-empty, even-length `(:k v :k v …)` kwargs
+    /// sequence with every even-indexed item being an [`Atom::Keyword`].
+    /// `false` for every other outer shape ([`Self::Nil`], every
+    /// [`Self::Atom`] variant, every quote-family wrapper) and for every
+    /// [`Self::List`] that fails the kwargs convention (empty list, odd
+    /// length, or any even-indexed non-keyword).
+    ///
+    /// The structural witness that [`Self::to_json`] will project this
+    /// value as [`serde_json::Value::Object`] rather than
+    /// [`serde_json::Value::Array`] at the [`Self::List`] arm — the
+    /// `(Sexp variant + kwargs shape, JSON canonical-form)` pairing
+    /// binds at ONE inherent method on the algebra rather than at a
+    /// free function consumers must reach into the `domain` module
+    /// path to invoke. Inverse round-trip law: every
+    /// [`Self::from_json`] projection of a [`serde_json::Value::Object`]
+    /// satisfies this predicate (the [`Self::List`] arm
+    /// [`Self::from_json`] builds for an `Object` is non-empty by the
+    /// `Object`'s non-empty-keys invariant when present, even-length by
+    /// the alternating `:k v` build, and keyword-headed at every even
+    /// index by the `Self::keyword(camel_to_kebab(k))` build — except
+    /// for the structurally degenerate empty `Object` which projects to
+    /// `Sexp::List(vec![])` and returns `false` here, matching
+    /// [`Self::to_json`]'s "empty-list ↛ kwargs" gate).
+    ///
+    /// Composes through [`Self::as_list`] (the structural soft-projection
+    /// onto `&[Sexp]`) and [`Atom::as_keyword`] (the typed soft-projection
+    /// onto the keyword payload from the [`Atom`] algebra) — the predicate
+    /// is rebuilt from already-lifted algebra primitives rather than
+    /// inline-matching the [`Self::List`] arm. Sibling-shape predicate
+    /// peer of [`Self::is_list`] (the unconditional [`Self::List`]-arm
+    /// predicate), with this method narrowing the structural witness to
+    /// the kwargs-shaped sub-cohort. The two predicates partition the
+    /// list-typed cell of the algebra: every [`Self::List`] either
+    /// satisfies `is_kwargs_list` (projects as [`serde_json::Value::Object`]
+    /// through [`Self::to_json`]) or does not (projects as
+    /// [`serde_json::Value::Array`]).
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// kwargs-shape predicate, previously a `pub(crate)` free function in
+    /// `domain.rs` reached across the module boundary by [`Self::to_json`],
+    /// is lifted ONE algebra level higher onto the inherent method on
+    /// the [`Sexp`] algebra — completing the structural-predicate family
+    /// alongside [`Self::is_list`] and the soft-projection family
+    /// ([`Self::as_atom`], [`Self::as_list`], [`Self::as_quote_form`]).
+    /// THEORY.md §II.1 invariant 2 — free middle; every consumer that
+    /// queries "would [`Self::to_json`] project this as `Object`?" (the
+    /// `Self::to_json` arm itself, future authoring-tool diagnostics, a
+    /// future LSP completion fallback, a future REPL pretty-printer that
+    /// chooses between `(…)` and `{…}` rendering, a future `tatara-check`
+    /// typed-pattern matcher) routes through ONE inherent algebra method
+    /// rather than reaching into the `domain` module path for a free
+    /// function. THEORY.md §V.1 — knowable platform; the JSON-format
+    /// witness becomes a TYPE projection on the substrate `Sexp` algebra
+    /// next to its sibling `Sexp::is_list` / `Sexp::as_list` pair rather
+    /// than living in a `domain.rs` `pub(crate)` helper consumers must
+    /// import via module path.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::Operation::hasTrait<T>()` —
+    /// typed-IR operations carry their structural traits as inherent
+    /// methods on the operation algebra rather than as free functions
+    /// in a sibling module; `Sexp::is_kwargs_list` is the
+    /// unstructured-Rust peer on the `Sexp` algebra for the
+    /// "would-this-project-as-Object" structural trait. Racket's
+    /// `(keyword-apply-procedure? stx)` — the syntax-class predicate
+    /// that gates a kwargs-style application form's printer / expander
+    /// path on the syntax algebra; `Sexp::is_kwargs_list` is the
+    /// substrate's peer at the [`Sexp`] layer, with the `as_list().
+    /// is_some_and(…)` composition standing in for Racket's
+    /// `syntax-parse` pattern matcher.
+    #[must_use]
+    pub fn is_kwargs_list(&self) -> bool {
+        self.as_list().is_some_and(|items| {
+            !items.is_empty()
+                && items.len().is_multiple_of(2)
+                && items.iter().step_by(2).all(|s| s.as_keyword().is_some())
+        })
+    }
+
     /// Soft projection onto the inner [`Atom`] payload — `Some(&Atom)`
     /// iff this is a [`Self::Atom`] variant, `None` for every other
     /// outer shape (`Nil`, `List`, `Quote`, `Quasiquote`, `Unquote`,
@@ -1351,7 +1430,7 @@ impl Sexp {
             Self::Nil => serde_json::Value::Null,
             Self::Atom(a) => a.to_json(),
             Self::List(items) => {
-                if crate::domain::is_kwargs_list(items) {
+                if self.is_kwargs_list() {
                     let mut map = serde_json::Map::with_capacity(items.len() / 2);
                     let mut i = 0;
                     while i + 1 < items.len() {
@@ -6848,6 +6927,190 @@ mod tests {
             sorted,
             vec!["already-kebab", "must-reach", "point-type", "with-a-b-c"],
         );
+    }
+
+    // ── Sexp::is_kwargs_list: the kwargs-shape predicate on the algebra ─
+    //
+    // `Sexp::is_kwargs_list` lifts the `pub(crate) domain::is_kwargs_list`
+    // free function onto the inherent-method canonical site on the
+    // [`Sexp`] algebra — sibling-shape predicate peer of [`Sexp::is_list`]
+    // narrowing the structural witness to the kwargs-shaped sub-cohort.
+    // The tests below pin the per-arm contract on the new canonical site
+    // directly; the `pub(crate)` free function has zero remaining callers
+    // post-lift and is removed in the same patch so the substrate's
+    // "kwargs-shape predicate" lives at exactly one canonical site on the
+    // algebra rather than splitting across a `domain.rs` helper and the
+    // `Sexp::to_json` call site.
+
+    #[test]
+    fn sexp_is_kwargs_list_method_returns_true_for_canonical_kwargs_shape() {
+        // PER-ARM CONTRACT (true cell): pin that a `Sexp::List` whose
+        // even-indexed items are all keywords and whose length is non-zero
+        // even returns `true` — the canonical kwargs shape `(:k v :k v …)`.
+        // Covers the two-arity and four-arity baseline cases plus a mixed
+        // payload (keyword odd index — even-index check is keyword-only,
+        // odd-index payload is unconstrained per the kwargs convention).
+        // A regression that drifts the predicate (incorrect parity check,
+        // wrong keyword-position check, off-by-one in the step) surfaces
+        // here immediately.
+        let two = Sexp::List(vec![Sexp::keyword("k"), Sexp::int(1)]);
+        assert!(two.is_kwargs_list());
+        let four = Sexp::List(vec![
+            Sexp::keyword("k1"),
+            Sexp::int(1),
+            Sexp::keyword("k2"),
+            Sexp::string("v2"),
+        ]);
+        assert!(four.is_kwargs_list());
+        // Odd-position values can themselves be keywords; the convention
+        // only constrains the EVEN positions.
+        let mixed = Sexp::List(vec![
+            Sexp::keyword("k1"),
+            Sexp::keyword("v-is-keyword-too"),
+            Sexp::keyword("k2"),
+            Sexp::Nil,
+        ]);
+        assert!(mixed.is_kwargs_list());
+    }
+
+    #[test]
+    fn sexp_is_kwargs_list_method_returns_false_for_non_list_outer_shapes_and_violating_lists() {
+        // PER-ARM CONTRACT (false cell): pin that every non-`Self::List`
+        // outer shape (Nil, every Atom payload variant, every quote-family
+        // wrapper) returns `false`, and that every `Self::List` violating
+        // the kwargs convention (empty, odd length, non-keyword at any
+        // even index) also returns `false`. A regression that returns
+        // `true` for a wrong shape (e.g. claiming a Nil or a non-kwargs
+        // list satisfies the predicate, opening the door to a
+        // `Sexp::to_json` arm misrouting) surfaces here immediately.
+        // Non-list outer shapes:
+        assert!(!Sexp::Nil.is_kwargs_list());
+        assert!(!Sexp::symbol("s").is_kwargs_list());
+        assert!(!Sexp::keyword("k").is_kwargs_list());
+        assert!(!Sexp::string("body").is_kwargs_list());
+        assert!(!Sexp::int(0).is_kwargs_list());
+        assert!(!Sexp::float(0.0).is_kwargs_list());
+        assert!(!Sexp::boolean(true).is_kwargs_list());
+        assert!(!Sexp::Quote(Box::new(Sexp::keyword("k"))).is_kwargs_list());
+        assert!(!Sexp::Quasiquote(Box::new(Sexp::keyword("k"))).is_kwargs_list());
+        assert!(!Sexp::Unquote(Box::new(Sexp::keyword("k"))).is_kwargs_list());
+        assert!(!Sexp::UnquoteSplice(Box::new(Sexp::keyword("k"))).is_kwargs_list());
+        // List arm violations:
+        assert!(!Sexp::List(vec![]).is_kwargs_list()); // empty
+        assert!(!Sexp::List(vec![Sexp::keyword("k")]).is_kwargs_list()); // odd length 1
+        assert!(
+            !Sexp::List(vec![Sexp::keyword("k1"), Sexp::int(1), Sexp::keyword("k2")])
+                .is_kwargs_list()
+        ); // odd length 3
+        assert!(!Sexp::List(vec![Sexp::int(1), Sexp::int(2)]).is_kwargs_list()); // non-keyword at even 0
+        assert!(!Sexp::List(vec![
+            Sexp::keyword("k1"),
+            Sexp::int(1),
+            Sexp::symbol("not-kw"),
+            Sexp::int(2)
+        ])
+        .is_kwargs_list()); // non-keyword at even 2
+    }
+
+    #[test]
+    fn sexp_is_kwargs_list_method_composes_through_as_list_and_atom_as_keyword() {
+        // COMPOSITION LAW: pin that the lifted predicate composes through
+        // the already-lifted `Self::as_list` (structural projection onto
+        // `&[Sexp]`) and `Atom::as_keyword` (typed projection onto the
+        // keyword payload) primitives — a regression that re-inlines the
+        // body without routing through the algebra-level soft-projection
+        // family becomes detectable here. Sweeps every reachable outer
+        // shape (Nil, every Atom variant, every quote-family wrapper, a
+        // selection of List shapes covering the true + false cells) and
+        // asserts the predicate's value agrees with the by-hand
+        // `as_list().is_some_and(...)` recomposition.
+        fn by_hand(s: &Sexp) -> bool {
+            s.as_list().is_some_and(|items| {
+                !items.is_empty()
+                    && items.len().is_multiple_of(2)
+                    && items.iter().step_by(2).all(|e| e.as_keyword().is_some())
+            })
+        }
+        let cases = [
+            Sexp::Nil,
+            Sexp::symbol("s"),
+            Sexp::keyword("k"),
+            Sexp::string("body"),
+            Sexp::int(7),
+            Sexp::float(2.5),
+            Sexp::boolean(false),
+            Sexp::Quote(Box::new(Sexp::keyword("k"))),
+            Sexp::Quasiquote(Box::new(Sexp::keyword("k"))),
+            Sexp::Unquote(Box::new(Sexp::keyword("k"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::keyword("k"))),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(1)]),
+            Sexp::List(vec![Sexp::keyword("k"), Sexp::int(1)]),
+            Sexp::List(vec![
+                Sexp::keyword("k1"),
+                Sexp::int(1),
+                Sexp::keyword("k2"),
+                Sexp::int(2),
+            ]),
+            Sexp::List(vec![Sexp::int(1), Sexp::int(2)]),
+            Sexp::List(vec![Sexp::keyword("k1"), Sexp::int(1), Sexp::symbol("x")]),
+        ];
+        for s in &cases {
+            assert_eq!(
+                s.is_kwargs_list(),
+                by_hand(s),
+                "predicate drifted from as_list ∘ atom_as_keyword composition for {s}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_to_json_object_arm_routes_through_is_kwargs_list_method() {
+        // CALLSITE-CONTRACT: pin that `Sexp::to_json`'s kwargs-vs-array
+        // bifurcation routes through the lifted `Sexp::is_kwargs_list`
+        // method — the kwargs-shape witness that gates the
+        // `serde_json::Value::Object` arm vs the `serde_json::Value::Array`
+        // arm at the `Sexp::List` outer shape. The pin walks the gate
+        // both directions: a kwargs-shaped list must project as `Object`
+        // (and the inherent predicate must agree, `true`); a non-kwargs
+        // list (empty, odd-length, or even-index non-keyword) must
+        // project as `Array` (and the predicate must agree, `false`). A
+        // regression that decouples the two paths (e.g. `to_json` routes
+        // through a re-inlined check while `is_kwargs_list` continues to
+        // delegate, or vice versa) surfaces here.
+        // Kwargs-shaped: Object projection, predicate true.
+        let kw = Sexp::List(vec![Sexp::keyword("foo-bar"), Sexp::int(1)]);
+        assert!(kw.is_kwargs_list());
+        assert!(matches!(
+            kw.to_json().expect("kwargs list projects"),
+            serde_json::Value::Object(_)
+        ));
+        // Non-kwargs (empty list): Array projection, predicate false.
+        let empty = Sexp::List(vec![]);
+        assert!(!empty.is_kwargs_list());
+        assert!(matches!(
+            empty.to_json().expect("empty list projects"),
+            serde_json::Value::Array(arr) if arr.is_empty(),
+        ));
+        // Non-kwargs (positional): Array projection, predicate false.
+        let positional = Sexp::List(vec![Sexp::int(1), Sexp::int(2), Sexp::int(3)]);
+        assert!(!positional.is_kwargs_list());
+        assert!(matches!(
+            positional.to_json().expect("positional list projects"),
+            serde_json::Value::Array(arr) if arr.len() == 3,
+        ));
+        // Non-kwargs (even-index non-keyword): Array projection.
+        let mixed = Sexp::List(vec![
+            Sexp::keyword("k"),
+            Sexp::int(1),
+            Sexp::symbol("x"),
+            Sexp::int(2),
+        ]);
+        assert!(!mixed.is_kwargs_list());
+        assert!(matches!(
+            mixed.to_json().expect("mixed list projects"),
+            serde_json::Value::Array(_)
+        ));
     }
 
     #[test]

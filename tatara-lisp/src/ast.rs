@@ -1628,19 +1628,146 @@ fn fmt_float(n: f64, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     }
 }
 
+/// Canonical reader-round-trippable rendering of a single atomic payload —
+/// `Symbol(s) → "{s}"`, `Keyword(s) → ":{s}"`, `Str(s) → "{s:?}"` (the
+/// debug-quoted form: `\"…\"` with embedded `"` and `\` escaped), `Int(n)
+/// → "{n}"`, `Float(n)` through [`fmt_float`] so integral values render
+/// with the `.0` suffix that preserves the typed-`Float`-vs-typed-`Int`
+/// distinction at the Display→read boundary, `Bool(true) → "#t"`,
+/// `Bool(false) → "#f"` (the Scheme bool spellings the reader's
+/// `atom_from_str` dispatches on — `true` / `false` re-read as symbols,
+/// NOT as bools — see the CLAUDE.md "Lisp bools" warning).
+///
+/// This is the *atomic-payload Display surface* — the typed-exit-side
+/// peer of [`crate::reader::atom_from_str`]'s atomic-payload
+/// typed-entry surface. Before this lift the per-variant rendering arms
+/// lived inline at the `Sexp::Atom(a) => match a { … }` arm of
+/// [`fmt::Display for Sexp`]; routing the outer arm through this impl
+/// lifts the seven inline sub-arms (the Bool variant splits into
+/// `true`/`false` to short-circuit the `if-else` branch) into ONE
+/// typed-algebra method the `Sexp` Display arm calls into via
+/// `fmt::Display::fmt(a, f)`. Sibling closed-set lift to
+/// [`QuoteForm::prefix`] (the four homoiconic prefix wrappers) and
+/// [`AtomKind::label`] (the six diagnostic labels) — those name the
+/// quote-family and atomic-discriminator pairings at the `Sexp` and
+/// `Atom` algebras respectively; this names the atomic-payload
+/// rendering at the `Atom` algebra so future consumers of "render a
+/// bare atom" land on this impl directly without unwrapping through
+/// `Sexp::Atom(_).to_string()` and stripping the outer wrap.
+///
+/// Three production-site sibling shapes the substrate carries that
+/// route through a per-`Atom`-variant projection, all 6/7-arm inline
+/// matches pre-lift:
+///   * [`fmt::Display for Sexp`]'s atom arm — 7 sub-arms (Bool splits),
+///     produces a `fmt::Formatter` body. Post-lift collapses to
+///     ONE `fmt::Display::fmt(a, f)` delegation.
+///   * [`crate::domain::sexp_to_json`]'s atom arms — 6 inline arms
+///     producing `serde_json::Value`. Future-lift candidate to a
+///     parallel `Atom::to_json` projection that this impl's sibling
+///     pattern names.
+///   * [`crate::interop::iac_forge_impl::From<&Sexp> for SExpr`]'s
+///     atom arm (feature-gated `iac-forge`) — 6 inline arms producing
+///     `iac_forge::sexpr::SExpr`. Future-lift candidate to a parallel
+///     `Atom::to_iac_forge_sexpr` projection.
+///
+/// The (Atom variant, rendered prefix/suffix/body) quadruple now lives
+/// at ONE typed-algebra Display impl rather than at seven inline
+/// sub-arms inside `Display for Sexp`'s outer Atom arm. A regression
+/// that drifts the Bool spelling (`#t`/`#f` vs `true`/`false`) — the
+/// CLAUDE.md-pinned reader-round-trip invariant — now lands at ONE
+/// site, and the test surface pins each variant's canonical rendering
+/// AND the round-trip identity through the reader at the Atom level
+/// directly (no Sexp wrap required to exercise the round-trip).
+///
+/// Bidirectional contract anchored by tests in this module:
+///   * `atom_display_renders_each_variant_to_canonical_form` —
+///     sweeps `AtomKind::ALL` and pins each variant's canonical
+///     rendering byte-for-byte against the pre-lift inline literal,
+///     so a future regression that drifts ONE arm (e.g. swaps
+///     `#t`/`#f` for `true`/`false`, or strips `Str`'s quote marks)
+///     fails loudly.
+///   * `sexp_atom_display_arm_routes_through_atom_display_for_every_variant`
+///     — pins the lifted boundary: `Sexp::Atom(a).to_string() ==
+///     a.to_string()` for every atomic payload variant, AND that
+///     both equal the legacy inline rendering. Catches a future
+///     drift where one surface's per-variant body changes without
+///     the other.
+///   * `atom_display_round_trips_through_reader_preserving_typed_identity`
+///     — sweeps a representative atom of each variant, renders it
+///     via `Atom::Display`, parses the rendering through
+///     [`crate::reader::read`], and pins the parsed atom equals
+///     the seed atom (modulo `Str`'s debug-quoted spelling — pinned
+///     separately because the reader expects unquoted source-level
+///     `"foo"`). Pins that the (`Atom::Display`, reader) pair forms
+///     a typed round-trip at the atom layer, the same invariant
+///     [`fmt_float`]'s `.0` suffix preserves for the float-vs-int
+///     distinction at the Sexp layer.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// (Atom variant, canonical rendering) pair appeared inline at THREE
+/// production sites (`Display for Sexp`'s 7-sub-arm atom arm,
+/// `sexp_to_json`'s 6 atom arms, `From<&Sexp> for SExpr`'s 6 atom arms)
+/// — well past the ≥2 PRIME-DIRECTIVE trigger once the structural
+/// shape is named. THIS lift retires the Display-surface site by
+/// naming the typed primitive on the `Atom` algebra; future runs route
+/// the JSON and iac-forge sites through parallel sibling projections
+/// (`Atom::to_json`, `Atom::to_iac_forge_sexpr`) the same pattern
+/// names. THEORY.md §II.1 invariant 1 — typed entry; the reader's
+/// `atom_from_str` is the typed-entry gate at the atomic-payload
+/// boundary, and this impl is the typed-exit-side mirror — the
+/// closed-set [`AtomKind`] algebra now threads BOTH gates through ONE
+/// projection family, so a regression that drifts one side's
+/// per-variant rendering from the other (e.g. extends `Atom` with a
+/// `Char` variant the reader accepts but the writer can't emit) is no
+/// longer a silent two-site divergence — rustc binds both sides to
+/// the same closed-set enum. THEORY.md §II.1 invariant 2 — free middle;
+/// the typed-exit rendering, the reader, the diagnostic surface
+/// (`LispError::TypeMismatch.got` slot rendering an atomic witness),
+/// and any future authoring tool (LSP / REPL pretty-printer) all
+/// route through ONE per-variant rendering rather than per-callsite
+/// re-derivation.
+///
+/// Frontier inspiration: Racket's `(syntax->datum stx)` / `write` pair
+/// — where `syntax->datum` unwraps the homoiconic surface to its
+/// atomic-payload layer and `write` emits the canonical S-expression
+/// rendering bound to the reader's `read` inverse; `Atom::Display`
+/// is the substrate's typed-algebra peer at the atomic-payload boundary,
+/// with the closed-set [`AtomKind`] standing in for Racket's
+/// datum-prim taxonomy. MLIR's `mlir::AsmPrinter::printAttribute` — the
+/// typed-IR attribute printer dispatches on the closed-set
+/// `AttributeKind` so every printer body for a kind lives at ONE
+/// implementation site; `Atom::Display` is the unstructured Rust peer
+/// for the `Sexp`/`Atom` algebra, with `fmt::Display` standing in for
+/// MLIR's `AsmPrinter` interface.
+impl fmt::Display for Atom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Symbol(s) => f.write_str(s),
+            Self::Keyword(s) => write!(f, ":{s}"),
+            Self::Str(s) => write!(f, "{s:?}"),
+            Self::Int(n) => write!(f, "{n}"),
+            Self::Float(n) => fmt_float(*n, f),
+            Self::Bool(true) => f.write_str("#t"),
+            Self::Bool(false) => f.write_str("#f"),
+        }
+    }
+}
+
 impl fmt::Display for Sexp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Nil => f.write_str("()"),
-            Self::Atom(a) => match a {
-                Atom::Symbol(s) => f.write_str(s),
-                Atom::Keyword(s) => write!(f, ":{s}"),
-                Atom::Str(s) => write!(f, "{s:?}"),
-                Atom::Int(n) => write!(f, "{n}"),
-                Atom::Float(n) => fmt_float(*n, f),
-                Atom::Bool(true) => f.write_str("#t"),
-                Atom::Bool(false) => f.write_str("#f"),
-            },
+            // The atomic-payload rendering lives at the typed
+            // [`fmt::Display for Atom`] impl above — the seven inline
+            // sub-arms `Symbol → s`, `Keyword → ":{s}"`, `Str → "{s:?}"`,
+            // `Int → "{n}"`, `Float → fmt_float`, `Bool(true) → "#t"`,
+            // `Bool(false) → "#f"` all bind at ONE site on the closed-set
+            // `Atom` algebra rather than at this outer arm. A future
+            // atomic-kind extension (e.g. `Char` for `#\x` reader syntax,
+            // `Bigint` for arbitrary-precision integers) extends `Atom`'s
+            // Display impl once and this arm picks up the new variant
+            // for free.
+            Self::Atom(a) => fmt::Display::fmt(a, f),
             Self::List(xs) => {
                 f.write_str("(")?;
                 for (i, x) in xs.iter().enumerate() {
@@ -4004,6 +4131,149 @@ mod tests {
             assert_eq!(
                 via_domain, via_composed,
                 "domain::sexp_shape vs Atom::kind().sexp_shape() drift for {atom:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn atom_display_renders_each_variant_to_canonical_form() {
+        // CANONICAL-RENDERING CONTRACT: pin that the lifted
+        // `fmt::Display for Atom` impl produces byte-identical
+        // canonical output for the seven atomic variant cases
+        // (Bool splits into true/false) as the pre-lift inline
+        // sub-arms inside `Display for Sexp`'s atom arm. Sibling-arm
+        // sweep so the seven pairings stay load-bearing under
+        // reordering refactors. A regression that drifts the Bool
+        // spelling (`#t`/`#f` vs Rust's `true`/`false`) — the
+        // CLAUDE.md-pinned reader-round-trip invariant — fails
+        // loudly here. Direct sibling to `atom_kind_label_renders_
+        // canonical_string_for_every_variant` on the diagnostic-
+        // label axis: this pins the rendered SOURCE (`#t`), that pins
+        // the rendered LABEL (`bool`); the two projections share the
+        // closed-set `AtomKind` algebra but render to distinct
+        // surfaces (source vs diagnostic vocabulary).
+        let cases: &[(Atom, &str)] = &[
+            (Atom::Symbol("foo".into()), "foo"),
+            (Atom::Keyword("k".into()), ":k"),
+            (Atom::Str("hello".into()), "\"hello\""),
+            (Atom::Int(42), "42"),
+            (Atom::Int(-7), "-7"),
+            (Atom::Float(1.5), "1.5"),
+            (Atom::Bool(true), "#t"),
+            (Atom::Bool(false), "#f"),
+        ];
+        for (atom, expected) in cases {
+            assert_eq!(
+                atom.to_string(),
+                *expected,
+                "Atom::Display drifted from canonical rendering for {atom:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn atom_display_renders_integral_float_with_dot_zero_suffix() {
+        // ROUND-TRIP-INVARIANT PIN: `fmt_float`'s `.0`-suffix
+        // discipline composes through `Atom::Display` — `Float(1.0)`
+        // renders as `"1.0"`, NOT `"1"` (which the reader would
+        // re-parse as `Atom::Int(1)`, silently coercing the typed
+        // `Float` track into the `Int` track at the Display→read
+        // boundary). Direct sibling pin to the existing Display-for-
+        // Sexp round-trip tests that exercise the same invariant
+        // through the `Sexp::Atom` outer wrap. Lifting the rendering
+        // onto the typed `Atom` algebra surfaces a future regression
+        // (e.g. an Atom::Display arm that bypasses `fmt_float` and
+        // formats `f64` directly) at the atom layer without
+        // requiring a Sexp wrap to reproduce.
+        assert_eq!(Atom::Float(1.0).to_string(), "1.0");
+        assert_eq!(Atom::Float(-42.0).to_string(), "-42.0");
+        assert_eq!(Atom::Float(0.99).to_string(), "0.99");
+    }
+
+    #[test]
+    fn sexp_atom_display_arm_routes_through_atom_display_for_every_variant() {
+        // LIFTED-BOUNDARY CONTRACT: pin that `Sexp::Atom(a).to_string()
+        // == a.to_string()` for every atomic payload variant. Pre-
+        // lift the per-variant body lived inline at the `Sexp::Atom(a)
+        // => match a { … }` arm of `Display for Sexp`; post-lift the
+        // outer arm delegates to `fmt::Display::fmt(a, f)`. A
+        // regression that drifts the outer arm (e.g. wraps the atom
+        // rendering in parens, or routes Symbol through a Sexp-
+        // specific arm before delegating) surfaces as an inequality
+        // here. The cases sweep all six `Atom` variants (Bool unified
+        // — both true/false agree under the impl). Sibling posture
+        // to the quote-family routing test
+        // `sexp_to_json_routes_quote_family_arms_through_as_quote_form_typed_marker`
+        // that pins the analogous `Sexp` outer arm routing through
+        // a typed algebra projection.
+        let cases: &[Atom] = &[
+            Atom::Symbol("name".into()),
+            Atom::Keyword("kw".into()),
+            Atom::Str("body".into()),
+            Atom::Int(7),
+            Atom::Float(2.5),
+            Atom::Float(1.0),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ];
+        for atom in cases {
+            let via_sexp = Sexp::Atom(atom.clone()).to_string();
+            let via_atom = atom.to_string();
+            assert_eq!(
+                via_sexp, via_atom,
+                "Sexp::Atom Display arm drifted from Atom::Display for {atom:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn atom_display_round_trips_through_reader_preserving_typed_identity() {
+        // BIDIRECTIONAL TYPED-IDENTITY CONTRACT: render an atom via
+        // `Atom::Display`, parse the rendering through
+        // `crate::reader::read`, and pin that the parsed value's
+        // outer shape is `Sexp::Atom(_)` carrying the SAME variant
+        // discriminator as the seed (via `Atom::kind`) AND that the
+        // payload round-trips bit-for-bit. This is the typed-exit /
+        // typed-entry mirror at the atomic-payload boundary — the
+        // load-bearing invariant the `fmt_float` `.0`-suffix
+        // discipline already exists to preserve. A regression that
+        // drifts ONE side (Display arm OR reader arm) corrupts the
+        // round-trip; pin it at the typed boundary directly. Sibling
+        // posture to the existing Sexp-layer round-trip tests:
+        // `float_display_round_trips_through_reader_into_typed_float`,
+        // `quote_prefix_round_trips_through_read_quoted_into_sexp_quote`.
+        let cases: &[Atom] = &[
+            Atom::Symbol("foo-bar".into()),
+            Atom::Keyword("kw".into()),
+            Atom::Int(42),
+            Atom::Int(-7),
+            Atom::Int(0),
+            Atom::Float(1.0),
+            Atom::Float(1.5),
+            Atom::Float(-42.0),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ];
+        for seed in cases {
+            let rendered = seed.to_string();
+            let mut parsed = crate::reader::read(&rendered)
+                .unwrap_or_else(|e| panic!("reader rejected {rendered:?} for {seed:?}: {e}"));
+            assert_eq!(
+                parsed.len(),
+                1,
+                "rendered {rendered:?} for {seed:?} re-read as != 1 form"
+            );
+            let Sexp::Atom(round_tripped) = parsed.remove(0) else {
+                panic!("rendered {rendered:?} for {seed:?} re-read as non-Atom");
+            };
+            assert_eq!(
+                round_tripped.kind(),
+                seed.kind(),
+                "Atom::Display→reader drifted variant for {seed:?} via {rendered:?}"
+            );
+            assert_eq!(
+                round_tripped, *seed,
+                "Atom::Display→reader drifted payload for {seed:?} via {rendered:?}"
             );
         }
     }

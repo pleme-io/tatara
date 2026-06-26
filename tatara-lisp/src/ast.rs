@@ -431,6 +431,191 @@ impl Atom {
         }
         Self::Symbol(s.to_owned())
     }
+
+    /// Soft projection onto the [`Self::Symbol`] payload — `Some(&str)`
+    /// iff this is a [`Self::Symbol`] variant, `None` for every other
+    /// atomic kind (`Keyword`, `Str`, `Int`, `Float`, `Bool`).
+    ///
+    /// FIRST of the six per-variant soft-projection methods on the typed
+    /// [`Atom`] algebra — the typed-EXIT *soft*-projection peer of the
+    /// typed-EXIT canonical-form projections ([`fmt::Display for Atom`],
+    /// [`Self::to_json`], [`Self::to_iac_forge_sexpr`]) and the typed-ENTRY
+    /// classifier ([`Self::from_lexeme`]). Where the canonical-form trio
+    /// projects the atomic payload to a *rendered* canonical surface
+    /// (string / JSON / iac-forge SExpr) and the classifier projects a
+    /// lexeme to the typed `Atom`, this method projects the typed `Atom`
+    /// to its inner payload — the soft-decomposition face of the closed
+    /// set, completing the algebra surface across BOTH bidirectional axes
+    /// (canonical-form rendering + classification on the typed-ENTRY/
+    /// typed-EXIT axis; soft decomposition on the typed-EXIT side at the
+    /// payload axis).
+    ///
+    /// Sibling soft-projection peer of [`Sexp::as_quote_form`]: where
+    /// `as_quote_form` soft-decomposes the four homoiconic prefix
+    /// wrappers into `Option<(QuoteForm, &Sexp)>`, this method (and its
+    /// five `as_*` siblings on [`Atom`]) soft-decompose the six atomic
+    /// payloads into `Option<&str>` / `Option<i64>` / `Option<f64>` /
+    /// `Option<bool>` — there is no inner-sexp body to surface, so the
+    /// projection's return type is just the payload. The
+    /// `Sexp::as_symbol` consumer at the `Sexp` algebra layer composes
+    /// this projection with [`Sexp::as_atom`] (the structural lift to
+    /// the inner [`Atom`]) — `Sexp::as_symbol(self) ==
+    /// self.as_atom().and_then(Atom::as_symbol)` — so the per-`Atom`-
+    /// variant soft-projection binds at ONE method on the typed algebra
+    /// rather than at six inline `Self::Atom(Atom::X(s)) => Some(s)` arms
+    /// inside the `Sexp` consumer.
+    ///
+    /// Lifts the inline `Self::Atom(Atom::Symbol(s)) => Some(s)` arm at
+    /// [`Sexp::as_symbol`]'s match body onto ONE typed-algebra projection
+    /// the `Sexp` consumer routes through via the structural lift
+    /// [`Sexp::as_atom`]. Sibling-shape lift to the typed-EXIT
+    /// canonical-form projections (`Display for Atom`, `Atom::to_json`,
+    /// `Atom::to_iac_forge_sexpr`) and the typed-ENTRY classifier
+    /// (`Atom::from_lexeme`) — every per-`Atom`-variant projection
+    /// across both the rendering surfaces AND the soft-decomposition
+    /// surface now binds at ONE method on the closed-set algebra rather
+    /// than at inline arms inside its consumer.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Atom variant, downstream-consumer-payload) pairing now binds at
+    /// ONE typed projection per consumer surface (six canonical-form
+    /// surfaces — `Display`, JSON, iac-forge, plus the soft-projection
+    /// FAMILY this method opens), regardless of which consumer reaches
+    /// in. THEORY.md §VI.1 — generation over composition; the six inline
+    /// `Self::Atom(Atom::X(s)) => Some(_)` arms at `Sexp::as_X` sites
+    /// (well past the ≥2 PRIME-DIRECTIVE trigger once the structural
+    /// shape is named) collapse onto the closed-set `Atom` algebra so a
+    /// future seventh atomic kind (e.g. `Char` for `#\x` reader syntax,
+    /// `Bigint` for arbitrary-precision integers) extends `Atom::ALL` +
+    /// the per-variant soft-projection method ONCE and rustc enforces
+    /// matching across every consumer through the closed-set match.
+    /// THEORY.md §V.1 — knowable platform; the (Atom variant, payload)
+    /// pairing becomes a TYPE projection on the substrate algebra
+    /// rather than six inline arms at the `Sexp` consumer. A typo or
+    /// swap at the soft-projection site is no longer a runtime drift
+    /// but a compile error against the typed projection.
+    ///
+    /// Frontier inspiration: Racket's `(symbol? v)` / `(symbol->string
+    /// v)` pair — the typed-predicate + typed-projection pair at the
+    /// atomic-payload layer; this method (and its five `as_*` siblings)
+    /// is the substrate's typed soft-projection peer on the closed-set
+    /// `Atom` algebra, with `Option<&str>` standing in for the
+    /// predicate-AND-projection pair Racket carries as two functions.
+    /// MLIR's `mlir::dyn_cast<SymbolAttribute>(attr)` — the typed-IR
+    /// soft-downcast onto a closed-set attribute family; `Atom::as_symbol`
+    /// is the unstructured-Rust peer on the `Atom` algebra for the
+    /// soft-projection face, with the closed-set `AtomKind` standing in
+    /// for MLIR's `AttributeKind` taxonomy.
+    #[must_use]
+    pub fn as_symbol(&self) -> Option<&str> {
+        match self {
+            Self::Symbol(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Soft projection onto the [`Self::Keyword`] payload — `Some(&str)`
+    /// iff this is a [`Self::Keyword`] variant, `None` for every other
+    /// atomic kind. The returned `&str` is the payload AFTER the `:`
+    /// prefix has been stripped at the typed-ENTRY classifier
+    /// boundary ([`Self::from_lexeme`] strips `:` when constructing a
+    /// `Keyword`; this projection surfaces the bare identifier).
+    /// SECOND of the six per-variant soft-projection methods on the
+    /// typed [`Atom`] algebra — see [`Self::as_symbol`] for the
+    /// algebra-level docstring.
+    #[must_use]
+    pub fn as_keyword(&self) -> Option<&str> {
+        match self {
+            Self::Keyword(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Soft projection onto the [`Self::Str`] payload — `Some(&str)` iff
+    /// this is a [`Self::Str`] variant (the typed `"…"`-quoted string
+    /// literal payload at the reader's [`crate::reader::Token::Str`]
+    /// branch), `None` for every other atomic kind. THIRD of the six
+    /// per-variant soft-projection methods — named `as_string` at the
+    /// `Sexp` consumer for consumer-vocabulary continuity with the
+    /// pre-lift `Sexp::as_string` projection (the typed payload variant
+    /// is `Str` for `String` shortening; the consumer-facing method
+    /// keeps `string` for symmetry with the `ExpectedKwargShape::String`
+    /// label and the [`SexpShape::String`] outer-shape marker).
+    #[must_use]
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            Self::Str(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Soft projection onto the [`Self::Int`] payload — `Some(i64)` iff
+    /// this is a [`Self::Int`] variant, `None` for every other atomic
+    /// kind. FOURTH of the six per-variant soft-projection methods.
+    /// The `i64` is returned by value (the payload is `Copy`); contrast
+    /// with [`Self::as_symbol`] / [`Self::as_keyword`] / [`Self::as_string`]
+    /// which borrow the underlying `String` payload as `&str` because
+    /// `String` is not `Copy`.
+    ///
+    /// Strict typed identity: this method projects `Atom::Int(n)` to
+    /// `Some(n)` only. The `Sexp::as_float` consumer at the `Sexp`
+    /// algebra layer widens `Int` to `Float` (`Atom::Int(n) → Some(n as
+    /// f64)`) for caller convenience at the numeric-kwarg boundary; the
+    /// `Atom`-level projection here stays strict so the typed-identity
+    /// distinction `Int(1)` vs `Float(1.0)` (the load-bearing typed
+    /// identity at the [`Self::from_lexeme`] ⇄ Display round-trip
+    /// boundary, dual of [`fmt_float`]'s `.0`-suffix discipline) is
+    /// preserved at the algebra layer. The widening lives at the
+    /// `Sexp::as_float` consumer (`a.as_float().or_else(|| a.as_int()
+    /// .map(|n| n as f64))`) where the convenience is wanted, not at
+    /// the algebra-level projection where the typed identity is
+    /// load-bearing.
+    #[must_use]
+    pub fn as_int(&self) -> Option<i64> {
+        match self {
+            Self::Int(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    /// Soft projection onto the [`Self::Float`] payload — `Some(f64)`
+    /// iff this is a [`Self::Float`] variant, `None` for every other
+    /// atomic kind. FIFTH of the six per-variant soft-projection
+    /// methods.
+    ///
+    /// Strict typed identity: `Atom::Int(n)` does NOT project through
+    /// this method (it stays `None`). The [`Sexp::as_float`] consumer
+    /// widens `Int` to `Float` at the `Sexp` algebra layer for caller
+    /// convenience; this algebra-level projection stays strict. See
+    /// [`Self::as_int`]'s docstring for the typed-identity contract.
+    #[must_use]
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Self::Float(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    /// Soft projection onto the [`Self::Bool`] payload — `Some(bool)`
+    /// iff this is a [`Self::Bool`] variant, `None` for every other
+    /// atomic kind. SIXTH and LAST of the six per-variant soft-projection
+    /// methods on the typed [`Atom`] algebra; together with the five
+    /// siblings ([`Self::as_symbol`], [`Self::as_keyword`],
+    /// [`Self::as_string`], [`Self::as_int`], [`Self::as_float`]) the
+    /// per-`Atom`-variant soft-projection family is complete across all
+    /// six closed-set arms. The CLAUDE.md-pinned `"#t"` / `"#f"` Scheme
+    /// bool spellings the reader's typed-ENTRY classifier
+    /// [`Self::from_lexeme`] dispatches on bind the lexeme → typed
+    /// [`Self::Bool`] direction; this method binds the typed
+    /// [`Self::Bool`] → payload direction at the soft-decomposition
+    /// face.
+    #[must_use]
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
 }
 
 /// Closed-set typed discriminator for the six [`Atom`] payload variants —
@@ -773,42 +958,85 @@ impl Sexp {
             _ => None,
         }
     }
-    pub fn as_symbol(&self) -> Option<&str> {
+
+    /// Soft projection onto the inner [`Atom`] payload — `Some(&Atom)`
+    /// iff this is a [`Self::Atom`] variant, `None` for every other
+    /// outer shape (`Nil`, `List`, `Quote`, `Quasiquote`, `Unquote`,
+    /// `UnquoteSplice`). The structural-lift face of the per-atomic-
+    /// payload soft-projection family — composes with the typed
+    /// [`Atom::as_symbol`] / [`Atom::as_keyword`] / [`Atom::as_string`]
+    /// / [`Atom::as_int`] / [`Atom::as_float`] / [`Atom::as_bool`]
+    /// projections to give the six `Sexp::as_X` consumers ONE typed
+    /// boundary instead of six inline `Self::Atom(Atom::X(s)) => Some(s)`
+    /// arms.
+    ///
+    /// Sibling soft-projection peer of [`Self::as_quote_form`] (the
+    /// soft-decomposition of the four homoiconic prefix wrappers into
+    /// `(QuoteForm, &Sexp)`) and [`Self::as_list`] (the soft-decomposition
+    /// of the structural list constructor into `&[Sexp]`). Together the
+    /// three projections (`as_atom`, `as_list`, `as_quote_form`) and
+    /// their nullary peer ([`Self::Nil`] via `matches!(self, Self::Nil)`)
+    /// cover every outer-shape arm of the `Sexp` algebra: Nil + Atom +
+    /// List + 4 quote-family arms = 7 outer shapes, with the typed-
+    /// projection set partitioning them by structural axis.
+    ///
+    /// Composition law binding `Sexp::as_X` to the typed `Atom` algebra:
+    /// for every [`Sexp`] `s`,
+    /// `s.as_symbol()` (and each `as_keyword` / `as_string` / `as_int` /
+    /// `as_bool` sibling) `== s.as_atom().and_then(Atom::as_<variant>)`.
+    /// The `Sexp::as_float` consumer specializes through the widening
+    /// inline composition `s.as_atom().and_then(|a| a.as_float()
+    /// .or_else(|| a.as_int().map(|n| n as f64)))` so the algebra-level
+    /// `Atom::as_float` stays strict and the typed-identity
+    /// distinction `Int(1)` vs `Float(1.0)` is preserved at the algebra
+    /// layer (see [`Atom::as_int`]'s docstring for the discipline).
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the six inline `Self::Atom(Atom::X(s)) => Some(_)` arms across
+    /// the `Sexp::as_X` family is past the three-times rule. THEORY.md
+    /// §II.1 invariant 2 — free middle; SIX consumers (`as_symbol`,
+    /// `as_keyword`, `as_string`, `as_int`, `as_float`, `as_bool`) now
+    /// route through ONE typed structural lift (this method) AND ONE
+    /// per-variant projection family on the closed-set `Atom` algebra
+    /// rather than six byte-identical outer-arm matches each.
+    /// THEORY.md §V.1 — knowable platform; the (Sexp variant, inner
+    /// payload kind) pairing becomes a TYPE projection on the substrate
+    /// algebra rather than six inline arms scattered across the six
+    /// `Sexp::as_X` consumers.
+    #[must_use]
+    pub fn as_atom(&self) -> Option<&Atom> {
         match self {
-            Self::Atom(Atom::Symbol(s)) => Some(s),
+            Self::Atom(a) => Some(a),
             _ => None,
         }
+    }
+
+    pub fn as_symbol(&self) -> Option<&str> {
+        self.as_atom().and_then(Atom::as_symbol)
     }
     pub fn as_keyword(&self) -> Option<&str> {
-        match self {
-            Self::Atom(Atom::Keyword(s)) => Some(s),
-            _ => None,
-        }
+        self.as_atom().and_then(Atom::as_keyword)
     }
     pub fn as_string(&self) -> Option<&str> {
-        match self {
-            Self::Atom(Atom::Str(s)) => Some(s),
-            _ => None,
-        }
+        self.as_atom().and_then(Atom::as_string)
     }
     pub fn as_int(&self) -> Option<i64> {
-        match self {
-            Self::Atom(Atom::Int(n)) => Some(*n),
-            _ => None,
-        }
+        self.as_atom().and_then(Atom::as_int)
     }
+    /// `Some(f)` for `Atom::Float(f)`, AND `Some(n as f64)` for
+    /// `Atom::Int(n)` — caller convenience at the numeric-kwarg
+    /// boundary. The Int-widening face lives at this consumer layer
+    /// rather than at [`Atom::as_float`] (strict per the typed-identity
+    /// discipline pinned at [`Atom::as_int`]'s docstring); the typed
+    /// soft-projection algebra on `Atom` stays strict, and the
+    /// `Sexp::as_float` consumer composes the strict typed projection
+    /// with a fallback widening branch on `Atom::as_int`.
     pub fn as_float(&self) -> Option<f64> {
-        match self {
-            Self::Atom(Atom::Float(n)) => Some(*n),
-            Self::Atom(Atom::Int(n)) => Some(*n as f64),
-            _ => None,
-        }
+        let a = self.as_atom()?;
+        a.as_float().or_else(|| a.as_int().map(|n| n as f64))
     }
     pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            Self::Atom(Atom::Bool(b)) => Some(*b),
-            _ => None,
-        }
+        self.as_atom().and_then(Atom::as_bool)
     }
     /// `foo` or `"foo"` — useful for names that may be authored either way.
     pub fn as_symbol_or_string(&self) -> Option<&str> {
@@ -4815,6 +5043,413 @@ mod tests {
             assert_eq!(
                 round_tripped, *seed,
                 "Atom::from_lexeme∘Display drifted payload for {seed:?} via {rendered:?}"
+            );
+        }
+    }
+
+    // ── Atom::as_X soft-projection family + Sexp::as_atom structural lift ──
+    //
+    // The six per-variant soft-projection methods on the typed `Atom` algebra
+    // (`as_symbol` / `as_keyword` / `as_string` / `as_int` / `as_float` /
+    // `as_bool`) lift the inline `Self::Atom(Atom::X(s)) => Some(s)` arms
+    // that previously lived at the six `Sexp::as_X` consumer sites onto ONE
+    // method per closed-set arm. The `Sexp::as_atom` structural lift gives
+    // the consumer family a uniform two-step composition `as_atom().and_then
+    // (Atom::as_X)`. The tests below pin:
+    //
+    //   (1) per-variant typed projection — `Atom::as_X` returns `Some(payload)`
+    //       iff the variant matches AND `None` for every other closed-set arm
+    //       (path-uniformity over `AtomKind::ALL`);
+    //   (2) the `Sexp::as_atom` projection — `Some(&Atom)` iff `Sexp::Atom(_)`
+    //       AND `None` for the structural shapes (`Nil` / `List` /
+    //       `Quote` / `Quasiquote` / `Unquote` / `UnquoteSplice`);
+    //   (3) lifted-boundary composition — `Sexp::as_<X>(s) == s.as_atom()
+    //       .and_then(Atom::as_<X>)` for every atomic variant, AND the
+    //       `Sexp::as_float` widening specialization (`Atom::Int(n)` →
+    //       `Some(n as f64)`) lives at the consumer layer, NOT the algebra
+    //       layer (per the typed-identity discipline pinned at
+    //       `Atom::as_int`'s docstring).
+
+    #[test]
+    fn atom_as_symbol_returns_payload_iff_symbol_variant() {
+        // PER-VARIANT PROJECTION CONTRACT: `Atom::as_symbol` projects
+        // `Atom::Symbol(s)` to `Some(&s)` and every other `AtomKind`
+        // variant to `None`. Sweeps `AtomKind::ALL` for the path-
+        // uniformity guard — catches a regression that mis-routes ONE
+        // arm (e.g. accepts `Atom::Keyword(s)` thinking it's "also a
+        // symbol-like identifier", or rejects `Atom::Symbol("foo")` if
+        // a future closed-set sweep accidentally narrows the projection
+        // by an `s.is_empty()` filter).
+        assert_eq!(Atom::Symbol("foo".into()).as_symbol(), Some("foo"));
+        assert_eq!(Atom::Symbol("seph.1".into()).as_symbol(), Some("seph.1"));
+        assert_eq!(Atom::Symbol(String::new()).as_symbol(), Some(""));
+        for kind in AtomKind::ALL {
+            if kind == AtomKind::Symbol {
+                continue;
+            }
+            let probe: Atom = match kind {
+                AtomKind::Symbol => unreachable!(),
+                AtomKind::Keyword => Atom::Keyword("kw".into()),
+                AtomKind::Str => Atom::Str("body".into()),
+                AtomKind::Int => Atom::Int(42),
+                AtomKind::Float => Atom::Float(1.5),
+                AtomKind::Bool => Atom::Bool(true),
+            };
+            assert_eq!(
+                probe.as_symbol(),
+                None,
+                "Atom::as_symbol must reject non-Symbol variant {kind:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_as_keyword_returns_payload_iff_keyword_variant() {
+        // PER-VARIANT PROJECTION CONTRACT: `Atom::as_keyword` projects
+        // `Atom::Keyword(s)` to `Some(&s)` and every other `AtomKind`
+        // variant to `None`. The returned `&str` is the BARE identifier
+        // (the `:` prefix was already stripped at the typed-ENTRY
+        // classifier boundary, `Atom::from_lexeme`); this projection
+        // does not re-add or re-strip the prefix — pinned by the empty
+        // probe to catch a regression that accidentally trims a leading
+        // char.
+        assert_eq!(Atom::Keyword("parent".into()).as_keyword(), Some("parent"));
+        assert_eq!(Atom::Keyword(String::new()).as_keyword(), Some(""));
+        for kind in AtomKind::ALL {
+            if kind == AtomKind::Keyword {
+                continue;
+            }
+            let probe: Atom = match kind {
+                AtomKind::Symbol => Atom::Symbol("foo".into()),
+                AtomKind::Keyword => unreachable!(),
+                AtomKind::Str => Atom::Str("body".into()),
+                AtomKind::Int => Atom::Int(42),
+                AtomKind::Float => Atom::Float(1.5),
+                AtomKind::Bool => Atom::Bool(true),
+            };
+            assert_eq!(
+                probe.as_keyword(),
+                None,
+                "Atom::as_keyword must reject non-Keyword variant {kind:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_as_string_returns_payload_iff_str_variant() {
+        // PER-VARIANT PROJECTION CONTRACT: `Atom::as_string` projects
+        // `Atom::Str(s)` to `Some(&s)` and every other `AtomKind`
+        // variant (including `Symbol` and `Keyword`, which also carry
+        // `String` payloads) to `None`. The closed-set discriminator is
+        // load-bearing: a `Symbol("foo")` MUST NOT route through this
+        // projection — a regression that conflates the three string-
+        // carrying variants would silently re-classify operator-position
+        // symbols as string-typed kwarg values at every `extract_string`
+        // boundary.
+        assert_eq!(Atom::Str("body".into()).as_string(), Some("body"));
+        assert_eq!(
+            Atom::Str("with\nnewline".into()).as_string(),
+            Some("with\nnewline"),
+        );
+        assert_eq!(Atom::Str(String::new()).as_string(), Some(""));
+        assert_eq!(
+            Atom::Symbol("looks-like-a-string".into()).as_string(),
+            None,
+            "Atom::as_string MUST NOT conflate Symbol with Str — load-bearing typed-identity",
+        );
+        assert_eq!(
+            Atom::Keyword("looks-like-a-string".into()).as_string(),
+            None,
+            "Atom::as_string MUST NOT conflate Keyword with Str — load-bearing typed-identity",
+        );
+        for kind in [AtomKind::Int, AtomKind::Float, AtomKind::Bool] {
+            let probe: Atom = match kind {
+                AtomKind::Int => Atom::Int(42),
+                AtomKind::Float => Atom::Float(1.5),
+                AtomKind::Bool => Atom::Bool(true),
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                probe.as_string(),
+                None,
+                "Atom::as_string must reject non-Str variant {kind:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_as_int_returns_payload_iff_int_variant_strict_no_float_widening() {
+        // PER-VARIANT PROJECTION CONTRACT (STRICT): `Atom::as_int`
+        // projects `Atom::Int(n)` to `Some(n)` and every other variant
+        // to `None`. STRICT typed identity: `Atom::Float(1.0)` does
+        // NOT project through (stays `None`) — the typed-identity
+        // distinction `Int(1)` vs `Float(1.0)` (load-bearing at the
+        // `Atom::from_lexeme` ⇄ `Atom::Display` round-trip boundary, dual of
+        // `fmt_float`'s `.0`-suffix discipline) is preserved at the
+        // algebra layer. The widening face lives at the
+        // `Sexp::as_float` consumer (which accepts both `Float` AND
+        // `Int`); the strict typed identity at the `Atom` algebra is
+        // load-bearing.
+        assert_eq!(Atom::Int(42).as_int(), Some(42));
+        assert_eq!(Atom::Int(-7).as_int(), Some(-7));
+        assert_eq!(Atom::Int(0).as_int(), Some(0));
+        assert_eq!(
+            Atom::Float(1.0).as_int(),
+            None,
+            "Atom::as_int MUST be strict — Float(1.0) is NOT Int(1) at the algebra layer",
+        );
+        for kind in [
+            AtomKind::Symbol,
+            AtomKind::Keyword,
+            AtomKind::Str,
+            AtomKind::Float,
+            AtomKind::Bool,
+        ] {
+            let probe: Atom = match kind {
+                AtomKind::Symbol => Atom::Symbol("foo".into()),
+                AtomKind::Keyword => Atom::Keyword("kw".into()),
+                AtomKind::Str => Atom::Str("body".into()),
+                AtomKind::Float => Atom::Float(1.5),
+                AtomKind::Bool => Atom::Bool(true),
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                probe.as_int(),
+                None,
+                "Atom::as_int must reject non-Int variant {kind:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_as_float_returns_payload_iff_float_variant_strict_no_int_widening() {
+        // PER-VARIANT PROJECTION CONTRACT (STRICT): `Atom::as_float`
+        // projects `Atom::Float(n)` to `Some(n)` and every other
+        // variant to `None`. STRICT typed identity: `Atom::Int(1)`
+        // does NOT project through (stays `None`) — see
+        // `atom_as_int_returns_payload_iff_int_variant_strict_no_float_widening`
+        // for the symmetric discipline. The widening face
+        // (`Atom::Int(n) → Some(n as f64)`) lives at the `Sexp::as_float`
+        // consumer layer, NOT the algebra layer.
+        assert_eq!(Atom::Float(1.5).as_float(), Some(1.5));
+        assert_eq!(Atom::Float(1.0).as_float(), Some(1.0));
+        assert_eq!(Atom::Float(-42.0).as_float(), Some(-42.0));
+        assert_eq!(
+            Atom::Int(1).as_float(),
+            None,
+            "Atom::as_float MUST be strict — Int(1) is NOT Float(1.0) at the algebra layer",
+        );
+        for kind in [
+            AtomKind::Symbol,
+            AtomKind::Keyword,
+            AtomKind::Str,
+            AtomKind::Int,
+            AtomKind::Bool,
+        ] {
+            let probe: Atom = match kind {
+                AtomKind::Symbol => Atom::Symbol("foo".into()),
+                AtomKind::Keyword => Atom::Keyword("kw".into()),
+                AtomKind::Str => Atom::Str("body".into()),
+                AtomKind::Int => Atom::Int(42),
+                AtomKind::Bool => Atom::Bool(true),
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                probe.as_float(),
+                None,
+                "Atom::as_float must reject non-Float variant {kind:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_as_bool_returns_payload_iff_bool_variant() {
+        // PER-VARIANT PROJECTION CONTRACT: `Atom::as_bool` projects
+        // `Atom::Bool(b)` to `Some(b)` and every other variant to
+        // `None`. Both spellings (`true` / `false`) project through
+        // the SAME projection — the variant identity (`Bool`) is what
+        // routes; the inner payload (`true` / `false`) is the
+        // projected value. CLAUDE.md "Lisp bools": at the reader
+        // boundary the typed-entry classifier `Atom::from_lexeme`
+        // routes `"#t"` / `"#f"` to `Atom::Bool(_)` and bare
+        // `"true"` / `"false"` to `Atom::Symbol(_)`; this projection
+        // does NOT re-classify the symbol-spelled bools — they STAY
+        // symbols. The negative test (`Atom::Symbol("true")` rejects)
+        // pins the discriminator discipline.
+        assert_eq!(Atom::Bool(true).as_bool(), Some(true));
+        assert_eq!(Atom::Bool(false).as_bool(), Some(false));
+        assert_eq!(
+            Atom::Symbol("true".into()).as_bool(),
+            None,
+            "Atom::as_bool MUST reject Symbol(\"true\") — CLAUDE.md typed-identity discipline",
+        );
+        assert_eq!(
+            Atom::Symbol("false".into()).as_bool(),
+            None,
+            "Atom::as_bool MUST reject Symbol(\"false\") — CLAUDE.md typed-identity discipline",
+        );
+        for kind in [
+            AtomKind::Symbol,
+            AtomKind::Keyword,
+            AtomKind::Str,
+            AtomKind::Int,
+            AtomKind::Float,
+        ] {
+            let probe: Atom = match kind {
+                AtomKind::Symbol => Atom::Symbol("foo".into()),
+                AtomKind::Keyword => Atom::Keyword("kw".into()),
+                AtomKind::Str => Atom::Str("body".into()),
+                AtomKind::Int => Atom::Int(42),
+                AtomKind::Float => Atom::Float(1.5),
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                probe.as_bool(),
+                None,
+                "Atom::as_bool must reject non-Bool variant {kind:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_atom_projects_inner_atom_iff_outer_is_atom_variant() {
+        // STRUCTURAL-LIFT CONTRACT: `Sexp::as_atom` projects
+        // `Sexp::Atom(a)` to `Some(&a)` and every other outer shape
+        // (`Nil` / `List` / `Quote` / `Quasiquote` / `Unquote` /
+        // `UnquoteSplice`) to `None`. Sweeps each outer shape so a
+        // regression that mis-routes ONE arm (e.g. accepts the
+        // singleton list `(a)` thinking the inner counts as the
+        // "wrapped atom", or rejects an `Atom` whose payload is empty)
+        // fails loudly. The `&Atom` borrow is rooted at the outer
+        // `&Sexp` — the projection does not clone, allocate, or take
+        // ownership.
+        let atom = Atom::Symbol("foo".into());
+        let sexp = Sexp::Atom(atom.clone());
+        assert_eq!(sexp.as_atom(), Some(&atom));
+
+        for outer in [
+            Sexp::Nil,
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::List(vec![]),
+            Sexp::Quote(Box::new(Sexp::symbol("x"))),
+            Sexp::Quasiquote(Box::new(Sexp::symbol("x"))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("x"))),
+        ] {
+            assert_eq!(
+                outer.as_atom(),
+                None,
+                "Sexp::as_atom must reject non-Atom outer shape {outer:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_x_family_routes_through_atom_as_x_for_every_atomic_variant() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the six `Sexp::as_X`
+        // consumer-side projections equal the two-step composition
+        // `s.as_atom().and_then(Atom::as_X)` for every atomic payload
+        // variant. Pre-lift the six methods opened the same `Self::Atom
+        // (Atom::X(s)) => Some(s)` inline arm; post-lift they delegate
+        // through the typed projection family on the closed-set `Atom`
+        // algebra. A regression that drifts the outer arm (e.g. re-
+        // inlines one variant's match without updating the typed
+        // projection) surfaces as an inequality here. Sweeps every
+        // atomic variant + every consumer projection, AND pins the
+        // `Sexp::as_float` widening specialization (`Atom::Int(n)` →
+        // `Some(n as f64)`) lives at the consumer layer.
+        let cases: &[Atom] = &[
+            Atom::Symbol("name".into()),
+            Atom::Keyword("kw".into()),
+            Atom::Str("body".into()),
+            Atom::Int(42),
+            Atom::Int(-7),
+            Atom::Float(1.5),
+            Atom::Float(1.0),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ];
+        for atom in cases {
+            let sexp = Sexp::Atom(atom.clone());
+
+            assert_eq!(
+                sexp.as_symbol(),
+                sexp.as_atom().and_then(Atom::as_symbol),
+                "Sexp::as_symbol drifted from as_atom().and_then(Atom::as_symbol) for {atom:?}",
+            );
+            assert_eq!(
+                sexp.as_keyword(),
+                sexp.as_atom().and_then(Atom::as_keyword),
+                "Sexp::as_keyword drifted from as_atom().and_then(Atom::as_keyword) for {atom:?}",
+            );
+            assert_eq!(
+                sexp.as_string(),
+                sexp.as_atom().and_then(Atom::as_string),
+                "Sexp::as_string drifted from as_atom().and_then(Atom::as_string) for {atom:?}",
+            );
+            assert_eq!(
+                sexp.as_int(),
+                sexp.as_atom().and_then(Atom::as_int),
+                "Sexp::as_int drifted from as_atom().and_then(Atom::as_int) for {atom:?}",
+            );
+            assert_eq!(
+                sexp.as_bool(),
+                sexp.as_atom().and_then(Atom::as_bool),
+                "Sexp::as_bool drifted from as_atom().and_then(Atom::as_bool) for {atom:?}",
+            );
+
+            // `Sexp::as_float` specializes through the widening composition
+            // `s.as_atom().and_then(|a| a.as_float().or_else(|| a.as_int()
+            // .map(|n| n as f64)))` so the algebra-level `Atom::as_float`
+            // stays strict and the typed-identity distinction `Int(1)` vs
+            // `Float(1.0)` is preserved at the algebra layer.
+            let expected_float = sexp
+                .as_atom()
+                .and_then(|a| a.as_float().or_else(|| a.as_int().map(|n| n as f64)));
+            assert_eq!(
+                sexp.as_float(),
+                expected_float,
+                "Sexp::as_float drifted from widening composition for {atom:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_float_widens_int_to_float_at_consumer_layer_only() {
+        // CONSUMER-LAYER WIDENING CONTRACT: pin that the `Sexp::as_float`
+        // consumer DOES widen `Atom::Int(n)` to `Some(n as f64)` (the
+        // load-bearing widening at the numeric-kwarg boundary the
+        // `extract_float` extractor depends on) AND that the algebra-
+        // level `Atom::as_float` does NOT (the strict typed-identity
+        // discipline pinned at `atom_as_float_returns_payload_iff_float_variant_strict_no_int_widening`).
+        // The widening lives at the CONSUMER layer ONLY; a regression
+        // that drifts the widening into the algebra layer (e.g. re-
+        // adds an `Atom::Int(n) => Some(n as f64)` arm at
+        // `Atom::as_float`) would silently coerce `Int(1)` slots into
+        // the `Float` track at every `Atom` consumer that bypasses
+        // `Sexp`, breaking the typed-identity discipline at the
+        // canonical-form rendering surfaces (Display, JSON,
+        // iac-forge).
+        let int_sexp = Sexp::int(7);
+        assert_eq!(
+            int_sexp.as_float(),
+            Some(7.0),
+            "Sexp::as_float must widen Atom::Int to f64 at the consumer layer",
+        );
+        assert_eq!(
+            Atom::Int(7).as_float(),
+            None,
+            "Atom::as_float must stay strict at the algebra layer",
+        );
+
+        // The widening sweeps the int domain — pin a few canonical
+        // values so a regression that loses the `as f64` cast (e.g. an
+        // accidental `usize` round-trip) surfaces directly.
+        for n in [-42i64, -1, 0, 1, 42] {
+            assert_eq!(
+                Sexp::int(n).as_float(),
+                Some(n as f64),
+                "Sexp::as_float widening drifted for Int({n})",
             );
         }
     }

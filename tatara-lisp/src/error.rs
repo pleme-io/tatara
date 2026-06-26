@@ -7932,17 +7932,16 @@ mod tests {
         // workspace uses (ExpectedKwargShape::ALL, SexpShape::ALL,
         // MacroDefHead::ALL, CompilerSpecIoStage::ALL,
         // AutoTerminateKind::ALL, SelectStrategyKind::ALL, …).
+        //
+        // The `iter+map+collect+sort_unstable` quadruple this test
+        // inlined pre-lift now binds at `<KwargPathKind as
+        // ClosedSet>::sorted_labels()` — the canonical-ordered
+        // candidate-list projection on the trait. Distinctness of the
+        // sorted result is covered by
+        // `assert_closed_set_well_formed::<KwargPathKind>()`.
         assert_eq!(KwargPathKind::ALL.len(), 3);
-        let mut sorted: Vec<&str> = KwargPathKind::ALL.iter().map(|k| k.label()).collect();
-        sorted.sort_unstable();
-        let mut deduped = sorted.clone();
-        deduped.dedup();
         assert_eq!(
-            sorted, deduped,
-            "KwargPathKind::ALL must not contain duplicates"
-        );
-        assert_eq!(
-            sorted,
+            <KwargPathKind as crate::ClosedSet>::sorted_labels(),
             vec!["item", "named", "slot"],
             "KwargPathKind::ALL must cover every reachable path-shape category"
         );
@@ -8213,17 +8212,16 @@ mod tests {
         // workspace uses (SexpShape::ALL, MacroDefHead::ALL,
         // UnquoteForm::ALL, RequestorKind::ALL, ReceiptKind::ALL,
         // ConditionKind::ALL, ProcessPhase::ALL, ChannelKind::ALL, …).
+        //
+        // The `iter+map+collect+sort_unstable` quadruple this test
+        // inlined pre-lift now binds at `<ExpectedKwargShape as
+        // ClosedSet>::sorted_labels()` — the canonical-ordered
+        // candidate-list projection on the trait. Distinctness of the
+        // sorted result is covered by
+        // `assert_closed_set_well_formed::<ExpectedKwargShape>()`.
         assert_eq!(ExpectedKwargShape::ALL.len(), 7);
-        let mut sorted: Vec<&str> = ExpectedKwargShape::ALL.iter().map(|s| s.label()).collect();
-        sorted.sort_unstable();
-        let mut deduped = sorted.clone();
-        deduped.dedup();
         assert_eq!(
-            sorted, deduped,
-            "ExpectedKwargShape::ALL must not contain duplicates"
-        );
-        assert_eq!(
-            sorted,
+            <ExpectedKwargShape as crate::ClosedSet>::sorted_labels(),
             vec![
                 "bool",
                 "int",
@@ -8482,17 +8480,16 @@ mod tests {
         // truth-table pinning every sibling closed-set lift in the
         // workspace uses (RequestorKind::ALL, ReceiptKind::ALL,
         // ConditionKind::ALL, ProcessPhase::ALL, ChannelKind::ALL, …).
+        //
+        // The `iter+map+collect+sort_unstable` quadruple this test
+        // inlined pre-lift now binds at `<SexpShape as
+        // ClosedSet>::sorted_labels()` — the canonical-ordered
+        // candidate-list projection on the trait. Distinctness of the
+        // sorted result is covered by
+        // `assert_closed_set_well_formed::<SexpShape>()`.
         assert_eq!(SexpShape::ALL.len(), 12);
-        let mut sorted: Vec<&str> = SexpShape::ALL.iter().map(|s| s.label()).collect();
-        sorted.sort_unstable();
-        let mut deduped = sorted.clone();
-        deduped.dedup();
         assert_eq!(
-            sorted, deduped,
-            "SexpShape::ALL must not contain duplicates"
-        );
-        assert_eq!(
-            sorted,
+            <SexpShape as crate::ClosedSet>::sorted_labels(),
             vec![
                 "bool",
                 "float",
@@ -8658,17 +8655,16 @@ mod tests {
         // truth-table pinning every sibling closed-set lift in the
         // workspace uses (SexpShape::ALL, AtomKind::ALL,
         // RequestorKind::ALL, ReceiptKind::ALL, ConditionKind::ALL, …).
+        //
+        // The `iter+map+collect+sort_unstable` quadruple this test
+        // inlined pre-lift now binds at `<UnquoteForm as
+        // ClosedSet>::sorted_labels()` — the canonical-ordered
+        // candidate-list projection on the trait. Distinctness of the
+        // sorted result is covered by
+        // `assert_closed_set_well_formed::<UnquoteForm>()`.
         assert_eq!(UnquoteForm::ALL.len(), 2);
-        let mut sorted: Vec<&str> = UnquoteForm::ALL.iter().map(|f| f.marker()).collect();
-        sorted.sort_unstable();
-        let mut deduped = sorted.clone();
-        deduped.dedup();
         assert_eq!(
-            sorted, deduped,
-            "UnquoteForm::ALL must not contain duplicates"
-        );
-        assert_eq!(
-            sorted,
+            <UnquoteForm as crate::ClosedSet>::sorted_labels(),
             vec![",", ",@"],
             "UnquoteForm::ALL must cover both template-marker syntactic forms"
         );
@@ -8795,17 +8791,16 @@ mod tests {
         // workspace uses (SexpShape::ALL, AtomKind::ALL,
         // QuoteForm::ALL, UnquoteForm::ALL, RequestorKind::ALL,
         // ReceiptKind::ALL, ConditionKind::ALL, …).
+        //
+        // The `iter+map+collect+sort_unstable` quadruple this test
+        // inlined pre-lift now binds at `<MacroDefHead as
+        // ClosedSet>::sorted_labels()` — the canonical-ordered
+        // candidate-list projection on the trait. Distinctness of the
+        // sorted result is covered by
+        // `assert_closed_set_well_formed::<MacroDefHead>()`.
         assert_eq!(MacroDefHead::ALL.len(), 3);
-        let mut sorted: Vec<&str> = MacroDefHead::ALL.iter().map(|h| h.keyword()).collect();
-        sorted.sort_unstable();
-        let mut deduped = sorted.clone();
-        deduped.dedup();
         assert_eq!(
-            sorted, deduped,
-            "MacroDefHead::ALL must not contain duplicates"
-        );
-        assert_eq!(
-            sorted,
+            <MacroDefHead as crate::ClosedSet>::sorted_labels(),
             vec!["defcheck", "defmacro", "defpoint-template"],
             "MacroDefHead::ALL must cover all three macro-definition heads"
         );

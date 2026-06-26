@@ -399,6 +399,91 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::labels().join(sep)
     }
 
+    /// Project [`Self::labels`] into ASCII-`sort_unstable` lexicographic
+    /// order — the substrate-wide canonical candidate-list ordering every
+    /// per-implementor `_all_is_unique_and_complete` test inlines a
+    /// hand-rolled `let mut sorted: Vec<&str> = T::ALL.iter().map(label)
+    /// .collect(); sorted.sort_unstable();` triple to materialize.
+    ///
+    /// Default body composes [`Self::labels`] with
+    /// [`slice::sort_unstable`](https://doc.rust-lang.org/std/primitive.slice.html#method.sort_unstable)
+    /// — the sorted-rendering is a typed CONSEQUENCE of `Self::ALL` +
+    /// `Self::label` + lexicographic order on `&str`. Implementors
+    /// override only when the sort surface needs to diverge from the
+    /// natural `labels().sort_unstable()` shape (no production
+    /// implementor reaches for this today — the axis exists for the same
+    /// reason `via`, `set_label`, `labels`, `labels_joined`,
+    /// `suggest_closest`, `parse_label_with_hint` overrides exist: a
+    /// typed escape hatch the trait surface exposes rather than forcing
+    /// the implementor to hand-roll the impl).
+    ///
+    /// The substrate-wide `let mut sorted: Vec<&str> = T::ALL.iter()
+    /// .map(<via>).collect(); sorted.sort_unstable();` triple recurred
+    /// at SEVEN test sites pre-lift (`quote_form_all_is_unique_and_
+    /// complete`, `atom_kind_all_is_unique_and_complete`,
+    /// `kwarg_path_kind_all_is_unique_and_complete`,
+    /// `expected_kwarg_shape_all_is_unique_and_complete`,
+    /// `sexp_shape_all_is_unique_and_complete`,
+    /// `unquote_form_all_is_unique_and_complete`,
+    /// `macro_def_head_all_is_unique_and_complete`) each materializing
+    /// the labels vec inline and sorting it in place before asserting
+    /// against a hand-rolled sorted truth-table — past the ≥3
+    /// PRIME-DIRECTIVE trigger once the per-test inline triple is named.
+    /// Post-lift each test site reduces to `assert_eq!(T::sorted_labels(),
+    /// vec![<truth-table>])` and the canonical-ordered candidate-list
+    /// surface binds at ONE trait method every closed-set consumer can
+    /// lean on without re-deriving the `iter+map+collect+sort` quadruple.
+    ///
+    /// Distinctness of the sorted result is already a substrate-wide
+    /// invariant pinned by [`assert_closed_set_well_formed`] (clause 3 —
+    /// labels are pairwise distinct), so the per-implementor `sorted ==
+    /// deduped` redundant double-check the inline triple carried can
+    /// retire alongside the materialization itself; the truth-table
+    /// comparison (the per-implementor unique payload — `vec!["'", ",",
+    /// ",@", "`"]` for `QuoteForm`, `vec!["bool", "float", "int",
+    /// "keyword", "string", "symbol"]` for `AtomKind`, …) stays at the
+    /// per-implementor test site as the load-bearing per-enum ground
+    /// truth this lift does NOT subsume.
+    ///
+    /// Future consumers — an LSP completion bar that wants
+    /// `nix | flux | lisp | container | aplicacao | guest` in
+    /// alphabetical order, a `tatara-check` diagnostic that wants
+    /// `expected one of: aplicacao, container, flux, guest, lisp, nix`
+    /// for an alphabetized natural-language rendering, a typed
+    /// near-miss metric that wants the candidate set in a
+    /// deterministic-across-machines canonical order — bind to ONE
+    /// trait method instead of hand-rolling the
+    /// `iter+map+collect+sort` quadruple at each call site, and the
+    /// closed-set projection's canonical-ordering surface evolves at
+    /// ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §V.1 — knowable platform; the sorted-candidate-list
+    /// shape was a known idiom carried by convention across 7+ test
+    /// sites. Lifting the sort onto the trait makes the shape a TYPED
+    /// CONSEQUENCE of [`Self::labels`] + ASCII lexicographic ordering —
+    /// generic consumers see ONE method, not ONE sort-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// sorted-candidate-list rendering emerges from the composition of
+    /// THREE substrate primitives ([`Self::ALL`], [`Self::label`],
+    /// `slice::sort_unstable`) rather than as a per-implementor inline
+    /// `collect+sort` pair. A future tightening of the canonical-
+    /// ordering surface (a future Unicode-collation-aware sort, a
+    /// future declaration-order sibling) lands at ONE primitive and
+    /// propagates to every closed-set consumer.
+    ///
+    /// Frontier inspiration: Idris's `show` over a finite-type universe
+    /// — the canonical-ordered listing emits as a single typed
+    /// projection rather than per-instance inline rendering. Translation
+    /// through pleme-io primitives: a pure default method composing the
+    /// trait's existing [`Self::labels`] surface with the
+    /// `slice::sort_unstable` standard-library primitive — no new dep,
+    /// no new IR layer.
+    fn sorted_labels() -> ::std::vec::Vec<&'static str> {
+        let mut labels = <Self as ClosedSet>::labels();
+        labels.sort_unstable();
+        labels
+    }
+
     /// Project `needle` onto the closest variant whose
     /// [`Self::label`] sits within the substrate-wide bounded edit
     /// distance — the typed bridge between an unrecognized input and
@@ -628,6 +713,20 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///    different separator threading, a subset of labels) loudly
 ///    rather than silently bifurcating the candidate-list-as-string
 ///    rendering every consumer routes through.
+/// 9. [`ClosedSet::sorted_labels`] composes [`ClosedSet::labels`] with
+///    [`slice::sort_unstable`](https://doc.rust-lang.org/std/primitive.slice.html#method.sort_unstable)
+///    verbatim — the canonical-ordered candidate-list rendering every
+///    `_all_is_unique_and_complete` per-implementor test (the 7+
+///    `let mut sorted: Vec<&str> = T::ALL.iter().map(<via>).collect();
+///    sorted.sort_unstable();` inline triples across `QuoteForm`,
+///    `AtomKind`, `KwargPathKind`, `ExpectedKwargShape`, `SexpShape`,
+///    `UnquoteForm`, `MacroDefHead`, …) routes through emits at ONE
+///    trait body. The default trait body satisfies the clause for free;
+///    the assertion catches a future implementor whose override returns
+///    a different sort shape (a subset of labels, a different ordering,
+///    declaration order instead of lexicographic) loudly rather than
+///    silently bifurcating the canonical-ordered candidate-list surface
+///    every LSP / `tatara-check` / metrics consumer routes through.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -803,6 +902,24 @@ where
             "{type_name}: T::labels_joined({sep:?}) drifted from T::labels().join({sep:?}) — the joined-candidate-list rendering every diagnostic / metrics consumer routes through no longer matches the natural labels-projection",
         );
     }
+    // (9) — `T::sorted_labels()` composes `T::labels()` with
+    // `slice::sort_unstable` verbatim. The default trait body satisfies
+    // the clause for free; the assertion catches a future implementor
+    // whose override drifts from the natural `labels().sort_unstable()`
+    // shape (a different ordering, a subset of labels, declaration order
+    // instead of lexicographic) loudly rather than silently bifurcating
+    // the canonical-ordered candidate-list surface every LSP /
+    // `tatara-check` / metrics consumer routes through.
+    let lifted_sorted = T::sorted_labels();
+    let natural_sorted = {
+        let mut v = T::labels();
+        v.sort_unstable();
+        v
+    };
+    assert_eq!(
+        lifted_sorted, natural_sorted,
+        "{type_name}: T::sorted_labels() drifted from `let mut v = T::labels(); v.sort_unstable(); v` — the canonical-ordered candidate-list surface every LSP / `tatara-check` / metrics consumer routes through no longer matches the natural labels-then-sort projection",
+    );
 }
 
 #[cfg(test)]
@@ -1157,6 +1274,146 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a labels_joined override drifted from the natural labels-join composition",
+        );
+    }
+
+    #[test]
+    fn sorted_labels_renders_labels_in_lexicographic_order() {
+        // The sorted-candidate-list surface — `T::sorted_labels()`
+        // composes `T::labels()` with `slice::sort_unstable` verbatim.
+        // Pinning the rendering against a hand-rolled lexicographic
+        // truth-table here means a regression that drifts the
+        // composition at the trait method (a future override that
+        // strips a label, threads a different ordering, sorts
+        // case-insensitively rather than byte-wise, returns
+        // declaration order instead of lexicographic) fails this
+        // contract before any per-implementor surface depends on the
+        // canonical ordering downstream. The `StubKind` labels
+        // (`alpha`/`beta`/`gamma`) are already in lexicographic order
+        // in declaration, so the round-trip identity holds trivially;
+        // the test relies on the sort key being byte-wise ASCII rather
+        // than declaration-order to actually exercise the sort step.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_labels(),
+            vec!["alpha", "beta", "gamma"],
+        );
+    }
+
+    #[test]
+    fn sorted_labels_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract — `T::sorted_labels()` MUST normalize
+        // an arbitrary declaration order into ASCII lexicographic
+        // order, regardless of the implementor's `ALL`-array layout.
+        // A regression that returns `labels()` verbatim (without the
+        // sort step) would pass `sorted_labels_renders_labels_in_
+        // lexicographic_order` on `StubKind` (because its labels
+        // already sit in order) but silently bifurcate the
+        // canonical-ordering surface for any implementor whose
+        // declaration order differs from byte-wise sort order.
+        // Pinning the sort discipline here with a deliberately-
+        // out-of-order stub catches that drift directly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse stub kind";
+            type Unknown = UnknownReverseStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseStubKind(s.to_owned())
+            }
+        }
+        // `labels()` preserves declaration order — `gamma, beta, alpha`.
+        assert_eq!(
+            <ReverseStubKind as ClosedSet>::labels(),
+            vec!["gamma", "beta", "alpha"],
+        );
+        // `sorted_labels()` normalizes to ASCII lexicographic order —
+        // `alpha, beta, gamma`. The composition with `sort_unstable`
+        // is the load-bearing step the lift names.
+        assert_eq!(
+            <ReverseStubKind as ClosedSet>::sorted_labels(),
+            vec!["alpha", "beta", "gamma"],
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_labels_and_composition() {
+        // The well-formedness sweep's (9) clause —
+        // `T::sorted_labels()` MUST compose `T::labels()` with
+        // `slice::sort_unstable` verbatim. A hand-impl'd implementor
+        // whose override drifts the composition (returns labels in
+        // declaration order, strips a label, threads a different
+        // ordering) fails the sweep loudly rather than silently
+        // bifurcating the canonical-ordered candidate-list surface
+        // every LSP / `tatara-check` / metrics consumer routes
+        // through. Pinning the failure path here keeps the testkit's
+        // (9) clause guaranteed-to-fire — a regression that makes
+        // the assertion permissive (e.g. a future "any permutation"
+        // relaxation) breaks this stub-level contract before any
+        // per-implementor sweep runs.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortKind {
+            First,
+            Second,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sort kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortKind {
+            const ALL: &'static [Self] = &[Self::First, Self::Second];
+            const SET_LABEL: &'static str = "drifted sort kind";
+            type Unknown = UnknownDriftedSortKind;
+            fn label(self) -> &'static str {
+                match self {
+                    // Labels are intentionally out of declaration
+                    // order vs. byte-wise sort: declaration is
+                    // `first, second`, but ASCII sort is `second,
+                    // first` only if `second < first` lexically (it
+                    // is: `'f' < 's'`, so declaration ALREADY equals
+                    // sort). Use distinct labels that DO reorder under
+                    // sort: `"zeta"` precedes `"alpha"` in declaration
+                    // but follows in ASCII sort.
+                    Self::First => "zeta",
+                    Self::Second => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortKind(s.to_owned())
+            }
+            fn sorted_labels() -> Vec<&'static str> {
+                // Drifted override — returns labels in declaration
+                // order rather than lexicographic, bifurcating the
+                // canonical-ordering surface.
+                vec!["zeta", "alpha"]
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedSortKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_labels override drifted from the natural labels-then-sort composition",
         );
     }
 

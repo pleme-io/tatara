@@ -3975,17 +3975,19 @@ mod tests {
         // `unquote_form_all_is_unique_and_complete` (the 2-of-4 subset
         // sibling) and `atom_kind_all_is_unique_and_complete` (the peer
         // atomic-payload axis).
+        //
+        // The `iter+map+collect+sort_unstable` quadruple this test inlined
+        // pre-lift now binds at `<QuoteForm as ClosedSet>::sorted_labels()`
+        // — the canonical-ordered candidate-list projection on the trait.
+        // Distinctness of the sorted result is covered by
+        // `assert_closed_set_well_formed::<QuoteForm>()` (the workspace-wide
+        // testkit), so this test reduces to the per-implementor unique
+        // payload (the four reader-punctuation literals in lexicographic
+        // order — the load-bearing per-enum ground truth the substrate-wide
+        // sort lift does NOT subsume).
         assert_eq!(QuoteForm::ALL.len(), 4);
-        let mut sorted: Vec<&str> = QuoteForm::ALL.iter().map(|qf| qf.prefix()).collect();
-        sorted.sort_unstable();
-        let mut deduped = sorted.clone();
-        deduped.dedup();
         assert_eq!(
-            sorted, deduped,
-            "QuoteForm::ALL must not contain duplicates"
-        );
-        assert_eq!(
-            sorted,
+            <QuoteForm as crate::ClosedSet>::sorted_labels(),
             vec!["'", ",", ",@", "`"],
             "QuoteForm::ALL must cover every reachable homoiconic prefix-wrapper"
         );
@@ -4298,14 +4300,17 @@ mod tests {
         // workspace uses (`SexpShape::ALL`, `RequestorKind::ALL`,
         // `ReceiptKind::ALL`, `ConditionKind::ALL`, `ProcessPhase::ALL`,
         // `ChannelKind::ALL`, …).
+        //
+        // The `iter+map+collect+sort_unstable` quadruple this test inlined
+        // pre-lift now binds at `<AtomKind as ClosedSet>::sorted_labels()`
+        // — the canonical-ordered candidate-list projection on the trait.
+        // Distinctness of the sorted result is covered by
+        // `assert_closed_set_well_formed::<AtomKind>()`, so this test
+        // reduces to the per-implementor unique payload (the six diagnostic
+        // labels in lexicographic order).
         assert_eq!(AtomKind::ALL.len(), 6);
-        let mut sorted: Vec<&str> = AtomKind::ALL.iter().map(|k| k.label()).collect();
-        sorted.sort_unstable();
-        let mut deduped = sorted.clone();
-        deduped.dedup();
-        assert_eq!(sorted, deduped, "AtomKind::ALL must not contain duplicates");
         assert_eq!(
-            sorted,
+            <AtomKind as crate::ClosedSet>::sorted_labels(),
             vec!["bool", "float", "int", "keyword", "string", "symbol"],
             "AtomKind::ALL must cover every reachable Atom payload kind"
         );

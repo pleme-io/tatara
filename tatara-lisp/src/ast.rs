@@ -1304,6 +1304,139 @@ impl Sexp {
         })
     }
 
+    /// Inverse of [`Self::to_json`] — project a [`serde_json::Value`] back
+    /// onto a [`Sexp`]. The closed-set [`serde_json::Value`] discriminator
+    /// maps directly onto the corresponding [`Sexp`] constructor:
+    ///
+    ///   - [`serde_json::Value::Null`] → [`Self::Nil`].
+    ///   - [`serde_json::Value::Bool`] → [`Self::boolean`].
+    ///   - [`serde_json::Value::Number`] → [`Self::int`] when the value
+    ///     fits an [`i64`], otherwise [`Self::float`] when it fits an
+    ///     [`f64`]; the structural impossibility "neither i64 nor f64"
+    ///     collapses to [`Self::int(0)`](Self::int) as a typed floor —
+    ///     [`serde_json::Number`]'s closed-set discriminator excludes
+    ///     this case in practice (every [`serde_json::Number`] is either
+    ///     i64-fitting, u64-fitting projected through f64, or f64-fitting
+    ///     directly), but the typed floor stays explicit so a future
+    ///     `serde_json` extension does not silently misroute. Mirror of
+    ///     [`Atom::to_json`]'s [`Self::int`] / [`Self::float`] bifurcation.
+    ///   - [`serde_json::Value::String`] → [`Self::string`]. The
+    ///     `serde_json::Value::String` discriminator is type-erased — a
+    ///     serde-projected symbol AND a serde-projected keyword AND a
+    ///     genuine string literal ALL inhabit it on the JSON side — so
+    ///     the back-projection chooses [`Self::string`] as the lossless
+    ///     floor for the `Atom::Symbol` / `Atom::Keyword` / `Atom::Str`
+    ///     three-way collapse. Consumers that need the symbol-vs-string
+    ///     distinction must preserve it BEFORE the JSON round-trip
+    ///     (e.g. through a typed enum's serde projection rather than a
+    ///     raw `Sexp`-to-`JValue` round-trip).
+    ///   - [`serde_json::Value::Array`] → [`Self::List`] mapping each
+    ///     element through this method recursively.
+    ///   - [`serde_json::Value::Object`] → [`Self::List`] of alternating
+    ///     `:key value` pairs in [`serde_json::Map`]'s iteration order
+    ///     (sorted by key under `serde_json`'s default `BTreeMap`
+    ///     backing; insertion order under the optional `preserve_order`
+    ///     feature, which the substrate does NOT enable today), with
+    ///     each JSON key projected through
+    ///     [`crate::domain::camel_to_kebab`] to recover the `:k`'s
+    ///     kebab-case authoring shape and each JSON value recursed
+    ///     through this method. Inverse of [`Self::to_json`]'s
+    ///     [`Self::List`] kwargs-shape arm: that arm projects
+    ///     `:k v :k v …` into a JSON object via
+    ///     [`crate::domain::kebab_to_camel`]; this arm projects the
+    ///     object back into a `Self::List` of alternating keyword /
+    ///     value via the inverse [`crate::domain::camel_to_kebab`].
+    ///
+    /// Composition law: `Self::from_json(&s.to_json()?)` projects back
+    /// to a `Sexp` whose [`Self::to_json`] re-projection produces the
+    /// SAME `JValue` (modulo the lossy `Symbol` / `Keyword` / `Str`
+    /// three-way collapse documented above; for the round-trippable
+    /// subset, `Sexp::Nil`, the six [`Atom`] kinds within their
+    /// discriminator class, and recursively `Sexp::List` of round-
+    /// trippable elements, the law holds byte-for-byte).
+    ///
+    /// Sibling-lift posture: this method mirrors the prior
+    /// [`crate::domain::sexp_to_json`] → [`Self::to_json`] (commit
+    /// 875ee3b) / [`crate::domain::sexp_shape`] → [`Self::shape`]
+    /// (commit 121bb60) / [`crate::domain::sexp_witness`] →
+    /// [`Self::witness`] (commit a427e3b) family of lifts, all of which
+    /// promoted a free function in `domain.rs` to the inherent-method
+    /// canonical site on the [`Sexp`] algebra. Pre-lift the
+    /// `json_to_sexp` dispatcher lived in `domain.rs` as the canonical
+    /// site; post-lift this inherent method is the canonical site and
+    /// the free function delegates so every existing caller continues
+    /// to compile.
+    ///
+    /// Sibling-shape lift on the round-trip closure: the substrate's
+    /// `Sexp` ↔ `serde_json::Value` round-trip now lives entirely as
+    /// two inherent methods on the [`Sexp`] algebra — [`Self::to_json`]
+    /// (forward) and [`Self::from_json`] (inverse). Consumers that
+    /// previously round-tripped a typed value through Lisp forms via
+    /// `domain::sexp_to_json` + `domain::json_to_sexp` now bind to ONE
+    /// algebra (the inherent-method family) rather than reaching across
+    /// the `domain` module path for two free functions. A future
+    /// canonical-form surface (e.g., a YAML round-trip via
+    /// [`serde_yaml`], a Nix-expression round-trip via the typed Nix
+    /// surface in `tatara-nix`) hangs off the SAME `Sexp` algebra at
+    /// `Self::to_yaml` / `Self::from_yaml` / `Self::to_nix` /
+    /// `Self::from_nix` — the naming pattern is now structurally
+    /// established by this pair.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the inline `json_to_sexp` dispatcher in `domain.rs` is lifted
+    /// ONE algebra level higher (from free function to inherent
+    /// method), completing the Sexp ↔ JValue round-trip closure
+    /// alongside [`Self::to_json`]. THEORY.md §V.1 — knowable
+    /// platform; the inverse projection becomes a NAMED primitive on
+    /// the substrate's `Sexp` algebra rather than a `domain`-module
+    /// free function consumers reach across module boundaries to call.
+    /// THEORY.md §II.1 invariant 2 — free middle; every consumer that
+    /// round-trips through JSON (the typed-rewriter at
+    /// [`crate::domain::TypedRewriter`], the derive macro's
+    /// `compile_from_args` JSON fallthrough, the test round-trip
+    /// fixtures) routes through ONE inherent algebra method — the
+    /// typed round-trip closure is structurally complete on the
+    /// `Sexp` algebra.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::parseAttribute(str, ctx)` —
+    /// the typed-IR parser inverse of `printAttribute` lives on the
+    /// same `Attribute` algebra as its printer dual; the substrate's
+    /// [`Self::from_json`] is the unstructured-Rust peer on the
+    /// `Sexp` algebra for the JSON canonical-form inverse, paired
+    /// with [`Self::to_json`] as the closed round-trip. Racket's
+    /// `(datum->syntax stx datum)` — the round-trip inverse of
+    /// `(syntax->datum stx)`, projected at the `datum` algebra layer;
+    /// `Self::from_json` is the substrate's peer at the `Sexp` layer
+    /// (one algebra level lower than Racket's `syntax` wrapper).
+    #[must_use]
+    pub fn from_json(v: &serde_json::Value) -> Self {
+        match v {
+            serde_json::Value::Null => Self::Nil,
+            serde_json::Value::Bool(b) => Self::boolean(*b),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Self::int(i)
+                } else if let Some(f) = n.as_f64() {
+                    Self::float(f)
+                } else {
+                    Self::int(0)
+                }
+            }
+            serde_json::Value::String(s) => Self::string(s.clone()),
+            serde_json::Value::Array(items) => {
+                Self::List(items.iter().map(Self::from_json).collect())
+            }
+            serde_json::Value::Object(map) => {
+                let mut out = Vec::with_capacity(map.len() * 2);
+                for (k, v) in map {
+                    out.push(Self::keyword(crate::domain::camel_to_kebab(k)));
+                    out.push(Self::from_json(v));
+                }
+                Self::List(out)
+            }
+        }
+    }
+
     pub fn as_symbol(&self) -> Option<&str> {
         self.as_atom().and_then(Atom::as_symbol)
     }
@@ -6364,5 +6497,196 @@ mod tests {
             rendered.contains("notify-ref"),
             "expected diagnostic to name the kebab-spelled duplicate key, got {rendered}",
         );
+    }
+
+    // ── Sexp::from_json: the inverse JSON-projection on the algebra ─────
+    //
+    // `Sexp::from_json` lifts the `domain::json_to_sexp` free-function
+    // dispatcher onto the inherent-method canonical site on the [`Sexp`]
+    // algebra — sibling-lift posture to the prior `sexp_to_json` →
+    // `Sexp::to_json` (875ee3b), `sexp_witness` → `Sexp::witness`
+    // (a427e3b), and `sexp_shape` → `Sexp::shape` (121bb60). The tests
+    // below pin the per-arm contract on the new canonical site directly;
+    // the free function delegates so the existing path-uniformity tests
+    // at `domain::json_to_sexp_*` continue to pass post-lift unchanged.
+
+    #[test]
+    fn sexp_from_json_projects_each_outer_arm_to_canonical_sexp() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the inherent
+        // `Sexp::from_json` associated function projects each reachable
+        // outer `serde_json::Value` shape to a `Sexp` byte-identical to
+        // the pre-lift inline rule at `crate::domain::json_to_sexp`'s
+        // outer match — Null → Nil, Bool → boolean, Number(i64) → int,
+        // Number(f64-only) → float, String → string, Array → List(map),
+        // Object → List of alternating `:k v` pairs in iteration order
+        // via `camel_to_kebab` on each key. A regression that drifts ANY
+        // outer arm (e.g. emits Null as Sexp::string(""), swaps Array
+        // for a kwargs-shaped List, drops the camel→kebab projection on
+        // Object keys) surfaces here. Pre-lift the dispatcher lived as a
+        // free function in `domain.rs`; post-lift the canonical site is
+        // the inherent associated function on the `Sexp` algebra.
+        assert_eq!(Sexp::from_json(&serde_json::Value::Null), Sexp::Nil);
+        assert_eq!(
+            Sexp::from_json(&serde_json::Value::Bool(true)),
+            Sexp::boolean(true),
+        );
+        assert_eq!(
+            Sexp::from_json(&serde_json::Value::Bool(false)),
+            Sexp::boolean(false),
+        );
+        assert_eq!(Sexp::from_json(&serde_json::json!(42)), Sexp::int(42));
+        assert_eq!(Sexp::from_json(&serde_json::json!(-1)), Sexp::int(-1));
+        assert_eq!(Sexp::from_json(&serde_json::json!(0)), Sexp::int(0));
+        // Float that does NOT fit i64 falls through to the float arm.
+        assert_eq!(Sexp::from_json(&serde_json::json!(1.5)), Sexp::float(1.5));
+        assert_eq!(
+            Sexp::from_json(&serde_json::Value::String("body".into())),
+            Sexp::string("body"),
+        );
+
+        // Array → List with each element projected recursively.
+        let arr = serde_json::json!([1, "x", true, null]);
+        assert_eq!(
+            Sexp::from_json(&arr),
+            Sexp::List(vec![
+                Sexp::int(1),
+                Sexp::string("x"),
+                Sexp::boolean(true),
+                Sexp::Nil,
+            ]),
+        );
+
+        // Object → List of alternating `:k v` pairs, JSON key projected
+        // through camel→kebab so the kwarg authoring shape is recovered.
+        // The iteration order of the JSON object is implementation-
+        // defined here (no `preserve_order` feature on `serde_json`), so
+        // pin the SET of (kebab-key, value) pairs rather than the
+        // sequence — order-uniformity vs. the delegate is pinned in the
+        // path-uniformity test below.
+        let obj = serde_json::json!({"pointType": "Gate", "mustReach": true});
+        let result = Sexp::from_json(&obj);
+        let items = match &result {
+            Sexp::List(items) => items.clone(),
+            other => panic!("expected List, got {other:?}"),
+        };
+        assert_eq!(items.len(), 4);
+        let mut pairs: Vec<(String, Sexp)> = items
+            .chunks_exact(2)
+            .map(|c| (c[0].as_keyword().expect("kw").to_string(), c[1].clone()))
+            .collect();
+        pairs.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            pairs,
+            vec![
+                ("must-reach".to_string(), Sexp::boolean(true)),
+                ("point-type".to_string(), Sexp::string("Gate")),
+            ],
+        );
+    }
+
+    #[test]
+    fn sexp_from_json_agrees_with_domain_json_to_sexp_for_every_outer_shape() {
+        // PATH-UNIFORMITY GUARD: pin that the free-function delegate
+        // `crate::domain::json_to_sexp(v) == Sexp::from_json(v)` for
+        // every reachable `serde_json::Value` outer shape. Post-lift the
+        // free function delegates to the inherent associated function;
+        // this test pins the delegation byte-for-byte so a future
+        // regression that drifts the delegate (e.g. inlines a stale
+        // pre-lift body, swaps the iteration order at one site) fires
+        // here, parallel to `sexp_to_json_method_agrees_with_domain_
+        // sexp_to_json_for_every_outer_shape`'s posture for the forward
+        // direction.
+        let shapes = [
+            serde_json::Value::Null,
+            serde_json::Value::Bool(true),
+            serde_json::Value::Bool(false),
+            serde_json::json!(7),
+            serde_json::json!(-3),
+            serde_json::json!(2.5),
+            serde_json::Value::String("body".into()),
+            serde_json::json!([1, 2, 3]),
+            serde_json::json!({"camelCase": "v", "another-key": 5}),
+            serde_json::json!({"nested": {"inner": [1, 2]}}),
+            serde_json::json!([]),
+            serde_json::json!({}),
+        ];
+        for v in &shapes {
+            assert_eq!(
+                Sexp::from_json(v),
+                crate::domain::json_to_sexp(v),
+                "delegate drifted from inherent associated function for {v}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_from_json_object_keys_route_through_camel_to_kebab() {
+        // KEY-PROJECTION CONTRACT: pin that JSON object keys land in
+        // the resulting `Sexp::List` as `Sexp::keyword(camel_to_kebab(k))`
+        // — the inverse of `Sexp::to_json`'s kebab→camel projection.
+        // A regression that drops the projection (writes the JSON key
+        // verbatim, breaking the kwarg round-trip), substitutes a
+        // different camel→kebab implementation at this site, or routes
+        // through `kebab_to_camel` (the wrong direction) surfaces here.
+        let obj = serde_json::json!({
+            "pointType": 1,
+            "mustReach": 2,
+            "already-kebab": 3,
+            "withABC": 4,
+        });
+        let result = Sexp::from_json(&obj);
+        let items = match &result {
+            Sexp::List(items) => items,
+            other => panic!("expected List, got {other:?}"),
+        };
+        // Even-position elements are keywords; odd-position elements are
+        // values. Pin the keyword spellings against the camel→kebab
+        // projection (camel boundaries become `-`; consecutive uppercase
+        // each get a leading `-` per the implementation in
+        // `domain::camel_to_kebab`).
+        let kws: Vec<&str> = items
+            .iter()
+            .step_by(2)
+            .map(|s| s.as_keyword().expect("even position must be keyword"))
+            .collect();
+        // Match the order JSON preserve_order gives us — sortable for
+        // stability; the contract is just that each key landed through
+        // camel→kebab, not the insertion order itself.
+        let mut sorted = kws.clone();
+        sorted.sort();
+        assert_eq!(
+            sorted,
+            vec!["already-kebab", "must-reach", "point-type", "with-a-b-c"],
+        );
+    }
+
+    #[test]
+    fn sexp_from_json_round_trips_to_json_for_canonical_subset() {
+        // ROUND-TRIP LAW: pin `Sexp::to_json(s)?.from_json() == s` for
+        // the round-trippable subset of Sexp shapes — Nil, Atom::Str
+        // (the lossless atomic floor that absorbs Symbol/Keyword on
+        // re-projection, so this test stays inside the lossless cell),
+        // Atom::Int, Atom::Float, Atom::Bool, and recursively
+        // Sexp::List of round-trippable elements. Pin that the inverse
+        // composes byte-for-byte against the forward projection inside
+        // the lossless cell — the round-trip law's structural anchor
+        // documented at `Sexp::from_json`'s docstring.
+        let cases = [
+            Sexp::Nil,
+            Sexp::string("body"),
+            Sexp::int(42),
+            Sexp::float(1.5),
+            Sexp::boolean(true),
+            Sexp::List(vec![Sexp::int(1), Sexp::string("x"), Sexp::Nil]),
+            // Empty list → empty array → empty list. Round-trips cleanly.
+            Sexp::List(vec![]),
+        ];
+        for s in &cases {
+            let projected = s
+                .to_json()
+                .expect("round-trippable Sexp must project to JSON");
+            let recovered = Sexp::from_json(&projected);
+            assert_eq!(recovered, *s, "round-trip drifted at {s}");
+        }
     }
 }

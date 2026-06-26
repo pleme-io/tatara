@@ -1352,32 +1352,28 @@ pub fn sexp_to_json(s: &Sexp) -> Result<JValue> {
     s.to_json()
 }
 
-/// Convert serde_json back to Sexp — inverse of `sexp_to_json`.
-/// Used by `rewrite_typed` to round-trip a typed value through Lisp forms.
+/// Thin delegate to [`Sexp::from_json`] retained for callers that want
+/// the free-function reach — the canonical site is now the inherent
+/// associated function on the [`Sexp`] algebra (sibling-lift posture to
+/// [`super::domain::sexp_to_json`] → [`Sexp::to_json`] (commit 875ee3b),
+/// [`super::domain::sexp_witness`] → [`Sexp::witness`] (commit a427e3b),
+/// and [`super::domain::sexp_shape`] → [`Sexp::shape`] (commit
+/// 121bb60)). Rules + round-trip semantics live at
+/// [`Sexp::from_json`]'s docstring.
+///
+/// Composition law: `json_to_sexp(v) == Sexp::from_json(v)` for every
+/// `v: &JValue`. Pre-lift the dispatcher lived here as the canonical
+/// site; post-lift the inherent associated function
+/// [`Sexp::from_json`] is the canonical site and this free function
+/// delegates so existing callers continue to compile. With this lift the
+/// substrate's `Sexp` ↔ `serde_json::Value` round-trip closure
+/// ([`Sexp::to_json`] + [`Sexp::from_json`]) lives entirely on the
+/// [`Sexp`] algebra; the four free functions that pre-dated the lift
+/// chain (`sexp_to_json`, `json_to_sexp`, `sexp_shape`, `sexp_witness`)
+/// are all delegates now — the canonical-form / structural-projection
+/// surface is structurally on the algebra.
 pub fn json_to_sexp(v: &JValue) -> Sexp {
-    match v {
-        JValue::Null => Sexp::Nil,
-        JValue::Bool(b) => Sexp::boolean(*b),
-        JValue::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Sexp::int(i)
-            } else if let Some(f) = n.as_f64() {
-                Sexp::float(f)
-            } else {
-                Sexp::int(0)
-            }
-        }
-        JValue::String(s) => Sexp::string(s.clone()),
-        JValue::Array(items) => Sexp::List(items.iter().map(json_to_sexp).collect()),
-        JValue::Object(map) => {
-            let mut out = Vec::with_capacity(map.len() * 2);
-            for (k, v) in map {
-                out.push(Sexp::keyword(camel_to_kebab(k)));
-                out.push(json_to_sexp(v));
-            }
-            Sexp::List(out)
-        }
-    }
+    Sexp::from_json(v)
 }
 
 pub(crate) fn is_kwargs_list(items: &[Sexp]) -> bool {
@@ -1404,7 +1400,14 @@ pub(crate) fn kebab_to_camel(s: &str) -> String {
 }
 
 /// `mustReach` → `must-reach` (inverse of `kebab_to_camel`).
-fn camel_to_kebab(s: &str) -> String {
+///
+/// `pub(crate)` because [`Sexp::from_json`] threads JSON object keys
+/// through this projection to recover the `:k`'s kebab-case authoring
+/// shape — the inverse of [`Sexp::to_json`]'s [`kebab_to_camel`] arm.
+/// Promoted from private to crate-visible in the same lift that moved
+/// the `json_to_sexp` dispatcher onto the [`Sexp`] algebra; the
+/// projection's call site moves with it, the visibility follows.
+pub(crate) fn camel_to_kebab(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     for (i, c) in s.chars().enumerate() {
         if c.is_uppercase() && i > 0 {

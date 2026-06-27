@@ -101,6 +101,137 @@ pub enum Atom {
 }
 
 impl Atom {
+    /// Canonical [`Self::Symbol`] constructor — first of the six per-
+    /// variant typed-construct methods on the closed-set [`Atom`]
+    /// algebra. Takes `impl Into<String>` so the consumer composes any
+    /// `&str` / `String` / `Cow<'_, str>` into the typed payload without
+    /// pre-coercing at its site — the `.into()` boundary lives at this
+    /// method on the algebra, parallel to how the [`Sexp`] outer
+    /// constructors ([`Sexp::symbol`], [`Sexp::keyword`],
+    /// [`Sexp::string`]) accept the same `impl Into<String>` shape at
+    /// the outer algebra layer.
+    ///
+    /// Sibling typed-construct family on the closed-set [`Atom`]
+    /// algebra — paired section-for-retraction with the soft-projection
+    /// family ([`Self::as_symbol`], [`Self::as_keyword`],
+    /// [`Self::as_string`], [`Self::as_int`], [`Self::as_float`],
+    /// [`Self::as_bool`]). Pre-lift the typed-construct family was
+    /// missing from the algebra: consumers reached for the bare
+    /// `Self::Symbol(s.into())` tuple-variant constructor + `.into()`
+    /// coercion at every site (with no `impl Into` ergonomy on the
+    /// algebra), AND the soft-projection family had no constructor
+    /// peer — section-for-retraction was uneven. Post-lift every
+    /// consumer that builds an [`Atom`] from a typed payload at one
+    /// site AND projects an [`Atom`] back to its typed payload at
+    /// another binds to ONE method per direction on the algebra. The
+    /// six [`Sexp`] outer constructors ([`Sexp::symbol`] through
+    /// [`Sexp::boolean`]) route through `Self::Atom(Atom::X(_))` —
+    /// `.into()` ergonomy on the inner algebra is reused at the outer
+    /// algebra without re-derivation.
+    ///
+    /// Round-trip law binding it to the soft-projection sibling: for
+    /// every `s: &str`, `Atom::symbol(s).as_symbol() == Some(s)` —
+    /// every other arm projects to `None`. Same posture across the
+    /// five sibling pairs (`Atom::keyword(s).as_keyword() == Some(s)`,
+    /// …). The `kind()` projection ([`Self::kind`]) similarly
+    /// round-trips through the construct face: `Atom::symbol(_).kind()
+    /// == AtomKind::Symbol`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle;
+    /// every consumer that constructs an [`Atom`] of a typed kind binds
+    /// to ONE typed method on the algebra rather than to the bare
+    /// tuple-variant constructor + per-site `.into()` coercion.
+    /// THEORY.md §V.1 — knowable platform; the `(AtomKind variant,
+    /// typed construct method)` pair becomes a TYPE projection on the
+    /// substrate's [`Atom`] algebra. THEORY.md §VI.1 — generation over
+    /// composition; the `[Sexp; 6]` outer constructors at
+    /// [`Sexp::symbol`]–[`Sexp::boolean`] regenerate identically
+    /// through `Self::Atom(Atom::X(_))` composition rather than
+    /// re-deriving the `.into()` + tuple-variant pair per outer
+    /// constructor.
+    ///
+    /// Frontier inspiration: Racket's `(symbol 'x)` / `(string s)` —
+    /// the typed-construct face the consumer reaches for a typed
+    /// atomic value paired one-for-one with `(symbol? v)` /
+    /// `(symbol->string v)` predicate/projection siblings; the
+    /// substrate's [`Self::symbol`] / [`Self::as_symbol`] pair is the
+    /// Rust-typed peer on the closed-set [`Atom`] algebra, with
+    /// `impl Into<String>` standing in for Racket's typed-pair coerce
+    /// face. MLIR's `mlir::SymbolAttr::get(ctx, name)` — typed-IR
+    /// attribute construction routes through ONE typed factory paired
+    /// with `mlir::dyn_cast<SymbolAttr>(attr)` on the projection face;
+    /// `Atom::symbol` is the substrate's unstructured-Rust peer.
+    #[must_use]
+    pub fn symbol(s: impl Into<String>) -> Self {
+        Self::Symbol(s.into())
+    }
+
+    /// Canonical [`Self::Keyword`] constructor — second of the six
+    /// per-variant typed-construct methods on the closed-set [`Atom`]
+    /// algebra. See [`Self::symbol`] for the algebra-level docstring.
+    #[must_use]
+    pub fn keyword(s: impl Into<String>) -> Self {
+        Self::Keyword(s.into())
+    }
+
+    /// Canonical [`Self::Str`] constructor — third of the six per-variant
+    /// typed-construct methods. The method name is `string` for
+    /// consumer-vocabulary continuity with [`Self::as_string`] /
+    /// [`Sexp::string`] / [`crate::error::SexpShape::String`] (the typed
+    /// payload variant is `Str` for `String` shortening; the consumer-
+    /// facing method keeps `string` for symmetry).
+    #[must_use]
+    pub fn string(s: impl Into<String>) -> Self {
+        Self::Str(s.into())
+    }
+
+    /// Canonical [`Self::Int`] constructor — fourth of the six per-variant
+    /// typed-construct methods. The `i64` is taken by value (no
+    /// `impl Into<…>` widening) — strict typed identity at the algebra
+    /// boundary, the same posture [`Self::as_int`] preserves on the
+    /// soft-projection face (`Atom::Int(n)` projects to `Some(n)` only;
+    /// the `Sexp::as_float` consumer is where Int→Float widening lives).
+    #[must_use]
+    pub fn int(n: i64) -> Self {
+        Self::Int(n)
+    }
+
+    /// Canonical [`Self::Float`] constructor — fifth of the six
+    /// per-variant typed-construct methods. The `f64` is taken by value
+    /// (no `impl Into<…>` widening), matching [`Self::int`]'s strict
+    /// typed-identity posture at the algebra boundary.
+    #[must_use]
+    pub fn float(n: f64) -> Self {
+        Self::Float(n)
+    }
+
+    /// Canonical [`Self::Bool`] constructor — sixth and last of the six
+    /// per-variant typed-construct methods on the closed-set [`Atom`]
+    /// algebra. Together with the five siblings ([`Self::symbol`],
+    /// [`Self::keyword`], [`Self::string`], [`Self::int`],
+    /// [`Self::float`]) the per-`Atom`-variant typed-construct family is
+    /// complete across all six closed-set arms, and pairs section-for-
+    /// retraction with the soft-projection family ([`Self::as_symbol`],
+    /// [`Self::as_keyword`], [`Self::as_string`], [`Self::as_int`],
+    /// [`Self::as_float`], [`Self::as_bool`]) — every consumer that
+    /// constructs an [`Atom`] from a typed payload at one site AND
+    /// projects an [`Atom`] back to its typed payload at another binds
+    /// to ONE method per direction on the algebra rather than to the
+    /// bare tuple-variant constructor + the soft-projection method
+    /// asymmetrically.
+    ///
+    /// The closed-set `bool` payload's Scheme-canonical `#t` / `#f`
+    /// reader lexemes are dispatched at [`Self::from_lexeme`] (the
+    /// typed-ENTRY classifier) — this method is the construction face
+    /// the consumer composes the typed `bool` value into when building
+    /// an [`Atom`] from already-typed Rust, parallel to how
+    /// [`Self::int`] and [`Self::float`] take their typed payload by
+    /// value.
+    #[must_use]
+    pub fn boolean(b: bool) -> Self {
+        Self::Bool(b)
+    }
+
     /// Project the atomic value into its closed-set [`AtomKind`] marker —
     /// `Symbol(_) → AtomKind::Symbol`, `Keyword(_) → AtomKind::Keyword`,
     /// `Str(_) → AtomKind::Str`, `Int(_) → AtomKind::Int`,
@@ -1036,23 +1167,61 @@ impl AtomKind {
 // the same `"atom kind"` literal.
 
 impl Sexp {
+    /// Canonical [`Self::Atom`]-[`Atom::Symbol`] outer constructor —
+    /// composes [`Atom::symbol`] (the typed-construct method on the
+    /// closed-set [`Atom`] algebra) under the [`Self::Atom`] outer
+    /// wrapper. The first of six `Self::Atom(Atom::X(_))` outer
+    /// constructors all routing through the typed [`Atom`] construct
+    /// family at the inner algebra so the `.into()` coercion + tuple-
+    /// variant constructor pair lives at ONE site per kind on the
+    /// [`Atom`] algebra rather than at this outer constructor's body.
+    /// Sibling-shape lift to the [`Atom::as_X`] /
+    /// [`Self::as_X`] composition through [`Self::as_atom`] on the
+    /// projection axis: where projections route OUTER `Self::as_X`
+    /// through `self.as_atom().and_then(Atom::as_X)`, constructions
+    /// route OUTER `Self::X` through `Self::Atom(Atom::X(payload))`.
+    ///
+    /// Composition law (forward): `Sexp::symbol(s) ==
+    /// Sexp::Atom(Atom::symbol(s))` for every `s: impl Into<String>`.
+    /// Round-trip law (with the soft-projection sibling): for every
+    /// `s: &str`, `Sexp::symbol(s).as_symbol() == Some(s)` — the inner
+    /// algebra's section-for-retraction surfaces through the outer
+    /// algebra without re-derivation. Same posture across the six
+    /// sibling pairs.
+    #[must_use]
     pub fn symbol(s: impl Into<String>) -> Self {
-        Self::Atom(Atom::Symbol(s.into()))
+        Self::Atom(Atom::symbol(s))
     }
+    /// Canonical [`Self::Atom`]-[`Atom::Keyword`] outer constructor —
+    /// composes [`Atom::keyword`] under [`Self::Atom`]. See
+    /// [`Self::symbol`] for the outer-algebra docstring.
+    #[must_use]
     pub fn keyword(s: impl Into<String>) -> Self {
-        Self::Atom(Atom::Keyword(s.into()))
+        Self::Atom(Atom::keyword(s))
     }
+    /// Canonical [`Self::Atom`]-[`Atom::Str`] outer constructor —
+    /// composes [`Atom::string`] under [`Self::Atom`].
+    #[must_use]
     pub fn string(s: impl Into<String>) -> Self {
-        Self::Atom(Atom::Str(s.into()))
+        Self::Atom(Atom::string(s))
     }
+    /// Canonical [`Self::Atom`]-[`Atom::Int`] outer constructor —
+    /// composes [`Atom::int`] under [`Self::Atom`].
+    #[must_use]
     pub fn int(n: i64) -> Self {
-        Self::Atom(Atom::Int(n))
+        Self::Atom(Atom::int(n))
     }
+    /// Canonical [`Self::Atom`]-[`Atom::Float`] outer constructor —
+    /// composes [`Atom::float`] under [`Self::Atom`].
+    #[must_use]
     pub fn float(n: f64) -> Self {
-        Self::Atom(Atom::Float(n))
+        Self::Atom(Atom::float(n))
     }
+    /// Canonical [`Self::Atom`]-[`Atom::Bool`] outer constructor —
+    /// composes [`Atom::boolean`] under [`Self::Atom`].
+    #[must_use]
     pub fn boolean(b: bool) -> Self {
-        Self::Atom(Atom::Bool(b))
+        Self::Atom(Atom::boolean(b))
     }
 
     pub fn is_list(&self) -> bool {
@@ -9148,6 +9317,228 @@ mod tests {
                 .expect("round-trippable Sexp must project to JSON");
             let recovered = Sexp::from_json(&projected);
             assert_eq!(recovered, *s, "round-trip drifted at {s}");
+        }
+    }
+
+    // ── Atom typed-construct family + Sexp outer-constructor routing ─────
+    //
+    // The six `Atom::{symbol, keyword, string, int, float, boolean}`
+    // typed-construct methods are the section sibling of the existing
+    // six `Atom::as_{symbol, keyword, string, int, float, bool}` soft-
+    // projection family — closing the (construct, project) algebra dual
+    // on the closed-set `Atom` algebra. The six `Sexp::{symbol, ...,
+    // boolean}` outer constructors now route through
+    // `Self::Atom(Atom::X(_))` so the `impl Into<String>` ergonomy +
+    // tuple-variant constructor pair lives at ONE site per kind on the
+    // `Atom` algebra. Pin the four structural laws:
+    //   (a) each `Atom::X` constructor produces the canonical tuple
+    //       variant payload byte-for-byte (`Atom::symbol("foo") ==
+    //       Atom::Symbol("foo".into())`, etc.) — pre-lift behavior
+    //       under the new construction face;
+    //   (b) the (construct, kind-project) round-trip
+    //       `Atom::X(_).kind() == AtomKind::X` for every (kind, payload)
+    //       pair — the typed-construct family pairs section-for-
+    //       retraction with the `Atom::kind` projection;
+    //   (c) the (construct, soft-project) round-trip
+    //       `Atom::X(payload).as_X() == Some(payload)` for every kind —
+    //       the typed-construct family pairs section-for-retraction
+    //       with the `Atom::as_X` family it now siblings;
+    //   (d) the outer-constructor composition law `Sexp::X(p) ==
+    //       Sexp::Atom(Atom::X(p))` for every kind — the `Sexp` outer
+    //       constructors route through the typed `Atom` constructors
+    //       rather than re-deriving the `Self::Atom(Atom::X(_))` pair
+    //       inline.
+
+    #[test]
+    fn atom_typed_constructors_emit_canonical_tuple_variant_for_every_kind() {
+        // STRUCTURAL CONSTRUCT CONTRACT: each `Atom::X` constructor
+        // emits the matching `Atom::Variant(payload)` tuple-variant
+        // value byte-for-byte. A regression that drifts ONE arm (e.g.
+        // a typo routing `Atom::keyword(s)` to `Self::Symbol(s.into())`
+        // — type-checks but silently mis-classifies every kwarg key
+        // authored through the algebra-level constructor) surfaces
+        // here. The `impl Into<String>` arms also accept `String`
+        // payloads — pinned alongside `&str` so the `.into()` ergonomy
+        // is exercised across both source types.
+        assert_eq!(Atom::symbol("foo"), Atom::Symbol("foo".into()));
+        assert_eq!(
+            Atom::symbol(String::from("seph.1")),
+            Atom::Symbol("seph.1".into()),
+        );
+        assert_eq!(Atom::symbol(""), Atom::Symbol(String::new()));
+        assert_eq!(Atom::keyword("parent"), Atom::Keyword("parent".into()));
+        assert_eq!(
+            Atom::keyword(String::from("attr")),
+            Atom::Keyword("attr".into()),
+        );
+        assert_eq!(Atom::keyword(""), Atom::Keyword(String::new()));
+        assert_eq!(Atom::string("body"), Atom::Str("body".into()));
+        assert_eq!(
+            Atom::string(String::from("with\nnewline")),
+            Atom::Str("with\nnewline".into()),
+        );
+        assert_eq!(Atom::string(""), Atom::Str(String::new()));
+        assert_eq!(Atom::int(0), Atom::Int(0));
+        assert_eq!(Atom::int(42), Atom::Int(42));
+        assert_eq!(Atom::int(-7), Atom::Int(-7));
+        assert_eq!(Atom::int(i64::MIN), Atom::Int(i64::MIN));
+        assert_eq!(Atom::int(i64::MAX), Atom::Int(i64::MAX));
+        assert_eq!(Atom::float(0.0), Atom::Float(0.0));
+        assert_eq!(Atom::float(1.5), Atom::Float(1.5));
+        assert_eq!(Atom::float(-2.5), Atom::Float(-2.5));
+        // NaN compares unequal to itself; pin via `to_bits` round-trip,
+        // matching the `Hash for Atom` Float-arm posture
+        // (`f.to_bits().hash(...)`).
+        assert_eq!(Atom::float(f64::NAN).kind(), AtomKind::Float);
+        match Atom::float(f64::NAN) {
+            Atom::Float(n) => assert!(n.is_nan()),
+            _ => panic!("Atom::float must emit Atom::Float"),
+        }
+        assert_eq!(Atom::float(f64::INFINITY), Atom::Float(f64::INFINITY));
+        assert_eq!(Atom::boolean(true), Atom::Bool(true));
+        assert_eq!(Atom::boolean(false), Atom::Bool(false));
+    }
+
+    #[test]
+    fn atom_typed_constructors_round_trip_through_kind_projection() {
+        // SECTION LAW (construct → kind): every typed constructor's
+        // output projects through `Atom::kind` to its matching
+        // `AtomKind` variant. The `(construct, kind-project)` pair
+        // forms a deterministic surjection from the construct face
+        // onto the closed-set `AtomKind` algebra — six (kind,
+        // representative payload) probes sweep `AtomKind::ALL` so a
+        // future seventh atomic kind landing on the algebra extends
+        // BOTH the construct face AND this sweep in lockstep (rustc-
+        // enforced through the closed-set match below).
+        for kind in AtomKind::ALL {
+            let constructed = match kind {
+                AtomKind::Symbol => Atom::symbol("foo"),
+                AtomKind::Keyword => Atom::keyword("parent"),
+                AtomKind::Str => Atom::string("body"),
+                AtomKind::Int => Atom::int(42),
+                AtomKind::Float => Atom::float(1.5),
+                AtomKind::Bool => Atom::boolean(true),
+            };
+            assert_eq!(
+                constructed.kind(),
+                kind,
+                "Atom typed constructor for {kind:?} drifted from its closed-set kind projection",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_typed_constructors_round_trip_through_per_variant_soft_projection() {
+        // RETRACTION LAW (construct → soft-project): every typed
+        // constructor's output projects through its matching `Atom::as_X`
+        // soft projection to `Some(payload)` — the (construct, soft-
+        // project) pair forms an `Iso(payload, Atom::Variant(payload))`
+        // on the typed-payload axis. Sibling-axis to the
+        // `(construct, kind-project)` pair above and to the
+        // `Sexp::as_quote_form / QuoteForm::wrap` round-trip on the
+        // outer-shape axis (`QuoteForm::wrap(inner).as_quote_form()
+        // == Some((qf, &inner))`). The retraction's load-bearing
+        // contract is what the substrate's named-form NAME gate
+        // (`split_name_slot` → `as_symbol_or_string`) depends on at
+        // every typed-domain dispatcher.
+        assert_eq!(Atom::symbol("foo").as_symbol(), Some("foo"));
+        assert_eq!(Atom::symbol("").as_symbol(), Some(""));
+        assert_eq!(Atom::keyword("parent").as_keyword(), Some("parent"));
+        assert_eq!(Atom::keyword("").as_keyword(), Some(""));
+        assert_eq!(Atom::string("body").as_string(), Some("body"));
+        assert_eq!(Atom::string("").as_string(), Some(""));
+        assert_eq!(Atom::int(42).as_int(), Some(42));
+        assert_eq!(Atom::int(0).as_int(), Some(0));
+        assert_eq!(Atom::int(i64::MIN).as_int(), Some(i64::MIN));
+        assert_eq!(Atom::float(1.5).as_float(), Some(1.5));
+        assert_eq!(Atom::float(0.0).as_float(), Some(0.0));
+        assert_eq!(Atom::boolean(true).as_bool(), Some(true));
+        assert_eq!(Atom::boolean(false).as_bool(), Some(false));
+    }
+
+    #[test]
+    fn sexp_outer_constructors_route_through_atom_typed_construct_family() {
+        // OUTER-CONSTRUCTOR COMPOSITION LAW: pin that each `Sexp::X`
+        // outer constructor emits `Sexp::Atom(Atom::X(_))` byte-for-byte
+        // — a regression that re-inlines the pre-lift body
+        // `Self::Atom(Atom::Variant(s.into()))` and drifts ONE arm
+        // (e.g. a future copy-edit that swaps `Sexp::symbol` to route
+        // through `Atom::Keyword` after a refactor) becomes detectable
+        // at this site. Sibling-shape pin to the `Sexp::as_X` family's
+        // structural-lift composition through `Sexp::as_atom +
+        // Atom::as_X` on the projection axis (sweep posture in
+        // `sexp_as_symbol_or_string_routes_through_atom_as_symbol_or_string_via_as_atom_composition`).
+        assert_eq!(Sexp::symbol("foo"), Sexp::Atom(Atom::symbol("foo")));
+        assert_eq!(Sexp::symbol(""), Sexp::Atom(Atom::symbol("")));
+        assert_eq!(
+            Sexp::symbol(String::from("seph.1")),
+            Sexp::Atom(Atom::symbol("seph.1")),
+        );
+        assert_eq!(Sexp::keyword("parent"), Sexp::Atom(Atom::keyword("parent")),);
+        assert_eq!(Sexp::string("body"), Sexp::Atom(Atom::string("body")));
+        assert_eq!(Sexp::int(42), Sexp::Atom(Atom::int(42)));
+        assert_eq!(Sexp::int(i64::MIN), Sexp::Atom(Atom::int(i64::MIN)));
+        assert_eq!(Sexp::float(1.5), Sexp::Atom(Atom::float(1.5)));
+        assert_eq!(Sexp::boolean(true), Sexp::Atom(Atom::boolean(true)));
+        assert_eq!(Sexp::boolean(false), Sexp::Atom(Atom::boolean(false)));
+    }
+
+    #[test]
+    fn atom_typed_constructors_partition_atom_kind_across_constructed_payloads() {
+        // PARTITION LAW: every typed constructor's output projects to
+        // `Some(_)` on its matching soft projection AND to `None` on
+        // every other soft projection. The (construct, soft-project)
+        // matrix is the diagonal of `AtomKind::ALL × AtomKind::ALL`:
+        // on-diagonal cells return `Some`, off-diagonal cells return
+        // `None`. Pin the full matrix so a regression that conflates
+        // two construct arms (e.g. a future `Atom::keyword(s)` typo
+        // routing to `Self::Symbol(s.into())` — type-checks, passes
+        // the kind-projection sweep above iff the typo also drifts
+        // `Atom::kind`, but fails THIS sweep because the off-diagonal
+        // `Atom::keyword(s).as_symbol() == None` cell flips to `Some`)
+        // surfaces structurally. The matrix's diagonal-restriction
+        // form rebuilds the closed-set partition law every soft-
+        // projection sweep above pins per-axis into ONE joint pin
+        // across the (construct, project) algebra dual.
+        let constructed = [
+            (AtomKind::Symbol, Atom::symbol("foo")),
+            (AtomKind::Keyword, Atom::keyword("parent")),
+            (AtomKind::Str, Atom::string("body")),
+            (AtomKind::Int, Atom::int(42)),
+            (AtomKind::Float, Atom::float(1.5)),
+            (AtomKind::Bool, Atom::boolean(true)),
+        ];
+        for (built_kind, a) in &constructed {
+            assert_eq!(
+                a.as_symbol().is_some(),
+                *built_kind == AtomKind::Symbol,
+                "as_symbol partition row drifted for {built_kind:?}",
+            );
+            assert_eq!(
+                a.as_keyword().is_some(),
+                *built_kind == AtomKind::Keyword,
+                "as_keyword partition row drifted for {built_kind:?}",
+            );
+            assert_eq!(
+                a.as_string().is_some(),
+                *built_kind == AtomKind::Str,
+                "as_string partition row drifted for {built_kind:?}",
+            );
+            assert_eq!(
+                a.as_int().is_some(),
+                *built_kind == AtomKind::Int,
+                "as_int partition row drifted for {built_kind:?}",
+            );
+            assert_eq!(
+                a.as_float().is_some(),
+                *built_kind == AtomKind::Float,
+                "as_float partition row drifted for {built_kind:?}",
+            );
+            assert_eq!(
+                a.as_bool().is_some(),
+                *built_kind == AtomKind::Bool,
+                "as_bool partition row drifted for {built_kind:?}",
+            );
         }
     }
 }

@@ -360,7 +360,7 @@ impl RealizedCompiler {
     /// Routes through the substrate's composed expand-then-keyword-project
     /// primitive [`Expander::expand_and_collect_calls_to`] on a clone of
     /// the preloaded expander, binding the per-form projection
-    /// [`named_form_projection::<T>`](crate::compile::named_form_projection)
+    /// `named_form_projection::<T>`
     /// — the SAME projection [`crate::compile_named_from_forms`] (the
     /// fresh-expander posture) routes through. Both consumers thread
     /// the same NAME-then-`T::compile_from_args` split through ONE named
@@ -415,7 +415,7 @@ impl RealizedCompiler {
     /// `T::compile_from_args`'s typed-entry kwargs gate) fires in source
     /// order under all three consumers — fresh from-forms, preloaded
     /// from-source, and preloaded from-forms — because the
-    /// [`named_form_projection::<T>`](crate::compile::named_form_projection)
+    /// `named_form_projection::<T>`
     /// helper is bound at ONE site that every cell of the matrix delegates
     /// through.
     ///

@@ -85,33 +85,65 @@ impl Expander {
     /// of the named NAME-then-kwargs dispatcher family, sibling of
     /// [`Self::expand_to_typed`].
     ///
-    /// Composes [`Self::expand_and_collect_calls_to`] with `T::KEYWORD`
-    /// as the keyword filter and [`named_form_projection::<T>`] as the
-    /// per-form projection — the two-arg `(keyword, projection)`
-    /// discipline bound at the type level through `T` inside ONE method
-    /// body. Routes to the SAME named projection that
-    /// [`Self::expand_source_to_named`] (from-source posture) and
-    /// [`compile_named_from_forms`] (free-function entry point) route
-    /// through, so the named-form structural rejection chain
-    /// (`NamedFormMissingName` for the missing NAME slot,
-    /// `NamedFormNonSymbolName` for the non-symbol NAME slot,
-    /// `T::compile_from_args`'s typed-entry kwargs gate) fires identically
-    /// across all three consumers.
+    /// Routes through the named constant-keyword primitive
+    /// [`Self::expand_and_collect_named_calls_to`] (which itself routes
+    /// through the named typed-decoded classifier primitive
+    /// [`Self::expand_and_collect_named_calls_to_any`] via a constant-
+    /// classifier decoder) with `T::KEYWORD` as the keyword filter and
+    /// a per-form `(name, spec_args) -> Result<NamedDefinition<T>>`
+    /// projection that composes `T::compile_from_args` with the
+    /// `NamedDefinition { name: name.to_string(), spec }` packaging.
+    /// Post-lift the typed (this method, `T::KEYWORD`-baked) and
+    /// untyped (the runtime-keyword sibling
+    /// [`Self::expand_and_collect_named_calls_to`]) constant-keyword
+    /// named cells route through the SAME composition point on the
+    /// `Expander` surface, mirroring how `expand_and_collect_calls_to`
+    /// (bare × constant-keyword × untyped) routes through
+    /// `expand_and_collect_calls_to_any` (bare × classifier) — the
+    /// `split_name_slot` composition lives at ONE site
+    /// (`expand_and_collect_named_calls_to_any` body) for the entire
+    /// named cell, with `crate::compile::named_form_projection`
+    /// remaining a slice-side primitive for callers that have a
+    /// single rest tail.
+    ///
+    /// The named-form structural rejection chain (`NamedFormMissingName`
+    /// for the missing NAME slot, `NamedFormNonSymbolName` for the
+    /// non-symbol NAME slot, `T::compile_from_args`'s typed-entry kwargs
+    /// gate) fires identically across all consumers of the named
+    /// dispatcher family — fresh / preloaded × from-forms / from-source
+    /// × constant / classifier — because every consumer routes through
+    /// the SAME `expand_and_collect_named_calls_to_any` composition that
+    /// composes `split_name_slot` with the per-form projection.
     ///
     /// Sibling of [`Self::expand_to_typed`] — both methods route
-    /// through the SAME [`Self::expand_and_collect_calls_to`] primitive,
+    /// through their constant-keyword Expander primitive sibling
+    /// ([`Self::expand_and_collect_calls_to`] for the bare-kwargs row,
+    /// [`Self::expand_and_collect_named_calls_to`] for the named row),
     /// each binding the per-form projection that fits its typed entry
     /// shape. Together with their from-source siblings they close the
     /// typed-from-`Expander` family.
     ///
     /// Theory anchor: see [`Self::expand_to_typed`] — the named sibling
     /// shares the same lift posture, threading the NAME-then-kwargs
-    /// projection through `T` instead of the bare-kwargs one.
+    /// projection through `T` AND routing through the named
+    /// constant-keyword primitive (rather than the bare-kwargs one
+    /// with `named_form_projection::<T>` doing the NAME extraction
+    /// inside the projection). THEORY.md §VI.1 — generation over
+    /// composition; the named-form `split_name_slot` composition lives
+    /// at ONE site post-lift rather than at TWO sites (the bare-kwargs
+    /// path through `named_form_projection<T>` AND the classifier path
+    /// through the `_any` primitive).
     pub fn expand_to_named<T: TataraDomain>(
         &mut self,
         forms: Vec<Sexp>,
     ) -> Result<Vec<NamedDefinition<T>>> {
-        self.expand_and_collect_calls_to(forms, T::KEYWORD, named_form_projection::<T>)
+        self.expand_and_collect_named_calls_to(forms, T::KEYWORD, |name, spec_args| {
+            let spec = T::compile_from_args(spec_args)?;
+            Ok(NamedDefinition {
+                name: name.to_string(),
+                spec,
+            })
+        })
     }
 
     /// Read + macroexpand + project every `(T::KEYWORD :k v …)` form in
@@ -519,7 +551,7 @@ where
 
 /// Split a `(<keyword> NAME …)` form's argument tail into the NAME slot
 /// projection and the remaining argument tail — the named-form arity +
-/// NAME-shape gate lifted out of [`named_form_projection`]'s inline body
+/// NAME-shape gate lifted out of `named_form_projection`'s inline body
 /// into ONE public primitive on the substrate's `&[Sexp]` algebra,
 /// independent of any `T: TataraDomain` typed-entry follow-up.
 ///
@@ -545,12 +577,12 @@ where
 /// consumer doesn't need.
 ///
 /// Before this lift the same two-step gate was welded INSIDE
-/// [`named_form_projection`]'s body, immediately followed by the typed-
+/// `named_form_projection`'s body, immediately followed by the typed-
 /// entry `T::compile_from_args` call. The pre-lift body had ONE
 /// consumer (every named-form dispatcher in the matrix routed through
 /// `named_form_projection::<T>` directly, which welded the gate with
 /// the typed-domain compose). After this lift the gate is composable:
-/// [`named_form_projection`] is now a 2-line composition of this
+/// `named_form_projection` is now a 2-line composition of this
 /// primitive with `T::compile_from_args`, and ANY consumer that wants
 /// the named-form NAME extraction WITHOUT the typed-domain compose
 /// binds to ONE primitive rather than re-deriving the
@@ -602,11 +634,11 @@ where
 /// named-form arity + NAME-shape gate is a NAMED primitive on the
 /// `&[Sexp]` algebra, NOT a re-derived inline pipeline at every
 /// named-form consumer site. The typed-domain compose (the
-/// `T::compile_from_args` step inside [`named_form_projection`])
+/// `T::compile_from_args` step inside `named_form_projection`)
 /// follows AS A COMPOSITION of THIS primitive + the typed-entry gate,
 /// not as a re-derivation of either. THEORY.md §II.1 invariant 2 —
 /// free middle; both the typed-domain consumer
-/// ([`named_form_projection<T>`]) AND any future classifier-NAME
+/// (`named_form_projection<T>`) AND any future classifier-NAME
 /// consumer route through ONE gate body, so a regression in the gate
 /// (a future debug-mode logger, span-aware borrow walker,
 /// instrumentation that records every NAME-slot rejection for
@@ -644,59 +676,22 @@ pub fn split_name_slot<'a>(
     Ok((name, spec_args))
 }
 
-/// Project a `(<T::KEYWORD> NAME :k v …)` form's argument tail to a typed
-/// [`NamedDefinition<T>`] — the per-form NAME-then-`T::compile_from_args`
-/// split that EVERY named-form dispatcher (fresh-expander on a free
-/// function, preloaded-expander on a [`RealizedCompiler`] method)
-/// composes through.
-///
-/// Two-line composition of [`split_name_slot`] (the named-form arity +
-/// NAME-shape gate on the `&[Sexp]` algebra) with `T::compile_from_args`
-/// (the typed-entry kwargs gate). Before the [`split_name_slot`] lift
-/// the two gates were welded inside this function's body; after the
-/// lift the gate is a public primitive on the substrate's `&[Sexp]`
-/// algebra, and this function is the typed-domain SPECIALIZATION that
-/// binds `keyword = T::KEYWORD` and chains the typed-entry compose. The
-/// `Result::collect` short-circuit inside
-/// [`Expander::expand_and_collect_calls_to`](crate::macro_expand::Expander::expand_and_collect_calls_to)
-/// preserves the pre-lift `?`-then-return semantics:
-/// `NamedFormMissingName` for the missing NAME slot,
-/// `NamedFormNonSymbolName` for the non-symbol NAME slot, and
-/// `T::compile_from_args`'s typed-entry kwargs gate fire in source
-/// order — through the SAME [`split_name_slot`] body whether the
-/// consumer is a typed-domain dispatcher (this function) or a future
-/// classifier-NAME dispatcher composed externally.
-///
-/// `pub(crate)` because [`RealizedCompiler::compile_named`](crate::compiler_spec::RealizedCompiler::compile_named)
-/// — the preloaded-expander posture's named-form dispatcher — is the
-/// second consumer; both consumers live inside this crate, and the
-/// public-facing typed-dispatcher surface is the two posture-specific
-/// entry points (`compile_named` for fresh, `RealizedCompiler::compile_named`
-/// for preloaded), not this projection. External consumers that want
-/// the named-form gate WITHOUT the typed-domain compose bind to
-/// [`split_name_slot`] directly.
-///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// typed-domain named-form projection EMERGES from the composition of
-/// [`split_name_slot`] + `T::compile_from_args`, NOT as a re-derived
-/// monolithic body. THEORY.md §V.1 — knowable platform; the
-/// named-form NAME-extraction-then-typed-entry sequence is a TYPED
-/// CONSEQUENCE of TWO substrate primitives (the slice-side gate +
-/// the typed-entry gate), composed at this site. THEORY.md §II.1
-/// invariant 2 — free middle; both postures (fresh
-/// `Expander::new()` and preloaded `RealizedCompiler.preloaded.clone()`)
-/// route through the SAME composition, so a regression that drifts
-/// ONE posture's NAME-or-spec rejection chain from the other becomes
-/// structurally impossible — there is exactly one composition both
-/// postures route through.
-pub(crate) fn named_form_projection<T: TataraDomain>(rest: &[Sexp]) -> Result<NamedDefinition<T>> {
-    let (name, spec_args) = split_name_slot(rest, T::KEYWORD)?;
-    let spec = T::compile_from_args(spec_args)?;
-    Ok(NamedDefinition {
-        name: name.to_string(),
-        spec,
-    })
-}
+// `named_form_projection<T>` — REMOVED.
+//
+// Pre-lift the function composed `split_name_slot(rest, T::KEYWORD) +
+// T::compile_from_args(spec_args) + NamedDefinition { name, spec }`
+// and was the sole projection driving `Expander::expand_to_named<T>`'s
+// per-form payload. Post-lift `Expander::expand_to_named<T>` routes
+// through the named constant-keyword primitive
+// `Expander::expand_and_collect_named_calls_to` (which routes through
+// the named typed-decoded classifier primitive
+// `Expander::expand_and_collect_named_calls_to_any` via a constant-
+// classifier decoder), inlining the typed-domain compose
+// `T::compile_from_args + NamedDefinition` into its `(name, spec_args)
+// -> Result<NamedDefinition<T>>` closure. The `split_name_slot`
+// composition therefore lives at ONE site post-lift (inside
+// `expand_and_collect_named_calls_to_any`) rather than at TWO sites
+// pre-lift (this removed helper + the classifier primitive's wrapper).
 
 #[cfg(test)]
 mod tests {
@@ -1877,28 +1872,6 @@ mod tests {
                 other => panic!("expected NamedFormMissingName, got {other:?}"),
             }
         }
-    }
-
-    #[test]
-    fn split_name_slot_powers_named_form_projection_path_uniformly() {
-        // End-to-end path-uniformity: the typed-domain consumer
-        // `named_form_projection<CompilerSpec>` composes through
-        // `split_name_slot` (the lift target) → `T::compile_from_args`,
-        // so the pre-lift and post-lift bodies are byte-identical on
-        // the same input. Pin that a valid NAME slot routes through
-        // the helper into the same `NamedDefinition` payload the
-        // pre-lift welded body would have produced. A regression that
-        // drifts the helper's NAME projection from the welded inline
-        // chain (e.g. dropping the borrow-or-owned compatibility,
-        // re-wrapping the shape gate's `&str` through an intermediate
-        // owned copy that fails to round-trip the symbol-author
-        // surface) fails-loudly through this end-to-end assertion.
-        let forms = crate::reader::read(r#"(my-compiler :name "x")"#).unwrap();
-        let rest = forms[0].as_list().unwrap();
-        let def = super::named_form_projection::<CompilerSpec>(rest)
-            .expect("named_form_projection must compose split_name_slot + T::compile_from_args");
-        assert_eq!(def.name, "my-compiler");
-        assert_eq!(def.spec.name, "x");
     }
 
     #[test]

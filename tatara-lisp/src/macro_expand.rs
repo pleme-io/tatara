@@ -1360,10 +1360,27 @@ impl Expander {
         D: FnMut(&str) -> Option<(T, &'static str)>,
         F: FnMut(T, &str, &[Sexp]) -> Result<R>,
     {
-        self.expand_and_collect_calls_to_any(forms, decode, move |(t, kw), rest| {
-            let (name, spec_args) = crate::compile::split_name_slot(rest, kw)?;
-            project(t, name, spec_args)
-        })
+        // Routes through the slice-side typed-decoded named projection
+        // [`crate::ast::iter_named_calls_to_any`] — the same
+        // `expand_program + iter_*_to_any + map + collect` shape
+        // [`Self::expand_and_collect_calls_to_any`] uses on the bare-kwargs
+        // axis. Pre-lift this method routed through the bare expander
+        // surface and welded [`crate::compile::split_name_slot`] inside
+        // the projection closure; post-lift the named gate composition
+        // lives at the slice level (`iter_named_calls_to_any`'s body)
+        // and the Expander surface inherits it through delegation. Both
+        // rows of the Expander surface (bare-kwargs, named) now share
+        // ONE pipeline skeleton on the slice algebra — a regression that
+        // drifts a future debug-mode logger, span-aware borrow walker,
+        // or fused-iterator invariant from one row to the other becomes
+        // structurally impossible at the slice boundary.
+        let expanded = self.expand_program(forms)?;
+        crate::ast::iter_named_calls_to_any(&expanded, decode)
+            .map(|maybe_triple| {
+                let (decoded, name, spec_args) = maybe_triple?;
+                project(decoded, name, spec_args)
+            })
+            .collect()
     }
 
     /// Read a source string into top-level forms via [`crate::reader::read`],

@@ -2896,6 +2896,235 @@ where
         .filter_map(move |f| f.as_call_to_any(&mut decode))
 }
 
+/// Iterate over the `Result<(decoded, NAME, spec_args)>` triples of every
+/// form in `forms` whose call head decodes through `decode` AND carries a
+/// positional NAME slot — the *slice-side* sibling of
+/// [`Sexp::as_call_to_any`] specialized to the named NAME-then-kwargs
+/// form shape, with the named-form structural gate
+/// [`crate::compile::split_name_slot`] composed in. Where
+/// [`iter_calls_to_any`] answers "which forms in this SLICE are calls
+/// whose heads decode through `F`, and what do they decode to alongside
+/// their args tail?" on a `&[Sexp]`, `iter_named_calls_to_any` answers
+/// the same question AND extracts the borrowed NAME slot AND the
+/// remaining spec args tail in ONE projection per matched form, lifting
+/// the named-form gate from inside the projection at every consumer
+/// site to the slice algebra itself.
+///
+/// The yielded `Result<(T, &'a str, &'a [Sexp])>` shape carries the
+/// classifier's typed witness `T` alongside the BORROWED NAME slot AND
+/// the BORROWED spec args tail. Non-matching forms (every shape
+/// [`Sexp::as_call_to_any`] rejects, AND every call whose head is
+/// present but `decode` returns `None` for) are skipped silently — the
+/// classifier filter precedes the named gate, mirroring how
+/// [`crate::compile::split_name_slot`] is composed into the projection
+/// AFTER the classifier-decoded args tail is already in hand. Matched
+/// forms whose NAME slot is missing yield `Err(NamedFormMissingName {
+/// keyword })` carrying the classifier-supplied keyword; matched forms
+/// whose NAME slot is a non-symbol-or-string yield `Err(NamedFormNonSymbolName
+/// { keyword, got })` carrying the same keyword and the typed
+/// [`SexpShape`](crate::error::SexpShape) projection of the offending
+/// slot. Consumers `.collect::<Result<Vec<_>, _>>()` to short-circuit
+/// at the first malformed NAME slot, exactly as
+/// [`Expander::expand_and_collect_named_calls_to_any`](crate::macro_expand::Expander::expand_and_collect_named_calls_to_any)
+/// short-circuits today via the same `split_name_slot` gate composed
+/// inside its projection closure.
+///
+/// Decoder signature `FnMut(&str) -> Option<(T, &'static str)>` pairs
+/// the typed witness `T` with the canonical static keyword threaded
+/// through the `NamedFormMissingName.keyword` /
+/// `NamedFormNonSymbolName.keyword` slots of the named-form gate — the
+/// `&'static` constraint pins the same compile-time discipline
+/// [`crate::compile::split_name_slot`]'s `keyword: &'static str`
+/// parameter pins at its boundary. A classifier consumer that wants
+/// "filter forms by a constant keyword" supplies a constant-classifier
+/// decoder `|h| (h == keyword).then_some(((), keyword))`; the
+/// [`iter_named_calls_to`] sibling below is exactly that specialization.
+///
+/// Closes the (per-form, slice-side) × (keyword, classifier) × (bare,
+/// named) 2×2×2 cube of soft-dispatch primitives on the substrate's
+/// `Sexp`/`&[Sexp]` algebras at the slice-side × classifier × named
+/// corner — the cube the per-form algebra
+/// (`as_call_to{,_any}`), the slice algebra
+/// (`iter_calls_to{,_any}`), and the Expander surface
+/// (`expand_and_collect_calls_to{,_any}` /
+/// `expand_and_collect_named_calls_to{,_any}`) collectively shape:
+///
+/// |                | bare-kwargs              | named NAME-then-kwargs                           |
+/// |----------------|--------------------------|--------------------------------------------------|
+/// | per-form       | [`Sexp::as_call_to_any`] | (composed inline at each named consumer)         |
+/// | slice          | [`iter_calls_to_any`]    | `iter_named_calls_to_any` (this)                 |
+/// | expander       | `expand_and_collect_calls_to_any` | `expand_and_collect_named_calls_to_any`  |
+///
+/// Pre-lift the bare expander surface (`expand_and_collect_calls_to_any`)
+/// routed through the slice primitive ([`iter_calls_to_any`]) via a
+/// uniform `expand_program + iter_calls_to_any + map + collect`
+/// pipeline; the named expander surface
+/// (`expand_and_collect_named_calls_to_any`) routed through the
+/// BARE expander surface and welded
+/// [`crate::compile::split_name_slot`] INSIDE the projection closure —
+/// the named gate composition lived at the expander level rather than
+/// at the slice level the bare row sat at. Post-lift the named expander
+/// surface routes through THIS slice primitive via the SAME
+/// `expand_program + iter_named_calls_to_any + map + collect`
+/// pipeline shape, so both rows now share the same composition skeleton
+/// on the slice algebra — a regression that drifts a future debug-mode
+/// logger, span-aware borrow walker, or fused-iterator invariant from
+/// one row to the other becomes structurally impossible at the slice
+/// boundary.
+///
+/// Two plausible future consumer shapes the slice-side named-classifier
+/// walk admits with no boilerplate:
+///   * **Closed-set classifier** — `iter_named_calls_to_any(forms, |h|
+///     match h { "defmonitor" => Some((Kind::Monitor, "defmonitor")),
+///     "defalertpolicy" => Some((Kind::Alert, "defalertpolicy")), _ =>
+///     None }).collect::<Result<Vec<_>, _>>()?` walks a slice of
+///     already-expanded forms, yielding the `(typed Kind, NAME, spec
+///     args)` triple for every `(defmonitor NAME …)` / `(defalertpolicy
+///     NAME …)` form. Future `tatara-check` consumers that already hold
+///     expanded forms (the workspace coherence checker walks
+///     `checks.lisp`'s post-expansion top-level) bind to ONE projection
+///     on the slice algebra rather than re-deriving the
+///     `iter_calls_to_any(forms, decode).map(|(decoded, args)| {
+///     split_name_slot(args, kw).map(|(name, rest)| (decoded, name,
+///     rest)) })` four-step inline composition.
+///   * **Live-registry classifier** — `iter_named_calls_to_any(forms,
+///     |h| registry.lookup(h).map(|h| (h, h.canonical_label())))` walks
+///     a slice of expanded forms, yielding the `(handler reference, NAME,
+///     spec args)` triple for every form whose head matches a runtime
+///     registry. Future REPL / authoring-tool surfaces that dispatch
+///     named forms through a live registry bind to ONE projection,
+///     sibling shape to how the macro expander already routes through
+///     a live-registry classifier via
+///     [`Sexp::as_call_to_any`].
+///
+/// The closed-form composition binding this slice primitive to its
+/// per-form sibling AND to the bare-kwargs slice primitive is the
+/// structural identity every consumer can pin against:
+///
+/// ```ignore
+/// iter_named_calls_to_any(forms, decode) ==
+///     iter_calls_to_any(forms, decode).map(|(decoded, args)| {
+///         let kw = /* keyword the decoder returned alongside decoded */;
+///         split_name_slot(args, kw).map(|(name, rest)| (decoded, name, rest))
+///     })
+/// ```
+///
+/// The yielded `&'a str` NAME slot and `&'a [Sexp]` spec args tail
+/// borrow from `&forms[i]` verbatim — no copy, no allocation, same
+/// lifetime as [`Sexp::as_call_to_any`]'s tail. Consumers that need
+/// owned ownership of the NAME (`NamedDefinition.name: String`,
+/// JSON-serialized payloads) `.to_string()` themselves — pushing the
+/// clone to the consumer boundary keeps the primitive allocation-free.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// named-form gate composition lived at the Expander level pre-lift
+/// (inside `expand_and_collect_named_calls_to_any`'s projection
+/// closure); the slice algebra had no named sibling to the bare
+/// [`iter_calls_to_any`]. Post-lift the slice algebra closes at the
+/// named corner, and the Expander surface routes through it via the
+/// SAME `expand_program + iter + map + collect` pipeline the bare
+/// expander surface uses. THEORY.md §V.1 — knowable platform; the
+/// slice-side named-classifier walk becomes a NAMED primitive on the
+/// substrate's `&[Sexp]` algebra, discoverable by any future authoring
+/// tool (LSP, REPL, `tatara-check`) that already holds expanded forms.
+/// THEORY.md §II.1 invariant 2 — free middle; the bare and named slice
+/// projections share the same `forms.iter().filter_map(_)` skeleton, so
+/// a regression that drifts ONE row's instrumentation from the other
+/// becomes structurally impossible.
+///
+/// Frontier inspiration: MLIR's
+/// `region.walk<NamedOp>([&](auto op) { auto name = op.getName(); … })`
+/// — the typed-IR walk over a region yielding ops decoded to their
+/// typed kind with the NAMED-symbol accessor pre-extracted is the MLIR
+/// idiom for a named-op visitor; `iter_named_calls_to_any` is the
+/// unstructured-Rust peer on the substrate's `&[Sexp]` algebra, with
+/// `decode: FnMut(&str) -> Option<(T, &'static str)>` standing in for
+/// MLIR's typed-interface dyn-cast bag AND `split_name_slot` standing
+/// in for the named accessor. Racket's `syntax-parse` `~or* ((~datum
+/// defX) name:id arg ...) ((~datum defY) name:id arg ...)` over an
+/// ellipsis-form — the slice-level matched-set named-form filter
+/// decoded to a typed witness is the closed-form sibling of `~or*`'s
+/// typed-choice repeater with the `name:id` capture binder, translated
+/// through pleme-io primitives as ONE projection on the `&[Sexp]`
+/// algebra.
+pub fn iter_named_calls_to_any<'a, F, T>(
+    forms: &'a [Sexp],
+    mut decode: F,
+) -> impl Iterator<Item = crate::error::Result<(T, &'a str, &'a [Sexp])>> + 'a
+where
+    F: FnMut(&str) -> Option<(T, &'static str)> + 'a,
+    T: 'a,
+{
+    iter_calls_to_any(forms, move |h| decode(h)).map(|((decoded, kw), args)| {
+        let (name, spec_args) = crate::compile::split_name_slot(args, kw)?;
+        Ok((decoded, name, spec_args))
+    })
+}
+
+/// Iterate over the `Result<(NAME, spec_args)>` pairs of every form in
+/// `forms` whose call head matches `keyword` AND carries a positional
+/// NAME slot — the *slice-side* sibling of [`Sexp::as_call_to`]
+/// specialized to the named NAME-then-kwargs form shape, with the
+/// named-form structural gate [`crate::compile::split_name_slot`]
+/// composed in. Where [`iter_calls_to`] answers "which forms in this
+/// SLICE are calls to `K`, and what are their args tails?" on a
+/// `&[Sexp]`, `iter_named_calls_to` answers the same question AND
+/// extracts the borrowed NAME slot AND the remaining spec args tail in
+/// ONE projection per matched form.
+///
+/// Routes through the typed-decoded sibling [`iter_named_calls_to_any`]
+/// with a constant-classifier decoder — the same constant-classifier
+/// composition [`iter_calls_to`] uses to route through
+/// [`iter_calls_to_any`] on the bare-kwargs axis, and that
+/// [`crate::macro_expand::Expander::expand_and_collect_named_calls_to`]
+/// uses to route through
+/// [`crate::macro_expand::Expander::expand_and_collect_named_calls_to_any`]
+/// on the Expander surface. The discarded `()` typed witness
+/// (`then_some(((), keyword))`) is consumed by the wrapper projection so
+/// the consumer's per-form mapper sees only the `(name, spec_args)`
+/// borrowed pair, matching the bare projection signature on the named
+/// axis.
+///
+/// `keyword: &'static str` threads verbatim through the
+/// `NamedFormMissingName.keyword` / `NamedFormNonSymbolName.keyword`
+/// slots of the named-form gate — same `&'static` discipline
+/// [`crate::compile::split_name_slot`] pins at its boundary. Consumers
+/// that want a runtime keyword whose lifetime is `&'static` (typical:
+/// `T::KEYWORD` of a typed-domain witness, a hardcoded literal like
+/// `"defcheck"`) bind to this primitive; consumers that want a runtime
+/// keyword whose lifetime is shorter use [`iter_named_calls_to_any`]
+/// directly with a constant-classifier decoder that converts
+/// post-resolution.
+///
+/// Closes the (slice-side × constant-keyword × named) corner of the
+/// soft-dispatch cube — see [`iter_named_calls_to_any`]'s docstring for
+/// the cube shape. The closed-form composition binding this primitive
+/// to the typed-decoded sibling is the structural identity every
+/// consumer can pin against:
+///
+/// ```ignore
+/// iter_named_calls_to(forms, k) ==
+///     iter_named_calls_to_any(forms, |h| (h == k).then_some(((), k)))
+///         .map(|maybe_triple| maybe_triple.map(|(_, name, args)| (name, args)))
+/// ```
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// constant-keyword named slice projection is a CONSEQUENCE of the
+/// typed-decoded named slice projection + a constant-classifier
+/// decoder, parallel to how [`iter_calls_to`] is a consequence of
+/// [`iter_calls_to_any`] on the bare-kwargs axis. THEORY.md §II.1
+/// invariant 2 — free middle; both rows of the slice algebra
+/// (bare-kwargs, named) route through their classifier sibling via
+/// constant-classifier composition, so a regression that drifts ONE
+/// row's pipeline from the other becomes structurally impossible.
+pub fn iter_named_calls_to<'a>(
+    forms: &'a [Sexp],
+    keyword: &'static str,
+) -> impl Iterator<Item = crate::error::Result<(&'a str, &'a [Sexp])>> + 'a {
+    iter_named_calls_to_any(forms, move |h| (h == keyword).then_some(((), keyword)))
+        .map(|maybe_triple| maybe_triple.map(|(_, name, args)| (name, args)))
+}
+
 /// Render an `Atom::Float`'s `f64` value to a form that re-reads as
 /// `Atom::Float` — preserves the float-vs-int typed identity across the
 /// `Sexp::Display` → [`crate::reader::read`] round-trip.
@@ -4240,6 +4469,377 @@ mod tests {
             decoded_count, 3,
             "three forms decode through the classifier"
         );
+    }
+
+    // ── iter_named_calls_to_any / iter_named_calls_to: slice-side closure
+    //    of the (slice × classifier × named) and (slice × constant × named)
+    //    corners of the soft-dispatch cube. Pre-lift the named gate
+    //    composition (`split_name_slot` over a classifier-decoded args
+    //    tail) lived ONLY inside `Expander::expand_and_collect_named_calls_to_any`'s
+    //    projection closure — the slice algebra had no named sibling to
+    //    the bare [`iter_calls_to_any`]. Post-lift the gate is composed
+    //    at the slice level and the Expander surface routes through it
+    //    via the SAME `expand_program + iter + map + collect` pipeline
+    //    the bare expander surface uses. The tests below pin the slice
+    //    primitive's contract DIRECTLY — independent of the Expander
+    //    surface — so a classifier-NAME consumer that already holds
+    //    expanded forms (a `tatara-check` runner, an LSP buffer walker,
+    //    a REPL exhaustive lister) sees the SAME `NamedFormMissingName`
+    //    / `NamedFormNonSymbolName` rejection chain the Expander
+    //    consumer sees through the surface method.
+
+    #[test]
+    fn iter_named_calls_to_any_yields_decoded_triple_for_every_matching_named_form_in_slice() {
+        // Closed-set classifier (`Kind::{Foo, Bar}`) that rejects one head
+        // out of three on a slice. Every matching form yields a
+        // `Result<(Kind, &str, &[Sexp])>` triple in source order; the
+        // unmatched form is skipped silently (NOT yielded as `Err`).
+        // Fail-before-pass-after: this assert requires the slice
+        // primitive to exist AND to yield the typed witness ALONGSIDE
+        // the borrowed NAME slot AND the borrowed spec args tail — pre-
+        // lift the slice algebra had no named sibling; consumers had
+        // to re-derive the four-step `iter_calls_to_any(forms,
+        // decode).map(|(d, args)| split_name_slot(args, k).map(|(n,
+        // r)| (d, n, r)))` composition at their call site.
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        enum Kind {
+            Foo,
+            Bar,
+        }
+        let forms = crate::reader::read(
+            "(deffoo alpha 1) (defbaz gamma 2) (defbar beta 3) (deffoo delta 4)",
+        )
+        .unwrap();
+        let yielded: Vec<(Kind, String, usize)> =
+            super::iter_named_calls_to_any(&forms, |h: &str| match h {
+                "deffoo" => Some((Kind::Foo, "deffoo")),
+                "defbar" => Some((Kind::Bar, "defbar")),
+                _ => None,
+            })
+            .map(|maybe_triple| {
+                maybe_triple.map(|(kind, name, args)| (kind, name.to_string(), args.len()))
+            })
+            .collect::<crate::error::Result<Vec<_>>>()
+            .expect("slice-side named-classifier walk must succeed on well-formed forms");
+        assert_eq!(
+            yielded,
+            vec![
+                (Kind::Foo, "alpha".to_string(), 1),
+                (Kind::Bar, "beta".into(), 1),
+                (Kind::Foo, "delta".into(), 1),
+            ],
+            "iter_named_calls_to_any must yield (decoded, NAME, args_len) in source order, skipping defbaz",
+        );
+    }
+
+    #[test]
+    fn iter_named_calls_to_any_skips_every_non_matching_form_shape_silently() {
+        // Soft-projection contract: the slice primitive must skip every
+        // shape the classifier rejects — non-list atoms, empty lists,
+        // lists with non-symbol heads, lists with unrecognized symbol
+        // heads — WITHOUT emitting the `NamedFormMissingName` /
+        // `NamedFormNonSymbolName` variants. The named gate fires ONLY
+        // for matched-keyword forms whose NAME slot is malformed, NEVER
+        // for forms the classifier filtered out first.
+        let forms = crate::reader::read(r#":kw "str" 42 () (unrecognized x) (5 y)"#).unwrap();
+        let yielded: Vec<()> = super::iter_named_calls_to_any(&forms, |h: &str| {
+            (h == "deffoo").then_some(((), "deffoo"))
+        })
+        .map(|maybe_triple| maybe_triple.map(|_| ()))
+        .collect::<crate::error::Result<Vec<_>>>()
+        .expect("slice-side named-classifier walk must succeed when zero forms match");
+        assert!(
+            yielded.is_empty(),
+            "slice-side named-classifier walk must yield empty Vec when zero forms match",
+        );
+    }
+
+    #[test]
+    fn iter_named_calls_to_any_emits_named_form_missing_name_for_matched_form_with_no_name_slot() {
+        // `(deffoo)` — head matches the classifier (yielding the typed
+        // witness AND the classifier-supplied static keyword), but the
+        // NAME slot is missing. `split_name_slot`'s arity gate fires
+        // inside the slice primitive and emits `NamedFormMissingName {
+        // keyword: "deffoo" }`. Pin that the keyword threaded through
+        // is the CLASSIFIER-supplied keyword (NOT a hardcoded fallback,
+        // NOT the form's head symbol) — a regression that drifted the
+        // keyword binding from `decode`'s tuple's second element to the
+        // head symbol or to a constant would fail loudly here.
+        let forms = crate::reader::read("(deffoo)").unwrap();
+        let mut iter = super::iter_named_calls_to_any(&forms, |h: &str| {
+            (h == "deffoo").then_some(((), "deffoo"))
+        });
+        let first = iter.next().expect("matched form must yield an item");
+        let err = first.expect_err("matched form with missing NAME must yield Err");
+        assert!(
+            matches!(
+                err,
+                crate::error::LispError::NamedFormMissingName { keyword: "deffoo" }
+            ),
+            "expected NamedFormMissingName {{ keyword: \"deffoo\" }} through slice primitive, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn iter_named_calls_to_any_emits_named_form_non_symbol_name_for_matched_form_with_int_name() {
+        // `(deffoo 42)` — head matches and the NAME-slot arity gate
+        // passes, but the NAME slot's shape gate rejects the int
+        // literal. Pin that BOTH the classifier-supplied keyword AND
+        // the typed `SexpShape::Int` projection flow into the
+        // structural variant, identically to how
+        // `Expander::expand_and_collect_named_calls_to_any` emits the
+        // same variant when its projection composes the same gate.
+        let forms = crate::reader::read("(deffoo 42)").unwrap();
+        let mut iter = super::iter_named_calls_to_any(&forms, |h: &str| {
+            (h == "deffoo").then_some(((), "deffoo"))
+        });
+        let first = iter.next().expect("matched form must yield an item");
+        let err = first.expect_err("matched form with non-symbol NAME must yield Err");
+        assert!(
+            matches!(
+                err,
+                crate::error::LispError::NamedFormNonSymbolName {
+                    keyword: "deffoo",
+                    got: crate::error::SexpShape::Int,
+                }
+            ),
+            "expected NamedFormNonSymbolName {{ keyword: \"deffoo\", got: Int }} through slice primitive, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn iter_named_calls_to_any_emits_named_form_non_symbol_name_for_matched_form_with_keyword_name()
+    {
+        // `(deffoo :name)` — sibling shape pin to the int case: a
+        // matched form whose NAME slot is a keyword. Together with the
+        // int case this closes path-uniformity across distinct
+        // non-symbol-or-string `SexpShape` cells at the slice primitive
+        // boundary — every consumer routes through the SAME gate
+        // composition regardless of the offending shape.
+        let forms = crate::reader::read("(deffoo :name)").unwrap();
+        let mut iter = super::iter_named_calls_to_any(&forms, |h: &str| {
+            (h == "deffoo").then_some(((), "deffoo"))
+        });
+        let first = iter.next().expect("matched form must yield an item");
+        let err = first.expect_err("matched form with keyword NAME must yield Err");
+        assert!(
+            matches!(
+                err,
+                crate::error::LispError::NamedFormNonSymbolName {
+                    keyword: "deffoo",
+                    got: crate::error::SexpShape::Keyword,
+                }
+            ),
+            "expected NamedFormNonSymbolName {{ keyword: \"deffoo\", got: Keyword }} through slice primitive, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn iter_named_calls_to_any_accepts_string_name_slot_routing_past_the_gate() {
+        // `(deffoo "quoted-name" :k v)` — NAME slot is a string
+        // literal, which `as_symbol_or_string` (inside `split_name_slot`)
+        // accepts alongside symbols. Pin that the slice primitive
+        // erases the quote-vs-symbol distinction at the boundary so a
+        // consumer sees ONE `&str` shape regardless of authoring
+        // choice, matching the equivalent gate in the typed-domain
+        // consumer downstream of `named_form_projection<T>`.
+        let forms = crate::reader::read(r#"(deffoo "quoted-name" :k "v")"#).unwrap();
+        let yielded: Vec<(String, usize)> = super::iter_named_calls_to_any(&forms, |h: &str| {
+            (h == "deffoo").then_some(((), "deffoo"))
+        })
+        .map(|maybe_triple| maybe_triple.map(|(_, name, args)| (name.to_string(), args.len())))
+        .collect::<crate::error::Result<Vec<_>>>()
+        .expect("string-author NAME slot must route past gate");
+        assert_eq!(yielded, vec![("quoted-name".into(), 2)]);
+    }
+
+    #[test]
+    fn iter_named_calls_to_any_short_circuits_on_first_malformed_name_under_collect() {
+        // `(deffoo good 1) (deffoo) (deffoo also-good 2)` — three
+        // matched forms; the SECOND has no NAME slot. Pin that
+        // `.collect::<Result<Vec<_>, _>>()` short-circuits at the
+        // second form (yielding `Err`) WITHOUT yielding the third
+        // form's payload. The iterator's lazy iteration combined with
+        // `Result::collect`'s short-circuit gives consumers
+        // first-failure semantics at the slice boundary, identical to
+        // how `Expander::expand_and_collect_named_calls_to_any` already
+        // short-circuits.
+        let forms = crate::reader::read("(deffoo good 1) (deffoo) (deffoo also-good 2)").unwrap();
+        let collected: crate::error::Result<Vec<()>> =
+            super::iter_named_calls_to_any(&forms, |h: &str| {
+                (h == "deffoo").then_some(((), "deffoo"))
+            })
+            .map(|maybe_triple| maybe_triple.map(|_| ()))
+            .collect();
+        let err = collected.expect_err("collect must surface the first failure");
+        assert!(
+            matches!(
+                err,
+                crate::error::LispError::NamedFormMissingName { keyword: "deffoo" }
+            ),
+            "expected NamedFormMissingName at the first malformed NAME, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn iter_named_calls_to_yields_name_and_spec_args_for_every_matching_form_in_slice() {
+        // Constant-keyword sibling of `iter_named_calls_to_any` —
+        // discards the `()` typed witness and yields `Result<(&str,
+        // &[Sexp])>` per matching form. Pin that the constant-keyword
+        // primitive yields the SAME source-ordered set of triples the
+        // typed-decoded sibling does on the same source, modulo the
+        // discarded typed witness.
+        let forms =
+            crate::reader::read("(defcheck alpha 1) (other beta) (defcheck gamma 2 3)").unwrap();
+        let yielded: Vec<(String, usize)> = super::iter_named_calls_to(&forms, "defcheck")
+            .map(|maybe_pair| maybe_pair.map(|(name, args)| (name.to_string(), args.len())))
+            .collect::<crate::error::Result<Vec<_>>>()
+            .expect("constant-keyword named slice walk must succeed on well-formed forms");
+        assert_eq!(
+            yielded,
+            vec![("alpha".into(), 1), ("gamma".into(), 2)],
+            "iter_named_calls_to must yield (NAME, args_len) in source order, skipping unrelated forms",
+        );
+    }
+
+    #[test]
+    fn iter_named_calls_to_routes_through_iter_named_calls_to_any_via_constant_classifier_composition(
+    ) {
+        // Pin the closed-form composition law binding the constant-
+        // keyword named cell to the typed-decoded named-classifier cell
+        // at the slice algebra boundary:
+        //
+        //   iter_named_calls_to(forms, k) ==
+        //       iter_named_calls_to_any(forms, |h| (h == k).then_some(((), k)))
+        //           .map(|maybe| maybe.map(|(_, n, a)| (n, a)))
+        //
+        // This makes the typed-decoded named-classifier slice primitive
+        // the CANONICAL composition point the constant-keyword sibling
+        // routes through — parallel to how `iter_calls_to` /
+        // `iter_calls_to_any` bind their composition law on the bare-
+        // kwargs axis at the slice level. A regression that drifts ONE
+        // sibling's pipeline from the other becomes loudly visible at
+        // this assertion.
+        let forms =
+            crate::reader::read("(defcheck alpha 1) (other beta) (defcheck gamma 2 3)").unwrap();
+        let via_constant: Vec<(String, usize)> = super::iter_named_calls_to(&forms, "defcheck")
+            .map(|maybe| maybe.map(|(name, args)| (name.to_string(), args.len())))
+            .collect::<crate::error::Result<Vec<_>>>()
+            .expect("constant-keyword named slice walk must succeed");
+        let via_classifier: Vec<(String, usize)> =
+            super::iter_named_calls_to_any(&forms, |h: &str| {
+                (h == "defcheck").then_some(((), "defcheck"))
+            })
+            .map(|maybe| maybe.map(|(_, name, args)| (name.to_string(), args.len())))
+            .collect::<crate::error::Result<Vec<_>>>()
+            .expect("typed-decoded named slice walk with constant-classifier decoder must succeed");
+        assert_eq!(
+            via_constant, via_classifier,
+            "iter_named_calls_to(forms, k) must yield byte-identical payload to iter_named_calls_to_any(forms, |h| (h == k).then_some(((), k))).map(strip)",
+        );
+    }
+
+    #[test]
+    fn iter_named_calls_to_threads_static_keyword_through_missing_variant() {
+        // Path-uniformity at the constant-keyword slice primitive
+        // boundary: a static `&'static str` keyword threaded into the
+        // primitive routes verbatim through the
+        // `NamedFormMissingName.keyword` slot when a matched form has
+        // no NAME — same threading discipline `split_name_slot` pins at
+        // its boundary. Pin three distinct keywords ALL round-trip
+        // through the variant's keyword slot.
+        for keyword in ["defmonitor", "defalertpolicy", "defcheck"] {
+            let src = format!("({keyword})");
+            let forms = crate::reader::read(&src).unwrap();
+            let mut iter = super::iter_named_calls_to(&forms, keyword);
+            let first = iter.next().expect("matched form must yield an item");
+            let err = first.expect_err("matched form with missing NAME must yield Err");
+            match err {
+                crate::error::LispError::NamedFormMissingName { keyword: got } => {
+                    assert_eq!(
+                        got, keyword,
+                        "constant-keyword slice primitive must thread keyword verbatim"
+                    );
+                }
+                other => {
+                    panic!("expected NamedFormMissingName for keyword {keyword:?}, got: {other:?}")
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn iter_named_calls_to_any_admits_fnmut_classifier_maintaining_state_across_batch_walk() {
+        // The slice-side typed-decoded named primitive's `FnMut`
+        // classifier constraint admits a closure that captures mutable
+        // state across the batch walk — counter, registry cache,
+        // visited-set — matching the bare-kwargs slice sibling's
+        // contract. Pin: a counter-bumping decoder increments once per
+        // shape-gate-passing form (NOT once per slice element, since
+        // `iter_calls_to_any` short-circuits before the decoder on
+        // non-list / empty-list / non-symbol-head shapes), and the
+        // post-walk counter equals the number of forms that reached
+        // the decoder.
+        let forms =
+            crate::reader::read("(deffoo a 1) 42 (deffoo b 2) () (defbar c 3) (deffoo d 4)")
+                .unwrap();
+        let mut decoder_calls = 0usize;
+        let yielded: Vec<String> = super::iter_named_calls_to_any(&forms, |h: &str| {
+            decoder_calls += 1;
+            (h == "deffoo").then_some(((), "deffoo"))
+        })
+        .map(|maybe| maybe.map(|(_, name, _)| name.to_string()))
+        .collect::<crate::error::Result<Vec<_>>>()
+        .expect("FnMut classifier dispatch must succeed on well-formed NAME slots");
+        // Four (defX …) call forms in the slice pass the shape gate;
+        // the int atom and empty list short-circuit before the
+        // decoder. Three of the four pass-through-decoder forms
+        // dispatch to deffoo; one dispatches to defbar (rejected by
+        // the decoder).
+        assert_eq!(
+            decoder_calls, 4,
+            "FnMut decoder must run once per shape-gate-passing form (4 call forms)"
+        );
+        assert_eq!(
+            yielded,
+            vec!["a".to_string(), "b".into(), "d".into()],
+            "three (deffoo …) forms match; one (defbar …) form is rejected by the decoder",
+        );
+    }
+
+    #[test]
+    fn iter_named_calls_to_any_yields_borrowed_name_and_args_with_form_lifetime() {
+        // Pin the borrow-lifetime contract at the slice primitive
+        // boundary: the yielded `&'a str` NAME slot and `&'a [Sexp]`
+        // spec args tail must borrow from the input slice verbatim —
+        // no copy, no allocation. A consumer that holds the iterator's
+        // yields alongside the input slice borrow can use the NAME as
+        // a lookup key against a registry without paying for a clone.
+        let forms = crate::reader::read("(deffoo my-name :k 1 :j 2)").unwrap();
+        let mut iter = super::iter_named_calls_to_any(&forms, |h: &str| {
+            (h == "deffoo").then_some(((), "deffoo"))
+        });
+        let (_, name, spec_args) = iter
+            .next()
+            .expect("matched form must yield an item")
+            .expect("well-formed NAME slot must split");
+        // Identity-check the NAME borrow: it must point at the same
+        // bytes the form's NAME slot symbol borrows from.
+        let form_list = forms[0].as_list().expect("form must be a list");
+        let form_name = form_list[1]
+            .as_symbol()
+            .expect("form NAME must be a symbol");
+        assert!(
+            std::ptr::eq(name.as_ptr(), form_name.as_ptr()),
+            "iter_named_calls_to_any must yield the borrowed NAME, NOT an allocated copy"
+        );
+        // Spec args tail must borrow from the form's tail starting at
+        // index 2 (after the NAME slot at index 1).
+        assert!(
+            std::ptr::eq(spec_args.as_ptr(), &form_list[2] as *const Sexp),
+            "iter_named_calls_to_any must yield the borrowed spec args tail, NOT an allocated copy"
+        );
+        assert_eq!(spec_args.len(), 4);
     }
 
     // ── as_unquote: the unquote-family projection ───────────────────────

@@ -174,63 +174,6 @@ pub struct NamedDefinition<T> {
 /// Back-compat alias — the old `Definition` type was `NamedDefinition<ProcessSpec>`.
 pub type Definition<T> = NamedDefinition<T>;
 
-/// Promote the previously `LispError::Compile`-shaped helper into the
-/// structural `LispError::NamedFormNonSymbolName { keyword, got }`
-/// variant. Sibling of `NamedFormMissingName { keyword }` — that variant
-/// fires when the form has no NAME slot at all (`(defpoint)`); this
-/// helper fires AFTER the arity gate has passed but BEFORE
-/// `T::compile_from_args` runs — at the second of two
-/// `compile_named_from_forms` rejection points
-/// (arity → name-symbol-or-string → compile_from_args). After this lift
-/// the entire `compile_named_from_forms::<T>` rejection chain is
-/// structurally typed end-to-end — every gate in the named-form
-/// authoring surface (`(defpoint NAME …)`, `(defalertpolicy NAME …)`,
-/// `(defcompiler NAME …)`) emits a pattern-matchable variant.
-///
-/// `T` is the typed-domain witness; the helper projects to
-/// `T::KEYWORD` (`&'static str`) at the boundary so the variant's
-/// `keyword` slot encodes the compile-time guarantee in the type
-/// system — a typo in the keyword can never drift into the
-/// diagnostic at runtime, same posture as `NamedFormMissingName.
-/// keyword`, `NotAListForm.keyword`, `MissingHeadSymbol.keyword`,
-/// `HeadMismatch.keyword`, `TypeMismatch.expected`, and the
-/// `Defmacro*.head` family. `got: &Sexp` is projected through
-/// `sexp_type_name` at the boundary so the variant's `got` slot is
-/// also `&'static str` (sourced from `sexp_type_name`'s exhaustive
-/// match over `Sexp` — same posture as `TypeMismatch.got`); a future
-/// `Sexp` variant gets named in `sexp_type_name` once and every
-/// consumer inherits.
-///
-/// Display preserves the legacy `"compile error in {keyword}:
-/// positional NAME must be a symbol or string"` prefix byte-for-byte
-/// AND appends the structural detail `(got {got})` parenthetically
-/// — same posture as `MissingHeadSymbol`'s `(got {g})` /
-/// `(empty list)` and `RestParamMissingName`'s `(rest marker at
-/// position {n}, …)`. Authoring tools that pattern-matched on the
-/// pre-lift rendered string see the legacy substring unchanged;
-/// tools that pattern-match on the variant gain structural binding
-/// to `keyword` AND `got`.
-///
-/// Theory anchor: THEORY.md §VI.1 — generation over composition;
-/// the helper boundary lands the structural-variant promotion
-/// (parallel to how `MissingHeadSymbol` / `HeadMismatch` /
-/// `NamedFormMissingName` promoted prior `Compile`-shaped sites
-/// into structural variants). THEORY.md §II.1 invariant 1 — typed
-/// entry; a NAME slot that isn't a symbol or string is exactly the
-/// failure mode the typed-entry gate exists to reject, AND now the
-/// failure mode is itself structurally typed (operators / authoring
-/// tools can pattern-match on identity, no substring parse
-/// required). THEORY.md §V.1 — knowable platform; the structural
-/// variant exposes `keyword` / `got` as first-class fields so
-/// authoring tools (LSP, REPL, `tatara-check`) bind to the data
-/// shape instead of substring-parsing the rendered diagnostic.
-fn named_form_non_symbol_name<T: TataraDomain>(got: &Sexp) -> LispError {
-    LispError::NamedFormNonSymbolName {
-        keyword: T::KEYWORD,
-        got: got.shape(),
-    }
-}
-
 /// Read + macroexpand + compile every `(T::KEYWORD :k v …)` form into `T`.
 ///
 /// Fresh-expander posture of the typed dispatcher family — routes through
@@ -457,62 +400,185 @@ where
     Expander::new().expand_and_collect_calls_to_any(forms, decode, project)
 }
 
+/// Split a `(<keyword> NAME …)` form's argument tail into the NAME slot
+/// projection and the remaining argument tail — the named-form arity +
+/// NAME-shape gate lifted out of [`named_form_projection`]'s inline body
+/// into ONE public primitive on the substrate's `&[Sexp]` algebra,
+/// independent of any `T: TataraDomain` typed-entry follow-up.
+///
+/// Composes the two-step structural rejection chain — `rest.split_first()`
+/// arity gate → `as_symbol_or_string()` NAME-shape gate — yielding the
+/// borrowed `(&'a str, &'a [Sexp])` pair on success: the NAME slot's
+/// canonical symbol-or-string projection (sourced from
+/// [`Sexp::as_symbol_or_string`], which accepts BOTH `(defcompiler
+/// my-compiler …)` symbol-author and `(defcompiler "quoted-compiler"
+/// …)` string-author surfaces) alongside the spec args tail (`&rest[1..]`,
+/// the empty slice for a singleton like `(defcompiler my-compiler)`).
+/// Both projections borrow from `rest` verbatim — no copy, no
+/// allocation, same lifetime as [`Sexp::as_symbol_or_string`]'s tail —
+/// so a consumer that wants to use the NAME slot as a lookup key (a
+/// REPL completion that resolves a partial NAME against a registry, an
+/// LSP that surfaces a tooltip for the NAME at hover, a
+/// `tatara-check` diagnostic that quotes the NAME in its rendered
+/// message) reaches the borrowed projection directly. Consumers that
+/// need owned ownership (`NamedDefinition.name: String`,
+/// JSON-serialized payloads, channel-bounded message bodies)
+/// `.to_string()` themselves — pushing the clone to the consumer
+/// boundary means the substrate primitive does NOT force a clone the
+/// consumer doesn't need.
+///
+/// Before this lift the same two-step gate was welded INSIDE
+/// [`named_form_projection`]'s body, immediately followed by the typed-
+/// entry `T::compile_from_args` call. The pre-lift body had ONE
+/// consumer (every named-form dispatcher in the matrix routed through
+/// `named_form_projection::<T>` directly, which welded the gate with
+/// the typed-domain compose). After this lift the gate is composable:
+/// [`named_form_projection`] is now a 2-line composition of this
+/// primitive with `T::compile_from_args`, and ANY consumer that wants
+/// the named-form NAME extraction WITHOUT the typed-domain compose
+/// binds to ONE primitive rather than re-deriving the
+/// `split_first()` arity gate + `as_symbol_or_string()` shape gate +
+/// `LispError::NamedFormMissingName` / `LispError::NamedFormNonSymbolName`
+/// emission triple inline at its own call site.
+///
+/// `keyword: &'static str` is the canonical operator-position label
+/// the named-form structural rejection variants
+/// ([`LispError::NamedFormMissingName.keyword`],
+/// [`LispError::NamedFormNonSymbolName.keyword`]) carry as `&'static
+/// str` slots. Threading the `&'static` constraint through this
+/// helper's parameter pins the same compile-time guarantee at the
+/// boundary — a typo in the keyword can never drift into the
+/// diagnostic at runtime, same posture as `MissingHeadSymbol.keyword`,
+/// `HeadMismatch.keyword`, `TypeMismatch.expected`, and the
+/// `Defmacro*.head` family. The pre-lift call sites bound the keyword
+/// via `T::KEYWORD` (the typed-domain witness's canonical label); the
+/// post-lift signature admits ANY `&'static str`, so a classifier
+/// consumer that decodes the head to a typed kind whose label is
+/// `&'static` (e.g. a `ClosedSet` implementor's `T::label()` or a
+/// hand-rolled `&'static str` lookup) binds to ONE primitive without
+/// requiring a `T: TataraDomain` witness.
+///
+/// Sibling of [`crate::ast::iter_calls_to`] /
+/// [`crate::ast::iter_calls_to_any`] on the slice-side `&[Sexp]`
+/// algebra — those primitives filter forms by keyword / classifier,
+/// this primitive splits an already-filtered form's argument tail
+/// into NAME + spec args. Together with [`Sexp::as_call`] /
+/// [`Sexp::as_call_to`] / [`Sexp::as_call_to_any`] on the per-form
+/// algebra, the substrate's named-form authoring surface decomposes
+/// into ONE chain of named primitives the consumer composes per
+/// call-site posture, instead of a four-step inline pipeline.
+///
+/// The future change that benefits: a `compile_named_any` family —
+/// the (named NAME-then-kwargs × typed-decoded classifier) cell the
+/// substrate's typed-dispatcher matrix leaves open today. A
+/// classifier-NAME consumer composes
+/// `expand_and_collect_calls_to_any(forms, decode_kind, |kind, args|
+/// { let (name, spec_args) = split_name_slot(args, kind.label())?;
+/// project(kind, name, spec_args) })` — the named-form gate is
+/// COMPOSED in, not re-derived inline. A future named-classifier
+/// primitive on `Expander` (a hypothetical
+/// `expand_and_collect_named_calls_to_any`) would land as 3 lines on
+/// top of `expand_and_collect_calls_to_any` + this primitive, without
+/// re-deriving the gate.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// named-form arity + NAME-shape gate is a NAMED primitive on the
+/// `&[Sexp]` algebra, NOT a re-derived inline pipeline at every
+/// named-form consumer site. The typed-domain compose (the
+/// `T::compile_from_args` step inside [`named_form_projection`])
+/// follows AS A COMPOSITION of THIS primitive + the typed-entry gate,
+/// not as a re-derivation of either. THEORY.md §II.1 invariant 2 —
+/// free middle; both the typed-domain consumer
+/// ([`named_form_projection<T>`]) AND any future classifier-NAME
+/// consumer route through ONE gate body, so a regression in the gate
+/// (a future debug-mode logger, span-aware borrow walker,
+/// instrumentation that records every NAME-slot rejection for
+/// telemetry) lands at ONE site the entire named-form authoring
+/// surface inherits. THEORY.md §V.1 — knowable platform; the
+/// named-form gate becomes a discoverable primitive on the
+/// substrate's `&[Sexp]` algebra rather than an implementation
+/// detail buried inside the typed-domain composition.
+///
+/// Frontier inspiration: Tree-sitter's `query` matched-set + capture
+/// binding — a typed pattern exposes named CAPTURES that the
+/// consumer references by binding; the NAME slot of a
+/// `(<keyword> NAME …)` form is the substrate's typed peer of the
+/// capture, exposed as a borrowed `&str` slot the caller composes
+/// into its typed projection. Racket's `syntax-parse`
+/// `(~datum keyword) name:id arg ...` matches the NAME slot through
+/// the `name:id` capture binder and the consumer references it
+/// downstream; `split_name_slot` is the unstructured-Rust peer with
+/// the typed structural rejection chain (`NamedFormMissingName`,
+/// `NamedFormNonSymbolName`) preserved across the boundary.
+pub fn split_name_slot<'a>(
+    rest: &'a [Sexp],
+    keyword: &'static str,
+) -> Result<(&'a str, &'a [Sexp])> {
+    let (name_form, spec_args) = rest
+        .split_first()
+        .ok_or(LispError::NamedFormMissingName { keyword })?;
+    let name =
+        name_form
+            .as_symbol_or_string()
+            .ok_or_else(|| LispError::NamedFormNonSymbolName {
+                keyword,
+                got: name_form.shape(),
+            })?;
+    Ok((name, spec_args))
+}
+
 /// Project a `(<T::KEYWORD> NAME :k v …)` form's argument tail to a typed
 /// [`NamedDefinition<T>`] — the per-form NAME-then-`T::compile_from_args`
-/// split lifted out of [`compile_named_from_forms`]'s inline closure into
-/// ONE named primitive on the substrate's per-form projection algebra.
+/// split that EVERY named-form dispatcher (fresh-expander on a free
+/// function, preloaded-expander on a [`RealizedCompiler`] method)
+/// composes through.
 ///
-/// Before this lift the same three-step chain — `rest.split_first()` arity
-/// gate → `as_symbol_or_string()` NAME shape gate → `T::compile_from_args`
-/// typed-entry kwargs gate — lived as an inline closure inside the
-/// fresh-expander dispatcher [`compile_named_from_forms`]. After this lift
-/// the closure becomes a named `pub(crate) fn`, threading `T:
-/// TataraDomain` through its type parameters so EVERY named-form
-/// dispatcher (fresh-expander on a free function, preloaded-expander on a
-/// [`RealizedCompiler`] method) binds to ONE projection function rather
-/// than re-deriving the closure body per posture.
-///
-/// Sibling of [`compile_typed`]'s per-form projection `T::compile_from_args`
-/// — that closure is a single typed-entry kwargs gate, this projection
-/// composes the NAME extraction with it. Both projections feed
-/// [`Expander::expand_and_collect_calls_to`](crate::macro_expand::Expander::expand_and_collect_calls_to)'s
-/// `F: FnMut(&[Sexp]) -> Result<R>` slot; passing a named `fn` (free
-/// function item) coerces to `FnMut` cleanly so the call boundary stays
-/// identical to the closure-form. The `Result::collect` short-circuit
-/// inside `expand_and_collect_calls_to` preserves the pre-lift
-/// `?`-then-return semantics: `NamedFormMissingName` for the missing
-/// NAME slot, `NamedFormNonSymbolName` for the non-symbol NAME slot, and
-/// `T::compile_from_args`'s typed-entry kwargs gate fire in source order.
+/// Two-line composition of [`split_name_slot`] (the named-form arity +
+/// NAME-shape gate on the `&[Sexp]` algebra) with `T::compile_from_args`
+/// (the typed-entry kwargs gate). Before the [`split_name_slot`] lift
+/// the two gates were welded inside this function's body; after the
+/// lift the gate is a public primitive on the substrate's `&[Sexp]`
+/// algebra, and this function is the typed-domain SPECIALIZATION that
+/// binds `keyword = T::KEYWORD` and chains the typed-entry compose. The
+/// `Result::collect` short-circuit inside
+/// [`Expander::expand_and_collect_calls_to`](crate::macro_expand::Expander::expand_and_collect_calls_to)
+/// preserves the pre-lift `?`-then-return semantics:
+/// `NamedFormMissingName` for the missing NAME slot,
+/// `NamedFormNonSymbolName` for the non-symbol NAME slot, and
+/// `T::compile_from_args`'s typed-entry kwargs gate fire in source
+/// order — through the SAME [`split_name_slot`] body whether the
+/// consumer is a typed-domain dispatcher (this function) or a future
+/// classifier-NAME dispatcher composed externally.
 ///
 /// `pub(crate)` because [`RealizedCompiler::compile_named`](crate::compiler_spec::RealizedCompiler::compile_named)
 /// — the preloaded-expander posture's named-form dispatcher — is the
 /// second consumer; both consumers live inside this crate, and the
 /// public-facing typed-dispatcher surface is the two posture-specific
 /// entry points (`compile_named` for fresh, `RealizedCompiler::compile_named`
-/// for preloaded), not this projection.
+/// for preloaded), not this projection. External consumers that want
+/// the named-form gate WITHOUT the typed-domain compose bind to
+/// [`split_name_slot`] directly.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
-/// inline closure became a named primitive once a second consumer
-/// (the preloaded-expander posture) arrived. THEORY.md §V.1 — knowable
-/// platform; the named-form NAME-extraction-then-typed-entry sequence is
-/// a NAMED primitive on the substrate's per-form projection algebra,
-/// not a re-derived closure body at every named-form dispatcher.
-/// THEORY.md §II.1 invariant 2 — free middle; both postures (fresh
+/// typed-domain named-form projection EMERGES from the composition of
+/// [`split_name_slot`] + `T::compile_from_args`, NOT as a re-derived
+/// monolithic body. THEORY.md §V.1 — knowable platform; the
+/// named-form NAME-extraction-then-typed-entry sequence is a TYPED
+/// CONSEQUENCE of TWO substrate primitives (the slice-side gate +
+/// the typed-entry gate), composed at this site. THEORY.md §II.1
+/// invariant 2 — free middle; both postures (fresh
 /// `Expander::new()` and preloaded `RealizedCompiler.preloaded.clone()`)
-/// route through the SAME projection, so a regression that drifts ONE
-/// posture's NAME-or-spec rejection chain from the other becomes
-/// structurally impossible — there is exactly one implementation both
+/// route through the SAME composition, so a regression that drifts
+/// ONE posture's NAME-or-spec rejection chain from the other becomes
+/// structurally impossible — there is exactly one composition both
 /// postures route through.
 pub(crate) fn named_form_projection<T: TataraDomain>(rest: &[Sexp]) -> Result<NamedDefinition<T>> {
-    let (name_form, spec_args) = rest.split_first().ok_or(LispError::NamedFormMissingName {
-        keyword: T::KEYWORD,
-    })?;
-    let name = name_form
-        .as_symbol_or_string()
-        .ok_or_else(|| named_form_non_symbol_name::<T>(name_form))?
-        .to_string();
+    let (name, spec_args) = split_name_slot(rest, T::KEYWORD)?;
     let spec = T::compile_from_args(spec_args)?;
-    Ok(NamedDefinition { name, spec })
+    Ok(NamedDefinition {
+        name: name.to_string(),
+        spec,
+    })
 }
 
 #[cfg(test)]
@@ -1508,5 +1574,213 @@ mod tests {
             4,
             "decoder must be invoked once per call-form head — four call forms in source",
         );
+    }
+
+    // ── split_name_slot: named-form arity + NAME-shape gate lift ────────
+    //
+    // The `(rest.split_first() → as_symbol_or_string)` two-step gate
+    // previously welded INSIDE `named_form_projection<T>`'s body is now
+    // a public primitive on the substrate's `&[Sexp]` algebra.
+    // `named_form_projection<T>` becomes a two-line composition of
+    // `split_name_slot(rest, T::KEYWORD)` with `T::compile_from_args`.
+    //
+    // The tests below pin the lifted primitive's contract directly —
+    // independent of `named_form_projection`'s typed-domain compose —
+    // so a classifier-NAME consumer that composes `split_name_slot`
+    // INTO `expand_and_collect_calls_to_any` (the future
+    // `compile_named_any` family the substrate matrix leaves open) sees
+    // the SAME structural rejection chain (`NamedFormMissingName` /
+    // `NamedFormNonSymbolName`) the typed-domain consumer sees through
+    // `named_form_projection`. Path-uniformity for the existing
+    // typed-domain consumer continues to be pinned by the
+    // `compile_named_emits_*` tests above — those route through
+    // `compile_named` → `named_form_projection<T>` → `split_name_slot`,
+    // so a regression that drifts the lifted gate from the pre-lift
+    // welded body would fail BOTH the per-consumer assertions above
+    // AND the helper-direct assertions below.
+
+    #[test]
+    fn split_name_slot_emits_named_form_missing_name_for_empty_rest() {
+        // `rest == &[]` — the `split_first()` arity gate fires before
+        // `as_symbol_or_string()` runs. Pin that the helper threads the
+        // caller-supplied keyword verbatim through
+        // `LispError::NamedFormMissingName.keyword`, NO typed-domain
+        // witness involved. Fail-before-pass-after: this assert requires
+        // the helper to exist AND to emit the structural variant — pre-
+        // lift the helper did not exist; the gate lived inline inside
+        // `named_form_projection<T>` and was reachable only with a
+        // `T: TataraDomain` constraint at the call boundary.
+        let err = super::split_name_slot(&[], "defwhatever").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormMissingName {
+                    keyword: "defwhatever",
+                }
+            ),
+            "expected NamedFormMissingName through split_name_slot, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn split_name_slot_emits_named_form_non_symbol_name_for_int_name_slot() {
+        // `rest[0]` is an int literal — the `as_symbol_or_string` shape
+        // gate fires AFTER the arity gate passes. Pin path-uniformity
+        // across distinct non-symbol-non-string shapes: `got` carries
+        // the `SexpShape::Int` projection sourced from the boundary's
+        // `Sexp::shape()` call (same projection the pre-lift
+        // `named_form_non_symbol_name<T>` helper used) so authoring
+        // tools (LSP, REPL, `tatara-check`) bind structurally to the
+        // actual offending shape instead of having to substring-grep
+        // the rendered diagnostic.
+        let rest = crate::reader::read("(5)").unwrap()[0]
+            .as_list()
+            .unwrap()
+            .to_vec();
+        let err = super::split_name_slot(&rest, "defwhatever").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormNonSymbolName {
+                    keyword: "defwhatever",
+                    got: SexpShape::Int,
+                }
+            ),
+            "expected NamedFormNonSymbolName {{ got: SexpShape::Int }} through split_name_slot, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn split_name_slot_emits_named_form_non_symbol_name_for_keyword_name_slot() {
+        // `rest[0]` is `:foo`, a keyword. Sibling shape pin to the int
+        // case above: `got` reads `SexpShape::Keyword`. Together with
+        // the int case this closes the path-uniformity matrix across
+        // the canonical non-symbol-or-string `SexpShape` cells.
+        let rest = crate::reader::read("(:foo)").unwrap()[0]
+            .as_list()
+            .unwrap()
+            .to_vec();
+        let err = super::split_name_slot(&rest, "defwhatever").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormNonSymbolName {
+                    keyword: "defwhatever",
+                    got: SexpShape::Keyword,
+                }
+            ),
+            "expected NamedFormNonSymbolName {{ got: SexpShape::Keyword }} through split_name_slot, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn split_name_slot_returns_borrowed_name_and_spec_args_for_symbol_name_slot() {
+        // `rest = [<symbol "my-name">, :key, "val"]` — the helper
+        // returns the NAME slot's `&str` projection borrowed from
+        // `rest[0]` and the spec args tail `&rest[1..]` borrowed from
+        // the slice verbatim. NO clone at the helper boundary — the
+        // consumer (`named_form_projection<T>`) calls `.to_string()`
+        // itself when ownership is required (`NamedDefinition.name:
+        // String`); a consumer that uses the NAME as a lookup key (a
+        // future REPL completion resolver, an LSP tooltip renderer)
+        // gets the borrow directly without paying for a clone it
+        // doesn't need.
+        let rest = crate::reader::read(r#"(my-name :key "val")"#).unwrap()[0]
+            .as_list()
+            .unwrap()
+            .to_vec();
+        let (name, spec_args) =
+            super::split_name_slot(&rest, "defwhatever").expect("valid symbol NAME must split");
+        assert_eq!(name, "my-name");
+        assert_eq!(spec_args.len(), 2);
+        assert_eq!(spec_args[0].as_keyword(), Some("key"));
+        assert_eq!(spec_args[1].as_string(), Some("val"));
+    }
+
+    #[test]
+    fn split_name_slot_returns_borrowed_name_and_spec_args_for_string_name_slot() {
+        // `rest = [<string "quoted-name">, :key, "val"]` — sibling pin
+        // for the string-author NAME-slot shape (both `(defcompiler
+        // my-name …)` symbol-author AND `(defcompiler "my-name" …)`
+        // string-author surfaces are accepted by `as_symbol_or_string`).
+        // The NAME projection erases the quote-vs-symbol distinction at
+        // the helper boundary so downstream consumers see ONE `&str`
+        // shape regardless of authoring choice — same as the typed-
+        // domain consumer downstream of `named_form_projection<T>`.
+        let rest = crate::reader::read(r#"("quoted-name" :key "val")"#).unwrap()[0]
+            .as_list()
+            .unwrap()
+            .to_vec();
+        let (name, spec_args) =
+            super::split_name_slot(&rest, "defwhatever").expect("valid string NAME must split");
+        assert_eq!(name, "quoted-name");
+        assert_eq!(spec_args.len(), 2);
+    }
+
+    #[test]
+    fn split_name_slot_returns_empty_spec_args_for_singleton_name_only_form() {
+        // `rest = [<symbol "my-name">]` — the helper accepts a NAME-
+        // only form (a `(defwhatever my-name)` form with no kwargs at
+        // all). The arity gate's `split_first()` returns `Some((&head,
+        // &[]))`, the shape gate accepts the symbol, and the empty
+        // `spec_args` slice is returned verbatim. The pre-lift welded
+        // body would then call `T::compile_from_args(&[])` — a typed-
+        // domain follow-up that may or may not accept the empty slice
+        // depending on `T::REQUIRED`'s shape. Pin that the helper
+        // itself does NOT short-circuit on empty `spec_args`: a
+        // classifier-NAME consumer that wants the NAME extraction
+        // WITHOUT the typed-domain typed-entry gate sees the empty
+        // slice exactly as a typed-domain consumer would.
+        let rest = crate::reader::read("(my-name)").unwrap()[0]
+            .as_list()
+            .unwrap()
+            .to_vec();
+        let (name, spec_args) =
+            super::split_name_slot(&rest, "defwhatever").expect("name-only form must split");
+        assert_eq!(name, "my-name");
+        assert!(spec_args.is_empty());
+    }
+
+    #[test]
+    fn split_name_slot_threads_caller_supplied_keyword_through_missing_variant() {
+        // Path-uniformity: the helper accepts ANY `&'static str` keyword,
+        // not just `T::KEYWORD` of a typed-domain witness. Pin three
+        // distinct caller-supplied keywords ALL thread verbatim through
+        // the `LispError::NamedFormMissingName.keyword` slot — a
+        // classifier-NAME consumer that decodes the head to a typed
+        // kind whose canonical label is `&'static str` (a `ClosedSet`
+        // implementor's `T::label()`, a hand-rolled `&'static str`
+        // table lookup) binds the keyword at the call boundary.
+        for keyword in ["defmonitor", "defalertpolicy", "defcheck"] {
+            let err = super::split_name_slot(&[], keyword).unwrap_err();
+            match err {
+                LispError::NamedFormMissingName { keyword: got } => {
+                    assert_eq!(got, keyword, "keyword slot must round-trip verbatim");
+                }
+                other => panic!("expected NamedFormMissingName, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn split_name_slot_powers_named_form_projection_path_uniformly() {
+        // End-to-end path-uniformity: the typed-domain consumer
+        // `named_form_projection<CompilerSpec>` composes through
+        // `split_name_slot` (the lift target) → `T::compile_from_args`,
+        // so the pre-lift and post-lift bodies are byte-identical on
+        // the same input. Pin that a valid NAME slot routes through
+        // the helper into the same `NamedDefinition` payload the
+        // pre-lift welded body would have produced. A regression that
+        // drifts the helper's NAME projection from the welded inline
+        // chain (e.g. dropping the borrow-or-owned compatibility,
+        // re-wrapping the shape gate's `&str` through an intermediate
+        // owned copy that fails to round-trip the symbol-author
+        // surface) fails-loudly through this end-to-end assertion.
+        let forms = crate::reader::read(r#"(my-compiler :name "x")"#).unwrap();
+        let rest = forms[0].as_list().unwrap();
+        let def = super::named_form_projection::<CompilerSpec>(rest)
+            .expect("named_form_projection must compose split_name_slot + T::compile_from_args");
+        assert_eq!(def.name, "my-compiler");
+        assert_eq!(def.spec.name, "x");
     }
 }

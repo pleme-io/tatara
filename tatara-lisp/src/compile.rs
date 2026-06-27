@@ -1783,4 +1783,75 @@ mod tests {
         assert_eq!(def.name, "my-compiler");
         assert_eq!(def.spec.name, "x");
     }
+
+    #[test]
+    fn expand_to_named_yields_same_payload_as_named_classifier_with_constant_keyword_composition() {
+        // Composition law binding the constant-`T::KEYWORD` named cell
+        // (`Expander::expand_to_named<T>`) to the typed-decoded
+        // named-classifier cell (`Expander::expand_and_collect_named_calls_to_any`)
+        // via a constant-classifier decoder. The post-lift identity:
+        //
+        //   expand_to_named::<T>(forms) ==
+        //       expand_and_collect_named_calls_to_any(forms,
+        //           |h| (h == T::KEYWORD).then_some(((), T::KEYWORD)),
+        //           |(), name, spec_args| {
+        //               let spec = T::compile_from_args(spec_args)?;
+        //               Ok(NamedDefinition { name: name.to_string(), spec })
+        //           })
+        //
+        // Pinning the identity here makes the typed-decoded named-classifier
+        // primitive the CANONICAL composition point the constant-keyword
+        // sibling routes through — parallel to how `iter_calls_to` /
+        // `expand_and_collect_calls_to` route through their respective
+        // `_any` siblings via a `|h| (h == k).then_some(())` decoder.
+        // A future regression that drifts ONE cell's NAME-slot rejection
+        // chain from the other becomes loudly visible at this assertion.
+        use super::{compile_named, NamedDefinition};
+        use crate::macro_expand::Expander;
+        let src = r#"(defcompiler alpha-compiler :name "x" :dialect "standard")
+                     (defcompiler beta-compiler  :name "y" :dialect "standard")"#;
+        let forms = crate::reader::read(src).unwrap();
+        let via_typed_named = Expander::new()
+            .expand_to_named::<CompilerSpec>(forms.clone())
+            .expect("constant-`T::KEYWORD` named cell must yield Vec<NamedDefinition<T>>");
+        let via_classifier_named: Vec<NamedDefinition<CompilerSpec>> = Expander::new()
+            .expand_and_collect_named_calls_to_any(
+                forms,
+                |h| (h == CompilerSpec::KEYWORD).then_some(((), CompilerSpec::KEYWORD)),
+                |(), name, spec_args| {
+                    let spec = CompilerSpec::compile_from_args(spec_args)?;
+                    Ok(NamedDefinition {
+                        name: name.to_string(),
+                        spec,
+                    })
+                },
+            )
+            .expect(
+                "typed-decoded named classifier with constant-keyword composition must succeed",
+            );
+        // Cross-check against the fresh-expander free-function entry
+        // point — three independent paths must yield the same payload
+        // on the same source, pinning path-uniformity across the
+        // constant-keyword and classifier columns AND the free-function
+        // ↔ method postures.
+        let via_free_function = compile_named::<CompilerSpec>(src)
+            .expect("free-function entry must yield same payload");
+        assert_eq!(via_typed_named.len(), 2);
+        assert_eq!(via_typed_named.len(), via_classifier_named.len());
+        assert_eq!(via_typed_named.len(), via_free_function.len());
+        for ((a, b), c) in via_typed_named
+            .iter()
+            .zip(via_classifier_named.iter())
+            .zip(via_free_function.iter())
+        {
+            assert_eq!(a.name, b.name, "NAME slot must agree across cells");
+            assert_eq!(a.name, c.name, "NAME slot must agree across postures");
+            assert_eq!(a.spec.name, b.spec.name, ":name spec must agree");
+            assert_eq!(a.spec.name, c.spec.name, ":name spec must agree");
+        }
+        assert_eq!(via_typed_named[0].name, "alpha-compiler");
+        assert_eq!(via_typed_named[0].spec.name, "x");
+        assert_eq!(via_typed_named[1].name, "beta-compiler");
+        assert_eq!(via_typed_named[1].spec.name, "y");
+    }
 }

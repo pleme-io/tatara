@@ -1208,6 +1208,212 @@ impl Expander {
         self.expand_and_collect_calls_to_any(forms, decode, project)
     }
 
+    /// Compose the expander's program-level expansion with the substrate's
+    /// typed-decoded classifier walk AND the named-form NAME-shape gate
+    /// ([`crate::compile::split_name_slot`]) — the from-forms posture of
+    /// the (named NAME-then-kwargs × typed-decoded classifier) cell of
+    /// the typed-dispatcher matrix on the `Expander` surface, sibling of
+    /// [`Self::expand_to_named`] (the constant-`T::KEYWORD` × named cell)
+    /// and of [`Self::expand_and_collect_calls_to_any`] (the from-forms
+    /// classifier × bare-kwargs cell).
+    ///
+    /// Routes through [`Self::expand_and_collect_calls_to_any`] with a
+    /// wrapper projection that composes [`crate::compile::split_name_slot`]
+    /// (the named-form arity + NAME-shape gate on the substrate's
+    /// `&[Sexp]` algebra) with the caller-supplied per-form projection.
+    /// The decoder yields `Option<(T, &'static str)>` — the typed witness
+    /// PAIRED with the canonical static keyword the named-form structural
+    /// rejection variants ([`crate::error::LispError::NamedFormMissingName`],
+    /// [`crate::error::LispError::NamedFormNonSymbolName`]) carry as
+    /// `&'static str` slots. Threading the `&'static` constraint through
+    /// the decoder's return type pins the same compile-time discipline
+    /// [`crate::compile::split_name_slot`]'s `keyword: &'static str`
+    /// parameter pins at the gate boundary — a typo in the canonical
+    /// keyword can never drift into the diagnostic at runtime, same posture
+    /// as the constant-`T::KEYWORD` cell where `T::KEYWORD` is
+    /// `&'static str` by trait construction.
+    ///
+    /// Closes the (named × typed-decoded classifier) corner of the
+    /// typed-dispatcher matrix on the `Expander` surface that the prior
+    /// run's [`crate::compile::split_name_slot`] lift (dd50801) named as
+    /// the future change the slice-side gate's named lift enables. The
+    /// 2×2 of compose-on-iter projections on the named-form axis becomes
+    /// structurally complete on the `Expander` surface:
+    ///
+    /// |                | constant `T::KEYWORD`               | typed-decoded classifier                     |
+    /// |----------------|-------------------------------------|----------------------------------------------|
+    /// | from-forms     | [`Self::expand_to_named`]           | `expand_and_collect_named_calls_to_any` (this) |
+    /// | from-source    | [`Self::expand_source_to_named`]    | [`Self::expand_source_and_collect_named_calls_to_any`] |
+    ///
+    /// The constant-`T::KEYWORD` column is the typed CONSEQUENCE of the
+    /// classifier column: an `expand_to_named::<T>(forms)` call composes
+    ///
+    /// ```ignore
+    /// expand_and_collect_named_calls_to_any(forms,
+    ///     |h| (h == T::KEYWORD).then_some(((), T::KEYWORD)),
+    ///     |(), name, spec_args| {
+    ///         let spec = T::compile_from_args(spec_args)?;
+    ///         Ok(NamedDefinition { name: name.to_string(), spec })
+    ///     })
+    /// ```
+    ///
+    /// Both columns route through ONE composition point on the
+    /// `Expander` surface (the typed-decoded classifier walk inside
+    /// [`Self::expand_and_collect_calls_to_any`]) and ONE gate body on
+    /// the `&[Sexp]` algebra ([`crate::compile::split_name_slot`]). A
+    /// regression that drifts ONE cell's NAME-slot rejection chain from
+    /// the others is structurally impossible — every cell binds to the
+    /// SAME `split_name_slot` body, the SAME `expand_program +
+    /// iter_calls_to_any + map + collect` pipeline. The
+    /// pre-lift `NamedFormMissingName` / `NamedFormNonSymbolName`
+    /// rejection chain inside `compile::named_form_projection` (the
+    /// `pub(crate)` typed-domain SPECIALIZATION that
+    /// [`Self::expand_to_named`] routes through) fires identically
+    /// through this classifier primitive — both consumers compose
+    /// [`crate::compile::split_name_slot`] with their per-site typed
+    /// continuation.
+    ///
+    /// Future consumer shapes the typed-decoded named-form primitive
+    /// admits with no boilerplate:
+    ///   * **Closed-set classifier** — a `tatara-check` runner that
+    ///     dispatches every `(defmonitor NAME …)` / `(defnotify NAME …)`
+    ///     / `(defalertpolicy NAME …)` form in `checks.lisp` through ONE
+    ///     classifier (a closed-set enum `Domain::{Monitor, Notify,
+    ///     AlertPolicy}` with `Domain::from_keyword`) decoding each
+    ///     head to its typed kind PAIRED with its canonical static
+    ///     keyword, then dispatches in the per-form projection — binds
+    ///     to ONE method rather than two-step `expand_and_collect_calls_to_any
+    ///     + split_name_slot` composition at each consumer site.
+    ///   * **Live-registry classifier** — a future `tatara-check`-shaped
+    ///     runtime dispatcher: `expand_and_collect_named_calls_to_any(forms,
+    ///     |h| registry.get(h).map(|d| (d, d.keyword())), |dispatcher,
+    ///     name, args| dispatcher.compile(name, args))` walks a program
+    ///     dispatching every named form whose head is in a runtime
+    ///     registry, decoded to a handler reference AND its canonical
+    ///     keyword (sourced from the dispatcher itself, NOT from the
+    ///     matched head text). The `&'static str` discipline on the
+    ///     keyword slot is preserved through the dispatcher's own
+    ///     `keyword() -> &'static str` accessor.
+    ///   * **`compile_named_any` free function family** — the natural
+    ///     fresh-expander free-function + preloaded-`RealizedCompiler`
+    ///     consumer pair, sibling of the existing `compile_typed_any`
+    ///     / `RealizedCompiler::compile_typed_any` pair. A future run
+    ///     lands those as 3-line composes on top of this primitive.
+    ///
+    /// `D` is `FnMut(&str) -> Option<(T, &'static str)>` — the typed-
+    /// decoded classifier yields a typed witness `T` AND its canonical
+    /// static keyword for the gate. `F` is `FnMut(T, &str, &[Sexp]) ->
+    /// Result<R>` — the per-form projection receives the typed witness
+    /// `T` ALONGSIDE the NAME slot's BORROWED `&str` projection (sourced
+    /// from [`Sexp::as_symbol_or_string`], which accepts BOTH symbol and
+    /// string NAME-author surfaces) AND the spec args tail. Consumers
+    /// that need owned ownership of the NAME (`NamedDefinition.name:
+    /// String`, JSON-serialized payloads) `.to_string()` themselves —
+    /// pushing the clone to the consumer boundary keeps the primitive
+    /// allocation-free. The `Result<R>` projection short-circuits on
+    /// the first error via `Iterator::collect::<Result<Vec<R>, _>>()`
+    /// inside [`Self::expand_and_collect_calls_to_any`].
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the (named × typed-decoded classifier) cell becomes a NAMED
+    /// primitive on the `Expander` surface composed FROM TWO substrate
+    /// primitives ([`Self::expand_and_collect_calls_to_any`] +
+    /// [`crate::compile::split_name_slot`]) rather than re-derived
+    /// inline at every named-classifier consumer's call site.
+    /// THEORY.md §II.1 invariant 1 — typed entry; the typed-decoded
+    /// classifier-filtered + NAME-shape-gated + caller-projected walk
+    /// IS the typed-entry-batch gate for named-form dispatch at the
+    /// `Expander` surface, with the `&'static str` keyword discipline
+    /// preserved through the decoder's return type. THEORY.md §II.1
+    /// invariant 2 — free middle; ALL four cells of the named-form
+    /// dispatcher matrix on the `Expander` surface route through ONE
+    /// composition point — a regression that drifts ONE cell's
+    /// instrumentation from the others is structurally impossible.
+    /// THEORY.md §V.1 — knowable platform; the named-form classifier
+    /// walk becomes a discoverable primitive that LSP / REPL /
+    /// `tatara-check` consumers bind to ONE method on the `Expander`
+    /// instead of re-implementing the two-step `expand_and_collect_calls_to_any
+    /// + split_name_slot` composition.
+    ///
+    /// Frontier inspiration: MLIR's `Region::walk<NamedOpInterface>(
+    /// [&](auto op) { auto name = op.getName(); … })` — the typed-IR
+    /// walk over a region yielding ops decoded to their typed interface
+    /// witness with the named-symbol accessor pre-extracted is the
+    /// MLIR idiom for named typed dispatch; this method is the
+    /// substrate's unstructured-Rust peer with the typed-decoded
+    /// classifier composed in and the NAME slot extracted via the
+    /// substrate's `split_name_slot` gate. Racket's `syntax-parse`
+    /// `~or* ((~datum defX) name:id arg ...) ((~datum defY) name:id
+    /// arg ...) ((~datum defZ) name:id arg ...)` over an ellipsis-form
+    /// — the typed-choice repeater with named-slot binder PAIRED with
+    /// per-arm dispatch — is the Racket idiom; this primitive is the
+    /// substrate's Rust-typed peer with the closed-set classifier
+    /// playing the `~or*` typed-choice role and the NAME slot extracted
+    /// by the substrate's slice-side gate.
+    pub fn expand_and_collect_named_calls_to_any<R, F, D, T>(
+        &mut self,
+        forms: Vec<Sexp>,
+        decode: D,
+        mut project: F,
+    ) -> Result<Vec<R>>
+    where
+        D: FnMut(&str) -> Option<(T, &'static str)>,
+        F: FnMut(T, &str, &[Sexp]) -> Result<R>,
+    {
+        self.expand_and_collect_calls_to_any(forms, decode, move |(t, kw), rest| {
+            let (name, spec_args) = crate::compile::split_name_slot(rest, kw)?;
+            project(t, name, spec_args)
+        })
+    }
+
+    /// Read a source string into top-level forms via [`crate::reader::read`],
+    /// then route the forms through
+    /// [`Self::expand_and_collect_named_calls_to_any`] — the from-source
+    /// posture of the (named × typed-decoded classifier) cell on the
+    /// `Expander` surface, sibling of
+    /// [`Self::expand_source_and_collect_calls_to_any`] (the from-source
+    /// classifier × bare-kwargs cell).
+    ///
+    /// Closes the (from-forms, from-source) × (constant `T::KEYWORD`,
+    /// typed-decoded classifier) 2×2 on the named-form axis of the
+    /// `Expander` surface — together with [`Self::expand_to_named`],
+    /// [`Self::expand_source_to_named`], and
+    /// [`Self::expand_and_collect_named_calls_to_any`], every cell of the
+    /// matrix binds to ONE composition point.
+    ///
+    /// `?`-routing through `read` preserves the structural ordering of
+    /// the rejection chain end-to-end: a reader error (lexer / parser /
+    /// unbalanced-paren / unterminated-string) short-circuits BEFORE
+    /// `expand_program` runs; an `expand_program` error short-circuits
+    /// BEFORE the classifier filter walks anything; the named-form gate
+    /// (`split_first()` arity → `as_symbol_or_string()` shape) inside
+    /// [`crate::compile::split_name_slot`] fires for the first matched
+    /// form that violates either condition; a per-form `project` error
+    /// short-circuits at the first failing matched form via
+    /// `Iterator::collect::<Result<Vec<R>, _>>()`.
+    ///
+    /// Theory anchor: same as [`Self::expand_and_collect_named_calls_to_any`].
+    /// THEORY.md §VI.1 (generation over composition; the from-source
+    /// posture inherits the named-form gate composition through
+    /// delegation rather than re-deriving the `read(src)? + walk + gate`
+    /// chain at every from-source named-classifier consumer's call
+    /// site), THEORY.md §II.1 invariant 2 (free middle; the from-source
+    /// posture and the from-forms posture route through the SAME named-
+    /// form composition).
+    pub fn expand_source_and_collect_named_calls_to_any<R, F, D, T>(
+        &mut self,
+        src: &str,
+        decode: D,
+        project: F,
+    ) -> Result<Vec<R>>
+    where
+        D: FnMut(&str) -> Option<(T, &'static str)>,
+        F: FnMut(T, &str, &[Sexp]) -> Result<R>,
+    {
+        let forms = crate::reader::read(src)?;
+        self.expand_and_collect_named_calls_to_any(forms, decode, project)
+    }
+
     /// Expand a single form. Top-level macro calls are rewritten; recurses
     /// into list children.
     ///
@@ -10187,6 +10393,295 @@ mod tests {
             super::contains_unquote(&nested_in_list),
             "contains_unquote failed to descend into a List subtree containing a \
              Quasiquote(Unquote(_)) — list recursion arm drifted"
+        );
+    }
+
+    // ── expand_and_collect_named_calls_to_any (from-forms × named ────
+    // × typed-decoded classifier) ─────────────────────────────────────
+    //
+    // The (named NAME-then-kwargs × typed-decoded classifier) cell of
+    // the dispatcher matrix on the `Expander` surface — pre-lift the
+    // matrix had the bare-kwargs row closed (expand_and_collect_calls_to
+    // + expand_and_collect_calls_to_any) AND the constant-keyword
+    // column closed on the named axis (expand_to_named +
+    // expand_source_to_named) but the (named × classifier) cell was
+    // open — every consumer that wanted to walk a program by typed-
+    // decoded classifier AND extract the NAME slot per matched form
+    // had to compose `expand_and_collect_calls_to_any` with
+    // `split_name_slot` inline. Post-lift the cell is ONE named primitive
+    // on the `Expander` surface, and the constant-`T::KEYWORD` named
+    // sibling routes through it as the (constant-classifier × named)
+    // specialization.
+    //
+    // The tests below pin: (a) the happy path yields the decoded triple
+    // `(T, &str, &[Sexp])` for every matched form in source order; (b)
+    // non-matching forms are skipped (soft-projection contract inherited
+    // from the typed-decoded primitive); (c) the `NamedFormMissingName`
+    // variant fires for matched forms with no NAME slot, threading the
+    // classifier-supplied `&'static str` keyword; (d) the
+    // `NamedFormNonSymbolName` variant fires for matched forms with a
+    // non-symbol-or-string NAME slot, again threading the classifier-
+    // supplied keyword; (e) the projection's `Err` short-circuits at
+    // the first failing matched form; (f) `expand_program` runs BEFORE
+    // the classifier filter walks — a `(defmacro …)` emitting a named
+    // form is decoded by the classifier on the EXPANDED head, not the
+    // macro-call head; (g) the from-source sibling agrees with `read +
+    // from-forms` on the same source.
+
+    #[test]
+    fn expand_and_collect_named_calls_to_any_yields_decoded_triple_for_every_matching_form_in_source_order(
+    ) {
+        // The typed-decoded named primitive's happy path: a closed-set
+        // classifier decodes head symbols to a typed enum PAIRED with
+        // its canonical static keyword, and the per-form projection
+        // receives `(decoded, name, spec_args)` for every matched form
+        // in source order. Sweep across TWO distinct classifier outcomes
+        // — `Monitor` / `Notify` — interleaved with a non-matching form
+        // to pin the typed-witness threading AND the NAME-slot
+        // projection AND the source-order yield AND the rejection of
+        // non-classifier forms in ONE assertion.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum Kind {
+            Monitor,
+            Notify,
+        }
+        let src = r#"(defmonitor cpu :threshold 80)
+                     (other-form 99)
+                     (defnotify email :to "ops@example.com")
+                     (defmonitor mem :threshold 90)"#;
+        let forms = read(src).unwrap();
+        let mut e = Expander::new();
+        let rows: Vec<(Kind, String, usize)> = e
+            .expand_and_collect_named_calls_to_any(
+                forms,
+                |h| match h {
+                    "defmonitor" => Some((Kind::Monitor, "defmonitor")),
+                    "defnotify" => Some((Kind::Notify, "defnotify")),
+                    _ => None,
+                },
+                |kind, name, spec_args| Ok((kind, name.to_string(), spec_args.len())),
+            )
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                (Kind::Monitor, "cpu".to_string(), 2),
+                (Kind::Notify, "email".to_string(), 2),
+                (Kind::Monitor, "mem".to_string(), 2),
+            ],
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_named_calls_to_any_skips_non_matching_forms_without_invoking_project() {
+        // Soft-projection contract — every shape the typed-decoded
+        // primitive rejects (non-list, empty list, list whose head is
+        // not a symbol, list whose head decodes to `None`) skips the
+        // projection silently. The named gate inside the wrapper
+        // projection runs ONLY for classifier-matched forms; a non-
+        // matching form that reaches the projection panics here.
+        let src = r#":bare-keyword
+                     "bare-string"
+                     42
+                     ()
+                     (foo bar)
+                     (defmonitor cpu :threshold 80)"#;
+        let forms = read(src).unwrap();
+        let mut e = Expander::new();
+        let names: Vec<String> = e
+            .expand_and_collect_named_calls_to_any(
+                forms,
+                |h| (h == "defmonitor").then_some(((), "defmonitor")),
+                |(), name, _args| Ok(name.to_string()),
+            )
+            .unwrap();
+        assert_eq!(names, vec!["cpu".to_string()]);
+    }
+
+    #[test]
+    fn expand_and_collect_named_calls_to_any_emits_named_form_missing_name_through_classifier_keyword(
+    ) {
+        // `(defmonitor)` matches the classifier but has no NAME slot —
+        // `split_name_slot` fires `NamedFormMissingName { keyword:
+        // "defmonitor" }`. The classifier's `&'static str` keyword is
+        // threaded VERBATIM through the named gate; a regression that
+        // hardcodes a different keyword (e.g. the matched head text or
+        // a default) would fail the structural variant identity
+        // assertion. Fail-before-pass-after: pre-lift the primitive did
+        // not exist; the inline `expand_and_collect_calls_to_any +
+        // split_name_slot` composition at the consumer site was the
+        // only path, with the keyword bound at the consumer's call
+        // boundary rather than at the named primitive's body.
+        let forms = read("(defmonitor)").unwrap();
+        let mut e = Expander::new();
+        let err = e
+            .expand_and_collect_named_calls_to_any::<(), _, _, ()>(
+                forms,
+                |h| (h == "defmonitor").then_some(((), "defmonitor")),
+                |(), _name, _args| Ok(()),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                crate::error::LispError::NamedFormMissingName {
+                    keyword: "defmonitor"
+                }
+            ),
+            "expected NamedFormMissingName with classifier-supplied keyword, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_named_calls_to_any_emits_named_form_non_symbol_name_through_classifier_keyword(
+    ) {
+        // `(defmonitor 42 :threshold 80)` matches the classifier but
+        // the NAME slot is an int — `split_name_slot` fires
+        // `NamedFormNonSymbolName { keyword: "defmonitor", got:
+        // SexpShape::Int }`. The classifier's `&'static str` keyword is
+        // threaded through the structural rejection variant verbatim,
+        // and the typed `SexpShape` projection on the offending slot
+        // is preserved across the named primitive.
+        let forms = read("(defmonitor 42 :threshold 80)").unwrap();
+        let mut e = Expander::new();
+        let err = e
+            .expand_and_collect_named_calls_to_any::<(), _, _, ()>(
+                forms,
+                |h| (h == "defmonitor").then_some(((), "defmonitor")),
+                |(), _name, _args| Ok(()),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                crate::error::LispError::NamedFormNonSymbolName {
+                    keyword: "defmonitor",
+                    got: crate::error::SexpShape::Int,
+                }
+            ),
+            "expected NamedFormNonSymbolName with classifier-supplied keyword + SexpShape::Int, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_named_calls_to_any_short_circuits_on_project_error_at_first_failure() {
+        // Result projection's short-circuit contract — when the
+        // projection returns `Err` on a matched named form, the walk
+        // stops and subsequent matched forms are NOT projected. Pin
+        // source-order short-circuit via a counter the projection
+        // increments before deciding to fail: the counter sits at
+        // exactly the index of the failing form (second match),
+        // proving the third match never reached the projection.
+        let forms = read("(defmon a :x 1) (defmon b :x 2) (defmon c :x 3)").unwrap();
+        let mut count = 0usize;
+        let mut e = Expander::new();
+        let err = e
+            .expand_and_collect_named_calls_to_any::<String, _, _, ()>(
+                forms,
+                |h| (h == "defmon").then_some(((), "defmon")),
+                |(), name, _args| {
+                    count += 1;
+                    if name == "b" {
+                        return Err(crate::error::LispError::Missing("test-failure"));
+                    }
+                    Ok(name.to_string())
+                },
+            )
+            .expect_err("projection must short-circuit on first Err");
+        assert_eq!(
+            count, 2,
+            "projection must have run on first matched form AND the failing form, then stopped"
+        );
+        assert!(
+            matches!(err, crate::error::LispError::Missing("test-failure")),
+            "expected the projection's typed Err verbatim, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_named_calls_to_any_expands_macros_before_filtering_by_classifier() {
+        // Ordering contract — `expand_program` runs BEFORE the
+        // typed-decoded named walk. A `(defmacro …)` form that emits a
+        // classifier-decoded named form must have its EXPANDED head
+        // decoded by the classifier, not the macro-call head. Pin the
+        // ordering with a macro `(emit-mon n thr)` expanding to
+        // `(defmonitor ,n :threshold ,thr)` — the classifier sees the
+        // expanded `defmonitor` head and the NAME slot's symbol value
+        // from the macro arg.
+        let src = r#"(defmacro emit-mon (n thr) `(defmonitor ,n :threshold ,thr))
+                     (defmonitor cpu :threshold 80)
+                     (emit-mon mem 90)
+                     (other-form 99)
+                     (emit-mon disk 70)"#;
+        let forms = read(src).unwrap();
+        let mut e = Expander::new();
+        let names: Vec<String> = e
+            .expand_and_collect_named_calls_to_any(
+                forms,
+                |h| (h == "defmonitor").then_some(((), "defmonitor")),
+                |(), name, _args| Ok(name.to_string()),
+            )
+            .unwrap();
+        // `cpu` from the literal call, `mem` from the first macro
+        // emit, `disk` from the second macro emit. The macro-emitted
+        // forms are present BECAUSE `expand_program` ran first.
+        assert_eq!(names, vec!["cpu", "mem", "disk"]);
+    }
+
+    #[test]
+    fn expand_source_and_collect_named_calls_to_any_matches_inlined_read_plus_from_forms_path() {
+        // From-source posture parity: feeding source through
+        // `expand_source_and_collect_named_calls_to_any` is byte-
+        // identical to feeding `read(src)?` through the from-forms
+        // sibling on a fresh expander, because the from-source posture
+        // is `read(src)? + from-forms` by construction. A regression
+        // that drifts the from-source posture's pipeline from the
+        // from-forms posture's pipeline would fail here.
+        let src = r#"(defmonitor cpu :threshold 80)
+                     (defmonitor mem :threshold 90)"#;
+        let via_src: Vec<String> = Expander::new()
+            .expand_source_and_collect_named_calls_to_any(
+                src,
+                |h| (h == "defmonitor").then_some(((), "defmonitor")),
+                |(), name, _args| Ok(name.to_string()),
+            )
+            .unwrap();
+        let forms = read(src).unwrap();
+        let via_forms: Vec<String> = Expander::new()
+            .expand_and_collect_named_calls_to_any(
+                forms,
+                |h| (h == "defmonitor").then_some(((), "defmonitor")),
+                |(), name, _args| Ok(name.to_string()),
+            )
+            .unwrap();
+        assert_eq!(via_src, via_forms);
+        assert_eq!(via_src, vec!["cpu".to_string(), "mem".to_string()]);
+    }
+
+    #[test]
+    fn expand_source_and_collect_named_calls_to_any_short_circuits_on_reader_error_before_classifier_runs(
+    ) {
+        // `?`-routing through `read` short-circuits BEFORE the
+        // classifier or the named gate runs. Unbalanced paren — reader
+        // error fires; classifier panic-decoder MUST NOT execute,
+        // proving the read step gates the entire pipeline.
+        let mut e = Expander::new();
+        let err = e
+            .expand_source_and_collect_named_calls_to_any::<(), _, _, ()>(
+                "(defmonitor cpu :threshold 80",
+                |_h| panic!("classifier must not run when reader fails"),
+                |(), _name, _args| Ok(()),
+            )
+            .unwrap_err();
+        // The named gate's variants MUST NOT fire — the reader error
+        // is structurally distinct.
+        assert!(
+            !matches!(
+                err,
+                crate::error::LispError::NamedFormMissingName { .. }
+                    | crate::error::LispError::NamedFormNonSymbolName { .. }
+            ),
+            "expected reader error, not named-gate variant; got: {err:?}"
         );
     }
 }

@@ -977,16 +977,20 @@ impl AtomKind {
     /// silent operator-facing diagnostic drift at every
     /// `LispError::TypeMismatch.got` slot for an atomic witness.
     ///
-    /// Bidirectional note: the dual projection
-    /// `SexpShape::as_atom_kind(self) -> Option<AtomKind>` is NOT
-    /// currently provided because no consumer needs it — every site
-    /// that has a [`SexpShape`] has it because it has a [`Sexp`]
-    /// already, so the per-form [`Atom::kind`] projection covers the
-    /// converse direction. If a future authoring tool (LSP / REPL /
-    /// `tatara-check` typed-pattern matcher) wants to lift the typed
-    /// marker out of a diagnostic-side shape identity, the dual lands
-    /// as ONE new `match` over the closed set, parallel to the
-    /// structure here.
+    /// Bidirectional dual: the inverse projection
+    /// [`crate::error::SexpShape::as_atom_kind`] (12→6, partial)
+    /// covers the 6-of-12 carving of [`SexpShape`] this embed
+    /// reaches. The pair `(AtomKind::sexp_shape,
+    /// SexpShape::as_atom_kind)` forms an `Iso(AtomKind, AtomShape ⊂
+    /// SexpShape)`: every typed marker round-trips through the embed
+    /// (`AtomKind::sexp_shape(k).as_atom_kind() == Some(k)` for every
+    /// `k: AtomKind`), every atom-shape pre-image recovers the typed
+    /// marker. The non-atom shapes (`Nil`, `List`, every quote-family
+    /// wrapper) form the kernel of the inverse — `as_atom_kind`
+    /// returns `None` for them. See [`crate::error::SexpShape::as_atom_kind`]'s
+    /// docstring for the composition law's other direction +
+    /// disjointness with the quote-family sibling
+    /// `SexpShape::as_quote_form`.
     ///
     /// Theory anchor: THEORY.md §V.1 — knowable platform; the (Atom
     /// variant, SexpShape variant) pairing becomes a TYPE projection
@@ -2782,15 +2786,20 @@ impl QuoteForm {
     /// that drifts the short label silently between the typed marker and
     /// the diagnostic surface is structurally impossible.
     ///
-    /// Bidirectional note: the dual projection
-    /// `SexpShape::as_quote_form(self) -> Option<QuoteForm>` is NOT
-    /// currently provided because no consumer needs it — every site that
-    /// has a [`SexpShape`] has it because it has a [`Sexp`] already, so
-    /// the per-form [`Sexp::as_quote_form`] projection covers the
-    /// converse direction. If a future authoring tool (LSP / REPL /
-    /// `tatara-check` typed-pattern matcher) wants to lift the typed
-    /// marker out of a diagnostic-side shape identity, the dual lands as
-    /// ONE new match on the closed set, parallel to the structure here.
+    /// Bidirectional dual: the inverse projection
+    /// [`crate::error::SexpShape::as_quote_form`] (12→4, partial)
+    /// covers the 4-of-12 carving of [`SexpShape`] this embed reaches.
+    /// The pair `(QuoteForm::sexp_shape,
+    /// SexpShape::as_quote_form)` forms an `Iso(QuoteForm, QuoteShape ⊂
+    /// SexpShape)`: every typed marker round-trips through the embed
+    /// (`QuoteForm::sexp_shape(qf).as_quote_form() == Some(qf)` for
+    /// every `qf: QuoteForm`), every quote-shape pre-image recovers
+    /// the typed marker. The non-quote-family shapes (`Nil`, `List`,
+    /// every atomic-payload variant) form the kernel of the inverse —
+    /// `as_quote_form` returns `None` for them. See
+    /// [`crate::error::SexpShape::as_quote_form`]'s docstring for the
+    /// composition law's other direction + disjointness with the
+    /// atomic-payload sibling `SexpShape::as_atom_kind`.
     ///
     /// Theory anchor: THEORY.md §V.1 — knowable platform; the (QuoteForm
     /// variant, SexpShape variant) pairing becomes a TYPE projection on

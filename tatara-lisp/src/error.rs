@@ -2987,6 +2987,207 @@ impl SexpShape {
             Self::UnquoteSplice => "unquote-splice",
         }
     }
+
+    /// Project the twelve-variant [`SexpShape`] back to its
+    /// corresponding [`crate::ast::AtomKind`] iff the shape names an
+    /// atomic-payload variant — `Symbol → Some(AtomKind::Symbol)`,
+    /// `Keyword → Some(AtomKind::Keyword)`, `String → Some(AtomKind::Str)`,
+    /// `Int → Some(AtomKind::Int)`, `Float → Some(AtomKind::Float)`,
+    /// `Bool → Some(AtomKind::Bool)`, every other shape (`Nil`,
+    /// `List`, every quote-family wrapper) `None`. The 6-of-12 carving
+    /// of [`SexpShape`] that the inverse [`crate::ast::AtomKind::sexp_shape`]
+    /// embed projection covers — naming the inverse closes the
+    /// embed/project section on the (atomic-payload, outer-shape)
+    /// algebra.
+    ///
+    /// Composition law (round-trip on the atom carving):
+    /// `AtomKind::sexp_shape(k).as_atom_kind() == Some(k)` for every
+    /// `k: AtomKind`. The non-atom shapes form the kernel of the
+    /// projection — `SexpShape::List.as_atom_kind() == None`,
+    /// `SexpShape::Nil.as_atom_kind() == None`, every quote-family
+    /// variant also `None`. The two projections together form an
+    /// `Iso(AtomKind, AtomShape ⊂ SexpShape)`: `as_atom_kind` is the
+    /// section (every `AtomKind` round-trips through the embed),
+    /// `sexp_shape` is the retraction (every atom-shape pre-image
+    /// recovers the typed marker). Disjoint with [`Self::as_quote_form`]:
+    /// for every variant in [`Self::ALL`], at most ONE of the two
+    /// projections returns `Some` — the typed-shape lattice's two
+    /// closed-set carvings partition the carve-able SexpShape variants
+    /// (every variant is in exactly one of AtomShape, QuoteShape, or
+    /// neither — the latter being `Nil` and `List`).
+    ///
+    /// Pre-lift the docstring on [`crate::ast::AtomKind::sexp_shape`]
+    /// explicitly anticipated this dual:
+    ///
+    /// > "the dual projection `SexpShape::as_atom_kind(self) ->
+    /// > Option<AtomKind>` is NOT currently provided because no
+    /// > consumer needs it ... If a future authoring tool (LSP /
+    /// > REPL / `tatara-check` typed-pattern matcher) wants to lift
+    /// > the typed marker out of a diagnostic-side shape identity,
+    /// > the dual lands as ONE new `match` over the closed set,
+    /// > parallel to the structure here."
+    ///
+    /// Post-lift the dual lives at this method; the `AtomKind::sexp_shape`
+    /// docstring's anticipation is satisfied. Two plausible future
+    /// consumers the closed-set projection admits with no new
+    /// boilerplate:
+    ///   * **LSP / REPL typed-shape filter** — given a
+    ///     `LispError::TypeMismatch { got: SexpShape, .. }`, project
+    ///     the offending shape through `as_atom_kind()`; iff `Some(k)`,
+    ///     the offending value was an atomic payload and the LSP can
+    ///     route through `AtomKind`'s diagnostic / completion surface
+    ///     (`AtomKind::label`, `AtomKind::ALL`-driven completion list)
+    ///     without re-deriving the 6-of-12 carving inline. Iff `None`,
+    ///     the surface dispatches to the structural (list / quote-family /
+    ///     nil) branch instead.
+    ///   * **`tatara-check` typed-pattern matcher** — a future
+    ///     `(check-shape-projects-to-atom-kind …)` substrate primitive
+    ///     binds to this projection rather than substring-matching the
+    ///     rendered label or duplicating the 6-of-12 carving on its
+    ///     own.
+    ///   * **Diagnostic-side audit-trail metric** — a future
+    ///     `tatara_lisp_type_mismatch_atom_kind_total{kind="symbol"}`
+    ///     metric reads the typed `AtomKind` directly off the rejected
+    ///     `SexpShape` via this projection, with the carving's
+    ///     correctness pinned at ONE site (the typed match here)
+    ///     rather than across N per-metric inline `match` arms.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (SexpShape variant, AtomKind variant) inverse pairing becomes a
+    /// TYPE projection on the substrate algebra rather than an inline
+    /// 6-of-12 `match` re-derived per call site. THEORY.md §II.1
+    /// invariant 2 — free middle; the (atomic-payload, outer-shape)
+    /// algebra now binds at TWO typed sites (`AtomKind::sexp_shape`
+    /// for the embed, `SexpShape::as_atom_kind` for the project), each
+    /// rebuilding the same closed-set pairing — a regression that
+    /// drifts ONE direction from the other fails the
+    /// `atom_kind_sexp_shape_round_trips_through_as_atom_kind` round-
+    /// trip pin below. THEORY.md §VI.1 — generation over composition;
+    /// the inverse pairing's ONE typed `match` displaces the speculative
+    /// per-consumer 6-of-12 carving (LSP, REPL, `tatara-check`,
+    /// metrics) the substrate's authoring surface roadmap anticipates.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::dyn_cast<AtomicAttr>(attr)`
+    /// — the typed soft-downcast from a generic `Attribute` to a
+    /// narrower typed `AtomicAttr` interface IS the closed-set
+    /// project direction; `SexpShape::as_atom_kind` is the
+    /// unstructured-Rust peer on the substrate's typed-shape algebra,
+    /// with [`crate::ast::AtomKind`] standing in for MLIR's
+    /// `AtomicAttr` interface. Racket's `(syntax->datum stx)` paired
+    /// with a closed-set predicate (`number?`, `symbol?`, `string?`,
+    /// `boolean?`) — the typed predicate face IS the project direction
+    /// on Racket's syntax-datum taxonomy; the substrate's
+    /// `as_atom_kind` is the Rust-typed peer where the predicate
+    /// surfaces the typed witness alongside the predicate verdict in
+    /// ONE `Option<AtomKind>` projection.
+    #[must_use]
+    pub fn as_atom_kind(self) -> Option<crate::ast::AtomKind> {
+        use crate::ast::AtomKind;
+        match self {
+            Self::Symbol => Some(AtomKind::Symbol),
+            Self::Keyword => Some(AtomKind::Keyword),
+            Self::String => Some(AtomKind::Str),
+            Self::Int => Some(AtomKind::Int),
+            Self::Float => Some(AtomKind::Float),
+            Self::Bool => Some(AtomKind::Bool),
+            Self::Nil
+            | Self::List
+            | Self::Quote
+            | Self::Quasiquote
+            | Self::Unquote
+            | Self::UnquoteSplice => None,
+        }
+    }
+
+    /// Project the twelve-variant [`SexpShape`] back to its
+    /// corresponding [`crate::ast::QuoteForm`] iff the shape names a
+    /// homoiconic quote-family wrapper — `Quote → Some(QuoteForm::Quote)`,
+    /// `Quasiquote → Some(QuoteForm::Quasiquote)`, `Unquote →
+    /// Some(QuoteForm::Unquote)`, `UnquoteSplice →
+    /// Some(QuoteForm::UnquoteSplice)`, every other shape (`Nil`,
+    /// `List`, every atomic-payload variant) `None`. The 4-of-12
+    /// carving of [`SexpShape`] that the inverse
+    /// [`crate::ast::QuoteForm::sexp_shape`] embed projection covers —
+    /// naming the inverse closes the embed/project section on the
+    /// (quote-family, outer-shape) algebra, sibling to
+    /// [`Self::as_atom_kind`] on the atomic-payload axis.
+    ///
+    /// Composition law (round-trip on the quote-family carving):
+    /// `QuoteForm::sexp_shape(qf).as_quote_form() == Some(qf)` for
+    /// every `qf: QuoteForm`. The non-quote-family shapes form the
+    /// kernel of the projection — `SexpShape::List.as_quote_form() ==
+    /// None`, `SexpShape::Nil.as_quote_form() == None`, every atomic-
+    /// payload variant also `None`. The two projections together form
+    /// an `Iso(QuoteForm, QuoteShape ⊂ SexpShape)`: `as_quote_form`
+    /// is the section (every `QuoteForm` round-trips through the
+    /// embed), `sexp_shape` is the retraction (every quote-shape
+    /// pre-image recovers the typed marker). Disjoint with
+    /// [`Self::as_atom_kind`]: for every variant in [`Self::ALL`], at
+    /// most ONE of the two projections returns `Some` — the typed-
+    /// shape lattice's two closed-set carvings partition the carve-
+    /// able SexpShape variants (every variant is in exactly one of
+    /// AtomShape, QuoteShape, or neither — the latter being `Nil`
+    /// and `List`).
+    ///
+    /// Pre-lift the docstring on [`crate::ast::QuoteForm::sexp_shape`]
+    /// explicitly anticipated this dual:
+    ///
+    /// > "the dual projection `SexpShape::as_quote_form(self) ->
+    /// > Option<QuoteForm>` is NOT currently provided because no
+    /// > consumer needs it ... If a future authoring tool (LSP /
+    /// > REPL / `tatara-check` typed-pattern matcher) wants to lift
+    /// > the typed marker out of a diagnostic-side shape identity,
+    /// > the dual lands as ONE new match on the closed set, parallel
+    /// > to the structure here."
+    ///
+    /// Post-lift the dual lives at this method; the
+    /// `QuoteForm::sexp_shape` docstring's anticipation is satisfied.
+    /// The same plausible future consumers [`Self::as_atom_kind`]
+    /// documents apply on the quote-family axis — a typed-shape
+    /// filter that narrows a diagnostic to "this rejection was on a
+    /// homoiconic prefix-wrapper" iff `as_quote_form().is_some()`
+    /// binds to ONE projection rather than re-deriving the 4-of-12
+    /// carving inline. A future `tatara-check` predicate
+    /// `(check-shape-projects-to-quote-form …)` reads the typed
+    /// `QuoteForm` directly off a rejected `SexpShape` via this
+    /// projection.
+    ///
+    /// Theory anchor: same as [`Self::as_atom_kind`]. THEORY.md §V.1
+    /// (knowable platform; the inverse pairing is a TYPE projection
+    /// rather than an inline 4-of-12 `match`), THEORY.md §II.1
+    /// invariant 2 (free middle; the embed/project pair binds at TWO
+    /// typed sites — `QuoteForm::sexp_shape` for the embed,
+    /// `SexpShape::as_quote_form` for the project — both rebuilding
+    /// the same closed-set pairing), THEORY.md §VI.1 (generation
+    /// over composition; the inverse 4-of-12 carving lifts to ONE
+    /// typed `match`).
+    ///
+    /// Frontier inspiration: same as [`Self::as_atom_kind`] — MLIR's
+    /// `mlir::dyn_cast<QuoteAttr>(attr)` typed soft-downcast on the
+    /// quote-family carving of a closed-set attribute union, with
+    /// Racket's `(or (quote-syntax? stx) (quasiquote-syntax? stx)
+    /// (unquote-syntax? stx) (unquote-splicing-syntax? stx))` as the
+    /// closed-form predicate-family sibling whose Rust-typed peer
+    /// surfaces the typed witness alongside the predicate verdict in
+    /// ONE `Option<QuoteForm>` projection.
+    #[must_use]
+    pub fn as_quote_form(self) -> Option<crate::ast::QuoteForm> {
+        use crate::ast::QuoteForm;
+        match self {
+            Self::Quote => Some(QuoteForm::Quote),
+            Self::Quasiquote => Some(QuoteForm::Quasiquote),
+            Self::Unquote => Some(QuoteForm::Unquote),
+            Self::UnquoteSplice => Some(QuoteForm::UnquoteSplice),
+            Self::Nil
+            | Self::List
+            | Self::Symbol
+            | Self::Keyword
+            | Self::String
+            | Self::Int
+            | Self::Float
+            | Self::Bool => None,
+        }
+    }
 }
 
 // `impl std::fmt::Display for SexpShape` + `impl std::str::FromStr for
@@ -8710,6 +8911,239 @@ mod tests {
                 assert_eq!(*b, SexpShape::Float);
             }
             _ => panic!("both must be TypeMismatch"),
+        }
+    }
+
+    // ── SexpShape ↔ AtomKind / QuoteForm: typed-shape lattice inverses ──
+    //
+    // The forward embed projections [`crate::ast::AtomKind::sexp_shape`]
+    // (6→12) and [`crate::ast::QuoteForm::sexp_shape`] (4→12) have
+    // existed for prior runs (commits 121bb60 + b15-ish); their dual
+    // projections [`SexpShape::as_atom_kind`] (12→6, partial) and
+    // [`SexpShape::as_quote_form`] (12→4, partial) close the
+    // embed/project section on the typed-shape lattice. The
+    // composition laws below pin the (embed, project) pair is an
+    // `Iso(AtomKind, AtomShape ⊂ SexpShape)` AND
+    // `Iso(QuoteForm, QuoteShape ⊂ SexpShape)` — every typed marker
+    // round-trips through the embed, every shape pre-image recovers
+    // the typed marker. Pre-lift the typed-shape lattice's two
+    // forward embeds had no dual projection naming the inverse 6-of-
+    // 12 + 4-of-12 carvings; post-lift the carvings live at ONE site
+    // each on the [`SexpShape`] algebra so a regression that drifts
+    // the inverse from the embed surfaces at the round-trip pin
+    // instead of at every speculative LSP / REPL / `tatara-check` /
+    // metrics consumer's per-carving inline `match`.
+
+    #[test]
+    fn as_atom_kind_projects_each_atom_shape_to_canonical_atom_kind_and_rejects_non_atom_shapes() {
+        // Per-variant truth-table sweep across every `SexpShape::ALL`
+        // entry — pins each variant's canonical mapping (atomic-payload
+        // arms project to the matching `AtomKind`; `Nil` / `List` /
+        // every quote-family arm project to `None`) byte-for-byte so a
+        // regression that drifts ONE arm (e.g. swaps `Symbol →
+        // AtomKind::Keyword`, drops `Bool`'s arm to `None`, accepts
+        // `List` as `Some(AtomKind::Str)`) fails loudly. The full
+        // `SexpShape::ALL` sweep doubles as exhaustiveness — adding a
+        // hypothetical thirteenth variant (e.g. `Vector` for `#(...)`)
+        // forces the test author to extend BOTH this sweep AND the
+        // typed `match` body, with rustc enforcing the match arm's
+        // presence and this sweep enforcing the (variant, projected
+        // mapping) pairing's canonical-form.
+        use crate::ast::AtomKind;
+        for shape in SexpShape::ALL {
+            let projected = shape.as_atom_kind();
+            let expected = match shape {
+                SexpShape::Symbol => Some(AtomKind::Symbol),
+                SexpShape::Keyword => Some(AtomKind::Keyword),
+                SexpShape::String => Some(AtomKind::Str),
+                SexpShape::Int => Some(AtomKind::Int),
+                SexpShape::Float => Some(AtomKind::Float),
+                SexpShape::Bool => Some(AtomKind::Bool),
+                SexpShape::Nil
+                | SexpShape::List
+                | SexpShape::Quote
+                | SexpShape::Quasiquote
+                | SexpShape::Unquote
+                | SexpShape::UnquoteSplice => None,
+            };
+            assert_eq!(
+                projected, expected,
+                "SexpShape::{shape:?}.as_atom_kind() drifted from canonical mapping"
+            );
+        }
+    }
+
+    #[test]
+    fn atom_kind_sexp_shape_round_trips_through_as_atom_kind() {
+        // The embed/project section law on the atomic carving:
+        // `AtomKind::sexp_shape(k).as_atom_kind() == Some(k)` for every
+        // `k: AtomKind::ALL`. Pinning the round-trip for every variant
+        // in the closed set proves the (embed, project) pair is an
+        // `Iso(AtomKind, AtomShape ⊂ SexpShape)` — the section is total
+        // on `AtomKind`'s carving. A regression that drifts EITHER
+        // direction (an `AtomKind::sexp_shape` arm that mis-maps OR a
+        // `SexpShape::as_atom_kind` arm that mis-inverts) fails here
+        // without depending on any per-consumer call site. Same posture
+        // as `unquote_form_marker_routes_through_to_quote_form_prefix_
+        // via_composition`'s round-trip on the 2-of-4 quote-family
+        // subset.
+        use crate::ast::AtomKind;
+        for kind in AtomKind::ALL {
+            let shape = kind.sexp_shape();
+            let recovered = shape.as_atom_kind();
+            assert_eq!(
+                recovered,
+                Some(kind),
+                "AtomKind::{kind:?} did NOT round-trip — sexp_shape().as_atom_kind() must recover the typed marker"
+            );
+        }
+    }
+
+    #[test]
+    fn as_quote_form_projects_each_quote_shape_to_canonical_quote_form_and_rejects_non_quote_shapes(
+    ) {
+        // Per-variant truth-table sweep across every `SexpShape::ALL`
+        // entry — pins each variant's canonical mapping (quote-family
+        // arms project to the matching `QuoteForm`; `Nil` / `List` /
+        // every atomic-payload arm project to `None`) byte-for-byte.
+        // Sibling sweep to
+        // `as_atom_kind_projects_each_atom_shape_to_canonical_atom_kind_and_rejects_non_atom_shapes`
+        // on the quote-family axis.
+        use crate::ast::QuoteForm;
+        for shape in SexpShape::ALL {
+            let projected = shape.as_quote_form();
+            let expected = match shape {
+                SexpShape::Quote => Some(QuoteForm::Quote),
+                SexpShape::Quasiquote => Some(QuoteForm::Quasiquote),
+                SexpShape::Unquote => Some(QuoteForm::Unquote),
+                SexpShape::UnquoteSplice => Some(QuoteForm::UnquoteSplice),
+                SexpShape::Nil
+                | SexpShape::List
+                | SexpShape::Symbol
+                | SexpShape::Keyword
+                | SexpShape::String
+                | SexpShape::Int
+                | SexpShape::Float
+                | SexpShape::Bool => None,
+            };
+            assert_eq!(
+                projected, expected,
+                "SexpShape::{shape:?}.as_quote_form() drifted from canonical mapping"
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_sexp_shape_round_trips_through_as_quote_form() {
+        // The embed/project section law on the quote-family carving:
+        // `QuoteForm::sexp_shape(qf).as_quote_form() == Some(qf)` for
+        // every `qf: QuoteForm::ALL`. Proves the (embed, project) pair
+        // is an `Iso(QuoteForm, QuoteShape ⊂ SexpShape)` — the section
+        // is total on `QuoteForm`'s carving. Sibling round-trip to
+        // `atom_kind_sexp_shape_round_trips_through_as_atom_kind` on
+        // the quote-family axis.
+        use crate::ast::QuoteForm;
+        for qf in QuoteForm::ALL {
+            let shape = qf.sexp_shape();
+            let recovered = shape.as_quote_form();
+            assert_eq!(
+                recovered,
+                Some(qf),
+                "QuoteForm::{qf:?} did NOT round-trip — sexp_shape().as_quote_form() must recover the typed marker"
+            );
+        }
+    }
+
+    #[test]
+    fn as_atom_kind_and_as_quote_form_partition_carvable_sexp_shape_variants() {
+        // Disjointness invariant: for every variant in
+        // `SexpShape::ALL`, AT MOST ONE of `as_atom_kind()` and
+        // `as_quote_form()` returns `Some` — the typed-shape lattice's
+        // two closed-set carvings partition the carve-able SexpShape
+        // variants. The two non-carved variants (`Nil`, `List`) project
+        // to `None` through BOTH projections — the kernel of both
+        // partial inverses. A regression that drifts the partition
+        // (e.g. accepts `SexpShape::List` as an atom kind, or as a
+        // quote form) fails here. Sibling to
+        // `as_atom_kind_projects_each_atom_shape_to_canonical_atom_kind_and_rejects_non_atom_shapes`
+        // and
+        // `as_quote_form_projects_each_quote_shape_to_canonical_quote_form_and_rejects_non_quote_shapes`
+        // — those pin the per-axis canonical mapping; this pins the
+        // joint disjointness across both axes.
+        for shape in SexpShape::ALL {
+            let atom = shape.as_atom_kind().is_some();
+            let quote = shape.as_quote_form().is_some();
+            assert!(
+                !(atom && quote),
+                "SexpShape::{shape:?} projects as BOTH an atom kind AND a quote form — typed-shape carvings must be disjoint"
+            );
+            // Cross-axis closure: the only variants that project as
+            // NEITHER are the non-carved structural shapes (`Nil` and
+            // `List`). Every other variant must be in exactly ONE
+            // carving — the substrate's typed-shape lattice's
+            // structural completeness pin.
+            let carved = atom || quote;
+            let expected_carved = !matches!(shape, SexpShape::Nil | SexpShape::List);
+            assert_eq!(
+                carved, expected_carved,
+                "SexpShape::{shape:?} must be carved iff it is neither Nil nor List"
+            );
+        }
+    }
+
+    #[test]
+    fn as_atom_kind_composes_with_sexp_shape_via_atom_kind_label_round_trip() {
+        // Cross-projection composition law: for every atom kind, the
+        // diagnostic label round-trips through both directions of the
+        // embed/project pair AND `AtomKind::label`:
+        // `AtomKind::ALL[i].label() == AtomKind::ALL[i].sexp_shape()
+        // .as_atom_kind().expect("...").label()`. This pin proves the
+        // typed-shape lattice's two carvings are not only structural
+        // inverses but ALSO label-coherent — a regression that drifts
+        // the (AtomKind variant, SexpShape variant) pairing while
+        // preserving the projection's structural inverseness (e.g. a
+        // future refactor that renames the variants in lockstep but
+        // leaves the per-variant labels stale) surfaces here. The
+        // label-coherence binds the diagnostic surface to the typed
+        // algebra at BOTH layers.
+        use crate::ast::AtomKind;
+        for kind in AtomKind::ALL {
+            let via_round_trip = kind
+                .sexp_shape()
+                .as_atom_kind()
+                .expect("every AtomKind round-trips through the embed/project pair")
+                .label();
+            assert_eq!(
+                via_round_trip,
+                kind.label(),
+                "AtomKind::{kind:?}.label() drifted from sexp_shape().as_atom_kind().label() — embed/project must preserve label coherence"
+            );
+        }
+    }
+
+    #[test]
+    fn as_quote_form_composes_with_sexp_shape_via_quote_form_prefix_round_trip() {
+        // Cross-projection composition law (quote-family sibling of
+        // `as_atom_kind_composes_with_sexp_shape_via_atom_kind_label_round_trip`):
+        // for every `qf: QuoteForm::ALL`,
+        // `qf.prefix() == qf.sexp_shape().as_quote_form().expect("...").prefix()`.
+        // Pins the (QuoteForm variant, SexpShape variant) pairing
+        // round-trips through the embed/project pair AND preserves
+        // each variant's canonical homoiconic-prefix punctuation
+        // (`"'"` / `` "`" `` / `","` / `",@"`) — a regression that
+        // drifts the round-trip OR drifts the prefix surfaces here.
+        use crate::ast::QuoteForm;
+        for qf in QuoteForm::ALL {
+            let via_round_trip = qf
+                .sexp_shape()
+                .as_quote_form()
+                .expect("every QuoteForm round-trips through the embed/project pair")
+                .prefix();
+            assert_eq!(
+                via_round_trip,
+                qf.prefix(),
+                "QuoteForm::{qf:?}.prefix() drifted from sexp_shape().as_quote_form().prefix() — embed/project must preserve prefix coherence"
+            );
         }
     }
 

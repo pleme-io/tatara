@@ -400,6 +400,123 @@ where
     Expander::new().expand_and_collect_calls_to_any(forms, decode, project)
 }
 
+/// Read + macroexpand + named-classifier-walk `src` through a fresh
+/// `Expander` — the from-source posture of the (named NAME-then-kwargs ×
+/// typed-decoded classifier) cell at the fresh-expander free-function
+/// boundary, sibling of [`compile_typed_any`] (the bare-kwargs typed-
+/// decoded classifier dispatcher) and of [`compile_named`] (the
+/// constant-`T::KEYWORD` named dispatcher).
+///
+/// Composes [`Expander::new()`](crate::macro_expand::Expander::new) with
+/// [`Expander::expand_source_and_collect_named_calls_to_any`] — the
+/// from-source named-classifier primitive on the `Expander` surface
+/// (ae2a3c3) that itself composes [`Expander::expand_and_collect_calls_to_any`]
+/// with [`split_name_slot`]. Closes the fresh-expander free-function
+/// dispatcher cube at the (typed-decoded classifier × named NAME-then-
+/// kwargs) corner that prior runs' [`split_name_slot`] (dd50801),
+/// [`Expander::expand_and_collect_named_calls_to_any`] (ae2a3c3), and
+/// [`compile_typed_any`] (8971014) collectively prepared:
+///
+/// |              | constant `T::KEYWORD`                   | typed-decoded classifier                       |
+/// |--------------|-----------------------------------------|------------------------------------------------|
+/// | from-forms × bare-kwargs | [`compile_typed_from_forms`]            | [`compile_typed_any_from_forms`]               |
+/// | from-source × bare-kwargs | [`compile_typed`]                       | [`compile_typed_any`]                          |
+/// | from-forms × named        | [`compile_named_from_forms`]            | [`compile_named_any_from_forms`]               |
+/// | from-source × named       | [`compile_named`]                       | [`compile_named_any`] (this)                   |
+///
+/// Decoder signature `FnMut(&str) -> Option<(T, &'static str)>` pairs the
+/// typed witness `T` with the canonical static keyword threaded through
+/// the `NamedFormMissingName.keyword` / `NamedFormNonSymbolName.keyword`
+/// slots of the named-form gate — the `&'static` constraint pins the
+/// same compile-time discipline `split_name_slot`'s `keyword: &'static
+/// str` parameter pins at the slice-side boundary. Projection signature
+/// `FnMut(T, &str, &[Sexp]) -> Result<R>` receives the typed witness
+/// ALONGSIDE the BORROWED NAME slot (from [`Sexp::as_symbol_or_string`],
+/// accepting both symbol- and string-author surfaces) AND the spec args
+/// tail. Consumers that need owned ownership of the NAME (`NamedDefinition.name:
+/// String`, JSON-serialized payloads) `.to_string()` themselves —
+/// pushing the clone to the consumer boundary keeps the primitive
+/// allocation-free.
+///
+/// The constant-`T::KEYWORD` column is the typed CONSEQUENCE of the
+/// classifier column: a `compile_named::<T>(src)` call composes
+/// `compile_named_any(src, |h| (h == T::KEYWORD).then_some(((),
+/// T::KEYWORD)), |(), name, spec_args| { let spec =
+/// T::compile_from_args(spec_args)?; Ok(NamedDefinition { name:
+/// name.to_string(), spec }) })`. Every cell of the cube binds to ONE
+/// composition point on the `Expander` surface (the typed-decoded
+/// classifier walk + [`split_name_slot`] gate) — a regression that
+/// drifts ONE cell's NAME-slot rejection chain from the others becomes
+/// structurally impossible.
+///
+/// Two plausible future consumers the primitive admits with no
+/// boilerplate: a `tatara-check` runner that dispatches every
+/// `(defmonitor NAME …)` / `(defnotify NAME …)` / `(defalertpolicy NAME
+/// …)` form in `checks.lisp` through ONE closed-set classifier in ONE
+/// pass over a source buffer; a live-registry dispatcher that walks a
+/// program dispatching every named form whose head is in a runtime
+/// registry, decoded to a handler reference AND its canonical static
+/// keyword (sourced from the dispatcher itself) without re-deriving
+/// `Expander::new().expand_source_and_collect_named_calls_to_any(…)` at
+/// the call site.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// (fresh × from-source × typed-decoded-classifier × named NAME-then-
+/// kwargs) cell is bound in ONE place rather than re-derived inline at
+/// every fresh-expander from-source named-classifier consumer's call
+/// site. THEORY.md §II.1 invariant 1 — typed entry; the typed-decoded
+/// classifier-filtered + NAME-shape-gated + caller-projected walk over
+/// the freshly-expanded program IS a typed-entry-batch gate at the
+/// free-function boundary. THEORY.md §II.1 invariant 2 — free middle;
+/// every cell of the (fresh × {from-forms, from-source} × {constant,
+/// classifier} × {bare-kwargs, named}) cube routes through ONE
+/// composition point on the `Expander` surface.
+///
+/// Frontier inspiration: Racket's `(eval-string str ns)` against a
+/// fresh empty namespace combined with `syntax-parse`'s `~or* ((~datum
+/// defX) name:id arg ...)` typed-choice repeater on the result —
+/// typed named-dispatch with NO preloaded macro library is the Racket
+/// idiom; this function is the Rust-typed peer with the typed-decoded
+/// classifier composed in, sibling of
+/// [`RealizedCompiler::compile_named_any`](crate::compiler_spec::RealizedCompiler::compile_named_any)
+/// (the preloaded-namespace posture).
+pub fn compile_named_any<R, F, D, T>(src: &str, decode: D, project: F) -> Result<Vec<R>>
+where
+    D: FnMut(&str) -> Option<(T, &'static str)>,
+    F: FnMut(T, &str, &[Sexp]) -> Result<R>,
+{
+    Expander::new().expand_source_and_collect_named_calls_to_any(src, decode, project)
+}
+
+/// Macroexpand + named-classifier-walk a pre-parsed program through a
+/// fresh `Expander` — the from-forms posture of [`compile_named_any`].
+///
+/// Composes [`Expander::new()`](crate::macro_expand::Expander::new) with
+/// [`Expander::expand_and_collect_named_calls_to_any`]. Sibling of
+/// [`compile_named_any`] (from-source) and of [`compile_typed_any_from_forms`]
+/// (from-forms × bare-kwargs typed-decoded classifier); together with
+/// [`compile_named_from_forms`] (from-forms × constant-`T::KEYWORD` ×
+/// named) it closes the from-forms row of the named-classifier corner
+/// at the free-function boundary — see [`compile_named_any`]'s 4×2
+/// table for the cube shape.
+///
+/// Theory anchor: same as [`compile_named_any`]. THEORY.md §VI.1
+/// (generation over composition; the from-forms posture is the
+/// inverse-delegation peer of from-source, which composes `read(src)? +
+/// from-forms`), THEORY.md §II.1 invariant 2 (free middle; every cell
+/// of the named-classifier cube routes through ONE composition point).
+pub fn compile_named_any_from_forms<R, F, D, T>(
+    forms: Vec<Sexp>,
+    decode: D,
+    project: F,
+) -> Result<Vec<R>>
+where
+    D: FnMut(&str) -> Option<(T, &'static str)>,
+    F: FnMut(T, &str, &[Sexp]) -> Result<R>,
+{
+    Expander::new().expand_and_collect_named_calls_to_any(forms, decode, project)
+}
+
 /// Split a `(<keyword> NAME …)` form's argument tail into the NAME slot
 /// projection and the remaining argument tail — the named-form arity +
 /// NAME-shape gate lifted out of [`named_form_projection`]'s inline body
@@ -1853,5 +1970,228 @@ mod tests {
         assert_eq!(via_typed_named[0].spec.name, "x");
         assert_eq!(via_typed_named[1].name, "beta-compiler");
         assert_eq!(via_typed_named[1].spec.name, "y");
+    }
+
+    // ── compile_named_any{,_from_forms} — fresh-expander free-function ──
+    //
+    // Closes the fresh-expander free-function dispatcher cube at the
+    // (typed-decoded classifier × named NAME-then-kwargs) corner.
+    // Each cell routes through `Expander::new()` + the matching
+    // `Expander` named-classifier primitive (ae2a3c3:
+    // `expand_and_collect_named_calls_to_any` for from-forms;
+    // `expand_source_and_collect_named_calls_to_any` for from-source),
+    // which in turn composes the typed-decoded classifier walk with
+    // `split_name_slot` (dd50801).
+
+    #[test]
+    fn compile_named_any_from_forms_yields_decoded_triple_for_every_matching_named_form_in_source_order(
+    ) {
+        // Pin the typed-decoded yield shape against a closed-set classifier
+        // (a hand-rolled `Kind::{Foo, Bar}` enum that rejects one head out
+        // of three) over a pre-parsed `Vec<Sexp>` against a fresh
+        // `Expander`. The classifier-decoded yield walks every matching
+        // named call form in source order, threading the typed witness
+        // ALONGSIDE the BORROWED NAME slot AND the args tail through the
+        // projection.
+        use super::compile_named_any_from_forms;
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        enum Kind {
+            Foo,
+            Bar,
+        }
+        let forms = crate::reader::read(
+            "(deffoo alpha 1) (defbaz gamma 2) (defbar beta 3) (deffoo delta 4)",
+        )
+        .unwrap();
+        let yielded: Vec<(Kind, String, usize)> = compile_named_any_from_forms(
+            forms,
+            |h: &str| match h {
+                "deffoo" => Some((Kind::Foo, "deffoo")),
+                "defbar" => Some((Kind::Bar, "defbar")),
+                _ => None,
+            },
+            |kind, name, args| -> Result<(Kind, String, usize)> {
+                Ok((kind, name.to_string(), args.len()))
+            },
+        )
+        .expect("fresh-expander named-classifier dispatch must succeed");
+        assert_eq!(
+            yielded,
+            vec![
+                (Kind::Foo, "alpha".into(), 1),
+                (Kind::Bar, "beta".into(), 1),
+                (Kind::Foo, "delta".into(), 1),
+            ],
+            "must yield (decoded, NAME, args_len) in source order, skipping defbaz",
+        );
+    }
+
+    #[test]
+    fn compile_named_any_skips_non_matching_forms_without_invoking_project() {
+        // Pin the soft-projection contract: the projection MUST NOT run on
+        // any form whose head the classifier rejects. A deliberately-
+        // panicking projection across a mix of non-matching shapes
+        // (atom, list with unrecognized symbol head, list with int head)
+        // survives the walk because the classifier rejects every form
+        // first.
+        use super::compile_named_any;
+        let src = r#":kw "str" 42 (unrecognized x) (5 y)"#;
+        let yielded: Vec<()> = compile_named_any(
+            src,
+            |h: &str| match h {
+                "deffoo" => Some(((), "deffoo")),
+                _ => None,
+            },
+            |(), _name, _args| -> Result<()> {
+                panic!(
+                    "projection must NOT run on classifier-rejected forms — soft-projection contract"
+                )
+            },
+        )
+        .expect("fresh-expander named-classifier dispatch must succeed when zero forms match");
+        assert!(yielded.is_empty());
+    }
+
+    #[test]
+    fn compile_named_any_emits_named_form_missing_name_through_classifier_keyword() {
+        // `(deffoo)` — head matches the classifier (yielding the typed
+        // witness AND the classifier-supplied static keyword), but the
+        // NAME slot is missing. `split_name_slot`'s arity gate fires and
+        // emits `NamedFormMissingName { keyword: "deffoo" }`. Pin that
+        // the keyword threaded through is the CLASSIFIER-supplied keyword
+        // (NOT a hardcoded fallback) — a regression that drifted the
+        // keyword binding from `decode`'s tuple's second element to a
+        // constant string would fail loudly here.
+        use super::compile_named_any;
+        let err = compile_named_any::<(), _, _, ()>(
+            "(deffoo)",
+            |h: &str| (h == "deffoo").then_some(((), "deffoo")),
+            |(), _name, _args| -> Result<()> { Ok(()) },
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, LispError::NamedFormMissingName { keyword: "deffoo" }),
+            "expected NamedFormMissingName {{ keyword: \"deffoo\" }}, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn compile_named_any_emits_named_form_non_symbol_name_through_classifier_keyword() {
+        // `(deffoo 42)` — head matches and the NAME-slot arity gate
+        // passes, but the NAME slot's shape gate rejects the int. Pin
+        // that BOTH the classifier-supplied keyword AND the typed
+        // `SexpShape::Int` projection flow into the structural variant.
+        use super::compile_named_any;
+        let err = compile_named_any::<(), _, _, ()>(
+            "(deffoo 42)",
+            |h: &str| (h == "deffoo").then_some(((), "deffoo")),
+            |(), _name, _args| -> Result<()> { Ok(()) },
+        )
+        .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormNonSymbolName {
+                    keyword: "deffoo",
+                    got: SexpShape::Int,
+                }
+            ),
+            "expected NamedFormNonSymbolName {{ keyword: \"deffoo\", got: Int }}, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn compile_named_any_routes_through_from_forms_under_delegation() {
+        // Pin the from-source-delegates-to-from-forms identity at the
+        // free-function boundary: feeding pre-parsed forms through
+        // `compile_named_any_from_forms` yields the byte-identical
+        // `Vec<R>` that `compile_named_any` yields on the source those
+        // forms came from. Both routes thread through `Expander::new()`
+        // + the SAME named-classifier primitive on `Expander`.
+        use super::{compile_named_any, compile_named_any_from_forms};
+        let src = "(deffoo alpha 1) (deffoo beta 2)";
+        let forms = crate::reader::read(src).unwrap();
+        let via_source: Vec<(String, usize)> = compile_named_any(
+            src,
+            |h: &str| (h == "deffoo").then_some(((), "deffoo")),
+            |(), name, args| -> Result<(String, usize)> { Ok((name.to_string(), args.len())) },
+        )
+        .expect("from-source must succeed");
+        let via_forms: Vec<(String, usize)> = compile_named_any_from_forms(
+            forms,
+            |h: &str| (h == "deffoo").then_some(((), "deffoo")),
+            |(), name, args| -> Result<(String, usize)> { Ok((name.to_string(), args.len())) },
+        )
+        .expect("from-forms must succeed");
+        assert_eq!(
+            via_source, via_forms,
+            "from-source routes through from-forms under delegation — outputs must be byte-identical",
+        );
+    }
+
+    #[test]
+    fn compile_named_any_expands_defmacro_in_source_before_classifier_runs() {
+        // Pin the `expand_program → classifier` ordering at the
+        // fresh-expander free-function boundary: a `(defmacro emit-foo
+        // …)` in the source absorbs into the fresh expander, then macro
+        // calls expand into `(deffoo NAME …)`, and the classifier sees
+        // the POST-expansion `deffoo` head. A regression that swapped
+        // the ordering (classifier-before-expand) would skip the macro
+        // calls entirely because their pre-expansion head is `emit-foo`,
+        // NOT `deffoo`.
+        use super::compile_named_any;
+        let src = "(defmacro emit-foo (n) `(deffoo ,n 1)) (emit-foo alpha) (emit-foo beta)";
+        let yielded: Vec<String> = compile_named_any(
+            src,
+            |h: &str| (h == "deffoo").then_some(((), "deffoo")),
+            |(), name, _args| -> Result<String> { Ok(name.to_string()) },
+        )
+        .expect("classifier must see post-expansion deffoo heads");
+        assert_eq!(
+            yielded,
+            vec!["alpha".to_string(), "beta".into()],
+            "classifier must run after macro expansion — both (emit-foo …) calls lower to (deffoo …)",
+        );
+    }
+
+    #[test]
+    fn compile_named_constant_keyword_dispatch_routes_through_compile_named_any_via_classifier_composition(
+    ) {
+        // Pin the closed-form composition law binding the constant-
+        // `T::KEYWORD` named cell to the typed-decoded named-classifier
+        // cell at the fresh-expander free-function boundary:
+        // `compile_named::<T>(src)` IS `compile_named_any(src, |h| (h
+        // == T::KEYWORD).then_some(((), T::KEYWORD)), |(), name,
+        // spec_args| { let spec = T::compile_from_args(spec_args)?;
+        // Ok(NamedDefinition { name: name.to_string(), spec }) })`.
+        // Pinning the identity here makes the typed-decoded named-
+        // classifier primitive the CANONICAL composition point the
+        // constant-keyword sibling routes through — parallel to how
+        // `compile_typed_constant_keyword_dispatch_routes_through_compile_typed_any_via_classifier_composition`
+        // pins the same law on the bare-kwargs axis.
+        use super::{compile_named, compile_named_any, NamedDefinition};
+        let src = r#"(defcompiler alpha-compiler :name "x" :dialect "standard")
+                     (foo not-our-keyword)
+                     (defcompiler beta-compiler  :name "y" :dialect "standard")"#;
+        let via_named = compile_named::<CompilerSpec>(src).expect("compile_named must succeed");
+        let via_any: Vec<NamedDefinition<CompilerSpec>> = compile_named_any(
+            src,
+            |h: &str| (h == CompilerSpec::KEYWORD).then_some(((), CompilerSpec::KEYWORD)),
+            |(), name, spec_args| {
+                let spec = CompilerSpec::compile_from_args(spec_args)?;
+                Ok(NamedDefinition {
+                    name: name.to_string(),
+                    spec,
+                })
+            },
+        )
+        .expect("compile_named_any with constant-keyword classifier must succeed");
+        assert_eq!(via_named.len(), 2);
+        assert_eq!(via_named.len(), via_any.len());
+        assert_eq!(via_named[0].name, via_any[0].name);
+        assert_eq!(via_named[0].name, "alpha-compiler");
+        assert_eq!(via_named[0].spec.name, via_any[0].spec.name);
+        assert_eq!(via_named[1].name, via_any[1].name);
+        assert_eq!(via_named[1].name, "beta-compiler");
     }
 }

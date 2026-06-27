@@ -632,6 +632,92 @@ impl RealizedCompiler {
         self.cloned_preloaded()
             .expand_and_collect_calls_to_any(forms, decode, project)
     }
+
+    /// Read + macroexpand + named-classifier-walk `src` through THIS
+    /// `RealizedCompiler`'s preloaded macro library — the preloaded-
+    /// expander posture of [`crate::compile_named_any`], sibling of
+    /// [`Self::compile_typed_any`] (the typed-decoded bare-kwargs
+    /// classifier) and of [`Self::compile_named`] (the constant-
+    /// `T::KEYWORD` named dispatcher).
+    ///
+    /// Closes the typed-dispatcher cube on the `RealizedCompiler`
+    /// boundary at the (preloaded × from-source × typed-decoded
+    /// classifier × named NAME-then-kwargs) corner. Each cell of the
+    /// cube routes through [`Self::cloned_preloaded`] + the matching
+    /// [`Expander`] primitive — constant-keyword cells through
+    /// [`Expander::expand_{,source_}to_{typed,named}`]; typed-decoded
+    /// classifier cells through
+    /// [`Expander::expand_{,source_}and_collect_{calls,named_calls}_to_any`].
+    /// The constant-keyword column is the typed CONSEQUENCE of the
+    /// classifier column: a `compile_named::<T>(src)` call composes
+    /// `compile_named_any(src, |h| (h ==
+    /// T::KEYWORD).then_some(((), T::KEYWORD)), |(), name, spec_args|
+    /// { let spec = T::compile_from_args(spec_args)?; Ok(NamedDefinition {
+    /// name: name.to_string(), spec }) })`.
+    ///
+    /// Decoder signature `FnMut(&str) -> Option<(T, &'static str)>`
+    /// pairs the typed witness `T` with the canonical static keyword
+    /// threaded through the `NamedFormMissingName.keyword` /
+    /// `NamedFormNonSymbolName.keyword` slots of the named-form gate.
+    /// Projection signature `FnMut(T, &str, &[Sexp]) -> Result<R>`
+    /// receives the typed witness ALONGSIDE the BORROWED NAME slot
+    /// AND the spec args tail. Per-call posture mirrors
+    /// [`Self::compile_named`]: the preloaded expander is cloned per
+    /// call so the cache (`Arc<Mutex<HashMap>>`) is shared via Arc
+    /// while per-call `defmacro` absorption stays local to the clone.
+    ///
+    /// Two plausible future consumer shapes the preloaded named-
+    /// classifier dispatcher admits with no boilerplate: a
+    /// `tatara-check` runtime dispatcher that walks every typed
+    /// `(defX NAME …)` form in a source buffer dispatched through
+    /// the active compiler's preloaded library, decoded by a runtime
+    /// registry; an LSP that walks every typed-domain named form in
+    /// a partial AST cache against the active compiler's preloaded
+    /// `:macros` library, decoded to its typed kind PAIRED with its
+    /// canonical static keyword.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the (preloaded × from-source × typed-decoded-classifier ×
+    /// named) cell is bound in ONE place rather than re-derived
+    /// inline at every preloaded from-source named-classifier
+    /// consumer's call site. THEORY.md §V.1 — knowable platform; the
+    /// preloaded named-classifier dispatch becomes a NAMED primitive
+    /// on the `RealizedCompiler` surface. THEORY.md §II.1 invariant 2
+    /// — free middle; every cell of the (preloaded × {from-forms,
+    /// from-source} × {constant, classifier} × {bare-kwargs, named})
+    /// cube routes through ONE composition point.
+    pub fn compile_named_any<R, F, D, T>(&self, src: &str, decode: D, project: F) -> Result<Vec<R>>
+    where
+        D: FnMut(&str) -> Option<(T, &'static str)>,
+        F: FnMut(T, &str, &[Sexp]) -> Result<R>,
+    {
+        self.compile_named_any_from_forms(crate::reader::read(src)?, decode, project)
+    }
+
+    /// Macroexpand + named-classifier-walk a pre-parsed program
+    /// through THIS `RealizedCompiler`'s preloaded macro library —
+    /// the from-forms posture of [`Self::compile_named_any`].
+    ///
+    /// Routes through [`Expander::expand_and_collect_named_calls_to_any`]
+    /// on a clone of the preloaded expander. Sibling of
+    /// [`Self::compile_named_any`] (from-source) and of
+    /// [`Self::compile_typed_any_from_forms`] (from-forms × bare-
+    /// kwargs typed-decoded classifier).
+    ///
+    /// Theory anchor: same as [`Self::compile_named_any`].
+    pub fn compile_named_any_from_forms<R, F, D, T>(
+        &self,
+        forms: Vec<Sexp>,
+        decode: D,
+        project: F,
+    ) -> Result<Vec<R>>
+    where
+        D: FnMut(&str) -> Option<(T, &'static str)>,
+        F: FnMut(T, &str, &[Sexp]) -> Result<R>,
+    {
+        self.cloned_preloaded()
+            .expand_and_collect_named_calls_to_any(forms, decode, project)
+    }
 }
 
 /// Realize a `CompilerSpec` in memory.
@@ -2246,5 +2332,207 @@ mod tests {
             )
             .expect("trivial-rejecting classifier must yield empty Vec on any source");
         assert!(yielded.is_empty());
+    }
+
+    // ── RealizedCompiler::compile_named_any{,_from_forms} ──────────────
+    //
+    // Preloaded-expander sibling of `compile_named_any{,_from_forms}`
+    // (the fresh-expander free functions). Closes the typed-dispatcher
+    // cube on the `RealizedCompiler` boundary at the (typed-decoded
+    // classifier × named NAME-then-kwargs) corner. Each cell routes
+    // through `cloned_preloaded()` + the matching named-classifier
+    // Expander primitive (ae2a3c3).
+
+    #[test]
+    fn realized_compiler_compile_named_any_from_forms_yields_decoded_triple_in_source_order() {
+        // Pin the typed-decoded yield shape against a closed-set
+        // classifier over a pre-parsed `Vec<Sexp>` through an empty-
+        // preloaded `RealizedCompiler`. The classifier-decoded yield
+        // walks every matching named call form in source order,
+        // threading the typed witness ALONGSIDE the BORROWED NAME slot
+        // AND the args tail through the projection.
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        enum Kind {
+            Foo,
+            Bar,
+        }
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let forms =
+            read("(deffoo alpha 1) (defbaz gamma 2) (defbar beta 3) (deffoo delta 4)").unwrap();
+        let yielded: Vec<(Kind, String, usize)> = parent
+            .compile_named_any_from_forms(
+                forms,
+                |h: &str| match h {
+                    "deffoo" => Some((Kind::Foo, "deffoo")),
+                    "defbar" => Some((Kind::Bar, "defbar")),
+                    _ => None,
+                },
+                |kind, name, args| -> Result<(Kind, String, usize)> {
+                    Ok((kind, name.to_string(), args.len()))
+                },
+            )
+            .expect("preloaded named-classifier dispatch must succeed");
+        assert_eq!(
+            yielded,
+            vec![
+                (Kind::Foo, "alpha".into(), 1),
+                (Kind::Bar, "beta".into(), 1),
+                (Kind::Foo, "delta".into(), 1),
+            ],
+            "must yield (decoded, NAME, args_len) in source order, skipping defbaz",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_named_any_routes_preloaded_macros_into_named_dispatch() {
+        // The compounding property of the preloaded named-classifier
+        // dispatcher: the SAME method works against a preloaded macro
+        // library whose `:macros` slot contains a `defmacro` that
+        // lowers to a named `(deffoo NAME …)` form. The preloaded
+        // expander absorbs the macro at realization time; the per-call
+        // dispatch sees post-expansion `deffoo` heads regardless of
+        // whether the source typed those heads directly or invoked the
+        // preloaded macro. Sibling of
+        // `realized_compiler_compile_named_routes_preloaded_macros_into_named_dispatch`
+        // for the typed-decoded classifier column.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec!["(defmacro emit-foo (n) `(deffoo ,n 1))".into()],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let yielded: Vec<String> = parent
+            .compile_named_any(
+                "(emit-foo alpha) (emit-foo beta)",
+                |h: &str| (h == "deffoo").then_some(((), "deffoo")),
+                |(), name, _args| -> Result<String> { Ok(name.to_string()) },
+            )
+            .expect("preloaded macro library must dispatch through named classifier");
+        assert_eq!(
+            yielded,
+            vec!["alpha".to_string(), "beta".into()],
+            "preloaded (emit-foo NAME) macro must lower to (deffoo NAME 1) — classifier sees post-expansion heads",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_named_any_emits_named_form_missing_name_through_classifier_keyword(
+    ) {
+        // Pin the named-form structural rejection chain end-to-end
+        // through the preloaded named-classifier dispatcher: `(deffoo)`
+        // matches the classifier but has no NAME slot, so the arity
+        // gate inside `split_name_slot` fires and emits
+        // `NamedFormMissingName { keyword: "deffoo" }`. The keyword
+        // threaded through is the CLASSIFIER-supplied keyword, NOT a
+        // hardcoded fallback.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let err = parent
+            .compile_named_any::<(), _, _, ()>(
+                "(deffoo)",
+                |h: &str| (h == "deffoo").then_some(((), "deffoo")),
+                |(), _name, _args| -> Result<()> { Ok(()) },
+            )
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::NamedFormMissingName {
+                    keyword: "deffoo",
+                }
+            ),
+            "expected NamedFormMissingName {{ keyword: \"deffoo\" }} through preloaded named classifier, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_named_any_routes_through_from_forms_under_delegation() {
+        // Pin the from-source-delegates-to-from-forms identity at the
+        // `RealizedCompiler` boundary: feeding pre-parsed forms through
+        // `compile_named_any_from_forms` yields the byte-identical
+        // `Vec<R>` that `compile_named_any` yields on the source those
+        // forms came from. Both routes thread through
+        // `self.cloned_preloaded()` + the SAME named-classifier
+        // primitive on `Expander`.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let src = "(deffoo alpha 1) (deffoo beta 2)";
+        let via_source: Vec<(String, usize)> = parent
+            .compile_named_any(
+                src,
+                |h: &str| (h == "deffoo").then_some(((), "deffoo")),
+                |(), name, args| -> Result<(String, usize)> { Ok((name.to_string(), args.len())) },
+            )
+            .expect("from-source must succeed");
+        let forms = read(src).unwrap();
+        let via_forms: Vec<(String, usize)> = parent
+            .compile_named_any_from_forms(
+                forms,
+                |h: &str| (h == "deffoo").then_some(((), "deffoo")),
+                |(), name, args| -> Result<(String, usize)> { Ok((name.to_string(), args.len())) },
+            )
+            .expect("from-forms must succeed");
+        assert_eq!(
+            via_source, via_forms,
+            "from-source routes through from-forms under delegation — outputs must be byte-identical",
+        );
+    }
+
+    #[test]
+    fn realized_compiler_compile_named_any_short_circuits_at_reader_error_before_clone() {
+        // Pin the read-then-clone-then-classifier-then-project ordering
+        // with BOTH decoder and projection explicitly panicking — any
+        // post-reader execution fires the panic. An unbalanced open
+        // paren is rejected at the reader boundary before the preloaded
+        // expander is cloned and before the classifier walk begins.
+        let parent = realize_in_memory(CompilerSpec {
+            name: "parent".into(),
+            dialect: "standard".into(),
+            macros: vec![],
+            domains: vec![],
+            optimization: "tree-walk".into(),
+            description: None,
+        })
+        .unwrap();
+        let err = parent
+            .compile_named_any::<(), _, _, ()>(
+                "(deffoo alpha",
+                |_h: &str| -> Option<((), &'static str)> {
+                    panic!("classifier must NOT run when reader rejects source")
+                },
+                |(), _name, _args| -> Result<()> {
+                    panic!("projection must NOT run when reader rejects source")
+                },
+            )
+            .unwrap_err();
+        assert!(
+            matches!(err, LispError::UnmatchedOpenParen { .. }),
+            "expected LispError::UnmatchedOpenParen short-circuit, got: {err:?}",
+        );
     }
 }

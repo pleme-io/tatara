@@ -49,8 +49,9 @@ pub use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
 pub use ast::{iter_calls_to, Atom, AtomKind, QuoteForm, Sexp, UnknownAtomKind, UnknownQuoteForm};
 pub use closed_set::{assert_closed_set_well_formed, ClosedSet};
 pub use compile::{
-    compile_named, compile_named_from_forms, compile_typed, compile_typed_any,
-    compile_typed_any_from_forms, compile_typed_from_forms, split_name_slot, NamedDefinition,
+    compile_named, compile_named_any, compile_named_any_from_forms, compile_named_from_forms,
+    compile_typed, compile_typed_any, compile_typed_any_from_forms, compile_typed_from_forms,
+    split_name_slot, NamedDefinition,
 };
 pub use diagnostic::{format_diagnostic, line_col, LineCol};
 pub use env::Env;

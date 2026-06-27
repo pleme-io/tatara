@@ -616,6 +616,67 @@ impl Atom {
             _ => None,
         }
     }
+
+    /// Soft projection onto the *symbol-or-string* union — `Some(&str)` iff
+    /// this is a [`Self::Symbol`] variant OR a [`Self::Str`] variant, `None`
+    /// for every other atomic kind (`Keyword`, `Int`, `Float`, `Bool`).
+    /// The atomic-payload peer of [`Sexp::as_symbol_or_string`] —
+    /// disjunctive composition of [`Self::as_symbol`] + [`Self::as_string`]
+    /// at the typed [`Atom`] algebra rather than at the [`Sexp`] consumer
+    /// layer where the union previously composed two distinct
+    /// [`Sexp::as_atom`] traversals.
+    ///
+    /// Sibling soft-projection peer of the six per-variant projections
+    /// ([`Self::as_symbol`], [`Self::as_keyword`], [`Self::as_string`],
+    /// [`Self::as_int`], [`Self::as_float`], [`Self::as_bool`]) — this
+    /// union projection completes the soft-decomposition family on the
+    /// closed-set [`Atom`] algebra by naming the (Symbol ⊎ Str) union
+    /// the substrate's named-form NAME gate ([`crate::compile::split_name_slot`]
+    /// via [`Sexp::as_symbol_or_string`]) keys on. Both NAME-author
+    /// surfaces (`(defcompiler my-name …)` — bare symbol; `(defcompiler
+    /// "my-name" …)` — quoted string) project to `Some("my-name")`
+    /// through one method on the algebra.
+    ///
+    /// Composition law binding it to [`Sexp::as_symbol_or_string`]: for
+    /// every [`Sexp`] `s`,
+    /// `s.as_symbol_or_string() == s.as_atom().and_then(Atom::as_symbol_or_string)`
+    /// — the same structural-lift composition pattern [`Sexp::as_symbol`]
+    /// / [`Sexp::as_keyword`] / [`Sexp::as_string`] / [`Sexp::as_int`] /
+    /// [`Sexp::as_bool`] route through on the six per-variant axis.
+    /// Lifts the `self.as_symbol().or_else(|| self.as_string())`
+    /// disjunctive composition at [`Sexp::as_symbol_or_string`]'s body
+    /// (TWO `Sexp::as_atom` traversals pre-lift) onto ONE typed-algebra
+    /// projection the `Sexp` consumer routes through via the structural
+    /// lift [`Sexp::as_atom`] (ONE `Sexp::as_atom` traversal post-lift).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Symbol ⊎ Str) union projection now binds at ONE method on the
+    /// closed-set [`Atom`] algebra regardless of which consumer reaches
+    /// in. THEORY.md §VI.1 — generation over composition; the
+    /// disjunctive `as_symbol().or_else(|| as_string())` composition at
+    /// [`Sexp::as_symbol_or_string`]'s body collapses onto a SINGLE
+    /// structural lift through [`Sexp::as_atom`] + the algebra-level
+    /// union projection, eliminating the double-traversal redundancy
+    /// the pre-lift consumer-layer composition carried. THEORY.md §V.1
+    /// — knowable platform; the (Symbol-or-Str) NAME-slot union becomes
+    /// a TYPE projection on the substrate algebra rather than a
+    /// disjunctive composition at every NAME-gate consumer.
+    ///
+    /// Frontier inspiration: Racket's `(or/c symbol? string?)`
+    /// contract — a typed disjunctive predicate the consumer binds to
+    /// in one place rather than re-deriving the disjunction at every
+    /// callsite; [`Self::as_symbol_or_string`] is the substrate's
+    /// unstructured-Rust peer with the typed projection (`Option<&str>`)
+    /// surfacing the underlying payload alongside the predicate face.
+    /// MLIR's `mlir::dyn_cast<StringLike>(attr)` — typed soft-downcast
+    /// onto a closed-set attribute union; [`Self::as_symbol_or_string`]
+    /// is the substrate's [`Atom`]-algebra peer for the
+    /// (Symbol ⊎ Str) union, with `Option<&str>` standing in for MLIR's
+    /// typed downcast result.
+    #[must_use]
+    pub fn as_symbol_or_string(&self) -> Option<&str> {
+        self.as_symbol().or_else(|| self.as_string())
+    }
 }
 
 /// Closed-set typed discriminator for the six [`Atom`] payload variants —
@@ -1666,8 +1727,24 @@ impl Sexp {
         self.as_atom().and_then(Atom::as_bool)
     }
     /// `foo` or `"foo"` — useful for names that may be authored either way.
+    ///
+    /// Structural-lift composition: routes through [`Sexp::as_atom`] + the
+    /// algebra-level [`Atom::as_symbol_or_string`] union projection — the
+    /// same `as_atom().and_then(Atom::as_X)` composition pattern
+    /// [`Sexp::as_symbol`] / [`Sexp::as_keyword`] / [`Sexp::as_string`] /
+    /// [`Sexp::as_int`] / [`Sexp::as_bool`] route through on the
+    /// per-variant axis. Lifts the disjunctive
+    /// `self.as_symbol().or_else(|| self.as_string())` composition at this
+    /// site's pre-lift body (TWO `Sexp::as_atom` traversals — one per
+    /// per-variant projection) onto ONE typed-algebra union projection
+    /// reached via ONE `Sexp::as_atom` traversal.
+    ///
+    /// Composition law: `s.as_symbol_or_string() == s.as_atom().and_then(Atom::as_symbol_or_string)`
+    /// for every [`Sexp`] `s`. See [`Atom::as_symbol_or_string`] for the
+    /// algebra-level peer's docstring (per-variant family completion +
+    /// theory grounding).
     pub fn as_symbol_or_string(&self) -> Option<&str> {
-        self.as_symbol().or_else(|| self.as_string())
+        self.as_atom().and_then(Atom::as_symbol_or_string)
     }
 
     /// The symbol in operator position — `Some(s)` iff this is a non-empty
@@ -7602,6 +7679,225 @@ mod tests {
                 None,
                 "Atom::as_bool must reject non-Bool variant {kind:?}",
             );
+        }
+    }
+
+    #[test]
+    fn atom_as_symbol_or_string_returns_payload_iff_symbol_or_str_variant() {
+        // UNION-PROJECTION CONTRACT: `Atom::as_symbol_or_string` projects
+        // BOTH `Atom::Symbol(s)` AND `Atom::Str(s)` to `Some(s)` and every
+        // other atomic kind (`Keyword`, `Int`, `Float`, `Bool`) to `None`.
+        // The disjunctive composition `as_symbol().or_else(||
+        // as_string())` lives at ONE typed-algebra projection on the
+        // closed-set `Atom` algebra; pre-lift the composition lived at
+        // `Sexp::as_symbol_or_string`'s consumer body and traversed
+        // `Sexp::as_atom` TWICE (once per per-variant projection),
+        // post-lift it traverses `Sexp::as_atom` ONCE through the
+        // algebra-level union projection. Pin the algebra-level contract
+        // sweep so a regression that drifts ONE union arm (e.g. drops the
+        // `Str` arm, accidentally widens to accept `Keyword`) surfaces
+        // structurally.
+        assert_eq!(
+            Atom::Symbol("my-name".into()).as_symbol_or_string(),
+            Some("my-name"),
+            "Atom::as_symbol_or_string must accept Atom::Symbol",
+        );
+        assert_eq!(
+            Atom::Str("my-name".into()).as_symbol_or_string(),
+            Some("my-name"),
+            "Atom::as_symbol_or_string must accept Atom::Str",
+        );
+        // Empty payloads project through too — the union projection
+        // is keyed on variant identity, not payload contents.
+        assert_eq!(
+            Atom::Symbol(String::new()).as_symbol_or_string(),
+            Some(""),
+            "Atom::as_symbol_or_string must accept empty Symbol payload",
+        );
+        assert_eq!(
+            Atom::Str(String::new()).as_symbol_or_string(),
+            Some(""),
+            "Atom::as_symbol_or_string must accept empty Str payload",
+        );
+        // Negative sweep: the four non-Symbol-non-Str variants reject.
+        for kind in [
+            AtomKind::Keyword,
+            AtomKind::Int,
+            AtomKind::Float,
+            AtomKind::Bool,
+        ] {
+            let probe: Atom = match kind {
+                AtomKind::Keyword => Atom::Keyword("kw".into()),
+                AtomKind::Int => Atom::Int(42),
+                AtomKind::Float => Atom::Float(1.5),
+                AtomKind::Bool => Atom::Bool(true),
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                probe.as_symbol_or_string(),
+                None,
+                "Atom::as_symbol_or_string must reject non-Symbol-non-Str variant {kind:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_as_symbol_or_string_borrow_ptr_eq_payload() {
+        // BORROW-LIFETIME CONTRACT: the yielded `&str` borrows the inner
+        // `String` payload's `&str` view verbatim — no copy, no
+        // allocation, no `to_string()` round-trip. Pin via `ptr::eq` on
+        // both projection sides (Symbol arm AND Str arm) so a regression
+        // that re-inlines the union as `match self { Symbol(s) =>
+        // Some(s.clone().as_str()), … }` (a `String::clone` reborrow that
+        // changes the byte-identity) surfaces structurally. Same posture
+        // as `as_call_to_args_borrow_is_same_pointer_as_as_call_tail` on
+        // the call-form algebra.
+        let sym = Atom::Symbol("my-name".into());
+        let projected = sym.as_symbol_or_string().expect("Symbol arm projects");
+        match &sym {
+            Atom::Symbol(s) => assert!(
+                std::ptr::eq(projected.as_ptr(), s.as_ptr()),
+                "Atom::as_symbol_or_string must borrow Atom::Symbol payload verbatim",
+            ),
+            _ => unreachable!(),
+        }
+        let str_atom = Atom::Str("my-name".into());
+        let projected_str = str_atom.as_symbol_or_string().expect("Str arm projects");
+        match &str_atom {
+            Atom::Str(s) => assert!(
+                std::ptr::eq(projected_str.as_ptr(), s.as_ptr()),
+                "Atom::as_symbol_or_string must borrow Atom::Str payload verbatim",
+            ),
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn atom_as_symbol_or_string_is_the_disjunction_of_as_symbol_and_as_string() {
+        // COMPOSITION LAW: pin that the union projection's value AGREES
+        // byte-for-byte with the explicit disjunctive composition
+        // `as_symbol().or_else(|| as_string())` across every atom kind.
+        // A regression that drifts the union from its disjunctive
+        // composition (e.g. swaps the `or_else` order so an
+        // `Atom::Symbol` somehow routes through the `Str` arm first, or
+        // adds a phantom arm that accepts `Keyword` payloads) surfaces
+        // here. Same posture as `is_kwargs_list` composing through
+        // `as_list ∘ atom_as_keyword`.
+        for atom in [
+            Atom::Symbol("foo".into()),
+            Atom::Keyword("kw".into()),
+            Atom::Str("body".into()),
+            Atom::Int(42),
+            Atom::Float(1.5),
+            Atom::Bool(true),
+            Atom::Bool(false),
+            Atom::Symbol(String::new()),
+            Atom::Str(String::new()),
+        ] {
+            let by_hand = atom.as_symbol().or_else(|| atom.as_string());
+            assert_eq!(
+                atom.as_symbol_or_string(),
+                by_hand,
+                "Atom::as_symbol_or_string drifted from as_symbol().or_else(|| as_string()) for {atom:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_symbol_or_string_routes_through_atom_as_symbol_or_string_via_as_atom_composition() {
+        // CONSUMER-LAYER COMPOSITION LAW: pin that `Sexp::as_symbol_or_string`
+        // routes through the structural lift `Sexp::as_atom` + the
+        // algebra-level `Atom::as_symbol_or_string` union projection —
+        // a regression that re-inlines the pre-lift body
+        // `self.as_symbol().or_else(|| self.as_string())` (TWO
+        // `Sexp::as_atom` traversals) at the `Sexp` consumer layer
+        // becomes detectable here. Sweeps every reachable outer shape so
+        // the closed-form composition is pinned across Nil + every Atom
+        // variant + every quote-family wrapper + List + the Sexp::Atom
+        // arms a regression could route to.
+        let cases = [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::symbol(""),
+            Sexp::string("body"),
+            Sexp::string(""),
+            Sexp::keyword("kw"),
+            Sexp::int(7),
+            Sexp::float(2.5),
+            Sexp::boolean(true),
+            Sexp::Quote(Box::new(Sexp::symbol("x"))),
+            Sexp::Quasiquote(Box::new(Sexp::symbol("x"))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("x"))),
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::List(vec![]),
+        ];
+        for s in &cases {
+            let by_composition = s.as_atom().and_then(Atom::as_symbol_or_string);
+            assert_eq!(
+                s.as_symbol_or_string(),
+                by_composition,
+                "Sexp::as_symbol_or_string drifted from as_atom().and_then(Atom::as_symbol_or_string) for {s}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_symbol_or_string_yields_none_for_non_atom_outer_shapes() {
+        // OUTER-SHAPE NEGATIVE SWEEP: pin that every non-Atom outer
+        // shape (`Nil`, `List`, every quote-family wrapper) projects to
+        // `None` — the structural-lift `Sexp::as_atom` rejects them at
+        // the outer match before the union projection even runs. Pins
+        // the soft-projection face: the named-form NAME gate
+        // (`crate::compile::split_name_slot`'s `as_symbol_or_string`
+        // consumer at compile.rs:671) sees `None` for these shapes and
+        // emits `NamedFormNonSymbolName` with the projected `SexpShape`
+        // — the lift preserves the same rejection arm boundary.
+        for outer in [
+            Sexp::Nil,
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::List(vec![]),
+            Sexp::Quote(Box::new(Sexp::symbol("x"))),
+            Sexp::Quasiquote(Box::new(Sexp::symbol("x"))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("x"))),
+        ] {
+            assert_eq!(
+                outer.as_symbol_or_string(),
+                None,
+                "Sexp::as_symbol_or_string must reject non-Atom outer shape {outer:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_symbol_or_string_borrow_ptr_eq_atom_payload() {
+        // BORROW-LIFETIME CONTRACT: the yielded `&str` borrows the inner
+        // `Atom::Symbol` / `Atom::Str` payload verbatim — no copy, no
+        // allocation, same lifetime as the outer `&Sexp`. Pin via
+        // `ptr::eq` on both projection sides so a regression that
+        // re-inlines the union as a `String`-allocating reborrow (e.g.
+        // `.map(|s| s.to_owned())` somewhere along the chain) surfaces
+        // structurally. Sibling pin to
+        // `atom_as_symbol_or_string_borrow_ptr_eq_payload` at the outer
+        // (`&Sexp`) layer rather than the inner (`&Atom`) layer.
+        let sym_sexp = Sexp::symbol("my-name");
+        let projected = sym_sexp.as_symbol_or_string().expect("Symbol arm projects");
+        match &sym_sexp {
+            Sexp::Atom(Atom::Symbol(s)) => assert!(
+                std::ptr::eq(projected.as_ptr(), s.as_ptr()),
+                "Sexp::as_symbol_or_string must borrow Atom::Symbol payload verbatim",
+            ),
+            _ => unreachable!(),
+        }
+        let str_sexp = Sexp::string("my-name");
+        let projected_str = str_sexp.as_symbol_or_string().expect("Str arm projects");
+        match &str_sexp {
+            Sexp::Atom(Atom::Str(s)) => assert!(
+                std::ptr::eq(projected_str.as_ptr(), s.as_ptr()),
+                "Sexp::as_symbol_or_string must borrow Atom::Str payload verbatim",
+            ),
+            _ => unreachable!(),
         }
     }
 

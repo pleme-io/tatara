@@ -1878,6 +1878,216 @@ impl Sexp {
         decode(head).map(|d| (d, args))
     }
 
+    /// Decompose a named call form (a `(<keyword> NAME :k v …)` shape) whose
+    /// head decodes through a caller-supplied classifier — `Some(Ok((decoded,
+    /// name, spec_args)))` iff this is a non-empty list whose first element
+    /// is a symbol AND `decode(head)` returns `Some((decoded, kw))` AND the
+    /// remaining elements split cleanly into a NAME slot (symbol or string
+    /// at position 1) and a spec args tail (position 2..), `Some(Err(…))` iff
+    /// the head decodes but the NAME slot is missing
+    /// ([`LispError::NamedFormMissingName`]) or non-symbol-or-string
+    /// ([`LispError::NamedFormNonSymbolName`]), `None` for every shape
+    /// [`Sexp::as_call_to_any`] rejects AND for every call whose head is
+    /// present but `decode` returns `None` for.
+    ///
+    /// This is the *per-form named-classifier projection* — the per-form
+    /// peer of [`iter_named_calls_to_any`] on the slice algebra and of
+    /// [`crate::macro_expand::Expander::expand_and_collect_named_calls_to_any`]
+    /// on the expander surface. Closes the (per-form × classifier × named)
+    /// corner of the soft-dispatch cube the substrate's per-form algebra
+    /// (`as_call_to{,_any}`) and slice algebra (`iter_calls_to{,_any}`,
+    /// `iter_named_calls_to{,_any}`) collectively shape — pre-lift the cube
+    /// at the per-form × named corner was "(composed inline at each named
+    /// consumer)" (the documented gap the cube table inside
+    /// [`iter_named_calls_to_any`] called out), post-lift the per-form ×
+    /// named row binds to ONE primitive every per-form named consumer
+    /// composes through:
+    ///
+    /// |                | bare-kwargs                  | named NAME-then-kwargs               |
+    /// |----------------|------------------------------|--------------------------------------|
+    /// | per-form       | [`Sexp::as_call_to_any`]     | `as_named_call_to_any` (this)        |
+    /// | slice          | [`iter_calls_to_any`]        | [`iter_named_calls_to_any`]          |
+    /// | expander       | `expand_and_collect_calls_to_any` | `expand_and_collect_named_calls_to_any` |
+    ///
+    /// The slice-side [`iter_named_calls_to_any`] now routes through THIS
+    /// per-form primitive via the SAME `forms.iter().filter_map(_)`
+    /// skeleton [`iter_calls_to_any`] uses to route through
+    /// [`Sexp::as_call_to_any`], so a regression that drifts ONE row's
+    /// instrumentation, span-aware borrow walker, or fused-iterator
+    /// invariant from the bare row to the named row (or vice versa) is
+    /// structurally impossible.
+    ///
+    /// Composes [`Sexp::as_call_to_any`] with
+    /// [`crate::compile::split_name_slot`]: the classifier filter precedes
+    /// the named gate, mirroring how `split_name_slot` is composed AFTER
+    /// the classifier-decoded args tail is already in hand inside
+    /// [`iter_named_calls_to_any`]. Decoder signature `FnOnce(&str) ->
+    /// Option<(T, &'static str)>` pairs the typed witness `T` with the
+    /// canonical static keyword threaded through the
+    /// `NamedFormMissingName.keyword` / `NamedFormNonSymbolName.keyword`
+    /// slots of the named-form gate — the `&'static` constraint pins the
+    /// same compile-time discipline [`crate::compile::split_name_slot`]'s
+    /// `keyword: &'static str` parameter pins at the slice-side boundary,
+    /// AND that the slice-side decoder signature pins on the slice
+    /// algebra.
+    ///
+    /// Three-arm result shape — `Option<Result<…>>` — preserves both the
+    /// classifier filter face (`None` for "not our head, skip silently",
+    /// matching the per-form soft-projection posture of every other `as_*`
+    /// method on `Sexp`) AND the named gate face (`Err` for "matched head
+    /// but malformed NAME", surfacing the typed structural-rejection
+    /// variants `LispError::NamedFormMissingName` /
+    /// `LispError::NamedFormNonSymbolName` the slice-side and expander-
+    /// surface consumers already short-circuit on). A consumer that wants
+    /// "fold over every per-form result, short-circuiting on the first
+    /// malformed NAME" composes `.transpose()` (yielding
+    /// `Result<Option<…>>`) and `?`-routes the outer `Result`; a consumer
+    /// that wants "skip every non-matching form AND every malformed
+    /// matched form" composes `.and_then(|res| res.ok())` (yielding
+    /// `Option<(T, &str, &[Sexp])>`); a consumer that wants the raw
+    /// three-arm shape pattern-matches directly.
+    ///
+    /// Two plausible future consumer shapes the per-form named-classifier
+    /// projection admits with no boilerplate:
+    ///   * **LSP hover tooltip** — an authoring tool that surfaces a
+    ///     tooltip on the symbol under the cursor wants to ask "is THIS
+    ///     form (the one I just resolved to under the cursor) a named
+    ///     call to any registered domain, decoded to a typed kind, with
+    ///     the borrowed NAME slot extracted for the tooltip body?". Pre-
+    ///     lift the tool would re-derive `form.as_call_to_any(decode)
+    ///     .and_then(|((kind, kw), args)| split_name_slot(args,
+    ///     kw).ok().map(|(name, rest)| (kind, name, rest)))` inline;
+    ///     post-lift the tool binds to ONE primitive.
+    ///   * **REPL single-form dispatcher** — a `:dispatch <classifier>
+    ///     <form>` command that walks a single form through the
+    ///     registry classifier, reporting the typed kind AND the NAME
+    ///     slot (for "you said `(defmonitor my-monitor …)`, I see
+    ///     `Monitor` named `my-monitor` with 3 spec args"). Pre-lift
+    ///     the REPL would re-derive the same inline composition; post-
+    ///     lift the REPL binds to ONE primitive, sibling shape to how
+    ///     [`Sexp::as_call_to_any`] backs the slice-side dispatcher
+    ///     [`iter_calls_to_any`].
+    ///
+    /// Structural identity binding it to its siblings:
+    ///   * `as_named_call_to_any(decode) == as_call_to_any(decode).map(|((d, kw), args)| split_name_slot(args, kw).map(|(name, rest)| (d, name, rest)))`
+    ///   * `as_named_call_to(k) == as_named_call_to_any(|h| (h == k).then_some(((), k))).map(|res| res.map(|(_, name, rest)| (name, rest)))`
+    ///   * `as_named_call_to_any(decode).is_none() == as_call_to_any(decode).is_none()` (the classifier filter face is identical to the bare-kwargs sibling's)
+    ///
+    /// The returned `&str` NAME slot and `&[Sexp]` spec args tail borrow
+    /// from `&self` verbatim — no copy, no allocation, same lifetime as
+    /// [`Sexp::as_call_to_any`]'s tail AND [`crate::compile::split_name_slot`]'s
+    /// pair. `T` is owned because the underlying [`Sexp::as_call_to_any`]
+    /// classifier is `FnOnce(&str) -> Option<(T, &'static str)>` and `T`
+    /// must outlive the helper boundary; consumers projecting to a typed
+    /// `Copy` enum (e.g. a closed-set `Kind`) get the value directly,
+    /// consumers projecting to a borrowed `&'static str` (a closed-set
+    /// head sourced from `ClosedSet::ALL.label()`) project to `&'static
+    /// str` and inherit the static lifetime through the classifier.
+    ///
+    /// Soft face on the classifier filter, strict face on the named gate:
+    /// "is this a named call whose head decodes through `F`, and what
+    /// are its NAME and spec args?" yielding `None` for "not our head"
+    /// (skip / fall through, no diagnostic) AND `Some(Err(…))` for "our
+    /// head but malformed NAME" (reject loudly, structural variant). The
+    /// soft-classifier-then-strict-named composition matches the
+    /// slice-side `iter_named_calls_to_any` yielded `Result` shape (with
+    /// non-matching forms skipped by the iterator filter) and the
+    /// expander-surface `expand_and_collect_named_calls_to_any` collect
+    /// shape (with `Result::collect` short-circuiting on the first
+    /// malformed NAME) — every layer of the cube preserves both faces.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// per-form × classifier × named cell of the soft-dispatch cube is a
+    /// CONSEQUENCE of [`Sexp::as_call_to_any`] + [`crate::compile::split_name_slot`],
+    /// named on the substrate's `Sexp` algebra rather than re-derived
+    /// inline at every per-form named consumer site. THEORY.md §V.1 —
+    /// knowable platform; the per-form named-classifier projection
+    /// becomes a NAMED primitive on the `Sexp` algebra, discoverable by
+    /// any future authoring tool (LSP, REPL, `tatara-check`) that holds
+    /// a single form in isolation. THEORY.md §II.1 invariant 2 — free
+    /// middle; the slice-side sibling [`iter_named_calls_to_any`] now
+    /// routes through this per-form primitive via the same
+    /// `forms.iter().filter_map(_)` skeleton the bare-kwargs row uses
+    /// to route through [`Sexp::as_call_to_any`], so the bare and named
+    /// rows share ONE filter-and-fuse implementation skeleton on the
+    /// `Sexp`/`&[Sexp]` algebras.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::dyn_cast<NamedOpInterface>(op)`
+    /// — the typed downcast from a polymorphic IR node onto a NAMED-op
+    /// interface that exposes both the typed witness AND the
+    /// symbol-name accessor is the MLIR idiom; `as_named_call_to_any` is
+    /// the unstructured-Rust peer on the substrate's `Sexp` algebra,
+    /// with `Option<Result<(T, &str, &[Sexp])>>` standing in for MLIR's
+    /// typed-downcast-then-name-accessor pair, and the `Result` face
+    /// carrying the typed structural rejection MLIR encodes via verifier
+    /// diagnostics. Racket's `syntax-parse` `~or* ((~datum defX) name:id
+    /// arg ...) ((~datum defY) name:id arg ...)` on a single syntax
+    /// object — typed named-form decomposition with `name:id` capture
+    /// binding is the Racket idiom; this method is the per-form
+    /// Rust-typed peer with the typed structural rejection
+    /// (`NamedFormMissingName` / `NamedFormNonSymbolName`) preserved
+    /// across the boundary.
+    pub fn as_named_call_to_any<F, T>(
+        &self,
+        decode: F,
+    ) -> Option<crate::error::Result<(T, &str, &[Sexp])>>
+    where
+        F: FnOnce(&str) -> Option<(T, &'static str)>,
+    {
+        self.as_call_to_any(decode).map(|((decoded, kw), args)| {
+            let (name, spec_args) = crate::compile::split_name_slot(args, kw)?;
+            Ok((decoded, name, spec_args))
+        })
+    }
+
+    /// Decompose a named call form whose head matches a constant
+    /// `keyword` — `Some(Ok((name, spec_args)))` iff this is a non-empty
+    /// list whose first element is the symbol `keyword` AND the remaining
+    /// elements split cleanly into a NAME slot and a spec args tail,
+    /// `Some(Err(…))` iff the head matches but the NAME slot is missing
+    /// or non-symbol-or-string, `None` for every shape
+    /// [`Sexp::as_call_to`] rejects.
+    ///
+    /// Constant-keyword sibling of [`Sexp::as_named_call_to_any`] and
+    /// per-form sibling of [`iter_named_calls_to`] on the slice algebra.
+    /// Routes through the typed-decoded sibling with a constant-classifier
+    /// decoder (`|h| (h == keyword).then_some(((), keyword))`) — the same
+    /// constant-classifier composition [`Sexp::as_call_to`] uses to route
+    /// through [`Sexp::as_call_to_any`] on the bare-kwargs axis, and that
+    /// [`iter_named_calls_to`] uses to route through
+    /// [`iter_named_calls_to_any`] on the slice algebra. The discarded
+    /// `()` typed witness (`then_some(((), keyword))`) is consumed by the
+    /// wrapper projection so the consumer's per-form mapper sees only the
+    /// `(name, spec_args)` borrowed pair, matching the bare projection
+    /// signature on the named axis.
+    ///
+    /// `keyword: &'static str` threads verbatim through the
+    /// `NamedFormMissingName.keyword` / `NamedFormNonSymbolName.keyword`
+    /// slots of the named-form gate — same `&'static` discipline
+    /// [`crate::compile::split_name_slot`] pins at its boundary, AND that
+    /// [`iter_named_calls_to`] pins on the slice algebra. Consumers that
+    /// want a runtime keyword whose lifetime is shorter use
+    /// [`Sexp::as_named_call_to_any`] directly with a constant-classifier
+    /// decoder that converts post-resolution.
+    ///
+    /// Structural identity binding it to its siblings:
+    ///   * `as_named_call_to(k) == as_named_call_to_any(|h| (h == k).then_some(((), k))).map(|res| res.map(|(_, name, rest)| (name, rest)))`
+    ///   * `as_named_call_to(k).is_none() == as_call_to(k).is_none()`
+    ///   * `iter_named_calls_to(forms, k) == forms.iter().filter_map(|f| f.as_named_call_to(k))`
+    ///
+    /// Theory anchor: see [`Sexp::as_named_call_to_any`] — the constant-
+    /// keyword sibling shares the same lift posture, threading the
+    /// `&'static str` keyword constraint through the named-form gate's
+    /// canonical-keyword slot rather than admitting an arbitrary runtime
+    /// keyword.
+    pub fn as_named_call_to(
+        &self,
+        keyword: &'static str,
+    ) -> Option<crate::error::Result<(&str, &[Sexp])>> {
+        self.as_named_call_to_any(move |h| (h == keyword).then_some(((), keyword)))
+            .map(|res| res.map(|(_, name, rest)| (name, rest)))
+    }
+
     /// Decompose an unquote-family form into its typed marker and inner
     /// expression — `Some((UnquoteForm::Unquote, inner))` iff this is `,x`
     /// (a [`Sexp::Unquote`] wrapper), `Some((UnquoteForm::Splice, inner))`
@@ -2951,7 +3161,7 @@ where
 ///
 /// |                | bare-kwargs              | named NAME-then-kwargs                           |
 /// |----------------|--------------------------|--------------------------------------------------|
-/// | per-form       | [`Sexp::as_call_to_any`] | (composed inline at each named consumer)         |
+/// | per-form       | [`Sexp::as_call_to_any`] | [`Sexp::as_named_call_to_any`]                   |
 /// | slice          | [`iter_calls_to_any`]    | `iter_named_calls_to_any` (this)                 |
 /// | expander       | `expand_and_collect_calls_to_any` | `expand_and_collect_named_calls_to_any`  |
 ///
@@ -3055,10 +3265,9 @@ where
     F: FnMut(&str) -> Option<(T, &'static str)> + 'a,
     T: 'a,
 {
-    iter_calls_to_any(forms, move |h| decode(h)).map(|((decoded, kw), args)| {
-        let (name, spec_args) = crate::compile::split_name_slot(args, kw)?;
-        Ok((decoded, name, spec_args))
-    })
+    forms
+        .iter()
+        .filter_map(move |f| f.as_named_call_to_any(&mut decode))
 }
 
 /// Iterate over the `Result<(NAME, spec_args)>` pairs of every form in
@@ -4838,6 +5047,269 @@ mod tests {
         assert!(
             std::ptr::eq(spec_args.as_ptr(), &form_list[2] as *const Sexp),
             "iter_named_calls_to_any must yield the borrowed spec args tail, NOT an allocated copy"
+        );
+        assert_eq!(spec_args.len(), 4);
+    }
+
+    // ── as_named_call_to_any / as_named_call_to: per-form × named cell ──
+    //
+    // The per-form × named corner of the soft-dispatch cube the slice
+    // primitive `iter_named_calls_to_any`'s docstring table identified as
+    // the documented gap pre-lift ("(composed inline at each named
+    // consumer)"). Post-lift the per-form × named row binds to ONE
+    // primitive every per-form named consumer composes through, and the
+    // slice-side `iter_named_calls_to_any` routes through it via the SAME
+    // `forms.iter().filter_map(_)` skeleton `iter_calls_to_any` uses to
+    // route through `as_call_to_any`. These tests pin: (a) the three-arm
+    // result shape (None for non-match, Some(Ok) for matched-and-
+    // well-formed, Some(Err) for matched-but-malformed-NAME) across each
+    // distinct shape, (b) the constant-keyword sibling routes through
+    // the typed-decoded sibling via constant-classifier composition, (c)
+    // the slice-side `iter_named_calls_to_any` IS the
+    // `forms.iter().filter_map(|f| f.as_named_call_to_any(_))` projection
+    // — the structural identity binding the per-form to the slice row.
+
+    #[test]
+    fn as_named_call_to_any_returns_decoded_triple_for_matched_well_formed_form() {
+        // `(deffoo my-name :k 1)` — head matches the classifier's `deffoo`
+        // arm, NAME slot is the symbol `my-name`, spec args tail is the
+        // two-element `:k 1` pair. Pin Some(Ok((decoded, name, args))).
+        // Fail-before-pass-after: this assert requires the per-form
+        // method to exist AND to thread the typed witness + borrowed
+        // NAME + borrowed spec args through ONE projection.
+        #[derive(Debug, PartialEq, Eq)]
+        enum Kind {
+            Foo,
+        }
+        let form = crate::reader::read("(deffoo my-name :k 1)").unwrap()[0].clone();
+        let res = form
+            .as_named_call_to_any(|h: &str| match h {
+                "deffoo" => Some((Kind::Foo, "deffoo")),
+                _ => None,
+            })
+            .expect("matched head must yield Some(_)")
+            .expect("well-formed NAME slot must split");
+        assert_eq!(res.0, Kind::Foo);
+        assert_eq!(res.1, "my-name");
+        assert_eq!(res.2.len(), 2);
+    }
+
+    #[test]
+    fn as_named_call_to_any_returns_none_when_decoder_rejects_head() {
+        // `(unrelated my-name :k 1)` — head is a symbol, but the
+        // classifier returns `None`. Pin: the classifier filter face is
+        // identical to `as_call_to_any` — `None` short-circuits BEFORE
+        // the named gate runs, so a non-matching head with a malformed
+        // NAME slot still yields `None`, NOT `Some(Err)`. The soft-
+        // filter face is preserved across the cube row.
+        let form = crate::reader::read("(unrelated my-name :k 1)").unwrap()[0].clone();
+        assert!(form
+            .as_named_call_to_any(|h: &str| (h == "deffoo").then_some(((), "deffoo")))
+            .is_none());
+    }
+
+    #[test]
+    fn as_named_call_to_any_returns_none_for_non_call_shapes() {
+        // Every shape `as_call_to_any` rejects, `as_named_call_to_any`
+        // rejects identically — atom, keyword, empty list, list with
+        // non-symbol head. The classifier-filter face is uniformly the
+        // soft per-form posture of every other `as_*` method on `Sexp`.
+        let shapes: Vec<Sexp> = vec![
+            Sexp::int(5),
+            Sexp::keyword("deffoo"),
+            Sexp::Nil,
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::int(1), Sexp::symbol("my-name")]),
+        ];
+        for s in shapes {
+            assert!(
+                s.as_named_call_to_any(|h: &str| (h == "deffoo").then_some(((), "deffoo")))
+                    .is_none(),
+                "non-call shape must yield None for as_named_call_to_any: {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn as_named_call_to_any_returns_some_err_for_matched_head_with_no_name_slot() {
+        // `(deffoo)` — head matches the classifier's `deffoo` arm but
+        // the form is a singleton: NO NAME slot at all. The named gate
+        // (`split_name_slot`'s arity gate) fires structurally, yielding
+        // `Some(Err(LispError::NamedFormMissingName { keyword: "deffoo" }))`.
+        // Pin the strict-gate face on the named row: matched-and-
+        // malformed yields the typed structural rejection variant, NOT
+        // `None` (which would conflate "not our head" with "our head
+        // but missing NAME" and break the cube's strict-vs-soft split).
+        let form = crate::reader::read("(deffoo)").unwrap()[0].clone();
+        let err = form
+            .as_named_call_to_any(|h: &str| (h == "deffoo").then_some(((), "deffoo")))
+            .expect("matched head must yield Some(_)")
+            .expect_err("missing NAME slot must yield Err");
+        assert!(
+            matches!(
+                err,
+                crate::error::LispError::NamedFormMissingName { keyword: "deffoo" }
+            ),
+            "expected NamedFormMissingName through per-form primitive, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn as_named_call_to_any_returns_some_err_for_matched_head_with_non_symbol_name() {
+        // `(deffoo 5 :k 1)` — head matches but NAME slot is an int
+        // literal. The named gate's `as_symbol_or_string` shape gate
+        // fires, yielding `Some(Err(LispError::NamedFormNonSymbolName
+        // { keyword: "deffoo", got: SexpShape::Int }))`. Pin the strict-
+        // gate face for the second structural rejection variant of the
+        // named gate AND the typed `SexpShape` projection of the
+        // offending slot.
+        let form = crate::reader::read("(deffoo 5 :k 1)").unwrap()[0].clone();
+        let err = form
+            .as_named_call_to_any(|h: &str| (h == "deffoo").then_some(((), "deffoo")))
+            .expect("matched head must yield Some(_)")
+            .expect_err("non-symbol NAME slot must yield Err");
+        assert!(
+            matches!(
+                err,
+                crate::error::LispError::NamedFormNonSymbolName {
+                    keyword: "deffoo",
+                    got: crate::error::SexpShape::Int,
+                }
+            ),
+            "expected NamedFormNonSymbolName through per-form primitive, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn as_named_call_to_constant_keyword_routes_through_as_named_call_to_any() {
+        // Pin the closed-form composition binding the constant-keyword
+        // sibling to the typed-decoded sibling:
+        //   as_named_call_to(k) ==
+        //     as_named_call_to_any(|h| (h == k).then_some(((), k)))
+        //       .map(|res| res.map(|(_, name, rest)| (name, rest)))
+        // across every shape in the test fixture set. A regression
+        // that re-implements the constant-keyword sibling without
+        // routing through the classifier sibling fails this assertion
+        // for the matched-and-well-formed AND matched-but-malformed
+        // AND non-match arms simultaneously.
+        let shapes: Vec<Sexp> = vec![
+            crate::reader::read("(defcompiler my-comp :a 1)").unwrap()[0].clone(),
+            crate::reader::read("(defcompiler)").unwrap()[0].clone(),
+            crate::reader::read("(defcompiler 5)").unwrap()[0].clone(),
+            crate::reader::read("(unrelated my-name :k 1)").unwrap()[0].clone(),
+            Sexp::int(99),
+            Sexp::List(vec![]),
+        ];
+        // `LispError` is not `PartialEq` (it transitively wraps `Sexp`,
+        // which carries an `Atom::Float` whose `f64` is not `Eq`).
+        // Compare via formatted-debug strings on the Err arm; Ok arms and
+        // None arm compare structurally. The closed-form composition
+        // `as_named_call_to(k) == as_named_call_to_any+unit-decoder` is
+        // pinned across all three arms.
+        for s in &shapes {
+            let via_constant = s.as_named_call_to("defcompiler").map(|res| {
+                res.map(|(name, rest)| (name.to_string(), rest.len()))
+                    .map_err(|e| format!("{e:?}"))
+            });
+            let via_classifier = s
+                .as_named_call_to_any(|h: &str| (h == "defcompiler").then_some(((), "defcompiler")))
+                .map(|res| {
+                    res.map(|(_, name, rest)| (name.to_string(), rest.len()))
+                        .map_err(|e| format!("{e:?}"))
+                });
+            assert_eq!(
+                via_constant, via_classifier,
+                "as_named_call_to(k) must equal as_named_call_to_any+unit-decoder for {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn iter_named_calls_to_any_is_the_slice_side_filter_map_of_as_named_call_to_any() {
+        // Pin the structural identity binding the slice algebra to the
+        // per-form algebra:
+        //   iter_named_calls_to_any(forms, decode) ==
+        //     forms.iter().filter_map(|f| f.as_named_call_to_any(&mut decode))
+        // Both sides must yield the SAME Result shape per element in
+        // source order — `Ok(triple)` for matched-and-well-formed,
+        // `Err(LispError)` for matched-but-malformed, with non-matches
+        // skipped by the filter_map. Sibling pin to
+        // `iter_calls_to_any_is_the_slice_side_projection_of_as_call_to_any`
+        // on the bare-kwargs row — both rows now share ONE
+        // `forms.iter().filter_map(_)` skeleton.
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        enum Kind {
+            Foo,
+            Bar,
+        }
+        let src = "(deffoo a :k 1)
+                   (other thing)
+                   (defbar 7 :j 2)
+                   (deffoo b)
+                   (defbaz c :m 3)";
+        let forms = crate::reader::read(src).unwrap();
+        let decode = |h: &str| match h {
+            "deffoo" => Some((Kind::Foo, "deffoo")),
+            "defbar" => Some((Kind::Bar, "defbar")),
+            _ => None,
+        };
+        let via_iter: Vec<crate::error::Result<(Kind, String, usize)>> =
+            super::iter_named_calls_to_any(&forms, decode)
+                .map(|res| res.map(|(k, name, args)| (k, name.to_string(), args.len())))
+                .collect();
+        let via_filter_map: Vec<crate::error::Result<(Kind, String, usize)>> = forms
+            .iter()
+            .filter_map(|f| f.as_named_call_to_any(decode))
+            .map(|res| res.map(|(k, name, args)| (k, name.to_string(), args.len())))
+            .collect();
+        assert_eq!(
+            via_iter.len(),
+            via_filter_map.len(),
+            "slice-side iter must yield the same number of items as the per-form filter_map",
+        );
+        for (a, b) in via_iter.iter().zip(via_filter_map.iter()) {
+            match (a, b) {
+                (Ok(ta), Ok(tb)) => assert_eq!(ta, tb),
+                (Err(ea), Err(eb)) => assert_eq!(format!("{ea:?}"), format!("{eb:?}")),
+                _ => panic!(
+                    "variant drift between slice iter and per-form filter_map: {a:?} vs {b:?}"
+                ),
+            }
+        }
+        // Concretely: 3 matched forms (deffoo a, defbar 7, deffoo b);
+        // `defbar 7` yields Err (int NAME), other two yield Ok.
+        assert_eq!(via_iter.len(), 3);
+        assert!(via_iter[0].is_ok());
+        assert!(via_iter[1].is_err());
+        assert!(via_iter[2].is_ok());
+    }
+
+    #[test]
+    fn as_named_call_to_any_borrows_name_and_spec_args_from_form_verbatim() {
+        // Pin the borrow-lifetime contract at the per-form primitive
+        // boundary: the yielded `&str` NAME slot and `&[Sexp]` spec
+        // args tail must borrow from the underlying form verbatim — no
+        // copy, no allocation. Sibling pin to
+        // `iter_named_calls_to_any_yields_borrowed_name_and_args_with_form_lifetime`
+        // on the slice algebra — both rows preserve the borrow
+        // contract.
+        let forms = crate::reader::read("(deffoo my-name :k 1 :j 2)").unwrap();
+        let form = &forms[0];
+        let (_, name, spec_args) = form
+            .as_named_call_to_any(|h: &str| (h == "deffoo").then_some(((), "deffoo")))
+            .expect("matched head must yield Some(_)")
+            .expect("well-formed NAME slot must split");
+        let form_list = form.as_list().expect("form must be a list");
+        let form_name = form_list[1]
+            .as_symbol()
+            .expect("form NAME must be a symbol");
+        assert!(
+            std::ptr::eq(name.as_ptr(), form_name.as_ptr()),
+            "as_named_call_to_any must yield the borrowed NAME, NOT an allocated copy"
+        );
+        assert!(
+            std::ptr::eq(spec_args.as_ptr(), &form_list[2] as *const Sexp),
+            "as_named_call_to_any must yield the borrowed spec args tail, NOT an allocated copy"
         );
         assert_eq!(spec_args.len(), 4);
     }

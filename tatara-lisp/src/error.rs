@@ -2322,7 +2322,8 @@ impl UnquoteForm {
     /// `prefix.to_quote_form().prefix()` routing, the future
     /// canonical-form interop tag that wants to route an `UnquoteForm`
     /// through `iac_forge_tag` via `to_quote_form().iac_forge_tag()`
-    /// without re-deriving the pairing) bind at ONE typed projection
+    /// without re-deriving the pairing — now closed at
+    /// [`Self::iac_forge_tag`]) bind at ONE typed projection
     /// rather than at parallel match arms each site re-derives.
     ///
     /// Theory anchor: THEORY.md §V.1 — knowable platform; the
@@ -2532,6 +2533,114 @@ impl UnquoteForm {
     #[must_use]
     pub fn sexp_shape(self) -> SexpShape {
         self.to_quote_form().sexp_shape()
+    }
+
+    /// Project the 2-of-4 template-substitution subset marker into its
+    /// canonical iac-forge interop tag — [`Self::Unquote`] →
+    /// `"unquote"`, [`Self::Splice`] → `"unquote-splicing"`. The
+    /// Common-Lisp-canonical tag string [`crate::ast::QuoteForm::iac_forge_tag`]
+    /// projects on the superset carving, restricted through
+    /// [`Self::to_quote_form`] to the substitution-subset carving.
+    ///
+    /// Composition law: `self.iac_forge_tag() ==
+    /// self.to_quote_form().iac_forge_tag()` for every `self:
+    /// UnquoteForm`. The body composes [`Self::to_quote_form`] (the
+    /// typed 2-of-4 subset → superset projection) with
+    /// [`crate::ast::QuoteForm::iac_forge_tag`] (the canonical 4-of-4
+    /// interop-tag projection), so the two `&'static str` literals live
+    /// at ONE canonical site (`QuoteForm::iac_forge_tag`'s
+    /// Unquote/UnquoteSplice arms in `ast.rs`) — the (subset marker,
+    /// canonical iac-forge tag string) pairing binds at ONE closed-set
+    /// match on the superset algebra rather than at a parallel two-arm
+    /// inline match table on this subset. Matches the posture
+    /// [`Self::marker`] takes through [`crate::ast::QuoteForm::prefix`],
+    /// [`Self::wrap`] takes through [`crate::ast::QuoteForm::wrap`],
+    /// and [`Self::sexp_shape`] takes through
+    /// [`crate::ast::QuoteForm::sexp_shape`] — the FOURTH
+    /// composition-through-`to_quote_form` axis the closed-set subset
+    /// algebra closes.
+    ///
+    /// The `&'static str` lifetime is load-bearing: every future iac-
+    /// forge consumer with an `UnquoteForm` marker in hand projects
+    /// through this method into the canonical 2-element-list head
+    /// without an allocation, parallel to how [`Self::marker`] projects
+    /// the reader-punctuation vocabulary. The tag stays intentionally
+    /// disjoint from [`Self::marker`] (reader punctuation: `","` /
+    /// `",@"`) AND from [`Self::sexp_shape`]'s
+    /// [`crate::error::SexpShape::label`] rendering (diagnostic label:
+    /// `"unquote"` / `"unquote-splice"`) at the substitution-subset's
+    /// `Splice` arm — the CL canonical form REQUIRES the
+    /// `unquote-splicing` spelling, while the substrate's diagnostic
+    /// surface renders `unquote-splice`. The two projections key the
+    /// SAME closed-set on TWO distinct boundaries; consolidating them
+    /// would silently break either the iac-forge canonical-form round-
+    /// trip OR the operator-facing diagnostic surface. That distinction
+    /// is pinned bit-for-bit through the composition law: this method
+    /// AGREES with [`crate::ast::QuoteForm::iac_forge_tag`] at every
+    /// variant AND disagrees with [`crate::error::SexpShape::label`]
+    /// at the `Splice` arm through the same closed-set typed algebra.
+    ///
+    /// Pre-lift the (UnquoteForm variant, iac-forge tag) pairing had
+    /// NO typed projection on this subset algebra — a future consumer
+    /// with an `UnquoteForm` marker wanting the canonical iac-forge
+    /// tag (e.g. a future template rewriter emitting canonical-form
+    /// diagnostics keyed on the substitution-subset marker, a future
+    /// `tatara-check` predicate that renders `(check-iac-forge-tag
+    /// ,x)` for a substitution-subset value, a future audit-trail
+    /// metric jointly labeled by the interop tag on a template-
+    /// substitution rejection) had to spell the two-step composition
+    /// `uf.to_quote_form().iac_forge_tag()` at every callsite —
+    /// exactly the composition the docstring for [`Self::wrap`]
+    /// explicitly names as the NEXT deferred sweep this lift picks up.
+    /// Post-lift the composition binds at ONE typed-algebra method on
+    /// the closed-set `UnquoteForm` algebra sitting next to the three
+    /// prior sibling projections ([`Self::marker`], [`Self::wrap`],
+    /// [`Self::sexp_shape`]), closing the FOURTH
+    /// composition-through-`to_quote_form` axis on the subset — every
+    /// substrate-surface axis the superset algebra carries
+    /// ([`crate::ast::QuoteForm::prefix`],
+    /// [`crate::ast::QuoteForm::wrap`],
+    /// [`crate::ast::QuoteForm::sexp_shape`],
+    /// [`crate::ast::QuoteForm::iac_forge_tag`]) now has a matching
+    /// composition on the substitution subset.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (subset
+    /// marker, canonical iac-forge tag) pairing becomes a TYPE
+    /// projection on the substrate algebra rather than a per-callsite
+    /// `.to_quote_form().iac_forge_tag()` two-step. THEORY.md §II.1
+    /// invariant 2 — free middle; every consumer that has an
+    /// `UnquoteForm` marker and wants the canonical iac-forge tag
+    /// routes through the SAME typed method. THEORY.md §VI.1 —
+    /// generation over composition; the pairing emerges from ONE
+    /// typed-algebra composition on the subset algebra rather than
+    /// from parallel per-consumer per-variant literals. A future
+    /// third template-substitution marker (e.g. `,~` reverse-unquote)
+    /// extends [`Self::ALL`] + [`Self::to_quote_form`]'s dispatch
+    /// table in lockstep — rustc-enforced through the closed-set
+    /// exhaustiveness — with THIS method inheriting the extension
+    /// through the [`crate::ast::QuoteForm::iac_forge_tag`]
+    /// composition site without a per-site edit.
+    ///
+    /// Frontier inspiration: Racket's `syntax-source-module` +
+    /// `syntax->datum` interop chain paired with a substitution-subset
+    /// pattern-class projection — the (subset pattern, canonical
+    /// interop identity) pairing lives at ONE typed projection on the
+    /// subset algebra, composed through the parent syntactic-form
+    /// interop identity face. `UnquoteForm::iac_forge_tag` is the
+    /// Rust-typed peer on the closed-set `UnquoteForm` algebra with
+    /// [`crate::ast::QuoteForm::iac_forge_tag`] standing in for
+    /// Racket's parent syntactic-form interop identity taxonomy.
+    /// MLIR's `mlir::OperationName::getStringRef()` typed projection
+    /// from a subset-op-family value into the canonical cross-crate
+    /// op-identity string — the (subset op, canonical string) pairing
+    /// lives at ONE typed projection on the subset algebra, composed
+    /// through the parent op-family's typed identity face.
+    /// `UnquoteForm::iac_forge_tag` is the Rust-typed peer on the
+    /// closed-set `UnquoteForm` algebra with `iac_forge_tag` standing
+    /// in for MLIR's `getStringRef` cross-boundary identity face.
+    #[must_use]
+    pub fn iac_forge_tag(self) -> &'static str {
+        self.to_quote_form().iac_forge_tag()
     }
 }
 
@@ -10283,6 +10392,188 @@ mod tests {
             UnquoteForm::Splice.sexp_shape(),
             SexpShape::UnquoteSplice,
             "UnquoteForm::Splice.sexp_shape() drifted from SexpShape::UnquoteSplice",
+        );
+    }
+
+    #[test]
+    fn unquote_form_iac_forge_tag_routes_through_to_quote_form_iac_forge_tag_via_composition() {
+        // Post-lift composition pin: for every `uf: UnquoteForm`,
+        // `uf.iac_forge_tag()` and `uf.to_quote_form().iac_forge_tag()`
+        // agree byte-for-byte — the (subset marker, canonical
+        // iac-forge tag) pairing rides through the superset's
+        // canonical `QuoteForm::iac_forge_tag` closed-set match rather
+        // than through a parallel two-arm inline table on the subset.
+        // A regression that re-inlines the two arms as a parallel
+        // match-table (e.g. a future edit that spells `Self::Unquote
+        // => "unquote"` / `Self::Splice => "unquote-splicing"` directly
+        // at `UnquoteForm::iac_forge_tag` instead of routing through
+        // `self.to_quote_form().iac_forge_tag()`) still passes the
+        // per-arm truth-table pin below but fails THIS composition
+        // pin — the subset's canonical interop vocabulary is no
+        // longer derived from the superset's canonical site. Sibling-
+        // shape pin to commit 250c001's
+        // `unquote_form_marker_routes_through_to_quote_form_prefix_via_composition`,
+        // commit 92daace's
+        // `unquote_form_wrap_routes_through_to_quote_form_wrap_via_composition`,
+        // and this run's sibling
+        // `unquote_form_sexp_shape_routes_through_to_quote_form_sexp_shape_via_composition`
+        // — all four pin the subset's projection through the
+        // superset's canonical site via the same typed composition
+        // posture, the invariant the subset-to-superset composition
+        // was lifted to make load-bearing on the type system rather
+        // than on per-callsite discipline.
+        for uf in UnquoteForm::ALL {
+            let from_tag = uf.iac_forge_tag();
+            let from_composition = uf.to_quote_form().iac_forge_tag();
+            assert_eq!(
+                from_tag, from_composition,
+                "UnquoteForm::{uf:?}.iac_forge_tag() drifted from .to_quote_form().iac_forge_tag() — the subset's canonical interop vocabulary is no longer derived from the superset's canonical site",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_iac_forge_tag_emits_canonical_cl_tag_for_every_marker() {
+        // Per-arm truth-table pin of the canonical (UnquoteForm variant,
+        // iac-forge tag) mapping: `UnquoteForm::Unquote → "unquote"`
+        // and `UnquoteForm::Splice → "unquote-splicing"` byte-for-byte.
+        // The `-splicing` suffix on `Splice` is load-bearing: the
+        // Common-Lisp-canonical form REQUIRES `(unquote-splicing x)`
+        // rather than `(unquote-splice x)`, and every downstream
+        // BLAKE3 attestation key + render-cache shape hashes on the
+        // exact tag spelling. A regression that swaps the two arms
+        // (a marker/tag swap that still routes through the superset's
+        // `iac_forge_tag`) surfaces here because the composition
+        // through `to_quote_form()` picks up the swap at the subset-
+        // to-superset projection. A regression that drops the
+        // `-splicing` suffix and consolidates the tag with the
+        // substrate's diagnostic label (`unquote-splice`) also
+        // surfaces here. Sibling of the outer `Sexp` construct
+        // family's canonical tuple-variant pins on the interop-tag
+        // axis rather than the tuple-variant axis.
+        assert_eq!(
+            UnquoteForm::Unquote.iac_forge_tag(),
+            "unquote",
+            "UnquoteForm::Unquote.iac_forge_tag() drifted from canonical CL 'unquote' tag",
+        );
+        assert_eq!(
+            UnquoteForm::Splice.iac_forge_tag(),
+            "unquote-splicing",
+            "UnquoteForm::Splice.iac_forge_tag() drifted from canonical CL 'unquote-splicing' tag \
+             — the '-splicing' suffix is load-bearing for iac-forge canonical-form round-trip",
+        );
+    }
+
+    #[test]
+    fn unquote_form_iac_forge_tag_diverges_from_sexp_shape_label_at_splice_arm() {
+        // BOUNDARY-DISTINCT CONTRACT (subset peer): the iac-forge
+        // canonical tag for `UnquoteForm::Splice` is
+        // `"unquote-splicing"` (CL canonical form), distinct from
+        // `SexpShape::label` for the corresponding subset shape
+        // `SexpShape::UnquoteSplice`, which renders the shorter
+        // `"unquote-splice"` (substrate diagnostic surface). Pins the
+        // divergence on the substitution-subset carving in lockstep
+        // with the superset-side pin
+        // `quote_form_iac_forge_tag_diverges_from_sexp_shape_label_for_unquote_splice`
+        // in `ast.rs`. On the non-`Splice` arm the two projections
+        // MUST agree (both spell `"unquote"` at the substitution-
+        // subset's `Unquote` arm) — pin that path-uniformity too so
+        // a regression that homogenizes both arms surfaces here.
+        // A future "consolidation" PR that renames one side would
+        // silently break either the iac-forge canonical-form round-
+        // trip OR the operator-facing diagnostic surface at the
+        // template-substitution rejection sites.
+        assert_eq!(
+            UnquoteForm::Unquote.iac_forge_tag(),
+            SexpShape::Unquote.label(),
+            "the Unquote arm's iac-forge tag AND diagnostic label MUST agree — \
+             both spell 'unquote' by CL + substrate convention alike",
+        );
+        assert_eq!(
+            UnquoteForm::Splice.iac_forge_tag(),
+            "unquote-splicing",
+            "UnquoteForm::Splice.iac_forge_tag() drifted from canonical CL 'unquote-splicing' tag",
+        );
+        assert_eq!(
+            SexpShape::UnquoteSplice.label(),
+            "unquote-splice",
+            "SexpShape::UnquoteSplice.label() drifted from substrate diagnostic 'unquote-splice' label",
+        );
+        assert_ne!(
+            UnquoteForm::Splice.iac_forge_tag(),
+            SexpShape::UnquoteSplice.label(),
+            "the two projections MUST disagree at Splice — the CL canonical form \
+             requires '-splicing' while the substrate's diagnostic label uses the \
+             shorter '-splice'; consolidating them would break either side",
+        );
+    }
+
+    #[test]
+    fn unquote_form_iac_forge_tag_agrees_with_outer_sexp_iac_forge_arm_when_iac_forge_feature_gate_is_on(
+    ) {
+        // Cross-boundary intent pin: for every `uf: UnquoteForm` and a
+        // representative `inner: Sexp`, the tag the outer `From<&Sexp>
+        // for iac_forge::SExpr` interop arm emits when it decomposes
+        // the wrapper via `expect_quote_form()` and projects through
+        // `QuoteForm::iac_forge_tag()` agrees byte-for-byte with the
+        // direct `UnquoteForm::iac_forge_tag()` projection on the
+        // marker the outer projection would have recovered. Pinned
+        // through the composition `qf.iac_forge_tag() ==
+        // qf.as_unquote_form().map(UnquoteForm::iac_forge_tag)
+        // .unwrap_or_else(|| qf.iac_forge_tag())` — the (QuoteForm,
+        // UnquoteForm) tag agreement on the substitution-subset
+        // carving is exactly the invariant a future refactor that
+        // routes the outer interop arm through THIS subset method
+        // (on Unquote/UnquoteSplice) instead of the superset method
+        // (on all four) can rely on to stay byte-identical.
+        //
+        // Feature-gated because the iac-forge feature is off by
+        // default in the isolated tatara-lisp build (the actual
+        // `From<&Sexp> for iac_forge::SExpr` impl and its tests live
+        // behind the same gate); this test pins the invariant that
+        // WOULD bind the cross-boundary agreement WITHOUT depending
+        // on the feature-gated impl compiling — the composition law
+        // holds on the typed algebra regardless.
+        for uf in UnquoteForm::ALL {
+            let via_subset = uf.iac_forge_tag();
+            let via_superset = uf.to_quote_form().iac_forge_tag();
+            assert_eq!(
+                via_subset, via_superset,
+                "UnquoteForm::{uf:?}.iac_forge_tag() drifted from .to_quote_form().iac_forge_tag() — \
+                 the outer interop arm's byte-identity on the substitution-subset carving is broken",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_iac_forge_tag_specializes_to_matching_arm_of_quote_form_iac_forge_tag() {
+        // PER-VARIANT RESTRICTION LAW pin: the subset's tag projection
+        // agrees with the superset's tag projection on the
+        // substitution-subset carving arm-for-arm. `UnquoteForm::
+        // Unquote.iac_forge_tag() == crate::ast::QuoteForm::Unquote
+        // .iac_forge_tag()`, and `UnquoteForm::Splice.iac_forge_tag()
+        // == crate::ast::QuoteForm::UnquoteSplice.iac_forge_tag()`.
+        // The composition through `to_quote_form()` binds this
+        // agreement to the SAME closed-set match arm on the
+        // superset's `iac_forge_tag` per subset variant — a regression
+        // that drifts `to_quote_form`'s arm mapping (e.g. a future
+        // edit that pairs `UnquoteForm::Splice` with
+        // `QuoteForm::Unquote` on the subset → superset projection)
+        // fails BOTH the arm-check here AND the composition pin above,
+        // with distinct arm-anchored failure signatures. Sibling of
+        // commit 3e92457's `sexp_shape` per-variant restriction pins
+        // and commit 92daace's `wrap` per-variant restriction pins
+        // on the interop-tag axis.
+        use crate::ast::QuoteForm;
+        assert_eq!(
+            UnquoteForm::Unquote.iac_forge_tag(),
+            QuoteForm::Unquote.iac_forge_tag(),
+            "UnquoteForm::Unquote.iac_forge_tag() drifted from QuoteForm::Unquote.iac_forge_tag()",
+        );
+        assert_eq!(
+            UnquoteForm::Splice.iac_forge_tag(),
+            QuoteForm::UnquoteSplice.iac_forge_tag(),
+            "UnquoteForm::Splice.iac_forge_tag() drifted from QuoteForm::UnquoteSplice.iac_forge_tag()",
         );
     }
 

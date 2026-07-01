@@ -1224,6 +1224,114 @@ impl Sexp {
         Self::Atom(Atom::boolean(b))
     }
 
+    /// Canonical [`Self::Quote`] outer constructor — composes
+    /// [`QuoteForm::wrap`] on the [`QuoteForm::Quote`] marker so the
+    /// `Box::new(inner)` allocation + tuple-variant pair lives at ONE
+    /// site on the closed-set [`QuoteForm`] algebra rather than at
+    /// this outer-constructor body. The first of four `Self::Quote*`
+    /// outer constructors all routing through the typed
+    /// [`QuoteForm::wrap`] family at the inner algebra — the
+    /// quote-family-axis section peer of the six `Self::Atom(Atom::X(_))`
+    /// outer constructors ([`Self::symbol`], [`Self::keyword`],
+    /// [`Self::string`], [`Self::int`], [`Self::float`],
+    /// [`Self::boolean`]) all routing through the typed [`Atom`]
+    /// construct family on the atomic-payload axis. Sibling-shape lift
+    /// to the [`Self::as_quote_form`] soft-projection sibling on the
+    /// projection axis: where the projection soft-decomposes a
+    /// quote-family wrapper into `Option<(QuoteForm, &Sexp)>` (surfacing
+    /// the typed marker alongside the borrowed inner body), each of
+    /// these four typed constructors embeds a fresh inner body under
+    /// the typed marker into the matching tuple-variant wrapper.
+    ///
+    /// Composition law (forward): `Sexp::quote(inner) ==
+    /// QuoteForm::Quote.wrap(inner) == Sexp::Quote(Box::new(inner))`
+    /// for every `inner: Sexp`. Round-trip law (section-for-retraction
+    /// with the soft-projection sibling): `Sexp::quote(inner)
+    /// .as_quote_form() == Some((QuoteForm::Quote, &inner))` for every
+    /// `inner: Sexp` — the inner algebra's typed constructor pairs
+    /// section-for-retraction with the outer algebra's soft
+    /// projection, and the marker + inner body cross-projection
+    /// preserves identity. Same posture across the four sibling
+    /// pairs (`Sexp::quote` / `Sexp::quasiquote` / `Sexp::unquote` /
+    /// `Sexp::unquote_splice`).
+    ///
+    /// Pre-lift the `Self::Quote(Box::new(inner))` welded triple
+    /// (`Self::Quote`, `Box::new`, `inner`) appeared inline at every
+    /// consumer that builds a quote-family wrapper — well past the ≥2
+    /// PRIME-DIRECTIVE trigger once the structural shape is named. The
+    /// welded triple already lives at ONE site on the closed-set
+    /// [`QuoteForm::wrap`] algebra for the marker-driven consumer path;
+    /// this outer constructor binds the per-variant `Sexp::X(Box::new(
+    /// inner))` welded triple to ONE typed-algebra method per marker on
+    /// the outer [`Sexp`] algebra, so consumers that know the marker at
+    /// compile time bind to the typed method directly rather than
+    /// re-deriving the `Self::X(Box::new(_))` pair inline. A future
+    /// allocation-policy change (e.g. arena-allocated wrappers for
+    /// span-aware [`Sexp`]) lands as ONE edit at [`QuoteForm::wrap`]
+    /// (the single site the allocation composition lives) and
+    /// propagates through these four typed constructors byte-for-byte.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (QuoteForm variant, [`Sexp`] tuple-variant constructor) pairing
+    /// binds at ONE typed-algebra method per marker on the outer
+    /// [`Sexp`] algebra regardless of which consumer reaches in.
+    /// THEORY.md §VI.1 — generation over composition; the welded
+    /// `Self::X(Box::new(_))` triple at every quote-family construct
+    /// site regenerates through `QuoteForm::X.wrap(_)` composition over
+    /// the typed algebra rather than per-site re-derivation. THEORY.md
+    /// §V.1 — knowable platform; the typed-construct family becomes a
+    /// TYPE projection on the substrate's outer [`Sexp`] algebra sitting
+    /// next to the typed-project family [`Self::as_quote_form`] rather
+    /// than as bare tuple-variant constructor + per-site `Box::new`
+    /// discipline. A future fifth homoiconic prefix syntax (e.g. syntax
+    /// quotation `#'x` for hygienic macros) extends [`QuoteForm::ALL`] +
+    /// [`QuoteForm::wrap`]'s arm + this construct family in lockstep,
+    /// rustc-enforced through the closed-set exhaustiveness.
+    ///
+    /// Frontier inspiration: Racket's `(quote x)` /
+    /// `(quasiquote x)` / `(unquote x)` / `(unquote-splicing x)` typed
+    /// syntactic-form construct face paired one-for-one with the
+    /// [`Self::as_quote_form`] closed-set soft-projection sibling on
+    /// the outer syntax algebra — the typed-construct + typed-project
+    /// algebra dual is closed at one method per direction per marker
+    /// on Racket's surface, and the [`Self::quote`] /
+    /// [`Self::quasiquote`] / [`Self::unquote`] / [`Self::unquote_splice`]
+    /// family is the Rust-typed peer on the closed-set outer [`Sexp`]
+    /// algebra with [`QuoteForm::wrap`] standing in for Racket's typed
+    /// dispatch face. MLIR's `mlir::OpBuilder::create<QuoteOp>(loc,
+    /// inner)` typed-IR wrapper construction paired with
+    /// `mlir::dyn_cast<QuoteOp>(op)` on the projection face — the typed
+    /// factory + typed downcast pair the IR algebra closes over on
+    /// every wrapper op; [`Self::quote`] / [`Self::as_quote_form`] is
+    /// the Rust-typed peer on the outer [`Sexp`] algebra with the
+    /// closed-set [`QuoteForm`] standing in for MLIR's `OperationName`
+    /// taxonomy over the wrapper-op family.
+    #[must_use]
+    pub fn quote(inner: Sexp) -> Self {
+        QuoteForm::Quote.wrap(inner)
+    }
+    /// Canonical [`Self::Quasiquote`] outer constructor — composes
+    /// [`QuoteForm::wrap`] on the [`QuoteForm::Quasiquote`] marker.
+    /// See [`Self::quote`] for the outer-algebra docstring.
+    #[must_use]
+    pub fn quasiquote(inner: Sexp) -> Self {
+        QuoteForm::Quasiquote.wrap(inner)
+    }
+    /// Canonical [`Self::Unquote`] outer constructor — composes
+    /// [`QuoteForm::wrap`] on the [`QuoteForm::Unquote`] marker.
+    /// See [`Self::quote`] for the outer-algebra docstring.
+    #[must_use]
+    pub fn unquote(inner: Sexp) -> Self {
+        QuoteForm::Unquote.wrap(inner)
+    }
+    /// Canonical [`Self::UnquoteSplice`] outer constructor — composes
+    /// [`QuoteForm::wrap`] on the [`QuoteForm::UnquoteSplice`] marker.
+    /// See [`Self::quote`] for the outer-algebra docstring.
+    #[must_use]
+    pub fn unquote_splice(inner: Sexp) -> Self {
+        QuoteForm::UnquoteSplice.wrap(inner)
+    }
+
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
     }
@@ -9538,6 +9646,188 @@ mod tests {
                 a.as_bool().is_some(),
                 *built_kind == AtomKind::Bool,
                 "as_bool partition row drifted for {built_kind:?}",
+            );
+        }
+    }
+
+    // ── Sexp quote-family typed-construct algebra ────────────────────────
+    //
+    // `Sexp::quote` / `Sexp::quasiquote` / `Sexp::unquote` /
+    // `Sexp::unquote_splice` are the outer-Sexp typed-construct family for
+    // the four homoiconic prefix wrappers, section-for-retraction with the
+    // `Sexp::as_quote_form` soft-projection sibling. Each routes through
+    // `QuoteForm::X.wrap(inner)` so the (marker, `Sexp::* tuple-variant
+    // constructor + `Box::new`) welded triple lives at ONE site on the
+    // closed-set `QuoteForm` algebra. Pin FOUR structural laws:
+    //   (a) the canonical-tuple emission
+    //       `Sexp::quote(inner) == Sexp::Quote(Box::new(inner))` for
+    //       every wrapper marker — the typed constructor pairs section-
+    //       for-retraction with the tuple-variant constructor;
+    //   (b) the composition law
+    //       `Sexp::X_variant(inner) == QuoteForm::X.wrap(inner)` for
+    //       every marker — the outer typed constructor routes through
+    //       the inner-algebra `QuoteForm::wrap` typed dispatch;
+    //   (c) the round-trip law
+    //       `Sexp::X_variant(inner).as_quote_form() == Some((QuoteForm::X,
+    //       &inner))` for every marker — the (construct, soft-project)
+    //       algebra dual closes on the outer [`Sexp`] algebra with
+    //       marker + inner-body cross-projection preserved;
+    //   (d) the outer-shape pairing
+    //       `Sexp::X_variant(inner).shape() == QuoteForm::X.sexp_shape()`
+    //       for every marker — the construct family composes coherently
+    //       through the outer-shape projection on the typed-shape
+    //       lattice, so a regression that drifts ONE marker's outer-
+    //       shape pairing from `QuoteForm::sexp_shape` surfaces here.
+
+    #[test]
+    fn sexp_quote_family_constructors_emit_canonical_tuple_variant_for_every_marker() {
+        // STRUCTURAL CONSTRUCT CONTRACT: each `Sexp::X_variant`
+        // constructor emits the matching `Sexp::X(Box::new(inner))`
+        // tuple-variant value byte-for-byte. A regression that drifts
+        // ONE arm (e.g. a typo routing `Sexp::unquote(inner)` to
+        // `Sexp::UnquoteSplice(Box::new(inner))` — type-checks but
+        // silently mis-classifies every macro-template substitution
+        // authored through the algebra-level constructor) surfaces
+        // here. Sibling-shape pin to the `Atom` typed-construct
+        // family's canonical-tuple-variant test posture
+        // (`atom_typed_constructors_emit_canonical_tuple_variant_for_every_kind`).
+        let payloads = [
+            Sexp::Nil,
+            Sexp::symbol("x"),
+            Sexp::keyword("k"),
+            Sexp::string("body"),
+            Sexp::int(42),
+            Sexp::boolean(true),
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]),
+        ];
+        for inner in &payloads {
+            assert_eq!(
+                Sexp::quote(inner.clone()),
+                Sexp::Quote(Box::new(inner.clone())),
+                "Sexp::quote drifted from canonical tuple variant for {inner:?}",
+            );
+            assert_eq!(
+                Sexp::quasiquote(inner.clone()),
+                Sexp::Quasiquote(Box::new(inner.clone())),
+                "Sexp::quasiquote drifted from canonical tuple variant for {inner:?}",
+            );
+            assert_eq!(
+                Sexp::unquote(inner.clone()),
+                Sexp::Unquote(Box::new(inner.clone())),
+                "Sexp::unquote drifted from canonical tuple variant for {inner:?}",
+            );
+            assert_eq!(
+                Sexp::unquote_splice(inner.clone()),
+                Sexp::UnquoteSplice(Box::new(inner.clone())),
+                "Sexp::unquote_splice drifted from canonical tuple variant for {inner:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_quote_family_constructors_route_through_quote_form_wrap() {
+        // COMPOSITION LAW: pin that each `Sexp::X_variant` outer
+        // constructor emits `QuoteForm::X.wrap(inner)` byte-for-byte —
+        // a regression that re-inlines the pre-lift body
+        // `Self::X(Box::new(inner))` and drifts ONE arm (e.g. a future
+        // copy-edit that swaps `Sexp::quote` to route through
+        // `QuoteForm::Quasiquote` after a refactor) becomes detectable
+        // at this site. Sibling-shape pin to the `Sexp::X_atom` family's
+        // composition-through-`Atom::X` posture
+        // (`sexp_outer_constructors_route_through_atom_typed_construct_family`).
+        let inner = Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]);
+        assert_eq!(
+            Sexp::quote(inner.clone()),
+            QuoteForm::Quote.wrap(inner.clone())
+        );
+        assert_eq!(
+            Sexp::quasiquote(inner.clone()),
+            QuoteForm::Quasiquote.wrap(inner.clone()),
+        );
+        assert_eq!(
+            Sexp::unquote(inner.clone()),
+            QuoteForm::Unquote.wrap(inner.clone())
+        );
+        assert_eq!(
+            Sexp::unquote_splice(inner.clone()),
+            QuoteForm::UnquoteSplice.wrap(inner.clone()),
+        );
+    }
+
+    #[test]
+    fn sexp_quote_family_constructors_round_trip_through_as_quote_form() {
+        // ROUND-TRIP LAW (construct → soft-project): every quote-family
+        // typed constructor's output projects through `Sexp::as_quote_form`
+        // to `Some((matching QuoteForm, &inner))`. Sweeps `QuoteForm::ALL`
+        // paired with a representative inner payload — the four
+        // (construct, project) pairs form an `Iso(inner, Sexp::X(inner))`
+        // on the typed-marker axis at the outer [`Sexp`] algebra. A
+        // regression that drifts ONE marker's construct arm (marker/
+        // constructor swap) fails BOTH the marker-projection AND the
+        // inner-borrow round-trip. Sibling-shape pin to the `Atom` typed-
+        // construct family's per-variant soft-projection round-trip test
+        // posture
+        // (`atom_typed_constructors_round_trip_through_per_variant_soft_projection`).
+        let inner = Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]);
+        let constructed: [(QuoteForm, Sexp); 4] = [
+            (QuoteForm::Quote, Sexp::quote(inner.clone())),
+            (QuoteForm::Quasiquote, Sexp::quasiquote(inner.clone())),
+            (QuoteForm::Unquote, Sexp::unquote(inner.clone())),
+            (
+                QuoteForm::UnquoteSplice,
+                Sexp::unquote_splice(inner.clone()),
+            ),
+        ];
+        for qf in QuoteForm::ALL {
+            let (built_qf, sexp) = constructed
+                .iter()
+                .find(|(m, _)| *m == qf)
+                .expect("QuoteForm::ALL sweep must reach every marker");
+            assert_eq!(*built_qf, qf);
+            let (proj_qf, proj_inner) = sexp
+                .as_quote_form()
+                .unwrap_or_else(|| panic!("construct→as_quote_form drifted at {qf:?}"));
+            assert_eq!(
+                proj_qf, qf,
+                "typed-marker round-trip drifted at {qf:?} — construct+project pair broken",
+            );
+            assert_eq!(
+                proj_inner, &inner,
+                "inner-body round-trip drifted at {qf:?} — construct+project pair broken",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_quote_family_constructors_compose_with_shape_via_quote_form_sexp_shape() {
+        // OUTER-SHAPE COMPOSITION LAW: every quote-family typed
+        // constructor's output projects through `Sexp::shape` to the
+        // matching `QuoteForm::X.sexp_shape()` — the (construct,
+        // outer-shape) composition binds through the closed-set
+        // `QuoteForm::sexp_shape` embed already lifted onto the
+        // typed-shape lattice. A regression that drifts ONE construct
+        // arm's outer-shape from `QuoteForm::sexp_shape` (e.g. a future
+        // marker/wrapper swap that surfaces through the typed-shape
+        // lattice but not through the tuple-variant emission itself)
+        // surfaces here alongside the round-trip pin. Sibling-shape pin
+        // to `quote_form_sexp_shape_paired_with_as_quote_form_preserves_pre_lift_pairing_for_every_sexp`
+        // on the projection axis — this pin closes the same axis on the
+        // outer construct family.
+        let inner = Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]);
+        let constructed: [(QuoteForm, Sexp); 4] = [
+            (QuoteForm::Quote, Sexp::quote(inner.clone())),
+            (QuoteForm::Quasiquote, Sexp::quasiquote(inner.clone())),
+            (QuoteForm::Unquote, Sexp::unquote(inner.clone())),
+            (
+                QuoteForm::UnquoteSplice,
+                Sexp::unquote_splice(inner.clone()),
+            ),
+        ];
+        for (qf, sexp) in &constructed {
+            assert_eq!(
+                sexp.shape(),
+                qf.sexp_shape(),
+                "Sexp::X_variant→shape drifted from QuoteForm::sexp_shape at {qf:?}",
             );
         }
     }

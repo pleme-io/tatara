@@ -3464,6 +3464,132 @@ impl SexpShape {
         self.as_quote_form()
             .and_then(crate::ast::QuoteForm::as_unquote_form)
     }
+
+    /// Project the twelve-variant [`SexpShape`] back to its corresponding
+    /// [`StructuralKind`] iff the shape names a structural-residual
+    /// wrapper — `Nil → Some(StructuralKind::Nil)`, `List →
+    /// Some(StructuralKind::List)`, every other shape (`Symbol`,
+    /// `Keyword`, `String`, `Int`, `Float`, `Bool`, `Quote`,
+    /// `Quasiquote`, `Unquote`, `UnquoteSplice`) `None`. The 2-of-12
+    /// carving of [`SexpShape`] that the inverse
+    /// [`StructuralKind::sexp_shape`] embed projection covers — naming
+    /// the inverse closes the (embed, project) algebra dual on the
+    /// (structural-residual subset, outer-shape) algebra, THIRD sibling
+    /// of the already-closed ([`crate::ast::AtomKind::sexp_shape`],
+    /// [`Self::as_atom_kind`]) dual on the 6-of-12 atomic-payload
+    /// carving AND ([`crate::ast::QuoteForm::sexp_shape`],
+    /// [`Self::as_quote_form`]) dual on the 4-of-12 quote-family
+    /// carving.
+    ///
+    /// Closes the typed-shape lattice's partition: every `SexpShape`
+    /// projects through EXACTLY ONE of [`Self::as_atom_kind`],
+    /// [`Self::as_quote_form`], [`Self::as_structural_kind`] as
+    /// `Some(_)`, and the three carvings cover `SexpShape::ALL`
+    /// disjointly (6 + 4 + 2 = 12). The partition is total AND
+    /// disjoint on the outer-shape closed set — pre-lift the
+    /// "residual" side of the partition lived at ONE inline
+    /// `!matches!(shape, SexpShape::Nil | SexpShape::List)` assertion
+    /// inside the test-module carving-disjointness pin (the runtime
+    /// witness the substrate maintained by test discipline); post-lift
+    /// the residual is a TYPED CARVING binding at ONE typed-algebra
+    /// method, symmetric with the two already-closed carvings that own
+    /// the atomic-payload and quote-family sides of the same partition.
+    ///
+    /// Composition law (partition-total): for every `self: SexpShape`,
+    /// EXACTLY ONE of `self.as_atom_kind().is_some()`,
+    /// `self.as_quote_form().is_some()`,
+    /// `self.as_structural_kind().is_some()` is `true`. Round-trip law
+    /// (retraction on the structural-residual subset carving):
+    /// `StructuralKind::sexp_shape(sk).as_structural_kind() ==
+    /// Some(sk)` for every `sk: StructuralKind`. The two projections
+    /// together form an `Iso(StructuralKind, StructuralShape ⊂
+    /// SexpShape)`: [`Self::as_structural_kind`] is the section (every
+    /// `StructuralKind` round-trips through the embed),
+    /// [`StructuralKind::sexp_shape`] is the retraction (every
+    /// structural-residual shape pre-image recovers the typed marker).
+    ///
+    /// Disjoint with [`Self::as_atom_kind`] AND [`Self::as_quote_form`]:
+    /// for every variant in [`Self::ALL`], at most ONE of the THREE
+    /// projections returns `Some`. The structural-residual subset
+    /// (`Nil` and `List`) is the KERNEL of both the atomic-payload and
+    /// quote-family projections and is EXACTLY the IMAGE of this one —
+    /// the three projections partition [`Self::ALL`] injectively.
+    ///
+    /// Pre-lift the (SexpShape variant, StructuralKind variant) pairing
+    /// had NO typed projection at this closed-set boundary — a consumer
+    /// with a `SexpShape` in hand (a `LispError::TypeMismatch.got`
+    /// slot's outer-shape identity, a rejected shape from a typed-entry
+    /// gate) wanting to narrow to "was this rejection on the structural
+    /// residual (neither atomic nor quote-family)?" had to spell the
+    /// two-step negation `shape.as_atom_kind().is_none() &&
+    /// shape.as_quote_form().is_none()` OR the inline `matches!(shape,
+    /// SexpShape::Nil | SexpShape::List)` at the callsite. Post-lift
+    /// the composition binds at ONE typed-algebra method on the outer
+    /// [`SexpShape`] algebra, and the pair with
+    /// [`StructuralKind::sexp_shape`] closes the embed/project algebra
+    /// dual on the structural-residual carving, completing the typed-
+    /// shape lattice's third and final closed-set carving.
+    ///
+    /// Two plausible future consumers the closed-set projection admits
+    /// with no new boilerplate:
+    ///   * **`tatara-check` typed-shape filter** — a future
+    ///     `(check-shape-projects-to-structural …)` substrate primitive
+    ///     binds to this projection rather than re-deriving the 2-of-12
+    ///     carving inline or negating the two sibling projections. A
+    ///     `LispError::TypeMismatch { got: SexpShape, .. }` whose
+    ///     offending shape projects through
+    ///     `as_structural_kind() == Some(_)` is a rejection on the
+    ///     structural residual (an empty [`crate::ast::Sexp::Nil`]
+    ///     marker or a bare [`crate::ast::Sexp::List`] shape) rather
+    ///     than on an atomic-payload OR quote-family wrapper.
+    ///   * **LSP / REPL typed-shape completion** — a future authoring
+    ///     surface offering completions filtered by carving axis binds
+    ///     to `StructuralKind::ALL` for the "structural" completion
+    ///     column rather than re-deriving `Nil | List` inline.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the inverse
+    /// 2-of-12 residual carving is a TYPE projection on the substrate
+    /// algebra rather than an inline `matches!(shape, SexpShape::Nil |
+    /// SexpShape::List)` two-arm predicate. THEORY.md §II.1 invariant
+    /// 2 — free middle; the embed/project pair binds at TWO typed
+    /// sites — [`StructuralKind::sexp_shape`] for the embed,
+    /// [`Self::as_structural_kind`] for the project — completing the
+    /// third and final closed-set carving of the outer-shape algebra.
+    /// THEORY.md §VI.1 — generation over composition; the residual
+    /// 2-of-12 carving lifts to ONE typed projection AND makes the
+    /// partition-total invariant (every `SexpShape` is in EXACTLY ONE
+    /// of the three carvings) a TYPED THEOREM rather than a runtime
+    /// `matches!` assertion.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::dyn_cast<StructuralOp>(op)`
+    /// typed soft-downcast on the residual carving of a closed-set
+    /// operation union — the (op, typed identity) pairing lives at ONE
+    /// typed projection on the outer op-family algebra, sibling of the
+    /// atomic-payload and quote-family carvings' typed downcasts.
+    /// [`Self::as_structural_kind`] is the Rust-typed peer on the
+    /// [`SexpShape`] closed set, completing the three-carving partition
+    /// the substrate's typed-shape lattice carries. Racket's
+    /// `(or (null? datum) (pair? datum))` closed-form predicate on the
+    /// (nil-or-list) residual whose Rust-typed peer surfaces the typed
+    /// witness alongside the predicate verdict in ONE
+    /// `Option<StructuralKind>` projection.
+    #[must_use]
+    pub fn as_structural_kind(self) -> Option<StructuralKind> {
+        match self {
+            Self::Nil => Some(StructuralKind::Nil),
+            Self::List => Some(StructuralKind::List),
+            Self::Symbol
+            | Self::Keyword
+            | Self::String
+            | Self::Int
+            | Self::Float
+            | Self::Bool
+            | Self::Quote
+            | Self::Quasiquote
+            | Self::Unquote
+            | Self::UnquoteSplice => None,
+        }
+    }
 }
 
 // `impl std::fmt::Display for SexpShape` + `impl std::str::FromStr for
@@ -3487,6 +3613,237 @@ impl SexpShape {
 // five of seven entries) pinned by
 // `sexp_shape_label_round_trips_through_from_str` +
 // `sexp_shape_from_str_accepts_only_canonical_labels`.
+
+/// Closed-set identifier for the STRUCTURAL-RESIDUAL carving of the
+/// twelve-variant [`SexpShape`] outer-shape lattice — the 2-of-12
+/// subset that names the two outermost shapes lying outside BOTH
+/// the atomic-payload carving ([`crate::ast::AtomKind`], 6-of-12) and
+/// the quote-family carving ([`crate::ast::QuoteForm`], 4-of-12):
+/// [`crate::ast::Sexp::Nil`] (the empty-result marker projecting to
+/// [`SexpShape::Nil`]) and [`crate::ast::Sexp::List`] (the
+/// payload-bearing container projecting to [`SexpShape::List`]).
+///
+/// Third-and-final closed-set carving of [`SexpShape`], sibling of
+/// [`crate::ast::AtomKind`] (the 6-of-12 atomic-payload carving) and
+/// [`crate::ast::QuoteForm`] (the 4-of-12 quote-family carving). The
+/// three carvings partition [`SexpShape::ALL`] disjointly (6 + 4 + 2 =
+/// 12) — every outer shape is in EXACTLY ONE carving, and the
+/// partition-total invariant becomes a TYPED THEOREM through the
+/// three sibling projections
+/// ([`SexpShape::as_atom_kind`], [`SexpShape::as_quote_form`],
+/// [`SexpShape::as_structural_kind`]) rather than through a runtime
+/// `matches!(shape, SexpShape::Nil | SexpShape::List)` predicate that
+/// the substrate maintained by test discipline at the carving-
+/// disjointness pin pre-lift.
+///
+/// Mirror at the residual-carving boundary of the prior-run
+/// [`crate::ast::AtomKind`] (atomic-payload closed set),
+/// [`crate::ast::QuoteForm`] (quote-family closed set), and
+/// [`UnquoteForm`] (template-substitution subset closed set) lifts:
+/// those enums key their respective carvings on a typed identity
+/// carried inside their variant listings; this enum keys the RESIDUAL
+/// carving that lies outside all three of them on the same
+/// [`SexpShape`] outer-shape lattice, closing the three-carving
+/// partition.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; the residual
+/// carving becomes a TYPE rather than an inline
+/// `matches!(shape, SexpShape::Nil | SexpShape::List)` predicate the
+/// substrate maintained by callsite discipline. THEORY.md §VI.1 —
+/// generation over composition; the typed enum lands the structural-
+/// completeness floor for the residual outer-shape surface, parallel
+/// to how [`crate::ast::AtomKind`] lands it for the atomic-payload
+/// carving and [`crate::ast::QuoteForm`] lands it for the quote-family
+/// carving. THEORY.md §II.1 invariant 1 — typed entry; the
+/// (structural-residual identity, outer shape) pairing is first-class
+/// load-bearing data on the substrate algebra rather than a runtime
+/// negation of the two sibling carvings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, tatara_lisp_derive::ClosedSet)]
+#[closed_set(via = "label", display, generate_unknown = "structural kind")]
+pub enum StructuralKind {
+    /// `[`crate::ast::Sexp::Nil`]` — the empty-result marker projecting
+    /// to [`SexpShape::Nil`]. `"nil"` diagnostic label (byte-for-byte
+    /// identical to [`SexpShape::Nil`]'s label under the
+    /// [`Self::sexp_shape`] composition).
+    Nil,
+    /// `[`crate::ast::Sexp::List(_)`]` — the payload-bearing container
+    /// projecting to [`SexpShape::List`]. `"list"` diagnostic label
+    /// (byte-for-byte identical to [`SexpShape::List`]'s label under
+    /// the [`Self::sexp_shape`] composition).
+    List,
+}
+
+impl StructuralKind {
+    /// The closed set of two structural-residual outer shapes — single
+    /// source of truth that drives the [`Self::label`] / [`fmt::Display`]
+    /// projection AND the [`FromStr`] decode sweep keyed on
+    /// [`Self::label`]. Adding a hypothetical third structural-residual
+    /// variant (e.g. `Vector` for `#(...)` reader syntax, `Map` for
+    /// `{...}`, or `Char` for `#\x` — each of which extends
+    /// [`SexpShape::ALL`] AND joins THIS enum's residual carving iff
+    /// it lies outside BOTH the atomic-payload carving and the
+    /// quote-family carving) lands at one [`Self::ALL`] entry + one
+    /// [`Self::sexp_shape`] arm + one [`SexpShape::as_structural_kind`]
+    /// arm — exhaustively checked by the compiler (the `[Self; 2]`
+    /// array literal forces the arity) AND by the per-variant truth-
+    /// table tests below.
+    ///
+    /// Sibling closed-set lift to every other typed-shape enum the
+    /// substrate carries: this crate's own [`SexpShape::ALL`] (the
+    /// twelve reachable outer shapes — superset of this residual's
+    /// two via [`Self::sexp_shape`]), [`crate::ast::AtomKind::ALL`]
+    /// (the six atomic-payload kinds — peer 6-of-12 carving of
+    /// [`SexpShape`]), [`crate::ast::QuoteForm::ALL`] (the four
+    /// homoiconic prefix-wrappers — peer 4-of-12 carving of
+    /// [`SexpShape`]), [`UnquoteForm::ALL`] (the two template-
+    /// substitution markers — proper 2-of-4 subset of [`crate::ast::QuoteForm`]),
+    /// and the cross-crate `tatara-process` family (`ConditionKind::ALL`,
+    /// `ProcessPhase::ALL`, `ProcessSignal::ALL`, `ChannelKind::ALL`,
+    /// `IntentKind::ALL`, `LifetimeKind::ALL`, `RequestorKind::ALL`,
+    /// `ReceiptKind::ALL`, …) every one of which paired its typed
+    /// projection with `ALL` before this lift.
+    ///
+    /// Future consumers that compose against `ALL`: LSP / REPL
+    /// completion for the operator-facing rendered residual-shape
+    /// label under the "structural" carving-axis column; a future
+    /// `tatara-check` predicate `(check-shape-projects-to-structural
+    /// …)` that filters diagnostics to "was this rejection on the
+    /// structural residual (neither atomic nor quote-family)?"; any
+    /// future audit-trail metric jointly labeled by [`Self::label`]
+    /// (e.g. `tatara_lisp_structural_shape_total{shape="list"}`) —
+    /// the metric label set IS [`Self::ALL`] mapped through
+    /// [`Self::label`]; any future structural rewriter (typed analogue
+    /// of MLIR's `op.walk<StructuralOp>()`) that wants to sweep over
+    /// every residual shape in a typed sequence.
+    pub const ALL: [Self; 2] = [Self::Nil, Self::List];
+
+    /// Project the typed `StructuralKind` to the canonical `&'static
+    /// str` diagnostic label — `"nil"` for [`Self::Nil`], `"list"` for
+    /// [`Self::List`]. Each label is byte-for-byte identical to the
+    /// corresponding [`SexpShape`] variant's label — and post-lift
+    /// this agreement is STRUCTURAL rather than a two-literal-
+    /// discipline site pinned by a cross-projection test.
+    ///
+    /// Composition law: `StructuralKind::label(sk) ==
+    /// StructuralKind::sexp_shape(sk).label()` for every `sk:
+    /// StructuralKind`. Body composes [`Self::sexp_shape`] (the typed
+    /// projection lifting each StructuralKind variant into its peer
+    /// [`SexpShape`] variant) with [`SexpShape::label`] (the canonical
+    /// `&'static str` projection on the superset's twelve-variant
+    /// closed set), so the two residual-arm labels live at ONE
+    /// canonical site ([`SexpShape::label`]) rather than at TWO
+    /// ([`SexpShape::label`] AND a parallel two-arm match here).
+    ///
+    /// Same lift posture as the sibling
+    /// [`crate::ast::AtomKind::label`] ⊂ [`SexpShape::label`]
+    /// composition (via [`crate::ast::AtomKind::sexp_shape`]) and
+    /// [`UnquoteForm::marker`] ⊂ [`crate::ast::QuoteForm::prefix`]
+    /// composition (via [`UnquoteForm::to_quote_form`]): the typed
+    /// projection sits on the value, and the consumer composes
+    /// through the existing structural pairing rather than re-
+    /// deriving the per-variant literal. The `&'static str` lifetime
+    /// is load-bearing: the composition allocates nothing at runtime
+    /// ([`Self::sexp_shape`] returns a `Copy` value and
+    /// [`SexpShape::label`] yields `&'static str`).
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// StructuralKind ⊂ SexpShape label-vocabulary containment
+    /// becomes a TYPED CONSEQUENCE of the [`Self::sexp_shape`] +
+    /// [`SexpShape::label`] composition rather than literal discipline
+    /// at two sites. THEORY.md §VI.1 — generation over composition;
+    /// the two residual-arm labels live at ONE canonical site
+    /// ([`SexpShape::label`]) and this method generates its identity
+    /// through the typed-projection composition. THEORY.md §II.1
+    /// invariant 2 — free middle; consumers of the [`StructuralKind`]
+    /// algebra route through ONE typed closed-set projection family
+    /// with no per-consumer literal duplication.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        self.sexp_shape().label()
+    }
+
+    /// Project the typed marker into its matching [`SexpShape`]
+    /// variant — `Nil → SexpShape::Nil`, `List → SexpShape::List`.
+    /// ONE projection on the closed-set structural-residual algebra
+    /// that binds the (StructuralKind variant, SexpShape variant)
+    /// pairing at ONE site on the typed algebra rather than at two
+    /// byte-identical inline arms scattered across consumers. Direct
+    /// sibling to [`crate::ast::AtomKind::sexp_shape`] (the 6-of-12
+    /// atomic-payload carving's embed) and
+    /// [`crate::ast::QuoteForm::sexp_shape`] (the 4-of-12 quote-family
+    /// carving's embed) — all three embeds land at ONE typed method
+    /// per closed-set carving, symmetric across the partition.
+    ///
+    /// Bidirectional dual: the inverse projection
+    /// [`SexpShape::as_structural_kind`] (12→2, partial) covers the
+    /// 2-of-12 carving of [`SexpShape`] this embed reaches. The pair
+    /// `(StructuralKind::sexp_shape, SexpShape::as_structural_kind)`
+    /// forms an `Iso(StructuralKind, StructuralShape ⊂ SexpShape)`:
+    /// every typed marker round-trips through the embed
+    /// (`StructuralKind::sexp_shape(sk).as_structural_kind() ==
+    /// Some(sk)` for every `sk: StructuralKind`), every structural-
+    /// residual shape pre-image recovers the typed marker. The ten
+    /// non-residual shapes (`Symbol`, `Keyword`, `String`, `Int`,
+    /// `Float`, `Bool`, `Quote`, `Quasiquote`, `Unquote`,
+    /// `UnquoteSplice`) form the kernel of the inverse —
+    /// `as_structural_kind` returns `None` for them.
+    ///
+    /// Composition law (partition-total, jointly with the two sibling
+    /// carvings): for every `shape: SexpShape`, EXACTLY ONE of
+    /// `shape.as_atom_kind()`, `shape.as_quote_form()`,
+    /// `shape.as_structural_kind()` is `Some(_)`. Pinned by the joint
+    /// partition test in this module, so a regression that drifts any
+    /// of the three carvings' partition-membership (an
+    /// [`crate::ast::AtomKind::sexp_shape`] arm, a
+    /// [`crate::ast::QuoteForm::sexp_shape`] arm, or this
+    /// [`Self::sexp_shape`] arm) surfaces immediately.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (StructuralKind variant, SexpShape variant) pairing becomes a
+    /// TYPE projection on the substrate algebra rather than a runtime
+    /// `matches!(shape, SexpShape::Nil | SexpShape::List)` predicate.
+    /// A typo or swap at the shape-projection site is no longer a
+    /// runtime drift but a compile error against the typed projection.
+    /// THEORY.md §II.1 invariant 2 — free middle; the (embed, project)
+    /// pair binds at TWO typed sites — [`Self::sexp_shape`] for the
+    /// embed, [`SexpShape::as_structural_kind`] for the project —
+    /// completing the third and final closed-set carving of the
+    /// outer-shape algebra. THEORY.md §VI.1 — generation over
+    /// composition; the two residual arms lift to ONE typed method,
+    /// and the partition-total invariant across the three carvings
+    /// becomes a TYPED THEOREM rather than a test assertion.
+    #[must_use]
+    pub fn sexp_shape(self) -> SexpShape {
+        match self {
+            Self::Nil => SexpShape::Nil,
+            Self::List => SexpShape::List,
+        }
+    }
+}
+
+// `impl std::fmt::Display for StructuralKind` + `impl std::str::FromStr
+// for StructuralKind` + `impl crate::ClosedSet for StructuralKind` +
+// `pub struct UnknownStructuralKind(pub String)` are generated by
+// `#[derive(tatara_lisp_derive::ClosedSet)]` on the enum declaration
+// above. `label` delegates to the inherent `StructuralKind::label` via
+// `#[closed_set(via = "label")]` — the inherent name coincides with
+// the trait method name here; the delegation stays explicit so the
+// SAME wiring shape applies whether the inherent projection is `label`
+// / `prefix` / `marker` / `keyword` / `as_str`. The `display` flag
+// emits the substrate-wide `f.write_str(Self::label(*self))` block.
+// `#[closed_set(generate_unknown = "structural kind")]` emits the typed
+// parse-rejection carrier with the substrate-wide `Debug + Clone +
+// PartialEq + Eq + thiserror::Error` derives and the `#[error("unknown
+// structural kind: {0}")]` annotation byte-for-byte; the explicit label
+// matches the auto-derived `pascal_to_spaced_lowercase("StructuralKind")`
+// projection byte-for-byte but pins the pre-lift wording. Round-trip +
+// cross-axis rejection (the label vocabulary partially overlaps
+// [`SexpShape`]'s labels on the two residual entries `"nil"` and
+// `"list"`; the disjointness contract is that a `FromStr` on THIS
+// closed set MUST reject the ten non-residual `SexpShape` labels since
+// they lie outside the carving) pinned by
+// `structural_kind_label_round_trips_through_from_str` +
+// `structural_kind_from_str_rejects_non_structural_sexp_shape_labels`.
 
 /// Typed witness of an offending `Sexp` at a typed-entry rejection
 /// boundary — the joint identity (shape + literal) the substrate's
@@ -3767,8 +4124,8 @@ mod tests {
         rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
         unknown_kwarg_suffix, CompilerSpecIoStage, ExpectedKwargShape, KwargPath, KwargPathKind,
         LispError, MacroDefHead, OptionalParamMalformedReason, SexpShape, SexpWitness,
-        UnknownExpectedKwargShape, UnknownKwargPathKind, UnknownMacroDefHead, UnknownSexpShape,
-        UnknownUnquoteForm, UnquoteForm,
+        StructuralKind, UnknownExpectedKwargShape, UnknownKwargPathKind, UnknownMacroDefHead,
+        UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
     };
 
     #[test]
@@ -9335,7 +9692,7 @@ mod tests {
         // Disjointness invariant: for every variant in
         // `SexpShape::ALL`, AT MOST ONE of `as_atom_kind()` and
         // `as_quote_form()` returns `Some` — the typed-shape lattice's
-        // two closed-set carvings partition the carve-able SexpShape
+        // two named carvings partition the carve-able SexpShape
         // variants. The two non-carved variants (`Nil`, `List`) project
         // to `None` through BOTH projections — the kernel of both
         // partial inverses. A regression that drifts the partition
@@ -9345,7 +9702,10 @@ mod tests {
         // and
         // `as_quote_form_projects_each_quote_shape_to_canonical_quote_form_and_rejects_non_quote_shapes`
         // — those pin the per-axis canonical mapping; this pins the
-        // joint disjointness across both axes.
+        // joint disjointness across both axes. The residual-side of the
+        // partition (the two `Nil`/`List` variants) is now itself a
+        // typed carving `StructuralKind` — pinned by
+        // `sexp_shape_partition_is_total_across_atom_quote_structural_carvings`.
         for shape in SexpShape::ALL {
             let atom = shape.as_atom_kind().is_some();
             let quote = shape.as_quote_form().is_some();
@@ -9354,17 +9714,77 @@ mod tests {
                 "SexpShape::{shape:?} projects as BOTH an atom kind AND a quote form — typed-shape carvings must be disjoint"
             );
             // Cross-axis closure: the only variants that project as
-            // NEITHER are the non-carved structural shapes (`Nil` and
-            // `List`). Every other variant must be in exactly ONE
-            // carving — the substrate's typed-shape lattice's
-            // structural completeness pin.
+            // NEITHER are the structural-residual shapes (`Nil` and
+            // `List`). Every other variant must be in exactly ONE of
+            // the two named carvings — the substrate's typed-shape
+            // lattice's structural completeness pin. Post-lift the
+            // residual-side identity binds to the typed
+            // `as_structural_kind()` projection rather than a runtime
+            // `matches!(shape, SexpShape::Nil | SexpShape::List)`
+            // predicate; the invariant lives at ONE closed-set match
+            // on the outer algebra.
             let carved = atom || quote;
-            let expected_carved = !matches!(shape, SexpShape::Nil | SexpShape::List);
+            let expected_carved = shape.as_structural_kind().is_none();
             assert_eq!(
                 carved, expected_carved,
-                "SexpShape::{shape:?} must be carved iff it is neither Nil nor List"
+                "SexpShape::{shape:?} must be carved iff it does not project through as_structural_kind"
             );
         }
+    }
+
+    #[test]
+    fn sexp_shape_partition_is_total_across_atom_quote_structural_carvings() {
+        // Partition-total invariant across ALL THREE typed-shape
+        // carvings — the (typed theorem, previously test assertion)
+        // this lift makes structural. For every variant in
+        // `SexpShape::ALL`, EXACTLY ONE of `as_atom_kind()`,
+        // `as_quote_form()`, `as_structural_kind()` returns `Some(_)`.
+        // Pre-lift the residual side lived at ONE inline
+        // `!matches!(shape, SexpShape::Nil | SexpShape::List)`
+        // assertion inside the carving-disjointness pin above (the
+        // runtime witness the substrate maintained by test
+        // discipline); post-lift the residual is a TYPED CARVING
+        // binding at ONE typed-algebra method, and the partition-
+        // total invariant across the three carvings becomes a TYPED
+        // THEOREM the joint sweep here surfaces byte-for-byte.
+        //
+        // Cardinalities: 6 + 4 + 2 = 12 (atomic-payload + quote-family
+        // + structural-residual = every SexpShape). A regression that
+        // drifts the partition-membership of any variant across any
+        // of the three carvings surfaces here.
+        let mut atom_count = 0;
+        let mut quote_count = 0;
+        let mut structural_count = 0;
+        for shape in SexpShape::ALL {
+            let atom = shape.as_atom_kind().is_some();
+            let quote = shape.as_quote_form().is_some();
+            let structural = shape.as_structural_kind().is_some();
+            let membership = usize::from(atom) + usize::from(quote) + usize::from(structural);
+            assert_eq!(
+                membership, 1,
+                "SexpShape::{shape:?} lands in {membership} carvings — partition must land it in EXACTLY ONE of (as_atom_kind, as_quote_form, as_structural_kind)",
+            );
+            atom_count += usize::from(atom);
+            quote_count += usize::from(quote);
+            structural_count += usize::from(structural);
+        }
+        assert_eq!(
+            atom_count, 6,
+            "atomic-payload carving must cover EXACTLY 6 of SexpShape::ALL",
+        );
+        assert_eq!(
+            quote_count, 4,
+            "quote-family carving must cover EXACTLY 4 of SexpShape::ALL",
+        );
+        assert_eq!(
+            structural_count, 2,
+            "structural-residual carving must cover EXACTLY 2 of SexpShape::ALL",
+        );
+        assert_eq!(
+            atom_count + quote_count + structural_count,
+            SexpShape::ALL.len(),
+            "the three carvings must partition SexpShape::ALL totally (6 + 4 + 2 = 12)",
+        );
     }
 
     #[test]
@@ -10349,5 +10769,218 @@ mod tests {
         // pins. The two surfaces are deliberately disjoint — the
         // `no_from_str` axis exists for exactly this case.
         crate::assert_closed_set_well_formed::<CompilerSpecIoStage>();
+    }
+
+    #[test]
+    fn structural_kind_all_is_unique_and_complete() {
+        // Cardinality + uniqueness floor for the structural-residual
+        // carving's typed algebra: `StructuralKind::ALL` has exactly
+        // TWO entries (`Nil`, `List`) and both are pairwise distinct.
+        // Sibling of the substrate-wide `*_all_is_unique_and_complete`
+        // truth-table shape carried by every closed-set implementor.
+        assert_eq!(
+            StructuralKind::ALL.len(),
+            2,
+            "StructuralKind::ALL must have exactly 2 entries (Nil + List)",
+        );
+        let mut seen = Vec::new();
+        for sk in StructuralKind::ALL {
+            assert!(
+                !seen.contains(&sk),
+                "StructuralKind::{sk:?} repeated in ALL — variants must be pairwise distinct",
+            );
+            seen.push(sk);
+        }
+    }
+
+    #[test]
+    fn structural_kind_sexp_shape_projects_canonical_variant_for_every_marker() {
+        // Per-arm truth-table pin of the canonical (StructuralKind
+        // variant, SexpShape variant) mapping: `StructuralKind::Nil →
+        // SexpShape::Nil` and `StructuralKind::List → SexpShape::List`
+        // byte-for-byte. Sibling of
+        // `unquote_form_sexp_shape_emits_canonical_shape_for_every_marker`
+        // on the residual-carving axis rather than the substitution-
+        // subset axis.
+        assert_eq!(
+            StructuralKind::Nil.sexp_shape(),
+            SexpShape::Nil,
+            "StructuralKind::Nil.sexp_shape() drifted from SexpShape::Nil",
+        );
+        assert_eq!(
+            StructuralKind::List.sexp_shape(),
+            SexpShape::List,
+            "StructuralKind::List.sexp_shape() drifted from SexpShape::List",
+        );
+    }
+
+    #[test]
+    fn structural_kind_sexp_shape_round_trips_through_as_structural_kind() {
+        // The embed/project section law on the structural-residual
+        // carving: `StructuralKind::sexp_shape(sk).as_structural_kind()
+        // == Some(sk)` for every `sk: StructuralKind::ALL`. Proves the
+        // (embed, project) pair is an `Iso(StructuralKind,
+        // StructuralShape ⊂ SexpShape)` — the section is total on
+        // `StructuralKind`'s carving. Sibling round-trip to
+        // `atom_kind_sexp_shape_round_trips_through_as_atom_kind`
+        // (on the 6-of-12 atomic-payload carving),
+        // `quote_form_sexp_shape_round_trips_through_as_quote_form`
+        // (on the 4-of-12 quote-family carving), AND
+        // `unquote_form_sexp_shape_round_trips_through_as_unquote_form`
+        // (on the 2-of-12 substitution-subset carving). Closes the
+        // third and final closed-set CARVING of `SexpShape` — the
+        // structural-residual — as a round-trip identity on the typed
+        // algebra.
+        for sk in StructuralKind::ALL {
+            let shape = sk.sexp_shape();
+            let recovered = shape.as_structural_kind();
+            assert_eq!(
+                recovered,
+                Some(sk),
+                "StructuralKind::{sk:?} did NOT round-trip — sexp_shape().as_structural_kind() must recover the typed marker",
+            );
+        }
+    }
+
+    #[test]
+    fn as_structural_kind_projects_each_structural_shape_to_canonical_structural_kind_and_rejects_non_structural_shapes(
+    ) {
+        // Per-variant truth-table sweep across every `SexpShape::ALL`
+        // entry — pins each variant's canonical mapping (the two
+        // structural-residual shapes project to the matching
+        // `StructuralKind`; every other shape — every atomic-payload
+        // arm AND every quote-family wrapper — projects to `None`)
+        // byte-for-byte. Sibling sweep to
+        // `as_atom_kind_projects_each_atom_shape_to_canonical_atom_kind_and_rejects_non_atom_shapes`,
+        // `as_quote_form_projects_each_quote_shape_to_canonical_quote_form_and_rejects_non_quote_shapes`,
+        // and
+        // `as_unquote_form_projects_each_unquote_shape_to_canonical_unquote_form_and_rejects_non_unquote_shapes`
+        // on the structural-residual carving axis.
+        for shape in SexpShape::ALL {
+            let projected = shape.as_structural_kind();
+            let expected = match shape {
+                SexpShape::Nil => Some(StructuralKind::Nil),
+                SexpShape::List => Some(StructuralKind::List),
+                SexpShape::Symbol
+                | SexpShape::Keyword
+                | SexpShape::String
+                | SexpShape::Int
+                | SexpShape::Float
+                | SexpShape::Bool
+                | SexpShape::Quote
+                | SexpShape::Quasiquote
+                | SexpShape::Unquote
+                | SexpShape::UnquoteSplice => None,
+            };
+            assert_eq!(
+                projected, expected,
+                "SexpShape::{shape:?}.as_structural_kind() drifted from canonical mapping",
+            );
+        }
+    }
+
+    #[test]
+    fn structural_kind_label_matches_sexp_shape_label_via_composition() {
+        // Composition-routing pin: for every `sk: StructuralKind`,
+        // `sk.label()` and `sk.sexp_shape().label()` agree byte-for-
+        // byte AND at the SAME `&'static str` pointer (the
+        // composition returns the SAME literal `SexpShape::label`
+        // emits, without a parallel arm-table on the subset). A
+        // regression that re-inlines the two arms as a parallel
+        // match-table (`Self::Nil => "nil"`, `Self::List => "list"`)
+        // still passes the label-equality sweep but fails the pointer
+        // pin — the residual-carving's label vocabulary is no longer
+        // derived from the superset's canonical site. Sibling-shape
+        // pin to `atom_kind_label_routes_through_sexp_shape_label_via_sexp_shape_projection`
+        // (the 6-of-12 atomic-payload carving) and
+        // `unquote_form_marker_routes_through_to_quote_form_prefix_via_composition`
+        // (the 2-of-4 substitution-subset carving).
+        for sk in StructuralKind::ALL {
+            let from_direct = sk.label();
+            let from_composition = sk.sexp_shape().label();
+            assert_eq!(
+                from_direct, from_composition,
+                "StructuralKind::{sk:?}.label() drifted from .sexp_shape().label() — the residual carving's label vocabulary is no longer derived from the superset's canonical site",
+            );
+            assert!(
+                std::ptr::eq(from_direct.as_ptr(), from_composition.as_ptr()),
+                "StructuralKind::{sk:?}.label() and .sexp_shape().label() must point at the SAME `&'static str` — a parallel inline table has a different pointer",
+            );
+        }
+    }
+
+    #[test]
+    fn structural_kind_label_round_trips_through_from_str() {
+        // `label` ↔ `FromStr` round-trip pin: for every `sk:
+        // StructuralKind::ALL`, `sk.label().parse::<StructuralKind>()
+        // == Ok(sk)`. The auto-derived `impl FromStr` (via
+        // `#[derive(ClosedSet)]` + the default `parse_label`) sweeps
+        // over `Self::ALL` keyed on `self.label()`, so a drift in
+        // either direction (a label typo or a variant-set drift)
+        // surfaces here. Sibling round-trip to
+        // `sexp_shape_label_round_trips_through_from_str` and
+        // `atom_kind_label_round_trips_through_from_str`.
+        for sk in StructuralKind::ALL {
+            let parsed = sk.label().parse::<StructuralKind>();
+            assert_eq!(
+                parsed,
+                Ok(sk),
+                "StructuralKind::{sk:?}.label() must round-trip through FromStr",
+            );
+        }
+    }
+
+    #[test]
+    fn structural_kind_from_str_rejects_non_structural_sexp_shape_labels() {
+        // Cross-axis rejection pin: the `FromStr` decode on
+        // StructuralKind MUST reject every `SexpShape` label that lies
+        // OUTSIDE the residual carving (the ten `symbol` / `keyword` /
+        // `string` / `int` / `float` / `bool` / `quote` / `quasiquote`
+        // / `unquote` / `unquote-splice` labels — every atomic-payload
+        // AND quote-family label). The two residual labels (`nil`,
+        // `list`) accept because they lie INSIDE the carving; every
+        // other `SexpShape` label rejects with `Err(UnknownStructuralKind)`.
+        // Sibling of
+        // `unquote_form_from_str_rejects_sexp_shape_labels_on_template_marker_axis`
+        // and
+        // `sexp_shape_from_str_accepts_only_canonical_labels` — the
+        // pattern the substrate carries at every closed-set-carving
+        // boundary.
+        let residual_labels: Vec<&'static str> =
+            StructuralKind::ALL.iter().map(|sk| sk.label()).collect();
+        for shape in SexpShape::ALL {
+            let label = shape.label();
+            let parsed = label.parse::<StructuralKind>();
+            if residual_labels.contains(&label) {
+                assert!(
+                    parsed.is_ok(),
+                    "SexpShape::{shape:?}.label() = {label:?} is a residual label — StructuralKind::from_str must accept",
+                );
+            } else {
+                assert!(
+                    parsed.is_err(),
+                    "SexpShape::{shape:?}.label() = {label:?} lies outside the residual carving — StructuralKind::from_str must reject",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn structural_kind_is_well_formed_closed_set() {
+        // Structural contract: StructuralKind's two variants are
+        // pairwise distinct, round-trip through the trait's `label` ↔
+        // `parse_label`, and reject the empty string — the
+        // workspace-wide `assert_closed_set_well_formed::<T>()` testkit
+        // pinned across every prior closed-set implementor
+        // (`AtomKind`, `QuoteForm`, `UnquoteForm`, `SexpShape`,
+        // `MacroDefHead`, `ExpectedKwargShape`, `KwargPathKind`,
+        // `CompilerSpecIoStage`). The substrate-level assertion runs
+        // on the auto-derived `impl ClosedSet for StructuralKind`
+        // emitted by `#[derive(tatara_lisp_derive::ClosedSet)]` — a
+        // regression that drifts the `via = "label"` projection
+        // (`"nil"` / `"list"`) or the variant listing forced through
+        // `Self::ALL` (cardinality 2 = every structural-residual
+        // outer shape) fails-loudly here.
+        crate::assert_closed_set_well_formed::<StructuralKind>();
     }
 }

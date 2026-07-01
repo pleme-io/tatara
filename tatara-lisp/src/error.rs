@@ -2642,6 +2642,139 @@ impl UnquoteForm {
     pub fn iac_forge_tag(self) -> &'static str {
         self.to_quote_form().iac_forge_tag()
     }
+
+    /// Stable, per-variant byte discriminator that paired with the
+    /// substitution-subset outer-shape hash body builds the substrate's
+    /// [`Hash for Sexp`](crate::ast::Sexp) projection at the two
+    /// template-substitution arms — `5u8` for [`Self::Unquote`], `6u8`
+    /// for [`Self::Splice`]. The byte values are load-bearing because
+    /// the macro-expansion cache ([`crate::macro_expand::Expander`]'s
+    /// cache) keys on the hash of `(macro_name, args)`, and every
+    /// [`crate::ast::Sexp::Unquote`] / [`crate::ast::Sexp::UnquoteSplice`]
+    /// wrapper participates in that hash through the superset's
+    /// [`crate::ast::QuoteForm::hash_discriminator`] arms — changing a
+    /// discriminator here silently invalidates every cached expansion
+    /// across the substrate AND risks collision with the reserved bytes
+    /// the other outer-Sexp carvings' arms use (`1u8` for the
+    /// [`crate::ast::Sexp::Atom`] outer-carve marker, `{0, 2}` for the
+    /// [`StructuralKind::hash_discriminator`] structural-residual
+    /// carving, `{3, 4}` for the non-substitution quote-family arms
+    /// [`crate::ast::QuoteForm::Quote`] and
+    /// [`crate::ast::QuoteForm::Quasiquote`]).
+    ///
+    /// Composition law: `self.hash_discriminator() ==
+    /// self.to_quote_form().hash_discriminator()` for every `self:
+    /// UnquoteForm`. The body composes [`Self::to_quote_form`] (the
+    /// typed 2-of-4 subset → superset projection) with
+    /// [`crate::ast::QuoteForm::hash_discriminator`] (the canonical
+    /// 4-of-4 cache-key byte projection), so the two `5u8`/`6u8`
+    /// literals live at ONE canonical site
+    /// ([`crate::ast::QuoteForm::hash_discriminator`]'s Unquote /
+    /// UnquoteSplice arms in `ast.rs`) rather than at a parallel
+    /// two-arm inline table on this subset. Matches the posture
+    /// [`Self::marker`] takes through [`crate::ast::QuoteForm::prefix`],
+    /// [`Self::wrap`] takes through [`crate::ast::QuoteForm::wrap`],
+    /// [`Self::sexp_shape`] takes through
+    /// [`crate::ast::QuoteForm::sexp_shape`], and
+    /// [`Self::iac_forge_tag`] takes through
+    /// [`crate::ast::QuoteForm::iac_forge_tag`] — the FIFTH
+    /// composition-through-`to_quote_form` axis the closed-set subset
+    /// algebra closes.
+    ///
+    /// Pre-lift the (UnquoteForm variant, cache-key byte) pairing had
+    /// NO typed projection on this subset algebra — a future consumer
+    /// with an [`UnquoteForm`] marker in hand wanting the outer-Sexp
+    /// cache-key byte (e.g. a future template rewriter that keys a
+    /// substitution-subset audit-trail metric on the
+    /// [`Hash for Sexp`](crate::ast::Sexp) cache-key partition, a
+    /// future `tatara-check` predicate that verifies the substitution-
+    /// subset carving's cache-key partition sits inside `{5, 6}` at a
+    /// substrate coherence gate, a future `TypedRewriter<UnquoteFormOp>`
+    /// that decides cache invalidation on the substitution-subset
+    /// discriminator) had to spell the two-step composition
+    /// `uf.to_quote_form().hash_discriminator()` at every callsite.
+    /// Post-lift the composition binds at ONE typed-algebra method on
+    /// the closed-set [`UnquoteForm`] algebra sitting next to the four
+    /// prior sibling projections ([`Self::marker`], [`Self::wrap`],
+    /// [`Self::sexp_shape`], [`Self::iac_forge_tag`]), closing the
+    /// FIFTH composition-through-`to_quote_form` axis on the subset
+    /// — every substrate-surface axis the superset algebra carries
+    /// ([`crate::ast::QuoteForm::prefix`],
+    /// [`crate::ast::QuoteForm::wrap`],
+    /// [`crate::ast::QuoteForm::sexp_shape`],
+    /// [`crate::ast::QuoteForm::iac_forge_tag`],
+    /// [`crate::ast::QuoteForm::hash_discriminator`]) now has a
+    /// matching composition on the substitution subset.
+    ///
+    /// `pub(crate)` because the byte-discriminator surface is an
+    /// implementation detail of the substrate's
+    /// [`Hash for Sexp`](crate::ast::Sexp) cache-key contract; exposing
+    /// it publicly would leak the cache-key shape through the API
+    /// without enabling any external consumer the public projections
+    /// ([`Self::marker`], [`Self::wrap`], [`Self::sexp_shape`],
+    /// [`Self::iac_forge_tag`]) don't already serve. Same posture as
+    /// [`crate::ast::QuoteForm::hash_discriminator`],
+    /// [`StructuralKind::hash_discriminator`],
+    /// [`crate::ast::AtomKind::hash_discriminator`], and
+    /// [`SexpShape::hash_discriminator`] — every `hash_discriminator`
+    /// projection on the substrate's typed-shape family is
+    /// crate-private.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (subset
+    /// marker, cache-key byte) pairing becomes a TYPE projection on the
+    /// substrate algebra rather than a per-callsite
+    /// `.to_quote_form().hash_discriminator()` two-step. THEORY.md
+    /// §II.1 invariant 2 — free middle; every consumer that has an
+    /// [`UnquoteForm`] marker and wants the outer-Sexp cache-key byte
+    /// routes through the SAME typed method, so a regression that
+    /// drifts ONE consumer's byte from the others cannot reach the
+    /// substrate's runtime cache. THEORY.md §VI.1 — generation over
+    /// composition; the pairing emerges from ONE typed-algebra
+    /// composition on the subset algebra rather than from parallel
+    /// per-consumer per-variant literals. A future third template-
+    /// substitution marker (e.g. `,~` reverse-unquote) extends
+    /// [`Self::ALL`] + [`Self::to_quote_form`]'s dispatch table in
+    /// lockstep — rustc-enforced through the closed-set exhaustiveness
+    /// — with THIS method inheriting the extension through the
+    /// [`crate::ast::QuoteForm::hash_discriminator`] composition site
+    /// without a per-site edit.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::TypeID::get<T>()` typed
+    /// projection from a subset-op-family value into the canonical
+    /// per-type identity byte the IR framework hashes on — the (subset
+    /// op, canonical hash identity) pairing lives at ONE typed
+    /// projection on the subset algebra, composed through the parent
+    /// op-family's typed identity face. `UnquoteForm::hash_discriminator`
+    /// is the Rust-typed peer on the closed-set [`UnquoteForm`]
+    /// algebra with [`crate::ast::QuoteForm::hash_discriminator`]
+    /// standing in for MLIR's parent op-family `TypeID` face.
+    ///
+    /// The `#[allow(dead_code)]` posture is deliberate: the substrate's
+    /// current [`Hash for Sexp`](crate::ast::Sexp) body composes
+    /// through [`crate::ast::QuoteForm::hash_discriminator`] at the
+    /// four quote-family arms uniformly rather than splitting the
+    /// dispatch into (2 non-substitution + 2 substitution) arms — so
+    /// no non-test caller currently reaches THIS subset-algebra
+    /// method's discriminator projection. The lift lands the
+    /// substrate primitive so future consumers keyed on the
+    /// substitution-subset carving specifically (a future
+    /// [`crate::macro_expand::Expander`] cache-invalidation predicate
+    /// that decides on the 2-of-4 substitution-subset only, a future
+    /// `tatara-check` predicate `(check-substitution-subset-cache-key
+    /// …)` that verifies the substitution-subset carving's cache-key
+    /// partition sits inside `{5, 6}`, a future
+    /// `TypedRewriter<UnquoteFormOp>` sweep that keys on the subset
+    /// discriminator directly) bind to ONE typed algebra method
+    /// rather than re-deriving the `.to_quote_form()
+    /// .hash_discriminator()` composition per callsite. Matches the
+    /// preemptive-primitive posture the prior-run [`Self::wrap`],
+    /// [`Self::sexp_shape`], and [`Self::iac_forge_tag`] lifts
+    /// carried before their downstream consumers materialized.
+    #[must_use]
+    #[allow(dead_code)]
+    pub(crate) fn hash_discriminator(self) -> u8 {
+        self.to_quote_form().hash_discriminator()
+    }
 }
 
 // `impl std::fmt::Display for UnquoteForm` + `impl std::str::FromStr
@@ -10880,6 +11013,178 @@ mod tests {
             UnquoteForm::Splice.iac_forge_tag(),
             QuoteForm::UnquoteSplice.iac_forge_tag(),
             "UnquoteForm::Splice.iac_forge_tag() drifted from QuoteForm::UnquoteSplice.iac_forge_tag()",
+        );
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminator_routes_through_to_quote_form_hash_discriminator_via_composition(
+    ) {
+        // Post-lift composition pin: for every `uf: UnquoteForm`,
+        // `uf.hash_discriminator()` and
+        // `uf.to_quote_form().hash_discriminator()` agree byte-for-byte
+        // — the (subset marker, outer-Sexp cache-key byte) pairing
+        // rides through the superset's canonical
+        // `QuoteForm::hash_discriminator` closed-set match rather than
+        // through a parallel two-arm inline table on the subset. A
+        // regression that re-inlines the two arms as a parallel
+        // match-table (e.g. a future edit that spells `Self::Unquote
+        // => 5` / `Self::Splice => 6` directly at
+        // `UnquoteForm::hash_discriminator` instead of routing through
+        // `self.to_quote_form().hash_discriminator()`) still passes
+        // the per-arm truth-table pin below but fails THIS composition
+        // pin — the subset's cache-key vocabulary is no longer derived
+        // from the superset's canonical site. Sibling-shape pin to the
+        // four prior-lift composition pins on `UnquoteForm`:
+        // `unquote_form_marker_routes_through_to_quote_form_prefix_via_composition`,
+        // `unquote_form_wrap_routes_through_to_quote_form_wrap_via_composition`,
+        // `unquote_form_sexp_shape_routes_through_to_quote_form_sexp_shape_via_composition`,
+        // and
+        // `unquote_form_iac_forge_tag_routes_through_to_quote_form_iac_forge_tag_via_composition`
+        // — all five pin the subset's projection through the
+        // superset's canonical site via the same typed composition
+        // posture. The FIFTH composition-through-`to_quote_form` axis
+        // on the substitution-subset closed set is now load-bearing
+        // on the type system rather than on per-callsite discipline.
+        for uf in UnquoteForm::ALL {
+            let from_disc = uf.hash_discriminator();
+            let from_composition = uf.to_quote_form().hash_discriminator();
+            assert_eq!(
+                from_disc, from_composition,
+                "UnquoteForm::{uf:?}.hash_discriminator() drifted from .to_quote_form().hash_discriminator() — the subset's cache-key vocabulary is no longer derived from the superset's canonical site",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminator_pins_legacy_cache_key_bytes() {
+        // Per-arm truth-table pin of the canonical (UnquoteForm variant,
+        // outer-Sexp cache-key byte) mapping: `UnquoteForm::Unquote → 5`
+        // and `UnquoteForm::Splice → 6` byte-for-byte. These bytes are
+        // load-bearing: the substrate's `Hash for Sexp` body composes
+        // `QuoteForm::hash_discriminator` at the Unquote/UnquoteSplice
+        // arms and the macro-expansion cache keys on those bytes;
+        // changing either arm silently invalidates every cached
+        // expansion across the substrate AND risks collision with the
+        // reserved bytes the non-substitution carvings' arms use
+        // (`{0, 2}` for `StructuralKind`, `1` for the outer `Atom`
+        // marker, `{3, 4}` for the non-substitution quote-family arms
+        // `Quote`/`Quasiquote`). Sibling of
+        // `quote_form_hash_discriminator_pins_legacy_cache_key_bytes`
+        // (4-arm superset pin),
+        // `structural_kind_hash_discriminator_pins_legacy_cache_key_bytes`
+        // (2-arm structural-residual pin),
+        // `atom_kind_hash_discriminator_pins_legacy_atom_cache_key_bytes`
+        // (6-arm atomic-payload pin), and
+        // `sexp_shape_hash_discriminator_pins_legacy_outer_cache_key_bytes`
+        // (12-arm shape-level pin) — this 2-arm subset pin joins the
+        // family the closed-set typed algebra composes on for outer-
+        // Sexp cache-key partition coherence.
+        assert_eq!(
+            UnquoteForm::Unquote.hash_discriminator(),
+            5,
+            "UnquoteForm::Unquote.hash_discriminator() drifted from legacy cache-key byte 5",
+        );
+        assert_eq!(
+            UnquoteForm::Splice.hash_discriminator(),
+            6,
+            "UnquoteForm::Splice.hash_discriminator() drifted from legacy cache-key byte 6",
+        );
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminator_specializes_to_matching_arm_of_quote_form_hash_discriminator(
+    ) {
+        // PER-VARIANT RESTRICTION LAW pin: the subset's discriminator
+        // projection agrees with the superset's discriminator
+        // projection on the substitution-subset carving arm-for-arm.
+        // `UnquoteForm::Unquote.hash_discriminator() ==
+        // QuoteForm::Unquote.hash_discriminator()`, and
+        // `UnquoteForm::Splice.hash_discriminator() ==
+        // QuoteForm::UnquoteSplice.hash_discriminator()`. The
+        // composition through `to_quote_form()` binds this agreement
+        // to the SAME closed-set match arm on the superset's
+        // `hash_discriminator` per subset variant — a regression that
+        // drifts `to_quote_form`'s arm mapping (e.g. a future edit
+        // that pairs `UnquoteForm::Splice` with `QuoteForm::Unquote`
+        // on the subset → superset projection) fails BOTH the
+        // arm-check here AND the composition pin above, with distinct
+        // arm-anchored failure signatures. Sibling of the four prior
+        // per-variant restriction pins on `UnquoteForm`: `marker`
+        // (through `QuoteForm::prefix`), `wrap` (through
+        // `QuoteForm::wrap`), `sexp_shape` (through
+        // `QuoteForm::sexp_shape`), and `iac_forge_tag` (through
+        // `QuoteForm::iac_forge_tag`) — the cache-key axis closes the
+        // per-variant restriction family on the substitution subset.
+        use crate::ast::QuoteForm;
+        assert_eq!(
+            UnquoteForm::Unquote.hash_discriminator(),
+            QuoteForm::Unquote.hash_discriminator(),
+            "UnquoteForm::Unquote.hash_discriminator() drifted from QuoteForm::Unquote.hash_discriminator()",
+        );
+        assert_eq!(
+            UnquoteForm::Splice.hash_discriminator(),
+            QuoteForm::UnquoteSplice.hash_discriminator(),
+            "UnquoteForm::Splice.hash_discriminator() drifted from QuoteForm::UnquoteSplice.hash_discriminator()",
+        );
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminator_partitions_disjointly_from_non_substitution_carvings() {
+        // DISJOINTNESS CONTRACT pin: the substitution-subset
+        // discriminator image `{5, 6}` MUST be disjoint from every
+        // other outer-Sexp carving's discriminator image — otherwise
+        // the substrate's `Hash for Sexp` cache-key partition
+        // silently collides and macro-expansion cache hits leak
+        // across carvings. The reserved bytes are:
+        //   * `StructuralKind::hash_discriminator` image: `{0, 2}`
+        //     (Nil=0, List=2)
+        //   * outer `Atom` carve marker: `{1}` (single-arm literal
+        //     inside `Hash for Sexp`)
+        //   * non-substitution `QuoteForm` arms
+        //     (Quote/Quasiquote): `{3, 4}` (subset image of
+        //     `QuoteForm::hash_discriminator` restricted to the
+        //     non-`UnquoteForm` carving)
+        // Sibling of the joint outer-Sexp discriminator-partition
+        // pin at the shape-level algebra
+        // (`sexp_shape_hash_discriminator_partitions_by_three_way_carving_disjointly`)
+        // — this test pins the FOURTH carving's partition membership
+        // (the 2-of-4 substitution-subset carving of `QuoteForm`)
+        // rather than the three top-level carvings of `SexpShape`.
+        use crate::ast::QuoteForm;
+        use std::collections::HashSet;
+
+        let subset_image: HashSet<u8> = UnquoteForm::ALL
+            .iter()
+            .map(|uf| uf.hash_discriminator())
+            .collect();
+        assert_eq!(
+            subset_image,
+            HashSet::from([5, 6]),
+            "UnquoteForm::ALL swept through hash_discriminator MUST cover exactly {{5, 6}} — the substitution-subset cache-key partition",
+        );
+
+        let structural_image: HashSet<u8> = StructuralKind::ALL
+            .iter()
+            .map(|sk| sk.hash_discriminator())
+            .collect();
+        assert!(
+            subset_image.is_disjoint(&structural_image),
+            "UnquoteForm hash_discriminator image {subset_image:?} MUST be disjoint from StructuralKind image {structural_image:?} — a cache-key collision would leak macro-expansion hits across the substitution-subset and structural-residual carvings",
+        );
+
+        let atom_outer_byte: HashSet<u8> = HashSet::from([1]);
+        assert!(
+            subset_image.is_disjoint(&atom_outer_byte),
+            "UnquoteForm hash_discriminator image {subset_image:?} MUST be disjoint from the outer Atom carve marker {{1}} — a cache-key collision would leak macro-expansion hits across the substitution-subset and atomic-payload carvings",
+        );
+
+        let non_substitution_quote_image: HashSet<u8> = [QuoteForm::Quote, QuoteForm::Quasiquote]
+            .iter()
+            .map(|qf| qf.hash_discriminator())
+            .collect();
+        assert!(
+            subset_image.is_disjoint(&non_substitution_quote_image),
+            "UnquoteForm hash_discriminator image {subset_image:?} MUST be disjoint from the non-substitution QuoteForm arms' image {non_substitution_quote_image:?} — a cache-key collision would leak macro-expansion hits across the substitution-subset and non-substitution quote-family carvings",
         );
     }
 

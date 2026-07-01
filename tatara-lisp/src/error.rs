@@ -3700,6 +3700,122 @@ impl SexpShape {
         }
     }
 
+    /// Project the twelve-variant [`SexpShape`] into the canonical
+    /// iac-forge interop tag string iff the shape names a homoiconic
+    /// quote-family wrapper — `Quote → Some("quote")`, `Quasiquote →
+    /// Some("quasiquote")`, `Unquote → Some("unquote")`, `UnquoteSplice
+    /// → Some("unquote-splicing")`, every other shape (`Nil`, `List`,
+    /// every atomic-payload variant) `None`. The 4-of-12 partial
+    /// projection on the closed-set [`SexpShape`] algebra that surfaces
+    /// [`crate::ast::QuoteForm::iac_forge_tag`]'s cross-crate canonical-
+    /// form tag surface at the outer-shape algebra level.
+    ///
+    /// Composition law: `self.iac_forge_tag() ==
+    /// self.as_quote_form().map(crate::ast::QuoteForm::iac_forge_tag)`
+    /// for every `self: SexpShape` — the (outer shape, canonical iac-
+    /// forge tag) pairing binds through the pre-existing quote-family
+    /// carving ([`Self::as_quote_form`]) composed with the closed-set
+    /// tag projection ([`crate::ast::QuoteForm::iac_forge_tag`]) rather
+    /// than at a parallel four-arm inline match table here — matching
+    /// the posture [`Self::as_unquote_form`] takes through
+    /// [`crate::ast::QuoteForm::as_unquote_form`] on the 2-of-4
+    /// template-substitution subset carving. `None` on every non-quote-
+    /// family shape (six atomic-payload variants + `Nil` + `List`) — the
+    /// eight-shape kernel of the projection matches the kernel of
+    /// [`Self::as_quote_form`] exactly.
+    ///
+    /// The SIXTH consumer of the outer-shape algebra's shape-level
+    /// projection surface, sibling of [`Self::label`] (operator-facing
+    /// diagnostic-label surface, all twelve arms), [`Self::hash_discriminator`]
+    /// (outer-`Sexp` cache-key discriminator byte, all twelve arms
+    /// → `{0..=6}`), [`Self::as_atom_kind`] (6-of-12 atomic-payload
+    /// carving), [`Self::as_quote_form`] (4-of-12 quote-family carving),
+    /// [`Self::as_structural_kind`] (2-of-12 structural-residual
+    /// carving), and [`Self::as_unquote_form`] (2-of-12 template-
+    /// substitution subset carving composed through the parent quote-
+    /// family carving). Post-lift the outer-shape algebra closes over
+    /// seven typed projection surfaces, each rebuilt from the SAME
+    /// closed twelve-arm set — a regression that drifts ONE projection
+    /// against the algebra's shape-identity fails-loudly at rustc's
+    /// exhaustiveness rather than silently at runtime.
+    ///
+    /// Pre-lift the (SexpShape variant, canonical iac-forge tag) pairing
+    /// had no typed projection at the outer-shape algebra level — a
+    /// consumer with a `SexpShape` in hand (a `LispError::TypeMismatch
+    /// .got` slot's outer-shape identity, a rejected shape from a
+    /// typed-entry gate, an LSP / REPL / audit-trail metric keyed on the
+    /// observed outer shape) wanting the cross-crate iac-forge canonical
+    /// tag had to re-embed the shape into a quote-family typed marker
+    /// via [`Self::as_quote_form`] then compose through
+    /// [`crate::ast::QuoteForm::iac_forge_tag`] inline. Post-lift the
+    /// composition binds at ONE method on the outer [`SexpShape`]
+    /// algebra — the (outer shape, canonical iac-forge tag) pairing lives
+    /// at ONE typed projection matching the shape-level algebra sweep
+    /// the six sibling projections established.
+    ///
+    /// The `Option<&'static str>` return shape is the natural typed peer
+    /// of [`crate::ast::QuoteForm::iac_forge_tag`]'s total `&'static str`
+    /// return: the quote-family superset TOTALS on the four-arm closed
+    /// set, and the outer twelve-arm closed set's projection PARTIALIZES
+    /// on the eight non-quote-family shapes. Same shape as
+    /// [`Self::as_atom_kind`] / [`Self::as_quote_form`] /
+    /// [`Self::as_structural_kind`] / [`Self::as_unquote_form`] — each
+    /// carving lifts a total sub-algebra projection to a partial outer-
+    /// shape projection with `None` on the residual arms, so a consumer
+    /// keying on "iff this outer shape has a canonical iac-forge tag"
+    /// binds against the closed set's typed image directly rather than
+    /// substring-matching the shape label.
+    ///
+    /// The `&'static str` lifetime is load-bearing: every iac-forge
+    /// consumer projects through this method into the canonical
+    /// 2-element-list head without an allocation, parallel to how
+    /// [`crate::ast::QuoteForm::iac_forge_tag`] on the sub-carving,
+    /// [`Self::label`] on the outer-shape diagnostic surface,
+    /// [`crate::ast::QuoteForm::prefix`] on the Display / reader
+    /// prefix surface, and [`UnquoteForm::marker`] on the template
+    /// marker axis project their respective closed sets. A future
+    /// homoiconic prefix-wrapper (e.g. hypothetical `,~` reverse-
+    /// unquote) extends [`crate::ast::QuoteForm`] AND [`Self`]'s
+    /// closed set together — rustc binds the iac-forge canonical-form
+    /// surface to the extended algebra at ONE arm each through
+    /// exhaustiveness, with the composition through [`Self::as_quote_form`]
+    /// pulling the new variant's tag into this projection mechanically.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (SexpShape variant, canonical iac-forge tag) pairing becomes a
+    /// TYPE projection on the outer-shape algebra rather than an inline
+    /// `.as_quote_form().map(...)` two-step at every consumer. A typo
+    /// or swap at the projection site is no longer a runtime tag drift
+    /// but a compile error against the typed composition — the
+    /// `SexpShape` ↔ `QuoteForm` ↔ tag string chain is rustc-enforced
+    /// end-to-end. THEORY.md §II.1 invariant 2 — free middle; the
+    /// (outer shape, canonical iac-forge tag) pairing now binds at ONE
+    /// site on the outer-shape algebra, composing through the pre-
+    /// existing four-arm sub-carving's tag projection rather than
+    /// duplicating the four-arm match here. THEORY.md §VI.1 —
+    /// generation over composition; the outer-shape algebra's typed
+    /// projection surface closes over SEVEN methods (label,
+    /// hash_discriminator, four carvings, iac_forge_tag) each keyed on
+    /// the SAME closed twelve-arm set.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::TypeSwitch<T>` typed
+    /// pattern-match combinator on a closed union — narrowing to a
+    /// specific typed case yields the typed downcast + operations on
+    /// that case in ONE typed step. [`Self::iac_forge_tag`] is the
+    /// Rust-typed peer where the "narrow to quote-family" step
+    /// ([`Self::as_quote_form`]) composes with the "read the case's
+    /// canonical tag" step ([`crate::ast::QuoteForm::iac_forge_tag`])
+    /// into ONE outer-shape projection. Racket's `(match shape
+    /// [(? quote-shape? qs) (quote-shape->iac-forge-tag qs)] [_ #f])`
+    /// closed-form match on the shape-taxonomy union — the outer
+    /// pattern's partial projection to the canonical form IS the shape
+    /// this method lifts to a typed Rust closed-set match.
+    #[must_use]
+    pub fn iac_forge_tag(self) -> Option<&'static str> {
+        self.as_quote_form()
+            .map(crate::ast::QuoteForm::iac_forge_tag)
+    }
+
     /// Project the typed [`SexpShape`] into the outer-`Sexp`
     /// [`Hash for Sexp`](crate::ast::Sexp) cache-key discriminator byte
     /// `{0..=6}` — the SHAPE-LEVEL peer of
@@ -11794,6 +11910,143 @@ mod tests {
         assert_eq!(
             union, full_outer,
             "the three-carving `hash_discriminator` image union must exactly cover {{0..=6}}",
+        );
+    }
+
+    #[test]
+    fn sexp_shape_iac_forge_tag_pins_canonical_cl_tags_for_every_quote_family_arm() {
+        // CANONICAL-TAG CONTRACT (shape-level peer): the shape-level
+        // `SexpShape::iac_forge_tag` MUST project each of the four
+        // quote-family arms to the SAME canonical Common-Lisp tag
+        // string `crate::ast::QuoteForm::iac_forge_tag` projects at the
+        // sub-carving level — `Quote → "quote"`, `Quasiquote →
+        // "quasiquote"`, `Unquote → "unquote"`, `UnquoteSplice →
+        // "unquote-splicing"`. A regression that inlines a byte-drifted
+        // spelling here (e.g. `SexpShape::UnquoteSplice → Some(
+        // "unquote-splice")` conflating the substrate's shorter
+        // diagnostic label with the CL canonical form) silently breaks
+        // every cross-crate iac-forge consumer keyed on `(unquote-
+        // splicing ...)`. Sibling posture to
+        // `quote_form_iac_forge_tag_pins_canonical_lisp_tag_strings_for_every_variant`
+        // (in `crate::ast`) on the 4-arm sub-carving — that pin binds
+        // the sub-carving's canonical tag surface; this pin binds the
+        // shape-level projection's canonical tag surface AND its
+        // Option-partial shape.
+        assert_eq!(SexpShape::Quote.iac_forge_tag(), Some("quote"));
+        assert_eq!(SexpShape::Quasiquote.iac_forge_tag(), Some("quasiquote"));
+        assert_eq!(SexpShape::Unquote.iac_forge_tag(), Some("unquote"));
+        assert_eq!(
+            SexpShape::UnquoteSplice.iac_forge_tag(),
+            Some("unquote-splicing"),
+        );
+    }
+
+    #[test]
+    fn sexp_shape_iac_forge_tag_returns_none_on_every_non_quote_family_shape() {
+        // PARTIAL-PROJECTION KERNEL CONTRACT (shape-level peer): every
+        // `SexpShape` variant OUTSIDE the four-arm quote-family carving
+        // MUST project through `SexpShape::iac_forge_tag` to `None` —
+        // the eight-shape kernel coincides byte-for-byte with the
+        // kernel of `SexpShape::as_quote_form`. Pin the eight-shape
+        // sweep (six atomic-payload variants + `Nil` + `List`) so a
+        // regression that surfaces a bogus tag for a non-quote-family
+        // arm (e.g. `SexpShape::List → Some("list")` conflating the
+        // outer-shape diagnostic label with the quote-family canonical
+        // form) fails-loudly here. Sibling posture to the projection's
+        // parent-carving `sexp_shape_as_quote_form` returning `None`
+        // on the eight-shape kernel.
+        assert_eq!(SexpShape::Nil.iac_forge_tag(), None);
+        assert_eq!(SexpShape::Symbol.iac_forge_tag(), None);
+        assert_eq!(SexpShape::Keyword.iac_forge_tag(), None);
+        assert_eq!(SexpShape::String.iac_forge_tag(), None);
+        assert_eq!(SexpShape::Int.iac_forge_tag(), None);
+        assert_eq!(SexpShape::Float.iac_forge_tag(), None);
+        assert_eq!(SexpShape::Bool.iac_forge_tag(), None);
+        assert_eq!(SexpShape::List.iac_forge_tag(), None);
+    }
+
+    #[test]
+    fn sexp_shape_iac_forge_tag_composes_through_as_quote_form_for_every_variant() {
+        // COMPOSITION-LAW CONTRACT (shape-level peer):
+        // `SexpShape::iac_forge_tag() ==
+        // SexpShape::as_quote_form().map(QuoteForm::iac_forge_tag)` for
+        // every variant in `SexpShape::ALL`. The (outer shape, canonical
+        // iac-forge tag) pairing binds through the pre-existing quote-
+        // family carving composed with the closed-set tag projection
+        // rather than at a parallel four-arm inline match — this pin
+        // enforces the composition-identity across the closed twelve-arm
+        // sweep so a regression that drifts ONE arm's inline projection
+        // from the composition (e.g. re-inlining `SexpShape::Quote →
+        // Some("quote-old")` without updating `QuoteForm::iac_forge_tag`)
+        // fails-loudly here. Sibling posture to
+        // `sexp_shape_hash_discriminator_quote_family_arms_route_through_quote_form`
+        // (delegation-identity on the byte-discriminator surface) — that
+        // pin binds the sub-carving byte routing; this pin binds the
+        // sub-carving tag routing.
+        for shape in SexpShape::ALL {
+            let via_method = shape.iac_forge_tag();
+            let via_composition = shape
+                .as_quote_form()
+                .map(crate::ast::QuoteForm::iac_forge_tag);
+            assert_eq!(
+                via_method, via_composition,
+                "SexpShape::{shape:?}.iac_forge_tag() drifted from \
+                 .as_quote_form().map(QuoteForm::iac_forge_tag) — the shape-level tag projection is no longer derived from the sub-carving's canonical site",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_iac_forge_tag_partitions_quote_family_and_kernel_disjointly() {
+        // IMAGE-PARTITION CONTRACT (shape-level peer): sweeping
+        // `SexpShape::ALL` through `SexpShape::iac_forge_tag` MUST
+        // partition into EXACTLY the four-arm quote-family image (four
+        // distinct canonical CL tag strings — the pre-image of `Some(_)`)
+        // AND the eight-shape kernel (all `None` — six atomic-payload
+        // variants + `Nil` + `List`). The image's `is_some()` count
+        // MUST be four (surjective onto the four-tag closed set), the
+        // kernel's `is_none()` count MUST be eight, and the sum MUST
+        // hit `SexpShape::ALL.len()` (twelve) — a regression that leaks
+        // a bogus `Some(_)` from a non-quote-family arm or drops a
+        // `Some(_)` from a quote-family arm fails-loudly here on the
+        // partition-cardinality axis before any downstream iac-forge
+        // consumer would surface the drift. Sibling posture to the
+        // three-way carving `sexp_shape_hash_discriminator_partitions_by_three_way_carving_disjointly`
+        // pinning the byte-image partition; this pin binds the shape-
+        // level tag-image partition on the four-arm quote-family
+        // carving.
+        let tag_image: std::collections::BTreeSet<&'static str> = SexpShape::ALL
+            .iter()
+            .filter_map(|shape| shape.iac_forge_tag())
+            .collect();
+        let expected_tag_image: std::collections::BTreeSet<&'static str> =
+            ["quote", "quasiquote", "unquote", "unquote-splicing"]
+                .into_iter()
+                .collect();
+        assert_eq!(
+            tag_image, expected_tag_image,
+            "SexpShape::iac_forge_tag image must exactly cover the four canonical CL quote-family tags",
+        );
+        let some_count = SexpShape::ALL
+            .iter()
+            .filter(|shape| shape.iac_forge_tag().is_some())
+            .count();
+        assert_eq!(
+            some_count, 4,
+            "SexpShape::iac_forge_tag must return `Some(_)` on exactly the four-arm quote-family carving",
+        );
+        let none_count = SexpShape::ALL
+            .iter()
+            .filter(|shape| shape.iac_forge_tag().is_none())
+            .count();
+        assert_eq!(
+            none_count, 8,
+            "SexpShape::iac_forge_tag must return `None` on exactly the eight-shape non-quote-family kernel",
+        );
+        assert_eq!(
+            some_count + none_count,
+            SexpShape::ALL.len(),
+            "SexpShape::iac_forge_tag's image + kernel must partition SexpShape::ALL exactly",
         );
     }
 }

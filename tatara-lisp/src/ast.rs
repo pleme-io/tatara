@@ -4096,6 +4096,146 @@ impl Sexp {
     pub fn iac_forge_tag(&self) -> Option<&'static str> {
         self.shape().iac_forge_tag()
     }
+
+    /// Canonical reader-punctuation prefix for the outer [`Sexp`] value —
+    /// the OUTER-VALUE peer of the shape-level
+    /// [`crate::error::SexpShape::prefix`] one algebra layer down.
+    /// `Some(&'static str)` for the four homoiconic prefix-wrapper arms —
+    /// `Self::Quote → Some("'")`, `Self::Quasiquote → Some("`")`,
+    /// `Self::Unquote → Some(",")`, `Self::UnquoteSplice → Some(",@")` —
+    /// and `None` for the outer atomic-payload arm ([`Self::Atom`]) AND
+    /// the two structural-residual arms ([`Self::Nil`], [`Self::List`]).
+    /// The 4-of-7 partial projection on the outer-`Sexp` algebra surfaces
+    /// [`crate::ast::QuoteForm::prefix`]'s reader-punctuation surface at
+    /// the outermost value-carrier algebra level, composed through the
+    /// pre-existing [`Self::shape`] projection and
+    /// [`crate::error::SexpShape::prefix`]'s shape-level partial
+    /// projection.
+    ///
+    /// Composition law: `sexp.prefix() == sexp.shape().prefix()` for
+    /// every `sexp: &Sexp` — the outer-`Sexp` reader-punctuation surface
+    /// routes through [`Self::shape`] into the shape-level partial
+    /// projection, which in turn composes through
+    /// [`crate::error::SexpShape::as_quote_form`] with
+    /// [`crate::ast::QuoteForm::prefix`]'s canonical 4-of-4 closed-set
+    /// prefix projection. Post-lift the outer-`Sexp` reader-punctuation
+    /// surface closes at FOUR typed layers: outer [`Self::prefix`]
+    /// (7-arm outer dispatch on the outer [`Sexp`] algebra, this method)
+    /// → shape-level [`crate::error::SexpShape::prefix`] (12-arm shape-
+    /// level dispatch on the [`crate::error::SexpShape`] algebra) →
+    /// quote-family carving [`crate::error::SexpShape::as_quote_form`]
+    /// (4-of-12 quote-family sub-carving) → sub-carving prefix
+    /// [`crate::ast::QuoteForm::prefix`] (4-arm quote-family sub-
+    /// carving's canonical reader-punctuation projection).
+    ///
+    /// Pre-lift a consumer with a typed [`Sexp`] value in hand (an
+    /// [`fmt::Display for Sexp`] impl that renders the four quote-family
+    /// arms as `<prefix><inner>`, an LSP hover / REPL completion that
+    /// echoes the source-punctuation prefix of a wrapper value, an
+    /// audit-trail metric keyed on the observed outer value) wanting
+    /// the canonical reader-punctuation prefix string had to spell the
+    /// two-step composition `sexp.shape().prefix()` at every callsite,
+    /// or route through [`Self::as_quote_form_marker`] composed with
+    /// [`crate::ast::QuoteForm::prefix`] via `map` as the
+    /// [`fmt::Display for Sexp`] impl does for its four quote-family
+    /// arms via [`Self::expect_quote_form`] composed with
+    /// [`crate::ast::QuoteForm::prefix`]. Post-lift the outer-`Sexp`
+    /// reader-punctuation projection binds at ONE typed-algebra method
+    /// on the outer value-carrier — the natural next rung on the
+    /// trajectory mirroring the [`Self::iac_forge_tag`] →
+    /// [`crate::error::SexpShape::iac_forge_tag`] ladder one vocabulary
+    /// axis over, matching the same shape-composition posture
+    /// [`Self::hash_discriminator`] and [`Self::iac_forge_tag`] take
+    /// through the outer → shape one-step delegation.
+    ///
+    /// The `Option<&'static str>` return shape mirrors
+    /// [`crate::error::SexpShape::prefix`]'s partial-projection shape one
+    /// algebra level down — the outer-`Sexp` seven-arm closed set's
+    /// projection PARTIALIZES on the three non-quote-family shapes
+    /// (`Nil`, `Atom`, `List`) exactly as the shape-level twelve-arm
+    /// closed set's projection PARTIALIZES on the eight non-quote-family
+    /// shapes. The kernel's outer cardinality (three: `Nil` / `Atom` /
+    /// `List`) matches the shape-level kernel's cardinality (eight)
+    /// through [`Self::shape`]'s six-atomic-arms → outer `Atom` collapse
+    /// — the outer three-arm kernel `{Nil, Atom, List}` corresponds to
+    /// the shape-level eight-arm kernel `{Nil, Symbol, Keyword, String,
+    /// Int, Float, Bool, List}` under the outer → shape projection.
+    ///
+    /// The reader-punctuation vocabulary this method projects (`"'"` /
+    /// `` "`" `` / `","` / `",@"`) is INTENTIONALLY DISJOINT from the
+    /// two sibling `&'static str` outer-value projection axes:
+    ///
+    /// * [`Self::iac_forge_tag`] — cross-crate canonical form
+    ///   (`"quote"` / `"quasiquote"` / `"unquote"` /
+    ///   `"unquote-splicing"`), BLAKE3 attestation keys, render-cache
+    ///   shape (load-bearing for byte-identical inter-crate compatibility
+    ///   with the iac-forge ecosystem);
+    /// * [`Self::type_name`] — operator-facing diagnostic label
+    ///   (`"nil"` / `"atom"` / `"list"` / `"quote"` / `"quasiquote"` /
+    ///   `"unquote"` / `"unquote-splice"`) on the outer 7-arm surface,
+    ///   [`crate::error::LispError::TypeMismatch`]'s `got` rendering,
+    ///   REPL / LSP shape-of-witness surface.
+    ///
+    /// This method projects the reader's SOURCE-TEXT vocabulary — the
+    /// four punctuation characters that appear literally in Lisp source
+    /// at each variant's homoiconic prefix. The three outer-value
+    /// closed-set projections key the SAME seven-arm outer algebra on
+    /// THREE distinct `&'static str` vocabularies (source-punctuation,
+    /// diagnostic-label, cross-crate canonical-form); consolidating any
+    /// two would silently break either the reader round-trip, the
+    /// operator-facing diagnostic surface, OR the iac-forge attestation
+    /// pipeline. The three vocabularies' distinctness is pinned bit-for-
+    /// bit through the composition law across the closed-set typed
+    /// algebra.
+    ///
+    /// The `&'static str` lifetime is load-bearing: every reader / LSP
+    /// / REPL / [`fmt::Display for Sexp`] consumer projects through this
+    /// method into the canonical prefix character without an allocation,
+    /// parallel to how [`crate::ast::QuoteForm::prefix`] on the sub-
+    /// carving, [`crate::error::SexpShape::prefix`] on the shape-level
+    /// projection, [`Self::iac_forge_tag`] on the cross-crate canonical-
+    /// form axis, and [`crate::error::UnquoteForm::marker`] on the
+    /// template-marker axis project their respective closed sets. A
+    /// future eighth [`Sexp`] variant (e.g. a hypothetical `Vector` for
+    /// `#(...)` reader syntax, `Map` for `{...}`, `Char` for `#\x`)
+    /// extends [`crate::error::SexpShape`] (adding a `None`-arm non-
+    /// quote-family shape) — this method picks up the new arm's `None`
+    /// mechanically through the shape composition, with rustc's
+    /// exhaustiveness binding the extension end-to-end at
+    /// [`crate::error::SexpShape::as_quote_form`]'s closed match.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (outer
+    /// `Sexp` variant, reader-punctuation prefix) pairing becomes a
+    /// TYPE projection on the outermost value-carrier algebra rather
+    /// than an inline `.shape().prefix()` two-step at every consumer.
+    /// A typo or swap at the projection site is no longer a runtime
+    /// prefix drift but a compile error against the typed composition
+    /// — the `Sexp` ↔ `SexpShape` ↔ `QuoteForm` ↔ prefix character
+    /// chain is rustc-enforced end-to-end. THEORY.md §II.1 invariant 2
+    /// — free middle; the (outer value, reader-punctuation prefix)
+    /// pairing now binds at ONE site on the outer-`Sexp` algebra,
+    /// composing through the pre-existing shape-level partial
+    /// projection rather than duplicating the four-arm match here.
+    /// THEORY.md §VI.1 — generation over composition; the outer-`Sexp`
+    /// reader-punctuation surface closes at FOUR typed layers (outer
+    /// → shape → carving → sub-carving-prefix), each keyed on the SAME
+    /// reader-punctuation projection carried at the closed-set sub-
+    /// carving level.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::Operation::getName()` typed
+    /// projection composed with `mlir::OperationName::getStringRef()`
+    /// — narrowing an operation-carrier value through its typed op-name
+    /// identity yields the canonical cross-boundary string identity in
+    /// ONE typed composition. [`Self::prefix`] is the Rust-typed peer
+    /// where the "project to shape" step ([`Self::shape`]) composes
+    /// with the "read the shape's canonical reader-punctuation" step
+    /// ([`crate::error::SexpShape::prefix`]) into ONE outer-value
+    /// projection — sibling of [`Self::iac_forge_tag`] one vocabulary
+    /// axis over on the cross-crate canonical-form surface.
+    #[must_use]
+    pub fn prefix(&self) -> Option<&'static str> {
+        self.shape().prefix()
+    }
 }
 
 /// Static panic message for [`Sexp::expect_quote_form`]'s asserted-total
@@ -8350,6 +8490,189 @@ mod tests {
             some_count + none_count,
             seeds.len(),
             "Sexp::iac_forge_tag's image + kernel must partition the representative outer-variant sweep exactly",
+        );
+    }
+
+    #[test]
+    fn sexp_prefix_routes_through_shape_prefix_via_composition() {
+        // COMPOSITION-IDENTITY CONTRACT (outer-value peer): pin the
+        // outer-`Sexp` reader-punctuation surface routing IDENTITY
+        // through the pre-existing shape-level projection — for every
+        // reachable outer-variant shape, `Sexp::prefix` MUST agree arm-
+        // for-arm with `self.shape().prefix()`. Post-lift the outer
+        // method's body is EXACTLY `self.shape().prefix()`, and this
+        // pin binds the routing identity across every reachable shape so
+        // a regression that re-inlines a parallel four-arm match on the
+        // outer `Self::Quote | Self::Quasiquote | ...` set returning
+        // literal reader-punctuation strings inline still drifts
+        // detectably if the shape-level projection's prefix composition
+        // is re-numbered — the composition identity is what closes the
+        // outer-`Sexp` reader-punctuation surface at four typed layers
+        // (outer → shape → carving → sub-carving-prefix). Sibling
+        // posture to
+        // `sexp_iac_forge_tag_routes_through_shape_iac_forge_tag_via_composition`
+        // one vocabulary axis over — that pin binds the outer method
+        // against the shape-level method on the cross-crate canonical-
+        // form tag axis; this pin binds the outer method against the
+        // shape-level method on the reader-punctuation axis.
+        let payload = Sexp::symbol("payload");
+        let seeds: Vec<(&str, Sexp)> = vec![
+            ("nil", Sexp::Nil),
+            ("atom-symbol", Sexp::symbol("s")),
+            ("atom-keyword", Sexp::keyword("k")),
+            ("atom-string", Sexp::string("t")),
+            ("atom-int", Sexp::int(7)),
+            ("atom-float", Sexp::float(2.5)),
+            ("atom-bool", Sexp::boolean(true)),
+            ("empty list", Sexp::List(vec![])),
+            (
+                "non-empty list",
+                Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]),
+            ),
+            ("quote", Sexp::Quote(Box::new(payload.clone()))),
+            ("quasiquote", Sexp::Quasiquote(Box::new(payload.clone()))),
+            ("unquote", Sexp::Unquote(Box::new(payload.clone()))),
+            (
+                "unquote-splice",
+                Sexp::UnquoteSplice(Box::new(payload.clone())),
+            ),
+        ];
+        for (label, sexp) in seeds {
+            let outer = sexp.prefix();
+            let via_shape = sexp.shape().prefix();
+            assert_eq!(
+                outer, via_shape,
+                "Sexp::prefix at {label} drifted from self.shape().prefix() — the four-layer typed reader-punctuation composition is broken",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_prefix_pins_canonical_reader_prefixes_for_every_quote_family_arm() {
+        // CANONICAL-PREFIX CONTRACT (outer-value peer): the outer-value
+        // `Sexp::prefix` MUST project each of the four homoiconic
+        // prefix-wrapper arms to the SAME canonical reader-punctuation
+        // string `crate::error::SexpShape::prefix` projects at the
+        // shape-level (and `crate::ast::QuoteForm::prefix` at the sub-
+        // carving level) — `Sexp::Quote → Some("'")`,
+        // `Sexp::Quasiquote → Some("`")`, `Sexp::Unquote → Some(",")`,
+        // `Sexp::UnquoteSplice → Some(",@")`. A regression that inlines
+        // a byte-drifted spelling here (e.g. `Sexp::UnquoteSplice →
+        // Some(", @")` inserting a spurious space, or `Sexp::Quote →
+        // Some("`")` swapping arms between Quote and Quasiquote)
+        // silently breaks the `Display for Sexp` round-trip against the
+        // reader's prefix dispatch. Sibling posture to
+        // `sexp_shape_prefix_pins_canonical_reader_prefixes_for_every_quote_family_arm`
+        // one algebra level down — that pin binds the shape-level
+        // projection's canonical reader-punctuation surface; this pin
+        // binds the outer-value projection's canonical reader-
+        // punctuation surface across the closed four-arm quote-family
+        // sweep on the outer `Sexp` algebra.
+        let inner = Sexp::symbol("payload");
+        assert_eq!(Sexp::Quote(Box::new(inner.clone())).prefix(), Some("'"),);
+        assert_eq!(
+            Sexp::Quasiquote(Box::new(inner.clone())).prefix(),
+            Some("`"),
+        );
+        assert_eq!(Sexp::Unquote(Box::new(inner.clone())).prefix(), Some(","),);
+        assert_eq!(Sexp::UnquoteSplice(Box::new(inner)).prefix(), Some(",@"),);
+    }
+
+    #[test]
+    fn sexp_prefix_returns_none_on_every_non_quote_family_variant() {
+        // PARTIAL-PROJECTION KERNEL CONTRACT (outer-value peer): every
+        // `Sexp` variant OUTSIDE the four-arm quote-family carving MUST
+        // project through `Sexp::prefix` to `None` — the three-arm
+        // outer kernel `{Nil, Atom, List}` (which corresponds to the
+        // eight-shape kernel at the shape-level projection through the
+        // six-atomic-arms → outer `Atom` collapse of `Self::shape`).
+        // Pin representative seeds for each kernel arm — `Nil`, one
+        // atom per `AtomKind`, one empty + one non-empty list — so a
+        // regression that surfaces a bogus prefix for a non-quote-
+        // family arm (e.g. `Sexp::List → Some("(")` conflating the
+        // outer-shape structural delimiter with the quote-family
+        // reader-punctuation) fails-loudly here. Sibling posture to
+        // `sexp_shape_prefix_returns_none_on_every_non_quote_family_shape`
+        // one algebra level down — that pin binds the shape-level
+        // projection's kernel; this pin binds the outer-value
+        // projection's kernel on the three-arm outer partition.
+        assert_eq!(Sexp::Nil.prefix(), None);
+        assert_eq!(Sexp::symbol("s").prefix(), None);
+        assert_eq!(Sexp::keyword("k").prefix(), None);
+        assert_eq!(Sexp::string("t").prefix(), None);
+        assert_eq!(Sexp::int(7).prefix(), None);
+        assert_eq!(Sexp::float(2.5).prefix(), None);
+        assert_eq!(Sexp::boolean(true).prefix(), None);
+        assert_eq!(Sexp::List(vec![]).prefix(), None);
+        assert_eq!(
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]).prefix(),
+            None,
+        );
+    }
+
+    #[test]
+    fn sexp_prefix_partitions_quote_family_and_kernel_disjointly() {
+        // IMAGE-PARTITION CONTRACT (outer-value peer): sweeping a
+        // representative seed per outer `Sexp` variant through
+        // `Sexp::prefix` MUST partition into EXACTLY the four-arm
+        // quote-family image (four distinct canonical reader-punctuation
+        // strings — the pre-image of `Some(_)`) AND the outer three-arm
+        // non-quote-family kernel (all `None` — `Nil` + one atom per
+        // `AtomKind` + one list). The image's `is_some()` count MUST be
+        // four (surjective onto the four-prefix closed set), the
+        // kernel's `is_none()` count MUST cover every non-quote-family
+        // seed, and the total sweep sums to the thirteen-seed
+        // representative sweep covering all seven outer variants (six
+        // `Atom` payloads + `Nil` + one `List` + four quote-family
+        // arms). A regression that leaks a bogus `Some(_)` from a non-
+        // quote-family arm or drops a `Some(_)` from a quote-family arm
+        // fails-loudly here on the partition-cardinality axis before
+        // any downstream reader-round-trip or Display consumer would
+        // surface the drift. Sibling posture to
+        // `sexp_shape_prefix_partitions_quote_family_and_kernel_disjointly`
+        // one algebra level down — that pin binds the shape-level
+        // image-partition on the twelve-shape closed sweep; this pin
+        // binds the outer-value image-partition on the representative
+        // outer-variant sweep.
+        let payload = Sexp::symbol("payload");
+        let seeds: Vec<Sexp> = vec![
+            Sexp::Nil,
+            Sexp::symbol("s"),
+            Sexp::keyword("k"),
+            Sexp::string("t"),
+            Sexp::int(7),
+            Sexp::float(2.5),
+            Sexp::boolean(true),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]),
+            Sexp::Quote(Box::new(payload.clone())),
+            Sexp::Quasiquote(Box::new(payload.clone())),
+            Sexp::Unquote(Box::new(payload.clone())),
+            Sexp::UnquoteSplice(Box::new(payload.clone())),
+        ];
+        let prefix_image: std::collections::BTreeSet<&'static str> =
+            seeds.iter().filter_map(Sexp::prefix).collect();
+        let expected_prefix_image: std::collections::BTreeSet<&'static str> =
+            ["'", "`", ",", ",@"].into_iter().collect();
+        assert_eq!(
+            prefix_image, expected_prefix_image,
+            "Sexp::prefix image must exactly cover the four canonical reader-punctuation quote-family prefixes",
+        );
+        let some_count = seeds.iter().filter(|sexp| sexp.prefix().is_some()).count();
+        assert_eq!(
+            some_count, 4,
+            "Sexp::prefix must return `Some(_)` on exactly the four-arm quote-family carving",
+        );
+        let none_count = seeds.iter().filter(|sexp| sexp.prefix().is_none()).count();
+        assert_eq!(
+            none_count,
+            seeds.len() - 4,
+            "Sexp::prefix must return `None` on every seed outside the four-arm quote-family carving",
+        );
+        assert_eq!(
+            some_count + none_count,
+            seeds.len(),
+            "Sexp::prefix's image + kernel must partition the representative outer-variant sweep exactly",
         );
     }
 

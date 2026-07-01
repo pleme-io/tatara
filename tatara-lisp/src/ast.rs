@@ -2536,6 +2536,169 @@ impl Sexp {
         Self::list(std::iter::once(Self::symbol(head)).chain(args))
     }
 
+    /// Canonical named-call-form outer constructor — composes the call-
+    /// form typed constructor [`Self::call`] with the atomic-payload
+    /// construct family's [`Self::symbol`] (for the NAME slot) via
+    /// `std::iter::once(Self::symbol(name)).chain(spec_args)` to build a
+    /// `(head NAME spec_args…)` symbol-headed named list-shaped [`Sexp`]
+    /// value at ONE site on the closed-set [`Sexp`] algebra. The named-
+    /// call-form section-for-retraction sibling of the existing
+    /// [`Self::as_named_call_to`] soft-projection ([`Option<crate::error::
+    /// Result<(&str, &[Sexp])>>`]): where the projection soft-decomposes
+    /// a `(<keyword> NAME spec_args…)` symbol-headed list into its NAME
+    /// symbol and spec args tail through the named-form gate
+    /// ([`crate::compile::split_name_slot`]), this constructor embeds a
+    /// fresh `(head string, name string, spec_args sequence)` triple
+    /// into the matching named-call-shaped wrapper. Composition sibling
+    /// of the call-form construct [`Self::call`] on the outer algebra:
+    /// where [`Self::call`] closes the (construct, project) dual on the
+    /// CALL-FORM TYPED DECOMPOSITION (`(head args…)`), this closes the
+    /// dual on the NAMED-CALL-FORM TYPED DECOMPOSITION (`(head NAME
+    /// spec_args…)`) — the load-bearing shape every `(defX NAME …)`
+    /// typed-domain named authoring form takes on the outer [`Sexp`]
+    /// algebra, and the section-for-retraction dual of the
+    /// [`crate::compile::split_name_slot`] gate at the value level.
+    ///
+    /// Composition law (forward, through the call-form + atomic-payload
+    /// construct families): `Sexp::named_call(head, name, spec_args) ==
+    /// Sexp::call(head, std::iter::once(Sexp::symbol(name)).chain(
+    /// spec_args))` for every `head: impl Into<String>` + `name: impl
+    /// Into<String>` + `spec_args: impl IntoIterator<Item = Sexp>`. The
+    /// body binds through the SAME two construct methods consumers
+    /// already reach for when threading a head-then-name-then-rest
+    /// sequence into a named call form — the composition law lifts that
+    /// two-method inline pattern to ONE named query on the outer
+    /// [`Sexp`] algebra.
+    ///
+    /// Round-trip law (section-for-retraction with the named-form soft-
+    /// projection): for every `head: &'static str` + `name: &str` +
+    /// `spec_args: Vec<Sexp>`, `Sexp::named_call(head, name, spec_args
+    /// .clone()).as_named_call_to(head) == Some(Ok((name, spec_args
+    /// .as_slice())))` — the outer algebra's named-call-form typed
+    /// constructor pairs section-for-retraction with the outer
+    /// algebra's soft named-call-form projection, and the (head symbol,
+    /// NAME symbol, spec args slice) cross-projection preserves
+    /// identity. Call-form projection composition: `Sexp::named_call(
+    /// head, name, spec_args).as_call() == Some((head,
+    /// once(Sexp::symbol(name)).chain(spec_args).collect().as_slice()
+    /// ))` — the call-form soft-projection recovers `(head, [name,
+    /// spec_args…])` with the NAME symbol as the first arg, mirroring
+    /// the [`Self::call`] round-trip on the encompassing call algebra.
+    /// Keyword-matched round-trip law: for every `head: &'static str` +
+    /// `name: &str` + `spec_args: Vec<Sexp>`, `Sexp::named_call(head,
+    /// name, spec_args.clone()).as_call_to(head) == Some(
+    /// [Sexp::symbol(name), spec_args…].as_slice())` — the keyword-
+    /// typed projection recovers the NAME-headed args tail iff its
+    /// argument keyword matches the constructor's head. Head-symbol
+    /// composition law: `Sexp::named_call(head, name, spec_args)
+    /// .head_symbol() == Some(head.as_str())` — the head-position
+    /// projection recovers the constructor's head byte-for-byte.
+    ///
+    /// Outer-shape composition law: `Sexp::named_call(head, name,
+    /// spec_args).shape() == SexpShape::List` for every input — a
+    /// named call form is a list-shaped [`Sexp`], the outer-shape
+    /// identity binds through the typed-shape lattice at the residual
+    /// arm. Structural-carving-marker composition law: `Sexp::
+    /// named_call(head, name, spec_args).as_structural_kind() ==
+    /// Some(StructuralKind::List)` — the residual-axis carving marker
+    /// binds through the closed-set [`StructuralKind`] algebra at ONE
+    /// arm, symmetric with [`Self::call`]'s residual-arm marker
+    /// composition.
+    ///
+    /// Named-form gate composition law: `crate::compile::split_name_slot(
+    /// &Sexp::named_call(head, name, spec_args).as_call_to(head)
+    /// .unwrap(), head) == Ok((name, spec_args.as_slice()))` — the
+    /// substrate's named-form arity + NAME-shape gate accepts every
+    /// output of this constructor byte-for-byte, closing the section-
+    /// for-retraction pair at the gate level as well as at the
+    /// projection level. A constructor emission that drifts into a
+    /// missing-NAME shape (empty spec_args yields `(head)`, which the
+    /// call-form projection recovers but the named-form gate rejects
+    /// with `NamedFormMissingName`) or a non-symbol-NAME shape
+    /// (`Sexp::keyword(name)` for the NAME position, which the gate
+    /// rejects with `NamedFormNonSymbolName`) becomes structurally
+    /// impossible — the `impl Into<String>` NAME bound admits string
+    /// payloads only, and the [`Self::symbol`] wrap routes to the
+    /// symbol atom variant `as_symbol_or_string` accepts.
+    ///
+    /// Pre-lift the `Sexp::call(head, std::iter::once(Sexp::symbol(
+    /// name)).chain(spec_args))` composition (or equivalently the
+    /// `Sexp::List(vec![Sexp::symbol(head), Sexp::symbol(name),
+    /// spec_args...])` welded quadruple) appeared inline at every
+    /// consumer that builds a `(defX NAME …)`-shaped [`Sexp`] value
+    /// — well past the ≥2 PRIME-DIRECTIVE trigger once the named
+    /// call-form shape is named. Post-lift consumers that have a head
+    /// string + a NAME string + an owned or iterable sequence of spec
+    /// args bind to ONE typed-algebra method on the outer [`Sexp`]
+    /// algebra with the two `impl Into<String>` bounds absorbing `&str`
+    /// / `String` / `&String` on both string positions and the
+    /// `impl IntoIterator<Item = Sexp>` bound on the spec args
+    /// absorbing `Vec<Sexp>` / `[Sexp; N]` / `.map(...)` chains without
+    /// a per-site `.collect::<Vec<Sexp>>()` coercion.
+    ///
+    /// Frontier inspiration: Racket's `syntax-parse`
+    /// `(~datum keyword) name:id spec ...` pattern binds the NAME slot
+    /// through the `name:id` capture binder and consumers reference it
+    /// downstream; the constructor peer on the same surface is
+    /// `syntax-e` composed with `datum->syntax` wrapping a
+    /// `(list #'keyword name-id spec-list ...)` triple. `Sexp::
+    /// named_call` is the unstructured-Rust peer — a section-for-
+    /// retraction constructor on the outer algebra that mirrors the
+    /// `~datum keyword name:id spec ...` pattern's NAME capture on the
+    /// construct side. Tree-sitter's `query`-matched named captures
+    /// have the same shape on the tree side: the query pattern
+    /// binds a NAME capture, the constructor peer (`ts_node_new`
+    /// composed with `ts_node_field_set`) embeds a fresh NAME child at
+    /// the corresponding field slot. The typed structural rejection
+    /// chain the substrate's named-form gate emits
+    /// ([`crate::error::LispError::NamedFormMissingName`],
+    /// [`crate::error::LispError::NamedFormNonSymbolName`]) is
+    /// preserved by construction — the constructor cannot emit a
+    /// value the gate rejects, symmetric with the `~datum` /
+    /// `name:id` reader-side rejection that fires BEFORE any
+    /// downstream binding sees the drifted shape.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// (head string, NAME string, spec args sequence, [`Self::call`]
+    /// call-form constructor) quadruple binds at ONE typed-algebra
+    /// method on the outer [`Sexp`] algebra, closing the named-call-
+    /// form (construct, project) algebra dual pair with
+    /// [`Self::as_named_call_to`] / [`Self::as_named_call_to_any`] on
+    /// the projection side and [`crate::compile::split_name_slot`] on
+    /// the gate side. THEORY.md §II.1 invariant 2 — free middle;
+    /// every consumer that has a head + NAME + spec args and wants to
+    /// build a named-call-shaped [`Sexp`] routes through the SAME
+    /// typed method, so a regression that drifts one consumer's
+    /// construction from the others (e.g. a copy-edit that emits
+    /// `Sexp::keyword(name)` for the NAME position, which the
+    /// named-form gate would reject with `NamedFormNonSymbolName`)
+    /// cannot reach the substrate's runtime. THEORY.md §V.1 —
+    /// knowable platform; the named-call-form typed-construct becomes
+    /// a TYPE projection on the substrate's outer [`Sexp`] algebra
+    /// sitting next to the typed-project family [`Self::
+    /// as_named_call_to`] / [`Self::as_named_call_to_any`] +
+    /// [`crate::ast::iter_named_calls_to`] /
+    /// [`crate::ast::iter_named_calls_to_any`] rather than a per-site
+    /// inline composition. THEORY.md §VI.1 — generation over
+    /// composition; the named-call-form pair emerges from ONE typed-
+    /// algebra composition through [`Self::call`] composed with
+    /// [`Self::symbol`] rather than from per-consumer per-callsite
+    /// literals; a future named-form shape extension (e.g. a
+    /// dotted-NAME form, or a typed-NAME form where the NAME slot
+    /// carries a compile-time-decoded typed witness) lands as ONE
+    /// peer constructor on this algebra alongside the call-form,
+    /// residual, quote-family, and atomic-payload construct
+    /// families.
+    #[must_use]
+    pub fn named_call<H, N, I>(head: H, name: N, spec_args: I) -> Self
+    where
+        H: Into<String>,
+        N: Into<String>,
+        I: IntoIterator<Item = Sexp>,
+    {
+        Self::call(head, std::iter::once(Self::symbol(name)).chain(spec_args))
+    }
+
     /// Decompose a call form into its argument tail IFF the head matches the
     /// supplied `keyword` — `Some(args)` iff this is a non-empty list whose
     /// first element is a symbol equal to `keyword`, where `args` is the
@@ -12184,6 +12347,437 @@ mod tests {
             Sexp::call(head, args.clone()),
             Sexp::list(std::iter::once(Sexp::symbol(head)).chain(args.iter().cloned())),
             "Sexp::call body drifted from the Sexp::list ∘ once(Sexp::symbol) ∘ chain composition for head={head:?}",
+        );
+    }
+
+    // ── Sexp::named_call — named-call-form (symbol-headed + NAME slot)
+    //    construct ───────────────────────────────────────────────────────
+    //
+    // `Sexp::named_call(head, name, spec_args)` is the section-for-
+    // retraction dual of the soft-projection `Sexp::as_named_call_to(
+    // keyword) -> Option<Result<(&str, &[Sexp])>>` — it embeds a fresh
+    // `(head string, NAME string, spec args sequence)` triple into a
+    // symbol-headed `(head NAME spec_args…)` `Sexp::List` value at ONE
+    // site on the outer `Sexp` algebra, composing the call-form
+    // typed constructor `Sexp::call` (which itself composes the atomic
+    // `Sexp::symbol` head with the residual `Sexp::list` wrapper) with
+    // a NAME-slot `Sexp::symbol` embedding via `std::iter::once(
+    // Sexp::symbol(name)).chain(spec_args)`. Pre-lift the composition
+    // lived inline at every consumer that built a `(defX NAME …)`
+    // typed-domain named authoring form or a synthetic named-dispatch
+    // form — `Sexp::List(vec![Sexp::symbol(head), Sexp::symbol(name),
+    // spec_args...])` or `Sexp::call(head, std::iter::once(
+    // Sexp::symbol(name)).chain(spec_args))` was the welded quadruple
+    // open coding. Post-lift the closure binds at ONE typed-algebra
+    // method.
+    //
+    // These pins cover:
+    //   (a) the composition law
+    //       `Sexp::named_call(head, name, spec_args) == Sexp::call(
+    //       head, std::iter::once(Sexp::symbol(name)).chain(spec_args))`
+    //       — the constructor body is BY DEFINITION the two-method
+    //       composition;
+    //   (b) the round-trip law
+    //       `Sexp::named_call(head, name, spec_args.clone())
+    //       .as_named_call_to(head) == Some(Ok((name, spec_args
+    //       .as_slice())))` — the (construct, named-project) named-
+    //       call-form algebra dual closes at this pair, symmetric with
+    //       the call-form's `Sexp::call(head, args.clone()).as_call()
+    //       == Some((head, args.as_slice()))` round-trip;
+    //   (c) the call-form projection composition
+    //       `Sexp::named_call(head, name, spec_args)
+    //       .as_call() == Some((head, [Sexp::symbol(name),
+    //       spec_args…].as_slice()))` — the call-form soft-projection
+    //       recovers `(head, [name, spec_args…])` with the NAME symbol
+    //       as the first arg, threading the constructor's output
+    //       through the encompassing call-form projection;
+    //   (d) the keyword-matched round-trip law
+    //       `Sexp::named_call(head, name, spec_args)
+    //       .as_call_to(head) == Some([Sexp::symbol(name),
+    //       spec_args…].as_slice())` — the keyword-typed projection
+    //       recovers the NAME-headed args tail iff its argument
+    //       matches the constructor's head;
+    //   (e) the head-symbol composition law
+    //       `Sexp::named_call(head, name, spec_args).head_symbol()
+    //       == Some(head)` — the head-position projection recovers
+    //       the constructor's head byte-for-byte;
+    //   (f) the named-form gate composition law
+    //       `crate::compile::split_name_slot(&Sexp::named_call(head,
+    //       name, spec_args).as_call_to(head).unwrap(), head) == Ok((
+    //       name, spec_args.as_slice()))` — the substrate's named-
+    //       form arity + NAME-shape gate accepts every output of this
+    //       constructor byte-for-byte, closing the section-for-
+    //       retraction pair at the gate level as well as the
+    //       projection level;
+    //   (g) the outer-shape composition law
+    //       `Sexp::named_call(head, name, spec_args).shape() ==
+    //       SexpShape::List` and `.as_structural_kind() == Some(
+    //       StructuralKind::List)` — the residual carving marker binds
+    //       through the closed-set `StructuralKind` algebra at ONE
+    //       arm, symmetric with `Sexp::call`'s residual-arm marker
+    //       composition;
+    //   (h) the input-shape flexibility
+    //       `Sexp::named_call("h", "n", Vec<Sexp>)` / `Sexp::
+    //       named_call(String, String, [Sexp; N])` / `Sexp::
+    //       named_call(&str, &String, iter::map(...))` all agree with
+    //       the canonical composition emission — the two `impl
+    //       Into<String>` bounds + `impl IntoIterator<Item = Sexp>`
+    //       args bound accept every reasonable input shape without a
+    //       per-consumer `.to_string()` / `.collect::<Vec<Sexp>>()`
+    //       coercion.
+
+    #[test]
+    fn sexp_named_call_constructor_body_matches_canonical_two_method_composition_across_representative_inputs(
+    ) {
+        // COMPOSITION LAW: `Sexp::named_call(head, name, spec_args) ==
+        // Sexp::call(head, std::iter::once(Sexp::symbol(name)).chain(
+        // spec_args))` for every representative (empty-spec-args,
+        // single-spec-arg, multi-spec-arg, heterogeneous-inner,
+        // quote-family-wrapping-inner) sample. A regression that
+        // drifts the body (e.g. a copy-edit that switches to
+        // `Sexp::keyword(name)` for the NAME position, or that
+        // reorders `name` and `spec_args` in the chain) surfaces here
+        // BEFORE the projection pins fail. Sibling-shape pin to
+        // `Sexp::call`'s canonical-composition test posture.
+        let samples: [(&'static str, &'static str, Vec<Sexp>); 5] = [
+            ("defcompiler", "solo", vec![]),
+            ("defpoint", "obs", vec![Sexp::keyword("class")]),
+            (
+                "defmonitor",
+                "m",
+                vec![
+                    Sexp::keyword("severity"),
+                    Sexp::symbol("Warning"),
+                    Sexp::keyword("threshold"),
+                    Sexp::int(42),
+                ],
+            ),
+            (
+                "defcheck",
+                "coherent",
+                vec![
+                    Sexp::List(vec![Sexp::symbol("crd-in-sync")]),
+                    Sexp::string("body"),
+                    Sexp::boolean(true),
+                ],
+            ),
+            (
+                "defalert-policy",
+                "outage",
+                vec![
+                    Sexp::Quote(Box::new(Sexp::symbol("x"))),
+                    Sexp::Quasiquote(Box::new(Sexp::List(vec![
+                        Sexp::symbol("template"),
+                        Sexp::Unquote(Box::new(Sexp::symbol("var"))),
+                    ]))),
+                    Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+                ],
+            ),
+        ];
+        for (head, name, spec_args) in &samples {
+            let expected = Sexp::call(
+                *head,
+                std::iter::once(Sexp::symbol(*name)).chain(spec_args.iter().cloned()),
+            );
+            assert_eq!(
+                Sexp::named_call(*head, *name, spec_args.clone()),
+                expected,
+                "Sexp::named_call drifted from Sexp::call(head, once(symbol(name)).chain(spec_args)) for head={head:?} name={name:?} spec_args={spec_args:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_named_call_constructor_round_trips_through_as_named_call_to() {
+        // ROUND-TRIP LAW (section-for-retraction with the named-form
+        // soft-projection): `Sexp::named_call(head, name, spec_args
+        // .clone()).as_named_call_to(head) == Some(Ok((name,
+        // spec_args.as_slice())))` sweeps the same representative
+        // input matrix — proves the (construct, named-project) pair
+        // forms an `Iso((&'static str, &str, Vec<Sexp>),
+        // (head-symbol-headed + NAME-symbol-second Sexp::List))` on
+        // the named-call-form typed decomposition. Sibling-shape pin
+        // to `Sexp::call`'s round-trip through `as_call` posture.
+        let samples: [(&'static str, &'static str, Vec<Sexp>); 4] = [
+            ("defcompiler", "solo", vec![]),
+            ("defpoint", "obs", vec![Sexp::keyword("class")]),
+            (
+                "defmonitor",
+                "m",
+                vec![Sexp::keyword("k"), Sexp::string("v")],
+            ),
+            (
+                "defalert-policy",
+                "outage",
+                vec![Sexp::Nil, Sexp::List(vec![Sexp::symbol("body")])],
+            ),
+        ];
+        for (head, name, spec_args) in &samples {
+            let built = Sexp::named_call(*head, *name, spec_args.clone());
+            assert_eq!(
+                built.as_named_call_to(head).and_then(|res| res.ok()),
+                Some((*name, spec_args.as_slice())),
+                "Sexp::named_call→as_named_call_to round-trip drifted for head={head:?} name={name:?} spec_args={spec_args:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_named_call_constructor_projects_through_as_call_with_name_first_arg() {
+        // CALL-FORM PROJECTION COMPOSITION: `Sexp::named_call(head,
+        // name, spec_args).as_call() == Some((head, [Sexp::symbol(
+        // name), spec_args…].as_slice()))` — the call-form soft-
+        // projection recovers `(head, [name, spec_args…])` with the
+        // NAME symbol as the first arg. Sibling-shape pin to the
+        // call-form encompassing algebra: the named-call constructor
+        // routes cleanly through the call-form projection AS A
+        // COMPOSITION.
+        let samples: [(&'static str, &'static str, Vec<Sexp>); 3] = [
+            ("defcompiler", "solo", vec![]),
+            ("defpoint", "obs", vec![Sexp::keyword("class")]),
+            (
+                "defmonitor",
+                "m",
+                vec![Sexp::keyword("threshold"), Sexp::int(42)],
+            ),
+        ];
+        for (head, name, spec_args) in &samples {
+            let built = Sexp::named_call(*head, *name, spec_args.clone());
+            let expected_args: Vec<Sexp> = std::iter::once(Sexp::symbol(*name))
+                .chain(spec_args.iter().cloned())
+                .collect();
+            assert_eq!(
+                built.as_call(),
+                Some((*head, expected_args.as_slice())),
+                "Sexp::named_call→as_call drifted for head={head:?} name={name:?} spec_args={spec_args:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_named_call_constructor_round_trips_through_as_call_to_matching_keyword() {
+        // KEYWORD-MATCHED ROUND-TRIP LAW: `Sexp::named_call(head,
+        // name, spec_args.clone()).as_call_to(head) == Some([
+        // Sexp::symbol(name), spec_args…].as_slice())` for the head-
+        // matched keyword, and `.as_call_to(other) == None` for every
+        // other keyword. Pins the (construct, keyword-typed-project)
+        // pair on the outer algebra threading through the NAMED axis
+        // — the same dispatch shape `compile_named_from_forms` routes
+        // through post-macroexpansion.
+        let samples: [(&'static str, &'static str, Vec<Sexp>); 3] = [
+            ("defcompiler", "solo", vec![]),
+            ("defpoint", "obs", vec![Sexp::keyword("class")]),
+            (
+                "defmonitor",
+                "m",
+                vec![Sexp::keyword("k"), Sexp::string("v")],
+            ),
+        ];
+        for (head, name, spec_args) in &samples {
+            let built = Sexp::named_call(*head, *name, spec_args.clone());
+            let expected_args: Vec<Sexp> = std::iter::once(Sexp::symbol(*name))
+                .chain(spec_args.iter().cloned())
+                .collect();
+            assert_eq!(
+                built.as_call_to(head),
+                Some(expected_args.as_slice()),
+                "Sexp::named_call→as_call_to(head) round-trip drifted for head={head:?} name={name:?} spec_args={spec_args:?}",
+            );
+            // Cross-keyword rejection: every DIFFERENT keyword misses.
+            let mismatched = format!("{head}-mismatch");
+            assert_eq!(
+                built.as_call_to(&mismatched),
+                None,
+                "Sexp::named_call→as_call_to(mismatch) leaked args for head={head:?} name={name:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_named_call_constructor_composes_with_head_symbol_and_shape_and_structural_kind() {
+        // OUTER-ALGEBRA PROJECTION COMPOSITIONS: every `Sexp::
+        // named_call(head, name, spec_args)` output projects through
+        // `head_symbol` / `shape` / `as_structural_kind` to the shape-
+        // invariants that pin the constructor's structural identity:
+        //   * `head_symbol() == Some(head)` — the head-position
+        //     projection recovers the constructor's head byte-for-byte;
+        //   * `shape() == SexpShape::List` — a named call form is a
+        //     list-shaped `Sexp` on the residual carving;
+        //   * `as_structural_kind() == Some(StructuralKind::List)` —
+        //     the residual carving marker binds through the closed-
+        //     set `StructuralKind` algebra at ONE arm.
+        let samples: [(&'static str, &'static str, Vec<Sexp>); 3] = [
+            ("head", "n", vec![]),
+            ("head", "n", vec![Sexp::keyword("k"), Sexp::string("v")]),
+            (
+                "head",
+                "n",
+                vec![
+                    Sexp::Nil,
+                    Sexp::Quote(Box::new(Sexp::symbol("x"))),
+                    Sexp::List(vec![Sexp::symbol("nested")]),
+                ],
+            ),
+        ];
+        for (head, name, spec_args) in &samples {
+            let built = Sexp::named_call(*head, *name, spec_args.clone());
+            assert_eq!(
+                built.head_symbol(),
+                Some(*head),
+                "Sexp::named_call→head_symbol drifted from Some({head:?}) for name={name:?} spec_args={spec_args:?}",
+            );
+            assert_eq!(
+                built.shape(),
+                SexpShape::List,
+                "Sexp::named_call→shape drifted from SexpShape::List for head={head:?} name={name:?} spec_args={spec_args:?}",
+            );
+            assert_eq!(
+                built.as_structural_kind(),
+                Some(StructuralKind::List),
+                "Sexp::named_call→as_structural_kind drifted from Some(StructuralKind::List) for head={head:?} name={name:?} spec_args={spec_args:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_named_call_constructor_output_passes_the_split_name_slot_gate() {
+        // NAMED-FORM GATE COMPOSITION LAW: `crate::compile::
+        // split_name_slot(&Sexp::named_call(head, name, spec_args)
+        // .as_call_to(head).unwrap(), head) == Ok((name, spec_args
+        // .as_slice()))` — the substrate's named-form arity + NAME-
+        // shape gate accepts every output of this constructor byte-
+        // for-byte, closing the section-for-retraction pair at the
+        // GATE level as well as the projection level. A regression
+        // that emits a value the gate rejects (e.g. a
+        // `NamedFormNonSymbolName` from a `Sexp::keyword(name)` NAME
+        // slot copy-edit) surfaces here even when the projection
+        // pins pass.
+        let samples: [(&'static str, &'static str, Vec<Sexp>); 4] = [
+            ("defcompiler", "solo", vec![]),
+            ("defpoint", "obs", vec![Sexp::keyword("class")]),
+            (
+                "defmonitor",
+                "m",
+                vec![Sexp::keyword("severity"), Sexp::symbol("Warning")],
+            ),
+            (
+                "defalert-policy",
+                "outage",
+                vec![
+                    Sexp::List(vec![Sexp::symbol("body")]),
+                    Sexp::Quote(Box::new(Sexp::symbol("x"))),
+                ],
+            ),
+        ];
+        for (head, name, spec_args) in &samples {
+            let built = Sexp::named_call(*head, *name, spec_args.clone());
+            let args_tail = built
+                .as_call_to(head)
+                .expect("Sexp::named_call output must pass Sexp::as_call_to(head)");
+            let gated = crate::compile::split_name_slot(args_tail, head)
+                .expect("Sexp::named_call output must pass split_name_slot");
+            assert_eq!(
+                gated,
+                (*name, spec_args.as_slice()),
+                "Sexp::named_call→split_name_slot round-trip drifted for head={head:?} name={name:?} spec_args={spec_args:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_named_call_constructor_accepts_diverse_head_name_and_arg_input_shapes() {
+        // INPUT-SHAPE FLEXIBILITY: the two `impl Into<String>` bounds
+        // absorb `&str` / `String` / `&String` on both head + NAME
+        // positions, and the `impl IntoIterator<Item = Sexp>` spec-
+        // args bound absorbs `Vec<Sexp>` / `[Sexp; N]` / `iter::
+        // empty()` / `.map(...)` chains — pin that all five
+        // representative input shapes reach the same canonical
+        // composition output. A regression that narrows any bound
+        // fails this pin. Sibling to `Sexp::call`'s input-shape pin.
+        let expected = Sexp::List(vec![
+            Sexp::symbol("head"),
+            Sexp::symbol("name"),
+            Sexp::symbol("a"),
+            Sexp::symbol("b"),
+        ]);
+        // (&str, &str, Vec<Sexp>) — the canonical borrowed shape.
+        assert_eq!(
+            Sexp::named_call("head", "name", vec![Sexp::symbol("a"), Sexp::symbol("b")]),
+            expected,
+            "Sexp::named_call drifted for (&str, &str, Vec<Sexp>) input",
+        );
+        // (String, String, [Sexp; N]) — the owned + array-literal
+        // shape.
+        assert_eq!(
+            Sexp::named_call(
+                String::from("head"),
+                String::from("name"),
+                [Sexp::symbol("a"), Sexp::symbol("b")],
+            ),
+            expected,
+            "Sexp::named_call drifted for (String, String, [Sexp; N]) input",
+        );
+        // (&str, &String, .map(...)) — the borrowed-owned-name +
+        // iterator-map chain shape.
+        let owned_name = String::from("name");
+        assert_eq!(
+            Sexp::named_call(
+                "head",
+                &owned_name,
+                ["a", "b"].iter().map(|s| Sexp::symbol(*s))
+            ),
+            expected,
+            "Sexp::named_call drifted for (&str, &String, iter::map) input",
+        );
+        // (&str, &str, iter::empty::<Sexp>()) — the zero-spec-args
+        // iterator shape, pinning the two-element list emission
+        // (`(head name)`) via the composition path.
+        assert_eq!(
+            Sexp::named_call("head", "name", std::iter::empty::<Sexp>()),
+            Sexp::List(vec![Sexp::symbol("head"), Sexp::symbol("name")]),
+            "Sexp::named_call drifted for zero-spec-args iter::empty input",
+        );
+        // (&str, &str, once+chain) — the head-then-rest spec-args
+        // shape a builder decomposing an existing named call form
+        // via `as_named_call_to` and re-emitting through this
+        // constructor threads through.
+        assert_eq!(
+            Sexp::named_call(
+                "head",
+                "name",
+                std::iter::once(Sexp::symbol("a")).chain([Sexp::symbol("b")]),
+            ),
+            expected,
+            "Sexp::named_call drifted for (&str, &str, once+chain) spec-args input",
+        );
+    }
+
+    #[test]
+    fn sexp_named_call_constructor_body_matches_typed_composition_through_call_and_symbol() {
+        // EXPLICIT COMPOSITION-LAW PIN: `Sexp::named_call(head, name,
+        // spec_args) == Sexp::call(head, std::iter::once(Sexp::symbol(
+        // name)).chain(spec_args))` BY DEFINITION — the constructor
+        // body IS this composition, and the pin exists so a
+        // regression that in-lines a hand-authored `Sexp::List(vec![
+        // Sexp::symbol(head), Sexp::symbol(name), spec_args...])`
+        // body (which would type-check and pass the projection round-
+        // trips) still surfaces here through the composition-path
+        // drift. Closes the "the constructor routes through
+        // `Sexp::call` + `Sexp::symbol`" invariant as a typed pin
+        // rather than a docstring claim.
+        let head = "defpoint";
+        let name = "observability-stack";
+        let spec_args = vec![
+            Sexp::keyword("class"),
+            Sexp::List(vec![Sexp::symbol("Gate"), Sexp::symbol("Observability")]),
+        ];
+        assert_eq!(
+            Sexp::named_call(head, name, spec_args.clone()),
+            Sexp::call(
+                head,
+                std::iter::once(Sexp::symbol(name)).chain(spec_args.iter().cloned()),
+            ),
+            "Sexp::named_call body drifted from the Sexp::call ∘ once(Sexp::symbol) ∘ chain composition for head={head:?} name={name:?}",
         );
     }
 }

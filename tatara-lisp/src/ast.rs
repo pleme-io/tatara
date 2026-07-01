@@ -1332,6 +1332,151 @@ impl Sexp {
         QuoteForm::UnquoteSplice.wrap(inner)
     }
 
+    /// Canonical marker-driven quote-family outer constructor — routes
+    /// through [`QuoteForm::wrap`] on the caller-supplied [`QuoteForm`]
+    /// marker at ONE site on the closed-set [`Sexp`] algebra. The outer-
+    /// algebra section-for-retraction sibling of the existing
+    /// [`Self::as_quote_form`] soft-projection ([`Option<(QuoteForm,
+    /// &Sexp)>`]): where the projection soft-decomposes a quote-family
+    /// wrapper into its typed [`QuoteForm`] marker + borrowed inner body
+    /// on the (marker, borrowed-inner) product, this constructor embeds
+    /// a typed [`QuoteForm`] marker + owned inner body pair into the
+    /// matching tuple-variant wrapper on the (marker, owned-inner)
+    /// product. Marker-driven parent of the four per-variant siblings
+    /// [`Self::quote`] / [`Self::quasiquote`] / [`Self::unquote`] /
+    /// [`Self::unquote_splice`] — each of the four is `Self::quote_form(
+    /// QuoteForm::X, inner)` restricted to a compile-time-known marker;
+    /// this constructor is the marker-abstracted parent every consumer
+    /// that binds the marker as a runtime value routes through.
+    ///
+    /// Sibling posture across the outer-algebra construct-family layer:
+    /// where [`Self::call`](Self::call) and [`Self::named_call`](Self::named_call)
+    /// close the (construct, project) dual on the call-form + named-
+    /// call-form typed decompositions of the residual-axis List arm,
+    /// and [`Self::list`](Self::list) closes it on the residual-axis
+    /// List arm itself, this constructor closes it on the quote-family-
+    /// axis wrapper decomposition — the outer [`Sexp`] algebra now
+    /// carries a (marker, project) construct-family dual pair for every
+    /// axis of the [`SexpShape`] closed set at ONE typed method per
+    /// corner, with `Sexp::quote_form(qf, inner)` as the marker-driven
+    /// quote-family construct entry and [`Self::as_quote_form`] as its
+    /// marker-recovering projection sibling.
+    ///
+    /// Composition law (forward): `Sexp::quote_form(marker, inner) ==
+    /// marker.wrap(inner)` for every `marker: QuoteForm` and every
+    /// `inner: Sexp`. The body routes through the SAME closed-set
+    /// `QuoteForm::wrap` method the four per-variant siblings
+    /// ([`Self::quote`] / [`Self::quasiquote`] / [`Self::unquote`] /
+    /// [`Self::unquote_splice`]) already reach for, so the (marker,
+    /// [`Sexp`] tuple-variant constructor) pairing binds at ONE closed-
+    /// set match on the substrate algebra — a regression that drifts
+    /// one consumer's marker→wrapper mapping from the others (e.g. a
+    /// copy-edit that pairs [`QuoteForm::Quote`] with the
+    /// [`Sexp::Quasiquote`] tuple variant, or that drops a
+    /// [`QuoteForm::UnquoteSplice`] value through the
+    /// [`Sexp::Unquote`] tuple variant) cannot reach the substrate's
+    /// runtime.
+    ///
+    /// Round-trip law (section-for-retraction with the outer-algebra
+    /// soft-projection): for every `marker: QuoteForm` and every
+    /// `inner: Sexp`, `Sexp::quote_form(marker, inner.clone())
+    /// .as_quote_form() == Some((marker, &inner))` — the outer
+    /// algebra's marker-driven quote-family constructor pairs section-
+    /// for-retraction with the outer algebra's soft quote-family
+    /// projection, and the (marker, inner body) cross-projection
+    /// preserves identity for every `QuoteForm` variant.
+    ///
+    /// Marker-recovering projection composition: `Sexp::quote_form(
+    /// marker, inner).as_quote_form_marker() == Some(marker)` for every
+    /// input — the marker-only projection sibling
+    /// ([`Self::as_quote_form_marker`]) recovers the constructor's
+    /// marker byte-for-byte. Outer-shape composition law:
+    /// `Sexp::quote_form(marker, inner).shape() == marker.sexp_shape()`
+    /// — the outer-shape identity binds through the typed-shape lattice
+    /// at ONE arm per [`QuoteForm`] variant, symmetric with the atomic
+    /// construct family's `Sexp::X_atom(payload).shape() ==
+    /// AtomKind::X.sexp_shape()` composition and the residual construct
+    /// family's `Sexp::list(items).shape() == SexpShape::List`
+    /// composition.
+    ///
+    /// Per-variant restriction laws (structural identity between the
+    /// marker-driven parent + the four per-variant siblings):
+    ///   * `Sexp::quote_form(QuoteForm::Quote, inner) == Sexp::quote(inner)`
+    ///   * `Sexp::quote_form(QuoteForm::Quasiquote, inner) == Sexp::quasiquote(inner)`
+    ///   * `Sexp::quote_form(QuoteForm::Unquote, inner) == Sexp::unquote(inner)`
+    ///   * `Sexp::quote_form(QuoteForm::UnquoteSplice, inner) == Sexp::unquote_splice(inner)`
+    ///
+    /// The four per-variant constructors ARE the marker-driven parent
+    /// specialized on a compile-time-known marker; the marker-abstracted
+    /// parent binds every consumer that routes a runtime `QuoteForm`
+    /// value through a quote-family construct to ONE typed method on
+    /// the outer [`Sexp`] algebra rather than a four-arm inline
+    /// `match qf { QuoteForm::X => Sexp::x(inner), … }` dispatch.
+    ///
+    /// Pre-lift consumers with a runtime `QuoteForm` marker routed
+    /// through `marker.wrap(inner)` directly (the reader's
+    /// `read_quoted` production consumer at `reader.rs`, the domain
+    /// module's quote-family round-trip test site) — well past the ≥2
+    /// PRIME-DIRECTIVE trigger once the marker-driven pattern is
+    /// named. Post-lift consumers bind to ONE typed-algebra method on
+    /// the outer [`Sexp`] algebra sitting next to the typed-project
+    /// family ([`Self::as_quote_form`] / [`Self::as_quote_form_marker`])
+    /// rather than reaching into the closed-set [`QuoteForm::wrap`]
+    /// method directly. A future allocation-policy change (e.g. arena-
+    /// allocated wrappers for span-aware [`Sexp`]) lands as ONE edit at
+    /// the single [`QuoteForm::wrap`] composition site and propagates
+    /// through this constructor byte-for-byte.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// (typed [`QuoteForm`] marker, owned inner body, [`QuoteForm::wrap`]
+    /// composition) triple binds at ONE typed-algebra method on the
+    /// outer [`Sexp`] algebra, closing the marker-driven quote-family
+    /// (construct, project) algebra dual pair with
+    /// [`Self::as_quote_form`] on the projection side. THEORY.md §II.1
+    /// invariant 2 — free middle; every consumer that has a runtime
+    /// [`QuoteForm`] marker + an owned inner body and wants to build a
+    /// quote-family wrapper routes through the SAME typed method, so a
+    /// regression that drifts one consumer's marker→wrapper mapping
+    /// cannot reach the substrate's runtime. THEORY.md §V.1 — knowable
+    /// platform; the marker-driven quote-family typed-construct becomes
+    /// a TYPE projection on the substrate's outer [`Sexp`] algebra
+    /// sitting next to the typed-project family
+    /// [`Self::as_quote_form`] / [`Self::as_quote_form_marker`] rather
+    /// than the closed-set [`QuoteForm::wrap`] method threaded as a
+    /// method call on a bound-marker value. THEORY.md §VI.1 —
+    /// generation over composition; the marker-driven quote-family
+    /// pair emerges from ONE typed-algebra composition through
+    /// [`QuoteForm::wrap`] rather than from per-consumer marker→wrapper
+    /// dispatch literals; a future fifth homoiconic prefix syntax
+    /// (e.g. `#'x` for hygienic macros) extends [`QuoteForm::ALL`] +
+    /// [`QuoteForm::wrap`]'s match arm + [`Self::as_quote_form`]'s
+    /// match arm in lockstep — rustc-enforced through the closed-set
+    /// exhaustiveness — with THIS constructor inheriting the extension
+    /// through the [`QuoteForm::wrap`] composition site without a per-
+    /// site edit.
+    ///
+    /// Frontier inspiration: Racket's `(datum->syntax stx (list #'qf
+    /// inner))` marker-abstracted quote-family construct paired one-
+    /// for-one with `syntax-e` on the projection face — the typed-
+    /// construct + typed-project algebra dual is closed on Racket's
+    /// syntax algebra at one method per direction, and
+    /// `Sexp::quote_form` / `Sexp::as_quote_form` is the Rust-typed peer
+    /// on the closed-set outer [`Sexp`] algebra with [`QuoteForm`]
+    /// standing in for Racket's syntactic-form taxonomy over the four
+    /// homoiconic prefix wrappers. MLIR's typed-IR
+    /// `mlir::OpBuilder::create(loc, OperationName, operands)` marker-
+    /// driven op construction paired with `mlir::Operation::getName()`
+    /// on the projection face — the typed factory + typed downcast pair
+    /// the IR algebra closes over on every op kind at one method per
+    /// direction; `Sexp::quote_form` / [`Self::as_quote_form_marker`]
+    /// is the Rust-typed peer on the outer [`Sexp`] algebra with the
+    /// closed-set [`QuoteForm`] standing in for MLIR's `OperationName`
+    /// taxonomy over the four homoiconic prefix-wrapper op kinds.
+    #[must_use]
+    pub fn quote_form(marker: QuoteForm, inner: Sexp) -> Self {
+        marker.wrap(inner)
+    }
+
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
     }
@@ -12778,6 +12923,173 @@ mod tests {
                 std::iter::once(Sexp::symbol(name)).chain(spec_args.iter().cloned()),
             ),
             "Sexp::named_call body drifted from the Sexp::call ∘ once(Sexp::symbol) ∘ chain composition for head={head:?} name={name:?}",
+        );
+    }
+
+    #[test]
+    fn sexp_quote_form_constructor_body_matches_quote_form_wrap_across_every_marker() {
+        // COMPOSITION-LAW PIN: `Sexp::quote_form(marker, inner) ==
+        // marker.wrap(inner)` for every `marker: QuoteForm` and every
+        // representative `inner: Sexp`. Sweeps `QuoteForm::ALL` × a
+        // representative gallery of inner bodies (atomic-payload,
+        // residual-Nil, residual-List, quote-family-nested,
+        // named-call-shaped) so a regression in the constructor body
+        // that inlined a per-variant match arm — e.g. `match marker {
+        // QuoteForm::Quote => Sexp::Quote(Box::new(inner)), … }` —
+        // that drifts one arm's tuple-variant target from the closed-
+        // set `QuoteForm::wrap` marker-to-wrapper mapping fails
+        // loudly at the first drifted variant. Pointer-inequality
+        // safe: `assert_eq!` compares by value, so the pin binds the
+        // structural composition path rather than any borrowed
+        // pointer identity.
+        let inners: Vec<Sexp> = vec![
+            Sexp::symbol("x"),
+            Sexp::keyword("k"),
+            Sexp::string("hello"),
+            Sexp::int(42),
+            Sexp::float(2.5),
+            Sexp::boolean(true),
+            Sexp::Nil,
+            Sexp::list(vec![Sexp::symbol("a"), Sexp::int(1)]),
+            Sexp::quote(Sexp::symbol("nested")),
+            Sexp::named_call(
+                "defpoint",
+                "observability-stack",
+                std::iter::empty::<Sexp>(),
+            ),
+        ];
+        for marker in QuoteForm::ALL {
+            for inner in &inners {
+                assert_eq!(
+                    Sexp::quote_form(marker, inner.clone()),
+                    marker.wrap(inner.clone()),
+                    "Sexp::quote_form body drifted from QuoteForm::wrap composition at marker={marker:?} inner={inner:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sexp_quote_form_constructor_round_trips_through_as_quote_form_for_every_marker() {
+        // ROUND-TRIP LAW PIN (section-for-retraction with the outer-
+        // algebra soft-projection): for every `marker: QuoteForm` +
+        // representative `inner: Sexp`, `Sexp::quote_form(marker,
+        // inner.clone()).as_quote_form() == Some((marker, &inner))`.
+        // Proves the (construct, project) pair forms an isomorphism
+        // between (QuoteForm × Sexp) and the closed-set 4-of-12 quote-
+        // family carving of the outer `Sexp` algebra — a regression
+        // that emits a value the projection rejects (unreachable by
+        // the closed-set structure, since `QuoteForm::wrap` targets a
+        // quote-family arm exactly) or that drifts the marker
+        // recovered from the projection (e.g. swapping `Quote` ↔
+        // `Quasiquote` in the constructor's dispatch) fails loudly
+        // at the first drifted variant.
+        for marker in QuoteForm::ALL {
+            let inner = Sexp::List(vec![Sexp::keyword("body"), Sexp::string("data")]);
+            let wrapped = Sexp::quote_form(marker, inner.clone());
+            assert_eq!(
+                wrapped.as_quote_form(),
+                Some((marker, &inner)),
+                "Sexp::quote_form({marker:?}, _).as_quote_form() failed to round-trip — the (construct, project) pair on the outer algebra is not a section-for-retraction of Sexp::as_quote_form",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_quote_form_constructor_composes_with_as_quote_form_marker_and_shape() {
+        // MARKER-RECOVERING + OUTER-SHAPE COMPOSITION PIN: for every
+        // `marker: QuoteForm` + representative `inner: Sexp`, the
+        // constructor's output projects through the marker-only sibling
+        // `Sexp::as_quote_form_marker` back to the constructor's marker
+        // AND through the outer-shape projection `Sexp::shape` to the
+        // canonical `marker.sexp_shape()`. Pins the two independent
+        // projection compositions simultaneously so a regression that
+        // reroutes through a non-quote-family arm (which the outer-
+        // shape lattice would surface as `SexpShape::List` or
+        // `SexpShape::Nil`) fails BOTH pins at once.
+        for marker in QuoteForm::ALL {
+            let inner = Sexp::symbol("body");
+            let wrapped = Sexp::quote_form(marker, inner.clone());
+            assert_eq!(
+                wrapped.as_quote_form_marker(),
+                Some(marker),
+                "Sexp::quote_form({marker:?}, _).as_quote_form_marker() drifted from Some({marker:?})",
+            );
+            assert_eq!(
+                wrapped.shape(),
+                marker.sexp_shape(),
+                "Sexp::quote_form({marker:?}, _).shape() drifted from {marker:?}.sexp_shape()",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_quote_form_constructor_specializes_to_each_per_variant_sibling() {
+        // PER-VARIANT RESTRICTION LAW PIN: the four per-variant
+        // siblings ARE the marker-driven parent specialized on a
+        // compile-time-known marker — `Sexp::quote_form(QuoteForm::X,
+        // inner) == Sexp::x_variant(inner)` for every X ∈
+        // {Quote, Quasiquote, Unquote, UnquoteSplice}. Any regression
+        // that drifts the marker-driven parent from its per-variant
+        // siblings' single canonical composition site
+        // (`QuoteForm::X.wrap(inner)`) fails at the first drifted
+        // variant.
+        let inner = Sexp::symbol("body");
+        assert_eq!(
+            Sexp::quote_form(QuoteForm::Quote, inner.clone()),
+            Sexp::quote(inner.clone()),
+            "Sexp::quote_form(QuoteForm::Quote, _) drifted from Sexp::quote(_)",
+        );
+        assert_eq!(
+            Sexp::quote_form(QuoteForm::Quasiquote, inner.clone()),
+            Sexp::quasiquote(inner.clone()),
+            "Sexp::quote_form(QuoteForm::Quasiquote, _) drifted from Sexp::quasiquote(_)",
+        );
+        assert_eq!(
+            Sexp::quote_form(QuoteForm::Unquote, inner.clone()),
+            Sexp::unquote(inner.clone()),
+            "Sexp::quote_form(QuoteForm::Unquote, _) drifted from Sexp::unquote(_)",
+        );
+        assert_eq!(
+            Sexp::quote_form(QuoteForm::UnquoteSplice, inner.clone()),
+            Sexp::unquote_splice(inner),
+            "Sexp::quote_form(QuoteForm::UnquoteSplice, _) drifted from Sexp::unquote_splice(_)",
+        );
+    }
+
+    #[test]
+    fn sexp_quote_form_constructor_targets_matching_tuple_variant_for_every_marker() {
+        // TUPLE-VARIANT-TARGET PIN: `Sexp::quote_form(marker, inner)`
+        // must be structurally equal to `Sexp::X(Box::new(inner))` for
+        // the X matching the marker — pinned per variant against the
+        // hand-authored tuple-variant literal so a regression that
+        // reroutes the wrap through an off-by-one closed-set match
+        // (e.g. `QuoteForm::Quote → Sexp::Quasiquote`) surfaces at
+        // this shape pin even when the round-trip law happens to
+        // still project through the projection sibling (it wouldn't —
+        // but the pin gives a distinct, tuple-variant-anchored
+        // failure signature). Sibling-shape lift to the same-anchor
+        // pin the `QuoteForm::wrap` inner algebra already carries.
+        let inner = Sexp::string("payload");
+        assert_eq!(
+            Sexp::quote_form(QuoteForm::Quote, inner.clone()),
+            Sexp::Quote(Box::new(inner.clone())),
+            "Sexp::quote_form(QuoteForm::Quote, _) drifted from Sexp::Quote(Box::new(_)) canonical tuple-variant shape",
+        );
+        assert_eq!(
+            Sexp::quote_form(QuoteForm::Quasiquote, inner.clone()),
+            Sexp::Quasiquote(Box::new(inner.clone())),
+            "Sexp::quote_form(QuoteForm::Quasiquote, _) drifted from Sexp::Quasiquote(Box::new(_)) canonical tuple-variant shape",
+        );
+        assert_eq!(
+            Sexp::quote_form(QuoteForm::Unquote, inner.clone()),
+            Sexp::Unquote(Box::new(inner.clone())),
+            "Sexp::quote_form(QuoteForm::Unquote, _) drifted from Sexp::Unquote(Box::new(_)) canonical tuple-variant shape",
+        );
+        assert_eq!(
+            Sexp::quote_form(QuoteForm::UnquoteSplice, inner.clone()),
+            Sexp::UnquoteSplice(Box::new(inner)),
+            "Sexp::quote_form(QuoteForm::UnquoteSplice, _) drifted from Sexp::UnquoteSplice(Box::new(_)) canonical tuple-variant shape",
         );
     }
 }

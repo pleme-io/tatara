@@ -8,50 +8,45 @@ use std::hash::{Hash, Hasher};
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
 // serde_json serialization that would otherwise dominate cache overhead on
 // cheap macro calls.
+//
+// The outer per-variant discriminator byte (`0` for Nil, `1` for Atom, `2`
+// for List, `3..=6` for the four quote-family variants) binds at ONE site
+// on the outer-`Sexp` algebra (`Sexp::hash_discriminator`) rather than at
+// four per-arm byte projections here. The seven outer-variant arms
+// partition `{0..=6}` injectively; the three sub-carvings' typed
+// discriminator methods compose through the outer `Sexp::hash_discriminator`
+// method:
+//   * `StructuralKind::hash_discriminator` for the two-arm structural-
+//     residual partition `{0, 2}` (Nil, List);
+//   * `AtomKind::hash_discriminator` for the nested atomic payload
+//     `{0..=5}` inside the Atom outer byte `1` (surfaced INSIDE
+//     `Hash for Atom`, NOT through this outer method);
+//   * `QuoteForm::hash_discriminator` for the quote-family arms `{3..=6}`.
+// A future eighth `Sexp` variant (e.g. `Vector` / `Map` / `Char`) picks a
+// fresh cache-key byte outside `{0..=6}` and lands at ONE new arm on
+// `Sexp::hash_discriminator` (extending either `StructuralKind` if it is
+// structural-residual or a fresh sub-algebra), with rustc binding the
+// consistency through exhaustiveness over the closed enum.
+//
+// The per-arm body below only handles the inner-payload hash sequence
+// after the outer discriminator byte is routed through
+// `self.hash_discriminator().hash(h)` — the recursive `inner.hash(h)` on
+// the quote-family arm is asserted-total via `expect_quote_form` (the
+// outer pattern guarantees the projection lands `Some`).
 impl Hash for Sexp {
     fn hash<H: Hasher>(&self, h: &mut H) {
+        self.hash_discriminator().hash(h);
         match self {
-            // The two structural-residual arms share the (discriminator,
-            // optional-inner) hash shape — the per-variant discriminator
-            // byte binds at ONE site on the closed-set `StructuralKind`
-            // algebra (`StructuralKind::hash_discriminator`) rather than
-            // as `0u8` / `2u8` inline literals at these two arms. The
-            // outer-carve discriminator space `{0, 1, 2, 3, 4, 5, 6}`
-            // stays partition-total across the three closed-set
-            // carvings (`StructuralKind::hash_discriminator` for
-            // `{0, 2}`, the `1u8` outer-carve marker for `Sexp::Atom`
-            // paired with `AtomKind::hash_discriminator`'s nested
-            // `{0..=5}` payload discriminator, and
-            // `QuoteForm::hash_discriminator` for `{3..=6}`) — pinned
-            // by the joint disjointness test in this module. Same
-            // posture as the quote-family arm below, which routes
-            // through `QuoteForm::hash_discriminator` for the
-            // four-of-thirteen `Sexp` wrapper variants.
-            Self::Nil => StructuralKind::Nil.hash_discriminator().hash(h),
-            Self::Atom(a) => {
-                1u8.hash(h);
-                a.hash(h);
-            }
+            Self::Nil => {}
+            Self::Atom(a) => a.hash(h),
             Self::List(items) => {
-                StructuralKind::List.hash_discriminator().hash(h);
                 items.len().hash(h);
                 for i in items {
                     i.hash(h);
                 }
             }
-            // The four quote-family variants share the (discriminator, inner)
-            // hash shape — all route through `as_quote_form`'s typed-marker
-            // projection so the per-variant discriminator bytes (3/4/5/6) and
-            // the recursive `inner.hash(h)` body bind at ONE site on the
-            // closed-set `QuoteForm` algebra. The `.expect(_)` is a
-            // static-invariant statement (the outer pattern guarantees the
-            // projection lands `Some`) that a future quote-family extension
-            // can't drift across — adding a fifth `Sexp` wrapper variant
-            // forces a corresponding `QuoteForm` extension AND
-            // `as_quote_form` arm, with rustc binding the three together.
             Self::Quote(_) | Self::Quasiquote(_) | Self::Unquote(_) | Self::UnquoteSplice(_) => {
-                let (qf, inner) = self.expect_quote_form();
-                qf.hash_discriminator().hash(h);
+                let (_, inner) = self.expect_quote_form();
                 inner.hash(h);
             }
         }
@@ -3908,6 +3903,87 @@ impl Sexp {
         self.as_quote_form()
             .expect(QUOTE_FAMILY_PROJECTION_INVARIANT)
     }
+
+    /// Stable, per-outer-variant byte discriminator for the substrate's
+    /// [`Hash for Sexp`] cache-key projection — `0` for [`Self::Nil`],
+    /// `1` for [`Self::Atom`], `2` for [`Self::List`], `3` for
+    /// [`Self::Quote`], `4` for [`Self::Quasiquote`], `5` for
+    /// [`Self::Unquote`], `6` for [`Self::UnquoteSplice`]. The two
+    /// structural-residual arms (`Nil`, `List`) delegate through
+    /// [`crate::error::StructuralKind::hash_discriminator`] via
+    /// [`crate::error::StructuralKind::Nil`] / [`crate::error::StructuralKind::List`]
+    /// so the (`Sexp` structural variant, cache-key byte) pairing binds
+    /// at ONE site on the closed-set structural-residual algebra rather
+    /// than as `0u8` / `2u8` inline literals on this method. The four
+    /// quote-family arms delegate through
+    /// [`crate::error::QuoteForm::hash_discriminator`] via
+    /// [`Self::expect_quote_form`] so the quote-family pairing binds at
+    /// ONE site on the closed-set [`crate::error::QuoteForm`] algebra.
+    /// Only the atomic outer marker `Sexp::Atom(_) → 1u8` remains inline
+    /// on this method — it is a single-arm outer marker paired with the
+    /// nested [`crate::ast::AtomKind::hash_discriminator`]'s `{0..=5}`
+    /// payload discriminator inside [`Hash for Atom`], so it has no
+    /// closed-set sub-carving peer to route through (documented at the
+    /// sibling `Sexp::Atom(_) → 1u8` comment on the prior lift of
+    /// [`crate::error::StructuralKind::hash_discriminator`]).
+    ///
+    /// The byte values are load-bearing because the macro-expansion cache
+    /// ([`crate::macro_expand::Expander`]'s cache) keys on the hash of
+    /// `(macro_name, args)` — changing a discriminator silently
+    /// invalidates every cached expansion across the substrate.
+    ///
+    /// The seven outer-variant arms partition `{0, 1, 2, 3, 4, 5, 6}`
+    /// injectively — closed-set-typed intra-Sexp injectivity that
+    /// composes through THREE sub-carving typed methods:
+    /// [`crate::error::StructuralKind::hash_discriminator`] for the
+    /// two-arm structural-residual partition of `{0, 2}`,
+    /// [`crate::ast::AtomKind::hash_discriminator`]'s six-arm partition
+    /// of `{0..=5}` (nested inside the Atom outer byte `1u8` via
+    /// [`Hash for Atom`], NOT surfaced through this method),
+    /// [`crate::error::QuoteForm::hash_discriminator`]'s four-arm
+    /// partition of `{3..=6}` (surfaced through this method's quote-
+    /// family arms). Together the four algebras (this outer method + the
+    /// three sub-carvings) jointly cover the entire outer-Sexp
+    /// discriminator space through ONE typed method per algebra layer.
+    /// A future eighth `Sexp` variant (e.g. a hypothetical `Vector` for
+    /// `#(...)` reader syntax, `Map` for `{...}`, or `Char` for `#\x`)
+    /// picks a fresh cache-key byte outside `{0..=6}` (e.g. `7u8`),
+    /// extends either [`crate::error::StructuralKind`] (if it names a
+    /// new structural-residual variant) or a fresh sub-algebra, and
+    /// lands at ONE new arm here, with rustc binding the consistency
+    /// through exhaustiveness over the closed enum.
+    ///
+    /// Pre-lift the outer-Sexp Hash body surfaced its cache-key bytes at
+    /// three inline `<N>u8.hash(h)` arms (`0u8`/`1u8`/`2u8`) plus a
+    /// `qf.hash_discriminator().hash(h)` composition on the quote-family
+    /// arm; the prior-run lift of
+    /// [`crate::error::StructuralKind::hash_discriminator`] collapsed the
+    /// `0u8` and `2u8` structural-residual arm literals to typed algebra
+    /// calls at their `Hash for Sexp` arm sites, and this outer method
+    /// closes over the ENTIRE outer-Sexp partition — the outer Hash
+    /// body now routes through ONE top-level `self.hash_discriminator()
+    /// .hash(h)` call rather than four per-arm byte projections.
+    ///
+    /// `pub(crate)` because the byte-discriminator surface is an
+    /// implementation detail of the substrate's `Hash for Sexp` cache-
+    /// key contract; exposing it publicly would leak the cache-key shape
+    /// through the API without enabling any external consumer the public
+    /// projections ([`Self::as_atom`], [`Self::as_list`],
+    /// [`Self::as_quote_form`]) don't already serve. Same posture as
+    /// [`crate::ast::AtomKind::hash_discriminator`],
+    /// [`crate::error::QuoteForm::hash_discriminator`], and
+    /// [`crate::error::StructuralKind::hash_discriminator`].
+    #[must_use]
+    pub(crate) fn hash_discriminator(&self) -> u8 {
+        match self {
+            Self::Nil => StructuralKind::Nil.hash_discriminator(),
+            Self::Atom(_) => 1,
+            Self::List(_) => StructuralKind::List.hash_discriminator(),
+            Self::Quote(_) | Self::Quasiquote(_) | Self::Unquote(_) | Self::UnquoteSplice(_) => {
+                self.expect_quote_form().0.hash_discriminator()
+            }
+        }
+    }
 }
 
 /// Static panic message for [`Sexp::expect_quote_form`]'s asserted-total
@@ -7656,6 +7732,262 @@ mod tests {
                 via_impl.finish(),
                 via_legacy.finish(),
                 "Hash for Sexp drifted from legacy (discr={expected_discr}, inner) sequence at {label}"
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_hash_discriminator_pins_legacy_outer_cache_key_bytes() {
+        // CACHE-KEY CONTRACT: pre-lift `Hash for Sexp` used the literal
+        // byte values 0/1/2 for Nil/Atom/List AND delegated 3/4/5/6 for
+        // Quote/Quasiquote/Unquote/UnquoteSplice through
+        // `QuoteForm::hash_discriminator`. The macro-expansion cache
+        // (`Expander::cache`) keys on Hash; ANY change to a discriminator
+        // byte silently invalidates every cached expansion across the
+        // substrate. Pin the seven legacy values explicitly so a
+        // regression that re-numbers them surfaces immediately — the
+        // outer-`Sexp` algebra MUST preserve the prior byte mapping bit-
+        // for-bit. Sibling posture to
+        // `atom_kind_hash_discriminator_pins_legacy_atom_cache_key_bytes`
+        // and `quote_form_hash_discriminator_pins_legacy_cache_key_bytes`
+        // on the two sub-carvings.
+        assert_eq!(Sexp::Nil.hash_discriminator(), 0);
+        assert_eq!(Sexp::symbol("x").hash_discriminator(), 1);
+        assert_eq!(Sexp::keyword("k").hash_discriminator(), 1);
+        assert_eq!(Sexp::string("s").hash_discriminator(), 1);
+        assert_eq!(Sexp::int(7).hash_discriminator(), 1);
+        assert_eq!(Sexp::float(2.5).hash_discriminator(), 1);
+        assert_eq!(Sexp::boolean(true).hash_discriminator(), 1);
+        assert_eq!(Sexp::List(vec![]).hash_discriminator(), 2);
+        assert_eq!(Sexp::Quote(Box::new(Sexp::Nil)).hash_discriminator(), 3);
+        assert_eq!(
+            Sexp::Quasiquote(Box::new(Sexp::Nil)).hash_discriminator(),
+            4
+        );
+        assert_eq!(Sexp::Unquote(Box::new(Sexp::Nil)).hash_discriminator(), 5);
+        assert_eq!(
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)).hash_discriminator(),
+            6
+        );
+    }
+
+    #[test]
+    fn sexp_hash_discriminator_bytes_partition_zero_through_six_injectively() {
+        // Closed-set injectivity across the seven outer-`Sexp` variants:
+        // the seven discriminator bytes MUST partition `{0, 1, 2, 3, 4,
+        // 5, 6}` injectively so two distinct outer variants never
+        // conflate their outer cache-key byte — a violation here means
+        // the cache could conflate e.g. `Sexp::List(vec![])` and
+        // `Sexp::Quote(Box::new(Sexp::Nil))` at the outer discriminator
+        // slot. Uses ONE seed per outer-variant sweep. Sibling pin to
+        // `atom_kind_hash_discriminator_bytes_are_pairwise_disjoint` (six-
+        // arm partition of `{0..=5}` nested inside the Atom outer byte
+        // `1`) and `quote_form_hash_discriminator_bytes_are_pairwise_
+        // disjoint` (four-arm partition of `{3..=6}` surfaced through
+        // this outer method's quote-family arms). Together the three
+        // partitions jointly cover the outer-Sexp discriminator space
+        // `{0..=6}` — the joint partition contract is pinned by
+        // `sexp_hash_discriminator_partitions_the_full_outer_discriminator_space_zero_through_six`
+        // below.
+        let bytes: Vec<u8> = [
+            Sexp::Nil,
+            Sexp::symbol("x"),
+            Sexp::List(vec![]),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ]
+        .iter()
+        .map(Sexp::hash_discriminator)
+        .collect();
+        let mut sorted = bytes.clone();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "Sexp hash discriminator bytes must be pairwise disjoint across the seven outer variants"
+        );
+        assert_eq!(sorted, vec![0, 1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn sexp_hash_discriminator_partitions_the_full_outer_discriminator_space_zero_through_six() {
+        // JOINT PARTITION CONTRACT: the outer-`Sexp` discriminator byte
+        // space `{0..=6}` is jointly covered by the three carvings' typed
+        // discriminator methods — pinning the joint contract makes the
+        // prefix-uniqueness invariant a compile-time-verified theorem
+        // rather than a per-carving isolated pin.
+        //
+        // Sexp-outer: `{0, 1, 2, 3, 4, 5, 6}` via `Sexp::hash_discriminator`
+        //   (the outer arm-partition method; the entire outer space).
+        // AtomKind: `{0, 1, 2, 3, 4, 5}` via `AtomKind::hash_discriminator`
+        //   (nested inside the Atom outer byte `1`; NOT part of the outer
+        //   partition, but pinned here to document the sub-carving space).
+        // QuoteForm: `{3, 4, 5, 6}` via `QuoteForm::hash_discriminator`
+        //   (surfaced through the four quote-family arms of the outer
+        //   method; MUST equal the outer sweep's `{3..=6}` slice).
+        //
+        // A regression that drifts the outer method's quote-family arms
+        // from the delegated `QuoteForm::hash_discriminator` bytes (e.g.
+        // routes `Sexp::Quote(_)` to `7u8` inline) fails-loudly here.
+        // Sibling posture to
+        // `structural_kind_hash_discriminator_disjoint_from_atom_outer_carve_byte_and_quote_form_hash_discriminator_partition`
+        // on the sub-carving axis — this pin binds the OUTER joint
+        // partition; that pin would bind a hypothetical structural sub-
+        // carving's disjointness.
+        let outer_seeds: Vec<Sexp> = vec![
+            Sexp::Nil,
+            Sexp::symbol("x"),
+            Sexp::List(vec![]),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ];
+        let outer_bytes: std::collections::BTreeSet<u8> =
+            outer_seeds.iter().map(Sexp::hash_discriminator).collect();
+        let expected: std::collections::BTreeSet<u8> = (0u8..=6u8).collect();
+        assert_eq!(
+            outer_bytes, expected,
+            "Sexp::hash_discriminator must cover exactly the outer discriminator space {{0..=6}}"
+        );
+
+        let quote_bytes: std::collections::BTreeSet<u8> = QuoteForm::ALL
+            .iter()
+            .map(|qf| qf.hash_discriminator())
+            .collect();
+        let quote_slice: std::collections::BTreeSet<u8> = (3u8..=6u8).collect();
+        assert_eq!(
+            quote_bytes, quote_slice,
+            "QuoteForm::hash_discriminator must cover {{3..=6}} — the quote-family slice of the outer Sexp partition"
+        );
+        assert!(
+            quote_bytes.is_subset(&outer_bytes),
+            "QuoteForm::hash_discriminator bytes must be a subset of Sexp::hash_discriminator's outer partition"
+        );
+    }
+
+    #[test]
+    fn sexp_hash_discriminator_atom_arm_collapses_over_every_atom_kind() {
+        // OUTER-CARVING CONTRACT (atomic arm): every `AtomKind` variant
+        // projects through `Sexp::Atom` to the SAME outer discriminator
+        // byte `1u8` — the atomic outer arm is a single-byte marker on
+        // the outer partition, with the per-atom-kind inner byte
+        // (`AtomKind::hash_discriminator`'s `{0..=5}`) nested INSIDE
+        // `Atom::hash` — NOT surfaced through this method. Pin the six-
+        // way collapse so a regression that drifts ONE atom kind's outer
+        // routing (e.g. routes `Sexp::Atom(Atom::Int(_))` to `7u8`
+        // inline) surfaces here immediately. Sibling posture to
+        // `sexp_hash_discriminator_quote_arm_delegates_to_quote_form_
+        // hash_discriminator` on the quote-family arm — that arm
+        // DELEGATES to `QuoteForm::hash_discriminator` for `{3..=6}`;
+        // this arm COLLAPSES to a single outer byte `1`.
+        for (kind, sexp) in [
+            (AtomKind::Symbol, Sexp::symbol("s")),
+            (AtomKind::Keyword, Sexp::keyword("k")),
+            (AtomKind::Str, Sexp::string("t")),
+            (AtomKind::Int, Sexp::int(7)),
+            (AtomKind::Float, Sexp::float(2.5)),
+            (AtomKind::Bool, Sexp::boolean(true)),
+        ] {
+            assert_eq!(
+                sexp.hash_discriminator(),
+                1,
+                "Sexp::Atom({kind:?}) must collapse to outer byte 1"
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_hash_discriminator_quote_arm_delegates_to_quote_form_hash_discriminator() {
+        // OUTER-CARVING CONTRACT (quote-family arm): every `QuoteForm`
+        // variant projects through `QuoteForm::wrap` to a `Sexp::Quote_*`
+        // whose `hash_discriminator` equals `qf.hash_discriminator()` —
+        // the four quote-family arms DELEGATE to the sub-algebra's
+        // discriminator method rather than inline four literals. Pin
+        // the delegation-identity across the closed set so a regression
+        // that inlines a byte at ONE arm (e.g. routes
+        // `Sexp::UnquoteSplice(_)` to `6u8` inline instead of through
+        // `QuoteForm::UnquoteSplice.hash_discriminator()`) fails-loudly
+        // here — it would type-check but silently drift if the sub-
+        // algebra's byte is renumbered.
+        for qf in QuoteForm::ALL {
+            let sexp = qf.wrap(Sexp::Nil);
+            assert_eq!(
+                sexp.hash_discriminator(),
+                qf.hash_discriminator(),
+                "Sexp {qf:?}-arm must delegate to QuoteForm::hash_discriminator"
+            );
+        }
+    }
+
+    #[test]
+    fn hash_for_sexp_routes_outer_discriminator_through_sexp_hash_discriminator() {
+        // ROUTING-LAW CONTRACT: pin the outer-`Sexp` routing IDENTITY —
+        // for every reachable outer-variant shape, `Hash for Sexp`
+        // produces byte-identical output to a hand-driven
+        // `<sexp.hash_discriminator()>.hash(h); <inner-payload-hash>`
+        // sequence. Binds the composition IDENTITY (not just value
+        // equality) between the outer Hash body and the typed algebra
+        // method — a regression that re-inlines the three literals
+        // (`0u8` / `1u8` / `2u8`) at the outer arms still drifts
+        // detectably if the future `Sexp::hash_discriminator` is
+        // re-numbered. Sibling posture to
+        // `hash_for_sexp_preserves_legacy_quote_family_discriminator_bytes`
+        // — that pin binds the quote-family arms against the pre-lift
+        // literal bytes; this pin binds ALL SEVEN outer arms against the
+        // post-lift typed method.
+        use std::collections::hash_map::DefaultHasher;
+        let payload = Sexp::symbol("payload");
+        let seeds: Vec<(&str, Sexp)> = vec![
+            ("nil", Sexp::Nil),
+            ("atom-symbol", Sexp::symbol("s")),
+            ("atom-int", Sexp::int(7)),
+            ("atom-float", Sexp::float(2.5)),
+            ("atom-bool", Sexp::boolean(true)),
+            ("empty list", Sexp::List(vec![])),
+            (
+                "non-empty list",
+                Sexp::List(vec![Sexp::symbol("op"), Sexp::int(1)]),
+            ),
+            ("quote", Sexp::Quote(Box::new(payload.clone()))),
+            ("quasiquote", Sexp::Quasiquote(Box::new(payload.clone()))),
+            ("unquote", Sexp::Unquote(Box::new(payload.clone()))),
+            (
+                "unquote-splice",
+                Sexp::UnquoteSplice(Box::new(payload.clone())),
+            ),
+        ];
+        for (label, sexp) in seeds {
+            let mut via_impl = DefaultHasher::new();
+            sexp.hash(&mut via_impl);
+
+            let mut via_lifted = DefaultHasher::new();
+            sexp.hash_discriminator().hash(&mut via_lifted);
+            match &sexp {
+                Sexp::Nil => {}
+                Sexp::Atom(a) => a.hash(&mut via_lifted),
+                Sexp::List(items) => {
+                    items.len().hash(&mut via_lifted);
+                    for i in items {
+                        i.hash(&mut via_lifted);
+                    }
+                }
+                Sexp::Quote(_)
+                | Sexp::Quasiquote(_)
+                | Sexp::Unquote(_)
+                | Sexp::UnquoteSplice(_) => {
+                    let (_, inner) = sexp.expect_quote_form();
+                    inner.hash(&mut via_lifted);
+                }
+            }
+
+            assert_eq!(
+                via_impl.finish(),
+                via_lifted.finish(),
+                "Hash for Sexp drifted from routed-through-hash_discriminator sequence at {label}"
             );
         }
     }

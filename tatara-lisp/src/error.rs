@@ -2469,6 +2469,70 @@ impl UnquoteForm {
     pub fn wrap(self, inner: crate::ast::Sexp) -> crate::ast::Sexp {
         self.to_quote_form().wrap(inner)
     }
+
+    /// Project the 2-of-4 template-substitution subset marker into its
+    /// matching [`SexpShape`] variant on the outer [`crate::ast::Sexp`]
+    /// algebra's twelve-variant shape lattice — [`Self::Unquote`] →
+    /// [`SexpShape::Unquote`], [`Self::Splice`] → [`SexpShape::UnquoteSplice`].
+    /// Section peer of [`SexpShape::as_unquote_form`] on the 2-of-12
+    /// carving that names the template-substitution wrappers; closes the
+    /// (embed, project) algebra dual on the `UnquoteForm ⊂ SexpShape`
+    /// typed-shape lattice, sibling of the already-closed
+    /// ([`crate::ast::AtomKind::sexp_shape`], [`SexpShape::as_atom_kind`])
+    /// dual on the 6-of-12 atomic-payload carving AND
+    /// ([`crate::ast::QuoteForm::sexp_shape`], [`SexpShape::as_quote_form`])
+    /// dual on the 4-of-12 quote-family carving.
+    ///
+    /// Composition law: `self.sexp_shape() ==
+    /// self.to_quote_form().sexp_shape()` for every `self: UnquoteForm`.
+    /// The (subset marker, outer [`SexpShape`]) pairing binds at ONE
+    /// closed-set match on the superset's
+    /// [`crate::ast::QuoteForm::sexp_shape`] rather than at a parallel
+    /// two-arm inline match table on this subset — matching the posture
+    /// [`Self::marker`] takes through [`crate::ast::QuoteForm::prefix`]
+    /// and [`Self::wrap`] takes through [`crate::ast::QuoteForm::wrap`].
+    /// Round-trip law (section-for-retraction with the outer projection
+    /// sibling): `self.sexp_shape().as_unquote_form() == Some(self)` for
+    /// every `self: UnquoteForm`.
+    ///
+    /// Pre-lift the (UnquoteForm variant, SexpShape variant) pairing had
+    /// NO typed projection on this subset algebra — a template rewriter
+    /// with an `UnquoteForm` marker in hand wanting the outer
+    /// [`SexpShape`] identity (e.g., a future `tatara-check` predicate
+    /// that filters diagnostics to "this rejection was on a template-
+    /// substitution wrapper", a future LSP hover that renders a typed
+    /// marker's outer-shape witness alongside its punctuation, a future
+    /// macro-hygiene analyzer that keys on the outer shape of a captured
+    /// substitution point) had to spell the two-step composition
+    /// `uf.to_quote_form().sexp_shape()` at every callsite. Post-lift
+    /// the composition binds at ONE typed-algebra method on the closed-
+    /// set `UnquoteForm` algebra, and the (embed, project) pair with
+    /// [`SexpShape::as_unquote_form`] forms an `Iso(UnquoteForm,
+    /// UnquoteShape ⊂ SexpShape)` on the substitution-subset carving.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (subset
+    /// marker, outer shape) pairing becomes a TYPE projection on the
+    /// substrate algebra rather than a per-callsite `.to_quote_form()
+    /// .sexp_shape()` two-step. THEORY.md §II.1 invariant 2 — free
+    /// middle; every consumer that has an `UnquoteForm` marker and
+    /// wants the outer [`SexpShape`] routes through the SAME typed
+    /// method. THEORY.md §VI.1 — generation over composition; the
+    /// pairing emerges from ONE typed-algebra composition on the subset
+    /// algebra rather than from parallel per-consumer per-variant
+    /// literals.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::OperationName` typed
+    /// projection from a subset-op-family value into the parent
+    /// `OperationName` taxonomy — the (subset op, taxonomic identity)
+    /// pairing lives at ONE typed projection on the subset algebra,
+    /// composed through the parent op-family's typed identity face.
+    /// `UnquoteForm::sexp_shape` is the Rust-typed peer on the closed-
+    /// set `UnquoteForm` algebra with [`SexpShape`] standing in for
+    /// MLIR's parent `OperationName` taxonomy.
+    #[must_use]
+    pub fn sexp_shape(self) -> SexpShape {
+        self.to_quote_form().sexp_shape()
+    }
 }
 
 // `impl std::fmt::Display for UnquoteForm` + `impl std::str::FromStr
@@ -3315,6 +3379,90 @@ impl SexpShape {
             | Self::Float
             | Self::Bool => None,
         }
+    }
+
+    /// Project the twelve-variant [`SexpShape`] back to its
+    /// corresponding [`UnquoteForm`] iff the shape names a template-
+    /// substitution wrapper — `Unquote → Some(UnquoteForm::Unquote)`,
+    /// `UnquoteSplice → Some(UnquoteForm::Splice)`, every other shape
+    /// (`Quote`, `Quasiquote`, `Nil`, `List`, every atomic-payload
+    /// variant) `None`. The 2-of-12 carving of [`SexpShape`] that the
+    /// inverse [`UnquoteForm::sexp_shape`] embed projection covers —
+    /// naming the inverse closes the embed/project section on the
+    /// (template-substitution subset, outer-shape) algebra, sibling of
+    /// the already-closed ([`crate::ast::AtomKind::sexp_shape`],
+    /// [`Self::as_atom_kind`]) dual on the 6-of-12 atomic-payload
+    /// carving AND ([`crate::ast::QuoteForm::sexp_shape`],
+    /// [`Self::as_quote_form`]) dual on the 4-of-12 quote-family
+    /// carving.
+    ///
+    /// Composition law (routes through the quote-family superset):
+    /// `self.as_unquote_form() == self.as_quote_form().and_then(
+    /// crate::ast::QuoteForm::as_unquote_form)` for every `self:
+    /// SexpShape`. The (outer shape, subset marker) pairing binds at
+    /// TWO existing closed-set matches ([`Self::as_quote_form`] +
+    /// [`crate::ast::QuoteForm::as_unquote_form`]) rather than at a
+    /// parallel twelve-arm inline match table here — matching the
+    /// posture [`UnquoteForm::sexp_shape`] takes through
+    /// [`crate::ast::QuoteForm::sexp_shape`] on the embed direction.
+    /// Round-trip law (retraction on the substitution-subset carving):
+    /// `UnquoteForm::sexp_shape(uf).as_unquote_form() == Some(uf)` for
+    /// every `uf: UnquoteForm`. The two projections together form an
+    /// `Iso(UnquoteForm, UnquoteShape ⊂ SexpShape)`:
+    /// [`Self::as_unquote_form`] is the section (every `UnquoteForm`
+    /// round-trips through the embed), [`UnquoteForm::sexp_shape`] is
+    /// the retraction (every substitution-subset shape pre-image
+    /// recovers the typed marker).
+    ///
+    /// Disjoint with [`Self::as_atom_kind`] AND properly subsumed by
+    /// [`Self::as_quote_form`]: for every variant in [`Self::ALL`], at
+    /// most ONE of ([`Self::as_atom_kind`], [`Self::as_quote_form`])
+    /// returns `Some` (the substrate's typed-shape lattice's two closed-
+    /// set carvings partition the carve-able SexpShape variants); and
+    /// [`Self::as_unquote_form`] returns `Some` iff [`Self::as_quote_form`]
+    /// returns `Some(qf)` AND `qf.as_unquote_form()` returns `Some(_)`
+    /// (the 2-of-4 template-substitution subset of the 4-of-12 quote-
+    /// family carving). The two quote-family shapes that lie OUTSIDE
+    /// the substitution subset (`Quote`, `Quasiquote`) form the kernel
+    /// of this projection but NOT of [`Self::as_quote_form`] — the
+    /// nested subset relationship makes the projections composable.
+    ///
+    /// Pre-lift the (SexpShape variant, UnquoteForm variant) pairing
+    /// had NO typed projection at this closed-set boundary — a
+    /// consumer with a `SexpShape` in hand (a `LispError::TypeMismatch
+    /// .got` slot's outer-shape identity, a rejected shape from a
+    /// typed-entry gate) wanting to narrow to "was this rejection on a
+    /// template-substitution wrapper?" had to spell the two-step
+    /// composition `shape.as_quote_form().and_then(QuoteForm::as_unquote_form)`
+    /// inline. Post-lift the composition binds at ONE typed-algebra
+    /// method on the outer [`SexpShape`] algebra, and the pair with
+    /// [`UnquoteForm::sexp_shape`] closes the embed/project algebra
+    /// dual on the substitution-subset carving.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the inverse
+    /// 2-of-12 carving is a TYPE projection on the substrate algebra
+    /// rather than an inline `.as_quote_form().and_then(...)` two-step.
+    /// THEORY.md §II.1 invariant 2 — free middle; the embed/project
+    /// pair binds at TWO typed sites — [`UnquoteForm::sexp_shape`] for
+    /// the embed, [`Self::as_unquote_form`] for the project — both
+    /// composing through the parent quote-family carving's closed
+    /// pair. THEORY.md §VI.1 — generation over composition; the
+    /// inverse 2-of-12 carving lifts to ONE typed projection.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::dyn_cast<UnquoteFamilyOp>(op)`
+    /// typed soft-downcast on the substitution-subset carving of a
+    /// closed-set operation union — the (op, typed identity) pairing
+    /// lives at ONE typed projection composed through the parent
+    /// op-family's typed downcast. [`Self::as_unquote_form`] is the
+    /// Rust-typed peer on the [`SexpShape`] closed set, with
+    /// [`crate::ast::QuoteForm::as_unquote_form`] standing in for the
+    /// parent-family-to-subset composition and this projection lifting
+    /// the parent-to-parent [`Self::as_quote_form`] composition into a
+    /// single typed method the consumer surface binds against directly.
+    #[must_use]
+    pub fn as_unquote_form(self) -> Option<UnquoteForm> {
+        self.as_quote_form()
+            .and_then(crate::ast::QuoteForm::as_unquote_form)
     }
 }
 
@@ -9656,6 +9804,194 @@ mod tests {
                     "UnquoteForm::{uf:?}.wrap({inner:?}).shape() drifted from .to_quote_form().sexp_shape() — the (subset marker, outer SexpShape) pairing is no longer derived from the superset's canonical composition",
                 );
             }
+        }
+    }
+
+    #[test]
+    fn unquote_form_sexp_shape_routes_through_to_quote_form_sexp_shape_via_composition() {
+        // Post-lift composition pin: for every `uf: UnquoteForm`,
+        // `uf.sexp_shape()` and `uf.to_quote_form().sexp_shape()`
+        // agree byte-for-byte — the (subset marker, outer SexpShape)
+        // pairing rides through the superset's canonical
+        // `QuoteForm::sexp_shape` closed-set match rather than through
+        // a parallel two-arm inline table on the subset. A regression
+        // that re-inlines the two arms as a parallel match-table (e.g.
+        // a future edit that spells `Self::Unquote => SexpShape::Unquote`
+        // / `Self::Splice => SexpShape::UnquoteSplice` directly at
+        // `UnquoteForm::sexp_shape` instead of routing through
+        // `self.to_quote_form().sexp_shape()`) still passes the round-
+        // trip sweep below but fails THIS composition pin — the
+        // subset's outer-shape vocabulary is no longer derived from
+        // the superset's canonical site. Sibling-shape pin to commit
+        // 250c001's `unquote_form_marker_routes_through_to_quote_form_prefix_via_composition`
+        // and commit 92daace's `unquote_form_wrap_routes_through_to_quote_form_wrap_via_composition`:
+        // all three pin the subset's projection through the superset's
+        // canonical site via the same typed composition posture, the
+        // invariant the subset-to-superset composition was lifted to
+        // make load-bearing on the type system rather than on
+        // per-callsite discipline.
+        for uf in UnquoteForm::ALL {
+            let from_shape = uf.sexp_shape();
+            let from_composition = uf.to_quote_form().sexp_shape();
+            assert_eq!(
+                from_shape, from_composition,
+                "UnquoteForm::{uf:?}.sexp_shape() drifted from .to_quote_form().sexp_shape() — the subset's outer-shape vocabulary is no longer derived from the superset's canonical site",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_sexp_shape_emits_canonical_shape_for_every_marker() {
+        // Per-arm truth-table pin of the canonical (UnquoteForm variant,
+        // SexpShape variant) mapping: `UnquoteForm::Unquote →
+        // SexpShape::Unquote` and `UnquoteForm::Splice →
+        // SexpShape::UnquoteSplice` byte-for-byte. A regression that
+        // swaps the two arms (a marker/shape swap that still routes
+        // through the superset's `sexp_shape`) surfaces here because
+        // the composition through `to_quote_form()` picks up the swap
+        // at the subset-to-superset projection. Sibling of the outer
+        // `Sexp` construct family's
+        // `sexp_quote_family_constructors_emit_canonical_tuple_variant_for_every_marker`
+        // (commit 38f076b) on the outer-shape axis rather than the
+        // tuple-variant axis.
+        assert_eq!(
+            UnquoteForm::Unquote.sexp_shape(),
+            SexpShape::Unquote,
+            "UnquoteForm::Unquote.sexp_shape() drifted from SexpShape::Unquote",
+        );
+        assert_eq!(
+            UnquoteForm::Splice.sexp_shape(),
+            SexpShape::UnquoteSplice,
+            "UnquoteForm::Splice.sexp_shape() drifted from SexpShape::UnquoteSplice",
+        );
+    }
+
+    #[test]
+    fn unquote_form_sexp_shape_round_trips_through_as_unquote_form() {
+        // The embed/project section law on the substitution-subset
+        // carving: `UnquoteForm::sexp_shape(uf).as_unquote_form() ==
+        // Some(uf)` for every `uf: UnquoteForm::ALL`. Proves the
+        // (embed, project) pair is an `Iso(UnquoteForm, UnquoteShape ⊂
+        // SexpShape)` — the section is total on `UnquoteForm`'s carving.
+        // Sibling round-trip to
+        // `atom_kind_sexp_shape_round_trips_through_as_atom_kind`
+        // (on the 6-of-12 atomic-payload carving) and
+        // `quote_form_sexp_shape_round_trips_through_as_quote_form`
+        // (on the 4-of-12 quote-family carving). Closes the third and
+        // final closed-set carving of `SexpShape` (the 2-of-12
+        // substitution-subset carving) as a round-trip identity on
+        // the typed algebra — pre-lift the pairing only lived in
+        // the two-step composition `uf.to_quote_form().sexp_shape()
+        // .as_quote_form().and_then(QuoteForm::as_unquote_form)` at
+        // callsite; post-lift the pairing rides the typed projection
+        // directly so a future regression that drifts the
+        // (UnquoteForm variant, SexpShape variant) pairing fails
+        // this assertion without depending on the composition
+        // chain sitting between the two.
+        for uf in UnquoteForm::ALL {
+            let shape = uf.sexp_shape();
+            let recovered = shape.as_unquote_form();
+            assert_eq!(
+                recovered,
+                Some(uf),
+                "UnquoteForm::{uf:?} did NOT round-trip — sexp_shape().as_unquote_form() must recover the typed marker",
+            );
+        }
+    }
+
+    #[test]
+    fn as_unquote_form_projects_each_unquote_shape_to_canonical_unquote_form_and_rejects_non_unquote_shapes(
+    ) {
+        // Per-variant truth-table sweep across every `SexpShape::ALL`
+        // entry — pins each variant's canonical mapping (the two
+        // substitution-subset shapes project to the matching
+        // `UnquoteForm`; every other shape — `Quote`, `Quasiquote`,
+        // `Nil`, `List`, every atomic-payload arm — projects to
+        // `None`) byte-for-byte. Sibling sweep to
+        // `as_quote_form_projects_each_quote_shape_to_canonical_quote_form_and_rejects_non_quote_shapes`
+        // and
+        // `as_atom_kind_projects_each_atom_shape_to_canonical_atom_kind_and_rejects_non_atom_shapes`
+        // on the substitution-subset carving axis.
+        for shape in SexpShape::ALL {
+            let projected = shape.as_unquote_form();
+            let expected = match shape {
+                SexpShape::Unquote => Some(UnquoteForm::Unquote),
+                SexpShape::UnquoteSplice => Some(UnquoteForm::Splice),
+                SexpShape::Nil
+                | SexpShape::List
+                | SexpShape::Quote
+                | SexpShape::Quasiquote
+                | SexpShape::Symbol
+                | SexpShape::Keyword
+                | SexpShape::String
+                | SexpShape::Int
+                | SexpShape::Float
+                | SexpShape::Bool => None,
+            };
+            assert_eq!(
+                projected, expected,
+                "SexpShape::{shape:?}.as_unquote_form() drifted from canonical mapping",
+            );
+        }
+    }
+
+    #[test]
+    fn as_unquote_form_routes_through_as_quote_form_and_quote_form_as_unquote_form_via_composition()
+    {
+        // Post-lift composition pin: for every `shape: SexpShape`,
+        // `shape.as_unquote_form()` and `shape.as_quote_form()
+        // .and_then(QuoteForm::as_unquote_form)` agree byte-for-byte
+        // — the 2-of-12 substitution-subset carving rides through
+        // the composition of the 4-of-12 quote-family carving
+        // (`SexpShape::as_quote_form`) and the 2-of-4 template-
+        // substitution subset gate on the quote-family superset
+        // (`QuoteForm::as_unquote_form`), rather than through a
+        // parallel twelve-arm inline match table here. A regression
+        // that re-inlines the twelve arms as a parallel match-table
+        // still passes the round-trip and truth-table sweeps but
+        // fails THIS composition pin — the (outer shape, subset
+        // marker) pairing is no longer derived from the two existing
+        // closed-set matches the substrate already owns. Sibling
+        // posture to `unquote_form_sexp_shape_routes_through_to_quote_form_sexp_shape_via_composition`
+        // on the retraction direction of the (embed, project) dual.
+        for shape in SexpShape::ALL {
+            let from_projection = shape.as_unquote_form();
+            let from_composition = shape
+                .as_quote_form()
+                .and_then(crate::ast::QuoteForm::as_unquote_form);
+            assert_eq!(
+                from_projection, from_composition,
+                "SexpShape::{shape:?}.as_unquote_form() drifted from .as_quote_form().and_then(QuoteForm::as_unquote_form) — the retraction is no longer derived from the composition through the quote-family carving",
+            );
+        }
+    }
+
+    #[test]
+    fn as_unquote_form_composes_with_marker_via_unquote_form_marker_round_trip() {
+        // Cross-projection composition law (substitution-subset sibling
+        // of `as_quote_form_composes_with_sexp_shape_via_quote_form_prefix_round_trip`
+        // and `as_atom_kind_composes_with_sexp_shape_via_atom_kind_label_round_trip`):
+        // for every `uf: UnquoteForm::ALL`, `uf.marker() ==
+        // uf.sexp_shape().as_unquote_form().expect("...").marker()`.
+        // Pins the (UnquoteForm variant, SexpShape variant) pairing
+        // round-trips through the embed/project pair AND preserves
+        // each variant's canonical template-substitution punctuation
+        // (`","` / `",@"`) — a regression that drifts the round-trip
+        // OR drifts the marker surfaces here. The label-coherence
+        // binds the diagnostic surface to the typed algebra at BOTH
+        // layers, matching the posture the atomic-payload and quote-
+        // family cross-projections already carry.
+        for uf in UnquoteForm::ALL {
+            let via_round_trip = uf
+                .sexp_shape()
+                .as_unquote_form()
+                .expect("every UnquoteForm round-trips through the embed/project pair")
+                .marker();
+            assert_eq!(
+                via_round_trip,
+                uf.marker(),
+                "UnquoteForm::{uf:?}.marker() drifted from sexp_shape().as_unquote_form().marker() — embed/project must preserve marker coherence",
+            );
         }
     }
 

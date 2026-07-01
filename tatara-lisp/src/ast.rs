@@ -1,6 +1,6 @@
 //! S-expression AST.
 
-use crate::error::{SexpShape, SexpWitness, UnquoteForm};
+use crate::error::{SexpShape, SexpWitness, StructuralKind, UnquoteForm};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -1342,6 +1342,96 @@ impl Sexp {
         }
     }
 
+    /// Soft projection onto the closed-set [`StructuralKind`] residual
+    /// carving marker — the 2-of-12 carving of the [`SexpShape`] algebra
+    /// covering [`Self::Nil`] and [`Self::List`] (the outer shapes that
+    /// lie OUTSIDE both the atomic-payload carving
+    /// [`AtomKind`](crate::error::SexpShape::as_atom_kind) and the
+    /// quote-family carving
+    /// [`QuoteForm`](crate::error::SexpShape::as_quote_form)). Returns
+    /// `Some(StructuralKind::Nil)` for [`Self::Nil`],
+    /// `Some(StructuralKind::List)` for [`Self::List`], `None` for
+    /// every other outer shape (every [`Self::Atom`] variant, every
+    /// quote-family wrapper: [`Self::Quote`], [`Self::Quasiquote`],
+    /// [`Self::Unquote`], [`Self::UnquoteSplice`]).
+    ///
+    /// Sibling soft-projection peer of [`Self::as_quote_form`] (the
+    /// soft-decomposition of the four homoiconic prefix wrappers into
+    /// `(QuoteForm, &Sexp)`) and [`Self::as_unquote`] (the
+    /// soft-decomposition of the two template-substitution wrappers
+    /// into `(UnquoteForm, &Sexp)`). Direct value-level peer of the
+    /// shape-level projection
+    /// [`SexpShape::as_structural_kind`](crate::error::SexpShape::as_structural_kind)
+    /// — the pair `(Sexp::as_structural_kind, SexpShape::as_structural_kind)`
+    /// binds the (Sexp value, StructuralKind carving marker) pairing at
+    /// ONE typed method on each algebra, symmetric with the existing
+    /// (Sexp value → AtomKind via
+    /// `Sexp::as_atom().map(Atom::kind)`) atomic-axis composition and
+    /// the direct (Sexp value → QuoteForm) marker projection
+    /// [`Self::as_quote_form`] returns.
+    ///
+    /// Composition law: `s.as_structural_kind() ==
+    /// s.shape().as_structural_kind()` for every `s: &Sexp`. Pre-lift
+    /// the residual-carving marker at the value level was reachable
+    /// only via the two-step composition
+    /// `s.shape().as_structural_kind()` (walking through the full
+    /// 12-variant [`SexpShape`] closed set to arrive at the 2-of-12
+    /// carving marker); post-lift the composition lands at ONE typed
+    /// method on the value algebra — the Nil arm returns `Some(Nil)`
+    /// directly and the List arm returns `Some(List)` directly,
+    /// matching the residual-carving membership at the value level.
+    /// The composition law is pinned by
+    /// `sexp_as_structural_kind_agrees_with_shape_as_structural_kind_for_every_variant`
+    /// in this module, so a regression that drifts either projection
+    /// from the other surfaces immediately.
+    ///
+    /// Sibling-shape lift to [`Self::is_list`] (the bare List-arm
+    /// predicate) and [`Self::is_kwargs_list`] (the narrower
+    /// kwargs-shaped List cohort predicate): where `is_list` returns
+    /// `true` iff the value inhabits the List arm of the residual
+    /// carving, `as_structural_kind` returns the typed carving marker
+    /// that binds BOTH residual arms (Nil and List) at ONE typed
+    /// projection — the operator answering "which residual arm?"
+    /// rather than the bare "is this the List arm?" predicate.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (Sexp variant, StructuralKind carving marker) pairing becomes a
+    /// TYPE projection on the substrate `Sexp` algebra rather than a
+    /// two-step composition through the shape-level projection. A typo
+    /// or swap at the value-projection site is no longer a runtime
+    /// drift but a compile error against the typed projection.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// residual-carving marker projection now lives on the typed
+    /// `Sexp` algebra alongside [`Self::as_atom`], [`Self::as_list`],
+    /// [`Self::as_quote_form`], [`Self::as_unquote`], completing the
+    /// (Sexp value → closed-set carving marker) family at the residual
+    /// axis. THEORY.md §II.1 invariant 2 — free middle; every consumer
+    /// that needs the residual-carving marker at the value level (a
+    /// future `tatara-check` predicate keyed on the Nil/List cohort, a
+    /// future LSP structural-navigation filter that keys on the
+    /// residual carving, a future typed-rewriter walk over the
+    /// residual arm) binds to ONE typed method on the value algebra
+    /// rather than a two-step composition through the shape-level
+    /// projection.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::dyn_cast<StructuralOp>(val)`
+    /// typed soft-downcast on the residual carving of a closed-set
+    /// value algebra — the (value, typed carving marker) pairing lives
+    /// at ONE typed projection on the outer value-algebra sibling. The
+    /// Rust-typed peer here uses the substrate's outer `Sexp` algebra
+    /// with `Sexp::as_structural_kind` closing the residual-carving
+    /// cell of the value-level soft-projection surface, symmetric with
+    /// the atomic-axis composition through [`Self::as_atom`] and the
+    /// quote-family projection [`Self::as_quote_form`].
+    #[must_use]
+    pub fn as_structural_kind(&self) -> Option<StructuralKind> {
+        match self {
+            Self::Nil => Some(StructuralKind::Nil),
+            Self::List(_) => Some(StructuralKind::List),
+            _ => None,
+        }
+    }
+
     /// Structural-shape predicate — `true` iff this is a [`Self::List`]
     /// whose items form a non-empty, even-length `(:k v :k v …)` kwargs
     /// sequence with every even-indexed item being an [`Atom::Keyword`].
@@ -1540,10 +1630,22 @@ impl Sexp {
     /// substrate's typed-Rust peer.
     #[must_use]
     pub fn shape(&self) -> SexpShape {
+        // Each variant routes through its closed-set carving-marker's
+        // `sexp_shape` projection — the atomic-payload carving via
+        // `AtomKind::sexp_shape`, the structural-residual carving via
+        // `StructuralKind::sexp_shape`, the quote-family carving via
+        // `QuoteForm::sexp_shape`. Post-lift the twelve outer-shape
+        // arms of the SexpShape closed set are reached through THREE
+        // carving-marker `sexp_shape` projections (6 + 2 + 4 = 12),
+        // symmetric across the partition — no arm hits a raw
+        // `SexpShape::*` literal here. A future thirteenth variant
+        // (e.g. `Sexp::Vector` for `#(...)` reader syntax) extends the
+        // carving-marker family the same way and lands at one arm
+        // here + one carving-marker `sexp_shape` arm in lockstep.
         match self {
-            Self::Nil => SexpShape::Nil,
+            Self::Nil => StructuralKind::Nil.sexp_shape(),
             Self::Atom(a) => a.kind().sexp_shape(),
-            Self::List(_) => SexpShape::List,
+            Self::List(_) => StructuralKind::List.sexp_shape(),
             Self::Quote(_) | Self::Quasiquote(_) | Self::Unquote(_) | Self::UnquoteSplice(_) => {
                 let (qf, _) = self.expect_quote_form();
                 qf.sexp_shape()
@@ -8383,6 +8485,246 @@ mod tests {
             assert_eq!(
                 via_outer, via_composed,
                 "Sexp::shape drifted from as_quote_form + QuoteForm::sexp_shape at {sexp:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_method_routes_structural_arms_through_structural_kind_sexp_shape_projection() {
+        // PATH-UNIFORMITY CONTRACT (structural-residual axis): the
+        // lifted `Sexp::shape()` routes its two structural-residual
+        // arms (Nil, List) through `StructuralKind::sexp_shape()`. Pin
+        // that the composition agrees bit-for-bit with the direct
+        // `Sexp::shape()` projection across the two structural-residual
+        // variants. A regression that drifts EITHER projection direction
+        // (a `Sexp::shape` arm that inlines `SexpShape::Nil` /
+        // `SexpShape::List` back as a raw literal, or a
+        // `StructuralKind::sexp_shape` arm that drifts its `SexpShape`
+        // mapping) surfaces here immediately. Sibling-shape pin to the
+        // atomic-axis routing test
+        // `sexp_shape_method_routes_atom_arm_through_atom_kind_sexp_shape_projection`
+        // and the quote-family-axis routing test
+        // `sexp_shape_method_routes_quote_family_arms_through_quote_form_sexp_shape_projection`
+        // — together the three tests pin ALL THREE closed-set
+        // carving-marker `sexp_shape` compositions the lifted
+        // `Sexp::shape()` body owns.
+        let samples = [
+            (Sexp::Nil, StructuralKind::Nil),
+            (Sexp::List(vec![]), StructuralKind::List),
+            (Sexp::List(vec![Sexp::symbol("a")]), StructuralKind::List),
+        ];
+        for (sexp, expected_sk) in &samples {
+            let via_outer = sexp.shape();
+            let sk = sexp
+                .as_structural_kind()
+                .expect("structural-residual sample must project through as_structural_kind");
+            assert_eq!(
+                sk, *expected_sk,
+                "as_structural_kind drifted typed marker at {sexp:?}"
+            );
+            let via_composed = sk.sexp_shape();
+            assert_eq!(
+                via_outer, via_composed,
+                "Sexp::shape drifted from as_structural_kind + StructuralKind::sexp_shape at {sexp:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_structural_kind_projects_nil_and_list_to_canonical_structural_kind() {
+        // PER-ARM CONTRACT: pin that `Sexp::as_structural_kind()`
+        // projects `Sexp::Nil` to `Some(StructuralKind::Nil)` and
+        // `Sexp::List(_)` to `Some(StructuralKind::List)` — the two
+        // structural-residual arms of the `Sexp` algebra. A regression
+        // that swaps the two arms (routes `Nil` to `Some(List)` or
+        // vice versa), returns `None` for either, or projects to a
+        // wrong `StructuralKind` variant surfaces here immediately.
+        // The List arm is exercised with an empty AND a non-empty
+        // items slice so a body that gates on `items.is_empty()`
+        // (rather than the outer arm) fails loudly.
+        assert_eq!(Sexp::Nil.as_structural_kind(), Some(StructuralKind::Nil));
+        assert_eq!(
+            Sexp::List(vec![]).as_structural_kind(),
+            Some(StructuralKind::List)
+        );
+        assert_eq!(
+            Sexp::List(vec![Sexp::symbol("a")]).as_structural_kind(),
+            Some(StructuralKind::List)
+        );
+        assert_eq!(
+            Sexp::List(vec![Sexp::int(1), Sexp::int(2), Sexp::int(3)]).as_structural_kind(),
+            Some(StructuralKind::List)
+        );
+    }
+
+    #[test]
+    fn sexp_as_structural_kind_rejects_non_structural_outer_shapes() {
+        // KERNEL CONTRACT: pin that `Sexp::as_structural_kind()`
+        // returns `None` for every non-structural outer shape — every
+        // `Sexp::Atom` variant (the atomic-payload carving) AND every
+        // quote-family wrapper (the quote-family carving). Sweeps
+        // every non-residual arm so a regression that accepts an atom
+        // (e.g. routes `Sexp::Atom(_)` to `Some(List)` because the
+        // outer arm is misread as a "container" of an atomic payload)
+        // or a quote-family wrapper (e.g. routes `Sexp::Quote(_)`
+        // through `_ => Some(_)` because the residual match falls
+        // through) fails loudly. Sibling-cohort sweep to
+        // `sexp_as_atom_projects_inner_atom_iff_outer_is_atom_variant`
+        // — that test pins the atomic-projection kernel, this one
+        // pins the structural-residual kernel.
+        for outer in [
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::Quote(Box::new(Sexp::symbol("x"))),
+            Sexp::Quasiquote(Box::new(Sexp::symbol("x"))),
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("x"))),
+        ] {
+            assert_eq!(
+                outer.as_structural_kind(),
+                None,
+                "Sexp::as_structural_kind must reject non-structural outer shape {outer:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_structural_kind_agrees_with_shape_as_structural_kind_for_every_variant() {
+        // COMPOSITION-LAW CONTRACT: `s.as_structural_kind() ==
+        // s.shape().as_structural_kind()` for every reachable Sexp
+        // outer shape. The value-level projection and the shape-level
+        // projection MUST agree bit-for-bit — the substrate's
+        // (Sexp value, StructuralKind marker) pairing binds at TWO
+        // typed methods (one on `Sexp`, one on `SexpShape`) that must
+        // stay in lockstep. Sweeps every outer shape (residual + atom
+        // + quote-family) so a drift on ANY arm surfaces immediately.
+        // Sibling-shape pin to the (Sexp → SexpShape → label) path-
+        // uniformity test
+        // `sexp_shape_method_label_composes_with_sexp_type_name_for_every_outer_shape`
+        // — where that test pins the label-projection composition,
+        // this one pins the structural-carving-marker projection
+        // composition.
+        let samples = [
+            Sexp::Nil,
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ];
+        for s in &samples {
+            assert_eq!(
+                s.as_structural_kind(),
+                s.shape().as_structural_kind(),
+                "Sexp::as_structural_kind and Sexp::shape().as_structural_kind must agree at {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_structural_kind_partitions_outer_shapes_jointly_with_as_atom_and_as_quote_form() {
+        // PARTITION-TOTAL CONTRACT (value-level): pin that for every
+        // reachable Sexp outer shape, EXACTLY ONE of `as_atom`,
+        // `as_quote_form`, `as_structural_kind` returns `Some(_)`.
+        // Post-lift the three carving-marker projections at the value
+        // level form a partition of the `Sexp` variant algebra —
+        // symmetric with the partition-total invariant pinned at the
+        // shape level by
+        // `sexp_shape_partition_is_total_across_atom_quote_structural_carvings`
+        // (in `error.rs`). A regression that drifts any carving's
+        // membership (an `as_atom` arm that accepts a non-atom, an
+        // `as_quote_form` arm that misses a quote-family wrapper, an
+        // `as_structural_kind` arm that swaps its Nil/List
+        // membership) surfaces here immediately, so the value-level
+        // partition invariant is a TYPED THEOREM (rustc-enforced
+        // exhaustiveness through the joint sweep) rather than a
+        // runtime `matches!` assertion.
+        let samples = [
+            Sexp::Nil,
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ];
+        for s in &samples {
+            let hits = [
+                s.as_atom().is_some(),
+                s.as_quote_form().is_some(),
+                s.as_structural_kind().is_some(),
+            ];
+            let hit_count: usize = hits.iter().filter(|b| **b).count();
+            assert_eq!(
+                hit_count, 1,
+                "value-level carvings must partition Sexp variants — {s:?} matched {hit_count} carvings (as_atom/as_quote_form/as_structural_kind = {hits:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_structural_kind_composes_with_label_via_structural_kind_label() {
+        // CROSS-PROJECTION COHERENCE: pin that
+        // `s.as_structural_kind().map(StructuralKind::label)` agrees
+        // with `s.shape().label()` for every residual-carving Sexp
+        // (and returns `None` for every non-residual Sexp). Composes
+        // the new value-level projection with the closed-set
+        // `StructuralKind::label` projection (which itself composes
+        // through `sexp_shape().label()`) so the label vocabulary
+        // stays load-bearing at ONE canonical site
+        // (`SexpShape::label`) rather than a parallel per-projection
+        // literal table.
+        let residual = [
+            (Sexp::Nil, "nil"),
+            (Sexp::List(vec![]), "list"),
+            (Sexp::List(vec![Sexp::symbol("a")]), "list"),
+        ];
+        for (sexp, expected_label) in &residual {
+            let via_carving = sexp.as_structural_kind().map(StructuralKind::label);
+            assert_eq!(
+                via_carving,
+                Some(*expected_label),
+                "structural-carving-marker label drifted at {sexp:?}"
+            );
+            assert_eq!(
+                via_carving,
+                Some(sexp.shape().label()),
+                "as_structural_kind.map(label) must equal shape().label() for residual sample {sexp:?}"
+            );
+        }
+        for non_residual in [
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ] {
+            assert_eq!(
+                non_residual.as_structural_kind().map(StructuralKind::label),
+                None,
+                "non-residual Sexp must project to None on as_structural_kind.map(label) — {non_residual:?}"
             );
         }
     }

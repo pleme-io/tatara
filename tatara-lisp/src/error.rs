@@ -3699,6 +3699,116 @@ impl SexpShape {
             | Self::UnquoteSplice => None,
         }
     }
+
+    /// Project the typed [`SexpShape`] into the outer-`Sexp`
+    /// [`Hash for Sexp`](crate::ast::Sexp) cache-key discriminator byte
+    /// `{0..=6}` — the SHAPE-LEVEL peer of
+    /// [`crate::ast::Sexp::hash_discriminator`] one algebra level up.
+    /// The twelve outer-shape arms collapse to seven outer bytes: the six
+    /// atomic-payload arms (`Symbol`, `Keyword`, `String`, `Int`, `Float`,
+    /// `Bool`) all project to the outer Atom marker byte `1u8` (their
+    /// per-atom-kind inner byte lives nested inside
+    /// [`Hash for Atom`](crate::ast::Atom) via
+    /// [`crate::ast::AtomKind::hash_discriminator`]'s `{0..=5}` payload
+    /// carving, NOT surfaced here); the two structural-residual arms
+    /// (`Nil`, `List`) delegate through
+    /// [`StructuralKind::hash_discriminator`] for `{0, 2}`; the four
+    /// quote-family arms (`Quote`, `Quasiquote`, `Unquote`,
+    /// `UnquoteSplice`) delegate through
+    /// [`crate::ast::QuoteForm::hash_discriminator`] for `{3..=6}`. The
+    /// byte partition is byte-identical to
+    /// [`crate::ast::Sexp::hash_discriminator`]'s outer sweep, so the
+    /// substrate's macro-expansion cache
+    /// ([`crate::macro_expand::Expander`]'s cache) key stays bit-for-bit
+    /// stable across the shape-level lift.
+    ///
+    /// Composition law: `sexp.hash_discriminator() ==
+    /// sexp.shape().hash_discriminator()` for every `sexp: &Sexp` — the
+    /// outer-`Sexp` cache-key discriminator method routes through
+    /// [`crate::ast::Sexp::shape`] into THIS method, which in turn
+    /// routes into the three closed-set carvings' discriminator
+    /// methods. Post-lift the outer-`Sexp` cache-key algebra closes at
+    /// FIVE typed layers:
+    ///   1. [`crate::ast::Sexp::hash_discriminator`] — 7-arm outer
+    ///      dispatch on the outer `Sexp` algebra;
+    ///   2. [`Self::hash_discriminator`] — 12-arm shape-level dispatch on
+    ///      the [`SexpShape`] algebra (this method);
+    ///   3. [`StructuralKind::hash_discriminator`] — 2-arm
+    ///      structural-residual sub-carving for `{0, 2}`;
+    ///   4. [`crate::ast::QuoteForm::hash_discriminator`] — 4-arm
+    ///      quote-family sub-carving for `{3..=6}`;
+    ///   5. [`crate::ast::AtomKind::hash_discriminator`] — 6-arm
+    ///      atomic-payload sub-carving for `{0..=5}` (nested inside
+    ///      `Hash for Atom` under outer byte `1u8`, NOT surfaced through
+    ///      this shape-level method).
+    ///
+    /// Pre-lift the outer-`Sexp` cache-key algebra bottomed out at the
+    /// three sub-carvings' discriminator methods directly via
+    /// [`crate::ast::Sexp::hash_discriminator`]'s seven arms — no
+    /// intermediate shape-level projection existed. Consumers that had a
+    /// typed [`SexpShape`] identity in hand (a
+    /// `LispError::TypeMismatch.got` slot, a rejected shape from a
+    /// typed-entry gate, a future authoring-tool audit-trail metric keyed
+    /// on the observed shape) wanting the outer cache-key byte had to
+    /// re-embed the typed shape into a [`crate::ast::Sexp`] value and
+    /// route through the outer method — an unnecessary allocation. Post-
+    /// lift the shape-level projection is a NAMED PRIMITIVE on the closed-
+    /// set [`SexpShape`] algebra sitting next to the three sibling shape-
+    /// level projections ([`Self::label`], [`Self::as_atom_kind`],
+    /// [`Self::as_quote_form`], [`Self::as_structural_kind`],
+    /// [`Self::as_unquote_form`]) — the outer cache-key partition
+    /// becomes a typed identity on the shape algebra rather than a
+    /// projection through the outer-`Sexp` value carrier.
+    ///
+    /// `pub(crate)` because the byte-discriminator surface is an
+    /// implementation detail of the substrate's `Hash for Sexp` cache-
+    /// key contract; exposing it publicly would leak the cache-key shape
+    /// through the API without enabling any external consumer the public
+    /// projections ([`Self::label`], [`Self::as_atom_kind`],
+    /// [`Self::as_quote_form`], [`Self::as_structural_kind`]) don't
+    /// already serve. Same posture as
+    /// [`crate::ast::Sexp::hash_discriminator`],
+    /// [`crate::ast::AtomKind::hash_discriminator`],
+    /// [`crate::ast::QuoteForm::hash_discriminator`], and
+    /// [`StructuralKind::hash_discriminator`].
+    ///
+    /// A future thirteenth [`SexpShape`] variant (e.g. `Vector` for
+    /// `#(...)` reader syntax, `Map` for `{...}`, `Char` for `#\x`)
+    /// picks a fresh cache-key byte outside `{0..=6}` (e.g. `7u8`),
+    /// extends either [`StructuralKind`] / [`crate::ast::AtomKind`] /
+    /// [`crate::ast::QuoteForm`] (if it names an existing sub-carving)
+    /// or a fresh sub-algebra, and lands at ONE new arm here — rustc
+    /// binds the consistency through exhaustiveness over the closed
+    /// [`SexpShape`] enum.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (SexpShape variant, outer cache-key byte) pairing becomes a TYPE
+    /// projection on the substrate's shape algebra rather than requiring
+    /// a re-embed into [`crate::ast::Sexp`] followed by an outer
+    /// dispatch. A typo or swap at the shape-level projection site is
+    /// a compile error against the typed projection rather than a
+    /// silent runtime cache-key drift. THEORY.md §II.1 invariant 2 —
+    /// free middle; the outer-`Sexp` cache-key algebra now closes over
+    /// FIVE typed layers (outer, shape, three sub-carvings) with rustc-
+    /// enforced consistency across each — a regression that drifts ONE
+    /// layer's discriminator bytes from the others cannot reach the
+    /// substrate's runtime cache. THEORY.md §VI.1 — generation over
+    /// composition; the shape-level projection is the missing algebra
+    /// layer between the outer-`Sexp` and the three sub-carvings — the
+    /// four pre-existing typed layers become a full FIVE-layer typed
+    /// composition through ONE new named projection.
+    #[must_use]
+    pub(crate) fn hash_discriminator(self) -> u8 {
+        match self {
+            Self::Nil => StructuralKind::Nil.hash_discriminator(),
+            Self::List => StructuralKind::List.hash_discriminator(),
+            Self::Symbol | Self::Keyword | Self::String | Self::Int | Self::Float | Self::Bool => 1,
+            Self::Quote => crate::ast::QuoteForm::Quote.hash_discriminator(),
+            Self::Quasiquote => crate::ast::QuoteForm::Quasiquote.hash_discriminator(),
+            Self::Unquote => crate::ast::QuoteForm::Unquote.hash_discriminator(),
+            Self::UnquoteSplice => crate::ast::QuoteForm::UnquoteSplice.hash_discriminator(),
+        }
+    }
 }
 
 // `impl std::fmt::Display for SexpShape` + `impl std::str::FromStr for
@@ -11460,5 +11570,230 @@ mod tests {
         // `Self::ALL` (cardinality 2 = every structural-residual
         // outer shape) fails-loudly here.
         crate::assert_closed_set_well_formed::<StructuralKind>();
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminator_pins_legacy_outer_cache_key_bytes() {
+        // CACHE-KEY CONTRACT (shape-level peer): the shape-level
+        // `SexpShape::hash_discriminator` MUST project each of the twelve
+        // outer-shape arms to the SAME outer cache-key byte the
+        // corresponding `Sexp` variant surfaces through
+        // `crate::ast::Sexp::hash_discriminator`. Pin the twelve-arm →
+        // seven-byte collapse: Nil→0, {Symbol/Keyword/String/Int/Float/
+        // Bool}→1 (the outer Atom marker byte; the per-atom-kind inner
+        // byte lives INSIDE `Hash for Atom` via
+        // `AtomKind::hash_discriminator`'s `{0..=5}`, NOT surfaced
+        // through this shape-level method), List→2, Quote→3,
+        // Quasiquote→4, Unquote→5, UnquoteSplice→6. Any regression that
+        // renumbers a byte here silently drifts the outer-`Sexp` cache-
+        // key partition since `Sexp::hash_discriminator` composes
+        // through `self.shape().hash_discriminator()` post-lift.
+        // Sibling posture to
+        // `structural_kind_hash_discriminator_pins_legacy_cache_key_bytes`
+        // on the 2-arm sub-carving, `crate::ast::AtomKind`'s
+        // `atom_kind_hash_discriminator_pins_legacy_atom_cache_key_bytes`
+        // on the 6-arm sub-carving, and
+        // `crate::ast::QuoteForm`'s
+        // `quote_form_hash_discriminator_pins_legacy_cache_key_bytes`
+        // on the 4-arm sub-carving.
+        assert_eq!(SexpShape::Nil.hash_discriminator(), 0);
+        assert_eq!(SexpShape::Symbol.hash_discriminator(), 1);
+        assert_eq!(SexpShape::Keyword.hash_discriminator(), 1);
+        assert_eq!(SexpShape::String.hash_discriminator(), 1);
+        assert_eq!(SexpShape::Int.hash_discriminator(), 1);
+        assert_eq!(SexpShape::Float.hash_discriminator(), 1);
+        assert_eq!(SexpShape::Bool.hash_discriminator(), 1);
+        assert_eq!(SexpShape::List.hash_discriminator(), 2);
+        assert_eq!(SexpShape::Quote.hash_discriminator(), 3);
+        assert_eq!(SexpShape::Quasiquote.hash_discriminator(), 4);
+        assert_eq!(SexpShape::Unquote.hash_discriminator(), 5);
+        assert_eq!(SexpShape::UnquoteSplice.hash_discriminator(), 6);
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminator_covers_outer_partition_zero_through_six() {
+        // PARTITION-COMPLETENESS CONTRACT (shape-level peer): the
+        // 12-arm sweep of `SexpShape::ALL` through
+        // `SexpShape::hash_discriminator` MUST cover exactly the outer
+        // cache-key partition `{0..=6}` — no byte outside the outer
+        // partition, no byte inside missing. The projection is
+        // surjective onto `{0..=6}` (every outer byte reached by at
+        // least one shape arm) with the atomic-shape collapse
+        // ({Symbol/Keyword/String/Int/Float/Bool} → 1) covering the
+        // outer Atom marker byte. Sibling posture to
+        // `sexp_hash_discriminator_partitions_the_full_outer_discriminator_space_zero_through_six`
+        // on the outer-`Sexp` algebra — that pin binds the outer-Sexp
+        // partition; this pin binds the shape-level partition. Post-
+        // lift the two partitions coincide byte-for-byte through
+        // `Sexp::hash_discriminator` = `self.shape().hash_discriminator()`.
+        let outer_bytes: std::collections::BTreeSet<u8> = SexpShape::ALL
+            .iter()
+            .map(|shape| shape.hash_discriminator())
+            .collect();
+        let expected: std::collections::BTreeSet<u8> = (0u8..=6u8).collect();
+        assert_eq!(
+            outer_bytes, expected,
+            "SexpShape::hash_discriminator must cover exactly the outer discriminator space {{0..=6}}",
+        );
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminator_atomic_arms_collapse_to_outer_atom_marker() {
+        // OUTER-CARVING CONTRACT (shape-level atomic arm): every
+        // `SexpShape` variant whose `as_atom_kind()` projection returns
+        // `Some(_)` MUST project through `SexpShape::hash_discriminator`
+        // to the SAME outer discriminator byte `1u8` — the atomic outer
+        // arm is a single-byte marker on the outer partition, with the
+        // per-atom-kind inner byte
+        // (`crate::ast::AtomKind::hash_discriminator`'s `{0..=5}`)
+        // nested INSIDE `Hash for Atom` — NOT surfaced through this
+        // shape-level method. Pin the six-way collapse so a regression
+        // that drifts ONE atomic-shape arm's outer routing (e.g. routes
+        // `SexpShape::Int` to `7u8` inline) surfaces here immediately.
+        // Sibling posture to
+        // `sexp_hash_discriminator_atom_arm_collapses_over_every_atom_kind`
+        // on the outer-`Sexp` algebra — that pin binds the outer-Sexp
+        // atom-arm collapse; this pin binds the shape-level atomic-arm
+        // collapse. Post-lift the two collapses coincide byte-for-byte
+        // through `Sexp::hash_discriminator` =
+        // `self.shape().hash_discriminator()`.
+        for shape in SexpShape::ALL {
+            if shape.as_atom_kind().is_some() {
+                assert_eq!(
+                    shape.hash_discriminator(),
+                    1u8,
+                    "SexpShape::{shape:?} is an atomic-payload shape but did not collapse to outer byte 1",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminator_structural_arms_route_through_structural_kind() {
+        // COMPOSITION-ROUTING CONTRACT (shape-level structural-residual
+        // arm): for every `SexpShape` variant whose `as_structural_kind()`
+        // projection returns `Some(sk)`, `SexpShape::hash_discriminator`
+        // MUST agree byte-for-byte with `sk.hash_discriminator()` — the
+        // two structural-residual arms (`Nil`, `List`) DELEGATE to the
+        // typed sub-carving rather than inline two byte literals. Pin
+        // the delegation-identity across the closed set so a regression
+        // that inlines a byte at ONE arm (e.g. routes `SexpShape::Nil`
+        // to `7u8` inline instead of through
+        // `StructuralKind::Nil.hash_discriminator()`) fails-loudly here
+        // — it would type-check but silently drift if the sub-algebra's
+        // byte is renumbered. Sibling posture to the outer-`Sexp` axis
+        // where `Sexp::Nil` / `Sexp::List(_)` also compose through
+        // `StructuralKind::hash_discriminator` (pre-lift on that axis;
+        // post-lift the same composition emerges through `self.shape()`
+        // routing).
+        for shape in SexpShape::ALL {
+            if let Some(sk) = shape.as_structural_kind() {
+                assert_eq!(
+                    shape.hash_discriminator(),
+                    sk.hash_discriminator(),
+                    "SexpShape::{shape:?} structural arm must delegate to StructuralKind::{sk:?}.hash_discriminator()",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminator_quote_family_arms_route_through_quote_form() {
+        // COMPOSITION-ROUTING CONTRACT (shape-level quote-family arm):
+        // for every `SexpShape` variant whose `as_quote_form()`
+        // projection returns `Some(qf)`, `SexpShape::hash_discriminator`
+        // MUST agree byte-for-byte with `qf.hash_discriminator()` — the
+        // four quote-family arms DELEGATE to the sub-algebra's
+        // discriminator method rather than inline four literals. Pin the
+        // delegation-identity across the closed set so a regression that
+        // inlines a byte at ONE arm (e.g. routes
+        // `SexpShape::UnquoteSplice` to `6u8` inline instead of through
+        // `QuoteForm::UnquoteSplice.hash_discriminator()`) fails-loudly
+        // here — it would type-check but silently drift if the sub-
+        // algebra's byte is renumbered. Sibling posture to
+        // `sexp_hash_discriminator_quote_arm_delegates_to_quote_form_hash_discriminator`
+        // on the outer-`Sexp` algebra — that pin binds the outer-Sexp
+        // quote-arm delegation; this pin binds the shape-level quote-
+        // family delegation.
+        for shape in SexpShape::ALL {
+            if let Some(qf) = shape.as_quote_form() {
+                assert_eq!(
+                    shape.hash_discriminator(),
+                    qf.hash_discriminator(),
+                    "SexpShape::{shape:?} quote-family arm must delegate to QuoteForm::{qf:?}.hash_discriminator()",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminator_partitions_by_three_way_carving_disjointly() {
+        // THREE-WAY CARVING PARTITION CONTRACT: for every `SexpShape`
+        // variant, EXACTLY ONE of the three closed-set carvings
+        // (`as_atom_kind`, `as_quote_form`, `as_structural_kind`)
+        // projects to `Some(_)`, AND the outer discriminator byte the
+        // shape-level `hash_discriminator` returns partitions across
+        // the three carvings' image spaces: atomic → `{1}` (outer Atom
+        // marker), quote-family → `{3, 4, 5, 6}`, structural → `{0, 2}`.
+        // A regression that drifts a carving assignment (e.g. routes
+        // `SexpShape::Nil` through `as_atom_kind()` due to a bogus
+        // typed-shape lattice edit) fails-loudly here — the partition
+        // completeness is a compile-time-verified theorem across the
+        // three carvings via rustc's exhaustiveness on each carving's
+        // `match`. Sibling posture to
+        // `structural_kind_hash_discriminator_disjoint_from_atom_outer_carve_byte_and_quote_form_hash_discriminator_partition`
+        // — that pin binds the sub-carving byte-space disjointness;
+        // this pin binds the shape-level three-way carving assignment
+        // AND its image-space partition.
+        let atomic_image: std::collections::BTreeSet<u8> = SexpShape::ALL
+            .iter()
+            .filter(|s| s.as_atom_kind().is_some())
+            .map(|s| s.hash_discriminator())
+            .collect();
+        let quote_image: std::collections::BTreeSet<u8> = SexpShape::ALL
+            .iter()
+            .filter(|s| s.as_quote_form().is_some())
+            .map(|s| s.hash_discriminator())
+            .collect();
+        let structural_image: std::collections::BTreeSet<u8> = SexpShape::ALL
+            .iter()
+            .filter(|s| s.as_structural_kind().is_some())
+            .map(|s| s.hash_discriminator())
+            .collect();
+        let expected_atomic: std::collections::BTreeSet<u8> = std::iter::once(1u8).collect();
+        let expected_quote: std::collections::BTreeSet<u8> = (3u8..=6u8).collect();
+        let expected_structural: std::collections::BTreeSet<u8> = [0u8, 2u8].into_iter().collect();
+        assert_eq!(
+            atomic_image, expected_atomic,
+            "the atomic-shape carving's `hash_discriminator` image must be {{1}} (the outer Atom marker byte)",
+        );
+        assert_eq!(
+            quote_image, expected_quote,
+            "the quote-family carving's `hash_discriminator` image must be {{3, 4, 5, 6}}",
+        );
+        assert_eq!(
+            structural_image, expected_structural,
+            "the structural-residual carving's `hash_discriminator` image must be {{0, 2}}",
+        );
+        assert!(
+            atomic_image.is_disjoint(&quote_image),
+            "atomic and quote-family carvings' `hash_discriminator` images must be disjoint",
+        );
+        assert!(
+            atomic_image.is_disjoint(&structural_image),
+            "atomic and structural-residual carvings' `hash_discriminator` images must be disjoint",
+        );
+        assert!(
+            quote_image.is_disjoint(&structural_image),
+            "quote-family and structural-residual carvings' `hash_discriminator` images must be disjoint",
+        );
+        let mut union: std::collections::BTreeSet<u8> = atomic_image;
+        union.extend(&quote_image);
+        union.extend(&structural_image);
+        let full_outer: std::collections::BTreeSet<u8> = (0u8..=6u8).collect();
+        assert_eq!(
+            union, full_outer,
+            "the three-carving `hash_discriminator` image union must exactly cover {{0..=6}}",
+        );
     }
 }

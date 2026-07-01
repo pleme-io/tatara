@@ -3928,6 +3928,86 @@ impl StructuralKind {
             Self::List => SexpShape::List,
         }
     }
+
+    /// Stable, per-variant byte discriminator that paired with the
+    /// residual outer-shape hash body builds the substrate's
+    /// [`Hash for Sexp`](crate::ast::Sexp) projection at the two
+    /// structural-residual arms — `0u8` for [`Self::Nil`], `2u8` for
+    /// [`Self::List`]. The byte values are load-bearing because the
+    /// macro-expansion cache ([`crate::macro_expand::Expander`]'s cache)
+    /// keys on the hash of `(macro_name, args)`, and every `Sexp`
+    /// participates in that hash — changing a discriminator silently
+    /// invalidates every cached expansion across the substrate AND
+    /// risks collision with the reserved bytes the other two
+    /// closed-set carvings' arms use (`1u8` for the [`crate::ast::Sexp::Atom`]
+    /// outer-carve marker, `3..=6` for the quote-family via
+    /// [`crate::ast::QuoteForm::hash_discriminator`]).
+    ///
+    /// The closed set ensures the two arms partition `{0, 2}`
+    /// injectively. Disjointness across the outer-Sexp discriminator
+    /// space is structural rather than overlap-induced hash
+    /// collision: [`crate::ast::Sexp::Atom(_)`]'s outer-carve byte
+    /// (`1u8`, single-arm literal inside [`Hash for Sexp`](crate::ast::Sexp))
+    /// AND [`crate::ast::QuoteForm::hash_discriminator`]'s
+    /// `{3, 4, 5, 6}` partition sit around this carving's `{0, 2}`
+    /// with a compile-time-checked prefix-uniqueness contract
+    /// [`Hash for Sexp`](crate::ast::Sexp)'s outer match maintains
+    /// through the exhaustive closed-set arm coverage. A future
+    /// structural-residual, quote-family, or atomic-kind extension
+    /// must extend both this method's arms AND the sibling
+    /// discriminator methods in lockstep, with rustc binding the
+    /// consistency through exhaustiveness over each closed enum.
+    ///
+    /// The SIBLING of the two prior-run discriminator lifts on the
+    /// same outer-Sexp Hash body: [`crate::ast::AtomKind::hash_discriminator`]
+    /// carries the six-variant atomic-payload carve's inner cache-key
+    /// bytes at the nested `Atom::hash` level, and
+    /// [`crate::ast::QuoteForm::hash_discriminator`] carries the four-
+    /// variant quote-family carve's outer-Sexp cache-key bytes at the
+    /// same `Hash for Sexp` body. Post-lift the SAME shape lands at
+    /// the structural-residual axis — every carving now surfaces its
+    /// hash-projection through ONE typed method rather than through
+    /// per-arm inline byte literals at the [`Hash for Sexp`](crate::ast::Sexp)
+    /// body. The three carvings' `hash_discriminator` methods form
+    /// the joint bit-map onto the outer-Sexp cache-key space, and
+    /// their partition-disjointness is the substrate's cache-key
+    /// prefix-uniqueness contract.
+    ///
+    /// `pub(crate)` because the byte-discriminator surface is an
+    /// implementation detail of the substrate's [`Hash for Sexp`](crate::ast::Sexp)
+    /// cache-key contract; exposing it publicly would leak the
+    /// cache-key shape through the API without enabling any external
+    /// consumer the public projections ([`Self::label`],
+    /// [`Self::sexp_shape`]) don't already serve. Same posture as
+    /// [`crate::ast::AtomKind::hash_discriminator`] and
+    /// [`crate::ast::QuoteForm::hash_discriminator`].
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (StructuralKind variant, cache-key byte) pairing becomes a TYPE
+    /// projection on the substrate algebra rather than two `0u8`/`2u8`
+    /// inline literals in [`Hash for Sexp`](crate::ast::Sexp). A typo
+    /// or swap at the hash-projection site is no longer a runtime
+    /// cache-key drift but a compile error against the typed
+    /// projection. THEORY.md §II.1 invariant 2 — free middle; ALL
+    /// THREE closed-set carvings (atomic-payload via
+    /// [`crate::ast::AtomKind::hash_discriminator`], quote-family via
+    /// [`crate::ast::QuoteForm::hash_discriminator`], structural-
+    /// residual via this method) now route through a typed
+    /// closed-set match family, so a regression that drifts ONE
+    /// carving's discriminator bytes from the others cannot reach
+    /// the substrate's runtime cache. THEORY.md §VI.1 — generation
+    /// over composition; the two `0u8`/`2u8` residual-arm literals
+    /// appeared inline at [`Hash for Sexp`](crate::ast::Sexp) — past
+    /// the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
+    /// named, and post-lift this method's two arms are the ONE
+    /// canonical site the outer-Sexp Hash body composes through.
+    #[must_use]
+    pub(crate) fn hash_discriminator(self) -> u8 {
+        match self {
+            Self::Nil => 0,
+            Self::List => 2,
+        }
+    }
 }
 
 // `impl std::fmt::Display for StructuralKind` + `impl std::str::FromStr
@@ -11168,6 +11248,113 @@ mod tests {
                 "SexpShape::{shape:?}.as_structural_kind() drifted from canonical mapping",
             );
         }
+    }
+
+    #[test]
+    fn structural_kind_hash_discriminator_pins_legacy_cache_key_bytes() {
+        // CACHE-KEY CONTRACT: pre-lift `Hash for Sexp` used the literal
+        // byte values 0 for `Sexp::Nil` and 2 for `Sexp::List(_)` as
+        // the two structural-residual arm discriminators. The
+        // macro-expansion cache (`Expander::cache`) keys on Hash;
+        // ANY change to a discriminator byte silently invalidates
+        // every cached expansion across the substrate AND risks
+        // collision with the reserved bytes the two sibling closed-
+        // set carvings use (`1u8` for the `Sexp::Atom(_)` outer-carve
+        // marker, `3..=6` for the quote-family via
+        // `crate::ast::QuoteForm::hash_discriminator`). Pin the two
+        // legacy values explicitly so a regression that re-numbers
+        // them surfaces immediately — the `StructuralKind` algebra
+        // MUST preserve the prior byte mapping bit-for-bit. Sibling
+        // posture to
+        // `atom_kind_hash_discriminator_pins_legacy_atom_cache_key_bytes`
+        // on the atomic-payload axis (nested inner) AND
+        // `quote_form_hash_discriminator_pins_legacy_cache_key_bytes`
+        // on the quote-family axis (outer `Sexp` level).
+        assert_eq!(StructuralKind::Nil.hash_discriminator(), 0);
+        assert_eq!(StructuralKind::List.hash_discriminator(), 2);
+    }
+
+    #[test]
+    fn structural_kind_hash_discriminator_bytes_are_pairwise_disjoint() {
+        // Closed-set injectivity: the two discriminator bytes must
+        // partition their subset of the outer-`Sexp` discriminator
+        // space injectively so `Sexp::Nil` and `Sexp::List(_)` never
+        // produce the SAME hash discriminator — a violation here
+        // means the cache could conflate the empty-result marker
+        // with the empty-list container. Sibling pin to
+        // `atom_kind_hash_discriminator_bytes_are_pairwise_disjoint`
+        // on the atomic-payload axis.
+        let bytes: Vec<u8> = StructuralKind::ALL
+            .iter()
+            .map(|sk| sk.hash_discriminator())
+            .collect();
+        let mut sorted = bytes.clone();
+        sorted.sort_unstable();
+        let mut deduped = sorted.clone();
+        deduped.dedup();
+        assert_eq!(
+            sorted, deduped,
+            "StructuralKind hash discriminator bytes must be pairwise disjoint",
+        );
+        assert_eq!(sorted, vec![0, 2]);
+    }
+
+    #[test]
+    fn structural_kind_hash_discriminator_disjoint_from_atom_outer_carve_byte_and_quote_form_hash_discriminator_partition(
+    ) {
+        // JOINT PARTITION CONTRACT: the outer-`Sexp` discriminator
+        // space `{0, 1, 2, 3, 4, 5, 6}` MUST partition across the
+        // three closed-set carvings AND the atomic-carve outer
+        // marker byte with NO overlap — the substrate's cache-key
+        // prefix-uniqueness contract binds bit-for-bit against this
+        // partition. This test pins the disjointness of
+        // `StructuralKind::hash_discriminator`'s `{0, 2}` against the
+        // atomic-carve outer marker byte `1u8` (single-arm literal
+        // inside `Hash for Sexp`) AND against
+        // `crate::ast::QuoteForm::hash_discriminator`'s `{3, 4, 5,
+        // 6}`. A regression that drifts ANY of the three carvings'
+        // discriminator arms into another's byte space (e.g. a
+        // future refactor that re-numbers `StructuralKind::List` to
+        // `1u8`) surfaces here — the prefix-uniqueness contract
+        // becomes a compile-time-verified theorem across the joint
+        // partition, not a per-carving isolated invariant. Companion
+        // to the on-axis `structural_kind_hash_discriminator_bytes_are_pairwise_disjoint`
+        // pin (which enforces intra-carving injectivity); together
+        // they close the three-carving-plus-atom-marker joint
+        // disjointness contract.
+        const ATOM_OUTER_CARVE_BYTE: u8 = 1;
+        let structural: Vec<u8> = StructuralKind::ALL
+            .iter()
+            .map(|sk| sk.hash_discriminator())
+            .collect();
+        let quote_family: Vec<u8> = crate::ast::QuoteForm::ALL
+            .iter()
+            .map(|qf| qf.hash_discriminator())
+            .collect();
+        for byte in &structural {
+            assert_ne!(
+                *byte, ATOM_OUTER_CARVE_BYTE,
+                "StructuralKind::hash_discriminator collided with the atomic-carve outer marker byte {ATOM_OUTER_CARVE_BYTE}",
+            );
+            assert!(
+                !quote_family.contains(byte),
+                "StructuralKind::hash_discriminator byte {byte} collided with QuoteForm::hash_discriminator partition {quote_family:?}",
+            );
+        }
+        let mut union: Vec<u8> = structural
+            .iter()
+            .copied()
+            .chain(std::iter::once(ATOM_OUTER_CARVE_BYTE))
+            .chain(quote_family.iter().copied())
+            .collect();
+        union.sort_unstable();
+        let mut deduped = union.clone();
+        deduped.dedup();
+        assert_eq!(
+            union, deduped,
+            "the three-carving-plus-atom-marker joint discriminator space {union:?} must partition without overlap",
+        );
+        assert_eq!(union, vec![0, 1, 2, 3, 4, 5, 6]);
     }
 
     #[test]

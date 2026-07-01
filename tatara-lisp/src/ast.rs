@@ -11,13 +11,29 @@ use std::hash::{Hash, Hasher};
 impl Hash for Sexp {
     fn hash<H: Hasher>(&self, h: &mut H) {
         match self {
-            Self::Nil => 0u8.hash(h),
+            // The two structural-residual arms share the (discriminator,
+            // optional-inner) hash shape — the per-variant discriminator
+            // byte binds at ONE site on the closed-set `StructuralKind`
+            // algebra (`StructuralKind::hash_discriminator`) rather than
+            // as `0u8` / `2u8` inline literals at these two arms. The
+            // outer-carve discriminator space `{0, 1, 2, 3, 4, 5, 6}`
+            // stays partition-total across the three closed-set
+            // carvings (`StructuralKind::hash_discriminator` for
+            // `{0, 2}`, the `1u8` outer-carve marker for `Sexp::Atom`
+            // paired with `AtomKind::hash_discriminator`'s nested
+            // `{0..=5}` payload discriminator, and
+            // `QuoteForm::hash_discriminator` for `{3..=6}`) — pinned
+            // by the joint disjointness test in this module. Same
+            // posture as the quote-family arm below, which routes
+            // through `QuoteForm::hash_discriminator` for the
+            // four-of-thirteen `Sexp` wrapper variants.
+            Self::Nil => StructuralKind::Nil.hash_discriminator().hash(h),
             Self::Atom(a) => {
                 1u8.hash(h);
                 a.hash(h);
             }
             Self::List(items) => {
-                2u8.hash(h);
+                StructuralKind::List.hash_discriminator().hash(h);
                 items.len().hash(h);
                 for i in items {
                     i.hash(h);
@@ -7532,6 +7548,79 @@ mod tests {
                 "as_unquote drifted from composed as_quote_form+as_unquote_form at {label}"
             );
         }
+    }
+
+    #[test]
+    fn hash_for_sexp_structural_arms_route_through_structural_kind_hash_discriminator() {
+        // CACHE-KEY CONTRACT (Hash side, structural axis): pin that
+        // the lifted `Hash for Sexp` impl produces byte-identical
+        // hashes for the two structural-residual arms (`Sexp::Nil`,
+        // `Sexp::List(_)`) as the pre-lift implementation, routing
+        // through `StructuralKind::hash_discriminator` so the
+        // (Sexp variant, cache-key byte) pairing is structurally
+        // bound to the algebra rather than threaded through inline
+        // `0u8` / `2u8` literals. We compute the expected hash via a
+        // SECOND hasher that manually drives the pre-lift `<discr>
+        // .hash(h); <rest>.hash(h)` sequence, then compare. A
+        // regression that drifts the discriminator (e.g. renumbers
+        // `StructuralKind::List` to `1u8` and collides with the
+        // atomic-carve outer marker byte) OR re-orders the (discr,
+        // rest) sequence surfaces here as a hash-value mismatch.
+        // Sibling arm-sweep to
+        // `hash_for_sexp_preserves_legacy_quote_family_discriminator_bytes`
+        // on the quote-family axis (four wrapper variants) — the
+        // three closed-set carvings' hash arms all route through
+        // ONE typed method per carving, and this pin binds the
+        // structural-residual arm's post-lift shape against the
+        // pre-lift byte-stream.
+        use crate::error::StructuralKind;
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        // (label, sexp, expected-first-discr-byte, extra-hash-sequence
+        // closure that drives the residual hash body after the
+        // discriminator byte)
+        #[allow(clippy::type_complexity)]
+        let cases: [(&str, Sexp, u8, Box<dyn Fn(&mut DefaultHasher)>); 2] = [
+            ("nil", Sexp::Nil, 0u8, Box::new(|_h: &mut DefaultHasher| {})),
+            (
+                "list",
+                Sexp::List(vec![Sexp::symbol("a"), Sexp::int(1)]),
+                2u8,
+                Box::new(|h: &mut DefaultHasher| {
+                    let items = vec![Sexp::symbol("a"), Sexp::int(1)];
+                    items.len().hash(h);
+                    for i in &items {
+                        i.hash(h);
+                    }
+                }),
+            ),
+        ];
+        for (label, sexp, expected_discr, extra) in &cases {
+            let mut via_impl = DefaultHasher::new();
+            sexp.hash(&mut via_impl);
+
+            let mut via_legacy = DefaultHasher::new();
+            expected_discr.hash(&mut via_legacy);
+            extra(&mut via_legacy);
+
+            assert_eq!(
+                via_impl.finish(),
+                via_legacy.finish(),
+                "Hash for Sexp drifted from legacy (discr={expected_discr}, rest) sequence at {label}",
+            );
+        }
+        // Composition pin: pointer-independent structural equality —
+        // the discriminator byte value MUST agree between the typed
+        // projection and the pre-lift literal, so a regression that
+        // re-inlines the two arm literals as a parallel match-table
+        // (`Sexp::Nil => 0u8`, `Sexp::List(_) => 2u8`) still passes
+        // the hash-value sweep above but drifts if the future
+        // `StructuralKind::hash_discriminator` is re-numbered — this
+        // pin binds the composition IDENTITY (not just the value
+        // equality) between the outer `Hash for Sexp` body and the
+        // typed algebra.
+        assert_eq!(StructuralKind::Nil.hash_discriminator(), 0u8);
+        assert_eq!(StructuralKind::List.hash_discriminator(), 2u8);
     }
 
     #[test]

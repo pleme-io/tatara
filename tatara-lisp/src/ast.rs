@@ -2418,6 +2418,124 @@ impl Sexp {
         Some((head, &list[1..]))
     }
 
+    /// Canonical call-form outer constructor — composes the atomic-
+    /// payload construct family's [`Self::symbol`] (the head-position
+    /// construct on the 6-of-12 atomic carving of [`SexpShape`]) with
+    /// the residual-axis construct family's [`Self::list`] (via
+    /// `std::iter::once(head_sexp).chain(args)`) to build a symbol-
+    /// headed list-shaped [`Sexp`] value at ONE site on the closed-set
+    /// [`Sexp`] algebra. The call-form section-for-retraction sibling
+    /// of the existing [`Self::as_call`] soft-projection ([`Option<(&
+    /// str, &[Sexp])>`]): where the projection soft-decomposes a
+    /// symbol-headed list into its head symbol and argument tail, this
+    /// constructor embeds a fresh (head string, item sequence) pair
+    /// into the matching call-shaped wrapper.
+    ///
+    /// Composition sibling of the atomic-payload construct family
+    /// ([`Self::symbol`], [`Self::keyword`], [`Self::string`],
+    /// [`Self::int`], [`Self::float`], [`Self::boolean`] — routing
+    /// through the typed [`Atom`] family on the 6-of-12 atomic carving),
+    /// the quote-family construct family ([`Self::quote`],
+    /// [`Self::quasiquote`], [`Self::unquote`], [`Self::unquote_splice`]
+    /// — routing through the typed [`QuoteForm::wrap`] family on the
+    /// 4-of-12 quote-family carving), and the residual-axis construct
+    /// [`Self::list`] (routing owned or iterable item sequences into
+    /// the tuple-variant on the 2-of-12 residual carving): those close
+    /// the (construct, project) algebra dual on their respective
+    /// STRUCTURAL carvings; this closes the (construct, project)
+    /// algebra dual on the SYMBOL-HEADED-LIST TYPED DECOMPOSITION — the
+    /// load-bearing shape every Lisp invocation, every `(defX …)`
+    /// typed-domain call form, and every macroexpander template head
+    /// takes on the outer [`Sexp`] algebra.
+    ///
+    /// Composition law (forward, through the outer algebra's atomic +
+    /// residual construct families): `Sexp::call(head, args) ==
+    /// Sexp::list(std::iter::once(Sexp::symbol(head)).chain(args))` for
+    /// every `head: impl Into<String>` + `args: impl IntoIterator<Item
+    /// = Sexp>`. The body binds through the SAME two construct methods
+    /// consumers already reach for when threading a head-then-rest
+    /// sequence into a call form — the composition law lifts that
+    /// two-method inline pattern to ONE named query on the outer
+    /// [`Sexp`] algebra.
+    ///
+    /// Round-trip law (section-for-retraction with the soft-projection
+    /// sibling): for every `head: &str` + `args: Vec<Sexp>`,
+    /// `Sexp::call(head, args.clone()).as_call() == Some((head,
+    /// args.as_slice()))` — the outer algebra's call-form typed
+    /// constructor pairs section-for-retraction with the outer
+    /// algebra's soft call-form projection, and the (head symbol,
+    /// args slice) cross-projection preserves identity. Keyword-
+    /// matched round-trip law: for every `head: &str` + `args:
+    /// Vec<Sexp>`, `Sexp::call(head, args.clone()).as_call_to(head) ==
+    /// Some(args.as_slice())` — the keyword-typed projection recovers
+    /// the args tail iff its argument keyword matches the constructor's
+    /// head. Head-symbol composition law: `Sexp::call(head,
+    /// args).head_symbol() == Some(head.as_str())` for every `head:
+    /// impl Into<String>` + `args: impl IntoIterator<Item = Sexp>` —
+    /// the head-position projection recovers the constructor's head
+    /// byte-for-byte.
+    ///
+    /// Outer-shape composition law: `Sexp::call(head, args).shape() ==
+    /// SexpShape::List` for every input — a call form is a list-shaped
+    /// [`Sexp`], and the outer-shape identity binds through the typed-
+    /// shape lattice at the residual arm. Structural-carving-marker
+    /// composition law: `Sexp::call(head, args).as_structural_kind()
+    /// == Some(StructuralKind::List)` — the residual-axis carving
+    /// marker binds through the closed-set [`StructuralKind`] algebra
+    /// at ONE arm, symmetric with the atomic-axis's `Sexp::X_atom(
+    /// payload).as_atom_kind() == Some(AtomKind::X)` marker
+    /// composition.
+    ///
+    /// Pre-lift the `Sexp::List(std::iter::once(Sexp::symbol(head))
+    /// .chain(args).collect())` composition (or equivalently the
+    /// `Sexp::List(vec![Sexp::symbol(head), args...])` welded triple)
+    /// appeared inline at every consumer that builds a call-shaped
+    /// [`Sexp`] value — well past the ≥2 PRIME-DIRECTIVE trigger once
+    /// the call-form shape is named. Post-lift consumers that have a
+    /// head string + an owned or iterable sequence of args bind to ONE
+    /// typed-algebra method on the outer [`Sexp`] algebra with the
+    /// `impl Into<String>` bound on the head absorbing `&str` /
+    /// `String` / `&String` and the `impl IntoIterator<Item = Sexp>`
+    /// bound on the args absorbing `Vec<Sexp>` / `[Sexp; N]` /
+    /// `.map(...)` chains without a per-site `.collect::<Vec<Sexp>>()`
+    /// coercion.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// (head string, args sequence, [`Self::List`] tuple-variant
+    /// constructor) triple binds at ONE typed-algebra method on the
+    /// outer [`Sexp`] algebra, closing the call-form (construct,
+    /// project) algebra dual pair with [`Self::as_call`] /
+    /// [`Self::as_call_to`] / [`Self::head_symbol`]. THEORY.md §II.1
+    /// invariant 2 — free middle; every consumer that has a head
+    /// string + an owned or iterable sequence of args and wants to
+    /// build a call-shaped [`Sexp`] routes through the SAME typed
+    /// method, so a regression that drifts one consumer's construction
+    /// from the others (e.g. a copy-edit that emits `Sexp::keyword(
+    /// head)` for the head position, or that swaps in a `Sexp::string`
+    /// head that [`Self::as_call`] then rejects at the projection
+    /// site) cannot reach the substrate's runtime. THEORY.md §V.1 —
+    /// knowable platform; the call-form typed-construct becomes a TYPE
+    /// projection on the substrate's outer [`Sexp`] algebra sitting
+    /// next to the typed-project family [`Self::as_call`] /
+    /// [`Self::as_call_to`] rather than bare tuple-variant constructor
+    /// paired with per-site `Sexp::List(vec![Sexp::symbol(...), ...])`
+    /// discipline. THEORY.md §VI.1 — generation over composition; the
+    /// call-form pair emerges from ONE typed-algebra composition
+    /// through [`Self::list`] composed with [`Self::symbol`] rather
+    /// than from per-consumer per-callsite literals; a future call-
+    /// form shape extension (e.g. a keyword-headed call form for a
+    /// Kernel-style applicative-vs-operative split) lands as ONE peer
+    /// constructor on this algebra alongside the residual, quote-
+    /// family, and atomic-payload construct families.
+    #[must_use]
+    pub fn call<H, I>(head: H, args: I) -> Self
+    where
+        H: Into<String>,
+        I: IntoIterator<Item = Sexp>,
+    {
+        Self::list(std::iter::once(Self::symbol(head)).chain(args))
+    }
+
     /// Decompose a call form into its argument tail IFF the head matches the
     /// supplied `keyword` — `Some(args)` iff this is a non-empty list whose
     /// first element is a symbol equal to `keyword`, where `args` is the
@@ -11737,6 +11855,335 @@ mod tests {
             ),
             expected,
             "Sexp::list drifted for once+chain input",
+        );
+    }
+
+    // ── Sexp::call — call-form (symbol-headed list) construct ──────────
+    //
+    // `Sexp::call(head, args)` is the section-for-retraction dual of the
+    // soft-projection `Sexp::as_call() -> Option<(&str, &[Sexp])>` — it
+    // embeds a fresh `(head string, item sequence)` pair into a symbol-
+    // headed `Sexp::List` value at ONE site on the outer `Sexp` algebra,
+    // composing the atomic-payload construct family's `Sexp::symbol` (for
+    // the head position) with the residual-axis construct family's
+    // `Sexp::list` (for the list wrapper) via `std::iter::once(head_sexp)
+    // .chain(args)`. Pre-lift the composition lived inline at every
+    // consumer that built a `(defX …)` typed-domain call form, a
+    // macroexpander template head, or a synthetic dispatch form —
+    // `Sexp::List(vec![Sexp::symbol(head), args...])` or `Sexp::List(
+    // std::iter::once(Sexp::symbol(head)).chain(args).collect())` was the
+    // welded three-method open coding. Post-lift the closure binds at
+    // ONE typed-algebra method.
+    //
+    // These pins cover:
+    //   (a) the composition law
+    //       `Sexp::call(head, args) == Sexp::list(std::iter::once(
+    //       Sexp::symbol(head)).chain(args))` — the constructor body is
+    //       BY DEFINITION the two-method composition;
+    //   (b) the round-trip law
+    //       `Sexp::call(head, args.clone()).as_call() == Some((head,
+    //       args.as_slice()))` — the (construct, project) call-form
+    //       algebra dual closes at this pair, symmetric with the
+    //       residual-axis's `Sexp::list(items.clone()).as_list() ==
+    //       Some(items.as_slice())` round-trip;
+    //   (c) the keyword-matched round-trip law
+    //       `Sexp::call(head, args.clone()).as_call_to(head) == Some(
+    //       args.as_slice())` — the keyword-typed projection recovers
+    //       the args tail iff its argument matches the constructor's
+    //       head;
+    //   (d) the head-symbol composition law
+    //       `Sexp::call(head, args).head_symbol() == Some(head)` — the
+    //       head-position projection recovers the constructor's head
+    //       byte-for-byte;
+    //   (e) the outer-shape composition law
+    //       `Sexp::call(head, args).shape() == SexpShape::List` — a
+    //       call form is a list-shaped `Sexp`;
+    //   (f) the structural-kind composition law
+    //       `Sexp::call(head, args).as_structural_kind() == Some(
+    //       StructuralKind::List)` — the residual carving marker binds
+    //       through the closed-set `StructuralKind` algebra at ONE
+    //       arm, symmetric with the residual-axis's `Sexp::list(items)
+    //       .as_structural_kind() == Some(StructuralKind::List)` marker
+    //       composition;
+    //   (g) the input-shape flexibility
+    //       `Sexp::call("h", Vec<Sexp>)` / `Sexp::call(String, [Sexp;
+    //       N])` / `Sexp::call(&String, iter::map(...))` all agree with
+    //       the canonical composition emission — the `impl Into<String>`
+    //       head bound + `impl IntoIterator<Item = Sexp>` args bound
+    //       accept every reasonable input shape without a per-consumer
+    //       `.to_string()` / `.collect::<Vec<Sexp>>()` coercion.
+
+    #[test]
+    fn sexp_call_constructor_body_matches_canonical_two_method_composition_across_representative_inputs(
+    ) {
+        // COMPOSITION LAW: `Sexp::call(head, args) == Sexp::list(
+        // std::iter::once(Sexp::symbol(head)).chain(args))` for every
+        // representative (empty-args, single-arg, multi-arg,
+        // heterogeneous-inner, quote-family-wrapping-inner) sample. A
+        // regression that drifts the body (e.g. a copy-edit that
+        // switches to `Sexp::keyword(head)` for the head position, or
+        // that reorders `head` and `args` in the chain) surfaces here
+        // BEFORE the projection pins fail. Sibling-shape pin to the
+        // residual-axis's canonical-composition test posture
+        // (`sexp_list_constructor_emits_canonical_tuple_variant_across_representative_inputs`).
+        let samples: [(&str, Vec<Sexp>); 5] = [
+            ("defcompiler", vec![]),
+            ("defpoint", vec![Sexp::symbol("obs")]),
+            (
+                "defpoint",
+                vec![
+                    Sexp::symbol("obs"),
+                    Sexp::keyword("class"),
+                    Sexp::symbol("Gate"),
+                ],
+            ),
+            (
+                "defcheck",
+                vec![
+                    Sexp::List(vec![Sexp::symbol("crd-in-sync")]),
+                    Sexp::keyword("params"),
+                    Sexp::int(42),
+                    Sexp::string("body"),
+                    Sexp::boolean(true),
+                ],
+            ),
+            (
+                "defalert-policy",
+                vec![
+                    Sexp::Quote(Box::new(Sexp::symbol("x"))),
+                    Sexp::Quasiquote(Box::new(Sexp::List(vec![
+                        Sexp::symbol("template"),
+                        Sexp::Unquote(Box::new(Sexp::symbol("var"))),
+                    ]))),
+                    Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+                ],
+            ),
+        ];
+        for (head, args) in &samples {
+            let expected =
+                Sexp::list(std::iter::once(Sexp::symbol(*head)).chain(args.iter().cloned()));
+            assert_eq!(
+                Sexp::call(*head, args.clone()),
+                expected,
+                "Sexp::call drifted from Sexp::list(once(symbol(head)).chain(args)) for head={head:?} args={args:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_call_constructor_round_trips_through_as_call() {
+        // ROUND-TRIP LAW (section-for-retraction with the call-form
+        // soft-projection): `Sexp::call(head, args.clone()).as_call()
+        // == Some((head, args.as_slice()))` sweeps the same
+        // representative input matrix as the composition-law pin —
+        // proves the (construct, soft-project) pair forms an
+        // `Iso((&str, Vec<Sexp>), symbol-headed Sexp::List)` on the
+        // call-form typed decomposition. Sibling-shape pin to the
+        // residual-axis's `Sexp::list(items.clone()).as_list() ==
+        // Some(items.as_slice())` round-trip
+        // (`sexp_list_constructor_round_trips_through_as_list`).
+        let samples: [(&str, Vec<Sexp>); 4] = [
+            ("defcompiler", vec![]),
+            ("defpoint", vec![Sexp::symbol("solo")]),
+            (
+                "defmonitor",
+                vec![Sexp::symbol("m"), Sexp::int(1), Sexp::int(2)],
+            ),
+            (
+                "defnotify",
+                vec![
+                    Sexp::Nil,
+                    Sexp::List(vec![Sexp::symbol("nested"), Sexp::int(7)]),
+                    Sexp::Quote(Box::new(Sexp::symbol("q"))),
+                ],
+            ),
+        ];
+        for (head, args) in &samples {
+            let built = Sexp::call(*head, args.clone());
+            assert_eq!(
+                built.as_call(),
+                Some((*head, args.as_slice())),
+                "Sexp::call→as_call round-trip drifted for head={head:?} args={args:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_call_constructor_round_trips_through_as_call_to_matching_keyword() {
+        // KEYWORD-MATCHED ROUND-TRIP LAW: `Sexp::call(head, args
+        // .clone()).as_call_to(head) == Some(args.as_slice())` for the
+        // head-matched keyword, and `.as_call_to(other)` returns `None`
+        // for every other keyword. Pins the (construct, keyword-typed-
+        // project) pair on the outer algebra — the same dispatch
+        // shape `compile_typed` / `compile_named_from_forms` route
+        // through post-macroexpansion.
+        let samples: [(&str, Vec<Sexp>); 4] = [
+            ("defcompiler", vec![]),
+            ("defpoint", vec![Sexp::symbol("obs")]),
+            ("defmonitor", vec![Sexp::keyword("k"), Sexp::string("v")]),
+            (
+                "defalert-policy",
+                vec![Sexp::Nil, Sexp::List(vec![Sexp::symbol("body")])],
+            ),
+        ];
+        for (head, args) in &samples {
+            let built = Sexp::call(*head, args.clone());
+            assert_eq!(
+                built.as_call_to(head),
+                Some(args.as_slice()),
+                "Sexp::call→as_call_to(head) round-trip drifted for head={head:?} args={args:?}",
+            );
+            // Cross-keyword rejection: every DIFFERENT keyword misses.
+            let mismatched = format!("{head}-mismatch");
+            assert_eq!(
+                built.as_call_to(&mismatched),
+                None,
+                "Sexp::call→as_call_to(mismatch) leaked args for head={head:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_call_constructor_composes_with_head_symbol_and_shape_and_structural_kind() {
+        // OUTER-ALGEBRA PROJECTION COMPOSITIONS: every `Sexp::call(head,
+        // args)` output projects through `head_symbol` /
+        // `shape` / `as_structural_kind` to the shape-invariants that
+        // pin the constructor's structural identity:
+        //   * `head_symbol() == Some(head)` — the head-position
+        //     projection recovers the constructor's head byte-for-byte;
+        //   * `shape() == SexpShape::List` — a call form is a list-
+        //     shaped `Sexp` on the residual carving;
+        //   * `as_structural_kind() == Some(StructuralKind::List)` — the
+        //     residual carving marker binds through the closed-set
+        //     `StructuralKind` algebra at ONE arm.
+        // A regression that reroutes `Sexp::call` through a non-list
+        // arm (e.g. wrapping in `Sexp::Quote` after a copy-edit that
+        // type-checks) fails ALL THREE pins simultaneously. Sibling to
+        // the residual-axis's `Sexp::list` shape-composition pins
+        // (`sexp_list_constructor_composes_with_shape_via_sexp_shape_list`
+        // + `sexp_list_constructor_composes_with_as_structural_kind`).
+        let samples: [(&str, Vec<Sexp>); 4] = [
+            ("head", vec![]),
+            ("head", vec![Sexp::symbol("only")]),
+            (
+                "head",
+                vec![Sexp::keyword("k"), Sexp::string("v"), Sexp::boolean(false)],
+            ),
+            (
+                "head",
+                vec![
+                    Sexp::Nil,
+                    Sexp::Quote(Box::new(Sexp::symbol("x"))),
+                    Sexp::List(vec![Sexp::symbol("nested")]),
+                ],
+            ),
+        ];
+        for (head, args) in &samples {
+            let built = Sexp::call(*head, args.clone());
+            assert_eq!(
+                built.head_symbol(),
+                Some(*head),
+                "Sexp::call→head_symbol drifted from Some({head:?}) for args={args:?}",
+            );
+            assert_eq!(
+                built.shape(),
+                SexpShape::List,
+                "Sexp::call→shape drifted from SexpShape::List for head={head:?} args={args:?}",
+            );
+            assert_eq!(
+                built.as_structural_kind(),
+                Some(StructuralKind::List),
+                "Sexp::call→as_structural_kind drifted from Some(StructuralKind::List) for head={head:?} args={args:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_call_constructor_accepts_diverse_head_and_arg_input_shapes() {
+        // INPUT-SHAPE FLEXIBILITY: the `impl Into<String>` head bound
+        // absorbs `&str` / `String` / `&String`, and the `impl
+        // IntoIterator<Item = Sexp>` args bound absorbs `Vec<Sexp>` /
+        // `[Sexp; N]` / `iter::empty()` / `.map(...)` chains — pin that
+        // all six representative input shapes reach the same canonical
+        // composition output. A regression that narrows either bound
+        // (e.g. requiring `String` on the head or `Vec<Sexp>` on the
+        // args) fails this pin. The two bounds are load-bearing for the
+        // ergonomy claim in the docstring — consumers threading a
+        // borrowed head + a `.map` chain must not need `.to_string()` /
+        // `.collect()` coercions before handing the pair to
+        // `Sexp::call`. Sibling to `Sexp::list`'s input-shape pin
+        // (`sexp_list_constructor_accepts_diverse_intoiterator_input_shapes`)
+        // and `Sexp::symbol`'s head-string absorption posture.
+        let expected = Sexp::List(vec![
+            Sexp::symbol("head"),
+            Sexp::symbol("a"),
+            Sexp::symbol("b"),
+        ]);
+        // (&str, Vec<Sexp>) — the canonical borrowed-head + owned-args
+        // shape.
+        assert_eq!(
+            Sexp::call("head", vec![Sexp::symbol("a"), Sexp::symbol("b")]),
+            expected,
+            "Sexp::call drifted for (&str, Vec<Sexp>) input",
+        );
+        // (String, [Sexp; N]) — the owned-head + array-literal shape.
+        assert_eq!(
+            Sexp::call(String::from("head"), [Sexp::symbol("a"), Sexp::symbol("b")],),
+            expected,
+            "Sexp::call drifted for (String, [Sexp; N]) input",
+        );
+        // (&String, .map(...)) — the borrowed-owned-head + iterator-map
+        // chain shape.
+        let owned_head = String::from("head");
+        assert_eq!(
+            Sexp::call(&owned_head, ["a", "b"].iter().map(|s| Sexp::symbol(*s))),
+            expected,
+            "Sexp::call drifted for (&String, iter::map) input",
+        );
+        // (&str, iter::empty::<Sexp>()) — the zero-arg iterator shape,
+        // pinning the singleton-list emission (`(head)`) via the
+        // composition path.
+        assert_eq!(
+            Sexp::call("head", std::iter::empty::<Sexp>()),
+            Sexp::List(vec![Sexp::symbol("head")]),
+            "Sexp::call drifted for zero-arg iter::empty input",
+        );
+        // (&str, once(head_of_args).chain(tail_of_args)) — the head-
+        // then-rest args shape a builder decomposing an existing call
+        // form via `as_call` and re-emitting through this constructor
+        // threads through.
+        assert_eq!(
+            Sexp::call(
+                "head",
+                std::iter::once(Sexp::symbol("a")).chain([Sexp::symbol("b")]),
+            ),
+            expected,
+            "Sexp::call drifted for (&str, once+chain) args input",
+        );
+    }
+
+    #[test]
+    fn sexp_call_constructor_body_matches_typed_composition_through_list_and_symbol() {
+        // EXPLICIT COMPOSITION-LAW PIN: `Sexp::call(head, args) ==
+        // Sexp::list(std::iter::once(Sexp::symbol(head)).chain(args))`
+        // BY DEFINITION — the constructor body IS this composition, and
+        // the pin exists so a regression that in-lines a hand-authored
+        // `Sexp::List(vec![Sexp::symbol(head), args...])` body (which
+        // would type-check and pass the projection round-trips) still
+        // surfaces here through the composition-path drift. This closes
+        // the "the constructor routes through the outer-algebra's
+        // atomic + residual construct families" invariant as a typed
+        // pin rather than a docstring claim.
+        let head = "defpoint";
+        let args = vec![
+            Sexp::symbol("obs"),
+            Sexp::keyword("class"),
+            Sexp::List(vec![Sexp::symbol("Gate"), Sexp::symbol("Observability")]),
+        ];
+        assert_eq!(
+            Sexp::call(head, args.clone()),
+            Sexp::list(std::iter::once(Sexp::symbol(head)).chain(args.iter().cloned())),
+            "Sexp::call body drifted from the Sexp::list ∘ once(Sexp::symbol) ∘ chain composition for head={head:?}",
         );
     }
 }

@@ -3949,6 +3949,154 @@ impl SexpShape {
             .map(crate::ast::QuoteForm::iac_forge_tag)
     }
 
+    /// Project the twelve-variant [`SexpShape`] into the canonical
+    /// reader-punctuation prefix string iff the shape names a homoiconic
+    /// quote-family wrapper — `Quote → Some("'")`, `Quasiquote →
+    /// Some("`")`, `Unquote → Some(",")`, `UnquoteSplice → Some(",@")`,
+    /// every other shape (`Nil`, `List`, every atomic-payload variant)
+    /// `None`. The 4-of-12 partial projection on the closed-set
+    /// [`SexpShape`] algebra that surfaces
+    /// [`crate::ast::QuoteForm::prefix`]'s reader-punctuation vocabulary
+    /// at the outer-shape algebra level.
+    ///
+    /// Composition law: `self.prefix() ==
+    /// self.as_quote_form().map(crate::ast::QuoteForm::prefix)` for every
+    /// `self: SexpShape` — the (outer shape, reader-punctuation prefix)
+    /// pairing binds through the pre-existing quote-family carving
+    /// ([`Self::as_quote_form`]) composed with the closed-set prefix
+    /// projection ([`crate::ast::QuoteForm::prefix`]) rather than at a
+    /// parallel four-arm inline match table here — matching the posture
+    /// [`Self::iac_forge_tag`] takes through
+    /// [`crate::ast::QuoteForm::iac_forge_tag`] on the cross-crate
+    /// canonical-form tag axis and [`Self::as_unquote_form`] takes
+    /// through [`crate::ast::QuoteForm::as_unquote_form`] on the 2-of-4
+    /// template-substitution subset carving. `None` on every non-quote-
+    /// family shape (six atomic-payload variants + `Nil` + `List`) — the
+    /// eight-shape kernel of the projection matches the kernel of
+    /// [`Self::as_quote_form`] AND [`Self::iac_forge_tag`] byte-for-byte.
+    ///
+    /// The EIGHTH consumer of the outer-shape algebra's shape-level
+    /// projection surface, sibling of [`Self::label`] (operator-facing
+    /// diagnostic-label surface, all twelve arms),
+    /// [`Self::hash_discriminator`] (outer-`Sexp` cache-key discriminator
+    /// byte, all twelve arms → `{0..=6}`), [`Self::as_atom_kind`]
+    /// (6-of-12 atomic-payload carving), [`Self::as_quote_form`]
+    /// (4-of-12 quote-family carving), [`Self::as_structural_kind`]
+    /// (2-of-12 structural-residual carving), [`Self::as_unquote_form`]
+    /// (2-of-12 template-substitution subset carving composed through
+    /// the parent quote-family carving), and [`Self::iac_forge_tag`]
+    /// (4-of-12 cross-crate canonical-form tag projection). Post-lift
+    /// the outer-shape algebra closes over EIGHT typed projection
+    /// surfaces, each rebuilt from the SAME closed twelve-arm set — a
+    /// regression that drifts ONE projection against the algebra's
+    /// shape-identity fails-loudly at rustc's exhaustiveness rather than
+    /// silently at runtime.
+    ///
+    /// Pre-lift the (SexpShape variant, reader-punctuation prefix)
+    /// pairing had no typed projection at the outer-shape algebra level
+    /// — a consumer with a [`SexpShape`] in hand (a
+    /// [`LispError::TypeMismatch`]'s `got` slot's outer-shape identity,
+    /// a rejected shape from a typed-entry gate, an LSP hover / REPL
+    /// completion / audit-trail metric keyed on the observed outer
+    /// shape) wanting the reader's canonical homoiconic prefix character
+    /// had to re-embed the shape into a quote-family typed marker via
+    /// [`Self::as_quote_form`] then compose through
+    /// [`crate::ast::QuoteForm::prefix`] inline. Post-lift the
+    /// composition binds at ONE method on the outer [`SexpShape`]
+    /// algebra — the (outer shape, reader-punctuation prefix) pairing
+    /// lives at ONE typed projection matching the shape-level algebra
+    /// sweep the seven sibling projections established.
+    ///
+    /// The `Option<&'static str>` return shape is the natural typed peer
+    /// of [`crate::ast::QuoteForm::prefix`]'s total `&'static str`
+    /// return: the quote-family superset TOTALS on the four-arm closed
+    /// set, and the outer twelve-arm closed set's projection PARTIALIZES
+    /// on the eight non-quote-family shapes. Same shape as
+    /// [`Self::as_atom_kind`] / [`Self::as_quote_form`] /
+    /// [`Self::as_structural_kind`] / [`Self::as_unquote_form`] /
+    /// [`Self::iac_forge_tag`] — each carving lifts a total sub-algebra
+    /// projection to a partial outer-shape projection with `None` on
+    /// the residual arms, so a consumer keying on "iff this outer shape
+    /// has a canonical reader-punctuation prefix" binds against the
+    /// closed set's typed image directly rather than substring-matching
+    /// the shape label.
+    ///
+    /// The reader-punctuation vocabulary this method projects (`"'"` /
+    /// `` "`" `` / `","` / `",@"`) is INTENTIONALLY DISJOINT from the
+    /// two sibling `&'static str` projection axes:
+    ///
+    /// * [`Self::iac_forge_tag`] — cross-crate canonical form
+    ///   (`"quote"` / `"quasiquote"` / `"unquote"` /
+    ///   `"unquote-splicing"`), BLAKE3 attestation keys, render-cache
+    ///   shape (load-bearing for byte-identical inter-crate compatibility
+    ///   with the iac-forge ecosystem).
+    /// * [`Self::label`] — operator-facing diagnostic label (`"quote"` /
+    ///   `"quasiquote"` / `"unquote"` / `"unquote-splice"`),
+    ///   [`LispError::TypeMismatch`]'s `got` rendering, REPL / LSP
+    ///   shape-of-witness surface.
+    ///
+    /// This method projects the reader's SOURCE-TEXT vocabulary — the
+    /// four punctuation characters that appear literally in Lisp source
+    /// at each variant's homoiconic prefix. The three closed-set
+    /// projections key the SAME twelve-arm shape algebra on THREE
+    /// distinct `&'static str` vocabularies (source-punctuation,
+    /// diagnostic-label, cross-crate canonical-form); consolidating any
+    /// two would silently break either the reader round-trip, the
+    /// operator-facing diagnostic surface, OR the iac-forge attestation
+    /// pipeline. The three vocabularies' distinctness is pinned bit-for-
+    /// bit through the composition law across the closed-set typed
+    /// algebra.
+    ///
+    /// The `&'static str` lifetime is load-bearing: every reader / LSP
+    /// / REPL / diagnostic consumer projects through this method into
+    /// the canonical prefix character without an allocation, parallel to
+    /// how [`crate::ast::QuoteForm::prefix`] on the sub-carving,
+    /// [`Self::iac_forge_tag`] on the cross-crate canonical-form axis,
+    /// [`Self::label`] on the outer-shape diagnostic surface, and
+    /// [`UnquoteForm::marker`] on the template marker axis project their
+    /// respective closed sets. A future homoiconic prefix-wrapper (e.g.
+    /// hypothetical `,~` reverse-unquote) extends
+    /// [`crate::ast::QuoteForm`] AND [`Self`]'s closed set together —
+    /// rustc binds the reader-punctuation surface to the extended
+    /// algebra at ONE arm each through exhaustiveness, with the
+    /// composition through [`Self::as_quote_form`] pulling the new
+    /// variant's prefix into this projection mechanically.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (SexpShape variant, reader-punctuation prefix) pairing becomes a
+    /// TYPE projection on the outer-shape algebra rather than an inline
+    /// `.as_quote_form().map(...)` two-step at every consumer. A typo
+    /// or swap at the projection site is no longer a runtime prefix
+    /// drift but a compile error against the typed composition — the
+    /// `SexpShape` ↔ `QuoteForm` ↔ prefix character chain is
+    /// rustc-enforced end-to-end. THEORY.md §II.1 invariant 2 — free
+    /// middle; the (outer shape, reader-punctuation prefix) pairing now
+    /// binds at ONE site on the outer-shape algebra, composing through
+    /// the pre-existing four-arm sub-carving's prefix projection rather
+    /// than duplicating the four-arm match here. THEORY.md §VI.1 —
+    /// generation over composition; the outer-shape algebra's typed
+    /// projection surface closes over EIGHT methods (label,
+    /// hash_discriminator, four carvings, iac_forge_tag, prefix) each
+    /// keyed on the SAME closed twelve-arm set.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::TypeSwitch<T>` typed
+    /// pattern-match combinator on a closed union — narrowing to a
+    /// specific typed case yields the typed downcast + operations on
+    /// that case in ONE typed step. [`Self::prefix`] is the Rust-typed
+    /// peer where the "narrow to quote-family" step
+    /// ([`Self::as_quote_form`]) composes with the "read the case's
+    /// reader-punctuation prefix" step
+    /// ([`crate::ast::QuoteForm::prefix`]) into ONE outer-shape
+    /// projection. Racket's `(match shape [(? quote-shape? qs)
+    /// (quote-shape->reader-prefix qs)] [_ #f])` closed-form match on
+    /// the shape-taxonomy union — the outer pattern's partial projection
+    /// to the source-punctuation form IS the shape this method lifts to
+    /// a typed Rust closed-set match.
+    #[must_use]
+    pub fn prefix(self) -> Option<&'static str> {
+        self.as_quote_form().map(crate::ast::QuoteForm::prefix)
+    }
+
     /// Project the typed [`SexpShape`] into the outer-`Sexp`
     /// [`Hash for Sexp`](crate::ast::Sexp) cache-key discriminator byte
     /// `{0..=6}` — the SHAPE-LEVEL peer of
@@ -12352,6 +12500,144 @@ mod tests {
             some_count + none_count,
             SexpShape::ALL.len(),
             "SexpShape::iac_forge_tag's image + kernel must partition SexpShape::ALL exactly",
+        );
+    }
+
+    #[test]
+    fn sexp_shape_prefix_pins_canonical_reader_prefixes_for_every_quote_family_arm() {
+        // CANONICAL-PREFIX CONTRACT (shape-level peer): the shape-level
+        // `SexpShape::prefix` MUST project each of the four quote-family
+        // arms to the SAME canonical reader-punctuation string
+        // `crate::ast::QuoteForm::prefix` projects at the sub-carving
+        // level — `Quote → "'"`, `Quasiquote → "`"`, `Unquote → ","`,
+        // `UnquoteSplice → ",@"`. A regression that inlines a byte-
+        // drifted spelling here (e.g. `SexpShape::Quote → Some("`")`
+        // swapping the single-quote and backtick prefixes, or
+        // `SexpShape::UnquoteSplice → Some("@,")` swapping the two-byte
+        // splice prefix's byte order) silently breaks every reader /
+        // LSP / REPL consumer keyed on the source-punctuation
+        // vocabulary. Sibling posture to
+        // `sexp_shape_iac_forge_tag_pins_canonical_cl_tags_for_every_quote_family_arm`
+        // on the cross-crate canonical-form axis — that pin binds the
+        // iac-forge tag surface; this pin binds the reader-punctuation
+        // prefix surface AND its Option-partial shape.
+        assert_eq!(SexpShape::Quote.prefix(), Some("'"));
+        assert_eq!(SexpShape::Quasiquote.prefix(), Some("`"));
+        assert_eq!(SexpShape::Unquote.prefix(), Some(","));
+        assert_eq!(SexpShape::UnquoteSplice.prefix(), Some(",@"));
+    }
+
+    #[test]
+    fn sexp_shape_prefix_returns_none_on_every_non_quote_family_shape() {
+        // PARTIAL-PROJECTION KERNEL CONTRACT (shape-level peer): every
+        // `SexpShape` variant OUTSIDE the four-arm quote-family carving
+        // MUST project through `SexpShape::prefix` to `None` — the
+        // eight-shape kernel coincides byte-for-byte with the kernel of
+        // `SexpShape::as_quote_form` AND `SexpShape::iac_forge_tag`
+        // (there is NO homoiconic reader-punctuation prefix for the
+        // atomic-payload variants `Symbol`/`Keyword`/`String`/`Int`/
+        // `Float`/`Bool` — those render via their own atomic syntax —
+        // nor for the structural residuals `Nil`/`List` which render as
+        // `nil`/`(...)` respectively, neither via a prefix character).
+        // Pin the eight-shape sweep so a regression that surfaces a
+        // bogus prefix for a non-quote-family arm (e.g. `SexpShape::Nil
+        // → Some("()")` conflating the structural-residual Display with
+        // the reader-punctuation vocabulary) fails-loudly here. Sibling
+        // posture to
+        // `sexp_shape_iac_forge_tag_returns_none_on_every_non_quote_family_shape`
+        // one vocabulary axis over.
+        assert_eq!(SexpShape::Nil.prefix(), None);
+        assert_eq!(SexpShape::Symbol.prefix(), None);
+        assert_eq!(SexpShape::Keyword.prefix(), None);
+        assert_eq!(SexpShape::String.prefix(), None);
+        assert_eq!(SexpShape::Int.prefix(), None);
+        assert_eq!(SexpShape::Float.prefix(), None);
+        assert_eq!(SexpShape::Bool.prefix(), None);
+        assert_eq!(SexpShape::List.prefix(), None);
+    }
+
+    #[test]
+    fn sexp_shape_prefix_composes_through_as_quote_form_for_every_variant() {
+        // COMPOSITION-LAW CONTRACT (shape-level peer): `SexpShape::prefix()
+        // == SexpShape::as_quote_form().map(QuoteForm::prefix)` for every
+        // variant in `SexpShape::ALL`. The (outer shape, reader-
+        // punctuation prefix) pairing binds through the pre-existing
+        // quote-family carving composed with the closed-set prefix
+        // projection rather than at a parallel four-arm inline match —
+        // this pin enforces the composition-identity across the closed
+        // twelve-arm sweep so a regression that drifts ONE arm's inline
+        // projection from the composition (e.g. re-inlining
+        // `SexpShape::Quote → Some("’")` — a fancy-quote look-alike —
+        // without updating `QuoteForm::prefix`) fails-loudly here.
+        // Sibling posture to
+        // `sexp_shape_iac_forge_tag_composes_through_as_quote_form_for_every_variant`
+        // one vocabulary axis over.
+        for shape in SexpShape::ALL {
+            let via_method = shape.prefix();
+            let via_composition = shape.as_quote_form().map(crate::ast::QuoteForm::prefix);
+            assert_eq!(
+                via_method, via_composition,
+                "SexpShape::{shape:?}.prefix() drifted from \
+                 .as_quote_form().map(QuoteForm::prefix) — the shape-level prefix projection is no longer derived from the sub-carving's canonical site",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_prefix_partitions_quote_family_and_kernel_disjointly() {
+        // IMAGE-PARTITION CONTRACT (shape-level peer): sweeping
+        // `SexpShape::ALL` through `SexpShape::prefix` MUST partition
+        // into EXACTLY the four-arm quote-family image (four distinct
+        // canonical reader-punctuation strings — the pre-image of
+        // `Some(_)`) AND the eight-shape kernel (all `None` — six
+        // atomic-payload variants + `Nil` + `List`). The image's
+        // `is_some()` count MUST be four (surjective onto the four-
+        // prefix closed set), the kernel's `is_none()` count MUST be
+        // eight, and the sum MUST hit `SexpShape::ALL.len()` (twelve)
+        // — a regression that leaks a bogus `Some(_)` from a non-
+        // quote-family arm or drops a `Some(_)` from a quote-family
+        // arm fails-loudly here on the partition-cardinality axis
+        // before any downstream reader / LSP / REPL consumer would
+        // surface the drift. Sibling posture to
+        // `sexp_shape_iac_forge_tag_partitions_quote_family_and_kernel_disjointly`
+        // pinning the tag-image partition; this pin binds the shape-
+        // level prefix-image partition on the four-arm quote-family
+        // carving. Disjoint vocabulary from the iac-forge partition
+        // (`"'"` / `"`"` / `","` / `",@"` vs. `"quote"` / `"quasiquote"`
+        // / `"unquote"` / `"unquote-splicing"`) — the same closed twelve-
+        // arm shape algebra carries THREE distinct `&'static str`
+        // vocabularies keyed on the same four-arm quote-family carving,
+        // and a regression that conflates any two lands here.
+        let prefix_image: std::collections::BTreeSet<&'static str> = SexpShape::ALL
+            .iter()
+            .filter_map(|shape| shape.prefix())
+            .collect();
+        let expected_prefix_image: std::collections::BTreeSet<&'static str> =
+            ["'", "`", ",", ",@"].into_iter().collect();
+        assert_eq!(
+            prefix_image, expected_prefix_image,
+            "SexpShape::prefix image must exactly cover the four canonical reader-punctuation quote-family prefixes",
+        );
+        let some_count = SexpShape::ALL
+            .iter()
+            .filter(|shape| shape.prefix().is_some())
+            .count();
+        assert_eq!(
+            some_count, 4,
+            "SexpShape::prefix must return `Some(_)` on exactly the four-arm quote-family carving",
+        );
+        let none_count = SexpShape::ALL
+            .iter()
+            .filter(|shape| shape.prefix().is_none())
+            .count();
+        assert_eq!(
+            none_count, 8,
+            "SexpShape::prefix must return `None` on exactly the eight-shape non-quote-family kernel",
+        );
+        assert_eq!(
+            some_count + none_count,
+            SexpShape::ALL.len(),
+            "SexpShape::prefix's image + kernel must partition SexpShape::ALL exactly",
         );
     }
 }

@@ -1342,6 +1342,114 @@ impl Sexp {
         }
     }
 
+    /// Canonical [`Self::List`] outer constructor — collects an
+    /// `impl IntoIterator<Item = Sexp>` into the tuple-variant payload
+    /// `Vec<Sexp>` at ONE site on the closed-set [`Sexp`] algebra. The
+    /// residual-axis section-for-retraction sibling of the existing
+    /// [`Self::as_list`] soft-projection ([`Option<&[Sexp]>`]): where
+    /// the projection soft-decomposes a [`Self::List`] arm into its
+    /// borrowed inner slice, this constructor embeds a fresh owned
+    /// item sequence into the matching tuple-variant wrapper. Sibling
+    /// of the atomic-payload construct family ([`Self::symbol`],
+    /// [`Self::keyword`], [`Self::string`], [`Self::int`],
+    /// [`Self::float`], [`Self::boolean`] — all routing through the
+    /// typed [`Atom`] construct family on the 6-of-12 atomic-payload
+    /// carving) and the quote-family construct family ([`Self::quote`],
+    /// [`Self::quasiquote`], [`Self::unquote`], [`Self::unquote_splice`]
+    /// — all routing through the typed [`QuoteForm::wrap`] family on
+    /// the 4-of-12 quote-family carving); closes the (construct,
+    /// project) algebra dual on the third and final structural carving
+    /// of the outer [`Sexp`] closed set — the 2-of-12 residual axis
+    /// covering [`Self::Nil`] and [`Self::List`]. [`Self::Nil`] is a
+    /// unit variant carrying no payload — the residual-axis
+    /// construct family closes at ONE constructor (this method) for
+    /// the sole payload-bearing residual arm.
+    ///
+    /// Composition law (forward): `Sexp::list(items) ==
+    /// Sexp::List(items.into_iter().collect::<Vec<Sexp>>())` for every
+    /// `items: impl IntoIterator<Item = Sexp>`. Round-trip law
+    /// (section-for-retraction with the soft-projection sibling): for
+    /// every `items: Vec<Sexp>`, `Sexp::list(items.clone()).as_list()
+    /// == Some(items.as_slice())` — the outer algebra's typed
+    /// constructor pairs section-for-retraction with the outer
+    /// algebra's soft projection, and the borrowed-slice cross-
+    /// projection preserves identity. Sibling posture across the
+    /// three axis-construct families on the outer [`Sexp`] algebra
+    /// (atomic + quote-family + residual).
+    ///
+    /// Outer-shape composition law: `Sexp::list(items).shape() ==
+    /// SexpShape::List` for every `items: impl IntoIterator<Item =
+    /// Sexp>` — the residual-arm outer-shape identity binds through
+    /// the typed-shape lattice at ONE arm, symmetric with the
+    /// quote-family construct family's outer-shape composition
+    /// `Sexp::X_variant(inner).shape() == QuoteForm::X.sexp_shape()`
+    /// and the atomic construct family's `Sexp::X_atom(payload).shape()
+    /// == AtomKind::X.sexp_shape()`. Structural-carving-marker
+    /// composition law: `Sexp::list(items).as_structural_kind() ==
+    /// Some(StructuralKind::List)` for every `items: impl
+    /// IntoIterator<Item = Sexp>` — the residual-axis carving marker
+    /// binds through the closed-set [`StructuralKind`] algebra at ONE
+    /// arm, symmetric with the atomic-axis's `Sexp::X_atom(payload)
+    /// .as_atom_kind() == Some(AtomKind::X)` marker composition.
+    ///
+    /// Pre-lift the [`Self::List(Vec<Sexp>)`] welded pair
+    /// ([`Self::List`] tuple-variant constructor + `Vec<Sexp>`
+    /// payload) appeared inline at every consumer that builds a
+    /// list-shaped [`Sexp`] value — well past the ≥2 PRIME-DIRECTIVE
+    /// trigger once the structural shape is named. Post-lift the
+    /// welded pair binds at ONE typed-algebra method on the outer
+    /// [`Sexp`] algebra with an `impl IntoIterator<Item = Sexp>`
+    /// bound so consumers that have a `Vec<Sexp>`, a `[Sexp; N]`
+    /// array, an `iter().cloned()` sequence, a
+    /// `.map(...).collect()`-worthy chain, or a
+    /// `once(head).chain(tail)` composition can hand the sequence
+    /// directly to the algebra without a per-site `.collect::<Vec<
+    /// Sexp>>()` coercion. A future allocation-policy change (e.g.
+    /// arena-allocated lists for span-aware [`Sexp`]) lands as ONE
+    /// edit at this method site and propagates through consumers
+    /// byte-for-byte.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// (list-shaped inner sequence, [`Self::List`] tuple-variant
+    /// constructor) pairing binds at ONE typed-algebra method on the
+    /// outer [`Sexp`] algebra, closing the outer-algebra construct
+    /// family across ALL THREE structural carvings of the [`SexpShape`]
+    /// closed set (atomic-payload + quote-family + residual). THEORY.md
+    /// §II.1 invariant 2 — free middle; every consumer that has an
+    /// owned or iterable sequence of [`Sexp`] and wants to build a
+    /// list-shaped wrapper routes through the SAME typed method, so a
+    /// regression that drifts one consumer's construction from the
+    /// others cannot reach the substrate's runtime. THEORY.md §V.1 —
+    /// knowable platform; the typed-construct family becomes a TYPE
+    /// projection on the substrate's outer [`Sexp`] algebra sitting
+    /// next to the typed-project family [`Self::as_list`] rather than
+    /// bare tuple-variant constructor + per-site `Vec<Sexp>` discipline.
+    /// THEORY.md §VI.1 — generation over composition; the residual-
+    /// arm outer-shape + carving-marker pairings emerge from ONE
+    /// typed-algebra composition on the outer [`Sexp`] algebra rather
+    /// than from per-consumer per-variant literals.
+    ///
+    /// Frontier inspiration: Racket's `(list x y z)` typed list-
+    /// construct primitive paired one-for-one with `(list? v)` /
+    /// `(car v)` / `(cdr v)` predicate/projection siblings on the
+    /// same closed-set list shape — the typed-construct + typed-
+    /// project algebra dual is closed at one method per direction on
+    /// Racket's surface, and [`Self::list`] / [`Self::as_list`] is
+    /// the Rust-typed peer on the closed-set outer [`Sexp`] algebra
+    /// with `impl IntoIterator<Item = Sexp>` standing in for Racket's
+    /// variadic collect face. MLIR's `mlir::OpBuilder::create<
+    /// ListOp>(loc, elements)` typed-IR list-op construction paired
+    /// with `mlir::dyn_cast<ListOp>(op)` on the projection face —
+    /// the typed factory + typed downcast pair the IR algebra closes
+    /// over on every list-shaped op; [`Self::list`] / [`Self::as_list`]
+    /// is the Rust-typed peer on the outer [`Sexp`] algebra with
+    /// [`StructuralKind::List`] standing in for MLIR's `OperationName`
+    /// taxonomy over the list-shaped op family.
+    #[must_use]
+    pub fn list<I: IntoIterator<Item = Sexp>>(items: I) -> Self {
+        Self::List(items.into_iter().collect())
+    }
+
     /// Soft projection onto the closed-set [`StructuralKind`] residual
     /// carving marker — the 2-of-12 carving of the [`SexpShape`] algebra
     /// covering [`Self::Nil`] and [`Self::List`] (the outer shapes that
@@ -11393,5 +11501,242 @@ mod tests {
                 "Sexp::X_variant→shape drifted from QuoteForm::sexp_shape at {qf:?}",
             );
         }
+    }
+
+    // ── Sexp::list residual-axis typed-construct algebra ─────────────────
+    //
+    // `Sexp::list(items)` is the residual-axis section-for-retraction
+    // sibling of the pre-existing `Sexp::as_list` soft-projection — the
+    // (construct, project) algebra dual on the 2-of-12 residual carving of
+    // the [`SexpShape`] closed set now closes at ONE constructor + ONE
+    // projection on the outer [`Sexp`] algebra, symmetric with the atomic-
+    // payload carving's (six `Sexp::X_atom(payload)` constructors +
+    // `Sexp::as_atom` / `Sexp::as_atom_kind` projections) and the quote-
+    // family carving's (four `Sexp::X_variant(inner)` constructors +
+    // `Sexp::as_quote_form` / `Sexp::as_quote_form_marker` projections).
+    // [`Sexp::Nil`] is a unit variant with no payload — the residual-axis
+    // construct family closes at ONE constructor (the sole payload-bearing
+    // residual arm). Pin FIVE structural laws:
+    //   (a) the canonical-tuple emission
+    //       `Sexp::list(items) == Sexp::List(items.into_iter().collect())`
+    //       across representative empty / single-element / multi-element /
+    //       heterogeneous-inner samples — the typed constructor pairs
+    //       section-for-retraction with the tuple-variant constructor;
+    //   (b) the round-trip law
+    //       `Sexp::list(items.clone()).as_list() == Some(items.as_slice())`
+    //       — the (construct, soft-project) algebra dual closes on the
+    //       outer [`Sexp`] algebra with the borrowed-slice cross-
+    //       projection preserving identity;
+    //   (c) the outer-shape law
+    //       `Sexp::list(items).shape() == SexpShape::List` — the residual-
+    //       arm outer-shape identity binds through the typed-shape
+    //       lattice at ONE arm, symmetric with the quote-family
+    //       construct family's `Sexp::X_variant(inner).shape() ==
+    //       QuoteForm::X.sexp_shape()`;
+    //   (d) the structural-kind law
+    //       `Sexp::list(items).as_structural_kind() == Some(
+    //       StructuralKind::List)` — the residual carving marker binds
+    //       through the closed-set [`StructuralKind`] algebra at ONE
+    //       arm, symmetric with the atomic-axis's
+    //       `Sexp::X_atom(payload).as_atom_kind() == Some(AtomKind::X)`;
+    //   (e) the input-shape flexibility
+    //       `Sexp::list(&Vec<Sexp>)` / `Sexp::list([Sexp; N])` /
+    //       `Sexp::list(iter::map(...))` all agree with the canonical
+    //       tuple-variant emission — the `impl IntoIterator<Item = Sexp>`
+    //       bound accepts every reasonable owned-sequence shape without a
+    //       per-consumer `.collect::<Vec<Sexp>>()` coercion.
+
+    #[test]
+    fn sexp_list_constructor_emits_canonical_tuple_variant_across_representative_inputs() {
+        // STRUCTURAL CONSTRUCT CONTRACT: `Sexp::list(items)` emits
+        // `Sexp::List(items.into_iter().collect::<Vec<Sexp>>())` byte-
+        // for-byte across representative empty, single-element, multi-
+        // element, and heterogeneous-inner samples. A regression that
+        // drifts the body (e.g. wrapping items in an extra `Sexp::Nil`
+        // sentinel, deduplicating, filtering) surfaces here. Sibling-
+        // shape pin to the quote-family construct family's canonical-
+        // tuple-variant test posture
+        // (`sexp_quote_family_constructors_emit_canonical_tuple_variant_for_every_marker`).
+        let samples: [Vec<Sexp>; 5] = [
+            vec![],
+            vec![Sexp::symbol("only")],
+            vec![Sexp::symbol("op"), Sexp::int(1), Sexp::int(2)],
+            vec![
+                Sexp::Nil,
+                Sexp::keyword("k"),
+                Sexp::string("body"),
+                Sexp::boolean(true),
+                Sexp::List(vec![Sexp::symbol("nested")]),
+            ],
+            vec![
+                Sexp::Quote(Box::new(Sexp::symbol("x"))),
+                Sexp::Quasiquote(Box::new(Sexp::List(vec![
+                    Sexp::symbol("template"),
+                    Sexp::Unquote(Box::new(Sexp::symbol("var"))),
+                ]))),
+                Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+            ],
+        ];
+        for items in &samples {
+            assert_eq!(
+                Sexp::list(items.clone()),
+                Sexp::List(items.clone()),
+                "Sexp::list drifted from canonical Sexp::List(_) tuple variant for {items:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_list_constructor_round_trips_through_as_list() {
+        // ROUND-TRIP LAW (section-for-retraction on the residual axis):
+        // `Sexp::list(items.clone()).as_list() == Some(items.as_slice())`
+        // sweeps the same representative input matrix as the canonical-
+        // tuple pin — proves the (construct, soft-project) pair forms an
+        // `Iso(Vec<Sexp>, Sexp::List(Vec<Sexp>))` on the residual axis,
+        // symmetric with the quote-family axis's `Sexp::X_variant(inner)
+        // .as_quote_form() == Some((QuoteForm::X, &inner))` round-trip
+        // (pinned by `sexp_quote_family_constructors_round_trip_through_as_quote_form`).
+        // A regression that mis-implements `Sexp::list` (e.g. dropping
+        // items, cloning off-by-one) fails here on top of the canonical-
+        // tuple pin.
+        let samples: [Vec<Sexp>; 4] = [
+            vec![],
+            vec![Sexp::symbol("solo")],
+            vec![Sexp::symbol("op"), Sexp::int(1), Sexp::int(2)],
+            vec![
+                Sexp::Nil,
+                Sexp::List(vec![Sexp::symbol("nested"), Sexp::int(7)]),
+                Sexp::Quote(Box::new(Sexp::symbol("q"))),
+            ],
+        ];
+        for items in &samples {
+            let built = Sexp::list(items.clone());
+            assert_eq!(
+                built.as_list(),
+                Some(items.as_slice()),
+                "Sexp::list→as_list round-trip drifted for {items:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_list_constructor_composes_with_shape_via_sexp_shape_list() {
+        // OUTER-SHAPE COMPOSITION LAW: every `Sexp::list(items)` output
+        // projects through `Sexp::shape` to `SexpShape::List` regardless
+        // of inner-item content — the (construct, outer-shape)
+        // composition binds through the typed-shape lattice's residual-
+        // arm at ONE arm. Sibling-shape pin to the quote-family construct
+        // family's outer-shape composition
+        // (`sexp_quote_family_constructors_compose_with_shape_via_quote_form_sexp_shape`).
+        // A regression that reroutes `Sexp::list` through another shape
+        // arm (e.g. wrapping in `Sexp::Quote` after a copy-edit that
+        // type-checks) surfaces here alongside the canonical-tuple pin.
+        let samples: [Vec<Sexp>; 4] = [
+            vec![],
+            vec![Sexp::symbol("only")],
+            vec![Sexp::int(1), Sexp::int(2), Sexp::int(3)],
+            vec![
+                Sexp::Nil,
+                Sexp::Quote(Box::new(Sexp::symbol("x"))),
+                Sexp::List(vec![Sexp::symbol("nested")]),
+            ],
+        ];
+        for items in &samples {
+            assert_eq!(
+                Sexp::list(items.clone()).shape(),
+                SexpShape::List,
+                "Sexp::list→shape drifted from SexpShape::List for {items:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_list_constructor_composes_with_as_structural_kind() {
+        // STRUCTURAL-KIND COMPOSITION LAW: every `Sexp::list(items)`
+        // output projects through `Sexp::as_structural_kind` to
+        // `Some(StructuralKind::List)` regardless of inner-item content
+        // — the residual carving marker binds through the closed-set
+        // `StructuralKind` algebra at ONE arm. Sibling-shape pin to the
+        // atomic-axis's `Sexp::X_atom(payload).as_atom_kind() ==
+        // Some(AtomKind::X)` marker composition. A regression that
+        // reroutes `Sexp::list` through a non-residual arm (e.g. a copy-
+        // edit that wraps items in `Sexp::Quote`) surfaces here through
+        // the returned marker no longer being `StructuralKind::List`.
+        let samples: [Vec<Sexp>; 4] = [
+            vec![],
+            vec![Sexp::symbol("only")],
+            vec![Sexp::keyword("k"), Sexp::string("v")],
+            vec![
+                Sexp::Nil,
+                Sexp::List(vec![Sexp::symbol("nested")]),
+                Sexp::Unquote(Box::new(Sexp::symbol("var"))),
+            ],
+        ];
+        for items in &samples {
+            assert_eq!(
+                Sexp::list(items.clone()).as_structural_kind(),
+                Some(StructuralKind::List),
+                "Sexp::list→as_structural_kind drifted from Some(StructuralKind::List) for {items:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_list_constructor_accepts_diverse_intoiterator_input_shapes() {
+        // INPUT-SHAPE FLEXIBILITY: the `impl IntoIterator<Item = Sexp>`
+        // bound accepts every reasonable owned-sequence shape without a
+        // per-consumer `.collect::<Vec<Sexp>>()` coercion at the call
+        // site — pin that `Vec<Sexp>`, `[Sexp; N]` array, `iter::empty
+        // ::<Sexp>()`, and `.map(...)` iterator chains all reach the
+        // same canonical tuple-variant output. A regression that
+        // narrows the bound (e.g. taking `&[Sexp]` or `Vec<Sexp>` only)
+        // fails this pin. The IntoIterator bound is load-bearing for the
+        // ergonomy claim in the docstring — consumers threading a `.map`
+        // chain through the outer algebra must not need an intermediate
+        // `.collect()` before handing the result to `Sexp::list`.
+        let expected = Sexp::List(vec![
+            Sexp::symbol("a"),
+            Sexp::symbol("b"),
+            Sexp::symbol("c"),
+        ]);
+        // Vec<Sexp> — the canonical owned-sequence shape.
+        assert_eq!(
+            Sexp::list(vec![
+                Sexp::symbol("a"),
+                Sexp::symbol("b"),
+                Sexp::symbol("c"),
+            ]),
+            expected,
+            "Sexp::list drifted for Vec<Sexp> input",
+        );
+        // [Sexp; N] — array-literal shape (elements moved out of the
+        // fixed-size array via the `IntoIterator` impl on `[T; N]`).
+        assert_eq!(
+            Sexp::list([Sexp::symbol("a"), Sexp::symbol("b"), Sexp::symbol("c"),]),
+            expected,
+            "Sexp::list drifted for [Sexp; N] input",
+        );
+        // `iter::empty::<Sexp>()` — the zero-item iterator shape.
+        assert_eq!(
+            Sexp::list(std::iter::empty::<Sexp>()),
+            Sexp::List(vec![]),
+            "Sexp::list drifted for iter::empty input",
+        );
+        // `.map(...)` iterator chain — the composition shape the
+        // docstring's ergonomy claim rests on.
+        assert_eq!(
+            Sexp::list(["a", "b", "c"].iter().map(|s| Sexp::symbol(*s))),
+            expected,
+            "Sexp::list drifted for iterator-map chain input",
+        );
+        // `once(head).chain(tail)` — the head-then-rest shape a builder
+        // consuming `head_symbol` + the tail slice threads through.
+        assert_eq!(
+            Sexp::list(
+                std::iter::once(Sexp::symbol("a")).chain([Sexp::symbol("b"), Sexp::symbol("c")]),
+            ),
+            expected,
+            "Sexp::list drifted for once+chain input",
+        );
     }
 }

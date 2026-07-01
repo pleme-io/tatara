@@ -3022,6 +3022,118 @@ impl Sexp {
         }
     }
 
+    /// Soft projection onto the closed-set [`QuoteForm`] quote-family
+    /// carving marker — the 4-of-12 carving of the [`SexpShape`] algebra
+    /// covering the four homoiconic prefix-wrappers ([`Self::Quote`],
+    /// [`Self::Quasiquote`], [`Self::Unquote`], [`Self::UnquoteSplice`]).
+    /// Returns `Some(QuoteForm::Quote)` iff this is `'x` (a
+    /// [`Self::Quote`] wrapper), `Some(QuoteForm::Quasiquote)` iff this
+    /// is `` `x `` (a [`Self::Quasiquote`] wrapper),
+    /// `Some(QuoteForm::Unquote)` iff this is `,x` (a [`Self::Unquote`]
+    /// wrapper), `Some(QuoteForm::UnquoteSplice)` iff this is `,@x` (a
+    /// [`Self::UnquoteSplice`] wrapper), `None` for every other outer
+    /// shape ([`Self::Nil`], every [`Self::Atom`] variant, [`Self::List`]).
+    ///
+    /// Direct value-level peer of the shape-level projection
+    /// [`SexpShape::as_quote_form`](crate::error::SexpShape::as_quote_form)
+    /// — the pair `(Sexp::as_quote_form_marker, SexpShape::as_quote_form)`
+    /// binds the (Sexp value, QuoteForm carving marker) pairing at ONE
+    /// typed method on each algebra, closing the quote-family cell of
+    /// the (Sexp value → carving marker) matrix at the marker-only
+    /// value-level projection surface. Marker-only sibling of
+    /// [`Self::as_quote_form`] (which returns `Option<(QuoteForm, &Sexp)>`
+    /// — marker + wrapped inner). Post-lift the substrate's value-level
+    /// marker-only carving-marker matrix closes its FINAL cell: the
+    /// atomic axis via [`Self::as_atom_kind`] (6-of-12), the residual
+    /// axis via [`Self::as_structural_kind`] (2-of-12), the unquote-
+    /// subset axis via [`Self::as_unquote_form`] (2-of-12), and NOW the
+    /// quote-family axis via `Self::as_quote_form_marker` (4-of-12) —
+    /// symmetric with the shape-level marker-only projection family on
+    /// [`SexpShape`](crate::error::SexpShape).
+    ///
+    /// Composition laws (two-way agreement — bindings): for every
+    /// `s: &Sexp`,
+    /// `s.as_quote_form_marker() == s.as_quote_form().map(|(qf, _)| qf)
+    ///  == s.shape().as_quote_form()`. Pre-lift the quote-family carving
+    /// marker at the value level was reachable only via one of these
+    /// two-step compositions — either through the parent
+    /// [`Self::as_quote_form`] projection (discarding the wrapped inner
+    /// via `.map(|(qf, _)| qf)`) or through the shape algebra
+    /// (`s.shape().as_quote_form()`, walking the full 12-variant
+    /// [`SexpShape`](crate::error::SexpShape) closed set to arrive at
+    /// the 4-of-12 carving marker). Post-lift the projection lands at
+    /// ONE typed method on the value algebra, and both compositions
+    /// are pinned as agreement laws (see
+    /// `sexp_as_quote_form_marker_agrees_with_as_quote_form_map_marker_for_every_variant`
+    /// and
+    /// `sexp_as_quote_form_marker_agrees_with_shape_as_quote_form_for_every_variant`
+    /// in this module).
+    ///
+    /// Superset-gate contract with [`Self::as_unquote_form`]: for every
+    /// `s: &Sexp`, `s.as_unquote_form().is_some()` implies
+    /// `s.as_quote_form_marker().is_some()` (the 2-of-12 substitution
+    /// subset is a proper subset of the 4-of-12 quote family). The two
+    /// non-substitution quote-family wrappers ([`Self::Quote`] and
+    /// [`Self::Quasiquote`]) satisfy `as_quote_form_marker().is_some()`
+    /// AND `as_unquote_form().is_none()` — the value-level image of the
+    /// 2-of-4 subset gate [`QuoteForm::as_unquote_form`]. Pinned by
+    /// `sexp_as_quote_form_marker_extends_as_unquote_form_to_full_quote_family`.
+    ///
+    /// Structural identity binding it to the quote-family variants:
+    ///   * `as_quote_form_marker() == Some(QuoteForm::Quote)`         iff `matches!(self, Sexp::Quote(_))`
+    ///   * `as_quote_form_marker() == Some(QuoteForm::Quasiquote)`    iff `matches!(self, Sexp::Quasiquote(_))`
+    ///   * `as_quote_form_marker() == Some(QuoteForm::Unquote)`       iff `matches!(self, Sexp::Unquote(_))`
+    ///   * `as_quote_form_marker() == Some(QuoteForm::UnquoteSplice)` iff `matches!(self, Sexp::UnquoteSplice(_))`
+    ///   * `as_quote_form_marker() == None`                           iff `!matches!(self, Sexp::Quote(_) | Sexp::Quasiquote(_) | Sexp::Unquote(_) | Sexp::UnquoteSplice(_))`
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the quote-
+    /// family carving marker at the value level becomes a NAMED
+    /// primitive on the substrate's `Sexp` algebra rather than a per-
+    /// site two-step composition through either [`Self::as_quote_form`]
+    /// (discarding its `&Sexp` inner) or [`Self::shape`] (walking through
+    /// the full 12-variant [`SexpShape`](crate::error::SexpShape) closed
+    /// set to arrive at the 4-of-12 carving marker). THEORY.md §II.1
+    /// invariant 2 — free middle; every consumer that wants the quote-
+    /// family carving identity without needing the wrapped inner (a
+    /// future `tatara-check` predicate `(check-value-projects-to-quote-
+    /// family …)` that filters diagnostics keyed on the quote-family
+    /// cohort; a future LSP structural-navigation filter that keys on
+    /// the quote-family carving membership at the value level; a
+    /// future `TypedRewriter<QuoteFamilyOp>` sweep that walks `Sexp`
+    /// values whose quote-family arm identity is `Some(QuoteForm::_)`
+    /// regardless of inner payload identity; a future REPL pretty-
+    /// printer that chooses rendering paths keyed on the value-level
+    /// quote-family carving marker without needing the inner payload)
+    /// routes through ONE typed method rather than reaching into one of
+    /// the two composition sites, and both compositions are pinned as
+    /// agreement laws so a regression that drifts ONE composition's
+    /// pairing from the other cannot reach the substrate's runtime.
+    /// THEORY.md §VI.1 — generation over composition; the (Sexp variant,
+    /// QuoteForm variant) pairing binds at ONE inherent method on the
+    /// algebra rather than at two parallel compositions, so a future
+    /// extension (e.g. a fifth `Sexp` quote-family wrapper) lands at
+    /// ONE match arm in the parent `as_quote_form` projection and
+    /// inherits through this method's structural composition.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::dyn_cast<QuoteFamilyOp>(op)
+    /// .map(|op| op.marker())` — every typed rewriter that only needs
+    /// the op-family identity (without the op's operands) binds to the
+    /// typed-downcast projection composed with an operand-discarding
+    /// marker extract; `Sexp::as_quote_form_marker` is the marker-only
+    /// peer on the substrate's `Sexp` algebra, with
+    /// `Option<QuoteForm>` standing in for MLIR's
+    /// `Optional<OperationName>` marker-only downcast result. Racket's
+    /// `syntax-parse` `~or* (~quote _) (~quasiquote _) (~unquote _)
+    /// (~unquote-splice _)` — every syntax-class pattern that keys on
+    /// the quote-family marker identity without binding the inner form;
+    /// `Sexp::as_quote_form_marker` is the Rust-typed peer that
+    /// surfaces the marker identity through a single primitive on the
+    /// syntax algebra.
+    #[must_use]
+    pub fn as_quote_form_marker(&self) -> Option<QuoteForm> {
+        self.as_quote_form().map(|(qf, _)| qf)
+    }
+
     /// Quote-family projection, asserted-total face of [`Sexp::as_quote_form`].
     /// Returns `(QuoteForm, &Sexp)` verbatim — same borrowed-inner posture,
     /// same closed-set marker — but panics with [`QUOTE_FAMILY_PROJECTION_INVARIANT`]
@@ -9532,6 +9644,308 @@ mod tests {
             assert!(
                 !unquote_hit || quote_hit,
                 "subset containment violated at {s:?}: as_unquote_form Some but as_quote_form None",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_quote_form_marker_projects_each_variant_to_canonical_quote_form() {
+        // PER-VARIANT TRUTH-TABLE (quote-family axis): pin byte-for-byte
+        // per-Sexp-quote-family-arm mapping — `Sexp::Quote(inner)`
+        // → `Some(QuoteForm::Quote)`, `Sexp::Quasiquote(inner)`
+        // → `Some(QuoteForm::Quasiquote)`, `Sexp::Unquote(inner)`
+        // → `Some(QuoteForm::Unquote)`, `Sexp::UnquoteSplice(inner)`
+        // → `Some(QuoteForm::UnquoteSplice)`. Value-level marker-only
+        // peer of the pre-existing tuple projection
+        // `Sexp::as_quote_form` — each quote-family-wrapper Sexp value's
+        // carving-marker projection must land on the matching QuoteForm
+        // arm the parent projection's tuple carries. A future fifth
+        // QuoteForm variant (e.g. `,~` reverse-unquote) extends both
+        // this sweep + the composition body via the as_quote_form
+        // primitive, with rustc enforcing the match arms in lockstep.
+        assert_eq!(
+            Sexp::Quote(Box::new(Sexp::symbol("x"))).as_quote_form_marker(),
+            Some(QuoteForm::Quote)
+        );
+        assert_eq!(
+            Sexp::Quasiquote(Box::new(Sexp::symbol("x"))).as_quote_form_marker(),
+            Some(QuoteForm::Quasiquote)
+        );
+        assert_eq!(
+            Sexp::Unquote(Box::new(Sexp::symbol("x"))).as_quote_form_marker(),
+            Some(QuoteForm::Unquote)
+        );
+        assert_eq!(
+            Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))).as_quote_form_marker(),
+            Some(QuoteForm::UnquoteSplice)
+        );
+        // Inner-payload invariance edge cases — pin the projection
+        // ignores inner payload content entirely (it reads only the
+        // outer wrapper variant discriminant), so a body that gates on
+        // inner payload shape fails loudly.
+        assert_eq!(
+            Sexp::Quote(Box::new(Sexp::Nil)).as_quote_form_marker(),
+            Some(QuoteForm::Quote)
+        );
+        assert_eq!(
+            Sexp::Quasiquote(Box::new(Sexp::List(vec![]))).as_quote_form_marker(),
+            Some(QuoteForm::Quasiquote)
+        );
+        assert_eq!(
+            Sexp::Unquote(Box::new(Sexp::List(vec![
+                Sexp::symbol("nested"),
+                Sexp::int(42),
+            ])))
+            .as_quote_form_marker(),
+            Some(QuoteForm::Unquote)
+        );
+        assert_eq!(
+            Sexp::UnquoteSplice(Box::new(Sexp::Quote(Box::new(Sexp::symbol("y")))))
+                .as_quote_form_marker(),
+            Some(QuoteForm::UnquoteSplice)
+        );
+    }
+
+    #[test]
+    fn sexp_as_quote_form_marker_rejects_non_quote_family_outer_shapes() {
+        // KERNEL: every non-quote-family outer shape (Nil, every Atom
+        // variant, List — empty and non-empty) projects to `None`.
+        // Sibling kernel-pin to
+        // `sexp_as_atom_kind_rejects_non_atom_outer_shapes`,
+        // `sexp_as_structural_kind_rejects_non_structural_outer_shapes`,
+        // and `sexp_as_unquote_form_rejects_non_unquote_subset_outer_shapes`
+        // on the quote-family axis. A body that widens the projection to
+        // any non-quote-family arm (e.g. `Sexp::List` starts returning
+        // `Some(QuoteForm::Quote)`) surfaces as a `None` expectation
+        // failure at the specific offending variant.
+        for non_quote in [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::int(1)]),
+        ] {
+            assert_eq!(
+                non_quote.as_quote_form_marker(),
+                None,
+                "non-quote-family Sexp must project to None on as_quote_form_marker — {non_quote:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_quote_form_marker_agrees_with_as_quote_form_map_marker_for_every_variant() {
+        // COMPOSITION-LAW CONTRACT (parent-projection peer): pin
+        // `s.as_quote_form_marker() == s.as_quote_form().map(|(qf, _)| qf)`
+        // for every reachable Sexp outer shape. Pre-lift the quote-
+        // family carving marker at the value level was reachable via
+        // this two-step composition through the parent
+        // [`Sexp::as_quote_form`] projection (discarding the wrapped
+        // inner via `.map(|(qf, _)| qf)`); post-lift the new marker-
+        // only projection MUST agree bit-for-bit — the substrate's
+        // (Sexp value, QuoteForm marker) pairing binds at THREE
+        // compositions (this parent-projection composition AND the
+        // shape-axis composition, both pinned in this module, AND the
+        // direct match in the new method's body) that must stay in
+        // lockstep. Sweeps every outer shape (atom + residual +
+        // quote-family) so a drift on ANY arm surfaces immediately.
+        let samples = [
+            Sexp::Nil,
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ];
+        for s in &samples {
+            assert_eq!(
+                s.as_quote_form_marker(),
+                s.as_quote_form().map(|(qf, _)| qf),
+                "Sexp::as_quote_form_marker and Sexp::as_quote_form().map(|(qf, _)| qf) must agree at {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_quote_form_marker_agrees_with_shape_as_quote_form_for_every_variant() {
+        // COMPOSITION-LAW CONTRACT (shape-axis peer):
+        // `s.as_quote_form_marker() == s.shape().as_quote_form()` for
+        // every reachable Sexp outer shape. Sibling to
+        // `sexp_as_atom_kind_agrees_with_shape_as_atom_kind_for_every_variant`,
+        // `sexp_as_structural_kind_agrees_with_shape_as_structural_kind_for_every_variant`,
+        // and `sexp_as_unquote_form_agrees_with_shape_as_unquote_form_for_every_variant`
+        // on the quote-family axis. Pre-lift the quote-family carving
+        // marker at the value level was reachable via this two-step
+        // composition through the shape algebra (`shape().as_quote_form()`,
+        // walking the full 12-variant [`SexpShape`](crate::error::SexpShape)
+        // closed set to arrive at the 4-of-12 carving marker); post-
+        // lift the new projection MUST agree bit-for-bit — the
+        // substrate's (Sexp value, QuoteForm marker) pairing now binds
+        // at ONE typed method on the value algebra, with both
+        // compositions (this shape-axis peer and the parent-projection
+        // peer pinned above) staying in lockstep.
+        use crate::error::SexpShape;
+        let samples = [
+            Sexp::Nil,
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("a")]),
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::Quote(Box::new(Sexp::Nil)),
+            Sexp::Quasiquote(Box::new(Sexp::Nil)),
+            Sexp::Unquote(Box::new(Sexp::Nil)),
+            Sexp::UnquoteSplice(Box::new(Sexp::Nil)),
+        ];
+        for s in &samples {
+            let via_value: Option<QuoteForm> = s.as_quote_form_marker();
+            let via_shape: Option<QuoteForm> = SexpShape::as_quote_form(s.shape());
+            assert_eq!(
+                via_value, via_shape,
+                "Sexp::as_quote_form_marker and Sexp::shape().as_quote_form must agree at {s:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_quote_form_marker_composes_with_prefix_via_quote_form_prefix() {
+        // CROSS-PROJECTION COHERENCE: pin that
+        // `s.as_quote_form_marker().map(QuoteForm::prefix)` agrees with
+        // the reader-prefix vocabulary carried on [`QuoteForm::prefix`]
+        // for every quote-family Sexp (and returns `None` for every
+        // non-quote-family Sexp). Sibling to
+        // `sexp_as_unquote_form_composes_with_marker_via_unquote_form_marker`
+        // on the quote-family axis. Composes the new value-level marker
+        // projection with the closed-set [`QuoteForm::prefix`]
+        // projection so the reader/writer prefix vocabulary (`'` / `` ` ``
+        // / `,` / `,@`) stays load-bearing at ONE canonical site
+        // ([`QuoteForm::prefix`]'s four arms) rather than a parallel
+        // per-projection literal table on the value algebra.
+        let quote_family = [
+            (Sexp::Quote(Box::new(Sexp::symbol("x"))), QuoteForm::Quote),
+            (
+                Sexp::Quasiquote(Box::new(Sexp::symbol("x"))),
+                QuoteForm::Quasiquote,
+            ),
+            (
+                Sexp::Unquote(Box::new(Sexp::symbol("x"))),
+                QuoteForm::Unquote,
+            ),
+            (
+                Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs"))),
+                QuoteForm::UnquoteSplice,
+            ),
+        ];
+        for (sexp, expected_qf) in &quote_family {
+            let via_carving = sexp.as_quote_form_marker().map(QuoteForm::prefix);
+            assert_eq!(
+                via_carving,
+                Some(expected_qf.prefix()),
+                "quote-family carving-marker prefix drifted at {sexp:?}"
+            );
+        }
+        for non_quote in [
+            Sexp::Nil,
+            Sexp::symbol("foo"),
+            Sexp::keyword("k"),
+            Sexp::string("s"),
+            Sexp::int(7),
+            Sexp::float(7.5),
+            Sexp::boolean(true),
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("a")]),
+        ] {
+            assert_eq!(
+                non_quote.as_quote_form_marker().map(QuoteForm::prefix),
+                None,
+                "non-quote-family Sexp must project to None on as_quote_form_marker.map(prefix) — {non_quote:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_as_quote_form_marker_extends_as_unquote_form_to_full_quote_family() {
+        // SUPERSET-GATE CONTRACT (value-level): pin that at every
+        // reachable Sexp outer shape,
+        // `as_unquote_form().is_some()` implies
+        // `as_quote_form_marker().is_some()` (the 2-of-12 substitution
+        // subset is a proper subset of the 4-of-12 quote family) AND
+        // `as_quote_form_marker().is_some() && !as_unquote_form().is_some()`
+        // holds exactly for the two non-substitution quote-family
+        // wrappers (`Sexp::Quote` and `Sexp::Quasiquote`) — the value-
+        // level image of the 2-of-4 subset gate
+        // [`QuoteForm::as_unquote_form`], mirroring
+        // `sexp_as_unquote_form_narrows_as_quote_form_to_substitution_subset`
+        // from the substitution-axis side. Pins the (substitution-
+        // subset ⊂ quote-family) inclusion as an invariant on the
+        // value algebra where the SUPERSET side is now a NAMED typed
+        // method — so a regression that widens either projection
+        // beyond its cell (e.g. `as_quote_form_marker` starts accepting
+        // `Sexp::List`, or `as_unquote_form` starts accepting
+        // `Sexp::Quote`) surfaces immediately as a subset-inclusion
+        // drift. Also pin that
+        // `as_unquote_form() == as_quote_form_marker().and_then(
+        //     QuoteForm::as_unquote_form)` — the value-level projection
+        // composes with the 2-of-4 subset gate at the marker algebra
+        // level, so the substrate's (Sexp value, UnquoteForm marker)
+        // pairing derives from the (Sexp value, QuoteForm marker)
+        // pairing at ONE composition rather than two parallel value-
+        // level projections.
+        let samples = [
+            (Sexp::Nil, false, false),
+            (Sexp::List(vec![]), false, false),
+            (Sexp::List(vec![Sexp::symbol("a")]), false, false),
+            (Sexp::symbol("foo"), false, false),
+            (Sexp::keyword("k"), false, false),
+            (Sexp::string("s"), false, false),
+            (Sexp::int(7), false, false),
+            (Sexp::float(7.5), false, false),
+            (Sexp::boolean(true), false, false),
+            // Quote-family, NOT substitution-subset
+            (Sexp::Quote(Box::new(Sexp::Nil)), true, false),
+            (Sexp::Quasiquote(Box::new(Sexp::Nil)), true, false),
+            // Quote-family AND substitution-subset
+            (Sexp::Unquote(Box::new(Sexp::Nil)), true, true),
+            (Sexp::UnquoteSplice(Box::new(Sexp::Nil)), true, true),
+        ];
+        for (s, quote_expected, unquote_expected) in &samples {
+            let quote_hit = s.as_quote_form_marker().is_some();
+            let unquote_hit = s.as_unquote_form().is_some();
+            assert_eq!(
+                quote_hit, *quote_expected,
+                "as_quote_form_marker membership drifted at {s:?}"
+            );
+            assert_eq!(
+                unquote_hit, *unquote_expected,
+                "as_unquote_form membership drifted at {s:?}"
+            );
+            // Superset containment: substitution ⊂ quote-family.
+            assert!(
+                !unquote_hit || quote_hit,
+                "subset containment violated at {s:?}: as_unquote_form Some but as_quote_form_marker None",
+            );
+            // Composition through the 2-of-4 subset gate:
+            // `s.as_unquote_form() == s.as_quote_form_marker().and_then(QuoteForm::as_unquote_form)`.
+            assert_eq!(
+                s.as_unquote_form(),
+                s.as_quote_form_marker()
+                    .and_then(QuoteForm::as_unquote_form),
+                "as_unquote_form and as_quote_form_marker + QuoteForm::as_unquote_form composition disagree at {s:?}",
             );
         }
     }

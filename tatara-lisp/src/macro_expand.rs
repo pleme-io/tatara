@@ -262,6 +262,132 @@ impl OptionalParam {
 }
 
 impl MacroParams {
+    /// Canonical `&rest` marker — the ONE typed `&'static str` on
+    /// [`MacroParams`] the parser's rest-slot dispatch specialises on.
+    /// The Common-Lisp lambda-list `&rest` keyword names the position
+    /// at which the parser stops collecting `required` / `optional`
+    /// names and binds every subsequent arg into a `Sexp::List` at the
+    /// [`Self::rest`] slot. Sibling posture to [`Self::OPTIONAL_MARKER`]
+    /// (`"&optional"`) on the same lambda-list-keyword algebra layer:
+    /// the two constants are the closed set of Common-Lisp
+    /// lambda-list-keyword `&'static str` markers the parser's typed
+    /// dispatch specialises on, sharing the canonical `char` lead byte
+    /// [`Self::LAMBDA_LIST_KEYWORD_LEAD`] (`'&'`).
+    ///
+    /// Pre-lift the same `"&rest"` bytes lived inline as a single
+    /// `s == "&rest"` comparison inside [`parse_params`], with the two
+    /// typed `&'static str` markers the CL lambda-list algebra
+    /// specialises on smeared across TWO parallel `s == "..."` inline
+    /// comparisons at the SAME dispatch cascade. Post-lift the
+    /// (`&rest` rest-slot marker, canonical `&'static str`) pairing
+    /// binds at ONE constant on the typed [`MacroParams`] algebra that
+    /// both the parser AND any future authoring / rendering surface
+    /// route through; a refactor that swaps the marker (e.g. a
+    /// Clojure-compat port to `&`  ONLY, an Elisp-compat port that
+    /// keeps `&rest` as-is, a Scheme R7RS-style port to `.` for the
+    /// dotted-pair rest slot) touches ONE constant rather than the
+    /// two inline literals scattered across the parser AND the
+    /// diagnostic message surfaces.
+    ///
+    /// Structural round-trip contract:
+    /// `Self::REST_MARKER.starts_with(Self::LAMBDA_LIST_KEYWORD_LEAD)`
+    /// — the projection law binding the `&'static str` marker to its
+    /// canonical `char` lead byte on the typed algebra, pinned by
+    /// `macro_params_rest_marker_prefixed_by_lambda_list_keyword_lead`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (`&rest` rest-slot marker, canonical `&'static str`) pairing
+    /// binds at ONE `pub const` on the typed [`MacroParams`] algebra
+    /// regardless of which parser / authoring surface reaches in.
+    /// THEORY.md §V.1 — knowable platform; the canonical CL lambda-
+    /// list `&rest` keyword becomes a TYPE-level constant on the
+    /// typed macro-params algebra rather than an inline `"&rest"`
+    /// literal at the parser's rest-slot dispatch arm.
+    pub const REST_MARKER: &'static str = "&rest";
+
+    /// Canonical `&optional` marker — the ONE typed `&'static str` on
+    /// [`MacroParams`] the parser's optional-section dispatch
+    /// specialises on. The Common-Lisp lambda-list `&optional` keyword
+    /// names the position at which the parser switches subsequent
+    /// bare-symbol names from the `required` bin to the `optional`
+    /// bin, until either the end of the param list OR the
+    /// [`Self::REST_MARKER`] terminal is reached. Sibling posture to
+    /// [`Self::REST_MARKER`] (`"&rest"`) on the same lambda-list-
+    /// keyword algebra layer: the two constants are the closed set of
+    /// CL lambda-list-keyword `&'static str` markers the parser's
+    /// typed dispatch specialises on, sharing the canonical `char`
+    /// lead byte [`Self::LAMBDA_LIST_KEYWORD_LEAD`] (`'&'`).
+    ///
+    /// Structural round-trip contract:
+    /// `Self::OPTIONAL_MARKER.starts_with(Self::LAMBDA_LIST_KEYWORD_LEAD)`
+    /// — pinned by
+    /// `macro_params_optional_marker_prefixed_by_lambda_list_keyword_lead`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (`&optional` section-switch marker, canonical `&'static str`)
+    /// pairing binds at ONE `pub const` on the typed [`MacroParams`]
+    /// algebra regardless of which parser / authoring surface reaches
+    /// in. THEORY.md §V.1 — knowable platform; the canonical CL
+    /// lambda-list `&optional` keyword becomes a TYPE-level constant
+    /// on the typed macro-params algebra rather than an inline
+    /// `"&optional"` literal at the parser's optional-section
+    /// dispatch arm.
+    pub const OPTIONAL_MARKER: &'static str = "&optional";
+
+    /// Canonical `&` LEAD byte shared across [`Self::REST_MARKER`]
+    /// (`"&rest"`) and [`Self::OPTIONAL_MARKER`] (`"&optional"`) — the
+    /// ONE canonical `char` on the [`MacroParams`] algebra that the
+    /// Common-Lisp lambda-list-keyword disjointness contract binds to.
+    ///
+    /// Sibling posture to the closed set of `pub const` per-role
+    /// canonical bytes on the substrate's other closed-set outer
+    /// algebras: [`crate::ast::Atom::STR_DELIMITER`] (`'"'`),
+    /// [`crate::ast::Atom::STR_ESCAPE_LEAD`] (`'\\'`),
+    /// [`crate::ast::Atom::KEYWORD_MARKER_LEAD`] (`':'`),
+    /// [`crate::ast::Atom::BOOL_LITERAL_LEAD`] (`'#'`),
+    /// [`crate::ast::Sexp::LIST_OPEN`] (`'('`),
+    /// [`crate::ast::Sexp::LIST_CLOSE`] (`')'`),
+    /// [`crate::ast::Sexp::COMMENT_LEAD`] (`';'`),
+    /// [`crate::ast::Sexp::COMMENT_TERM`] (`'\n'`),
+    /// [`crate::ast::QuoteForm::SPLICE_DISCRIMINATOR`] (`'@'`), and
+    /// every `crate::ast::QuoteForm::lead_char` projection — every
+    /// canonical per-role byte the substrate's typed algebras
+    /// specialise on is now a `pub const` on its owning closed-set
+    /// algebra. This constant closes the CL lambda-list-keyword
+    /// family lead byte at the SAME algebra as its two `&'static str`
+    /// marker projections so a delimiter swap (e.g. a Racket-compat
+    /// port from CL `&rest` / `&optional` to `#!rest` / `#!optional`
+    /// keyword-args, a Clojure-compat port to `&` ONLY as the rest
+    /// marker) lands at ONE constant on the algebra.
+    ///
+    /// Structural round-trip contract:
+    /// `Self::REST_MARKER.starts_with(Self::LAMBDA_LIST_KEYWORD_LEAD)`
+    /// AND
+    /// `Self::OPTIONAL_MARKER.starts_with(Self::LAMBDA_LIST_KEYWORD_LEAD)`
+    /// — the projection law binding the two `&'static str` markers to
+    /// their shared canonical `char` lead byte, pinned by
+    /// `macro_params_rest_marker_prefixed_by_lambda_list_keyword_lead`
+    /// and
+    /// `macro_params_optional_marker_prefixed_by_lambda_list_keyword_lead`.
+    ///
+    /// Disjointness contract: `LAMBDA_LIST_KEYWORD_LEAD`'s byte MUST
+    /// differ from every sibling outer-marker `char` the substrate's
+    /// other closed-set algebras specialise on. A collision would
+    /// silently break the reader's outer dispatch: an `&`-prefixed
+    /// bare atom `&rest` / `&optional` would collide with whichever
+    /// marker it aliased. Pinned structurally at
+    /// `macro_params_lambda_list_keyword_lead_distinct_from_every_other_algebra_marker`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (CL lambda-list-keyword LEAD byte, canonical `'&'`) pairing
+    /// binds at ONE constant on the typed [`MacroParams`] algebra
+    /// regardless of which of the two `&'static str` marker consumers
+    /// reaches in. THEORY.md §V.1 — knowable platform; the canonical
+    /// CL lambda-list-keyword LEAD byte becomes a TYPE-level constant
+    /// on the substrate algebra rather than an inline `'&'` glyph at
+    /// every docstring pinning the family disjointness contract.
+    pub const LAMBDA_LIST_KEYWORD_LEAD: char = '&';
+
     /// The flat, ordered param-name list the template bytecode indexes into:
     /// every `required` name in order, then every `optional` name in order,
     /// then the `rest` name if present. `names()[i]` is the param `Subst(i)`
@@ -2398,7 +2524,7 @@ fn parse_params(list: &[Sexp]) -> Result<MacroParams> {
         let s = list[i]
             .as_symbol()
             .ok_or_else(|| non_symbol_param(i, &list[i]))?;
-        if s == "&rest" {
+        if s == MacroParams::REST_MARKER {
             let Some(next) = list.get(i + 1) else {
                 return Err(rest_param_missing_name(i, None));
             };
@@ -2415,7 +2541,7 @@ fn parse_params(list: &[Sexp]) -> Result<MacroParams> {
                 rest: Some(name.to_string()),
             });
         }
-        if s == "&optional" {
+        if s == MacroParams::OPTIONAL_MARKER {
             if let Some(first) = optional_marker {
                 return Err(optional_marker_repeated(first, i));
             }
@@ -7549,6 +7675,305 @@ mod tests {
         // The rest name is last, after required + optional — i.e. at the
         // structural `fixed_arity()` boundary the typed primitive names.
         assert_eq!(params.names()[params.fixed_arity()], "d");
+    }
+
+    // ── `MacroParams::{REST_MARKER, OPTIONAL_MARKER,
+    // LAMBDA_LIST_KEYWORD_LEAD}` — the typed CL lambda-list-keyword
+    // marker algebra ────────────────────────────────────────────────
+    //
+    // The three `pub const`s close the Common-Lisp lambda-list keyword
+    // family at the typed [`MacroParams`] algebra: `REST_MARKER` and
+    // `OPTIONAL_MARKER` are the two `&'static str` markers the parser's
+    // typed dispatch specialises on; `LAMBDA_LIST_KEYWORD_LEAD` is the
+    // canonical `'&'` char shared as the LEAD byte of both markers.
+    // Pre-lift the same two `&'static str` markers lived as two inline
+    // `s == "..."` comparisons at `parse_params` — post-lift both
+    // comparisons route through the typed constants so a delimiter swap
+    // (e.g. a Racket-compat `#!rest` port, a Clojure-compat `&` port)
+    // lands at ONE constant on the typed algebra.
+    //
+    // These pins cover: (a) the exact `&'static str` / `char` values,
+    // (b) the structural round-trip law binding each `&'static str`
+    // marker to its shared `char` LEAD byte, (c) the pairwise
+    // disjointness of the two `&'static str` markers, (d) the cross-
+    // axis disjointness of the `char` LEAD byte against every sibling
+    // outer-marker `char` the substrate's other closed-set algebras
+    // specialise on, and (e) the path-uniformity of `parse_params`
+    // through the typed constants.
+
+    #[test]
+    fn macro_params_rest_marker_projects_canonical_ampersand_rest_str() {
+        // Pins the constant's exact `&'static str` bytes so a typo
+        // (`"&res"`, `"&Rest"`, `"&rst"`) or an accidental redefinition
+        // surfaces immediately. Sibling-shape pin to
+        // `macro_params_optional_marker_projects_canonical_ampersand_optional_str`
+        // on the peer `&optional` axis.
+        assert_eq!(
+            MacroParams::REST_MARKER,
+            "&rest",
+            "MacroParams::REST_MARKER drifted from the substrate- \
+             canonical CL lambda-list `&rest` marker — the parser's \
+             `parse_params` rest-slot dispatch AND every downstream \
+             authoring / rendering surface binds to this ONE typed \
+             constant.",
+        );
+    }
+
+    #[test]
+    fn macro_params_optional_marker_projects_canonical_ampersand_optional_str() {
+        // Pins the constant's exact `&'static str` bytes so a typo
+        // (`"&opt"`, `"&Optional"`, `"&option"`) or an accidental
+        // redefinition surfaces immediately. Sibling-shape pin to
+        // `macro_params_rest_marker_projects_canonical_ampersand_rest_str`
+        // on the peer `&rest` axis.
+        assert_eq!(
+            MacroParams::OPTIONAL_MARKER,
+            "&optional",
+            "MacroParams::OPTIONAL_MARKER drifted from the substrate- \
+             canonical CL lambda-list `&optional` marker — the parser's \
+             `parse_params` optional-section dispatch AND every \
+             downstream authoring / rendering surface binds to this \
+             ONE typed constant.",
+        );
+    }
+
+    #[test]
+    fn macro_params_lambda_list_keyword_lead_projects_canonical_ampersand_char() {
+        // Pins the constant's exact `char` value so a typo (`'#'`,
+        // `'@'`, `'!'`) or an accidental redefinition surfaces
+        // immediately. Sibling-shape pin to
+        // `atom_keyword_marker_lead_projects_canonical_colon_char`,
+        // `atom_bool_literal_lead_projects_canonical_hash_char`,
+        // `atom_str_delimiter_projects_canonical_double_quote_char`
+        // on the peer per-role LEAD-byte axes across the substrate's
+        // closed-set outer algebras.
+        assert_eq!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            '&',
+            "LAMBDA_LIST_KEYWORD_LEAD char drifted from the substrate- \
+             canonical `&` LEAD byte — the CL lambda-list-keyword \
+             family (REST_MARKER, OPTIONAL_MARKER) shares this ONE \
+             typed constant as their common LEAD byte.",
+        );
+    }
+
+    #[test]
+    fn macro_params_rest_marker_prefixed_by_lambda_list_keyword_lead() {
+        // STRUCTURAL ROUND-TRIP CONTRACT: the `&'static str` marker
+        // `MacroParams::REST_MARKER` starts with the `char` LEAD byte
+        // `MacroParams::LAMBDA_LIST_KEYWORD_LEAD` — the projection law
+        // binding the two typed constants on the [`MacroParams`]
+        // algebra. A regression that renames the `&'static str` (e.g.
+        // to Racket's `"#!rest"` keyword-args) OR the `char` (e.g. to
+        // `'#'` for the `#!` shebang lead) without updating the other
+        // fails HERE. Sibling-shape pin to
+        // `atom_keyword_marker_lead_prefixes_keyword_marker` on the
+        // peer `Atom`-algebra Keyword-prefix LEAD-byte axis.
+        assert!(
+            MacroParams::REST_MARKER.starts_with(MacroParams::LAMBDA_LIST_KEYWORD_LEAD),
+            "MacroParams::REST_MARKER `{}` does NOT start with \
+             MacroParams::LAMBDA_LIST_KEYWORD_LEAD `{:?}` — the two \
+             typed constants have drifted apart on the [`MacroParams`] \
+             algebra; the CL lambda-list-keyword family disjointness \
+             contract can no longer bind to ONE shared LEAD byte.",
+            MacroParams::REST_MARKER,
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+        );
+    }
+
+    #[test]
+    fn macro_params_optional_marker_prefixed_by_lambda_list_keyword_lead() {
+        // STRUCTURAL ROUND-TRIP CONTRACT: peer to
+        // `macro_params_rest_marker_prefixed_by_lambda_list_keyword_lead`
+        // on the `&optional` axis. Both `&'static str` markers of the
+        // CL lambda-list-keyword family MUST share the canonical `char`
+        // LEAD byte so the typed-marker disjointness contract can bind
+        // to ONE shared LEAD byte on the [`MacroParams`] algebra.
+        assert!(
+            MacroParams::OPTIONAL_MARKER.starts_with(MacroParams::LAMBDA_LIST_KEYWORD_LEAD),
+            "MacroParams::OPTIONAL_MARKER `{}` does NOT start with \
+             MacroParams::LAMBDA_LIST_KEYWORD_LEAD `{:?}` — the two \
+             typed constants have drifted apart on the [`MacroParams`] \
+             algebra; the CL lambda-list-keyword family disjointness \
+             contract can no longer bind to ONE shared LEAD byte.",
+            MacroParams::OPTIONAL_MARKER,
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+        );
+    }
+
+    #[test]
+    fn macro_params_rest_and_optional_markers_pairwise_disjoint() {
+        // PAIRWISE DISJOINTNESS PIN: the two `&'static str` markers on
+        // the CL lambda-list-keyword algebra MUST differ so the
+        // parser's typed dispatch cascade at `parse_params` (which
+        // tests `REST_MARKER` FIRST, then `OPTIONAL_MARKER`) cannot
+        // silently route both dispatches through the same arm. A
+        // regression that aliases the two markers (e.g. both to
+        // `"&rest"` after a typo) would silently drop the optional
+        // section's structural distinction — every `&optional` name
+        // would misclassify as a rest-slot marker.
+        assert_ne!(
+            MacroParams::REST_MARKER,
+            MacroParams::OPTIONAL_MARKER,
+            "REST_MARKER and OPTIONAL_MARKER collide — the parser's \
+             typed dispatch cascade at `parse_params` can no longer \
+             distinguish the rest-slot boundary from the optional- \
+             section boundary.",
+        );
+    }
+
+    #[test]
+    fn macro_params_lambda_list_keyword_lead_distinct_from_every_other_algebra_marker() {
+        // CROSS-AXIS DISJOINTNESS PIN: `MacroParams::LAMBDA_LIST_KEYWORD_LEAD`
+        // MUST NOT alias any sibling outer-marker `char` on the
+        // substrate's other closed-set algebras — the Atom-payload
+        // markers (`STR_DELIMITER`, `STR_ESCAPE_LEAD`,
+        // `KEYWORD_MARKER_LEAD`, `BOOL_LITERAL_LEAD`), the paired list
+        // delimiters (`Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE`), the
+        // paired line-comment delimiters (`Sexp::COMMENT_LEAD` /
+        // `Sexp::COMMENT_TERM`), every `QuoteForm::lead_char`
+        // projection, AND `QuoteForm::SPLICE_DISCRIMINATOR`. A
+        // collision would silently break the reader's outer dispatch:
+        // an `&`-prefixed bare atom `&rest` / `&optional` would collide
+        // with whichever marker it aliased. Sibling-shape pin to
+        // `atom_keyword_marker_lead_distinct_from_every_other_algebra_marker`
+        // on the peer `Atom`-algebra Keyword-prefix LEAD-byte axis —
+        // pins the SAME shape on the CL lambda-list-keyword LEAD-byte
+        // axis. A future outer-marker extension that collided with
+        // `'&'` fails HERE at the cross-axis enumeration.
+        use crate::ast::{Atom, QuoteForm, Sexp};
+
+        assert_ne!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            Atom::STR_DELIMITER,
+            "LAMBDA_LIST_KEYWORD_LEAD collides with STR_DELIMITER — a \
+             bare `&rest` at a param-list position would ambiguously \
+             begin a lambda-list keyword AND open a string.",
+        );
+        assert_ne!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            Atom::STR_ESCAPE_LEAD,
+            "LAMBDA_LIST_KEYWORD_LEAD collides with STR_ESCAPE_LEAD — \
+             the reader's Str-escape lead byte would alias the CL \
+             lambda-list-keyword LEAD byte.",
+        );
+        assert_ne!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            Atom::KEYWORD_MARKER_LEAD,
+            "LAMBDA_LIST_KEYWORD_LEAD collides with KEYWORD_MARKER_LEAD \
+             — a bare `&rest` at a param-list position would \
+             ambiguously begin a lambda-list keyword AND begin an \
+             `:foo` keyword.",
+        );
+        assert_ne!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            Atom::BOOL_LITERAL_LEAD,
+            "LAMBDA_LIST_KEYWORD_LEAD collides with BOOL_LITERAL_LEAD — \
+             a bare `&rest` at a param-list position would ambiguously \
+             begin a lambda-list keyword AND classify as a Bool prefix.",
+        );
+        assert_ne!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            Sexp::LIST_OPEN,
+            "LAMBDA_LIST_KEYWORD_LEAD collides with LIST_OPEN — a bare \
+             `&rest` at a param-list position would ambiguously begin \
+             a lambda-list keyword AND open a list.",
+        );
+        assert_ne!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            Sexp::LIST_CLOSE,
+            "LAMBDA_LIST_KEYWORD_LEAD collides with LIST_CLOSE — a bare \
+             `&rest` at a param-list position would ambiguously begin \
+             a lambda-list keyword AND close a list.",
+        );
+        assert_ne!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            Sexp::COMMENT_LEAD,
+            "LAMBDA_LIST_KEYWORD_LEAD collides with COMMENT_LEAD — a \
+             bare `&rest` at a param-list position would ambiguously \
+             begin a lambda-list keyword AND begin a comment.",
+        );
+        assert_ne!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            Sexp::COMMENT_TERM,
+            "LAMBDA_LIST_KEYWORD_LEAD collides with COMMENT_TERM — the \
+             reader's line-comment discard loop would terminate on the \
+             SAME byte the parser's lambda-list-keyword LEAD dispatch \
+             binds to.",
+        );
+        for qf in QuoteForm::ALL {
+            assert_ne!(
+                MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+                qf.lead_char(),
+                "LAMBDA_LIST_KEYWORD_LEAD collides with \
+                 QuoteForm::{qf:?}'s lead_char — a bare `&rest` at a \
+                 param-list position would ambiguously begin a lambda- \
+                 list keyword AND begin a quote-family prefix.",
+            );
+        }
+        assert_ne!(
+            MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            "LAMBDA_LIST_KEYWORD_LEAD collides with \
+             SPLICE_DISCRIMINATOR — the reader's `,@` splice-promotion \
+             peek byte would alias the CL lambda-list-keyword LEAD \
+             byte.",
+        );
+    }
+
+    #[test]
+    fn parse_params_recognizes_rest_marker_via_typed_constant() {
+        // PATH-UNIFORMITY PIN: the parser's rest-slot dispatch at
+        // `parse_params` MUST classify the typed constant
+        // `MacroParams::REST_MARKER` as the rest-slot boundary —
+        // authoring surfaces that assemble a param list through the
+        // typed constant (rather than through an inline string literal
+        // read from user source) must reach the SAME rest-slot binding
+        // the reader-driven path does.
+        //
+        // The `read(REST_MARKER)` composition here is the load-bearing
+        // structural link: we build the param-list source through the
+        // typed constant, then parse it through the reader, then the
+        // parser MUST bind `xs` at the `rest` slot. A regression that
+        // drifts the parser's dispatch away from the typed constant
+        // (e.g. re-inlines a string literal that goes stale against
+        // the constant) fails HERE.
+        let src = format!("a {} xs", MacroParams::REST_MARKER);
+        let params = parse_params(&read(&src).unwrap()).unwrap();
+        assert_eq!(
+            params,
+            MacroParams {
+                required: vec!["a".into()],
+                optional: Vec::new(),
+                rest: Some("xs".into()),
+            },
+            "parse_params dispatch drifted away from REST_MARKER — the \
+             typed constant no longer routes to the rest-slot arm.",
+        );
+    }
+
+    #[test]
+    fn parse_params_recognizes_optional_marker_via_typed_constant() {
+        // PATH-UNIFORMITY PIN: peer to
+        // `parse_params_recognizes_rest_marker_via_typed_constant` on
+        // the `&optional` axis. The parser's optional-section dispatch
+        // at `parse_params` MUST classify the typed constant
+        // `MacroParams::OPTIONAL_MARKER` as the section-switch
+        // boundary that reroutes subsequent bare-symbol names from the
+        // `required` bin to the `optional` bin.
+        let src = format!("a {} b c", MacroParams::OPTIONAL_MARKER);
+        let params = parse_params(&read(&src).unwrap()).unwrap();
+        assert_eq!(
+            params,
+            MacroParams {
+                required: vec!["a".into()],
+                optional: vec![OptionalParam::bare("b"), OptionalParam::bare("c")],
+                rest: None,
+            },
+            "parse_params dispatch drifted away from OPTIONAL_MARKER — \
+             the typed constant no longer routes to the optional- \
+             section arm.",
+        );
     }
 
     // ── fixed_arity: the rest-start / rest-less max-arity primitive ─────

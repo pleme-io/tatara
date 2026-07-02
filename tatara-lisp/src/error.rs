@@ -1983,6 +1983,103 @@ impl MacroDefHead {
     /// [`Self::keyword`]).
     pub const ALL: [Self; 3] = [Self::Defmacro, Self::DefpointTemplate, Self::Defcheck];
 
+    /// Canonical `&'static str` head keyword for [`Self::Defmacro`] —
+    /// the `(defmacro NAME (PARAMS) BODY)` Lisp-style macro-definition
+    /// form. Sibling posture to [`Self::DEFPOINT_TEMPLATE_KEYWORD`]
+    /// (`"defpoint-template"`) and [`Self::DEFCHECK_KEYWORD`]
+    /// (`"defcheck"`) on the same head-keyword algebra layer.
+    ///
+    /// Pre-lift the same `"defmacro"` bytes lived inline at the
+    /// [`Self::keyword`] match arm plus at the Display truth-table
+    /// test (`macro_def_head_display_renders_canonical_keyword_for_each_variant`)
+    /// — the ≥2 PRIME-DIRECTIVE trigger. Post-lift the (`Defmacro`
+    /// variant, canonical `&'static str`) pairing binds at ONE `pub
+    /// const` on the typed [`MacroDefHead`] algebra: the [`Self::keyword`]
+    /// arm and every consumer that pins the exact bytes route through
+    /// this constant, so a rename to `defmacro-typed` (say, if a
+    /// future extension lands a peer `defmacro-hygienic` variant and
+    /// wants to disambiguate the legacy form) is ONE edit HERE with
+    /// the derived Display / FromStr surfaces mechanically picking it
+    /// up. Sibling posture to the closed set of per-role canonical
+    /// `pub const` bytes on the substrate's other closed-set outer
+    /// algebras: [`crate::ast::Atom::STR_DELIMITER`] (`'"'`),
+    /// [`crate::ast::Atom::KEYWORD_MARKER`] (`":"`),
+    /// [`crate::ast::Sexp::LIST_OPEN`] (`'('`),
+    /// [`crate::macro_expand::MacroParams::REST_MARKER`] (`"&rest"`),
+    /// [`crate::macro_expand::MacroParams::OPTIONAL_MARKER`] (`"&optional"`).
+    pub const DEFMACRO_KEYWORD: &'static str = "defmacro";
+
+    /// Canonical `&'static str` head keyword for [`Self::DefpointTemplate`]
+    /// — the `(defpoint-template NAME (PARAMS) BODY)` K8s-as-processes
+    /// authoring-surface macro form (see the `tatara-process` crate).
+    /// Sibling posture to [`Self::DEFMACRO_KEYWORD`] (`"defmacro"`)
+    /// and [`Self::DEFCHECK_KEYWORD`] (`"defcheck"`) on the same
+    /// head-keyword algebra layer.
+    ///
+    /// Pre-lift the same `"defpoint-template"` bytes lived inline at
+    /// the [`Self::keyword`] match arm plus at the Display truth-table
+    /// test. Post-lift the (`DefpointTemplate` variant, canonical
+    /// `&'static str`) pairing binds at ONE `pub const` on the typed
+    /// [`MacroDefHead`] algebra.
+    pub const DEFPOINT_TEMPLATE_KEYWORD: &'static str = "defpoint-template";
+
+    /// Canonical `&'static str` head keyword for [`Self::Defcheck`] —
+    /// the `(defcheck NAME (PARAMS) BODY)` workspace-coherence
+    /// authoring-surface macro form (see `tatara-reconciler/checks.lisp`).
+    /// Sibling posture to [`Self::DEFMACRO_KEYWORD`] (`"defmacro"`)
+    /// and [`Self::DEFPOINT_TEMPLATE_KEYWORD`] (`"defpoint-template"`)
+    /// on the same head-keyword algebra layer.
+    ///
+    /// Pre-lift the same `"defcheck"` bytes lived inline at the
+    /// [`Self::keyword`] match arm plus at the Display truth-table
+    /// test AND at seven `iter_named_calls_to(&forms, "defcheck")` /
+    /// `["defmonitor", "defalertpolicy", "defcheck"]` test-site
+    /// literals across [`crate::ast`] and [`crate::compile`]. Post-lift
+    /// the (`Defcheck` variant, canonical `&'static str`) pairing
+    /// binds at ONE `pub const` on the typed [`MacroDefHead`] algebra.
+    pub const DEFCHECK_KEYWORD: &'static str = "defcheck";
+
+    /// The closed set of three canonical `&'static str` head keywords
+    /// — the [`Self::DEFMACRO_KEYWORD`] (`"defmacro"`) canonical
+    /// Lisp-style macro-definition keyword followed by the
+    /// [`Self::DEFPOINT_TEMPLATE_KEYWORD`] (`"defpoint-template"`)
+    /// K8s-as-processes authoring-surface keyword followed by the
+    /// [`Self::DEFCHECK_KEYWORD`] (`"defcheck"`) workspace-coherence
+    /// authoring-surface keyword. Canonical declaration order matches
+    /// [`Self::ALL`] so `Self::KEYWORDS[i] == Self::ALL[i].keyword()`
+    /// element-wise — pinned by
+    /// `macro_def_head_keywords_align_with_all_by_index`.
+    ///
+    /// Sibling posture to
+    /// [`crate::macro_expand::MacroParams::LAMBDA_LIST_KEYWORDS`]
+    /// (`[Self; 2]`) — every closed-set algebra now pins its
+    /// keyword-projection ALL array at the declaration site via a
+    /// forced-arity `[&'static str; N]` array whose length fails
+    /// compilation if a new variant lands without being added to the
+    /// set. Adding a hypothetical fourth head (a `defpoint-fragment`
+    /// partial-template surface, a `defrewrite` typed-rewriter
+    /// authoring keyword) extends [`Self::ALL`] ONCE +
+    /// [`Self::keyword`] ONCE + [`Self::KEYWORDS`] ONCE + adds ONE
+    /// per-role keyword `pub const` — rustc's forced-arity check on
+    /// the `[Self; N]` array + `[&'static str; N]` array pair
+    /// enforces every downstream consumer picks up the extension
+    /// mechanically.
+    ///
+    /// Future consumers that compose against [`Self::KEYWORDS`]: an
+    /// LSP / REPL completion provider surfacing every `(defma…`
+    /// partial input against the closed set (`Self::KEYWORDS.iter()`
+    /// is the ONE typed sweep over every legal macro-definition
+    /// head), a `tatara-check` coverage assertion (every workspace
+    /// `.lisp` file's `(def…)` form-head must classify to some entry
+    /// of `Self::KEYWORDS` OR be a registered `TataraDomain` keyword),
+    /// a Sekiban audit-trail metric jointly labeled by
+    /// [`Self::keyword`] whose metric-label set IS `Self::KEYWORDS`.
+    pub const KEYWORDS: [&'static str; 3] = [
+        Self::DEFMACRO_KEYWORD,
+        Self::DEFPOINT_TEMPLATE_KEYWORD,
+        Self::DEFCHECK_KEYWORD,
+    ];
+
     /// Project a `head: &str` borrow (a `Sexp` symbol slice) into the
     /// typed `MacroDefHead`. Returns `None` if `head` is not one of the
     /// three canonical macro-definition head keywords; the caller
@@ -2017,9 +2114,9 @@ impl MacroDefHead {
     #[must_use]
     pub fn keyword(self) -> &'static str {
         match self {
-            Self::Defmacro => "defmacro",
-            Self::DefpointTemplate => "defpoint-template",
-            Self::Defcheck => "defcheck",
+            Self::Defmacro => Self::DEFMACRO_KEYWORD,
+            Self::DefpointTemplate => Self::DEFPOINT_TEMPLATE_KEYWORD,
+            Self::Defcheck => Self::DEFCHECK_KEYWORD,
         }
     }
 }
@@ -9099,6 +9196,218 @@ mod tests {
             "defpoint-template"
         );
         assert_eq!(format!("{}", MacroDefHead::Defcheck), "defcheck");
+    }
+
+    // ── `MacroDefHead::{DEFMACRO_KEYWORD, DEFPOINT_TEMPLATE_KEYWORD,
+    // DEFCHECK_KEYWORD, KEYWORDS}` — the typed per-role head-keyword
+    // algebra ─────────────────────────────────────────────────────
+    //
+    // Sibling posture to
+    // `crate::macro_expand::MacroParams::{REST_MARKER,
+    // OPTIONAL_MARKER, LAMBDA_LIST_KEYWORDS}` — the per-role canonical
+    // `&'static str` marker + closed-set `[&'static str; N]` array
+    // pattern applied to the `MacroDefHead` closed set. Pre-lift the
+    // three canonical keyword literals lived at TWO structural sites
+    // — the `Self::keyword` match arm AND
+    // `macro_def_head_display_renders_canonical_keyword_for_each_variant`'s
+    // per-variant `assert_eq!` truth-table — plus at consumer
+    // test-site literals in `crate::ast` / `crate::compile`. Post-lift
+    // each (variant, canonical `&'static str`) pairing binds at ONE
+    // `pub const` on the typed [`MacroDefHead`] algebra the
+    // [`Self::keyword`] arm routes through.
+
+    #[test]
+    fn macro_def_head_defmacro_keyword_projects_canonical_defmacro_bytes() {
+        // Pins the exact `"defmacro"` bytes at the typed constant.
+        // A regression that drifts the constant (e.g. typo
+        // `"def-macro"` with a hyphen, `"defMacro"` in camelCase, or
+        // an accidental trailing whitespace) fails-loudly here.
+        // This is the single site the substrate's canonical-Lisp
+        // macro-definition head keyword resolves to; every downstream
+        // consumer (Display, FromStr, tests, LSP completion, metric
+        // labels) routes through this constant.
+        assert_eq!(
+            MacroDefHead::DEFMACRO_KEYWORD,
+            "defmacro",
+            "MacroDefHead::DEFMACRO_KEYWORD drifted from the substrate- \
+             canonical CL-style macro-definition head keyword `\"defmacro\"`"
+        );
+    }
+
+    #[test]
+    fn macro_def_head_defpoint_template_keyword_projects_canonical_defpoint_template_bytes() {
+        // Pins the exact `"defpoint-template"` bytes at the typed
+        // constant. The hyphen (NOT an underscore, NOT a camel-case
+        // capital) is load-bearing: it matches the caixa Aplicacao
+        // authoring surface's convention where multi-word Lisp-style
+        // identifiers use kebab-case rather than snake_case.
+        assert_eq!(
+            MacroDefHead::DEFPOINT_TEMPLATE_KEYWORD,
+            "defpoint-template",
+            "MacroDefHead::DEFPOINT_TEMPLATE_KEYWORD drifted from the substrate- \
+             canonical K8s-as-processes authoring-surface head keyword \
+             `\"defpoint-template\"`"
+        );
+    }
+
+    #[test]
+    fn macro_def_head_defcheck_keyword_projects_canonical_defcheck_bytes() {
+        // Pins the exact `"defcheck"` bytes at the typed constant.
+        // The `tatara-reconciler/checks.lisp` workspace-coherence
+        // driver reads this exact keyword to classify `(defcheck …)`
+        // forms; any drift here silently breaks the check runner.
+        assert_eq!(
+            MacroDefHead::DEFCHECK_KEYWORD,
+            "defcheck",
+            "MacroDefHead::DEFCHECK_KEYWORD drifted from the substrate- \
+             canonical workspace-coherence authoring-surface head keyword \
+             `\"defcheck\"`"
+        );
+    }
+
+    #[test]
+    fn macro_def_head_keyword_method_routes_through_typed_constants() {
+        // PATH-UNIFORMITY: the inherent `Self::keyword(self)` method
+        // MUST return the per-role `pub const` byte-for-byte for each
+        // reachable variant. A regression that reverts ONE arm to an
+        // inline `"defmacro"` string literal (e.g. a merge-conflict
+        // resolution that picked the pre-lift form) silently
+        // reintroduces the ≥2 PRIME-DIRECTIVE trigger the lift
+        // resolved — this test catches that by pinning the arm's
+        // return value to the constant, so the two paths (inline vs.
+        // typed constant) cannot both hold.
+        assert_eq!(
+            MacroDefHead::Defmacro.keyword(),
+            MacroDefHead::DEFMACRO_KEYWORD,
+            "MacroDefHead::Defmacro.keyword() drifted from \
+             MacroDefHead::DEFMACRO_KEYWORD — the match arm reverted to \
+             an inline literal"
+        );
+        assert_eq!(
+            MacroDefHead::DefpointTemplate.keyword(),
+            MacroDefHead::DEFPOINT_TEMPLATE_KEYWORD,
+            "MacroDefHead::DefpointTemplate.keyword() drifted from \
+             MacroDefHead::DEFPOINT_TEMPLATE_KEYWORD — the match arm \
+             reverted to an inline literal"
+        );
+        assert_eq!(
+            MacroDefHead::Defcheck.keyword(),
+            MacroDefHead::DEFCHECK_KEYWORD,
+            "MacroDefHead::Defcheck.keyword() drifted from \
+             MacroDefHead::DEFCHECK_KEYWORD — the match arm reverted to \
+             an inline literal"
+        );
+    }
+
+    #[test]
+    fn macro_def_head_keywords_has_expected_cardinality() {
+        // Cardinality contract: `Self::KEYWORDS.len() == 3` — pinned
+        // at the declaration site by rustc's forced-arity check on
+        // `[&'static str; 3]`. This test surfaces the arity as a
+        // fail-loud runtime pin so a future refactor that switches
+        // the array type to `&[&'static str]` (dropping the compile-
+        // time arity forcing) doesn't silently loosen the closed-set
+        // discipline the family relies on. Sibling posture to
+        // `macro_params_lambda_list_keywords_has_expected_cardinality`
+        // on the `MacroParams::LAMBDA_LIST_KEYWORDS` family.
+        assert_eq!(
+            MacroDefHead::KEYWORDS.len(),
+            3,
+            "MacroDefHead::KEYWORDS cardinality drifted from 3 — the \
+             head-keyword closed set gained or lost a variant without \
+             the ALL / KEYWORDS pair being updated in tandem"
+        );
+    }
+
+    #[test]
+    fn macro_def_head_keywords_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::KEYWORDS[i] ==
+        // Self::ALL[i].keyword()` element-wise. The two ALL arrays
+        // (typed variants, canonical `&'static str` keywords) share
+        // ONE canonical declaration order — a regression that
+        // reorders ONE array without reordering the other silently
+        // misaligns every `zip(Self::ALL, Self::KEYWORDS)` consumer
+        // (LSP completion providers, metric-label emitters, coverage
+        // reporters). Pinning by-index alignment here catches the
+        // reorder at test time.
+        assert_eq!(
+            MacroDefHead::KEYWORDS.len(),
+            MacroDefHead::ALL.len(),
+            "MacroDefHead::KEYWORDS and MacroDefHead::ALL diverged in \
+             cardinality — the per-role constants and enum variants must \
+             stay in lockstep"
+        );
+        for (i, head) in MacroDefHead::ALL.iter().enumerate() {
+            assert_eq!(
+                MacroDefHead::KEYWORDS[i],
+                head.keyword(),
+                "MacroDefHead::KEYWORDS[{i}] `{kw}` drifted from \
+                 MacroDefHead::ALL[{i}].keyword() `{via_variant}` — the \
+                 canonical declaration order of the two ALL arrays must \
+                 match element-wise",
+                kw = MacroDefHead::KEYWORDS[i],
+                via_variant = head.keyword(),
+            );
+        }
+    }
+
+    #[test]
+    fn macro_def_head_keywords_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: the three `&'static str` keywords on
+        // the head-keyword algebra MUST differ so the derive-generated
+        // FromStr's linear sweep cannot route two variants through
+        // the same arm. Family-wide sweep over KEYWORDS × KEYWORDS —
+        // supersedes any single per-pair assertion and picks up new
+        // variants mechanically when the array grows. Sibling posture
+        // to `macro_params_lambda_list_keywords_pairwise_distinct` on
+        // the CL lambda-list-keyword family.
+        for (i, a) in MacroDefHead::KEYWORDS.iter().enumerate() {
+            for (j, b) in MacroDefHead::KEYWORDS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "MacroDefHead::KEYWORDS[{i}] `{a}` collides with \
+                     MacroDefHead::KEYWORDS[{j}] `{b}` — the derive- \
+                     generated FromStr sweep would route two variants \
+                     through the same arm"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn macro_def_head_keywords_all_round_trip_through_from_str() {
+        // Family-wide bidirection: every entry of `Self::KEYWORDS`
+        // MUST parse back to some `MacroDefHead` variant AND that
+        // variant's `keyword()` MUST equal the original entry.
+        // Sibling posture to `macro_def_head_keyword_round_trips_through_from_str`
+        // (which sweeps over `Self::ALL`); this test sweeps over the
+        // per-role `&'static str` constants directly, catching a
+        // regression where one of the three constants drifts from
+        // the corresponding `Self::keyword` arm (e.g. `DEFCHECK_KEYWORD`
+        // set to `"defvalidation"` while `Self::Defcheck.keyword()`
+        // still returns `Self::DEFCHECK_KEYWORD`, which would parse
+        // to `MacroDefHead::Defcheck` correctly but break every
+        // downstream consumer that pinned the literal `"defcheck"`
+        // bytes).
+        for kw in MacroDefHead::KEYWORDS {
+            let parsed: MacroDefHead = kw.parse().unwrap_or_else(|_| {
+                panic!(
+                    "MacroDefHead::KEYWORDS entry `{kw}` failed to parse — \
+                     the entry drifted from Self::keyword"
+                )
+            });
+            assert_eq!(
+                parsed.keyword(),
+                kw,
+                "MacroDefHead::KEYWORDS entry `{kw}` parses to a variant \
+                 whose keyword() `{}` does not match — the constant and \
+                 the match arm drifted apart",
+                parsed.keyword(),
+            );
+        }
     }
 
     #[test]

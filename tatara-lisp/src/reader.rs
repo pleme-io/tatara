@@ -87,7 +87,20 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
             ws if ws.is_whitespace() => {
                 chars.next();
             }
-            ';' => {
+            // Line-comment arm — the canonical `;` byte routed through
+            // the [`Sexp::COMMENT_LEAD`] constant on the closed-set outer
+            // [`Sexp`] algebra. Outer-structural peer of the
+            // [`Sexp::LIST_OPEN`] / [`Sexp::LIST_CLOSE`] list-delimiter
+            // lifts on the reader-discard axis: where those two constants
+            // shape a `Sexp::List` payload, this constant is the ONE `;`
+            // byte the reader's outer-dispatch arm AND the bare-atom
+            // terminator disjunct below both bind to on the closed-set
+            // outer [`Sexp`] algebra. The trailing `\n` disjunct is
+            // absorbed by the whitespace check in the outer match's
+            // guard arm; this loop consumes every byte up to (and
+            // including) the newline so the discarded run emits NO
+            // token.
+            Sexp::COMMENT_LEAD => {
                 while let Some(&(_, ch)) = chars.peek() {
                     chars.next();
                     if ch == '\n' {
@@ -194,12 +207,24 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
                     // delimiter arms becomes structurally impossible
                     // — the two paired constants are the ONE typed
                     // channel both sides consume.
+                    // Bare-atom terminator disjunct — the canonical `;`
+                    // byte routed through the [`Sexp::COMMENT_LEAD`]
+                    // constant on the closed-set outer [`Sexp`] algebra.
+                    // Pre-lift the `ch == ';'` disjunct was an inline
+                    // `char`-literal check scattered alongside the two
+                    // list-delimiter disjuncts; post-lift it collapses
+                    // onto ONE constant on the outer algebra so a
+                    // regression that drifts ONE of the two comment-
+                    // boundary sites (this terminator OR the outer-
+                    // dispatch arm above) from the other becomes
+                    // structurally impossible — the paired constants
+                    // are the ONE typed channel both sites consume.
                     if ch.is_whitespace()
                         || ch == Sexp::LIST_OPEN
                         || ch == Sexp::LIST_CLOSE
                         || QuoteForm::from_lead_char(ch).is_some()
                         || ch == Atom::STR_DELIMITER
-                        || ch == ';'
+                        || ch == Sexp::COMMENT_LEAD
                     {
                         break;
                     }
@@ -1022,6 +1047,85 @@ mod tests {
             matches!(&tokens[1], (Token::Str(s), 3) if s == "body"),
             "second token must be Token::Str(\"body\") at position 3, got {:?}",
             tokens[1],
+        );
+    }
+
+    // ── `Sexp::COMMENT_LEAD` — the reader's TWO comment-boundary sites
+    // bind to ONE canonical `char` constant on the closed-set outer
+    // [`Sexp`] algebra. The composition pins below anchor each of the
+    // two sites (line-comment outer-dispatch arm, bare-atom terminator
+    // disjunct) at the constant so a regression that re-inlines one
+    // site's byte fails at rustc / test time rather than as a silent
+    // tokenizer drift. Sibling-shape tests to the
+    // `tokenizer_list_open_close_arms_*` /
+    // `tokenizer_bare_atom_terminator_disjunct_binds_to_sexp_list_delimiter_constants`
+    // block above (outer-structural paired-delimiter axis), lifted onto
+    // the reader-discard axis of the closed-set outer [`Sexp`] algebra.
+
+    #[test]
+    fn tokenizer_line_comment_outer_dispatch_arm_binds_to_sexp_comment_lead() {
+        // OUTER-DISPATCH CONTRACT: pin that a source composed of the
+        // typed constant + comment body + `\n` + trailing atom
+        // tokenizes to exactly the trailing atom — the discarded
+        // line-comment run consumes every byte between the constant AND
+        // (up to and including) the `\n` and emits NO token. A
+        // regression that drifts the arm to a different `char` (e.g.
+        // re-inlines `';'` at the arm while the terminator migrates to
+        // a new byte) fails HERE at the token-count assertion (the
+        // comment body would leak into the token stream as one or more
+        // `Token::Atom`s).
+        let source = format!("{}comment body here\nfoo", Sexp::COMMENT_LEAD,);
+        let tokens = tokenize(&source).unwrap_or_else(|e| {
+            panic!("tokenize rejected COMMENT_LEAD-led source `{source}`: {e}")
+        });
+        assert_eq!(
+            tokens.len(),
+            1,
+            "COMMENT_LEAD-led line-comment must be discarded, leaving ONLY \
+             the trailing atom in the token stream, got {tokens:?}",
+        );
+        assert!(
+            matches!(&tokens[0], (Token::Atom(s), _) if s == "foo"),
+            "sole surviving token must be Token::Atom(\"foo\"), got {:?} \
+             — the line-comment outer-dispatch arm did NOT discard the \
+             COMMENT_LEAD-led run",
+            tokens[0],
+        );
+    }
+
+    #[test]
+    fn tokenizer_bare_atom_terminator_disjunct_binds_to_sexp_comment_lead() {
+        // BARE-ATOM TERMINATOR CONTRACT: pin that a bare atom lexeme
+        // immediately followed by the typed constant tokenizes as
+        // exactly ONE `Token::Atom` — the atom lexeme preceding the
+        // byte — with the subsequent line-comment run discarded by the
+        // outer-dispatch arm. A regression that drops the disjunct
+        // (e.g. reverts `Sexp::COMMENT_LEAD` to a stale `';'` literal,
+        // or renames the constant without updating the reader arm)
+        // would silently absorb the `;` byte into the bare-atom
+        // accumulator and consume every char up to whitespace / paren /
+        // string / quote-family / eof as ONE `Token::Atom` payload.
+        // Sibling-shape pin to
+        // `reader_bare_atom_terminator_disjunct_binds_to_atom_str_delimiter`
+        // on the Str-payload delimiter axis, AND to
+        // `tokenizer_bare_atom_terminator_disjunct_binds_to_sexp_list_delimiter_constants`
+        // on the outer-structural paired-delimiter axis.
+        let source = format!("foo{}bar rest", Sexp::COMMENT_LEAD);
+        let tokens =
+            tokenize(&source).unwrap_or_else(|e| panic!("tokenize rejected `{source}`: {e}"));
+        assert_eq!(
+            tokens.len(),
+            1,
+            "bare atom + COMMENT_LEAD + line-comment body must tokenize \
+             as EXACTLY one token (the leading atom; the comment body is \
+             discarded), got {tokens:?}",
+        );
+        assert!(
+            matches!(&tokens[0], (Token::Atom(s), 0) if s == "foo"),
+            "sole surviving token must be Token::Atom(\"foo\") at position \
+             0, got {:?} — the bare-atom terminator disjunct did NOT \
+             break at COMMENT_LEAD",
+            tokens[0],
         );
     }
 }

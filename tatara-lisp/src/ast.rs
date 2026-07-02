@@ -1808,6 +1808,71 @@ impl Sexp {
     /// rendering's right char) all bind here.
     pub const LIST_CLOSE: char = ')';
 
+    /// Canonical `;` char that begins a line-comment run in the reader's
+    /// tokenizer AND (as a bare-atom terminator disjunct) breaks a
+    /// `Token::Atom` accumulator when the byte is encountered mid-lexeme.
+    /// Outer-structural peer of [`Self::LIST_OPEN`] / [`Self::LIST_CLOSE`]
+    /// on the reader-discard axis: where `LIST_OPEN` / `LIST_CLOSE` are
+    /// the paired-delimiter constants that shape a `Sexp::List` payload
+    /// on the closed-set outer [`Sexp`] algebra, `COMMENT_LEAD` is the
+    /// ONE `;` byte the reader's tokenizer's TWO comment-boundary sites
+    /// bind to on the same outer algebra — the outer-dispatch arm that
+    /// begins a line-comment run (consuming through the trailing `\n`
+    /// which is itself absorbed by the whitespace disjunct in the outer
+    /// match) AND the bare-atom terminator disjunct that ends a
+    /// `Token::Atom` accumulator when it encounters this byte mid-lexeme
+    /// so a bare `foo;bar` source tokenizes as `Token::Atom("foo") @ 0`
+    /// followed by a discarded line-comment run rather than as ONE
+    /// `Token::Atom("foo;bar")` payload.
+    ///
+    /// Pre-lift the same `';'` byte lived inline at TWO sites in
+    /// `crate::reader::tokenize`: the outer-match `';' => { … }`
+    /// line-comment arm AND the bare-atom terminator's `|| ch == ';'`
+    /// disjunct. Post-lift the (reader-discard role, canonical byte)
+    /// pairing binds at ONE constant on the [`Sexp`] algebra that both
+    /// consumer sites route through; a refactor that swaps the byte
+    /// (e.g. a Scheme R7RS-style port to `#;` datum-comment syntax, an
+    /// Emacs-style port to `#!` shebang-comment syntax) touches ONE
+    /// constant rather than two inline bytes that would silently drift
+    /// out of tokenizer agreement if one was updated without the other.
+    ///
+    /// Reader-discard contract: `Sexp::COMMENT_LEAD` MUST NOT surface
+    /// as an atomic payload in any parsed [`Sexp`] — the outer-dispatch
+    /// arm consumes the byte AND every char up to (but not past) the
+    /// trailing `\n`, emitting NO token. The bare-atom terminator
+    /// disjunct breaks the `Token::Atom` accumulator EXACTLY on this
+    /// byte so the subsequent line-comment run reaches the outer arm
+    /// with its byte-offset intact. Both sites bind to ONE constant so
+    /// a regression that drifts ONE of the two disjuncts (e.g.
+    /// re-inlines `';'` at the outer arm while migrating the terminator
+    /// to a different byte) fails at rustc / test time rather than as
+    /// a silent tokenizer misclassification.
+    ///
+    /// Cross-axis disjointness with the sibling markers (pinned
+    /// structurally at
+    /// `sexp_comment_lead_distinct_from_every_other_algebra_marker`):
+    /// `COMMENT_LEAD`'s byte MUST differ from [`Self::LIST_OPEN`]
+    /// (`'('`), [`Self::LIST_CLOSE`] (`')'`), [`Atom::STR_DELIMITER`]
+    /// (`'"'`), [`Atom::KEYWORD_MARKER`]'s lead byte (`':'`), the two
+    /// [`Atom::bool_literal`] spellings' lead byte (`'#'`) AND every
+    /// [`QuoteForm::lead_char`] projection (`'\''`, `` '`' ``, `','`)
+    /// on the substrate's outer-marker axes. Otherwise a bare `;foo`
+    /// lexeme would ambiguously route through the line-comment arm AND
+    /// a sibling algebra's arm at the reader's outer dispatch.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (reader-discard role, canonical `;` byte) pairing binds at ONE
+    /// constant on the closed-set outer [`Sexp`] algebra regardless of
+    /// which of the two consumer sites reaches in. THEORY.md §VI.1 —
+    /// generation over composition; two byte-identical inline `';'`
+    /// char literals across ONE substrate file collapse onto ONE named
+    /// constant, matching the substrate's three-times rule
+    /// (`\geq 2` PRIME-DIRECTIVE trigger). THEORY.md §V.1 — knowable
+    /// platform; the canonical comment-lead byte becomes a TYPE-level
+    /// constant on the outer substrate algebra rather than two inline
+    /// bytes at two consumer surfaces in `crate::reader`.
+    pub const COMMENT_LEAD: char = ';';
+
     /// Canonical [`Self::Atom`]-[`Atom::Symbol`] outer constructor —
     /// composes [`Atom::symbol`] (the typed-construct method on the
     /// closed-set [`Atom`] algebra) under the [`Self::Atom`] outer
@@ -16809,6 +16874,104 @@ mod tests {
                 reread[0], original,
                 "read(display(list)) drifted from list for {original:?} \
                  — rendered={rendered:?} reread={reread:?}",
+            );
+        }
+    }
+
+    // ── `Sexp::COMMENT_LEAD` — the canonical `;` char routed through
+    // the reader's TWO comment-boundary sites: the outer-dispatch arm
+    // that begins a line-comment run AND the bare-atom terminator
+    // disjunct that breaks a `Token::Atom` accumulator on this byte.
+    // Sibling-shape tests to the `sexp_list_open_close` block above
+    // (outer-structural paired-delimiter axis), lifted onto the reader-
+    // discard axis of the closed-set outer [`Sexp`] algebra.
+
+    #[test]
+    fn sexp_comment_lead_projects_canonical_semicolon_char() {
+        // Pins the constant's exact `char` value so a typo (`'#'`,
+        // `'!'`, `':'`) or an accidental redefinition surfaces
+        // immediately. Sibling-shape pin to
+        // `sexp_list_open_projects_canonical_open_paren_char` on the
+        // outer-structural axis — pins the SAME shape on the reader-
+        // discard axis of the closed-set outer [`Sexp`] algebra.
+        assert_eq!(
+            Sexp::COMMENT_LEAD,
+            ';',
+            "COMMENT_LEAD char drifted from the substrate-canonical `;` \
+             line-comment lead — the reader-discard contract at \
+             crate::reader::tokenize (line-comment outer arm, bare-atom \
+             terminator disjunct) binds to this ONE constant.",
+        );
+    }
+
+    #[test]
+    fn sexp_comment_lead_distinct_from_every_other_algebra_marker() {
+        // Cross-axis disjointness pin: `Sexp::COMMENT_LEAD` may NOT
+        // alias any sibling outer-marker char on the substrate's other
+        // closed-set algebras — the paired list delimiters
+        // (`Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE`), the Str-payload
+        // delimiter (`Atom::STR_DELIMITER`), the Keyword-marker prefix
+        // (`Atom::KEYWORD_MARKER`'s lead byte), the two Bool-literal
+        // spellings' lead byte (`Atom::bool_literal(true|false)`'s first
+        // char), AND every quote-family lead char
+        // (`QuoteForm::lead_char(qf)` for each `qf` in `QuoteForm::ALL`).
+        // Otherwise a bare `;`-starting lexeme would ambiguously route
+        // through the line-comment arm AND a sibling algebra's arm in
+        // `crate::reader::tokenize`. Guards the paired disjointness
+        // across the substrate's outer-marker axes so a future refactor
+        // that swaps a marker to collide with the comment lead surfaces
+        // at this pin rather than as a silent reader misclassification.
+        assert_ne!(
+            Sexp::COMMENT_LEAD,
+            Sexp::LIST_OPEN,
+            "COMMENT_LEAD and LIST_OPEN share a byte — a bare `{}foo` \
+             lexeme would ambiguously begin a list AND begin a comment.",
+            Sexp::LIST_OPEN,
+        );
+        assert_ne!(
+            Sexp::COMMENT_LEAD,
+            Sexp::LIST_CLOSE,
+            "COMMENT_LEAD and LIST_CLOSE share a byte — a bare `{}foo` \
+             lexeme would ambiguously close a list AND begin a comment.",
+            Sexp::LIST_CLOSE,
+        );
+        assert_ne!(
+            Sexp::COMMENT_LEAD,
+            Atom::STR_DELIMITER,
+            "COMMENT_LEAD and STR_DELIMITER share a byte — a bare `{}foo` \
+             lexeme would ambiguously begin a comment AND open a string.",
+            Atom::STR_DELIMITER,
+        );
+        let kw_char = Atom::KEYWORD_MARKER
+            .chars()
+            .next()
+            .expect("KEYWORD_MARKER must be non-empty");
+        assert_ne!(
+            Sexp::COMMENT_LEAD,
+            kw_char,
+            "COMMENT_LEAD and KEYWORD_MARKER share a byte — a bare `{kw_char}foo` \
+             lexeme would ambiguously begin a comment AND begin a keyword.",
+        );
+        for b in [true, false] {
+            let lead = Atom::bool_literal(b)
+                .chars()
+                .next()
+                .expect("bool_literal must be non-empty");
+            assert_ne!(
+                Sexp::COMMENT_LEAD,
+                lead,
+                "COMMENT_LEAD and bool_literal({b:?}) share a lead byte — a \
+                 bare `{lead}...` lexeme would ambiguously begin a comment \
+                 AND classify as a Bool.",
+            );
+        }
+        for qf in QuoteForm::ALL {
+            assert_ne!(
+                Sexp::COMMENT_LEAD,
+                qf.lead_char(),
+                "COMMENT_LEAD and QuoteForm::{qf:?}::lead_char share a byte — \
+                 a bare `;`-starting source would silently route through the \
+                 quote-family outer-dispatch arm.",
             );
         }
     }

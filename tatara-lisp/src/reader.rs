@@ -218,57 +218,31 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
             _ => {
                 let mut s = String::new();
                 while let Some(&(_, ch)) = chars.peek() {
-                    // Bare-atom terminator disjunct — the five typed
-                    // gates (whitespace, `(`, `)`, `Atom::STR_DELIMITER`,
-                    // `;`) plus ONE quote-family gate that end a
-                    // `Token::Atom` run. Pre-lift the three
-                    // quote-family disjuncts (`ch == '\''` / `ch == '`'`
-                    // / `ch == ','`) were three parallel `char`-literal
-                    // checks scattered across this predicate; post-
-                    // lift they collapse to ONE
-                    // `QuoteForm::from_lead_char(ch).is_some()` gate
-                    // on the closed-set [`QuoteForm`] algebra so a
-                    // regression that drifts ONE bare-atom terminator
-                    // disjunct from the outer-dispatch's quote-family
-                    // arm becomes structurally impossible — there is
-                    // exactly ONE decode both sites consume, and
-                    // adding a fifth homoiconic prefix extends
-                    // [`QuoteForm::from_lead_char`] which propagates
-                    // through this predicate automatically.
-                    // Bare-atom terminator disjunct — the two paired
-                    // list-delimiter gates ([`Sexp::LIST_OPEN`] and
-                    // [`Sexp::LIST_CLOSE`]) bind to the SAME closed-
-                    // set outer [`Sexp`] algebra constants the outer-
-                    // dispatch arms above AND the Display impl in
-                    // `ast.rs` route through. Pre-lift the two
-                    // list-delimiter disjuncts (`ch == '('` /
-                    // `ch == ')'`) were two parallel `char`-literal
-                    // checks scattered across this predicate; post-
-                    // lift they collapse to ONE constant per side on
-                    // the outer algebra so a regression that drifts
-                    // ONE disjunct from the outer-dispatch's list-
-                    // delimiter arms becomes structurally impossible
-                    // — the two paired constants are the ONE typed
-                    // channel both sides consume.
-                    // Bare-atom terminator disjunct — the canonical `;`
-                    // byte routed through the [`Sexp::COMMENT_LEAD`]
-                    // constant on the closed-set outer [`Sexp`] algebra.
-                    // Pre-lift the `ch == ';'` disjunct was an inline
-                    // `char`-literal check scattered alongside the two
-                    // list-delimiter disjuncts; post-lift it collapses
-                    // onto ONE constant on the outer algebra so a
-                    // regression that drifts ONE of the two comment-
-                    // boundary sites (this terminator OR the outer-
-                    // dispatch arm above) from the other becomes
-                    // structurally impossible — the paired constants
-                    // are the ONE typed channel both sites consume.
-                    if ch.is_whitespace()
-                        || ch == Sexp::LIST_OPEN
-                        || ch == Sexp::LIST_CLOSE
-                        || QuoteForm::from_lead_char(ch).is_some()
-                        || ch == Atom::STR_DELIMITER
-                        || ch == Sexp::COMMENT_LEAD
-                    {
+                    // Bare-atom terminator disjunct — the SIX-fold
+                    // outer-dispatch category-leading char disjunction
+                    // routed through the closed-set
+                    // [`Sexp::is_bare_atom_boundary`] projection on the
+                    // outer [`Sexp`] algebra. Pre-lift this predicate
+                    // lived as an inline six-clause boolean chain
+                    // (`ch.is_whitespace() || ch == Sexp::LIST_OPEN ||
+                    // ch == Sexp::LIST_CLOSE ||
+                    // QuoteForm::from_lead_char(ch).is_some() || ch ==
+                    // Atom::STR_DELIMITER || ch == Sexp::COMMENT_LEAD`)
+                    // spanning THREE type namespaces at ONE consumer
+                    // site; post-lift the WHOLE disjunction binds at
+                    // ONE typed method on the outer [`Sexp`] algebra.
+                    // Structural dual of the outer-dispatch cascade
+                    // above: the outer-dispatch fires the SPECIFIC arm
+                    // for whichever category `c` matches, this
+                    // terminator fires the BARE-ATOM break iff ANY of
+                    // the same six categories matches — the two share
+                    // ONE typed source of truth (the projection) so a
+                    // refactor that adds a SEVENTH outer-dispatch
+                    // category extends the projection ONCE + the
+                    // outer-dispatch ONCE, rather than mutating an
+                    // inline six-clause boolean chain that would
+                    // silently drift out of tokenizer agreement.
+                    if Sexp::is_bare_atom_boundary(ch) {
                         break;
                     }
                     s.push(ch);
@@ -1303,5 +1277,126 @@ mod tests {
              break at COMMENT_LEAD",
             tokens[0],
         );
+    }
+
+    // ── `Sexp::is_bare_atom_boundary` — the ONE typed projection on the
+    // outer [`Sexp`] algebra that the reader's bare-atom accumulator
+    // terminator disjunct binds to. The composition pin below anchors
+    // the terminator's dispatch at the projection so a regression that
+    // re-inlines the six-clause boolean chain at the terminator site
+    // AND drifts ONE clause from the projection fails HERE at the
+    // sweep-time offset assertion. Sibling-shape pin to the four
+    // sibling reader-composition pins above
+    // (`_binds_to_sexp_list_delimiter_constants`,
+    // `_binds_to_atom_str_delimiter`,
+    // `_binds_to_sexp_comment_lead`,
+    // `_routes_through_quote_form_from_lead_char`): each pin covers
+    // ONE outer-dispatch category axis (list delimiters, string
+    // delimiter, comment lead, quote-family lead); THIS pin covers
+    // the DISJUNCTION of all six axes end-to-end through the projection
+    // — the ONE typed source of truth the terminator disjunct binds to
+    // post-lift.
+
+    #[test]
+    fn tokenizer_bare_atom_terminator_disjunct_routes_through_sexp_is_bare_atom_boundary() {
+        // BARE-ATOM TERMINATOR CONTRACT (whole-projection sweep): the
+        // reader's bare-atom accumulator gates on
+        // `Sexp::is_bare_atom_boundary(ch)`. Sweep every distinct
+        // boundary-class char (whitespace, [`Sexp::LIST_OPEN`],
+        // [`Sexp::LIST_CLOSE`], every [`QuoteForm::lead_char`],
+        // [`Atom::STR_DELIMITER`], [`Sexp::COMMENT_LEAD`]) as a
+        // trailer after a bare `foo` lexeme; assert the atom breaks at
+        // byte offset 3 (the length of `foo`) EXACTLY. A regression
+        // that drifts the terminator (e.g. drops one clause from the
+        // projection) surfaces here as either an atom that swallows
+        // the boundary byte (its s payload changes) OR a token stream
+        // whose second token starts at a wrong offset.
+        //
+        // Structural coherence with the sibling pins on the same axis:
+        // where those pins cover ONE axis (list/str/comment/quote)
+        // each, THIS pin sweeps ALL of them through the projection at
+        // ONCE — a regression that added a SEVENTH outer-dispatch
+        // category (e.g. `#|` block-comment) to the reader's outer
+        // arm-set but forgot to extend `is_bare_atom_boundary` would
+        // fail HERE at the trailing-char coherence sweep AS SOON AS
+        // the seventh char joined the sweep table.
+        let boundary_probes: Vec<(char, &'static str)> = {
+            let mut arms: Vec<(char, &'static str)> = vec![
+                (' ', "whitespace-space"),
+                ('\t', "whitespace-tab"),
+                ('\n', "whitespace-newline"),
+                (Sexp::LIST_OPEN, "LIST_OPEN"),
+                (Sexp::LIST_CLOSE, "LIST_CLOSE"),
+                (Atom::STR_DELIMITER, "STR_DELIMITER"),
+                (Sexp::COMMENT_LEAD, "COMMENT_LEAD"),
+            ];
+            // Each `QuoteForm::lead_char` is a distinct boundary byte
+            // the terminator must break on (with `,` and `,@` sharing
+            // the `,` lead char via the outer decode). Push every
+            // variant's lead char even if some alias; the sweep is
+            // still well-formed because the projection is char-level.
+            for qf in QuoteForm::ALL {
+                let name: &'static str = match qf {
+                    QuoteForm::Quote => "QuoteForm::Quote",
+                    QuoteForm::Quasiquote => "QuoteForm::Quasiquote",
+                    QuoteForm::Unquote => "QuoteForm::Unquote",
+                    QuoteForm::UnquoteSplice => "QuoteForm::UnquoteSplice",
+                };
+                arms.push((qf.lead_char(), name));
+            }
+            arms
+        };
+        for (ch, name) in &boundary_probes {
+            // Sanity: every probe char MUST be classified as a boundary
+            // by the projection. A regression that dropped a clause
+            // fails HERE before the tokenizer sweep runs, pinpointing
+            // the missing clause independently of the reader's
+            // behavior. Guards against a projection that agrees with
+            // itself but disagrees with the outer-dispatch's arm-set.
+            assert!(
+                Sexp::is_bare_atom_boundary(*ch),
+                "probe char `{name}` (`{ch:?}`) must classify as a \
+                 boundary via `Sexp::is_bare_atom_boundary` before the \
+                 tokenizer sweep — the projection missed a category",
+            );
+            // Per-boundary well-formed trailer. Every probe char MUST
+            // cleanly close its own tokenization run after appearing
+            // as the terminator: STR_DELIMITER opens a Str payload
+            // that must close via a paired STR_DELIMITER; every other
+            // probe char is either self-closing (whitespace / comment
+            // / paren) or leaves a well-formed prefix at end-of-input
+            // (quote-family reads only if a datum follows — we append
+            // one). Structural pin: the test's soundness depends on
+            // the tokenizer accepting the source shape; a regression
+            // that broke tokenization for a well-formed trailer would
+            // fail at the tokenize() call rather than the assertion.
+            let trailer: String = match *ch {
+                Atom::STR_DELIMITER => Atom::STR_DELIMITER.to_string(),
+                c if c == QuoteForm::Quote.lead_char()
+                    || c == QuoteForm::Quasiquote.lead_char()
+                    || c == QuoteForm::Unquote.lead_char() =>
+                {
+                    "x".to_string()
+                }
+                _ => String::new(),
+            };
+            let source = format!("foo{ch}{trailer}");
+            let tokens = tokenize(&source).unwrap_or_else(|e| {
+                panic!("tokenize rejected `{source}` for boundary probe `{name}`: {e}")
+            });
+            assert!(
+                !tokens.is_empty(),
+                "boundary probe `{name}` — tokenizer must emit at least \
+                 one token for `{source}`, got empty stream",
+            );
+            assert!(
+                matches!(&tokens[0], (Token::Atom(s), 0) if s == "foo"),
+                "boundary probe `{name}` — first token must be \
+                 Token::Atom(\"foo\") at pos 0, got {:?} — the reader's \
+                 bare-atom terminator disjunct did NOT break at the \
+                 boundary char `{ch:?}`",
+                tokens[0],
+            );
+        }
     }
 }

@@ -2065,6 +2065,93 @@ impl Sexp {
     /// bytes at two consumer surfaces in `crate::reader`.
     pub const COMMENT_LEAD: char = ';';
 
+    /// Reader-level boundary predicate — returns `true` iff `ch` is one
+    /// of the SIX outer-dispatch category-leading chars the reader's
+    /// tokenizer specialises on: whitespace, [`Self::LIST_OPEN`],
+    /// [`Self::LIST_CLOSE`], any [`QuoteForm::lead_char`] (via the
+    /// closed-set [`QuoteForm::from_lead_char`] decode),
+    /// [`Atom::STR_DELIMITER`], AND [`Self::COMMENT_LEAD`]. The ONE
+    /// typed projection on the outer [`Sexp`] algebra that names the
+    /// disjunction of "the char would start a NEW reader-level token
+    /// (or a discarded run) rather than feed the current bare-atom
+    /// accumulator."
+    ///
+    /// Structural dual of the reader's outer-dispatch cascade in
+    /// `crate::reader::tokenize`: the outer-dispatch has FIVE specific
+    /// arms (`ws if ws.is_whitespace()`, `Self::COMMENT_LEAD`,
+    /// `Self::LIST_OPEN`, `Self::LIST_CLOSE`, `Atom::STR_DELIMITER`)
+    /// plus ONE pre-match `QuoteForm::from_lead_char(c).is_some()`
+    /// gate — SIX categories in total. The default `_ => { …
+    /// bare-atom accumulator … }` arm fires EXACTLY when every specific
+    /// arm rejects. This method is the typed projection of that
+    /// implicit disjunction: `Sexp::is_bare_atom_boundary(ch) == true`
+    /// iff `ch` would trigger one of the SIX specific arms, and
+    /// `false` iff `ch` would fall through to the bare-atom
+    /// accumulator's default arm. The two consumer sites in
+    /// `crate::reader::tokenize` — the outer-dispatch's implicit "no
+    /// specific arm fires" residual predicate AND the bare-atom
+    /// accumulator's terminator disjunct — now share ONE typed source
+    /// of truth on the closed-set outer [`Sexp`] algebra.
+    ///
+    /// Pre-lift the SIX-clause boolean chain
+    /// (`ch.is_whitespace() || ch == Sexp::LIST_OPEN || ch ==
+    /// Sexp::LIST_CLOSE || QuoteForm::from_lead_char(ch).is_some() ||
+    /// ch == Atom::STR_DELIMITER || ch == Sexp::COMMENT_LEAD`) lived
+    /// inline at the bare-atom accumulator's terminator gate in
+    /// `crate::reader::tokenize`, spanning THREE type namespaces
+    /// ([`Sexp`], [`Atom`], [`QuoteForm`]) at ONE consumer site.
+    /// Post-lift the WHOLE disjunction binds at ONE typed projection
+    /// on the outer [`Sexp`] algebra so a refactor that adds a
+    /// SEVENTH outer-dispatch category (e.g. `#|…|#` block-comment
+    /// lead byte, `#\` char-literal prefix, `#[` vector-literal
+    /// prefix) extends the algebra ONCE (via a new arm on THIS method
+    /// AND a matching outer-dispatch arm in the reader) rather than
+    /// mutating an inline six-clause boolean chain that would silently
+    /// drift out of tokenizer agreement if one clause was added
+    /// without the other. Sibling-shape peer of the outer-dispatch's
+    /// closed-set per-category projections
+    /// ([`QuoteForm::from_lead_char`] on the quote-family axis;
+    /// [`Atom::decode_str_escape`] on the Str-escape axis): where those
+    /// two methods each lift ONE outer-dispatch category's decode onto
+    /// its typed algebra, THIS method lifts the DISJUNCTION of ALL SIX
+    /// outer-dispatch categories onto the outer [`Sexp`] algebra as
+    /// a bool predicate.
+    ///
+    /// Composition law (forward): for every char `ch` and every
+    /// substrate-marker enumeration
+    /// `Self::{LIST_OPEN, LIST_CLOSE, COMMENT_LEAD}`,
+    /// `Atom::STR_DELIMITER`, `QuoteForm::from_lead_char(ch).is_some()`,
+    /// `is_bare_atom_boundary` returns `true`; for every char that
+    /// isn't whitespace AND isn't listed on any marker axis, returns
+    /// `false`. Reader-level composition law:
+    /// `read(format!("foo{ch}"))` tokenizes as `[Token::Atom("foo"),
+    /// …trailing token(s) from `ch`]` when
+    /// `Self::is_bare_atom_boundary(ch)` is `true`, and as
+    /// `[Token::Atom(format!("foo{ch}"))]` (ONE token) when it is
+    /// `false`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (reader-level boundary role, canonical char) pairing binds at
+    /// ONE typed projection on the outer [`Sexp`] algebra regardless
+    /// of which of the SIX outer-dispatch category-leading chars is
+    /// under test. THEORY.md §VI.1 — generation over composition; a
+    /// SIX-clause inline boolean disjunction spanning THREE type
+    /// namespaces collapses onto ONE named method — the substrate's
+    /// three-times rule saturated at the outer-dispatch's disjunction.
+    /// THEORY.md §V.1 — knowable platform; the canonical reader-level
+    /// boundary predicate becomes a TYPE-level method on the outer
+    /// substrate algebra rather than an inline six-clause boolean
+    /// chain at ONE consumer site inside `crate::reader::tokenize`.
+    #[must_use]
+    pub fn is_bare_atom_boundary(ch: char) -> bool {
+        ch.is_whitespace()
+            || ch == Self::LIST_OPEN
+            || ch == Self::LIST_CLOSE
+            || QuoteForm::from_lead_char(ch).is_some()
+            || ch == Atom::STR_DELIMITER
+            || ch == Self::COMMENT_LEAD
+    }
+
     /// Canonical [`Self::Atom`]-[`Atom::Symbol`] outer constructor —
     /// composes [`Atom::symbol`] (the typed-construct method on the
     /// closed-set [`Atom`] algebra) under the [`Self::Atom`] outer
@@ -17835,6 +17922,103 @@ mod tests {
                 "COMMENT_LEAD and QuoteForm::{qf:?}::lead_char share a byte — \
                  a bare `;`-starting source would silently route through the \
                  quote-family outer-dispatch arm.",
+            );
+        }
+    }
+
+    // ── `Sexp::is_bare_atom_boundary` — the ONE typed projection on the
+    // outer [`Sexp`] algebra that names the SIX-fold outer-dispatch
+    // category-leading char disjunction. The exhaustive pin below
+    // anchors each of the six categories AS a positive arm AND the
+    // load-bearing substrate marker LEAD bytes (`:` / `#` / `@`) AS
+    // negative arms — the three lead bytes are first-char classifiers
+    // for bare-atom payload families (Keyword / Bool / splice second-
+    // char), NOT outer-dispatch category-leading chars, and a
+    // regression that promoted any to a boundary would break their
+    // tokenization. The composition end-to-end pin (in reader tests)
+    // sweeps every boundary char through the bare-atom accumulator and
+    // asserts the atom terminates at exactly the boundary byte.
+
+    #[test]
+    fn sexp_is_bare_atom_boundary_matches_outer_dispatch_arm_set_exhaustively() {
+        // OUTER-DISPATCH COHERENCE PIN: the SIX outer-dispatch category-
+        // leading char families the reader's tokenizer specialises on
+        // MUST ALL classify as boundaries; no other char (bare-atom
+        // chars) may classify as one. This test enumerates the FULL
+        // outer-dispatch arm-set as a typed table AND sweeps a
+        // representative negative set, asserting the projection's
+        // predicate matches the outer-dispatch's specific-arm firing
+        // exactly. A refactor that added a SEVENTH outer-dispatch arm
+        // (e.g. `#|…|#` block-comment) to the reader without extending
+        // the projection's disjunction would fail HERE at the coherence
+        // sweep: the new lead byte would EITHER be a boundary the
+        // projection missed (test asserts positive, projection returns
+        // false → panic) OR a bare-atom char the reader stole from the
+        // default arm (silent tokenizer drift the projection doesn't
+        // catch). Either way the coherence pin catches the drift and
+        // forces the projection + outer-dispatch to stay in lockstep.
+        let positive_arms: Vec<(char, String)> = {
+            let mut arms: Vec<(char, String)> = vec![
+                (' ', "whitespace".to_string()),
+                ('\t', "whitespace-tab".to_string()),
+                ('\n', "whitespace-newline".to_string()),
+                (Sexp::LIST_OPEN, "LIST_OPEN".to_string()),
+                (Sexp::LIST_CLOSE, "LIST_CLOSE".to_string()),
+                (Atom::STR_DELIMITER, "STR_DELIMITER".to_string()),
+                (Sexp::COMMENT_LEAD, "COMMENT_LEAD".to_string()),
+            ];
+            for qf in QuoteForm::ALL {
+                arms.push((qf.lead_char(), format!("QuoteForm::{qf:?}")));
+            }
+            arms
+        };
+        for (ch, name) in &positive_arms {
+            assert!(
+                Sexp::is_bare_atom_boundary(*ch),
+                "outer-dispatch arm `{name}` (`{ch:?}`) must classify as \
+                 a boundary — the projection missed a category the \
+                 reader's outer-dispatch specialises on",
+            );
+        }
+        // Negative sweep: every char below MUST fall through to the
+        // default bare-atom arm. Includes typical alpha, digit, and
+        // sign chars AND the three load-bearing substrate marker LEAD
+        // bytes (`:` / `#` / `@`) that are first-char classifiers for
+        // bare-atom payload families rather than outer-dispatch
+        // categories.
+        let negative_arms: &[char] = &[
+            'a',
+            'z',
+            'A',
+            'Z',
+            '0',
+            '9',
+            '-',
+            '+',
+            '_',
+            '.',
+            '=',
+            '<',
+            '>',
+            '!',
+            '?',
+            '/',
+            '*',
+            '%',
+            '&',
+            '|',
+            '^',
+            '~',
+            Atom::KEYWORD_MARKER.chars().next().unwrap(),
+            Atom::bool_literal(true).chars().next().unwrap(),
+            QuoteForm::SPLICE_DISCRIMINATOR,
+        ];
+        for ch in negative_arms {
+            assert!(
+                !Sexp::is_bare_atom_boundary(*ch),
+                "bare-atom char {ch:?} must NOT classify as a boundary — \
+                 the reader's outer-dispatch has NO specific arm on this \
+                 byte; the default bare-atom arm must accept it",
             );
         }
     }

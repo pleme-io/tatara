@@ -292,6 +292,122 @@ impl Atom {
         }
     }
 
+    /// Project the atomic payload to its canonical `&'static str`
+    /// diagnostic label — `"symbol"` for [`Self::Symbol`], `"keyword"`
+    /// for [`Self::Keyword`], `"string"` for [`Self::Str`], `"int"` for
+    /// [`Self::Int`], `"float"` for [`Self::Float`], `"bool"` for
+    /// [`Self::Bool`]. The outer-`Atom` peer on the [`Atom`] algebra of
+    /// [`AtomKind::label`] (the marker-level label projection on the
+    /// closed-set atomic-kind algebra) and [`crate::ast::Sexp::type_name`]
+    /// (the outer-value label projection on the [`crate::ast::Sexp`]
+    /// algebra composed through [`crate::ast::Sexp::shape`] +
+    /// [`crate::error::SexpShape::label`]). Every label is byte-for-byte
+    /// identical to the corresponding [`crate::error::SexpShape`] variant's
+    /// label — the AtomKind ⊂ SexpShape label-vocabulary containment
+    /// established by [`AtomKind::label`]'s composition through
+    /// [`AtomKind::sexp_shape`] surfaces at the outer-`Atom` layer through
+    /// this projection.
+    ///
+    /// Composition law: `atom.label() == atom.kind().label() ==
+    /// atom.kind().sexp_shape().label()` for every `atom: &Atom`. The
+    /// body composes [`Self::kind`] (the typed projection lifting each
+    /// [`Atom`] variant into its peer [`AtomKind`] marker) with
+    /// [`AtomKind::label`] (the canonical `&'static str` projection on the
+    /// closed-set atomic-payload algebra), so the six atomic-arm labels
+    /// live at ONE canonical site ([`crate::error::SexpShape::label`]'s
+    /// atomic arms, via [`AtomKind::label`]'s composition through
+    /// [`AtomKind::sexp_shape`]) rather than at TWO
+    /// ([`crate::error::SexpShape::label`] AND a parallel six-arm match
+    /// on the outer [`Atom`] algebra, pre-lift). Cross-algebra agreement
+    /// law: `Sexp::Atom(atom.clone()).type_name() == atom.label()` for
+    /// every `atom: Atom` — the outer-[`crate::ast::Sexp`] label
+    /// projection at the atomic-payload arms routes through
+    /// [`crate::ast::Sexp::shape`]'s
+    /// `Self::Atom(a) => a.kind().sexp_shape()` arm which composes with
+    /// [`crate::error::SexpShape::label`] byte-for-byte with this
+    /// projection's `self.kind().label()` composition, so the (outer
+    /// `Sexp` label, outer `Atom` label) agreement is a TYPED CONSEQUENCE
+    /// of the two typed compositions rather than literal discipline at
+    /// two sites.
+    ///
+    /// Sibling-shape lift to [`Self::kind`] (the closed-set atomic-kind
+    /// projection): where `kind()` carries the typed [`AtomKind`] marker
+    /// on the [`Atom`] algebra, `label()` carries the `&'static str`
+    /// literal the rendered diagnostic surface wants (still derived from
+    /// the typed marker, but flattened through [`AtomKind::label`] for
+    /// substring-grep callers, future
+    /// [`crate::error::LispError::TypeMismatch`] `got` slots keyed on an
+    /// atomic witness before the outer [`crate::ast::Sexp`] wrap, and
+    /// future LSP hover / REPL completion / audit-trail metric surfaces
+    /// that hold an [`Atom`] value directly rather than a wrapped
+    /// [`crate::ast::Sexp::Atom`]). The `&'static str` lifetime is
+    /// load-bearing: the composition allocates nothing at runtime
+    /// ([`Self::kind`] returns a `Copy` value and [`AtomKind::label`]
+    /// yields `&'static str`).
+    ///
+    /// Pre-lift the (Atom variant, `&'static str` diagnostic label)
+    /// pairing had no typed projection on the outer-[`Atom`] algebra —
+    /// a consumer with a typed [`Atom`] in hand (a hand-authored
+    /// [`Atom`] value at a test-harness diagnostic, a future
+    /// [`crate::domain`] typed-kwarg gate that rejects on an atomic
+    /// witness before the outer [`crate::ast::Sexp`] wrap, a future LSP
+    /// hover surface that emits an atomic-payload identity without an
+    /// enclosing [`crate::ast::Sexp::Atom`] wrap, a future audit-trail
+    /// metric keyed on the observed atomic kind) wanting the canonical
+    /// diagnostic label had to spell the two-step composition
+    /// `atom.kind().label()` at every callsite, OR go through
+    /// [`crate::ast::Sexp::Atom(atom.clone()).type_name()`] which wraps
+    /// and unwraps for no runtime purpose. Post-lift the composition
+    /// binds at ONE typed-algebra method on the outer [`Atom`] value-
+    /// carrier — the SIXTH consumer of the outer-[`Atom`] projection
+    /// surface (sibling of [`Self::kind`], [`Self::to_json`],
+    /// [`Self::to_iac_forge_sexpr`], [`Self::from_lexeme`], and the six
+    /// per-variant soft-projection methods [`Self::as_symbol`] /
+    /// [`Self::as_keyword`] / [`Self::as_string`] / [`Self::as_int`] /
+    /// [`Self::as_float`] / [`Self::as_bool`] + the composite
+    /// [`Self::as_symbol_or_string`]).
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (Atom
+    /// variant, `&'static str` diagnostic label) pairing becomes a TYPE
+    /// projection on the outer-[`Atom`] algebra rather than a per-
+    /// callsite `.kind().label()` two-step OR a wrap-through-Sexp
+    /// [`crate::ast::Sexp::Atom(atom.clone()).type_name()`] round-trip.
+    /// A typo or swap at the outer-`Atom` label site is no longer a
+    /// runtime label drift but a compile error against the typed
+    /// composition — the [`Atom`] ↔ [`AtomKind`] ↔ label chain is
+    /// rustc-enforced end-to-end. THEORY.md §II.1 invariant 2 — free
+    /// middle; the outer-[`Atom`] diagnostic-label projection now binds
+    /// at ONE site on the outer-`Atom` algebra, composing through the
+    /// pre-existing marker-level label projection ([`AtomKind::label`])
+    /// rather than duplicating the six-arm match. THEORY.md §VI.1 —
+    /// generation over composition; the outer-`Atom` label projection is
+    /// the missing algebra layer between the outer [`Atom`] value-carrier
+    /// and the pre-existing [`AtomKind`] marker-level label projection —
+    /// the three pre-existing typed layers ([`Atom`] → [`AtomKind`] →
+    /// [`crate::error::SexpShape`] → `&'static str`) become a full
+    /// four-layer typed composition through ONE new named projection on
+    /// the outer value-carrier.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::Attribute::getAbstractAttribute()
+    /// .getName()` typed projection composed with the attribute-kind's
+    /// typed string identity — narrowing an attribute-carrier value
+    /// through its typed kind identity yields the canonical diagnostic
+    /// string identity in ONE typed composition on the outer attribute
+    /// algebra. Translated through the substrate's outer-[`Atom`]
+    /// value-carrier algebra, `atom.kind().label()` closes the (outer
+    /// value, canonical diagnostic label) pairing at ONE typed projection
+    /// on the value-carrier algebra composed through the marker-level
+    /// diagnostic-label face. Racket's `(syntax-kind stx)` composed with
+    /// `(kind-label kind)` on the datum-kind taxonomy — the typed
+    /// diagnostic label emerges from a two-hop composition on the outer
+    /// datum-carrier through the typed kind identity. `Atom::label` is
+    /// the Rust-typed peer on the closed-set outer-[`Atom`] algebra with
+    /// [`AtomKind`] standing in for Racket's datum-kind taxonomy.
+    #[must_use]
+    pub fn label(&self) -> &'static str {
+        self.kind().label()
+    }
+
     /// Project the atomic payload to its canonical [`serde_json::Value`]
     /// rendering — the typed-algebra peer of [`fmt::Display for Atom`] at
     /// the JSON-projection boundary. Lifts six inline atom arms inside
@@ -9485,6 +9601,162 @@ mod tests {
         // listing forced through `Self::ALL` fails-loudly here in
         // isolation from the per-variant truth tables above.
         crate::assert_closed_set_well_formed::<AtomKind>();
+    }
+
+    #[test]
+    fn atom_label_projects_each_variant_to_canonical_diagnostic_label() {
+        // PER-ARM CONTRACT: pin the outer-`Atom` `Self::label`
+        // projection produces the SIX canonical `&'static str` labels
+        // byte-for-byte across every reachable atomic-payload variant.
+        // Pre-lift the outer-`Atom` label projection had no typed
+        // primitive on the value-carrier algebra — a consumer with an
+        // `Atom` value in hand wanting the canonical diagnostic label
+        // had to spell the two-step composition `atom.kind().label()`
+        // at every callsite, OR go through
+        // `Sexp::Atom(atom.clone()).type_name()` which wraps and
+        // unwraps for no runtime purpose. Post-lift the SIX arms bind
+        // at ONE typed projection on the outer-`Atom` algebra that
+        // routes through `AtomKind::label` (which itself composes
+        // through `AtomKind::sexp_shape().label()` into the canonical
+        // `SexpShape::label` site) — the (Atom variant, diagnostic
+        // label) pairing binds at ONE typed algebra composition
+        // spanning FOUR typed layers.
+        //
+        // Sibling-shape pin to
+        // `atom_kind_label_renders_canonical_string_for_every_variant`
+        // one algebra layer down and
+        // `sexp_type_name_method_projects_each_outer_arm_to_canonical_label`
+        // one algebra layer up. A regression that drifts ONE arm's
+        // label (e.g. Symbol → "sym", swapping Int ↔ Float, dropping
+        // the `Str → "string"` boundary rename) fails-loudly at THIS
+        // test AND the sibling `AtomKind::label` per-arm pin.
+        assert_eq!(Atom::Symbol("foo".to_owned()).label(), "symbol");
+        assert_eq!(Atom::Keyword("kw".to_owned()).label(), "keyword");
+        assert_eq!(Atom::Str("hi".to_owned()).label(), "string");
+        assert_eq!(Atom::Int(42).label(), "int");
+        assert_eq!(Atom::Float(1.5).label(), "float");
+        assert_eq!(Atom::Bool(true).label(), "bool");
+        assert_eq!(Atom::Bool(false).label(), "bool");
+    }
+
+    #[test]
+    fn atom_label_composes_through_kind_label_for_every_variant() {
+        // COMPOSITION-LAW CONTRACT: `atom.label() == atom.kind().label()`
+        // for every reachable atomic payload — the outer-`Atom` label
+        // projection is structurally derived through `Self::kind` +
+        // `AtomKind::label` rather than through a parallel six-arm
+        // inline match on the outer-`Atom` algebra. Pin the composition
+        // law so a future refactor that re-inlines the six atomic-arm
+        // literals here (and gains its own drift surface separate from
+        // the `AtomKind::label` canonical site) surfaces immediately.
+        // The pointer-equality check pins the composition produces the
+        // SAME `&'static str` (not just a byte-equal copy) for every
+        // variant — proof the routing hits ONE static literal site
+        // (`SexpShape::label` via `AtomKind::sexp_shape().label()` via
+        // `AtomKind::label`'s composition) rather than a parallel inline
+        // table on the outer-`Atom` algebra.
+        //
+        // Sibling-shape pin to
+        // `atom_kind_label_routes_through_sexp_shape_label_via_sexp_shape_projection`
+        // one algebra layer down (which pins `AtomKind::label`'s routing
+        // through `SexpShape::label`) and
+        // `sexp_type_name_method_composes_through_shape_label_for_every_outer_shape`
+        // one algebra layer up (which pins `Sexp::type_name`'s routing
+        // through `Sexp::shape().label()`). The three routing pins jointly
+        // enforce the (outer-`Atom` value, canonical label) pairing
+        // stays a full four-layer typed composition (`Atom` → `AtomKind`
+        // → `SexpShape` → `&'static str`) rather than degrading to a
+        // per-layer inline literal table.
+        let samples: Vec<Atom> = vec![
+            Atom::Symbol("foo".to_owned()),
+            Atom::Keyword("kw".to_owned()),
+            Atom::Str("hi".to_owned()),
+            Atom::Int(0),
+            Atom::Int(-7),
+            Atom::Int(42),
+            Atom::Float(0.0),
+            Atom::Float(-1.5),
+            Atom::Float(f64::INFINITY),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ];
+        for atom in &samples {
+            let via_label = atom.label();
+            let via_composition = atom.kind().label();
+            assert_eq!(
+                via_label, via_composition,
+                "Atom::label() must route through self.kind().label() \
+                 for {atom:?} — drift here means the lift was reverted \
+                 to inline arms",
+            );
+            assert!(
+                std::ptr::eq(via_label.as_ptr(), via_composition.as_ptr()),
+                "Atom::label() must return the SAME `&'static str` as \
+                 self.kind().label() for {atom:?} — pointer drift \
+                 means the lift composes through a parallel literal \
+                 table rather than routing into the canonical \
+                 AtomKind::label site",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_label_agrees_with_sexp_type_name_at_every_atom_arm() {
+        // CROSS-ALGEBRA AGREEMENT CONTRACT: for every atomic payload
+        // `a`, `a.label() == Sexp::Atom(a.clone()).type_name()`. The
+        // agreement is a TYPED CONSEQUENCE of the two typed
+        // compositions — `Sexp::Atom(a).type_name()` routes through
+        // `Sexp::shape()`'s `Self::Atom(a) => a.kind().sexp_shape()`
+        // arm which composes with `SexpShape::label` byte-for-byte
+        // with `a.kind().label()` (which itself composes through
+        // `AtomKind::sexp_shape().label()`). A regression that drifts
+        // either side of the cross-algebra bridge (an outer-`Atom`
+        // label re-inlined onto a different literal, an outer-`Sexp`
+        // Atom-arm re-routed through a stale shape projection, an
+        // `AtomKind::sexp_shape` arm that swaps Int ↔ Float) fails-
+        // loudly here rather than as a silent operator-facing
+        // diagnostic drift at every consumer that pattern-matches on
+        // the outer-`Sexp` label vs the outer-`Atom` label
+        // independently.
+        //
+        // Sibling posture to
+        // `atom_kind_label_agrees_with_sexp_shape_label_for_every_atom_arm`
+        // one algebra layer down — that pin binds the marker-level
+        // vocabulary containment (`AtomKind::label ==
+        // AtomKind::sexp_shape().label()`), this pin binds the
+        // outer-value-level vocabulary containment (`Atom::label ==
+        // Sexp::Atom(_).type_name()`) so the FOUR-layer typed
+        // composition on the outer-`Atom` algebra and the FIVE-layer
+        // typed composition on the outer-`Sexp` algebra agree at their
+        // common atomic-payload arms.
+        for atom in [
+            Atom::Symbol("foo".to_owned()),
+            Atom::Keyword("kw".to_owned()),
+            Atom::Str("hi".to_owned()),
+            Atom::Int(42),
+            Atom::Float(2.5),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ] {
+            let via_atom = atom.label();
+            let via_sexp = Sexp::Atom(atom.clone()).type_name();
+            assert_eq!(
+                via_atom, via_sexp,
+                "Atom::label() must agree with Sexp::Atom(_).type_name() \
+                 for {atom:?} — cross-algebra label drift at the \
+                 atomic-payload arms would fracture the typed diagnostic \
+                 vocabulary between the outer-Atom and outer-Sexp \
+                 algebras",
+            );
+            assert!(
+                std::ptr::eq(via_atom.as_ptr(), via_sexp.as_ptr()),
+                "Atom::label() must return the SAME `&'static str` as \
+                 Sexp::Atom(_).type_name() for {atom:?} — pointer drift \
+                 means one algebra layer re-inlined the literal rather \
+                 than routing into the canonical `SexpShape::label` \
+                 site",
+            );
+        }
     }
 
     #[test]

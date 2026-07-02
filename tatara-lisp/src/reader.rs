@@ -95,11 +95,27 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
                     }
                 }
             }
-            '(' => {
+            // List-opening arm — the canonical `(` byte routed through
+            // the [`Sexp::LIST_OPEN`] constant on the closed-set outer
+            // [`Sexp`] algebra. Outer-structural peer of the
+            // [`Atom::STR_DELIMITER`] Str-payload lift on the atomic
+            // axis, and of the [`QuoteForm::from_lead_char`] outer
+            // quote-family dispatch above — the (structural role,
+            // canonical byte) pairing binds at ONE typed constant on
+            // the substrate algebra rather than at an inline `char`
+            // literal at this arm AND the bare-atom terminator's
+            // disjunct below AND `Sexp`'s Display impl's opener/closer
+            // arms in `ast.rs`.
+            Sexp::LIST_OPEN => {
                 chars.next();
                 out.push((Token::LParen, pos));
             }
-            ')' => {
+            // List-closing arm — the canonical `)` byte routed through
+            // the [`Sexp::LIST_CLOSE`] constant on the closed-set outer
+            // [`Sexp`] algebra. Section-for-retraction sibling of the
+            // list-opening arm above; the paired-delimiter round-trip
+            // holds iff both arms bind to the same closed-set constants.
+            Sexp::LIST_CLOSE => {
                 chars.next();
                 out.push((Token::RParen, pos));
             }
@@ -163,9 +179,24 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
                     // adding a fifth homoiconic prefix extends
                     // [`QuoteForm::from_lead_char`] which propagates
                     // through this predicate automatically.
+                    // Bare-atom terminator disjunct — the two paired
+                    // list-delimiter gates ([`Sexp::LIST_OPEN`] and
+                    // [`Sexp::LIST_CLOSE`]) bind to the SAME closed-
+                    // set outer [`Sexp`] algebra constants the outer-
+                    // dispatch arms above AND the Display impl in
+                    // `ast.rs` route through. Pre-lift the two
+                    // list-delimiter disjuncts (`ch == '('` /
+                    // `ch == ')'`) were two parallel `char`-literal
+                    // checks scattered across this predicate; post-
+                    // lift they collapse to ONE constant per side on
+                    // the outer algebra so a regression that drifts
+                    // ONE disjunct from the outer-dispatch's list-
+                    // delimiter arms becomes structurally impossible
+                    // — the two paired constants are the ONE typed
+                    // channel both sides consume.
                     if ch.is_whitespace()
-                        || ch == '('
-                        || ch == ')'
+                        || ch == Sexp::LIST_OPEN
+                        || ch == Sexp::LIST_CLOSE
                         || QuoteForm::from_lead_char(ch).is_some()
                         || ch == Atom::STR_DELIMITER
                         || ch == ';'
@@ -861,6 +892,100 @@ mod tests {
                 matches!(&tokens[1], (Token::Quoted(marker), 3) if *marker == qf),
                 "QuoteForm::{qf:?} — second token must be Token::Quoted(qf) at pos 3, \
                  got {:?}",
+                tokens[1],
+            );
+        }
+    }
+
+    // ── `Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE` — the paired canonical
+    // `(` / `)` chars routed through the FOUR outer-structural round-
+    // trip sites: two `crate::reader::tokenize` outer-dispatch arms
+    // (`Token::LParen`, `Token::RParen`) AND two bare-atom terminator
+    // disjuncts. The composition pins below anchor each site at the
+    // typed constant so a regression that re-inlines one site's byte
+    // fails at rustc / test time rather than as a silent tokenizer
+    // drift. Sibling-shape tests to the `reader_str_*` block above
+    // (Str-payload delimiter axis), lifted onto the outer-structural
+    // [`Sexp`] algebra.
+
+    #[test]
+    fn tokenizer_list_open_close_arms_bind_to_sexp_list_delimiter_constants() {
+        // OUTER-DISPATCH CONTRACT: pin that a source composed of the
+        // two typed constants + payload atoms tokenizes to the
+        // expected `Token::LParen` + payload-token(s) + `Token::RParen`
+        // sequence. A regression that drifts ONE of the two arms to a
+        // different `char` fails HERE at the outer-token identity
+        // and byte-offset assertions. Sibling-shape pin to
+        // `reader_str_open_close_arms_bind_to_atom_str_delimiter`
+        // (the Str-payload delimiter axis).
+        let source = format!("{}foo bar{}", Sexp::LIST_OPEN, Sexp::LIST_CLOSE);
+        let tokens = tokenize(&source).unwrap_or_else(|e| {
+            panic!("tokenize rejected LIST_OPEN/CLOSE-wrapped source `{source}`: {e}")
+        });
+        assert_eq!(
+            tokens.len(),
+            4,
+            "LIST_OPEN/CLOSE-wrapped `foo bar` payload must tokenize as \
+             LParen + Atom(foo) + Atom(bar) + RParen (4 tokens), got \
+             {tokens:?}",
+        );
+        assert!(
+            matches!(tokens[0], (Token::LParen, 0)),
+            "expected Token::LParen at position 0 (from LIST_OPEN outer \
+             arm), got {:?}",
+            tokens[0],
+        );
+        assert!(
+            matches!(tokens[3], (Token::RParen, _)),
+            "expected Token::RParen at last position (from LIST_CLOSE \
+             outer arm), got {:?}",
+            tokens[3],
+        );
+    }
+
+    #[test]
+    fn tokenizer_bare_atom_terminator_disjunct_binds_to_sexp_list_delimiter_constants() {
+        // BARE-ATOM TERMINATOR CONTRACT: pin that a bare atom lexeme
+        // followed by either list delimiter tokenizes as TWO distinct
+        // tokens — first the atom lexeme, then the corresponding
+        // paren token at the byte offset the atom terminator broke
+        // at. A regression that drops one of the two disjuncts (e.g.
+        // re-inlines `'('` at one site and misses the terminator
+        // update on the other) would silently absorb the paren into
+        // the bare-atom accumulator and swallow the subsequent
+        // structural token — this pair catches the drift for both
+        // sides at once. Sibling-shape pin to
+        // `reader_bare_atom_terminator_disjunct_binds_to_atom_str_delimiter`
+        // (the Str-payload delimiter axis).
+        for (delim, expected_second_tok_matcher_name) in
+            [(Sexp::LIST_OPEN, "LParen"), (Sexp::LIST_CLOSE, "RParen")]
+        {
+            let source = format!("foo{delim}");
+            let tokens = tokenize(&source).unwrap_or_else(|e| {
+                panic!("tokenize rejected `{source}` for LIST delimiter `{delim}`: {e}")
+            });
+            assert_eq!(
+                tokens.len(),
+                2,
+                "bare atom + list delimiter `{delim}` must tokenize as \
+                 TWO distinct tokens, got {tokens:?}",
+            );
+            assert!(
+                matches!(&tokens[0], (Token::Atom(s), 0) if s == "foo"),
+                "first token must be Token::Atom(\"foo\") at position 0, \
+                 got {:?} — the bare-atom terminator disjunct did NOT \
+                 break at LIST delimiter `{delim}`",
+                tokens[0],
+            );
+            let second_is_expected = match delim {
+                Sexp::LIST_OPEN => matches!(&tokens[1], (Token::LParen, 3)),
+                Sexp::LIST_CLOSE => matches!(&tokens[1], (Token::RParen, 3)),
+                _ => unreachable!("delim must be LIST_OPEN or LIST_CLOSE"),
+            };
+            assert!(
+                second_is_expected,
+                "second token must be Token::{expected_second_tok_matcher_name} at \
+                 position 3, got {:?}",
                 tokens[1],
             );
         }

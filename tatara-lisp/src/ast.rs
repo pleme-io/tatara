@@ -2,6 +2,17 @@
 
 use crate::error::{SexpShape, SexpWitness, StructuralKind, UnquoteForm};
 use std::fmt;
+// Bring `fmt::Write` into scope so `f.write_char(Self::LIST_OPEN)` at
+// [`fmt::Display for Sexp`] resolves — the outer-structural delimiter
+// arms of the `Self::Nil` / `Self::List` rendering routes through
+// [`Sexp::LIST_OPEN`] / [`Sexp::LIST_CLOSE`] via `fmt::Write::write_char`
+// rather than through the format! machinery (`write!(f, "{}", '(')`)
+// so the (typed delimiter, formatter emission) pair binds directly on
+// the closed-set outer-algebra without a per-char formatting round-trip.
+// The `as _` alias imports the trait's methods without adding a name to
+// the ast.rs namespace, matching the Rust idiom for extension-trait
+// import hygiene.
+use std::fmt::Write as _;
 use std::hash::{Hash, Hasher};
 
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
@@ -1720,6 +1731,83 @@ impl AtomKind {
 // the same `"atom kind"` literal.
 
 impl Sexp {
+    /// Canonical `(` char that opens a [`Self::List`] rendering AND
+    /// (paired with [`Self::LIST_CLOSE`]) the empty [`Self::Nil`]
+    /// rendering `()`. Outer-structural peer of [`Atom::STR_DELIMITER`]
+    /// on the atomic-payload delimiter axis: where `STR_DELIMITER` is
+    /// the ONE `"` byte the reader's tokenizer's FOUR
+    /// `Token::Str`-round-trip sites bind to on the closed-set [`Atom`]
+    /// algebra, `LIST_OPEN` is the ONE `(` byte the reader's tokenizer's
+    /// `Token::LParen` outer-dispatch arm AND the bare-atom terminator
+    /// disjunct AND [`fmt::Display for Sexp`]'s list-opening emission
+    /// AND [`Self::Nil`]'s two-char `()` rendering all bind to on the
+    /// closed-set outer [`Sexp`] algebra.
+    ///
+    /// Pre-lift the same `'('` byte lived inline at FOUR sites: two
+    /// outer-match arms in `crate::reader::tokenize` (the
+    /// `Token::LParen` construction arm AND the bare-atom terminator's
+    /// `|| ch == '('` disjunct), and two Display arms in [`fmt::Display
+    /// for Sexp`] (the `Self::List(_)` opener AND the `Self::Nil`
+    /// two-char `()` rendering's left char). Post-lift the (typed
+    /// structural role, canonical byte) pairing binds at ONE constant
+    /// on the [`Sexp`] algebra that every consumer routes through; a
+    /// refactor that swaps the byte (e.g. a Racket-style port to `[`
+    /// for square-bracket list literals, an S-expression-DSL port to
+    /// `{` for brace-list syntax) touches ONE constant rather than
+    /// four inline bytes that would silently drift out of round-trip
+    /// agreement if one was updated without the others.
+    ///
+    /// Load-bearing paired-delimiter contract:
+    /// `Sexp::LIST_OPEN` MUST pair section-for-retraction with
+    /// [`Self::LIST_CLOSE`] at every round-trip site — the reader's
+    /// `Token::LParen` (from `LIST_OPEN`) MUST be closed by a
+    /// `Token::RParen` (from `LIST_CLOSE`) for a well-formed list,
+    /// and the Display impl's `Self::List(_)` arm MUST emit
+    /// `LIST_OPEN` at the opener AND `LIST_CLOSE` at the closer for
+    /// the reader-then-Display round trip
+    /// `parse(display(list)) == list` to hold. Guards the paired
+    /// disjointness across the closed-set outer [`Sexp`] algebra so a
+    /// future refactor that renames one constant without updating the
+    /// other fails at rustc / test time rather than as a silent list-
+    /// rendering asymmetry.
+    ///
+    /// Cross-axis disjointness with the sibling delimiters (pinned
+    /// structurally at
+    /// `sexp_list_delimiters_distinct_from_every_other_algebra_marker`):
+    /// `LIST_OPEN`'s byte MUST differ from [`Atom::STR_DELIMITER`]
+    /// (`'"'`), [`Atom::KEYWORD_MARKER`] (`":"`), the two
+    /// [`Atom::bool_literal`] spellings (`"#t"` / `"#f"`) AND every
+    /// [`QuoteForm::lead_char`] projection (`'\''`, `` '`' ``, `','`)
+    /// on the substrate's outer-marker axes. Otherwise the reader's
+    /// `Token::LParen` outer-dispatch arm would ambiguously route
+    /// through a sibling algebra's arm.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (`Self::List` outer structure, canonical `(` opener) pairing
+    /// now binds at ONE constant on the closed-set outer [`Sexp`]
+    /// algebra regardless of which of the four consumer surfaces
+    /// reaches in. THEORY.md §VI.1 — generation over composition;
+    /// four byte-identical inline `'('` char literals across two
+    /// substrate files collapse onto ONE named constant, matching
+    /// the substrate's three-times rule. THEORY.md §V.1 — knowable
+    /// platform; the canonical list-opener byte becomes a
+    /// TYPE-level constant on the outer substrate algebra rather
+    /// than four inline bytes at four consumer surfaces across two
+    /// substrate files (`crate::reader` and `crate::ast`).
+    pub const LIST_OPEN: char = '(';
+
+    /// Canonical `)` char that closes a [`Self::List`] rendering AND
+    /// (paired with [`Self::LIST_OPEN`]) the empty [`Self::Nil`]
+    /// rendering `()`. See [`Self::LIST_OPEN`] for the substrate-wide
+    /// paired-delimiter contract, cross-axis disjointness, and theory
+    /// anchors — this constant is its section-for-retraction sibling
+    /// on the closer axis. Four consumer sites (the reader's
+    /// `Token::RParen` outer-dispatch arm, the bare-atom terminator's
+    /// `|| ch == ')'` disjunct, [`fmt::Display for Sexp`]'s
+    /// `Self::List(_)` closer, [`Self::Nil`]'s two-char `()`
+    /// rendering's right char) all bind here.
+    pub const LIST_CLOSE: char = ')';
+
     /// Canonical [`Self::Atom`]-[`Atom::Symbol`] outer constructor —
     /// composes [`Atom::symbol`] (the typed-construct method on the
     /// closed-set [`Atom`] algebra) under the [`Self::Atom`] outer
@@ -6191,7 +6279,20 @@ impl fmt::Display for Atom {
 impl fmt::Display for Sexp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Nil => f.write_str("()"),
+            // The empty-list rendering `()` composes BOTH structural
+            // delimiters — [`Self::LIST_OPEN`] followed by
+            // [`Self::LIST_CLOSE`] — on the closed-set outer [`Sexp`]
+            // algebra. Pre-lift the same two bytes lived inline as one
+            // `"()"` string literal at this arm; post-lift each byte
+            // binds to its typed constant, so a delimiter swap flips
+            // both this arm AND the `Self::List(_)` opener/closer arm
+            // below AND the reader's `Token::LParen` / `Token::RParen`
+            // outer-dispatch arms in lockstep — at ONE constant per
+            // side rather than at four inline bytes across two files.
+            Self::Nil => {
+                f.write_char(Self::LIST_OPEN)?;
+                f.write_char(Self::LIST_CLOSE)
+            }
             // The atomic-payload rendering lives at the typed
             // [`fmt::Display for Atom`] impl above — the seven inline
             // sub-arms `Symbol → s`, `Keyword → ":{s}"`, `Str → "{s:?}"`,
@@ -6203,15 +6304,27 @@ impl fmt::Display for Sexp {
             // Display impl once and this arm picks up the new variant
             // for free.
             Self::Atom(a) => fmt::Display::fmt(a, f),
+            // The `Self::List(_)` opener AND closer arms bind to
+            // [`Self::LIST_OPEN`] AND [`Self::LIST_CLOSE`] on the
+            // closed-set outer [`Sexp`] algebra — the SAME two typed
+            // constants the reader's `Token::LParen` / `Token::RParen`
+            // outer-dispatch arms AND the `Self::Nil` two-char
+            // rendering all route through. Adding a fifth structural
+            // outer-shape (e.g. an eventual `Self::Vector` for `[…]`
+            // reader syntax) lands as ONE new pair of `Sexp::VEC_OPEN`
+            // / `Sexp::VEC_CLOSE` constants with the reader arms +
+            // Display arms binding through them, extending the
+            // outer-structural algebra by ONE axis without touching
+            // this arm's `LIST_OPEN` / `LIST_CLOSE` binding.
             Self::List(xs) => {
-                f.write_str("(")?;
+                f.write_char(Self::LIST_OPEN)?;
                 for (i, x) in xs.iter().enumerate() {
                     if i > 0 {
                         f.write_str(" ")?;
                     }
                     write!(f, "{x}")?;
                 }
-                f.write_str(")")
+                f.write_char(Self::LIST_CLOSE)
             }
             // The four quote-family variants share the
             // `write!(f, "<prefix>{inner}")` Display shape — all route
@@ -16420,6 +16533,282 @@ mod tests {
                 Sexp::Atom(Atom::string(payload)),
                 "STR_DELIMITER-wrapped payload {payload:?} drifted from \
                  the Sexp::Atom(Atom::string(_)) typed-constructor shape",
+            );
+        }
+    }
+
+    // ── `Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE` — the paired canonical
+    // `(` / `)` chars routed through the FOUR outer-structural round-
+    // trip sites: two `crate::reader::tokenize` outer-dispatch arms
+    // (`Token::LParen`, `Token::RParen`), two bare-atom terminator
+    // disjuncts (`|| ch == LIST_OPEN` / `|| ch == LIST_CLOSE`), and
+    // two `fmt::Display for Sexp` arms (`Self::List(_)` opener +
+    // closer AND `Self::Nil` two-char `()`). Sibling-shape tests to
+    // the `atom_str_delimiter_*` block above (Str-payload delimiter
+    // axis), lifted onto the outer-structural [`Sexp`] algebra.
+
+    #[test]
+    fn sexp_list_open_projects_canonical_open_paren_char() {
+        // Pins the constant's exact `char` value so a typo (`'['`,
+        // `'{'`, `';'`) or an accidental redefinition surfaces
+        // immediately. Sibling-shape pin to
+        // `atom_str_delimiter_projects_canonical_double_quote_char`
+        // (the Str-payload delimiter axis) — pins the SAME shape on
+        // the outer list-opener axis of the closed-set outer [`Sexp`]
+        // algebra.
+        assert_eq!(
+            Sexp::LIST_OPEN,
+            '(',
+            "LIST_OPEN char drifted from the substrate-canonical `(` \
+             opener — the reader-round-trip contract at \
+             crate::reader::tokenize (Token::LParen outer arm, bare-\
+             atom terminator disjunct) AND fmt::Display for Sexp \
+             (Self::List(_) opener, Self::Nil two-char left) all bind \
+             to this ONE constant.",
+        );
+    }
+
+    #[test]
+    fn sexp_list_close_projects_canonical_close_paren_char() {
+        // Pins the constant's exact `char` value so a typo (`']'`,
+        // `'}'`, `';'`) or an accidental redefinition surfaces
+        // immediately. Section-for-retraction sibling pin of the
+        // opener above; the paired-delimiter round-trip contract
+        // holds iff both constants pin their canonical bytes here.
+        assert_eq!(
+            Sexp::LIST_CLOSE,
+            ')',
+            "LIST_CLOSE char drifted from the substrate-canonical `)` \
+             closer — the reader-round-trip contract at \
+             crate::reader::tokenize (Token::RParen outer arm, bare-\
+             atom terminator disjunct) AND fmt::Display for Sexp \
+             (Self::List(_) closer, Self::Nil two-char right) all \
+             bind to this ONE constant.",
+        );
+    }
+
+    #[test]
+    fn sexp_list_delimiters_distinct_from_every_other_algebra_marker() {
+        // Cross-axis disjointness pin: neither `Sexp::LIST_OPEN` nor
+        // `Sexp::LIST_CLOSE` may alias any sibling outer-marker
+        // char on the substrate's other closed-set algebras — the
+        // Str-payload delimiter (`Atom::STR_DELIMITER`), the
+        // Keyword-marker prefix (`Atom::KEYWORD_MARKER`), the two
+        // Bool-literal spellings (`Atom::bool_literal(true|false)`),
+        // AND every quote-family lead char
+        // (`QuoteForm::lead_char(qf)` for each `qf` in
+        // `QuoteForm::ALL`). Otherwise a bare `(`/`)`-starting lexeme
+        // would ambiguously route through TWO outer-dispatch arms in
+        // `crate::reader::tokenize`. Guards the paired disjointness
+        // across the substrate's outer-marker axes so a future
+        // refactor that swaps a marker to collide with either list
+        // delimiter surfaces at this pin rather than as a silent
+        // reader misclassification.
+        //
+        // First: opener/closer disjoint from each other — pairs
+        // MUST be structurally distinct.
+        assert_ne!(
+            Sexp::LIST_OPEN,
+            Sexp::LIST_CLOSE,
+            "LIST_OPEN and LIST_CLOSE share a byte — the paired-\
+             delimiter contract would collapse.",
+        );
+
+        // Second: opener/closer disjoint from Str-delimiter.
+        assert_ne!(
+            Sexp::LIST_OPEN,
+            Atom::STR_DELIMITER,
+            "LIST_OPEN and STR_DELIMITER share a byte — a bare `{}foo` \
+             lexeme would ambiguously begin a list AND open a string.",
+            Atom::STR_DELIMITER,
+        );
+        assert_ne!(
+            Sexp::LIST_CLOSE,
+            Atom::STR_DELIMITER,
+            "LIST_CLOSE and STR_DELIMITER share a byte — a bare `{}foo` \
+             lexeme would ambiguously close a list AND open a string.",
+            Atom::STR_DELIMITER,
+        );
+
+        // Third: opener/closer disjoint from KEYWORD_MARKER's byte
+        // (single-char `":"` on the outer axis) — `KEYWORD_MARKER` is
+        // a `&'static str` so compare against its first byte's char.
+        let kw_char = Atom::KEYWORD_MARKER
+            .chars()
+            .next()
+            .expect("KEYWORD_MARKER must be non-empty");
+        assert_ne!(
+            Sexp::LIST_OPEN,
+            kw_char,
+            "LIST_OPEN and KEYWORD_MARKER share a byte — a bare `{}foo` \
+             lexeme would ambiguously begin a list AND begin a keyword.",
+            kw_char,
+        );
+        assert_ne!(
+            Sexp::LIST_CLOSE,
+            kw_char,
+            "LIST_CLOSE and KEYWORD_MARKER share a byte — a bare `{}foo` \
+             lexeme would ambiguously close a list AND begin a keyword.",
+            kw_char,
+        );
+
+        // Fourth: opener/closer disjoint from every Bool-literal
+        // spelling's first char (`'#'` for both `"#t"` / `"#f"`).
+        for b in [true, false] {
+            let lead = Atom::bool_literal(b)
+                .chars()
+                .next()
+                .expect("bool_literal must be non-empty");
+            assert_ne!(
+                Sexp::LIST_OPEN,
+                lead,
+                "LIST_OPEN and bool_literal({b:?}) share a lead byte — a \
+                 bare `{lead}...` lexeme would ambiguously begin a list \
+                 AND classify as a Bool.",
+            );
+            assert_ne!(
+                Sexp::LIST_CLOSE,
+                lead,
+                "LIST_CLOSE and bool_literal({b:?}) share a lead byte — a \
+                 bare `{lead}...` lexeme would ambiguously close a list \
+                 AND classify as a Bool.",
+            );
+        }
+
+        // Fifth: opener/closer disjoint from every quote-family
+        // lead char (`'\''`, `` '`' ``, `','` — three distinct lead
+        // chars across the four `QuoteForm` variants). The reader's
+        // outer-dispatch orders the quote-family arm BEFORE the
+        // list-delimiter arms, so a collision here would silently
+        // route `(`/`)` through the quote-family branch.
+        for qf in QuoteForm::ALL {
+            assert_ne!(
+                Sexp::LIST_OPEN,
+                qf.lead_char(),
+                "LIST_OPEN and QuoteForm::{qf:?}::lead_char share a byte — \
+                 a bare `(...)` list would silently route through the \
+                 quote-family outer-dispatch arm.",
+            );
+            assert_ne!(
+                Sexp::LIST_CLOSE,
+                qf.lead_char(),
+                "LIST_CLOSE and QuoteForm::{qf:?}::lead_char share a byte — \
+                 a bare `(...)` list-closer would silently route through \
+                 the quote-family outer-dispatch arm.",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_display_nil_arm_binds_to_both_list_delimiter_constants() {
+        // NIL DISPLAY CONTRACT: pin that `format!("{}", Sexp::Nil)`
+        // produces the two-char rendering composed of BOTH typed
+        // delimiters — `LIST_OPEN` followed by `LIST_CLOSE`. Pre-lift
+        // this arm carried the two bytes inline as ONE `"()"` string
+        // literal; post-lift each byte binds to its typed constant,
+        // so a delimiter swap flips both the opener AND the closer in
+        // lockstep at the typed algebra rather than at this arm's
+        // inline literal. A regression that re-inlines the two bytes
+        // OR drifts ONE of the two typed-constant bindings fails
+        // loudly at this composition pin.
+        let rendered = format!("{}", Sexp::Nil);
+        let expected: String = [Sexp::LIST_OPEN, Sexp::LIST_CLOSE].iter().collect();
+        assert_eq!(
+            rendered, expected,
+            "Sexp::Nil Display drifted from the [LIST_OPEN, LIST_CLOSE] \
+             composition — the two-char `()` rendering must be the \
+             string composed of the two typed constants in order.",
+        );
+        // Cross-check against the bare byte-string to catch a
+        // regression that silently swaps the two constants' values.
+        assert_eq!(
+            rendered, "()",
+            "Sexp::Nil Display drifted from the canonical `()` two-char \
+             rendering — a typed-constant swap would produce e.g. `)(` \
+             which passes the `[LIST_OPEN, LIST_CLOSE]` compose test \
+             but fails this hard-coded reference check.",
+        );
+    }
+
+    #[test]
+    fn sexp_display_list_arms_bind_to_sexp_list_delimiter_constants() {
+        // LIST DISPLAY CONTRACT: pin that `format!("{}", Sexp::List(_))`
+        // opens with `LIST_OPEN`, closes with `LIST_CLOSE`, and
+        // interleaves the children through the arm's ` `-separator
+        // loop. Sweeps a representative small list plus the singleton
+        // list plus the empty list — the empty list is IMPORTANT
+        // because `Sexp::List(vec![])` is a distinct `Sexp` shape from
+        // `Sexp::Nil`, and both must render as `()` through the outer
+        // algebra (the reader's `()` source produces `Sexp::List(vec![])`
+        // — see the `read` pipeline in `crate::reader`). A regression
+        // that drifts either arm's binding surfaces here.
+        for list in [
+            Sexp::List(vec![]),
+            Sexp::List(vec![Sexp::symbol("x")]),
+            Sexp::List(vec![Sexp::symbol("a"), Sexp::symbol("b")]),
+            Sexp::List(vec![Sexp::int(1), Sexp::int(2), Sexp::int(3)]),
+        ] {
+            let rendered = format!("{list}");
+            let first = rendered
+                .chars()
+                .next()
+                .unwrap_or_else(|| panic!("empty rendering for {list:?}"));
+            let last = rendered
+                .chars()
+                .last()
+                .unwrap_or_else(|| panic!("empty rendering for {list:?}"));
+            assert_eq!(
+                first,
+                Sexp::LIST_OPEN,
+                "List Display opener drifted from LIST_OPEN for {list:?}: \
+                 got {rendered:?}",
+            );
+            assert_eq!(
+                last,
+                Sexp::LIST_CLOSE,
+                "List Display closer drifted from LIST_CLOSE for {list:?}: \
+                 got {rendered:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_list_delimiters_close_reader_display_round_trip_for_lists_of_atoms() {
+        // Load-bearing round-trip contract for the four outer-
+        // structural sites — the reader's `Token::LParen` /
+        // `Token::RParen` outer-dispatch arms both bind to
+        // `Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE`, AND the Display
+        // impl's `Self::List(_)` arms bind to the SAME two constants,
+        // so wrapping a sequence of atom lexemes in the constants on
+        // both sides recovers a `Sexp::List(_)` shape that
+        // round-trips through Display and the reader without drift.
+        // A regression that swaps ONE of the four arms (e.g.
+        // re-inlines `'('` at the reader opener while migrating the
+        // Display opener to a different delimiter) breaks the
+        // opener-must-match-closer contract across two files.
+        for children in [
+            vec![],
+            vec![Sexp::symbol("foo")],
+            vec![Sexp::symbol("a"), Sexp::symbol("b"), Sexp::int(42)],
+        ] {
+            let original = Sexp::List(children);
+            let rendered = format!("{original}");
+            let reread = crate::reader::read(&rendered).unwrap_or_else(|e| {
+                panic!(
+                    "reader rejected Display-rendered list `{rendered}` \
+                     for `{original:?}`: {e}"
+                )
+            });
+            assert_eq!(
+                reread.len(),
+                1,
+                "Display-rendered list `{rendered}` must read as exactly \
+                 one form, got {reread:?}",
+            );
+            assert_eq!(
+                reread[0], original,
+                "read(display(list)) drifted from list for {original:?} \
+                 — rendered={rendered:?} reread={reread:?}",
             );
         }
     }

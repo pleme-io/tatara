@@ -264,6 +264,80 @@ impl Atom {
         }
     }
 
+    /// Canonical `#` LEAD byte shared across both [`Self::bool_literal`]
+    /// spellings (`"#t"` for [`true`], `"#f"` for [`false`]) — the ONE
+    /// canonical `char` on the [`Atom`] algebra the substrate's Bool-
+    /// prefix disjointness contract binds to.
+    ///
+    /// Sibling posture to the closed set of `pub const` reader-punctuation
+    /// canonical bytes on the substrate: [`Self::STR_DELIMITER`] (`'"'`),
+    /// [`Self::STR_ESCAPE_LEAD`] (`'\\'`), [`Sexp::LIST_OPEN`] (`'('`),
+    /// [`Sexp::LIST_CLOSE`] (`')'`), [`Sexp::COMMENT_LEAD`] (`';'`),
+    /// [`Sexp::COMMENT_TERM`] (`'\n'`), [`QuoteForm::SPLICE_DISCRIMINATOR`]
+    /// (`'@'`) — every canonical per-role byte the reader's tokenizer
+    /// specialises on is now a `pub const` on its owning closed-set
+    /// algebra. This constant closes the Bool-family lead byte at the
+    /// SAME algebra as its two-char [`Self::bool_literal`] projections
+    /// so a delimiter swap (e.g. a Common-Lisp-compat port from
+    /// Scheme `#t`/`#f` to CL `T`/`NIL`, a JSON-compat port to
+    /// `true`/`false`, or an extension for the broader Scheme
+    /// hash-prefix reader-macro family `#\char` / `#(vector)` /
+    /// `#|block-comment|#` / `#;datum-comment`) lands at ONE constant
+    /// on the algebra rather than at inline `'#'` char literals
+    /// scattered across the test surface AND the docstrings pinning
+    /// the disjointness contract.
+    ///
+    /// Structural round-trip contract:
+    /// `Self::bool_literal(b).starts_with(Self::BOOL_LITERAL_LEAD)`
+    /// for every `b: bool` — pinned by
+    /// `atom_bool_literal_lead_prefixes_every_bool_literal_spelling`.
+    /// A regression that drifts EITHER the constant OR the two
+    /// [`Self::bool_literal`] arms surfaces at the pin rather than at
+    /// a silent bool-family reader drift where `#t` / `#f` classify as
+    /// [`Self::Symbol`] instead of [`Self::Bool`].
+    ///
+    /// Disjointness contract: `BOOL_LITERAL_LEAD`'s byte MUST differ
+    /// from [`Self::STR_DELIMITER`] (`'"'`), [`Self::STR_ESCAPE_LEAD`]
+    /// (`'\\'`), [`Self::KEYWORD_MARKER`]'s lead byte (`':'`),
+    /// [`Sexp::LIST_OPEN`] (`'('`), [`Sexp::LIST_CLOSE`] (`')'`),
+    /// [`Sexp::COMMENT_LEAD`] (`';'`), [`Sexp::COMMENT_TERM`]
+    /// (`'\n'`), every [`QuoteForm::lead_char`] projection AND
+    /// [`QuoteForm::SPLICE_DISCRIMINATOR`] (`'@'`) — every other
+    /// closed-set outer-marker byte the reader's tokenizer specialises
+    /// on. A collision would silently break the reader's outer
+    /// dispatch: a `#`-prefixed bare atom `#t` would collide with
+    /// whichever marker it aliased. Pinned by
+    /// `atom_bool_literal_lead_distinct_from_every_other_algebra_marker`.
+    ///
+    /// Consumer sites this constant closes: the three test-surface
+    /// sites that pre-lift each extracted the lead byte via
+    /// `Self::bool_literal(b).chars().next().unwrap()` (or `.expect(_)`)
+    /// — the `Bool`-arm of [`Sexp::is_bare_atom_boundary`]'s negative
+    /// sweep AND the two [`QuoteForm::SPLICE_DISCRIMINATOR`]
+    /// disjointness assertions — collapse onto ONE named byte on the
+    /// substrate algebra. The two SPLICE_DISCRIMINATOR assertions
+    /// (one per `bool_literal` spelling) further collapse to ONE
+    /// assertion since the lead byte is by construction the SAME
+    /// across both spellings.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Bool-family lead byte, canonical `'#'`) pairing binds at ONE
+    /// constant on the closed-set outer [`Atom`] algebra regardless of
+    /// which reader-surface consumer reaches in. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the
+    /// [`Self::bool_literal(b).starts_with(Self::BOOL_LITERAL_LEAD)`]
+    /// round-trip law is a coherence proof BETWEEN the paired
+    /// projection ([`Self::bool_literal`]) AND the shared lead byte
+    /// (this constant) on ONE algebra — a regression that drifts
+    /// either side surfaces at the pin rather than as a silent
+    /// hash-prefix reader-family drift. THEORY.md §V.1 — knowable
+    /// platform; the canonical Bool-family lead byte becomes a
+    /// TYPE-level constant on the substrate algebra rather than an
+    /// inline `.chars().next().unwrap()` extraction at every test
+    /// surface AND an inline `'#'` mention across every docstring
+    /// pinning the disjointness contract.
+    pub const BOOL_LITERAL_LEAD: char = '#';
+
     /// Canonical `"` delimiter that opens AND closes a [`Self::Str`]
     /// atom in the reader's tokenizer AND self-escapes inside a
     /// backslash-escape sequence — ONE canonical `char` on the
@@ -9476,21 +9550,16 @@ mod tests {
                 .next()
                 .expect("KEYWORD_MARKER must have at least one char"),
         );
-        // Both `#t` / `#f` spellings share `#` as the lead byte.
-        assert_ne!(
-            QuoteForm::SPLICE_DISCRIMINATOR,
-            Atom::bool_literal(true)
-                .chars()
-                .next()
-                .expect("bool_literal(true) must have at least one char"),
-        );
-        assert_ne!(
-            QuoteForm::SPLICE_DISCRIMINATOR,
-            Atom::bool_literal(false)
-                .chars()
-                .next()
-                .expect("bool_literal(false) must have at least one char"),
-        );
+        // Both `#t` / `#f` spellings share `Atom::BOOL_LITERAL_LEAD`
+        // (`'#'`) as the lead byte. Pre-lift each spelling was
+        // extracted via `Atom::bool_literal(b).chars().next().expect(_)`
+        // — TWO assertions for the SAME byte by construction. Post-
+        // lift both collapse to ONE assertion routing through the
+        // typed constant; the structural invariant "both spellings
+        // share the lead byte" lives at
+        // `atom_bool_literal_lead_prefixes_every_bool_literal_spelling`
+        // rather than as a per-spelling boilerplate duplication here.
+        assert_ne!(QuoteForm::SPLICE_DISCRIMINATOR, Atom::BOOL_LITERAL_LEAD);
     }
 
     #[test]
@@ -17559,6 +17628,168 @@ mod tests {
         }
     }
 
+    // ── `Atom::BOOL_LITERAL_LEAD` — the canonical `'#'` char shared
+    // across BOTH `Atom::bool_literal` spellings (`"#t"` for `true`,
+    // `"#f"` for `false`). Sibling-shape tests to the
+    // `atom_bool_literal_*` block above (the two-char spelling axis
+    // of the Bool payload) — where those pins bind the two-char
+    // Scheme spelling of each `bool` payload, THESE tests bind the
+    // ONE shared lead byte of the two spellings onto the closed-set
+    // outer [`Atom`] algebra so a hash-prefix reader-family
+    // extension (`#\char`, `#(vector)`, `#|block-comment|#`, `#;
+    // datum-comment`) lands at ONE constant on the algebra.
+
+    #[test]
+    fn atom_bool_literal_lead_projects_canonical_hash_char() {
+        // Pins the constant's exact `char` value so a typo (`'#'`
+        // vs. `'$'`, `'@'`, or `'!'`) or an accidental redefinition
+        // surfaces immediately. Sibling-shape pin to
+        // `atom_str_delimiter_projects_canonical_double_quote_char`
+        // (Str-delimiter axis) and
+        // `atom_str_escape_lead_projects_canonical_backslash_char`
+        // (Str-escape-lead axis) — pins the SAME shape on the
+        // Bool-family lead-byte axis of the closed-set [`Atom`]
+        // algebra.
+        assert_eq!(
+            Atom::BOOL_LITERAL_LEAD,
+            '#',
+            "BOOL_LITERAL_LEAD char drifted from the substrate-\
+             canonical `#` Bool-family lead byte — the disjointness \
+             contract at is_bare_atom_boundary's negative sweep AND \
+             the QuoteForm::SPLICE_DISCRIMINATOR non-collision pin \
+             both bind to this ONE constant.",
+        );
+    }
+
+    #[test]
+    fn atom_bool_literal_lead_prefixes_every_bool_literal_spelling() {
+        // Structural round-trip pin — the (BOOL_LITERAL_LEAD,
+        // bool_literal spelling) pairing binds at ONE algebra layer:
+        // for every `b: bool`, `Atom::bool_literal(b)` MUST start
+        // with `Atom::BOOL_LITERAL_LEAD`. A regression that drifts
+        // EITHER the constant OR the two `bool_literal` arms
+        // surfaces here rather than at a silent bool-family reader
+        // drift where `#t` / `#f` classify as `Atom::Symbol` instead
+        // of `Atom::Bool`.
+        //
+        // Load-bearing across both `b: bool` values because the
+        // structural invariant IS "both spellings share the lead
+        // byte" — sweeps the closed `bool` domain so a hypothetical
+        // regression that renamed ONE spelling only (e.g. moved
+        // `"#f"` to `"~f"`) fails at THIS pin even though the
+        // constant AND the sibling spelling both agreed.
+        //
+        // Sibling-shape peer of
+        // `atom_bool_literal_closes_reader_display_round_trip_for_both_variants`
+        // one axis over: that test binds the (spelling, typed Bool
+        // variant) round-trip through the reader/Display; THIS test
+        // binds the (lead byte, spelling) prefix invariant at the
+        // atomic-algebra layer directly.
+        for b in [true, false] {
+            let spelling = Atom::bool_literal(b);
+            assert!(
+                spelling.starts_with(Atom::BOOL_LITERAL_LEAD),
+                "Atom::bool_literal({b:?}) = {spelling:?} does NOT \
+                 start with BOOL_LITERAL_LEAD ({:?}) — the structural \
+                 invariant \"both bool_literal spellings share the \
+                 lead byte\" broke at b={b:?}",
+                Atom::BOOL_LITERAL_LEAD,
+            );
+        }
+    }
+
+    #[test]
+    fn atom_bool_literal_lead_distinct_from_every_other_algebra_marker() {
+        // Cross-axis disjointness pin: BOOL_LITERAL_LEAD's byte MUST
+        // NOT alias any other closed-set outer-marker byte the
+        // reader's tokenizer specialises on — otherwise a bare `#t`
+        // / `#f` lexeme would ambiguously route through the
+        // colliding arm AND the bool classifier. Sibling-shape pin
+        // to `sexp_comment_term_distinct_from_every_non_whitespace_algebra_marker`
+        // (COMMENT_TERM axis) — enumerates every closed-set outer-
+        // marker char AND asserts non-collision on the Bool-family
+        // lead-byte axis.
+        //
+        // The enumerated set spans THREE type namespaces and every
+        // canonical reader byte the substrate exposes:
+        //   * `Sexp::LIST_OPEN` / `LIST_CLOSE` / `COMMENT_LEAD` /
+        //     `COMMENT_TERM` — outer-structural + reader-discard
+        //   * `Atom::STR_DELIMITER` / `STR_ESCAPE_LEAD` — atomic-
+        //     payload delimiter + escape lead
+        //   * `Atom::KEYWORD_MARKER`'s lead byte — atomic-payload
+        //     prefix marker
+        //   * every `QuoteForm::lead_char` projection AND
+        //     `QuoteForm::SPLICE_DISCRIMINATOR` — homoiconic
+        //     prefix + splice-discriminator
+        assert_ne!(
+            Atom::BOOL_LITERAL_LEAD,
+            Sexp::LIST_OPEN,
+            "BOOL_LITERAL_LEAD collides with LIST_OPEN — a bare `#t` \
+             would ambiguously open a list AND classify as a Bool.",
+        );
+        assert_ne!(
+            Atom::BOOL_LITERAL_LEAD,
+            Sexp::LIST_CLOSE,
+            "BOOL_LITERAL_LEAD collides with LIST_CLOSE — a bare `#t` \
+             would ambiguously close a list AND classify as a Bool.",
+        );
+        assert_ne!(
+            Atom::BOOL_LITERAL_LEAD,
+            Sexp::COMMENT_LEAD,
+            "BOOL_LITERAL_LEAD collides with COMMENT_LEAD — a bare \
+             `#t` would ambiguously open a line comment AND classify \
+             as a Bool.",
+        );
+        assert_ne!(
+            Atom::BOOL_LITERAL_LEAD,
+            Sexp::COMMENT_TERM,
+            "BOOL_LITERAL_LEAD collides with COMMENT_TERM — the \
+             reader's line-comment discard-loop terminator would \
+             alias the Bool-family lead byte.",
+        );
+        assert_ne!(
+            Atom::BOOL_LITERAL_LEAD,
+            Atom::STR_DELIMITER,
+            "BOOL_LITERAL_LEAD collides with STR_DELIMITER — a bare \
+             `#t` would ambiguously open a string AND classify as a \
+             Bool.",
+        );
+        assert_ne!(
+            Atom::BOOL_LITERAL_LEAD,
+            Atom::STR_ESCAPE_LEAD,
+            "BOOL_LITERAL_LEAD collides with STR_ESCAPE_LEAD — the \
+             reader's Str-escape lead byte would alias the Bool-\
+             family lead byte.",
+        );
+        let kw_lead = Atom::KEYWORD_MARKER
+            .chars()
+            .next()
+            .expect("KEYWORD_MARKER must have at least one char");
+        assert_ne!(
+            Atom::BOOL_LITERAL_LEAD,
+            kw_lead,
+            "BOOL_LITERAL_LEAD collides with KEYWORD_MARKER's lead \
+             byte — a bare `#t` would ambiguously begin a keyword AND \
+             classify as a Bool.",
+        );
+        for qf in QuoteForm::ALL {
+            assert_ne!(
+                Atom::BOOL_LITERAL_LEAD,
+                qf.lead_char(),
+                "BOOL_LITERAL_LEAD collides with QuoteForm::{qf:?}'s \
+                 lead_char — a bare `#t` would ambiguously begin a \
+                 quote-family prefix AND classify as a Bool.",
+            );
+        }
+        assert_ne!(
+            Atom::BOOL_LITERAL_LEAD,
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            "BOOL_LITERAL_LEAD collides with SPLICE_DISCRIMINATOR — \
+             the reader's `,@` splice-promotion peek byte would alias \
+             the Bool-family lead byte.",
+        );
+    }
+
     // ── `Atom::STR_DELIMITER` — the canonical `"` char routed through
     // the four Str-round-trip sites inside `crate::reader::tokenize`
     // (string-opening arm, escape-handler self-escape mapping, string-
@@ -18585,7 +18816,15 @@ mod tests {
             '^',
             '~',
             Atom::KEYWORD_MARKER.chars().next().unwrap(),
-            Atom::bool_literal(true).chars().next().unwrap(),
+            // The bool_literal spellings' shared lead byte lives at
+            // the typed `Atom::BOOL_LITERAL_LEAD` constant on the
+            // closed-set outer [`Atom`] algebra. Pre-lift this slot
+            // held an inline `Atom::bool_literal(true).chars().next()
+            // .unwrap()` chain extracting the byte from ONE spelling;
+            // post-lift the byte lives at ONE named constant that
+            // BOTH spellings project through (pinned by
+            // `atom_bool_literal_lead_prefixes_every_bool_literal_spelling`).
+            Atom::BOOL_LITERAL_LEAD,
             QuoteForm::SPLICE_DISCRIMINATOR,
         ];
         for ch in negative_arms {

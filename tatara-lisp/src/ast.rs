@@ -440,6 +440,112 @@ impl Atom {
     /// consumer sites inside one reader file.
     pub const STR_ESCAPE_LEAD: char = '\\';
 
+    /// Canonical Str-payload escape-table projection — total closed-set
+    /// decode from the ONE post-escape-lead source byte the reader's
+    /// escape-handler branch consumes to the ONE decoded byte pushed
+    /// onto the accumulated Str payload. ONE typed projection on the
+    /// closed-set [`Atom`] algebra that the substrate's Str-escape
+    /// decode boundary binds to; every consumer that reaches inside a
+    /// [`Self::Str`] payload for a backslash-escape sequence routes
+    /// through THIS method rather than a per-site inline
+    /// `match esc { … }` table.
+    ///
+    /// Closes the Str-payload tokenization boundary that
+    /// [`Self::STR_DELIMITER`] + [`Self::STR_ESCAPE_LEAD`] began: where
+    /// those two constants pin the ONE canonical delimiter byte AND
+    /// the ONE canonical escape-lead byte the reader's outer + inner
+    /// branch dispatch specialises on, this method pins the ONE
+    /// canonical decode table the escape-handler's inner branch
+    /// consumes AFTER the escape-lead byte fires. The three constants
+    /// together span the Str-payload tokenization axis — every byte
+    /// the reader's `Token::Str` accumulation loop reads either
+    /// terminates the payload (`STR_DELIMITER`), triggers the escape
+    /// handler (`STR_ESCAPE_LEAD`), pushes through unchanged
+    /// (passthrough), OR is fed into THIS method as the escape source
+    /// byte AND its result pushed onto the payload.
+    ///
+    /// Total function: EVERY `char` maps to exactly one decoded
+    /// `char`. The five typed arms bind the substrate's canonical
+    /// escape shorthand:
+    ///
+    /// | esc source                | decoded byte              |
+    /// | ------------------------- | ------------------------- |
+    /// | `'n'`                     | `'\n'`                    |
+    /// | `'t'`                     | `'\t'`                    |
+    /// | `'r'`                     | `'\r'`                    |
+    /// | `Self::STR_DELIMITER`     | `Self::STR_DELIMITER`     |
+    /// | `Self::STR_ESCAPE_LEAD`   | `Self::STR_ESCAPE_LEAD`   |
+    /// | any other `char`          | itself (passthrough)      |
+    ///
+    /// The two self-escape arms (`STR_DELIMITER → STR_DELIMITER`,
+    /// `STR_ESCAPE_LEAD → STR_ESCAPE_LEAD`) are the ONLY
+    /// pattern-equals-value arms in the table; both bind through the
+    /// closed-set [`Atom`] algebra constants so a delimiter-swap or
+    /// escape-lead-swap on the algebra propagates through pattern AND
+    /// value at ONE site rather than as scattered inline byte literals
+    /// that would silently drift out of round-trip agreement if one
+    /// was updated without the other.
+    ///
+    /// The three named-escape arms (`'n'` / `'t'` / `'r'`) are the
+    /// substrate's canonical whitespace shorthand — pattern-distinct-
+    /// from-value on every arm (each maps a printable ASCII letter to
+    /// its corresponding C0 control byte). Pre-lift the whole table
+    /// lived inline at ONE site inside [`crate::reader::tokenize`]'s
+    /// escape-handler branch; post-lift the table lives at ONE typed
+    /// projection on the [`Atom`] algebra that the reader consumes
+    /// through a single `Self::decode_str_escape(esc)` call. Adding a
+    /// sixth named-escape arm (e.g. `'0' → '\0'` for the NUL byte, or
+    /// an `'x'` hex-byte-prefix arm) extends THIS method's match
+    /// rather than mutating the reader's inline block.
+    ///
+    /// Load-bearing round-trip contract: for every `esc: char`,
+    /// `read(&format!("{}{}{}{}", Atom::STR_DELIMITER,
+    /// Atom::STR_ESCAPE_LEAD, esc, Atom::STR_DELIMITER))[0] ==
+    /// Sexp::Atom(Atom::string(Atom::decode_str_escape(esc)
+    /// .to_string()))`. Every escape-source byte inside a
+    /// STR_DELIMITER-wrapped payload decodes through THIS projection
+    /// end-to-end — pinning the (reader escape-handler branch, this
+    /// method) pairing against a silent drift at either side. A
+    /// regression that re-inlines the reader's table would break the
+    /// pin the moment a new arm lands here but NOT there (or vice
+    /// versa).
+    ///
+    /// Sibling-shape peer of [`QuoteForm::from_lead_char`] on the
+    /// closed-set [`QuoteForm`] algebra: where `from_lead_char` is
+    /// the ONE typed dispatch on the outer-tokenizer quote-family
+    /// axis (four homoiconic prefix chars decode to `Option<Self>`),
+    /// this method is the ONE typed dispatch on the inner-tokenizer
+    /// Str-escape axis (every escape-source char decodes to a
+    /// resolved `char`). Both are the substrate's canonical
+    /// closed-set projections the reader consumes through ONE call
+    /// site each; both close the reader's per-char specialization
+    /// point onto the algebra.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Str-escape source byte, decoded byte) pairing now binds at
+    /// ONE typed projection on the closed-set [`Atom`] algebra
+    /// regardless of which consumer reaches in. THEORY.md §VI.1 —
+    /// generation over composition; the reader's five-arm inline
+    /// table plus one passthrough arm at [`crate::reader::tokenize`]
+    /// collapses onto ONE named projection. THEORY.md §V.1 — knowable
+    /// platform; the canonical Str-escape decode table becomes a
+    /// TYPE-level method on the substrate algebra rather than an
+    /// inline block inside one reader file — a future decoder
+    /// (e.g. a Racket-compat port, a heredoc mode, a raw-string
+    /// mode) plugs a peer projection onto the same algebra rather
+    /// than forking the reader.
+    #[must_use]
+    pub const fn decode_str_escape(esc: char) -> char {
+        match esc {
+            'n' => '\n',
+            't' => '\t',
+            'r' => '\r',
+            Self::STR_DELIMITER => Self::STR_DELIMITER,
+            Self::STR_ESCAPE_LEAD => Self::STR_ESCAPE_LEAD,
+            other => other,
+        }
+    }
+
     /// Canonical [`Self::Symbol`] constructor — first of the six per-
     /// variant typed-construct methods on the closed-set [`Atom`]
     /// algebra. Takes `impl Into<String>` so the consumer composes any
@@ -17178,6 +17284,185 @@ mod tests {
              handler's self-escape arm's pattern + value pair drifted \
              from the Atom::STR_ESCAPE_LEAD constant",
         );
+    }
+
+    // ── `Atom::decode_str_escape` — the ONE typed Str-escape decode
+    // projection on the closed-set [`Atom`] algebra. Pins the six-arm
+    // decode table (three named-escape arms `'n' / 't' / 'r'`, two
+    // pattern-equals-value self-escape arms on
+    // [`Atom::STR_DELIMITER`] + [`Atom::STR_ESCAPE_LEAD`], one
+    // passthrough `other`) AND the reader-level composition through
+    // [`crate::reader::tokenize`]'s escape-handler branch. Sibling-shape
+    // peer of the `atom_str_escape_lead_*` block above on the same
+    // Str-payload tokenization boundary: where those pin the
+    // ESCAPE-LEAD byte's two round-trip sites, these pin the escape
+    // TABLE's decode arms end-to-end.
+
+    #[test]
+    fn atom_decode_str_escape_named_escape_arms_project_canonical_c0_control_bytes() {
+        // NAMED-ESCAPE CONTRACT: the three canonical whitespace-
+        // shorthand arms map each ASCII letter to its corresponding
+        // C0 control byte. Pins the ONE typed projection's arms so a
+        // regression that swaps ONE arm's decoded byte (e.g. drifts
+        // `'n' → '\r'`, breaking the substrate's canonical newline
+        // shorthand) surfaces at this pin rather than at some
+        // downstream Str-payload round-trip.
+        assert_eq!(
+            Atom::decode_str_escape('n'),
+            '\n',
+            "decode_str_escape('n') drifted from the substrate-canonical \
+             newline (`\\n`) shorthand — the reader's escape-handler \
+             branch's `'n' → '\\n'` arm binds to THIS projection.",
+        );
+        assert_eq!(
+            Atom::decode_str_escape('t'),
+            '\t',
+            "decode_str_escape('t') drifted from the substrate-canonical \
+             tab (`\\t`) shorthand.",
+        );
+        assert_eq!(
+            Atom::decode_str_escape('r'),
+            '\r',
+            "decode_str_escape('r') drifted from the substrate-canonical \
+             carriage-return (`\\r`) shorthand.",
+        );
+    }
+
+    #[test]
+    fn atom_decode_str_escape_self_escape_arms_route_through_atom_algebra_constants() {
+        // SELF-ESCAPE CONTRACT: the two pattern-equals-value arms in
+        // the escape table bind through the closed-set [`Atom`]
+        // algebra constants at BOTH pattern AND value. Pin that
+        // decoding the delimiter byte OR the escape-lead byte from
+        // its escaped form recovers the SAME algebra constant — a
+        // delimiter-swap on the algebra propagates through pattern
+        // AND value at ONE site (the `decode_str_escape` match arm)
+        // rather than as scattered inline byte literals. Sibling-
+        // shape pin to
+        // `reader_str_escape_self_escape_arm_routes_through_atom_str_delimiter`
+        // AND
+        // `reader_str_escape_lead_outer_arm_and_self_escape_arm_route_through_atom_str_escape_lead`
+        // — where those anchor the reader's inner-loop dispatch to
+        // the constants, this anchors the algebra-level projection's
+        // pattern-equals-value arms to the SAME constants so the
+        // reader-round-trip through `decode_str_escape` cannot drift
+        // if the constants ever change.
+        assert_eq!(
+            Atom::decode_str_escape(Atom::STR_DELIMITER),
+            Atom::STR_DELIMITER,
+            "decode_str_escape(STR_DELIMITER) drifted from the self-\
+             escape identity on the Str-payload delimiter axis — the \
+             `\\\"` sequence must decode to the STR_DELIMITER byte.",
+        );
+        assert_eq!(
+            Atom::decode_str_escape(Atom::STR_ESCAPE_LEAD),
+            Atom::STR_ESCAPE_LEAD,
+            "decode_str_escape(STR_ESCAPE_LEAD) drifted from the self-\
+             escape identity on the Str-payload escape-lead axis — \
+             the `\\\\` sequence must decode to the STR_ESCAPE_LEAD \
+             byte.",
+        );
+    }
+
+    #[test]
+    fn atom_decode_str_escape_passthrough_arm_returns_source_byte_unchanged_for_non_named_chars() {
+        // PASSTHROUGH CONTRACT: every `esc` NOT bound by the five
+        // typed arms (three named + two self-escape) decodes to
+        // itself. Pins the total-function property of the projection
+        // — every `char` maps to exactly one decoded `char`, and the
+        // decode is identity outside the closed-set table. A
+        // regression that stripped the `other => other` fallthrough
+        // (e.g. swapped it for a diagnostic path or a `Result` return
+        // shape) surfaces at this pin. Sweep a representative
+        // cross-section of ASCII printable + non-ASCII payload bytes
+        // that MUST NOT alias any of the five typed arms — the
+        // reader's pre-lift six-arm table pushed each of these
+        // through unchanged, and the typed projection must preserve
+        // that identity end-to-end.
+        for esc in ['a', 'z', '0', '9', '!', '/', '<', '≠', 'π', '🌱'] {
+            // Cross-arm disjointness precondition — none of the swept
+            // chars may alias the five typed arms; otherwise the sweep
+            // conflates passthrough with a typed decode and no longer
+            // pins the fallthrough identity.
+            assert!(
+                !matches!(esc, 'n' | 't' | 'r')
+                    && esc != Atom::STR_DELIMITER
+                    && esc != Atom::STR_ESCAPE_LEAD,
+                "passthrough sweep char `{esc}` aliases a typed \
+                 escape-table arm — the sweep no longer pins the \
+                 `other => other` fallthrough",
+            );
+            assert_eq!(
+                Atom::decode_str_escape(esc),
+                esc,
+                "decode_str_escape({esc:?}) drifted from the passthrough \
+                 identity — every non-named-escape byte must decode to \
+                 itself so the reader's `\\{esc}` sequence yields the \
+                 payload byte `{esc}`.",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_decode_str_escape_composes_end_to_end_through_reader_for_every_named_arm() {
+        // END-TO-END COMPOSITION CONTRACT: pin that every typed
+        // escape-table arm — the three named-escape arms + the two
+        // pattern-equals-value self-escape arms + a representative
+        // passthrough — decodes through the reader's full
+        // escape-handler pipeline via ONE
+        // `Atom::decode_str_escape(esc)` call. Wrap each `esc` in a
+        // STR_DELIMITER-wrapped, STR_ESCAPE_LEAD-led source, run it
+        // through [`crate::reader::read`], and assert the resulting
+        // Str payload equals `decode_str_escape(esc).to_string()`.
+        // A regression that re-inlined the reader's table (e.g.
+        // reverted the escape-handler branch to per-arm literals AND
+        // added a sixth named-escape arm to
+        // [`Atom::decode_str_escape`] without updating the reader)
+        // fails HERE at the first arm whose decode diverges.
+        //
+        // Sibling-shape pin to
+        // `atom_str_escape_lead_closes_reader_self_escape_round_trip_for_backslash_payload`
+        // — where that pin exercises the SINGLE self-escape arm on
+        // the escape-lead axis end-to-end, this sweep exercises the
+        // FULL closed-set table on the same axis.
+        for esc in [
+            'n',
+            't',
+            'r',
+            Atom::STR_DELIMITER,
+            Atom::STR_ESCAPE_LEAD,
+            'x',
+        ] {
+            let source = format!(
+                "{}{}{}{}",
+                Atom::STR_DELIMITER,
+                Atom::STR_ESCAPE_LEAD,
+                esc,
+                Atom::STR_DELIMITER,
+            );
+            let forms = crate::reader::read(&source).unwrap_or_else(|e| {
+                panic!(
+                    "reader rejected `{source}` composed from \
+                     STR_DELIMITER + STR_ESCAPE_LEAD + `{esc}`: {e}"
+                )
+            });
+            assert_eq!(
+                forms.len(),
+                1,
+                "escape sweep for `{esc}` must read as exactly one form, \
+                 got {forms:?}",
+            );
+            let decoded = Atom::decode_str_escape(esc);
+            assert_eq!(
+                forms[0],
+                Sexp::Atom(Atom::string(decoded.to_string())),
+                "escape sweep for `{esc}` drifted from \
+                 Sexp::Atom(Atom::string(decode_str_escape({esc:?}) = \
+                 {decoded:?}).to_string()) — the reader's escape-handler \
+                 branch OR Atom::decode_str_escape drifted from the ONE \
+                 shared closed-set escape-table projection",
+            );
+        }
     }
 
     // ── `Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE` — the paired canonical

@@ -176,32 +176,32 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
                         // in lockstep at ONE constant.
                         Some((_, Atom::STR_ESCAPE_LEAD)) => {
                             if let Some((_, esc)) = chars.next() {
-                                s.push(match esc {
-                                    'n' => '\n',
-                                    't' => '\t',
-                                    'r' => '\r',
-                                    // Self-escape: `\"` unescapes to the
-                                    // canonical delimiter byte. Pattern
-                                    // AND value both bind to
-                                    // `Atom::STR_DELIMITER` so a future
-                                    // delimiter swap flips both sides in
-                                    // lockstep at ONE constant.
-                                    Atom::STR_DELIMITER => Atom::STR_DELIMITER,
-                                    // Self-escape: `\\` unescapes to the
-                                    // canonical escape-lead byte. Pattern
-                                    // AND mapped value both bind to
-                                    // [`Atom::STR_ESCAPE_LEAD`] so a
-                                    // future escape-lead swap flips both
-                                    // sides in lockstep at ONE constant.
-                                    // Sibling posture to the
-                                    // `Atom::STR_DELIMITER` self-escape
-                                    // arm above — the escape table's TWO
-                                    // pattern-equals-value arms sit on
-                                    // the algebra's two Str-payload
-                                    // delimiter-axis constants.
-                                    Atom::STR_ESCAPE_LEAD => Atom::STR_ESCAPE_LEAD,
-                                    other => other,
-                                });
+                                // Escape-decode arm — the ONE post-
+                                // escape-lead source byte routed through
+                                // the closed-set [`Atom::decode_str_escape`]
+                                // projection on the [`Atom`] algebra.
+                                // Pre-lift this arm held its own inline
+                                // six-arm `match esc { … }` table (three
+                                // named-escape arms `'n' / 't' / 'r'`,
+                                // two pattern-equals-value self-escape
+                                // arms on [`Atom::STR_DELIMITER`] +
+                                // [`Atom::STR_ESCAPE_LEAD`], one
+                                // passthrough `other`); post-lift the
+                                // WHOLE table binds at ONE typed
+                                // projection on the algebra so a new
+                                // named-escape arm (e.g. `'0' → '\0'`,
+                                // `'x' → hex-byte`), a heredoc-mode
+                                // suspension, or a Racket-compat swap
+                                // extends the algebra ONCE rather than
+                                // mutating this inline block. Sibling
+                                // posture to the outer-arm's
+                                // [`QuoteForm::from_lead_char`] dispatch:
+                                // where `from_lead_char` is the ONE
+                                // typed dispatch on the outer-tokenizer
+                                // quote-family axis, `decode_str_escape`
+                                // is the ONE typed dispatch on the
+                                // inner-tokenizer Str-escape axis.
+                                s.push(Atom::decode_str_escape(esc));
                             }
                         }
                         // String-closing arm — the canonical `"` byte

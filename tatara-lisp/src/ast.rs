@@ -199,6 +199,95 @@ impl Atom {
     /// consumer surfaces.
     pub const KEYWORD_MARKER: &'static str = ":";
 
+    /// Canonical `:` LEAD `char` of the [`Self::KEYWORD_MARKER`] prefix
+    /// (`":"`) — the ONE canonical `char` on the [`Atom`] algebra the
+    /// substrate's Keyword-prefix lead-byte disjointness contract binds
+    /// to.
+    ///
+    /// Sibling posture to the closed set of `pub const` reader-punctuation
+    /// canonical `char` bytes on the substrate: [`Self::STR_DELIMITER`]
+    /// (`'"'`), [`Self::STR_ESCAPE_LEAD`] (`'\\'`),
+    /// [`Self::BOOL_LITERAL_LEAD`] (`'#'`), [`Sexp::LIST_OPEN`] (`'('`),
+    /// [`Sexp::LIST_CLOSE`] (`')'`), [`Sexp::COMMENT_LEAD`] (`';'`),
+    /// [`Sexp::COMMENT_TERM`] (`'\n'`), [`QuoteForm::SPLICE_DISCRIMINATOR`]
+    /// (`'@'`) — every canonical per-role byte the reader's tokenizer
+    /// specialises on is a `pub const` on its owning closed-set algebra.
+    /// This constant closes the Keyword-prefix lead byte at the SAME
+    /// algebra as its one-char [`Self::KEYWORD_MARKER`] `&'static str`
+    /// projection — the ONE `char` that the `&'static str` projects to
+    /// when the substrate's consumer needs a `char` (not a `&str`) for
+    /// cross-axis marker-byte comparisons or for the reader's
+    /// specific-arm outer-dispatch.
+    ///
+    /// Structural round-trip contract:
+    /// `Self::KEYWORD_MARKER.starts_with(Self::KEYWORD_MARKER_LEAD)` —
+    /// pinned by
+    /// `atom_keyword_marker_lead_prefixes_keyword_marker`. A regression
+    /// that drifts EITHER the constant OR the [`Self::KEYWORD_MARKER`]
+    /// spelling surfaces at the pin rather than at a silent Keyword-
+    /// prefix reader drift where `:foo` classifies as [`Self::Symbol`]
+    /// instead of [`Self::Keyword`]. Sibling-shape peer of
+    /// [`Self::BOOL_LITERAL_LEAD`]'s
+    /// `Self::bool_literal(b).starts_with(Self::BOOL_LITERAL_LEAD)`
+    /// round-trip law: where that pin binds the Bool-family two spellings
+    /// to their shared lead byte, this pin binds the Keyword-marker
+    /// one-char prefix to its projected lead byte.
+    ///
+    /// Disjointness contract: `KEYWORD_MARKER_LEAD`'s byte MUST differ
+    /// from [`Self::STR_DELIMITER`] (`'"'`), [`Self::STR_ESCAPE_LEAD`]
+    /// (`'\\'`), [`Self::BOOL_LITERAL_LEAD`] (`'#'`),
+    /// [`Sexp::LIST_OPEN`] (`'('`), [`Sexp::LIST_CLOSE`] (`')'`),
+    /// [`Sexp::COMMENT_LEAD`] (`';'`), [`Sexp::COMMENT_TERM`]
+    /// (`'\n'`), every [`QuoteForm::lead_char`] projection AND
+    /// [`QuoteForm::SPLICE_DISCRIMINATOR`] (`'@'`) — every other
+    /// closed-set outer-marker byte the reader's tokenizer specialises
+    /// on. A collision would silently break the reader's outer
+    /// dispatch: a `:`-prefixed bare atom `:foo` would collide with
+    /// whichever marker it aliased. Pinned by
+    /// `atom_keyword_marker_lead_distinct_from_every_other_algebra_marker`.
+    ///
+    /// Consumer sites this constant closes: SEVEN test-surface sites
+    /// that pre-lift each extracted the lead byte via
+    /// `Atom::KEYWORD_MARKER.chars().next().expect(_)` (or `.unwrap()`) —
+    /// the Keyword arm of the [`Sexp::is_bare_atom_boundary`] negative
+    /// sweep AND the six cross-axis disjointness pins on the sibling
+    /// marker-byte algebras
+    /// ([`QuoteForm::SPLICE_DISCRIMINATOR`], [`Self::BOOL_LITERAL_LEAD`],
+    /// [`Self::STR_DELIMITER`], [`Self::STR_ESCAPE_LEAD`],
+    /// [`Sexp::LIST_OPEN`] / [`Sexp::LIST_CLOSE`],
+    /// [`Sexp::COMMENT_LEAD`], [`Sexp::COMMENT_TERM`]) — collapse onto
+    /// ONE named byte on the substrate algebra.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Keyword-prefix lead byte, canonical `':'`) pairing binds at ONE
+    /// constant on the closed-set outer [`Atom`] algebra regardless of
+    /// which reader-surface consumer reaches in. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the
+    /// `Self::KEYWORD_MARKER.starts_with(Self::KEYWORD_MARKER_LEAD)`
+    /// round-trip law is a coherence proof BETWEEN the paired projection
+    /// ([`Self::KEYWORD_MARKER`]) AND its projected lead byte (this
+    /// constant) on ONE algebra — a regression that drifts either side
+    /// surfaces at the pin rather than as a silent Keyword-prefix reader
+    /// drift. THEORY.md §V.1 — knowable platform; the canonical
+    /// Keyword-prefix lead byte becomes a TYPE-level constant on the
+    /// substrate algebra rather than an inline
+    /// `.chars().next().expect(_)` extraction at every test surface AND
+    /// an inline `':'` mention across every docstring pinning the
+    /// disjointness contract.
+    ///
+    /// Frontier inspiration: Racket's `read-syntax` colon-prefix reader
+    /// hook (`#:name` for keyword args, `::name` for module-scoped bindings
+    /// in some dialects) — where the `:` prefix dispatches keyword-family
+    /// reader-macros keyed on ONE typed lead byte on the port's reader
+    /// table. Translated to tatara-lisp: `Atom::KEYWORD_MARKER_LEAD`
+    /// becomes the ONE typed lead byte on the closed-set outer [`Atom`]
+    /// algebra that a future keyword-family peer method (e.g. a
+    /// Clojure-compat port to `::foo` namespaced keywords) can extend
+    /// through — the paired-prefix discipline that Racket's read-syntax
+    /// table carries lands here as a `pub const` on the algebra rather
+    /// than as an inline char literal at every consumer site.
+    pub const KEYWORD_MARKER_LEAD: char = ':';
+
     /// Project the closed-set `bool` domain to its canonical Scheme-
     /// spelling `&'static str` — `"#t"` for `true`, `"#f"` for `false`.
     /// ONE projection on the [`Atom`] algebra that the substrate's
@@ -9542,14 +9631,14 @@ mod tests {
         assert_ne!(QuoteForm::SPLICE_DISCRIMINATOR, Sexp::LIST_OPEN);
         assert_ne!(QuoteForm::SPLICE_DISCRIMINATOR, Sexp::LIST_CLOSE);
         assert_ne!(QuoteForm::SPLICE_DISCRIMINATOR, Sexp::COMMENT_LEAD);
-        // KEYWORD_MARKER is a `&'static str`; compare against its first char.
-        assert_ne!(
-            QuoteForm::SPLICE_DISCRIMINATOR,
-            Atom::KEYWORD_MARKER
-                .chars()
-                .next()
-                .expect("KEYWORD_MARKER must have at least one char"),
-        );
+        // The KEYWORD_MARKER prefix's canonical LEAD `char` lives at
+        // the typed `Atom::KEYWORD_MARKER_LEAD` constant on the closed-
+        // set outer [`Atom`] algebra. Pre-lift this slot held an inline
+        // `Atom::KEYWORD_MARKER.chars().next().expect(_)` extraction;
+        // post-lift the byte lives at ONE named constant that the
+        // [`Atom::KEYWORD_MARKER`] `&'static str` projects to (pinned
+        // by `atom_keyword_marker_lead_prefixes_keyword_marker`).
+        assert_ne!(QuoteForm::SPLICE_DISCRIMINATOR, Atom::KEYWORD_MARKER_LEAD);
         // Both `#t` / `#f` spellings share `Atom::BOOL_LITERAL_LEAD`
         // (`'#'`) as the lead byte. Pre-lift each spelling was
         // extracted via `Atom::bool_literal(b).chars().next().expect(_)`
@@ -17533,6 +17622,167 @@ mod tests {
         }
     }
 
+    // ── `Atom::KEYWORD_MARKER_LEAD` — the canonical `:` LEAD `char`
+    // of the `Atom::KEYWORD_MARKER` `&'static str` prefix, routed
+    // through the SEVEN test-surface sites that pre-lift each extracted
+    // the byte via `Atom::KEYWORD_MARKER.chars().next().expect(_)`
+    // (or `.unwrap()`) — the Keyword arm of the
+    // `Sexp::is_bare_atom_boundary` negative sweep AND the six cross-
+    // axis disjointness pins on the sibling marker-byte algebras
+    // (`SPLICE_DISCRIMINATOR`, `BOOL_LITERAL_LEAD`, `STR_DELIMITER`,
+    // `STR_ESCAPE_LEAD`, `LIST_OPEN` / `LIST_CLOSE`, `COMMENT_LEAD`,
+    // `COMMENT_TERM`). Sibling-shape tests to the `atom_bool_literal_lead_*`
+    // block below (Bool-family shared LEAD-byte axis) and the
+    // `atom_str_delimiter_*` / `atom_str_escape_lead_*` blocks below
+    // (Str-payload delimiter + escape-lead axes) — pins the SAME shape
+    // on the Keyword-prefix LEAD-byte axis of the closed-set outer
+    // [`Atom`] algebra.
+
+    #[test]
+    fn atom_keyword_marker_lead_projects_canonical_colon_char() {
+        // Pins the constant's exact `char` value so a typo (`';'`,
+        // `'.'`, `'!'`) or an accidental redefinition surfaces
+        // immediately. Sibling-shape pin to
+        // `atom_bool_literal_lead_projects_canonical_hash_char`
+        // (the Bool-family shared LEAD-byte axis) and
+        // `atom_str_delimiter_projects_canonical_double_quote_char`
+        // (the Str-payload delimiter axis) — pins the SAME shape on
+        // the Keyword-prefix LEAD-byte axis of the closed-set outer
+        // [`Atom`] algebra.
+        assert_eq!(
+            Atom::KEYWORD_MARKER_LEAD,
+            ':',
+            "KEYWORD_MARKER_LEAD char drifted from the substrate- \
+             canonical `:` LEAD byte — the seven test-surface sites \
+             that pre-lift each extracted this byte from \
+             Atom::KEYWORD_MARKER via `.chars().next().expect(_)` all \
+             bind to this ONE constant.",
+        );
+    }
+
+    #[test]
+    fn atom_keyword_marker_lead_prefixes_keyword_marker() {
+        // STRUCTURAL ROUND-TRIP CONTRACT: the `&'static str` prefix
+        // `Atom::KEYWORD_MARKER` starts with the `char` LEAD byte
+        // `Atom::KEYWORD_MARKER_LEAD` — the projection law that binds
+        // the two typed constants on the outer [`Atom`] algebra. A
+        // regression that renames the `&'static str` (e.g. `"#:"` for
+        // a Racket-compat `#:name` keyword-arg port) OR the `char`
+        // (e.g. to `'.'` for a dotted-path prefix) without updating the
+        // other fails HERE — the structural invariant that
+        // `KEYWORD_MARKER_LEAD` IS the lead byte of `KEYWORD_MARKER`
+        // is what makes the seven consumer sites safe to route
+        // through the `char` constant instead of the `&'static str`
+        // projection. Sibling-shape pin to
+        // `atom_bool_literal_lead_prefixes_every_bool_literal_spelling`
+        // on the Bool-family axis: where that pin sweeps every `b:
+        // bool` spelling to prove BOTH spellings share the lead byte,
+        // this pin binds the one-char `KEYWORD_MARKER` prefix to its
+        // projected lead byte via a single `starts_with` call.
+        //
+        // Load-bearing: this pin IS the "the two typed constants
+        // project onto each other" invariant that lets the seven
+        // consumer sites bind to the `char` constant instead of the
+        // `.chars().next().expect(_)` chain on the `&'static str`.
+        assert!(
+            Atom::KEYWORD_MARKER.starts_with(Atom::KEYWORD_MARKER_LEAD),
+            "Atom::KEYWORD_MARKER `{}` does NOT start with \
+             Atom::KEYWORD_MARKER_LEAD `{:?}` — the two typed constants \
+             have drifted apart on the closed-set outer [`Atom`] \
+             algebra; the seven consumer sites that route through the \
+             `char` constant instead of the `&'static str` projection \
+             would silently disagree with the reader's actual `:foo` \
+             classification.",
+            Atom::KEYWORD_MARKER,
+            Atom::KEYWORD_MARKER_LEAD,
+        );
+    }
+
+    #[test]
+    fn atom_keyword_marker_lead_distinct_from_every_other_algebra_marker() {
+        // CROSS-AXIS DISJOINTNESS PIN: `Atom::KEYWORD_MARKER_LEAD`
+        // MUST NOT alias any sibling outer-marker `char` on the
+        // substrate's other closed-set algebras — the Str-payload
+        // delimiter (`Atom::STR_DELIMITER`), Str-payload escape lead
+        // (`Atom::STR_ESCAPE_LEAD`), Bool-family shared lead
+        // (`Atom::BOOL_LITERAL_LEAD`), the paired list delimiters
+        // (`Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE`), the paired line-
+        // comment delimiters (`Sexp::COMMENT_LEAD` /
+        // `Sexp::COMMENT_TERM`), every `QuoteForm::lead_char`
+        // projection, AND `QuoteForm::SPLICE_DISCRIMINATOR`. A
+        // collision would silently break the reader's outer dispatch:
+        // a `:`-prefixed bare atom `:foo` would collide with whichever
+        // marker it aliased. Sibling-shape pin to
+        // `atom_bool_literal_lead_distinct_from_every_other_algebra_marker`
+        // (the Bool-family LEAD-byte axis) — pins the SAME shape at
+        // the Keyword-prefix LEAD-byte axis. A future outer-marker
+        // extension that collided with `':'` fails HERE at the cross-
+        // axis enumeration.
+        assert_ne!(
+            Atom::KEYWORD_MARKER_LEAD,
+            Atom::STR_DELIMITER,
+            "KEYWORD_MARKER_LEAD collides with STR_DELIMITER — a bare \
+             `:foo` would ambiguously begin a keyword AND open a \
+             string.",
+        );
+        assert_ne!(
+            Atom::KEYWORD_MARKER_LEAD,
+            Atom::STR_ESCAPE_LEAD,
+            "KEYWORD_MARKER_LEAD collides with STR_ESCAPE_LEAD — the \
+             reader's Str-escape lead byte would alias the Keyword- \
+             prefix lead byte.",
+        );
+        assert_ne!(
+            Atom::KEYWORD_MARKER_LEAD,
+            Atom::BOOL_LITERAL_LEAD,
+            "KEYWORD_MARKER_LEAD collides with BOOL_LITERAL_LEAD — a \
+             bare `:foo` would ambiguously begin a keyword AND \
+             classify as a Bool.",
+        );
+        assert_ne!(
+            Atom::KEYWORD_MARKER_LEAD,
+            Sexp::LIST_OPEN,
+            "KEYWORD_MARKER_LEAD collides with LIST_OPEN — a bare \
+             `:foo` would ambiguously begin a keyword AND open a list.",
+        );
+        assert_ne!(
+            Atom::KEYWORD_MARKER_LEAD,
+            Sexp::LIST_CLOSE,
+            "KEYWORD_MARKER_LEAD collides with LIST_CLOSE — a bare \
+             `:foo` would ambiguously begin a keyword AND close a list.",
+        );
+        assert_ne!(
+            Atom::KEYWORD_MARKER_LEAD,
+            Sexp::COMMENT_LEAD,
+            "KEYWORD_MARKER_LEAD collides with COMMENT_LEAD — a bare \
+             `:foo` would ambiguously begin a keyword AND begin a \
+             comment.",
+        );
+        assert_ne!(
+            Atom::KEYWORD_MARKER_LEAD,
+            Sexp::COMMENT_TERM,
+            "KEYWORD_MARKER_LEAD collides with COMMENT_TERM — the \
+             reader's line-comment discard loop would terminate on \
+             the SAME byte the from_lexeme keyword-prefix arm binds to.",
+        );
+        for qf in QuoteForm::ALL {
+            assert_ne!(
+                Atom::KEYWORD_MARKER_LEAD,
+                qf.lead_char(),
+                "KEYWORD_MARKER_LEAD collides with QuoteForm::{qf:?}'s \
+                 lead_char — a bare `:foo` would ambiguously begin a \
+                 keyword AND begin a quote-family prefix.",
+            );
+        }
+        assert_ne!(
+            Atom::KEYWORD_MARKER_LEAD,
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            "KEYWORD_MARKER_LEAD collides with SPLICE_DISCRIMINATOR — \
+             the reader's `,@` splice-promotion peek byte would alias \
+             the Keyword-prefix lead byte.",
+        );
+    }
+
     // ── `Atom::bool_literal` — the ONE projection routing the closed-set
     // `bool` domain through its canonical Scheme spelling across the two
     // Bool-round-trip sites (reader-entry classifier, Lisp canonical
@@ -17761,16 +18011,12 @@ mod tests {
              reader's Str-escape lead byte would alias the Bool-\
              family lead byte.",
         );
-        let kw_lead = Atom::KEYWORD_MARKER
-            .chars()
-            .next()
-            .expect("KEYWORD_MARKER must have at least one char");
         assert_ne!(
             Atom::BOOL_LITERAL_LEAD,
-            kw_lead,
-            "BOOL_LITERAL_LEAD collides with KEYWORD_MARKER's lead \
-             byte — a bare `#t` would ambiguously begin a keyword AND \
-             classify as a Bool.",
+            Atom::KEYWORD_MARKER_LEAD,
+            "BOOL_LITERAL_LEAD collides with KEYWORD_MARKER_LEAD — a \
+             bare `#t` would ambiguously begin a keyword AND classify \
+             as a Bool.",
         );
         for qf in QuoteForm::ALL {
             assert_ne!(
@@ -17835,20 +18081,22 @@ mod tests {
         // marker-swap that accidentally collides two axes surfaces
         // at this pin rather than as a silent reader misclassification.
         //
-        // `KEYWORD_MARKER` is `":"` (single-char) — its byte MUST
-        // differ from `STR_DELIMITER`'s (`'"'`) so `:foo` never
-        // opens a string. The two `bool_literal` spellings (`"#t"`,
-        // `"#f"`) begin with `'#'` — a two-char prefix distinct from
-        // the single `'"'` STR_DELIMITER — so a bare `#t` never
-        // opens a string either. Pin the byte-level disjointness
-        // directly here so any future refactor that swaps a marker
-        // to collide with STR_DELIMITER fails loudly.
+        // `KEYWORD_MARKER` is `":"` (single-char) — its LEAD `char`
+        // lives at `Atom::KEYWORD_MARKER_LEAD` on the closed-set outer
+        // [`Atom`] algebra AND MUST differ from `STR_DELIMITER`'s
+        // (`'"'`) so `:foo` never opens a string. The two
+        // `bool_literal` spellings (`"#t"`, `"#f"`) begin with `'#'` —
+        // a two-char prefix distinct from the single `'"'`
+        // STR_DELIMITER — so a bare `#t` never opens a string either.
+        // Pin the byte-level disjointness directly here so any future
+        // refactor that swaps a marker to collide with STR_DELIMITER
+        // fails loudly.
         assert_ne!(
-            Atom::STR_DELIMITER.to_string(),
-            Atom::KEYWORD_MARKER,
-            "STR_DELIMITER and KEYWORD_MARKER share a byte — a bare \
-             `{}foo` lexeme would ambiguously open a string AND begin a \
-             keyword classification.",
+            Atom::STR_DELIMITER,
+            Atom::KEYWORD_MARKER_LEAD,
+            "STR_DELIMITER and KEYWORD_MARKER_LEAD share a byte — a \
+             bare `{}foo` lexeme would ambiguously open a string AND \
+             begin a keyword classification.",
             Atom::KEYWORD_MARKER,
         );
         for b in [true, false] {
@@ -17966,11 +18214,11 @@ mod tests {
              would ambiguously route through the string-closing arm.",
         );
         assert_ne!(
-            Atom::STR_ESCAPE_LEAD.to_string(),
-            Atom::KEYWORD_MARKER,
-            "STR_ESCAPE_LEAD and KEYWORD_MARKER share a byte — a bare \
-             `{}foo` lexeme would ambiguously match the escape-lead \
-             AND begin a keyword classification.",
+            Atom::STR_ESCAPE_LEAD,
+            Atom::KEYWORD_MARKER_LEAD,
+            "STR_ESCAPE_LEAD and KEYWORD_MARKER_LEAD share a byte — a \
+             bare `{}foo` lexeme would ambiguously match the escape- \
+             lead AND begin a keyword classification.",
             Atom::KEYWORD_MARKER,
         );
         for b in [true, false] {
@@ -18306,26 +18554,26 @@ mod tests {
             Atom::STR_DELIMITER,
         );
 
-        // Third: opener/closer disjoint from KEYWORD_MARKER's byte
-        // (single-char `":"` on the outer axis) — `KEYWORD_MARKER` is
-        // a `&'static str` so compare against its first byte's char.
-        let kw_char = Atom::KEYWORD_MARKER
-            .chars()
-            .next()
-            .expect("KEYWORD_MARKER must be non-empty");
+        // Third: opener/closer disjoint from KEYWORD_MARKER's LEAD
+        // `char` (single-char `":"` on the outer axis) — the
+        // `Atom::KEYWORD_MARKER` `&'static str`'s projected lead byte
+        // lives at `Atom::KEYWORD_MARKER_LEAD` on the closed-set
+        // outer [`Atom`] algebra.
         assert_ne!(
             Sexp::LIST_OPEN,
-            kw_char,
-            "LIST_OPEN and KEYWORD_MARKER share a byte — a bare `{}foo` \
-             lexeme would ambiguously begin a list AND begin a keyword.",
-            kw_char,
+            Atom::KEYWORD_MARKER_LEAD,
+            "LIST_OPEN and KEYWORD_MARKER_LEAD share a byte — a bare \
+             `{}foo` lexeme would ambiguously begin a list AND begin \
+             a keyword.",
+            Atom::KEYWORD_MARKER_LEAD,
         );
         assert_ne!(
             Sexp::LIST_CLOSE,
-            kw_char,
-            "LIST_CLOSE and KEYWORD_MARKER share a byte — a bare `{}foo` \
-             lexeme would ambiguously close a list AND begin a keyword.",
-            kw_char,
+            Atom::KEYWORD_MARKER_LEAD,
+            "LIST_CLOSE and KEYWORD_MARKER_LEAD share a byte — a bare \
+             `{}foo` lexeme would ambiguously close a list AND begin \
+             a keyword.",
+            Atom::KEYWORD_MARKER_LEAD,
         );
 
         // Fourth: opener/closer disjoint from every Bool-literal
@@ -18553,15 +18801,13 @@ mod tests {
              lexeme would ambiguously begin a comment AND open a string.",
             Atom::STR_DELIMITER,
         );
-        let kw_char = Atom::KEYWORD_MARKER
-            .chars()
-            .next()
-            .expect("KEYWORD_MARKER must be non-empty");
         assert_ne!(
             Sexp::COMMENT_LEAD,
-            kw_char,
-            "COMMENT_LEAD and KEYWORD_MARKER share a byte — a bare `{kw_char}foo` \
-             lexeme would ambiguously begin a comment AND begin a keyword.",
+            Atom::KEYWORD_MARKER_LEAD,
+            "COMMENT_LEAD and KEYWORD_MARKER_LEAD share a byte — a bare \
+             `{lead}foo` lexeme would ambiguously begin a comment AND \
+             begin a keyword.",
+            lead = Atom::KEYWORD_MARKER_LEAD,
         );
         for b in [true, false] {
             let lead = Atom::bool_literal(b)
@@ -18695,16 +18941,12 @@ mod tests {
              line-comment discard loop would terminate on the SAME byte \
              the Str-payload's escape-handler outer arm binds to.",
         );
-        let kw_char = Atom::KEYWORD_MARKER
-            .chars()
-            .next()
-            .expect("KEYWORD_MARKER must be non-empty");
         assert_ne!(
             Sexp::COMMENT_TERM,
-            kw_char,
-            "COMMENT_TERM and KEYWORD_MARKER share a byte — the reader's \
-             line-comment discard loop would terminate on the SAME byte \
-             the from_lexeme keyword-prefix arm binds to.",
+            Atom::KEYWORD_MARKER_LEAD,
+            "COMMENT_TERM and KEYWORD_MARKER_LEAD share a byte — the \
+             reader's line-comment discard loop would terminate on the \
+             SAME byte the from_lexeme keyword-prefix arm binds to.",
         );
         for b in [true, false] {
             let lead = Atom::bool_literal(b)
@@ -18815,7 +19057,15 @@ mod tests {
             '|',
             '^',
             '~',
-            Atom::KEYWORD_MARKER.chars().next().unwrap(),
+            // The `KEYWORD_MARKER` prefix's lead byte lives at the
+            // typed `Atom::KEYWORD_MARKER_LEAD` constant on the closed-
+            // set outer [`Atom`] algebra. Pre-lift this slot held an
+            // inline `Atom::KEYWORD_MARKER.chars().next().unwrap()`
+            // chain extracting the byte from the `&'static str`
+            // projection; post-lift the byte lives at ONE named
+            // constant the `&'static str` projects to (pinned by
+            // `atom_keyword_marker_lead_prefixes_keyword_marker`).
+            Atom::KEYWORD_MARKER_LEAD,
             // The bool_literal spellings' shared lead byte lives at
             // the typed `Atom::BOOL_LITERAL_LEAD` constant on the
             // closed-set outer [`Atom`] algebra. Pre-lift this slot

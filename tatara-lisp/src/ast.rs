@@ -288,6 +288,111 @@ impl Atom {
     /// than as an inline char literal at every consumer site.
     pub const KEYWORD_MARKER_LEAD: char = ':';
 
+    /// Project a bare keyword `name` to its canonical qualified rendering
+    /// — `format!("{}{name}", Self::KEYWORD_MARKER)`, i.e. the ONE
+    /// canonical [`String`] on the [`Atom`] algebra that composes
+    /// [`Self::KEYWORD_MARKER`] with a bare keyword name to produce the
+    /// substrate-canonical `":name"` spelling.
+    ///
+    /// Sibling projection to [`Self::bool_literal`] on the atomic-payload
+    /// canonical-rendering axis: where `bool_literal(b)` projects the
+    /// closed-set `bool` domain to its canonical Scheme spelling
+    /// `"#t"` / `"#f"` (`&'static str` because the set is finite), THIS
+    /// method projects the open-set bare-name domain to its canonical
+    /// qualified spelling `":name"` ([`String`] because the set is
+    /// unbounded). The [`Atom`] algebra's atomic-payload canonical-
+    /// rendering axis now carries a typed projection for BOTH the
+    /// prefix-marked variable-payload variant (Keyword) and the self-
+    /// marked closed-set-payload variant (Bool).
+    ///
+    /// Pre-lift the same `format!("{}{s}", Self::KEYWORD_MARKER)`
+    /// composition lived inline at THREE Keyword-arm sites on the
+    /// atomic-payload rendering axis:
+    ///
+    /// 1. [`Self::to_json`]'s [`Self::Keyword`] arm —
+    ///    `serde_json::Value::String(format!(...))` for the JSON-
+    ///    canonical projection.
+    /// 2. [`Self::to_iac_forge_sexpr`]'s [`Self::Keyword`] arm —
+    ///    `SExpr::Symbol(format!(...))` for the iac-forge canonical-
+    ///    attestation projection.
+    /// 3. [`fmt::Display for Atom`]'s [`Self::Keyword`] arm —
+    ///    `write!(f, "{}{s}", Self::KEYWORD_MARKER)` for the Lisp-
+    ///    canonical-form Display projection.
+    ///
+    /// Post-lift the two allocating sites (1) + (2) bind at ONE typed
+    /// projection on the algebra; the [`fmt::Display for Atom`] site
+    /// (3) keeps its allocation-free `write!` path but its byte output
+    /// is pinned bit-identical to this projection by
+    /// `atom_display_keyword_arm_agrees_with_keyword_qualified_bytes`
+    /// so the three canonical-rendering surfaces cannot drift out of
+    /// agreement. Adding a fourth Keyword-rendering site (e.g. a future
+    /// YAML canonical projection, an LSP hover renderer) binds through
+    /// THIS projection rather than composing [`Self::KEYWORD_MARKER`]
+    /// inline — the (Keyword payload, canonical qualified rendering)
+    /// pairing lives at ONE algebra layer.
+    ///
+    /// Round-trip contract (with [`Self::from_lexeme`]):
+    /// `Self::from_lexeme(&Self::keyword_qualified(name)) ==
+    /// Self::Keyword(name.to_owned())` for every `name: &str` that
+    /// does NOT itself parse as a Bool spelling, integer, or float
+    /// (the four typed-entry classification arms preceding the
+    /// [`Self::KEYWORD_MARKER`]-prefix arm). The classifier's
+    /// `s.strip_prefix(Self::KEYWORD_MARKER)` gate is the LEFT-inverse
+    /// of THIS projection on the Keyword-payload subset — pinned by
+    /// `atom_from_lexeme_inverts_keyword_qualified_on_bare_name`.
+    /// Composition preserves proofs across the (typed-EXIT rendering,
+    /// typed-ENTRY classification) round-trip at ONE algebra site.
+    ///
+    /// Sibling posture to [`QuoteForm::prefix`]'s composition with
+    /// homoiconic inner forms in [`fmt::Display for Sexp`]'s quote-
+    /// family arm: where `QuoteForm::prefix` is the [`&'static str`]
+    /// prefix a quote-family variant composes with an inner rendering
+    /// via `write!(f, "{}{inner}", qf.prefix())`, THIS method is the
+    /// composed [`String`] a Keyword atom composes with a bare name.
+    /// Both projections close a (marker, payload) pair on their owning
+    /// closed-set algebra.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Keyword payload, canonical qualified rendering) pairing binds
+    /// at ONE projection on the closed-set [`Atom`] algebra regardless
+    /// of which of the three canonical-rendering surfaces reaches in.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// round-trip law
+    /// `Self::from_lexeme(&Self::keyword_qualified(n)) ==
+    /// Self::Keyword(n.into())` is a coherence proof BETWEEN the
+    /// paired typed-EXIT rendering (this method) AND the typed-ENTRY
+    /// classification ([`Self::from_lexeme`]) on ONE algebra — a
+    /// regression that drifts either side surfaces at the pin rather
+    /// than as a silent Keyword-round-trip drift. THEORY.md §V.1 —
+    /// knowable platform; the (Keyword payload → canonical qualified
+    /// rendering) composition becomes a TYPE-level projection on the
+    /// substrate algebra rather than an inline
+    /// `format!("{}{s}", Self::KEYWORD_MARKER)` at every consumer
+    /// site. THEORY.md §VI.1 — generation over composition; three
+    /// byte-identical inline compositions collapse onto ONE named
+    /// projection (two routed sites + one Display byte-identity pin),
+    /// matching the substrate's three-times rule.
+    ///
+    /// Frontier inspiration: Racket's `syntax/parse` keyword-form
+    /// canonical-rendering hook — where `#:name` keyword args have
+    /// ONE canonical printer that composes the port's `KEYWORD_PREFIX`
+    /// with the bare name rather than N per-consumer `printf`
+    /// compositions. Translated to tatara-lisp:
+    /// `Atom::keyword_qualified` becomes the ONE canonical-rendering
+    /// projection on the closed-set outer [`Atom`] algebra so a
+    /// future prefix migration (a Racket-compat port to `#:name`, a
+    /// Clojure-compat port to `::name`) touches ONE
+    /// [`Self::KEYWORD_MARKER`] constant + zero rendering sites,
+    /// rather than the pre-lift three inline `format!` compositions
+    /// that would silently drift.
+    #[must_use]
+    pub fn keyword_qualified(name: &str) -> String {
+        let mut out = String::with_capacity(Self::KEYWORD_MARKER.len() + name.len());
+        out.push_str(Self::KEYWORD_MARKER);
+        out.push_str(name);
+        out
+    }
+
     /// Project the closed-set `bool` domain to its canonical Scheme-
     /// spelling `&'static str` — `"#t"` for `true`, `"#f"` for `false`.
     /// ONE projection on the [`Atom`] algebra that the substrate's
@@ -1275,7 +1380,18 @@ impl Atom {
     pub fn to_json(&self) -> serde_json::Value {
         match self {
             Self::Symbol(s) => serde_json::Value::String(s.clone()),
-            Self::Keyword(s) => serde_json::Value::String(format!("{}{s}", Self::KEYWORD_MARKER)),
+            // Keyword arm routes through the typed
+            // [`Self::keyword_qualified`] projection on the atomic-
+            // payload canonical-rendering axis — the ONE composition
+            // of [`Self::KEYWORD_MARKER`] with a bare keyword name on
+            // the [`Atom`] algebra, shared with
+            // [`Self::to_iac_forge_sexpr`]'s Keyword arm and pinned
+            // byte-identical to [`fmt::Display for Atom`]'s Keyword
+            // arm. Pre-lift each of the three sites carried its own
+            // inline `format!("{}{s}", Self::KEYWORD_MARKER)`
+            // composition; post-lift the composition lives at ONE
+            // typed algebra projection.
+            Self::Keyword(s) => serde_json::Value::String(Self::keyword_qualified(s)),
             Self::Str(s) => serde_json::Value::String(s.clone()),
             Self::Int(n) => serde_json::Value::Number((*n).into()),
             Self::Float(n) => serde_json::Number::from_f64(*n)
@@ -1517,9 +1633,15 @@ impl Atom {
         match self {
             Self::Symbol(s) => SExpr::Symbol(s.clone()),
             // Keywords encoded as `:name` symbols in canonical form —
-            // same `:` prefix convention as `Atom::to_json`'s
-            // string-prefixed encoding.
-            Self::Keyword(s) => SExpr::Symbol(format!("{}{s}", Self::KEYWORD_MARKER)),
+            // routed through the typed [`Self::keyword_qualified`]
+            // projection on the atomic-payload canonical-rendering
+            // axis, shared with [`Self::to_json`]'s Keyword arm and
+            // pinned byte-identical to [`fmt::Display for Atom`]'s
+            // Keyword arm. The `:` prefix convention matches
+            // [`Self::to_json`]'s string-prefixed encoding by
+            // construction — both bind to the SAME
+            // [`Self::KEYWORD_MARKER`] via THIS projection.
+            Self::Keyword(s) => SExpr::Symbol(Self::keyword_qualified(s)),
             Self::Str(s) => SExpr::String(s.clone()),
             Self::Int(n) => SExpr::Integer(*n),
             Self::Float(n) => SExpr::Float(*n),
@@ -18038,6 +18160,232 @@ mod tests {
              the reader's `,@` splice-promotion peek byte would alias \
              the Keyword-prefix lead byte.",
         );
+    }
+
+    // ── `Atom::keyword_qualified` — the ONE projection composing
+    // `Atom::KEYWORD_MARKER` with a bare keyword name across the three
+    // canonical-rendering Keyword-arm sites (JSON, iac-forge, Lisp
+    // Display). Pins the composition + the round-trip law with
+    // `Atom::from_lexeme` + the path-uniformity at every routed site so
+    // a regression that re-inlines any single site's `format!("{}{s}",
+    // KEYWORD_MARKER)` composition drifts against these pins even when
+    // the rendered bytes still agree at that site.
+
+    #[test]
+    fn atom_keyword_qualified_composes_keyword_marker_with_bare_name() {
+        // BYTE-COMPOSITION CONTRACT: `Atom::keyword_qualified(name)`
+        // renders exactly `Atom::KEYWORD_MARKER ++ name` for every
+        // bare-name input — the ONE typed composition of the Keyword-
+        // prefix constant with a bare-name payload on the [`Atom`]
+        // algebra. Sibling-shape pin to
+        // `atom_bool_literal_projects_canonical_scheme_spellings`
+        // (the Bool-family canonical-rendering axis): where that pin
+        // sweeps the CLOSED `bool` domain to its canonical spellings,
+        // this pin sweeps a representative set of bare-name inputs
+        // (empty, single-char, dashed, dotted, unicode) through the
+        // Keyword-family projection to prove the composition holds
+        // uniformly over the open-set bare-name domain.
+        for name in [
+            "",
+            "x",
+            "class",
+            "parent",
+            "point-type",
+            "kebab-case-name",
+            "dotted.path",
+            "with_underscore",
+            "α",
+        ] {
+            let expected = format!("{}{name}", Atom::KEYWORD_MARKER);
+            assert_eq!(
+                Atom::keyword_qualified(name),
+                expected,
+                "Atom::keyword_qualified({name:?}) drifted from the \
+                 substrate-canonical composition \
+                 `Atom::KEYWORD_MARKER ++ name` — the three canonical- \
+                 rendering Keyword-arm sites (to_json, to_iac_forge_sexpr, \
+                 Display) all bind to this ONE projection.",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_keyword_qualified_starts_with_keyword_marker() {
+        // STRUCTURAL PREFIX CONTRACT: for every bare-name input,
+        // `Atom::keyword_qualified(name).starts_with(Atom::KEYWORD_MARKER)`.
+        // The projection MUST begin with the canonical
+        // [`Atom::KEYWORD_MARKER`] prefix so
+        // [`Atom::from_lexeme`]'s `s.strip_prefix(Self::KEYWORD_MARKER)`
+        // classifier gate matches every rendered qualified keyword.
+        // Sibling-shape pin to
+        // `atom_bool_literal_lead_prefixes_every_bool_literal_spelling`
+        // (the Bool-family shared-lead-byte axis): where that pin
+        // sweeps every `b: bool` to prove BOTH spellings share the
+        // lead byte, this pin sweeps every representative bare-name
+        // to prove EVERY qualified rendering starts with the shared
+        // Keyword-family prefix.
+        for name in ["", "x", "class", "parent", "point-type", "α"] {
+            let qualified = Atom::keyword_qualified(name);
+            assert!(
+                qualified.starts_with(Atom::KEYWORD_MARKER),
+                "Atom::keyword_qualified({name:?}) = {qualified:?} does \
+                 NOT start with Atom::KEYWORD_MARKER `{}` — the \
+                 projection has drifted from its structural prefix \
+                 contract; Atom::from_lexeme's `strip_prefix` classifier \
+                 gate would silently disagree with the rendered \
+                 qualified keyword.",
+                Atom::KEYWORD_MARKER,
+            );
+        }
+    }
+
+    #[test]
+    fn atom_from_lexeme_inverts_keyword_qualified_on_bare_name() {
+        // ROUND-TRIP CONTRACT (typed-EXIT rendering ↔ typed-ENTRY
+        // classification): [`Atom::from_lexeme`] is the LEFT-inverse
+        // of [`Atom::keyword_qualified`] on the Keyword-payload
+        // subset — i.e. `Atom::from_lexeme(&Atom::keyword_qualified(n))
+        // == Atom::Keyword(n.to_owned())` for every bare `name` that
+        // does NOT itself parse as a Bool spelling, integer, or float
+        // (the four typed-entry classification arms preceding the
+        // KEYWORD_MARKER-prefix arm at `from_lexeme`).
+        //
+        // A regression that drifts EITHER the composition (this
+        // projection) OR the classification (from_lexeme's
+        // strip_prefix arm) surfaces at THIS pin rather than as a
+        // silent Keyword-round-trip drift at a downstream consumer.
+        // Sibling-shape pin to
+        // `atom_from_lexeme_round_trips_through_bool_literal_for_every_bool`
+        // (the Bool-family round-trip axis) — pins the SAME shape at
+        // the Keyword-family round-trip axis of the closed-set outer
+        // [`Atom`] algebra.
+        for name in [
+            "x",
+            "class",
+            "parent",
+            "point-type",
+            "kebab-case-name",
+            "dotted.path",
+            "with_underscore",
+            "α",
+        ] {
+            let qualified = Atom::keyword_qualified(name);
+            let classified = Atom::from_lexeme(&qualified);
+            assert_eq!(
+                classified,
+                Atom::Keyword(name.to_owned()),
+                "Atom::from_lexeme({qualified:?}) drifted from \
+                 Atom::Keyword({name:?}) — the round-trip law between \
+                 Atom::keyword_qualified (typed-EXIT canonical \
+                 rendering) and Atom::from_lexeme's strip_prefix arm \
+                 (typed-ENTRY classification) has broken on the \
+                 Keyword-family axis of the closed-set outer [`Atom`] \
+                 algebra.",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_display_keyword_arm_agrees_with_keyword_qualified_bytes() {
+        // DISPLAY BYTE-IDENTITY PIN: [`fmt::Display for Atom`]'s
+        // [`Atom::Keyword`] arm keeps its allocation-free
+        // `write!(f, "{}{s}", Self::KEYWORD_MARKER)` composition
+        // (Display is called at every canonical-rendering surface
+        // that composes via `format!("{sexp}")` — avoiding the
+        // allocation is load-bearing on tokenizer-adjacent hot paths
+        // like `checks.lisp`'s exhaustive `defcheck` rendering) but
+        // MUST produce byte-identical output to
+        // [`Atom::keyword_qualified`]. Otherwise the three canonical-
+        // rendering surfaces (Display, to_json, to_iac_forge_sexpr)
+        // would silently disagree on the qualified-keyword bytes even
+        // though two of the three route through the typed projection.
+        //
+        // Load-bearing: this pin IS the "Display's inline write! and
+        // the typed projection agree byte-for-byte" invariant that
+        // lets Display keep the zero-alloc path while to_json /
+        // to_iac_forge_sexpr collapse onto the ONE algebra site.
+        for name in [
+            "",
+            "x",
+            "class",
+            "parent",
+            "point-type",
+            "kebab-case-name",
+            "α",
+        ] {
+            let atom = Atom::Keyword(name.to_owned());
+            let via_display = atom.to_string();
+            let via_projection = Atom::keyword_qualified(name);
+            assert_eq!(
+                via_display, via_projection,
+                "fmt::Display for Atom's Keyword arm drifted from \
+                 Atom::keyword_qualified on name {name:?} — the \
+                 write! path and the typed projection have disagreed \
+                 on the qualified-keyword bytes.",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_to_json_keyword_arm_routes_through_keyword_qualified() {
+        // PATH-UNIFORMITY GUARD: [`Atom::to_json`]'s [`Atom::Keyword`]
+        // arm's rendered String value MUST equal
+        // [`Atom::keyword_qualified`] on the same bare name — the
+        // FIRST of the two routed sites is bound to the typed
+        // projection. A regression that re-inlines the `format!("{}{s}",
+        // Self::KEYWORD_MARKER)` composition at this arm without
+        // updating the projection (or vice versa) fails HERE.
+        // Sibling-shape pin to
+        // `atom_to_iac_forge_sexpr_keyword_arm_routes_through_keyword_qualified`
+        // on the iac-forge canonical-attestation-form axis: where that
+        // pin binds the iac-forge arm's Symbol payload, this pin binds
+        // the JSON arm's String payload.
+        for name in ["", "x", "class", "parent", "α"] {
+            let atom = Atom::Keyword(name.to_owned());
+            let via_json = atom.to_json();
+            let expected = serde_json::Value::String(Atom::keyword_qualified(name));
+            assert_eq!(
+                via_json, expected,
+                "Atom::to_json's Keyword arm drifted from \
+                 Atom::keyword_qualified on name {name:?} — the JSON \
+                 canonical-rendering site has diverged from the typed \
+                 algebra projection.",
+            );
+        }
+    }
+
+    #[cfg(feature = "iac-forge")]
+    #[test]
+    fn atom_to_iac_forge_sexpr_keyword_arm_routes_through_keyword_qualified() {
+        // PATH-UNIFORMITY GUARD: [`Atom::to_iac_forge_sexpr`]'s
+        // [`Atom::Keyword`] arm's rendered Symbol payload MUST equal
+        // [`Atom::keyword_qualified`] on the same bare name — the
+        // SECOND of the two routed sites is bound to the typed
+        // projection. Sibling-shape pin to
+        // `atom_to_json_keyword_arm_routes_through_keyword_qualified`
+        // on the JSON canonical-rendering axis: where that pin binds
+        // the JSON arm's String payload, this pin binds the iac-forge
+        // arm's Symbol payload.
+        //
+        // The iac-forge canonical attestation depends on THIS bit-
+        // identical composition: a downstream BLAKE3 attestation
+        // reader hashes the canonical SExpr shape byte-for-byte, so
+        // any drift here would silently break the attestation
+        // pipeline's round-trip with every iac-forge consumer already
+        // keyed on `:name` Symbol payloads.
+        use iac_forge::sexpr::SExpr;
+        for name in ["", "x", "class", "parent", "α"] {
+            let atom = Atom::Keyword(name.to_owned());
+            let via_iac = atom.to_iac_forge_sexpr();
+            let expected = SExpr::Symbol(Atom::keyword_qualified(name));
+            assert_eq!(
+                via_iac, expected,
+                "Atom::to_iac_forge_sexpr's Keyword arm drifted from \
+                 Atom::keyword_qualified on name {name:?} — the \
+                 iac-forge canonical-attestation-form site has \
+                 diverged from the typed algebra projection.",
+            );
+        }
     }
 
     // ── `Atom::bool_literal` — the ONE projection routing the closed-set

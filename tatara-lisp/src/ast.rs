@@ -1122,6 +1122,143 @@ impl Atom {
         }
     }
 
+    /// Inverse of [`Self::to_json`] restricted to the JSON `Number`
+    /// discriminator — the ONE typed inverse projection on the closed-set
+    /// [`Atom`] algebra that names the (`serde_json::Number` →
+    /// [`Self::Int`] / [`Self::Float`]) bifurcation. Lifts the pre-lift
+    /// inline three-arm cascade inside [`crate::ast::Sexp::from_json`]'s
+    /// `serde_json::Value::Number(n)` outer-match arm — first
+    /// `n.as_i64()?` sink to [`Self::Int`] then `n.as_f64()?` sink to
+    /// [`Self::Float`] then a `Self::Int(0)` typed floor for the
+    /// structural-impossibility residual — onto ONE typed projection on
+    /// the [`Atom`] algebra so the paired FORWARD ([`Self::to_json`]'s
+    /// [`Self::Int`] / [`Self::Float`] arms) and INVERSE (this method)
+    /// numeric-axis projections live at ONE algebra layer.
+    ///
+    /// Mapping (byte-identical to the pre-lift cascade in
+    /// [`crate::ast::Sexp::from_json`]):
+    ///
+    /// | `serde_json::Number` shape         | result             |
+    /// | ---------------------------------- | ------------------ |
+    /// | `n.as_i64() == Some(i)`            | [`Self::Int`]`(i)` |
+    /// | `n.as_i64() == None`, `.as_f64() == Some(f)` | [`Self::Float`]`(f)` |
+    /// | `n.as_i64() == None`, `.as_f64() == None`    | [`Self::Int`]`(0)` — typed floor |
+    ///
+    /// Every `serde_json::Number` today is either i64-fitting,
+    /// u64-fitting (projected through f64), or f64-fitting — the
+    /// `Int(0)` residual arm is a static-invariant statement that
+    /// `serde_json::Number`'s closed-set discriminator excludes the
+    /// "neither i64 nor f64" case in practice; the typed floor stays
+    /// explicit so a future `serde_json` extension does NOT silently
+    /// misroute through an unreachable-panic. The `Self::int(0)`
+    /// composition in the pre-lift code equalled `Self::Atom(Atom::Int(0))`
+    /// via the `Sexp::int` sugar; post-lift the [`Atom`] algebra owns
+    /// the typed floor at the atomic layer directly.
+    ///
+    /// Round-trip laws (paired with [`Self::to_json`]'s numeric arms):
+    ///
+    /// * For every `i: i64`, `Atom::from_json_number(&i.into()) ==
+    ///   Atom::Int(i)` — the [`Self::Int`] → `JValue::Number` →
+    ///   [`Self::Int`] round-trip is byte-identical.
+    /// * For every finite non-integer-valued `f: f64`,
+    ///   `Atom::from_json_number(&serde_json::Number::from_f64(f)
+    ///   .unwrap()) == Atom::Float(f)` — the [`Self::Float`] →
+    ///   `JValue::Number` → [`Self::Float`] round-trip is byte-identical
+    ///   for `f64` values that don't overlap the i64-fitting subset of
+    ///   [`serde_json::Number`]'s discriminator (i.e. non-integer-valued
+    ///   finite floats; integer-valued floats round-trip through the
+    ///   [`Self::Int`] arm by `as_i64`'s eager check).
+    /// * Non-finite floats ([`f64::NAN`], [`f64::INFINITY`],
+    ///   [`f64::NEG_INFINITY`]) collapse to [`serde_json::Value::Null`]
+    ///   in [`Self::to_json`] — they NEVER produce a [`serde_json::Number`]
+    ///   value, so the round-trip law does not apply to them. This
+    ///   asymmetry is JSON's structural inexpressibility of non-finite
+    ///   floats (pinned at
+    ///   `atom_to_json_float_nan_and_infinity_collapse_to_null`), not a
+    ///   substrate choice.
+    ///
+    /// ONE consumer entrypoint the substrate binds against: the outer
+    /// [`crate::ast::Sexp::from_json`]'s `serde_json::Value::Number(n)`
+    /// arm was pre-lift a hand-rolled three-branch cascade
+    /// (`if let Some(i) = n.as_i64() { Self::int(i) } else if let
+    /// Some(f) = n.as_f64() { Self::float(f) } else { Self::int(0) }`);
+    /// post-lift the outer arm collapses to
+    /// `Self::Atom(Atom::from_json_number(n))` — the ONE typed inverse
+    /// on the [`Atom`] algebra owns the numeric-axis bifurcation, the
+    /// outer arm delegates. A regression that drifts the outer arm
+    /// (e.g. re-inlines the bifurcation and swaps the `as_i64`/`as_f64`
+    /// order so `42.0` sinks to [`Self::Float`] instead of
+    /// [`Self::Int`]) becomes structurally unreachable — there is
+    /// exactly ONE numeric decode both directions of the round-trip
+    /// consume.
+    ///
+    /// Sibling-lift posture: this method mirrors [`Self::from_lexeme`]
+    /// on the typed-entry classification axis — that method decodes a
+    /// bare-atom lexeme (`&str`) into the six-way [`Atom`] taxonomy;
+    /// THIS method decodes a JSON `Number` into the two-way (
+    /// [`Self::Int`] / [`Self::Float`]) numeric subtaxonomy on the SAME
+    /// algebra. Together with the seven typed-EXIT projections on
+    /// [`Atom`] ([`fmt::Display for Atom`], [`Self::to_json`],
+    /// [`Self::to_iac_forge_sexpr`], [`Self::label`],
+    /// [`Self::sexp_shape`], [`Self::hash_discriminator`],
+    /// [`Self::bool_literal`]) and the two typed-ENTRY projections on
+    /// [`Atom`] ([`Self::from_lexeme`], THIS method) the algebra's
+    /// canonical-form bidirectional sweep is complete across every
+    /// production-site rendering + parsing surface — every consumer's
+    /// (`Atom` variant, canonical rendering) OR (canonical source,
+    /// `Atom` variant) pairing binds at ONE method per direction per
+    /// surface on the closed-set algebra rather than at inline arms
+    /// scattered across per-consumer sites.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// (JSON `Number` → typed [`Atom`] numeric variant) projection IS
+    /// the typed-entry gate on the JSON numeric axis. Placing the
+    /// paired forward (`Atom::to_json`'s [`Self::Int`] / [`Self::Float`]
+    /// arms) AND inverse (THIS method) on the [`Atom`] algebra closes
+    /// the round-trip closure at ONE algebra layer — future numeric
+    /// taxonomy extensions (e.g. `u64`-fitting arm for the
+    /// `serde-preserve-order` feature's `arbitrary_precision` mode, a
+    /// [`Self::Bigint`] variant for arbitrary-precision integers, a
+    /// [`Self::Rational`] variant for [`num_rational::Rational64`])
+    /// extend the algebra ONCE at [`Self::to_json`]'s match AND ONCE at
+    /// this method's cascade — both edits land on the SAME algebra
+    /// rather than across the `Atom` module AND the `Sexp` module
+    /// boundary. THEORY.md §V.1 — knowable platform; the numeric
+    /// inverse projection becomes a NAMED primitive on the substrate's
+    /// [`Atom`] algebra rather than an inline three-arm cascade at the
+    /// `Sexp::from_json` consumer. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the round-trip law
+    /// `Atom::from_json_number(&Atom::Int(n).to_json_as_number()) ==
+    /// Atom::Int(n)` (pinned at
+    /// `atom_from_json_number_round_trips_atom_to_json_int_arm`) is a
+    /// coherence proof BETWEEN the paired projections on ONE algebra —
+    /// a regression that drifts either side surfaces at the pin
+    /// rather than as a silent Sexp ↔ JSON round-trip drift.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::parseAttribute(str, ctx)` —
+    /// the typed-IR parser inverse of `printAttribute` lives on the
+    /// SAME `Attribute` algebra as its printer dual; the substrate's
+    /// [`Self::from_json_number`] is the unstructured-Rust peer on the
+    /// [`Atom`] algebra for the JSON-numeric canonical-form inverse,
+    /// paired with [`Self::to_json`]'s numeric arms as the closed
+    /// numeric-axis round-trip. Racket's
+    /// `(json->racket (racket->json v))` numeric identity — the
+    /// round-trip law that a JSON-projected numeric datum recovers to
+    /// its source Racket numeric primitive; THIS method's round-trip
+    /// pins are the Rust-typed peer on the [`Atom`] algebra with the
+    /// closed-set numeric taxonomy ([`Self::Int`] / [`Self::Float`])
+    /// standing in for Racket's numeric tower.
+    #[must_use]
+    pub fn from_json_number(n: &serde_json::Number) -> Self {
+        if let Some(i) = n.as_i64() {
+            Self::Int(i)
+        } else if let Some(f) = n.as_f64() {
+            Self::Float(f)
+        } else {
+            Self::Int(0)
+        }
+    }
+
     /// Project the atomic payload to its canonical
     /// [`iac_forge::sexpr::SExpr`] rendering — the typed-algebra peer of
     /// [`fmt::Display for Atom`] and [`Self::to_json`] at the
@@ -3578,15 +3715,32 @@ impl Sexp {
         match v {
             serde_json::Value::Null => Self::Nil,
             serde_json::Value::Bool(b) => Self::boolean(*b),
-            serde_json::Value::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    Self::int(i)
-                } else if let Some(f) = n.as_f64() {
-                    Self::float(f)
-                } else {
-                    Self::int(0)
-                }
-            }
+            // Numeric arm — the (JSON `Number` → typed [`Atom`]
+            // numeric variant) bifurcation lifts onto the closed-set
+            // [`Atom`] algebra via [`Atom::from_json_number`]. Pre-lift
+            // this arm carried its own inline three-branch cascade
+            // (`n.as_i64()` sink to [`Self::int`] then `n.as_f64()`
+            // sink to [`Self::float`] then a `Self::int(0)` typed
+            // floor for the structural-impossibility residual);
+            // post-lift the WHOLE cascade binds at ONE typed projection
+            // on the algebra so a delimiter swap of the numeric axis
+            // (e.g. adding a `u64`-fitting arm for the
+            // `serde-preserve-order` feature's `arbitrary_precision`
+            // mode, extending [`Atom`] with a `Bigint` variant) extends
+            // [`Atom::from_json_number`] ONCE — the outer [`Self::from_json`]
+            // arm here delegates through the algebra with zero edits.
+            // Structural dual of [`Atom::to_json`]'s [`Atom::Int`] /
+            // [`Atom::Float`] arms one algebra layer over: the paired
+            // FORWARD (typed variant → `JValue::Number`) AND INVERSE
+            // (`JValue::Number` → typed variant) numeric-axis
+            // projections both live on the closed-set [`Atom`] algebra,
+            // and this outer [`Self::from_json`] arm binds to the
+            // inverse peer at ONE typed method. Sibling-shape pin to
+            // [`Self::Atom`]'s general delegation posture — the outer
+            // `Sexp` layer wraps the atomic algebra's typed projection
+            // via [`Self::Atom`] rather than re-deriving the
+            // per-variant construction at this consumer.
+            serde_json::Value::Number(n) => Self::Atom(Atom::from_json_number(n)),
             serde_json::Value::String(s) => Self::string(s.clone()),
             serde_json::Value::Array(items) => {
                 Self::List(items.iter().map(Self::from_json).collect())
@@ -12176,6 +12330,149 @@ mod tests {
     }
 
     #[test]
+    fn atom_from_json_number_int_arm_projects_i64_backed_numbers_to_atom_int() {
+        // TYPED-INVERSE CONTRACT (Int arm): pin that `Atom::from_json_number`
+        // decodes every `serde_json::Number` whose `.as_i64()` returns
+        // `Some(i)` to `Atom::Int(i)`. Sweeps every i64-boundary value
+        // the substrate pinned in the sibling `Atom::to_json` sweep
+        // (0, ±1, ±42, i64::MAX, i64::MIN) plus a representative
+        // interior sample; the sweep pins that the `as_i64()` arm
+        // fires eagerly BEFORE the `as_f64()` arm, so an
+        // integer-valued `Number` never sinks to `Atom::Float` at the
+        // atomic-algebra boundary. A regression that drifts the arm
+        // (e.g. swaps the `as_i64` / `as_f64` order) fails at the
+        // `i64::MAX` / `i64::MIN` boundary samples because those two
+        // values exceed `f64`'s 53-bit mantissa and would silently
+        // round through the `as_f64` sink.
+        for i in [0i64, 1, -1, 42, -7, i64::MAX, i64::MIN] {
+            let n: serde_json::Number = i.into();
+            assert_eq!(
+                Atom::from_json_number(&n),
+                Atom::Int(i),
+                "Atom::from_json_number drifted Int arm for i64 sample {i}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_from_json_number_float_arm_projects_finite_non_integer_f64_backed_numbers_to_atom_float(
+    ) {
+        // TYPED-INVERSE CONTRACT (Float arm): pin that
+        // `Atom::from_json_number` decodes every `serde_json::Number`
+        // whose `.as_i64()` returns `None` but `.as_f64()` returns
+        // `Some(f)` to `Atom::Float(f)`. Sweeps a representative set of
+        // finite non-integer-valued f64 samples the substrate pinned
+        // in the sibling `Atom::to_json` sweep (1.5, -2.5, positive
+        // and negative fractional values, subnormal, `f64::MIN_POSITIVE`).
+        // Every sample is constructed via `serde_json::Number::from_f64`
+        // which the standard library documents as f64-backed
+        // (`.as_i64()` returns `None`, `.as_f64()` returns
+        // `Some(input)`) so the Float arm fires deterministically.
+        // A regression that drifts the arm (e.g. drops the `as_f64`
+        // sink entirely and falls through to the `Int(0)` typed floor)
+        // fails HERE at the fractional-value assertions with an
+        // `Int(0)` mismatch.
+        for f in [
+            1.5f64,
+            -2.5,
+            0.1,
+            -0.1,
+            f64::MIN_POSITIVE,
+            1.234_567_890_123,
+        ] {
+            let n = serde_json::Number::from_f64(f)
+                .unwrap_or_else(|| panic!("Number::from_f64({f}) must accept finite float"));
+            assert_eq!(
+                Atom::from_json_number(&n),
+                Atom::Float(f),
+                "Atom::from_json_number drifted Float arm for f64 sample {f}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_from_json_number_round_trips_atom_to_json_int_arm() {
+        // ROUND-TRIP LAW (Int axis): pin the paired-projection identity
+        // `Atom::from_json_number(&<Atom::Int(i).to_json() as Number>)
+        // == Atom::Int(i)` for every i64 boundary sample. The pair
+        // `Atom::to_json` (forward) + `Atom::from_json_number` (inverse)
+        // now lives on the SAME closed-set [`Atom`] algebra — this
+        // pin proves the closure at ONE algebra layer without a
+        // `Sexp::from_json` intermediary. A regression that drifts
+        // either side of the pair (e.g. `Atom::to_json` emits `Int(n)`
+        // as a JSON string, or `Atom::from_json_number` inverts the
+        // `as_i64` / `as_f64` cascade order) surfaces here at the
+        // boundary-value mismatch. Sibling-shape pin to
+        // `atom_display_round_trips_through_reader_preserving_typed_identity`
+        // — where that pin closes the `Atom → Display → reader → Atom`
+        // round-trip on the Display axis, THIS pin closes the
+        // `Atom::Int → to_json → Number → from_json_number → Atom::Int`
+        // round-trip on the JSON numeric axis, both on the SAME [`Atom`]
+        // algebra.
+        for i in [0i64, 1, -1, 42, -7, i64::MAX, i64::MIN] {
+            let atom_before = Atom::Int(i);
+            let via_forward = atom_before.to_json();
+            let n = match via_forward {
+                serde_json::Value::Number(n) => n,
+                other => {
+                    panic!("Atom::Int({i}).to_json() must project to JValue::Number, got {other:?}",)
+                }
+            };
+            assert_eq!(
+                Atom::from_json_number(&n),
+                atom_before,
+                "Atom::Int({i}) round-trip through to_json + from_json_number drifted",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_from_json_number_round_trips_atom_to_json_float_arm_for_non_integer_finite_samples() {
+        // ROUND-TRIP LAW (Float axis, non-integer subset): pin the
+        // paired-projection identity `Atom::from_json_number(&<Atom::Float(f)
+        // .to_json() as Number>) == Atom::Float(f)` for every finite
+        // non-integer f64 sample. The non-integer restriction is
+        // load-bearing: `serde_json::Number::from_f64` on an
+        // integer-valued f64 like `1.0` produces a Number whose
+        // `.as_i64()` may return `Some(1)` (the exact behavior depends
+        // on `serde_json`'s internal representation of the JSON
+        // number tower — integer-valued floats can round-trip through
+        // the `as_i64` arm, sinking to `Atom::Int(1)` instead of
+        // `Atom::Float(1.0)`). The three-way (`Symbol` / `Keyword` /
+        // `Str`) collapse on the string side of `Sexp::from_json`'s
+        // docstring is one axis; THIS pin covers the (`Int` / `Float`)
+        // collapse on the numeric side for the round-trippable subset
+        // (non-integer-valued finite floats). Together with the Int
+        // round-trip pin above the two floors close the numeric-axis
+        // round-trip closure at the algebra layer. NaN / ±∞ are
+        // pinned separately at `atom_to_json_float_nan_and_infinity_collapse_to_null`
+        // — those don't produce a `Number` from `to_json` so the
+        // round-trip law does NOT apply to them.
+        for f in [
+            1.5f64,
+            -2.5,
+            0.1,
+            -0.1,
+            f64::MIN_POSITIVE,
+            1.234_567_890_123,
+        ] {
+            let atom_before = Atom::Float(f);
+            let via_forward = atom_before.to_json();
+            let n = match via_forward {
+                serde_json::Value::Number(n) => n,
+                other => panic!(
+                    "Atom::Float({f}).to_json() must project to JValue::Number, got {other:?}",
+                ),
+            };
+            assert_eq!(
+                Atom::from_json_number(&n),
+                atom_before,
+                "Atom::Float({f}) round-trip through to_json + from_json_number drifted",
+            );
+        }
+    }
+
+    #[test]
     fn atom_to_json_float_nan_and_infinity_collapse_to_null() {
         // JSON-INEXPRESSIBILITY PIN: JSON has no canonical form for
         // `NaN` / `±∞` — `serde_json::Number::from_f64` returns `None`
@@ -14989,6 +15286,58 @@ mod tests {
             sorted,
             vec!["already-kebab", "must-reach", "point-type", "with-a-b-c"],
         );
+    }
+
+    #[test]
+    fn sexp_from_json_number_arm_routes_through_atom_from_json_number() {
+        // LIFTED-BOUNDARY CONTRACT: pin that the outer `Sexp::from_json`'s
+        // `serde_json::Value::Number(_)` arm delegates through the
+        // typed-algebra method `Atom::from_json_number` for every
+        // reachable `serde_json::Number` shape (i64-backed, finite
+        // f64-backed, and the empty structural-impossibility residual —
+        // although `serde_json::Number`'s closed-set discriminator
+        // excludes the last case in practice, so it's exercised only
+        // via the direct algebra method). Pre-lift the outer arm
+        // carried its own inline three-branch cascade (`n.as_i64` then
+        // `n.as_f64` then `Self::int(0)` typed floor); post-lift the
+        // arm collapses to `Self::Atom(Atom::from_json_number(n))` and
+        // the per-variant numeric-axis body binds at ONE typed
+        // projection on the [`Atom`] algebra. A regression that drifts
+        // the outer arm (e.g. re-inlines ONE variant's rendering
+        // without updating `Atom::from_json_number`, or introduces a
+        // spurious f64→JValue::Null re-wrap) surfaces as an inequality
+        // here. The sweep covers every Number shape the substrate
+        // encounters in practice.
+        //
+        // Sibling-shape pin to `sexp_to_json_atom_arms_route_through_atom_to_json`
+        // (in `crate::domain::tests`) — where that pin closes the
+        // FORWARD `Sexp::Atom → JValue` routing through
+        // `Atom::to_json`, THIS pin closes the INVERSE
+        // `JValue::Number → Sexp::Atom` routing through
+        // `Atom::from_json_number`. Together the two pins pin the
+        // round-trip closure `Sexp::from_json ∘ Sexp::to_json` for
+        // the numeric-axis subset AT the algebra layer rather than
+        // per consumer.
+        let number_shapes: Vec<serde_json::Number> = vec![
+            0i64.into(),
+            1i64.into(),
+            (-1i64).into(),
+            42i64.into(),
+            i64::MAX.into(),
+            i64::MIN.into(),
+            serde_json::Number::from_f64(1.5).unwrap(),
+            serde_json::Number::from_f64(-2.5).unwrap(),
+            serde_json::Number::from_f64(1.234_567_890_123).unwrap(),
+        ];
+        for n in &number_shapes {
+            let via_outer = Sexp::from_json(&serde_json::Value::Number(n.clone()));
+            let via_algebra = Sexp::Atom(Atom::from_json_number(n));
+            assert_eq!(
+                via_outer, via_algebra,
+                "Sexp::from_json Number arm drifted from \
+                 Sexp::Atom(Atom::from_json_number(n)) for {n:?}",
+            );
+        }
     }
 
     // ── Sexp::is_kwargs_list: the kwargs-shape predicate on the algebra ─

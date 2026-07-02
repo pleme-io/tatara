@@ -388,6 +388,160 @@ impl MacroParams {
     /// every docstring pinning the family disjointness contract.
     pub const LAMBDA_LIST_KEYWORD_LEAD: char = '&';
 
+    /// Closed-set forced-arity ALL array over the CL lambda-list-keyword
+    /// `&'static str` markers the parser's typed dispatch specialises on
+    /// — the [`Self::REST_MARKER`] (`"&rest"`) rest-slot marker followed
+    /// by the [`Self::OPTIONAL_MARKER`] (`"&optional"`) optional-section
+    /// marker, in the canonical CL lambda-list ordering (`&optional`
+    /// binds AFTER `&required`, `&rest` binds AFTER `&optional`, so the
+    /// declaration walk fires `REST_MARKER` FIRST as the terminal-arm
+    /// early return; the ALL array's ordering keys on marker
+    /// declaration order in this file, not on parse-time ordering).
+    ///
+    /// Sibling posture to the closed set of `pub const ALL: [Self; N]`
+    /// forced-arity arrays on the substrate's other closed-set outer
+    /// algebras: [`crate::ast::AtomKind::ALL`] (`[Self; 6]`),
+    /// [`crate::ast::QuoteForm::ALL`] (`[Self; 4]`),
+    /// [`crate::error::SexpShape::ALL`] (`[Self; 12]`),
+    /// [`crate::error::UnquoteForm::ALL`] (`[Self; 2]`),
+    /// [`crate::error::MacroDefHead::ALL`] (`[Self; 3]`) — every
+    /// closed-set algebra the substrate carries pins its cardinality at
+    /// the declaration site via a `pub const ALL` array whose forced
+    /// arity fails compilation if a new variant lands without being
+    /// added to the set. `LAMBDA_LIST_KEYWORDS` closes the same shape
+    /// on the CL lambda-list-keyword family: a third marker (`&key`
+    /// for keyword-args, `&aux` for auxiliaries, `&body` for the
+    /// docstring-carrying tail of `defmacro` bodies) extends this ONE
+    /// `pub const` + the matching per-role marker `pub const` above,
+    /// AND rustc enforces every downstream consumer's closed-set
+    /// sweep picks up the new marker at the SAME structural site.
+    ///
+    /// Pre-lift the two `&'static str` markers were named on the typed
+    /// algebra but the family they close was NOT — the two structural
+    /// round-trip pins (`_rest_marker_prefixed_by_lambda_list_keyword_
+    /// lead` AND `_optional_marker_prefixed_by_lambda_list_keyword_
+    /// lead`) each named ONE marker inline as a duplicate 3-line
+    /// `assert!(A.starts_with(LEAD), ...)` shape, and the pairwise-
+    /// disjointness pin (`_rest_and_optional_markers_pairwise_disjoint`)
+    /// named the two markers as a hand-rolled `assert_ne!` pair.
+    /// Post-lift the ALL array binds the family at the typed algebra so
+    /// every family-wide contract (LEAD-byte round-trip, pairwise
+    /// disjointness, membership gate) routes through the ONE array and
+    /// a future `&key` / `&aux` extension automatically extends the
+    /// sweep without re-deriving per-marker assertions.
+    ///
+    /// Structural round-trip contract: every element `m` of
+    /// `Self::LAMBDA_LIST_KEYWORDS` satisfies
+    /// `m.starts_with(Self::LAMBDA_LIST_KEYWORD_LEAD)` — pinned by
+    /// `macro_params_every_lambda_list_keyword_prefixed_by_lambda_list_keyword_lead`.
+    /// Cardinality contract: `Self::LAMBDA_LIST_KEYWORDS.len() == 2`
+    /// pins the current family size at the type level; a future third
+    /// marker extends the array's arity AND updates every downstream
+    /// pin at ONE structural site. Pairwise-disjointness contract:
+    /// every distinct index pair `(i, j)` in `Self::LAMBDA_LIST_KEYWORDS`
+    /// satisfies `Self::LAMBDA_LIST_KEYWORDS[i] !=
+    /// Self::LAMBDA_LIST_KEYWORDS[j]` — pinned by
+    /// `macro_params_lambda_list_keywords_pairwise_distinct`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// CL lambda-list-keyword family closure binds at ONE `pub const`
+    /// on the typed [`MacroParams`] algebra regardless of which
+    /// consumer (parser dispatch, family-wide contract sweep,
+    /// authoring / rendering surface, `is_lambda_list_keyword`
+    /// membership gate) reaches in. THEORY.md §V.1 — knowable
+    /// platform; the family's cardinality becomes a TYPE-level
+    /// constant on the substrate algebra rather than a per-consumer
+    /// hand-rolled enumeration of the two markers. THEORY.md §VI.1 —
+    /// generation over composition; the family-wide contract sweeps
+    /// (LEAD-byte round-trip, pairwise disjointness, membership gate)
+    /// emerge from the composition of TWO substrate primitives (this
+    /// `pub const` array + the per-role `pub const REST_MARKER` /
+    /// `pub const OPTIONAL_MARKER`) rather than as per-marker inline
+    /// assertions the current pins duplicate structurally.
+    ///
+    /// Frontier inspiration: Common Lisp's `LAMBDA-LIST-KEYWORDS`
+    /// standard variable (CLHS §3.4.1) — the runtime-reflectable list
+    /// of every reserved lambda-list keyword the implementation
+    /// recognises; `LAMBDA_LIST_KEYWORDS` is the substrate's typed-Rust
+    /// peer at compile time, with the closed-set ALL array standing in
+    /// for CL's runtime-mutable list. Translation through pleme-io
+    /// primitives: a `pub const [&'static str; N]` on the typed
+    /// [`MacroParams`] algebra rather than a runtime-mutable list;
+    /// forced-arity closure at the type layer with the same
+    /// family-reflective read surface.
+    pub const LAMBDA_LIST_KEYWORDS: [&'static str; 2] = [Self::REST_MARKER, Self::OPTIONAL_MARKER];
+
+    /// Typed membership gate over the closed set
+    /// [`Self::LAMBDA_LIST_KEYWORDS`] — `true` iff `s` matches some
+    /// element of the ALL array byte-for-byte, `false` for every other
+    /// input.
+    ///
+    /// The typed "does this symbol name a CL lambda-list keyword?"
+    /// projection on the [`MacroParams`] algebra. Sibling posture to the
+    /// closed set of per-algebra membership / classifier gates the
+    /// substrate carries:
+    /// [`crate::ast::QuoteForm::from_lead_char`] (per-char quote-family
+    /// dispatch — Some/None on a closed 3-char set),
+    /// [`crate::ast::Sexp::is_bare_atom_boundary`] (six-fold
+    /// bare-atom-boundary sweep), and
+    /// [`crate::ast::Atom::decode_str_escape`] (Str-escape decode table
+    /// on a closed 6-arm set) — every family-membership gate the
+    /// substrate carries binds at ONE method on the closed-set
+    /// algebra so a family extension lands at ONE place plus the
+    /// per-role marker without re-deriving per-consumer inline
+    /// enumerations.
+    ///
+    /// Pre-lift the "is this symbol a CL lambda-list keyword?" concept
+    /// existed structurally but was NOT named on the algebra — the
+    /// disjointness pin (`_rest_and_optional_markers_pairwise_disjoint`)
+    /// AND the cross-axis disjointness sweep
+    /// (`_lambda_list_keyword_lead_distinct_from_every_other_algebra_marker`)
+    /// each named the concept implicitly as a hand-rolled per-marker
+    /// `assert_ne!` sweep. Post-lift the membership gate binds at ONE
+    /// typed method on the algebra a future consumer (a parser-time
+    /// "this symbol looks like a lambda-list keyword but isn't
+    /// recognised" hint, an authoring-surface completion bar that
+    /// suggests `&rest` / `&optional` at param-list positions, a
+    /// pretty-printer that colors CL lambda-list keywords distinctly)
+    /// binds against without re-deriving the per-marker enumeration
+    /// at every consumer site.
+    ///
+    /// Contract:
+    ///   * Every element of [`Self::LAMBDA_LIST_KEYWORDS`] classifies
+    ///     as `true` — pinned by
+    ///     `macro_params_is_lambda_list_keyword_accepts_every_marker`.
+    ///   * The bare CL lambda-list-keyword LEAD byte
+    ///     ([`Self::LAMBDA_LIST_KEYWORD_LEAD`]) as a 1-char string
+    ///     classifies as `false` — pinned by
+    ///     `macro_params_is_lambda_list_keyword_rejects_bare_lead_byte`.
+    ///   * Symbols starting with the LEAD byte but naming an
+    ///     unrecognised keyword (`"&key"`, `"&aux"`, `"&body"`)
+    ///     classify as `false` — pinned by
+    ///     `macro_params_is_lambda_list_keyword_rejects_unrecognised_ampersand_prefixed_names`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// closed-set membership gate binds at ONE typed method on the
+    /// [`MacroParams`] algebra regardless of which consumer reaches
+    /// in. THEORY.md §III — the typescape; the "is this a CL
+    /// lambda-list keyword?" projection becomes a TYPE projection on
+    /// the substrate algebra rather than per-consumer inline
+    /// enumeration of the two markers. THEORY.md §V.1 — knowable
+    /// platform; a future third marker (`&key`, `&aux`, `&body`)
+    /// extends [`Self::LAMBDA_LIST_KEYWORDS`] ONCE and every
+    /// membership-gate consumer picks up the new marker for free.
+    ///
+    /// Frontier inspiration: Common Lisp's `(find X LAMBDA-LIST-KEYWORDS)`
+    /// pattern for testing lambda-list keyword membership at runtime;
+    /// `is_lambda_list_keyword` is the substrate's typed-Rust peer at
+    /// compile time. Translation through pleme-io primitives: a linear
+    /// sweep over the [`Self::LAMBDA_LIST_KEYWORDS`] `pub const` array
+    /// rather than a runtime `find` over a mutable list; ordinary
+    /// slice `contains` on the `&'static str` array.
+    #[must_use]
+    pub fn is_lambda_list_keyword(s: &str) -> bool {
+        Self::LAMBDA_LIST_KEYWORDS.contains(&s)
+    }
+
     /// The flat, ordered param-name list the template bytecode indexes into:
     /// every `required` name in order, then every `optional` name in order,
     /// then the `rest` name if present. `names()[i]` is the param `Subst(i)`
@@ -7974,6 +8128,229 @@ mod tests {
              the typed constant no longer routes to the optional- \
              section arm.",
         );
+    }
+
+    // ── `MacroParams::LAMBDA_LIST_KEYWORDS` + `is_lambda_list_keyword` —
+    // the closed-set forced-arity ALL array + membership gate that closes
+    // the CL lambda-list-keyword family at the typed [`MacroParams`]
+    // algebra. Sibling posture to the closed set of `pub const ALL: [Self;
+    // N]` forced-arity arrays across the substrate's other closed-set
+    // outer algebras (`AtomKind::ALL`, `QuoteForm::ALL`, `SexpShape::ALL`,
+    // `UnquoteForm::ALL`, `MacroDefHead::ALL`); a future third marker
+    // (`&key`, `&aux`, `&body`) extends the array's arity + adds ONE `pub
+    // const` for the marker and every downstream family-wide contract
+    // sweep (LEAD-byte round-trip, pairwise disjointness, membership
+    // gate) picks up the extension at ONE structural site.
+    //
+    // These pins cover: (a) the cardinality contract (the ALL array's
+    // length matches the pre-lift per-role marker count), (b) the
+    // ordering contract (each ALL entry matches its corresponding per-
+    // role `pub const` by-index), (c) the family-wide structural round-
+    // trip (every ALL element starts_with LEAD), (d) the family-wide
+    // pairwise disjointness (every distinct ALL index pair yields
+    // distinct markers), (e) the membership-gate acceptance side (every
+    // ALL element classifies as `true`), and (f) the membership-gate
+    // rejection side (the bare LEAD byte + unrecognised `&`-prefixed
+    // names classify as `false`).
+    //
+    // Fail-before/pass-after: every test below references
+    // `MacroParams::LAMBDA_LIST_KEYWORDS` or
+    // `MacroParams::is_lambda_list_keyword`, which simply did not exist
+    // on `MacroParams` before this lift — every assertion was a
+    // compile-time error against the prior surface.
+
+    #[test]
+    fn macro_params_lambda_list_keywords_has_expected_cardinality() {
+        // CARDINALITY PIN: the ALL array closes the family at exactly TWO
+        // entries — the two `&'static str` markers the parser's typed
+        // dispatch specialises on today (`&rest` + `&optional`). A future
+        // third marker (`&key`, `&aux`, `&body`) extends this arity to
+        // 3 AND every downstream family-wide contract sweep picks up the
+        // extension at ONE structural site. A regression that drops a
+        // marker from the ALL array (silently narrowing the family) OR
+        // aliases two markers to the same index (silently narrowing the
+        // typed dispatch) fails HERE at the cardinality contract before
+        // the structural round-trip / pairwise-disjointness contracts
+        // even fire.
+        assert_eq!(
+            MacroParams::LAMBDA_LIST_KEYWORDS.len(),
+            2,
+            "LAMBDA_LIST_KEYWORDS cardinality drifted from 2 — the CL \
+             lambda-list-keyword family closure now names a different \
+             number of markers than the two the parser's typed dispatch \
+             specialises on.",
+        );
+    }
+
+    #[test]
+    fn macro_params_lambda_list_keywords_binds_per_role_markers_by_index() {
+        // ORDERING PIN: each ALL entry matches its corresponding per-role
+        // `pub const` by-index. A regression that swaps the ordering
+        // (`[OPTIONAL_MARKER, REST_MARKER]` after a rebase) would keep
+        // the cardinality + membership contracts intact but silently
+        // reorder downstream consumers that iterate `LAMBDA_LIST_KEYWORDS`
+        // in canonical order (a future authoring surface that renders
+        // "supported CL lambda-list keywords: &rest, &optional" would
+        // silently render "supported CL lambda-list keywords: &optional,
+        // &rest" instead). Pins the array's declaration-order binding
+        // structurally so a reorder fails HERE at each element rather
+        // than only at consumer sites downstream.
+        assert_eq!(
+            MacroParams::LAMBDA_LIST_KEYWORDS[0],
+            MacroParams::REST_MARKER,
+            "LAMBDA_LIST_KEYWORDS[0] drifted from REST_MARKER — the ALL \
+             array's declaration-order binding to the per-role `pub \
+             const` broke at the rest-slot marker slot.",
+        );
+        assert_eq!(
+            MacroParams::LAMBDA_LIST_KEYWORDS[1],
+            MacroParams::OPTIONAL_MARKER,
+            "LAMBDA_LIST_KEYWORDS[1] drifted from OPTIONAL_MARKER — the \
+             ALL array's declaration-order binding to the per-role \
+             `pub const` broke at the optional-section marker slot.",
+        );
+    }
+
+    #[test]
+    fn macro_params_every_lambda_list_keyword_prefixed_by_lambda_list_keyword_lead() {
+        // FAMILY-WIDE STRUCTURAL ROUND-TRIP PIN: every element of the ALL
+        // array MUST start with the canonical LEAD byte. Where the two
+        // per-marker `_prefixed_by_lambda_list_keyword_lead` pins each
+        // named ONE marker inline as a duplicate 3-line
+        // `assert!(A.starts_with(LEAD), ...)` shape, this family-wide
+        // sweep routes the SAME contract through the closed-set ALL
+        // array — a future third marker (`&key`, `&aux`, `&body`)
+        // extends the array AND is automatically covered by this sweep
+        // without adding a third `_prefixed_by_...` per-marker pin. The
+        // per-marker pins stay as fine-grained fail-loud sites; this
+        // pin is the algebra-wide closure the family-extending refactor
+        // routes through.
+        for m in MacroParams::LAMBDA_LIST_KEYWORDS {
+            assert!(
+                m.starts_with(MacroParams::LAMBDA_LIST_KEYWORD_LEAD),
+                "LAMBDA_LIST_KEYWORDS element `{m}` does NOT start with \
+                 LAMBDA_LIST_KEYWORD_LEAD `{lead:?}` — the CL lambda- \
+                 list-keyword family's structural round-trip contract \
+                 no longer binds every marker to its shared LEAD byte.",
+                lead = MacroParams::LAMBDA_LIST_KEYWORD_LEAD,
+            );
+        }
+    }
+
+    #[test]
+    fn macro_params_lambda_list_keywords_pairwise_distinct() {
+        // FAMILY-WIDE PAIRWISE DISJOINTNESS PIN: every distinct index pair
+        // `(i, j)` in the ALL array yields distinct markers. Where the
+        // pre-lift `_rest_and_optional_markers_pairwise_disjoint` pin
+        // named the TWO markers as a hand-rolled `assert_ne!` pair, this
+        // family-wide sweep routes the SAME contract through the closed-
+        // set ALL array so a future third marker automatically extends
+        // the sweep to `(3 * 2) / 2 == 3` distinct pairs without re-
+        // deriving per-marker `assert_ne!` calls. The pre-lift pin
+        // stays as the fine-grained fail-loud site; this pin is the
+        // family-wide closure the algebra-extending refactor routes
+        // through.
+        for (i, a) in MacroParams::LAMBDA_LIST_KEYWORDS.iter().enumerate() {
+            for (j, b) in MacroParams::LAMBDA_LIST_KEYWORDS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "LAMBDA_LIST_KEYWORDS[{i}] `{a}` collides with \
+                     LAMBDA_LIST_KEYWORDS[{j}] `{b}` — the CL lambda- \
+                     list-keyword family's pairwise disjointness \
+                     contract no longer binds distinct index pairs \
+                     to distinct markers.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn macro_params_is_lambda_list_keyword_accepts_every_marker() {
+        // ACCEPTANCE-SIDE MEMBERSHIP PIN: every element of the ALL array
+        // MUST classify as `true` through the typed membership gate. The
+        // gate is defined as `LAMBDA_LIST_KEYWORDS.contains(&s)`, so this
+        // pin is the structural closure binding the gate's return value
+        // to the ALL array's element set. A regression that specialises
+        // the gate to a subset of the array (e.g. a `matches!(s,
+        // "&rest")` inline that silently drops the `&optional` branch)
+        // fails HERE at the ALL sweep. Sibling-shape acceptance sweep to
+        // the closed-set `ClosedSet::parse_label` roundtrip pin — every
+        // element of `Self::ALL` decodes through the projection back to
+        // itself.
+        for m in MacroParams::LAMBDA_LIST_KEYWORDS {
+            assert!(
+                MacroParams::is_lambda_list_keyword(m),
+                "is_lambda_list_keyword rejected LAMBDA_LIST_KEYWORDS \
+                 element `{m}` — the closed-set membership gate's \
+                 acceptance side drifted from the ALL array.",
+            );
+        }
+    }
+
+    #[test]
+    fn macro_params_is_lambda_list_keyword_rejects_bare_lead_byte() {
+        // REJECTION-SIDE MEMBERSHIP PIN (LEAD byte alone): the bare LEAD
+        // byte `"&"` MUST classify as `false`. A future Clojure-compat
+        // port might land a bare `&` marker — but until such an
+        // extension explicitly lands on the ALL array, the substrate
+        // MUST NOT silently classify the LEAD byte alone as a
+        // recognised CL lambda-list keyword. Pins the gate's
+        // rejection-side contract against a plausible future
+        // near-miss extension.
+        let bare_lead: String = MacroParams::LAMBDA_LIST_KEYWORD_LEAD.to_string();
+        assert!(
+            !MacroParams::is_lambda_list_keyword(&bare_lead),
+            "is_lambda_list_keyword accepted the bare LEAD byte `{bare_lead}` — \
+             the closed-set membership gate silently classifies the bare `&` \
+             LEAD byte as a recognised CL lambda-list keyword despite the ALL \
+             array containing only the two suffixed markers.",
+        );
+    }
+
+    #[test]
+    fn macro_params_is_lambda_list_keyword_rejects_unrecognised_ampersand_prefixed_names() {
+        // REJECTION-SIDE MEMBERSHIP PIN (unrecognised near-misses): the
+        // three plausible future CL lambda-list keywords (`&key` for
+        // keyword-args, `&aux` for auxiliaries, `&body` for the
+        // docstring-carrying tail of `defmacro` bodies) MUST classify as
+        // `false` UNTIL they explicitly land on the ALL array. Pins the
+        // gate's conservative rejection contract — the closed-set
+        // membership gate is not a "starts with `&`" heuristic; it is a
+        // typed enumeration over the currently-recognised markers. A
+        // regression that silently loosens the gate to a `starts_with`
+        // check (dropping the closed-set discipline) fails HERE.
+        for candidate in ["&key", "&aux", "&body"] {
+            assert!(
+                !MacroParams::is_lambda_list_keyword(candidate),
+                "is_lambda_list_keyword accepted the unrecognised \
+                 `&`-prefixed name `{candidate}` — the closed-set \
+                 membership gate silently loosened its acceptance beyond \
+                 the two markers the ALL array names today.",
+            );
+        }
+    }
+
+    #[test]
+    fn macro_params_is_lambda_list_keyword_rejects_bare_identifiers_and_empty_string() {
+        // REJECTION-SIDE MEMBERSHIP PIN (bare identifiers + empty): a
+        // bare identifier (`"a"`, `"xs"`, `"foo"`) and the empty string
+        // MUST classify as `false`. These are the shapes the parser's
+        // bare-symbol dispatch cascade sees at `parse_params` when
+        // walking a param list, so pinning them here binds the
+        // membership gate's rejection contract to the parser's most
+        // common non-marker input shapes.
+        for candidate in ["a", "xs", "foo", ""] {
+            assert!(
+                !MacroParams::is_lambda_list_keyword(candidate),
+                "is_lambda_list_keyword accepted the bare non-marker \
+                 input `{candidate}` — the closed-set membership gate's \
+                 rejection side no longer excludes bare identifiers \
+                 the parser routes through the fall-through cascade.",
+            );
+        }
     }
 
     // ── fixed_arity: the rest-start / rest-less max-arity primitive ─────

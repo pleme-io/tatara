@@ -61,9 +61,14 @@ impl Hash for Sexp {
 }
 
 // The six atomic variants share the (discriminator, inner) hash shape —
-// the per-variant discriminator byte binds at ONE site on the closed-set
-// `AtomKind` algebra (`AtomKind::hash_discriminator`) rather than at six
-// inline `<N>u8.hash(h)` arms here. The inner-payload arm stays a match
+// the per-variant discriminator byte binds at ONE site on the outer-`Atom`
+// algebra (`Atom::hash_discriminator`) rather than at six inline
+// `<N>u8.hash(h)` arms here. The outer-value method composes through the
+// pre-existing marker-level projection `AtomKind::hash_discriminator` (via
+// `self.kind().hash_discriminator()`) so the (Atom variant, byte) pairing
+// lives at ONE canonical site on the closed-set `AtomKind` algebra rather
+// than at TWO (both a parallel six-arm match here AND `AtomKind::hash_
+// discriminator`'s canonical site). The inner-payload arm stays a match
 // because the payload type differs per variant (`String` for symbol /
 // keyword / str, `i64` for int, `f64::to_bits()` for float, `bool` for
 // bool); the or-pattern collapses the three string-carrying arms. Float:
@@ -73,10 +78,19 @@ impl Hash for Sexp {
 // pairing is pinned bit-for-bit by `atom_kind_hash_discriminator_pins_
 // legacy_atom_cache_key_bytes` against the pre-lift 0/1/2/3/4/5 sequence
 // — same posture as `quote_form_hash_discriminator_pins_legacy_cache_
-// key_bytes` for the four-of-thirteen `Sexp` wrapper variants.
+// key_bytes` for the four-of-thirteen `Sexp` wrapper variants. Post-lift
+// the outer-`Atom` `Hash` body is structurally parallel to `Hash for
+// Sexp` one algebra layer up — both spell `self.hash_discriminator().hash
+// (h); <inner-payload-hash>` at the outer-value carrier, with the byte
+// binding routed through the outer-value-level projection at each
+// algebra. Routing identity pinned by
+// `hash_for_atom_routes_atom_discriminator_through_atom_hash_discriminator`
+// on the outer-`Atom` algebra, sibling of
+// `hash_for_sexp_routes_outer_discriminator_through_sexp_hash_discriminator`
+// on the outer-`Sexp` algebra.
 impl Hash for Atom {
     fn hash<H: Hasher>(&self, h: &mut H) {
-        self.kind().hash_discriminator().hash(h);
+        self.hash_discriminator().hash(h);
         match self {
             Self::Symbol(s) | Self::Keyword(s) | Self::Str(s) => s.hash(h),
             Self::Int(n) => n.hash(h),
@@ -505,6 +519,97 @@ impl Atom {
     #[must_use]
     pub fn sexp_shape(&self) -> SexpShape {
         self.kind().sexp_shape()
+    }
+
+    /// Stable, per-variant byte discriminator that paired with the
+    /// recursive payload hash builds the substrate's [`Hash for Atom`]
+    /// projection — `0u8` for [`Self::Symbol`], `1u8` for
+    /// [`Self::Keyword`], `2u8` for [`Self::Str`], `3u8` for
+    /// [`Self::Int`], `4u8` for [`Self::Float`], `5u8` for
+    /// [`Self::Bool`]. The outer-value peer on the [`Atom`] algebra of
+    /// [`AtomKind::hash_discriminator`] (the marker-level cache-key byte
+    /// projection on the closed-set atomic-kind algebra), sibling of
+    /// [`Self::label`] and [`Self::sexp_shape`] one vocabulary axis over
+    /// on the outer-`Atom` algebra. Body composes through
+    /// `self.kind().hash_discriminator()` — routing through [`Self::kind`]
+    /// (the typed 6-arm outer-value → marker projection) then
+    /// [`AtomKind::hash_discriminator`] (the canonical 6-arm cache-key
+    /// byte projection) so the (Atom variant, byte) pairing lives at
+    /// ONE canonical site ([`AtomKind::hash_discriminator`]'s six match
+    /// arms) rather than at six inline `<N>u8.hash(h)` arms at
+    /// [`Hash for Atom`]'s callsite.
+    ///
+    /// Composition law: `atom.hash_discriminator() ==
+    /// atom.kind().hash_discriminator()` for every `atom: &Atom`. Pinned
+    /// by `atom_hash_discriminator_composes_through_kind_hash_discriminator_for_every_variant`
+    /// across a representative payload sweep (including NaN via
+    /// `f64::to_bits` round-trip on the Float arm, matching
+    /// [`Hash for Atom`]'s posture; both empty and non-empty
+    /// String/Symbol/Keyword arms; `i64::{MIN, MAX}` on the Int arm;
+    /// both Bool arms). Sibling of
+    /// `atom_label_composes_through_kind_label_for_every_variant` and
+    /// `atom_sexp_shape_composes_through_kind_sexp_shape_for_every_variant`
+    /// one vocabulary axis over.
+    ///
+    /// Routing-identity law binding it to [`Hash for Atom`]'s post-lift
+    /// body: for every `atom: &Atom`, hashing via the impl produces
+    /// byte-identical output to a hand-driven
+    /// `atom.hash_discriminator().hash(h); <inner-payload-hash>`
+    /// sequence. Pinned by
+    /// `hash_for_atom_routes_atom_discriminator_through_atom_hash_discriminator`.
+    /// Sibling posture to
+    /// `hash_for_sexp_routes_outer_discriminator_through_sexp_hash_discriminator`
+    /// one algebra layer up — the two routing pins jointly enforce the
+    /// outer-value Hash bodies at BOTH algebras stay structurally
+    /// parallel (`self.hash_discriminator().hash(h); <inner>`).
+    ///
+    /// `pub(crate)` because the byte-discriminator surface is an
+    /// implementation detail of the substrate's [`Hash for Atom`]
+    /// cache-key contract; exposing it publicly would leak the cache-key
+    /// shape through the API without enabling any external consumer the
+    /// public projections ([`Self::kind`], [`Self::label`],
+    /// [`Self::sexp_shape`]) don't already serve. Same posture as
+    /// [`AtomKind::hash_discriminator`] one algebra layer down and
+    /// [`crate::ast::Sexp::hash_discriminator`] one algebra layer up.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (outer
+    /// `Atom` variant, cache-key byte) pairing becomes a TYPE projection
+    /// on the outermost atomic value-carrier algebra composed through the
+    /// pre-existing marker-level projection, rather than a two-hop
+    /// composition at the [`Hash for Atom`] callsite. THEORY.md §II.1
+    /// invariant 2 — free middle; the outer-`Atom` cache-key algebra now
+    /// closes over THREE typed layers (outer `Atom` → [`AtomKind`] → byte)
+    /// with rustc-enforced consistency across each — a regression that
+    /// drifts the [`Hash for Atom`] callsite's byte routing from the
+    /// canonical [`AtomKind::hash_discriminator`] site cannot reach the
+    /// substrate's expansion-cache runtime. THEORY.md §VI.1 — generation
+    /// over composition; the outer-value byte projection is the missing
+    /// algebra layer between the outer `Atom` and the pre-existing
+    /// marker-level byte projection — the two pre-existing typed layers
+    /// become a full THREE-layer typed composition through ONE new named
+    /// projection on the outer value-carrier, closing the (label,
+    /// sexp_shape, hash_discriminator) trio on the outer-`Atom` algebra.
+    ///
+    /// Frontier inspiration: MLIR's
+    /// `mlir::Attribute::getAsOpaquePointer()` typed projection composed
+    /// with the attribute-kind's stable identifier — narrowing an
+    /// attribute-carrier value through its typed kind identity yields the
+    /// canonical cache-key identity in ONE typed composition on the outer
+    /// attribute algebra. Translated through the substrate's
+    /// outer-[`Atom`] value-carrier algebra,
+    /// `atom.kind().hash_discriminator()` closes the (outer value, byte
+    /// cache-key discriminator) pairing at ONE typed projection on the
+    /// value-carrier algebra composed through the marker-level cache-key
+    /// face. Racket's `(datum-hash-key datum)` composed with
+    /// `(kind-hash-tag kind)` on the datum-kind taxonomy — the byte
+    /// cache-key identity emerges from a two-hop composition on the
+    /// outer datum-carrier through the typed kind identity;
+    /// `Atom::hash_discriminator` is the Rust-typed peer on the
+    /// closed-set outer-[`Atom`] algebra with [`AtomKind`] standing in
+    /// for Racket's datum-kind taxonomy.
+    #[must_use]
+    pub(crate) fn hash_discriminator(&self) -> u8 {
+        self.kind().hash_discriminator()
     }
 
     /// Project the atomic payload to its canonical [`serde_json::Value`]
@@ -1305,7 +1410,12 @@ impl AtomKind {
     /// cache-key shape through the API without enabling any external
     /// consumer the public projections ([`Atom::kind`], [`Self::label`],
     /// [`Self::sexp_shape`]) don't already serve. Same posture as
-    /// [`QuoteForm::hash_discriminator`].
+    /// [`QuoteForm::hash_discriminator`] and its outer-value peer
+    /// [`Atom::hash_discriminator`] (the outer-`Atom` projection that
+    /// composes through this method via `self.kind().hash_discriminator()`
+    /// so the [`Hash for Atom`] callsite binds at ONE site on the
+    /// outer-`Atom` algebra rather than at the two-hop
+    /// `.kind().hash_discriminator()` chain).
     #[must_use]
     pub(crate) fn hash_discriminator(self) -> u8 {
         match self {
@@ -10116,6 +10226,124 @@ mod tests {
                 via_legacy,
                 "Hash for Atom drifted from legacy \
                  (discr={expected_discr}, inner) sequence at {label}"
+            );
+        }
+    }
+
+    #[test]
+    fn atom_hash_discriminator_composes_through_kind_hash_discriminator_for_every_variant() {
+        // COMPOSITION-LAW CONTRACT: `atom.hash_discriminator() ==
+        // atom.kind().hash_discriminator()` for every reachable atomic
+        // payload — the outer-`Atom` cache-key byte projection is
+        // structurally derived through `Self::kind` +
+        // `AtomKind::hash_discriminator` rather than through a parallel
+        // six-arm inline match on the outer-`Atom` algebra. Pin the
+        // composition law so a future refactor that re-inlines the six
+        // atomic-arm literals here (and gains its own drift surface
+        // separate from the `AtomKind::hash_discriminator` canonical
+        // site) surfaces immediately.
+        //
+        // Sibling-shape pin to
+        // `atom_label_composes_through_kind_label_for_every_variant`
+        // (diagnostic-label axis) and
+        // `atom_sexp_shape_composes_through_kind_sexp_shape_for_every_variant`
+        // (outer-shape axis) one vocabulary axis over — the three pins
+        // jointly enforce the outer-`Atom` algebra closes the (label,
+        // sexp_shape, hash_discriminator) trio through the SAME typed
+        // marker layer (`Self::kind` into `AtomKind`) rather than
+        // degrading to a per-layer inline literal table on the
+        // outer-`Atom` algebra. The sweep includes NaN and ±∞ Float
+        // payloads (matching `Hash for Atom`'s `f64::to_bits()`
+        // posture), both empty and non-empty String/Symbol/Keyword
+        // arms, `i64::{MIN, MAX}` on the Int arm, and both Bool arms —
+        // exhausting the byte-partition surface at every reachable
+        // atomic-payload witness.
+        let samples: Vec<Atom> = vec![
+            Atom::Symbol("foo".to_owned()),
+            Atom::Symbol(String::new()),
+            Atom::Keyword("kw".to_owned()),
+            Atom::Keyword(String::new()),
+            Atom::Str("hi".to_owned()),
+            Atom::Str(String::new()),
+            Atom::Int(0),
+            Atom::Int(-7),
+            Atom::Int(42),
+            Atom::Int(i64::MIN),
+            Atom::Int(i64::MAX),
+            Atom::Float(0.0),
+            Atom::Float(-1.5),
+            Atom::Float(f64::INFINITY),
+            Atom::Float(f64::NEG_INFINITY),
+            Atom::Float(f64::NAN),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ];
+        for atom in &samples {
+            let via_outer = atom.hash_discriminator();
+            let via_composition = atom.kind().hash_discriminator();
+            assert_eq!(
+                via_outer, via_composition,
+                "Atom::hash_discriminator() must route through \
+                 self.kind().hash_discriminator() for {atom:?} — drift \
+                 here means the lift was reverted to inline arms and \
+                 the outer-`Atom` cache-key algebra fractured from the \
+                 canonical AtomKind::hash_discriminator site",
+            );
+        }
+    }
+
+    #[test]
+    fn hash_for_atom_routes_atom_discriminator_through_atom_hash_discriminator() {
+        // ROUTING-LAW CONTRACT: pin the outer-`Atom` routing IDENTITY —
+        // for every reachable atomic payload, `Hash for Atom` produces
+        // byte-identical output to a hand-driven
+        // `atom.hash_discriminator().hash(h); <inner-payload-hash>`
+        // sequence. Binds the composition IDENTITY (not just value
+        // equality) between the outer Hash body and the typed algebra
+        // method — a regression that re-inlines the two-hop
+        // `self.kind().hash_discriminator()` chain at the outer arm
+        // still drifts detectably if the future
+        // `Atom::hash_discriminator` composes through a different site.
+        // Sibling posture to
+        // `hash_for_sexp_routes_outer_discriminator_through_sexp_hash_discriminator`
+        // — that pin binds the `Hash for Sexp` body against the
+        // outer-`Sexp` cache-key method; this pin binds the
+        // `Hash for Atom` body against the outer-`Atom` cache-key
+        // method. Together the two routing pins enforce the outer-value
+        // Hash bodies at BOTH algebras stay structurally parallel
+        // (`self.hash_discriminator().hash(h); <inner>`).
+        use std::collections::hash_map::DefaultHasher;
+        let seeds: Vec<(&str, Atom)> = vec![
+            ("symbol", Atom::Symbol("s".to_owned())),
+            ("symbol-empty", Atom::Symbol(String::new())),
+            ("keyword", Atom::Keyword("kw".to_owned())),
+            ("str", Atom::Str("hi".to_owned())),
+            ("int-zero", Atom::Int(0)),
+            ("int-min", Atom::Int(i64::MIN)),
+            ("int-max", Atom::Int(i64::MAX)),
+            ("float", Atom::Float(2.5)),
+            ("float-nan", Atom::Float(f64::NAN)),
+            ("float-inf", Atom::Float(f64::INFINITY)),
+            ("bool-true", Atom::Bool(true)),
+            ("bool-false", Atom::Bool(false)),
+        ];
+        for (label, atom) in &seeds {
+            let mut via_impl = DefaultHasher::new();
+            atom.hash(&mut via_impl);
+
+            let mut via_lifted = DefaultHasher::new();
+            atom.hash_discriminator().hash(&mut via_lifted);
+            match atom {
+                Atom::Symbol(s) | Atom::Keyword(s) | Atom::Str(s) => s.hash(&mut via_lifted),
+                Atom::Int(n) => n.hash(&mut via_lifted),
+                Atom::Float(f) => f.to_bits().hash(&mut via_lifted),
+                Atom::Bool(b) => b.hash(&mut via_lifted),
+            }
+
+            assert_eq!(
+                via_impl.finish(),
+                via_lifted.finish(),
+                "Hash for Atom drifted from routed-through-hash_discriminator sequence at {label}"
             );
         }
     }

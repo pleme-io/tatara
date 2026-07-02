@@ -2202,6 +2202,87 @@ impl Sexp {
     /// bytes at two consumer surfaces in `crate::reader`.
     pub const COMMENT_LEAD: char = ';';
 
+    /// Canonical `\n` char that terminates a line-comment run in the
+    /// reader's tokenizer — the section-for-retraction sibling of
+    /// [`Self::COMMENT_LEAD`] on the reader-discard axis. Paired
+    /// opener/terminator peer of [`Self::LIST_OPEN`] /
+    /// [`Self::LIST_CLOSE`] on the outer-structural axis: where
+    /// [`Self::LIST_OPEN`] / [`Self::LIST_CLOSE`] are the two typed
+    /// constants that shape a `Sexp::List` payload, [`Self::COMMENT_LEAD`]
+    /// / [`Self::COMMENT_TERM`] are the two typed constants that shape
+    /// the reader's line-comment discard run. Both pairs live on the
+    /// closed-set outer [`Sexp`] algebra so the reader-discard axis
+    /// carries the same opener/closer discipline the outer-structural
+    /// axis has carried since the initial [`Self::LIST_OPEN`] /
+    /// [`Self::LIST_CLOSE`] lift.
+    ///
+    /// Pre-lift the same `'\n'` byte lived inline at ONE site in
+    /// `crate::reader::tokenize` — the line-comment discard loop's
+    /// terminator check `if ch == '\n' { break; }`. Post-lift the
+    /// (reader-discard terminator role, canonical byte) pairing binds
+    /// at ONE constant on the [`Sexp`] algebra that the consumer site
+    /// routes through; a refactor that ports the reader to a different
+    /// line-break convention (e.g. Scheme R7RS `#;` datum-comment
+    /// terminated at the next well-formed datum, an Emacs-style port
+    /// with `\r\n` CRLF sequences, a Common-Lisp-style `#|…|#` block
+    /// comment closed by `|#`) touches ONE constant (or extends the
+    /// algebra by ONE peer method) rather than an inline byte.
+    ///
+    /// Reader-discard contract: `Sexp::COMMENT_TERM` MUST NOT surface
+    /// as an atomic payload in any parsed [`Sexp`] — the reader's
+    /// [`Self::COMMENT_LEAD`] outer-dispatch arm consumes every byte
+    /// (INCLUDING this terminator) up to and including the FIRST
+    /// occurrence of [`Self::COMMENT_TERM`], emitting NO token. The
+    /// (lead, term) pair carries the SAME reader-discard invariant as
+    /// (LIST_OPEN, LIST_CLOSE) does on the outer-structural axis: both
+    /// bytes are structural markers that never appear in a token
+    /// payload.
+    ///
+    /// Cross-axis disjointness with the sibling closed-set markers
+    /// (pinned structurally at
+    /// `sexp_comment_term_distinct_from_every_non_whitespace_algebra_marker`):
+    /// `COMMENT_TERM`'s byte MUST differ from every NON-whitespace
+    /// outer-marker char — [`Self::LIST_OPEN`], [`Self::LIST_CLOSE`],
+    /// [`Self::COMMENT_LEAD`], [`Atom::STR_DELIMITER`],
+    /// [`Atom::STR_ESCAPE_LEAD`], [`Atom::KEYWORD_MARKER`]'s lead byte,
+    /// the two [`Atom::bool_literal`] spellings' lead byte, AND every
+    /// [`QuoteForm::lead_char`] projection. The terminator IS a
+    /// whitespace char (it satisfies `char::is_whitespace`) so the
+    /// disjointness test explicitly excludes the whitespace-family
+    /// axis: the terminator's role IS to be whitespace-family, so the
+    /// disjointness contract binds only against the non-whitespace
+    /// outer-marker axes.
+    ///
+    /// Interaction with the escape-decode codomain axis: the terminator
+    /// byte `'\n'` COINCIDES with the C0 control byte
+    /// [`Atom::decode_str_escape`]`('n')` produces — the two roles are
+    /// distinct algebraic axes (reader-discard structural marker on
+    /// the outer [`Sexp`] algebra vs. Str-escape shorthand codomain
+    /// value on the inner [`Atom`] algebra) so the collision at the
+    /// byte level is by design, NOT a disjointness violation. A `\n`
+    /// byte APPEARING inside a `Token::Str` payload's decoded output
+    /// (via `\n` shorthand) is orthogonal to a `\n` byte APPEARING as
+    /// the line-comment terminator at the reader's outer-dispatch
+    /// discard loop.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (reader-discard terminator role, canonical `\n` byte) pairing
+    /// binds at ONE constant on the closed-set outer [`Sexp`] algebra
+    /// regardless of which consumer reaches in. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the paired
+    /// (COMMENT_LEAD, COMMENT_TERM) shape now lives at the algebra
+    /// alongside (LIST_OPEN, LIST_CLOSE), so the reader-discard axis
+    /// carries the SAME opener/closer discipline as the outer-
+    /// structural axis. THEORY.md §VI.1 — generation over composition;
+    /// the reader's inline `'\n'` char literal at the line-comment
+    /// discard loop's terminator check collapses onto ONE named
+    /// constant on the substrate algebra. THEORY.md §V.1 — knowable
+    /// platform; the canonical line-comment terminator byte becomes
+    /// a TYPE-level constant on the outer substrate algebra rather
+    /// than an inline `'\n'` at one consumer surface in
+    /// `crate::reader::tokenize`.
+    pub const COMMENT_TERM: char = '\n';
+
     /// Reader-level boundary predicate — returns `true` iff `ch` is one
     /// of the SIX outer-dispatch category-leading chars the reader's
     /// tokenizer specialises on: whitespace, [`Self::LIST_OPEN`],
@@ -18271,6 +18352,151 @@ mod tests {
                 "COMMENT_LEAD and QuoteForm::{qf:?}::lead_char share a byte — \
                  a bare `;`-starting source would silently route through the \
                  quote-family outer-dispatch arm.",
+            );
+        }
+    }
+
+    // ── `Sexp::COMMENT_TERM` — the canonical `\n` char that terminates
+    // a line-comment run in the reader's tokenizer. Section-for-retraction
+    // sibling of `Sexp::COMMENT_LEAD` on the reader-discard axis; paired
+    // opener/terminator peer of `Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE`
+    // on the outer-structural axis. The pins below anchor the constant's
+    // exact byte AND its cross-axis disjointness against every
+    // non-whitespace closed-set outer-marker char.
+
+    #[test]
+    fn sexp_comment_term_projects_canonical_line_feed_char() {
+        // Pins the constant's exact `char` value so a typo (`'\r'`,
+        // `'\0'`, a display-glyph substitution) or an accidental
+        // redefinition surfaces immediately. Sibling-shape pin to
+        // `sexp_comment_lead_projects_canonical_semicolon_char` on the
+        // reader-discard axis — pins the SAME shape at the terminator
+        // side of the (COMMENT_LEAD, COMMENT_TERM) paired-delimiter
+        // algebra on the closed-set outer [`Sexp`] algebra.
+        assert_eq!(
+            Sexp::COMMENT_TERM,
+            '\n',
+            "COMMENT_TERM char drifted from the substrate-canonical `\\n` \
+             line-feed byte — the reader-discard contract at \
+             crate::reader::tokenize's line-comment discard loop binds \
+             to this ONE constant.",
+        );
+    }
+
+    #[test]
+    fn sexp_comment_term_is_whitespace_family_char() {
+        // WHITESPACE-FAMILY PIN: the line-comment terminator MUST be a
+        // whitespace char. The reader's outer-match's `ws if
+        // ws.is_whitespace()` arm absorbs any lingering COMMENT_TERM
+        // byte after the discard loop terminates on it — a regression
+        // that repointed COMMENT_TERM at a NON-whitespace byte would
+        // BOTH break the discard loop's semantics AND leak the byte
+        // into the token stream as an outer-dispatch dispatch (either a
+        // specific arm firing on it, or the bare-atom accumulator
+        // consuming it). Pin the property structurally so a byte swap
+        // that lost whitespace-family membership surfaces here rather
+        // than as a downstream tokenizer misclassification.
+        assert!(
+            Sexp::COMMENT_TERM.is_whitespace(),
+            "COMMENT_TERM `{:?}` is NOT a whitespace char — the reader's \
+             outer-match whitespace arm would fail to absorb it AND the \
+             line-comment discard loop's terminator would leak the byte \
+             into the token stream.",
+            Sexp::COMMENT_TERM,
+        );
+    }
+
+    #[test]
+    fn sexp_comment_term_distinct_from_every_non_whitespace_algebra_marker() {
+        // Cross-axis disjointness pin: `Sexp::COMMENT_TERM` may NOT
+        // alias any NON-whitespace sibling outer-marker char on the
+        // substrate's other closed-set algebras — the paired list
+        // delimiters (`Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE`), the
+        // line-comment lead (`Sexp::COMMENT_LEAD`), the Str-payload
+        // delimiter + escape-lead (`Atom::STR_DELIMITER` /
+        // `Atom::STR_ESCAPE_LEAD`), the Keyword-marker prefix
+        // (`Atom::KEYWORD_MARKER`'s lead byte), the two Bool-literal
+        // spellings' lead byte (`Atom::bool_literal(true|false)`'s
+        // first char), AND every quote-family lead char
+        // (`QuoteForm::lead_char(qf)` for each `qf` in `QuoteForm::ALL`).
+        // The disjointness contract EXCLUDES the whitespace-family
+        // axis — the terminator's role IS to be whitespace-family, so
+        // the outer-match's `ws if ws.is_whitespace()` arm absorbs it
+        // by design (see `sexp_comment_term_is_whitespace_family_char`
+        // above). Sibling-shape pin to
+        // `sexp_comment_lead_distinct_from_every_other_algebra_marker`
+        // on the lead side of the paired-delimiter algebra — pins the
+        // SAME shape at the terminator side.
+        assert_ne!(
+            Sexp::COMMENT_TERM,
+            Sexp::LIST_OPEN,
+            "COMMENT_TERM and LIST_OPEN share a byte — the reader's \
+             line-comment discard loop would terminate on the SAME byte \
+             the outer-dispatch's list-opening arm binds to.",
+        );
+        assert_ne!(
+            Sexp::COMMENT_TERM,
+            Sexp::LIST_CLOSE,
+            "COMMENT_TERM and LIST_CLOSE share a byte — the reader's \
+             line-comment discard loop would terminate on the SAME byte \
+             the outer-dispatch's list-closing arm binds to.",
+        );
+        assert_ne!(
+            Sexp::COMMENT_TERM,
+            Sexp::COMMENT_LEAD,
+            "COMMENT_TERM and COMMENT_LEAD share a byte — a bare \
+             `{lead}{lead}` two-char source would AMBIGUOUSLY begin AND \
+             terminate the SAME comment run at the SAME byte, collapsing \
+             the paired-delimiter algebra onto ONE char.",
+            lead = Sexp::COMMENT_LEAD,
+        );
+        assert_ne!(
+            Sexp::COMMENT_TERM,
+            Atom::STR_DELIMITER,
+            "COMMENT_TERM and STR_DELIMITER share a byte — the reader's \
+             line-comment discard loop would terminate on the SAME byte \
+             the outer-dispatch's string-opening arm binds to.",
+        );
+        assert_ne!(
+            Sexp::COMMENT_TERM,
+            Atom::STR_ESCAPE_LEAD,
+            "COMMENT_TERM and STR_ESCAPE_LEAD share a byte — the reader's \
+             line-comment discard loop would terminate on the SAME byte \
+             the Str-payload's escape-handler outer arm binds to.",
+        );
+        let kw_char = Atom::KEYWORD_MARKER
+            .chars()
+            .next()
+            .expect("KEYWORD_MARKER must be non-empty");
+        assert_ne!(
+            Sexp::COMMENT_TERM,
+            kw_char,
+            "COMMENT_TERM and KEYWORD_MARKER share a byte — the reader's \
+             line-comment discard loop would terminate on the SAME byte \
+             the from_lexeme keyword-prefix arm binds to.",
+        );
+        for b in [true, false] {
+            let lead = Atom::bool_literal(b)
+                .chars()
+                .next()
+                .expect("bool_literal must be non-empty");
+            assert_ne!(
+                Sexp::COMMENT_TERM,
+                lead,
+                "COMMENT_TERM and bool_literal({b:?}) share a lead byte — \
+                 the reader's line-comment discard loop would terminate \
+                 on the SAME byte the from_lexeme bool-literal arm binds \
+                 to.",
+            );
+        }
+        for qf in QuoteForm::ALL {
+            assert_ne!(
+                Sexp::COMMENT_TERM,
+                qf.lead_char(),
+                "COMMENT_TERM and QuoteForm::{qf:?}::lead_char share a \
+                 byte — the reader's line-comment discard loop would \
+                 terminate on the SAME byte the quote-family outer- \
+                 dispatch arm binds to.",
             );
         }
     }

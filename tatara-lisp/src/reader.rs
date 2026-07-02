@@ -111,15 +111,20 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
             // shape a `Sexp::List` payload, this constant is the ONE `;`
             // byte the reader's outer-dispatch arm AND the bare-atom
             // terminator disjunct below both bind to on the closed-set
-            // outer [`Sexp`] algebra. The trailing `\n` disjunct is
-            // absorbed by the whitespace check in the outer match's
-            // guard arm; this loop consumes every byte up to (and
-            // including) the newline so the discarded run emits NO
-            // token.
+            // outer [`Sexp`] algebra. The paired terminator byte
+            // (absorbed by the whitespace check in the outer match's
+            // guard arm even if it survived this loop) is
+            // [`Sexp::COMMENT_TERM`] — the section-for-retraction
+            // sibling on the same reader-discard axis; the (lead,
+            // term) pair carries the SAME opener/closer discipline
+            // that (LIST_OPEN, LIST_CLOSE) does on the outer-structural
+            // axis. This loop consumes every byte up to (and including)
+            // the first [`Sexp::COMMENT_TERM`] so the discarded run
+            // emits NO token.
             Sexp::COMMENT_LEAD => {
                 while let Some(&(_, ch)) = chars.peek() {
                     chars.next();
-                    if ch == '\n' {
+                    if ch == Sexp::COMMENT_TERM {
                         break;
                     }
                 }
@@ -1275,6 +1280,106 @@ mod tests {
             "sole surviving token must be Token::Atom(\"foo\") at position \
              0, got {:?} — the bare-atom terminator disjunct did NOT \
              break at COMMENT_LEAD",
+            tokens[0],
+        );
+    }
+
+    #[test]
+    fn tokenizer_line_comment_terminator_arm_binds_to_sexp_comment_term_constant() {
+        // TERMINATOR-BOUNDARY CONTRACT: pin that a source composed of a
+        // COMMENT_LEAD-led run + the typed COMMENT_TERM constant + a
+        // trailing well-formed datum tokenizes to EXACTLY the trailing
+        // datum's tokens — the line-comment discard loop consumes every
+        // byte up to and including the FIRST COMMENT_TERM, then hands
+        // off to the outer-dispatch which tokenizes the subsequent
+        // datum. Sibling-shape pin to
+        // `tokenizer_line_comment_outer_dispatch_arm_binds_to_sexp_comment_lead`
+        // on the LEAD side of the paired-delimiter algebra; THIS pin
+        // covers the TERMINATOR side end-to-end through the constant.
+        //
+        // A regression that drifts the terminator constant (e.g. swaps
+        // COMMENT_TERM to `'\r'` while the source carries a bare `\n`)
+        // would cause the discard loop to run to end-of-input, absorbing
+        // the trailing datum's bytes into the discarded run. A regression
+        // that reverts the arm to an inline `'\n'` char literal AND
+        // silently drifts the constant to a different byte would fail
+        // HERE at the source-composition assertion: the source is built
+        // from the constant, so the source AND the arm both track the
+        // constant OR both track the inline literal — mixing the two
+        // surfaces here as a tokenizer misclassification.
+        let source = format!(
+            "{}comment body here{}foo",
+            Sexp::COMMENT_LEAD,
+            Sexp::COMMENT_TERM,
+        );
+        let tokens = tokenize(&source).unwrap_or_else(|e| {
+            panic!("tokenize rejected COMMENT_TERM-terminated source `{source}`: {e}")
+        });
+        assert_eq!(
+            tokens.len(),
+            1,
+            "COMMENT_TERM-terminated line-comment must be discarded, \
+             leaving ONLY the trailing atom in the token stream, got \
+             {tokens:?}",
+        );
+        assert!(
+            matches!(&tokens[0], (Token::Atom(s), _) if s == "foo"),
+            "sole surviving token must be Token::Atom(\"foo\"), got {:?} \
+             — the line-comment discard loop's terminator arm did NOT \
+             break at COMMENT_TERM",
+            tokens[0],
+        );
+    }
+
+    #[test]
+    fn tokenizer_line_comment_terminator_arm_breaks_per_run_across_two_comment_runs() {
+        // PER-RUN PIN: the line-comment discard loop's terminator arm
+        // fires ONCE per comment run — breaking on the FIRST
+        // COMMENT_TERM inside each run, then handing off to the outer-
+        // dispatch which fires the whitespace arm (or the COMMENT_LEAD
+        // arm again if a new comment starts). Pin the loop exit's
+        // per-run scope against a regression that skipped to
+        // end-of-input on COMMENT_TERM, which would silently swallow
+        // every subsequent token including a trailing datum after the
+        // second comment.
+        //
+        // Source shape: `;line 1 body\n;line 2 body\nfoo` — TWO
+        // COMMENT_LEAD-led runs each terminated by ITS own COMMENT_TERM,
+        // followed by a trailing atom. A regression that ran the
+        // discard loop past the FIRST COMMENT_TERM would either
+        // (a) tokenize `foo` as part of an over-eaten comment body
+        // (0 tokens), OR (b) tokenize `line`, `2`, `body`, `foo` as
+        // separate atoms if the discard loop wrongly broke on the
+        // second COMMENT_LEAD rather than the first COMMENT_TERM.
+        // Pins the (per-run, single-terminator-scope) semantics of the
+        // discard loop end-to-end.
+        //
+        // Structural pin: pairs with the sibling terminator arm test
+        // above; that pin covers the ONE-terminator common case, THIS
+        // pin covers the MULTI-line boundary where the discard loop
+        // hands off ONCE per comment run rather than running to EOF.
+        let source = format!(
+            "{}line 1 body{}{}line 2 body{}foo",
+            Sexp::COMMENT_LEAD,
+            Sexp::COMMENT_TERM,
+            Sexp::COMMENT_LEAD,
+            Sexp::COMMENT_TERM,
+        );
+        let tokens = tokenize(&source).unwrap_or_else(|e| {
+            panic!("tokenize rejected multi-line COMMENT_TERM source `{source}`: {e}")
+        });
+        assert_eq!(
+            tokens.len(),
+            1,
+            "two COMMENT_LEAD-led runs each terminated by their own \
+             COMMENT_TERM must both be discarded, leaving ONLY the \
+             trailing atom in the token stream, got {tokens:?}",
+        );
+        assert!(
+            matches!(&tokens[0], (Token::Atom(s), _) if s == "foo"),
+            "sole surviving token must be Token::Atom(\"foo\"), got {:?} \
+             — the discard loop did NOT hand off correctly at the FIRST \
+             COMMENT_TERM of EACH run",
             tokens[0],
         );
     }

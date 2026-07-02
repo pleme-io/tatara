@@ -253,6 +253,96 @@ impl Atom {
         }
     }
 
+    /// Canonical `"` delimiter that opens AND closes a [`Self::Str`]
+    /// atom in the reader's tokenizer AND self-escapes inside a
+    /// backslash-escape sequence — ONE canonical `char` on the
+    /// [`Atom`] algebra the substrate's FOUR `"`-round-trip inline
+    /// `char` literals at [`crate::reader::tokenize`] bind to.
+    ///
+    /// Sibling constant of [`Self::KEYWORD_MARKER`] on the atomic-
+    /// payload marker/delimiter axis of the closed-set [`Atom`]
+    /// algebra: where `KEYWORD_MARKER` is the ONE `&'static str`
+    /// prefix a [`Self::Keyword`] payload composes WITH at four
+    /// canonical-form round-trip sites (reader-entry classifier,
+    /// Lisp-canonical Display, JSON canonical form, iac-forge
+    /// canonical form) and [`Self::bool_literal`] is the ONE
+    /// projection a [`Self::Bool`] payload composes THROUGH at its
+    /// two Bool-round-trip sites, this constant is the ONE canonical
+    /// delimiter a [`Self::Str`] payload pairs with at the reader's
+    /// four `"`-round-trip sites inside [`crate::reader::tokenize`]:
+    ///   1. The outer-match string-opening arm — the `"` byte that
+    ///      begins a [`crate::reader::Token::Str`] tokenization run.
+    ///   2. The escape-handler mapping — `\"` unescapes to a bare `"`
+    ///      character inside the accumulated string payload (the
+    ///      only self-escape arm on the reader's five-arm escape
+    ///      table: `\n → \n`, `\t → \t`, `\r → \r`, `\" → "`,
+    ///      `\\ → \\`).
+    ///   3. The string-closing arm — the `"` byte that terminates the
+    ///      current [`crate::reader::Token::Str`] tokenization run
+    ///      and emits the accumulated payload.
+    ///   4. The bare-atom tokenizer's break-disjunct — `"` is one of
+    ///      the seven characters that terminates a
+    ///      [`crate::reader::Token::Atom`] run so a bare atom
+    ///      followed by a string (e.g. `foo"body"`) tokenizes as two
+    ///      distinct tokens rather than one Symbol payload.
+    ///
+    /// Pre-lift the same `"` byte lived inline at four `char`
+    /// literals scattered across `crate::reader::tokenize`: two outer-
+    /// match arm patterns (opening + escape-handler), one inner-loop
+    /// termination pattern (closing), one bare-atom termination
+    /// disjunct. Post-lift the (Str payload, canonical `"` delimiter)
+    /// pairing binds at ONE `char` constant on the [`Atom`] algebra
+    /// that every reader consumer routes through; a refactor that
+    /// swaps the delimiter (e.g. a Racket-compat port to `#"…"#`
+    /// heredoc mode, a Python-compat port that also accepts `'`,
+    /// a triple-quoted heredoc mode) touches ONE constant + one
+    /// reader table rather than four inline byte literals that would
+    /// silently drift out of round-trip agreement if one was updated
+    /// without the others (e.g. an opening `#` without a matching
+    /// closing `#` would round-trip a broken string with a
+    /// silently-truncated payload).
+    ///
+    /// Load-bearing round-trip contract:
+    /// `read(&format!("{}{s}{}", Atom::STR_DELIMITER,
+    /// Atom::STR_DELIMITER))[0] == Sexp::Atom(Atom::string(s))` for
+    /// every escape-free `s: &str`. The reader's opening + closing
+    /// arms both bind to THIS constant so the delimiter cannot drift
+    /// silently between opener and closer; a regression that swaps
+    /// ONE arm's pattern to a different byte fails the round-trip
+    /// even when the byte-value at the other arm still agrees at
+    /// the surface. Guards the CLAUDE.md-implicit convention that
+    /// operator-visible strings use ONE canonical delimiter across
+    /// the reader entry surface — the delimiter is a first-class
+    /// algebra fact rather than a per-callsite reader convention.
+    ///
+    /// Sibling-shape peer of [`Self::KEYWORD_MARKER`] on the closed-
+    /// set [`Atom`] algebra: where `KEYWORD_MARKER` (`":"`) partitions
+    /// bare-atom lexemes at reader-entry classifier `strip_prefix`
+    /// gate into `Keyword` vs default `Symbol`, this constant (`'"'`)
+    /// partitions the reader's outer tokenizer arm into
+    /// `Token::Str` vs `Token::Atom` — both are the ONE canonical
+    /// marker byte the reader binds to when discriminating an
+    /// [`Atom`] variant's typed-entry classification path. A `Str`
+    /// payload takes the `Token::Str` reader branch (with THIS
+    /// delimiter) NOT the `Token::Atom` reader branch (routed
+    /// through [`Self::from_lexeme`]) — the two paths remain
+    /// structurally disjoint through the reader's delimiter
+    /// dispatch.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Str payload, canonical `"` delimiter) pairing now binds at
+    /// ONE constant on the closed-set [`Atom`] algebra regardless of
+    /// which of the four reader tokenizer sites reaches in.
+    /// THEORY.md §VI.1 — generation over composition; four byte-
+    /// identical inline `'"'` char literals in `crate::reader::tokenize`
+    /// collapse onto ONE named constant. Four occurrences, well past
+    /// the ≥2 lift threshold — the substrate's three-times rule at
+    /// the Str-delimiter axis. THEORY.md §V.1 — knowable platform;
+    /// the canonical string-delimiter byte becomes a TYPE-level
+    /// constant on the substrate algebra rather than four inline
+    /// bytes at four consumer sites inside one reader file.
+    pub const STR_DELIMITER: char = '"';
+
     /// Canonical [`Self::Symbol`] constructor — first of the six per-
     /// variant typed-construct methods on the closed-set [`Atom`]
     /// algebra. Takes `impl Into<String>` so the consumer composes any
@@ -15944,6 +16034,121 @@ mod tests {
             assert_eq!(
                 round_tripped, a,
                 "bool round-trip through bool_literal drifted at b={b:?}",
+            );
+        }
+    }
+
+    // ── `Atom::STR_DELIMITER` — the canonical `"` char routed through
+    // the four Str-round-trip sites inside `crate::reader::tokenize`
+    // (string-opening arm, escape-handler self-escape mapping, string-
+    // closing arm, bare-atom terminator disjunct). Pins the constant
+    // value AND the composition against a byte-identical drift at any
+    // one of the four sites. Sibling-shape tests to the
+    // `atom_keyword_marker_*` block above (Keyword prefix axis) and
+    // the `atom_bool_literal_*` block above (Bool spelling axis).
+
+    #[test]
+    fn atom_str_delimiter_projects_canonical_double_quote_char() {
+        // Pins the constant's exact `char` value so a typo (`'\''`,
+        // `'\`'`, `'#'`) or an accidental redefinition surfaces
+        // immediately. Sibling-shape pin to
+        // `atom_keyword_marker_projects_canonical_colon_byte` (the
+        // Keyword prefix axis) and
+        // `atom_bool_literal_projects_canonical_scheme_spellings`
+        // (the Bool spelling axis) — pins the SAME shape on the
+        // Str-delimiter axis of the closed-set [`Atom`] algebra.
+        assert_eq!(
+            Atom::STR_DELIMITER,
+            '"',
+            "STR_DELIMITER char drifted from the substrate-canonical `\"` \
+             delimiter — the reader-round-trip contract at \
+             crate::reader::tokenize (string-opening arm, escape-handler \
+             self-escape, string-closing arm, bare-atom terminator \
+             disjunct) all bind to this ONE constant.",
+        );
+    }
+
+    #[test]
+    fn atom_str_delimiter_distinct_from_every_other_atom_marker() {
+        // Cross-axis disjointness pin: the Str-delimiter byte
+        // (`Atom::STR_DELIMITER`) must NOT alias the Keyword-marker
+        // prefix byte (`Atom::KEYWORD_MARKER`) or the two Bool-
+        // literal spellings (`Atom::bool_literal(true|false)`) —
+        // otherwise a bare `:foo` or `#t` lexeme starting with the
+        // Str-delimiter would ambiguously route through the reader's
+        // `Token::Str` branch AND the `Token::Atom` classifier's
+        // Keyword / Bool arms in `Atom::from_lexeme`. Guards the
+        // structural disjointness of the atomic-payload marker
+        // family on the closed-set [`Atom`] algebra so a future
+        // marker-swap that accidentally collides two axes surfaces
+        // at this pin rather than as a silent reader misclassification.
+        //
+        // `KEYWORD_MARKER` is `":"` (single-char) — its byte MUST
+        // differ from `STR_DELIMITER`'s (`'"'`) so `:foo` never
+        // opens a string. The two `bool_literal` spellings (`"#t"`,
+        // `"#f"`) begin with `'#'` — a two-char prefix distinct from
+        // the single `'"'` STR_DELIMITER — so a bare `#t` never
+        // opens a string either. Pin the byte-level disjointness
+        // directly here so any future refactor that swaps a marker
+        // to collide with STR_DELIMITER fails loudly.
+        assert_ne!(
+            Atom::STR_DELIMITER.to_string(),
+            Atom::KEYWORD_MARKER,
+            "STR_DELIMITER and KEYWORD_MARKER share a byte — a bare \
+             `{}foo` lexeme would ambiguously open a string AND begin a \
+             keyword classification.",
+            Atom::KEYWORD_MARKER,
+        );
+        for b in [true, false] {
+            assert!(
+                !Atom::bool_literal(b).starts_with(Atom::STR_DELIMITER),
+                "bool_literal({b:?}) begins with STR_DELIMITER — a bare \
+                 `{}` lexeme would ambiguously open a string AND classify \
+                 as a Bool.",
+                Atom::bool_literal(b),
+            );
+        }
+    }
+
+    #[test]
+    fn atom_str_delimiter_closes_reader_display_round_trip_for_escape_free_str_payloads() {
+        // Load-bearing round-trip contract for the reader's four
+        // Str-round-trip sites — the reader's string-opening AND
+        // string-closing arms both bind to `Atom::STR_DELIMITER`, so
+        // wrapping an escape-free payload in the constant's byte on
+        // both sides recovers the SAME `Atom::string(s)` value the
+        // typed constructor produces. A regression that drifts ONE
+        // of the two arms (e.g. re-inlines `'"'` at the opener while
+        // migrating the closer to a different delimiter) breaks the
+        // opener-must-match-closer contract even when the byte-value
+        // at the drifted site still agrees at the surface, because
+        // this round-trip binds to the constant at BOTH endpoints.
+        //
+        // Escape-free payload sweep — the reader's escape-handler
+        // arm's self-escape (`\"` → `"`) is pinned separately at
+        // `reader_str_escape_self_escape_arm_routes_through_atom_str_delimiter`
+        // in `crate::reader::tests`; here we sweep the payloads that
+        // do NOT hit the escape-handler branch so the opener/closer
+        // pairing is isolated as the load-bearing composition.
+        for payload in ["hello", "", "foo bar", "kw", "seph.1", "42"] {
+            let source = format!("{}{payload}{}", Atom::STR_DELIMITER, Atom::STR_DELIMITER,);
+            let forms = crate::reader::read(&source).unwrap_or_else(|e| {
+                panic!(
+                    "reader rejected `{source}` composed from \
+                     Atom::STR_DELIMITER at payload={payload:?}: {e}"
+                )
+            });
+            assert_eq!(
+                forms.len(),
+                1,
+                "STR_DELIMITER-wrapped payload {payload:?} must read as \
+                 exactly one form, got {forms:?}",
+            );
+            assert_eq!(
+                forms[0],
+                Sexp::Atom(Atom::string(payload)),
+                "STR_DELIMITER-wrapped payload {payload:?} drifted from \
+                 the Sexp::Atom(Atom::string(_)) typed-constructor shape",
             );
         }
     }

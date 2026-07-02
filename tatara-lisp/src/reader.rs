@@ -91,7 +91,13 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
                     out.push((Token::Quoted(QuoteForm::Unquote), pos));
                 }
             }
-            '"' => {
+            // String-opening arm — the canonical `"` byte routed through
+            // the [`Atom::STR_DELIMITER`] constant on the closed-set
+            // [`Atom`] algebra. The closing arm below AND the self-
+            // escape arm inside the escape table AND the bare-atom
+            // terminator disjunct all bind to the SAME constant so
+            // the four `"`-round-trip sites cannot drift.
+            Atom::STR_DELIMITER => {
                 chars.next();
                 let mut s = String::new();
                 loop {
@@ -102,13 +108,23 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
                                     'n' => '\n',
                                     't' => '\t',
                                     'r' => '\r',
-                                    '"' => '"',
+                                    // Self-escape: `\"` unescapes to the
+                                    // canonical delimiter byte. Pattern
+                                    // AND value both bind to
+                                    // `Atom::STR_DELIMITER` so a future
+                                    // delimiter swap flips both sides in
+                                    // lockstep at ONE constant.
+                                    Atom::STR_DELIMITER => Atom::STR_DELIMITER,
                                     '\\' => '\\',
                                     other => other,
                                 });
                             }
                         }
-                        Some((_, '"')) => break,
+                        // String-closing arm — the canonical `"` byte
+                        // that terminates the current `Token::Str` run.
+                        // Same constant as the opener; a delimiter
+                        // swap flips both arms in lockstep.
+                        Some((_, Atom::STR_DELIMITER)) => break,
                         Some((_, ch)) => s.push(ch),
                         None => return Err(LispError::UnterminatedString(pos)),
                     }
@@ -118,13 +134,21 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
             _ => {
                 let mut s = String::new();
                 while let Some(&(_, ch)) = chars.peek() {
+                    // Bare-atom terminator disjunct — the seven
+                    // characters that end a `Token::Atom` run. The `"`
+                    // disjunct routes through `Atom::STR_DELIMITER` so
+                    // a bare atom followed by a string (e.g.
+                    // `foo"body"`) tokenizes as two distinct tokens
+                    // and the string-opening delimiter byte binds to
+                    // the SAME constant every other `"`-round-trip
+                    // site above binds to.
                     if ch.is_whitespace()
                         || ch == '('
                         || ch == ')'
                         || ch == '\''
                         || ch == '`'
                         || ch == ','
-                        || ch == '"'
+                        || ch == Atom::STR_DELIMITER
                         || ch == ';'
                     {
                         break;
@@ -624,5 +648,114 @@ mod tests {
                 "{src:?}: reader's bare-atom arm drifted from Sexp::Atom(Atom::from_lexeme(_))"
             );
         }
+    }
+
+    // ── `Atom::STR_DELIMITER` — the reader's four `"`-round-trip sites
+    // bind to ONE canonical `char` constant on the closed-set [`Atom`]
+    // algebra. The composition pins below anchor each of the four sites
+    // (opener, self-escape mapping, closer, bare-atom terminator) at
+    // the constant so a regression that re-inlines one site's byte
+    // fails at rustc / test time rather than as a silent tokenizer
+    // drift.
+
+    #[test]
+    fn reader_str_open_close_arms_bind_to_atom_str_delimiter() {
+        // TOKENIZE-BOUNDARY CONTRACT: the outer-match string-opening
+        // arm AND the inner-loop string-closing arm both bind to
+        // `Atom::STR_DELIMITER`. A source string composed of the
+        // constant + payload + constant tokenizes to ONE
+        // `Token::Str(payload)` — pinning that the opener/closer
+        // pairing routes through the same algebra constant. A
+        // regression that swaps one of the two arms to a different
+        // char fails HERE at the token-count assertion (opener
+        // without matching closer would return `UnterminatedString`
+        // or over-read into the next token).
+        let payload = "hello world";
+        let source = format!("{}{payload}{}", Atom::STR_DELIMITER, Atom::STR_DELIMITER,);
+        let tokens = tokenize(&source).unwrap_or_else(|e| {
+            panic!("tokenize rejected STR_DELIMITER-wrapped source `{source}`: {e}")
+        });
+        assert_eq!(
+            tokens.len(),
+            1,
+            "STR_DELIMITER-wrapped payload must tokenize as exactly one \
+             Token::Str, got {tokens:?}",
+        );
+        match &tokens[0] {
+            (Token::Str(s), 0) => assert_eq!(
+                s, payload,
+                "Token::Str body drifted from STR_DELIMITER-wrapped payload"
+            ),
+            other => panic!(
+                "expected Token::Str at position 0, got {other:?} — the \
+                 opener/closer arms in tokenize must both bind to \
+                 Atom::STR_DELIMITER"
+            ),
+        }
+    }
+
+    #[test]
+    fn reader_str_escape_self_escape_arm_routes_through_atom_str_delimiter() {
+        // ESCAPE-HANDLER SELF-ESCAPE CONTRACT: the reader's five-arm
+        // escape table (`\n`, `\t`, `\r`, `\"`, `\\`, plus a
+        // passthrough default) carries a single self-escape arm on
+        // the Str-delimiter axis — `\"` unescapes to the constant's
+        // byte. Both the pattern AND the mapped value bind to
+        // `Atom::STR_DELIMITER` so a delimiter swap flips both sides
+        // in lockstep. Pin the composition end-to-end: a source
+        // containing `\"` inside a wrapped payload must round-trip
+        // through the tokenizer AND the reader to a
+        // `Sexp::Atom(Atom::string(str_delim.to_string()))` value.
+        let escape_source = format!(
+            "{}\\{}{}",
+            Atom::STR_DELIMITER,
+            Atom::STR_DELIMITER,
+            Atom::STR_DELIMITER,
+        );
+        let forms = read(&escape_source)
+            .unwrap_or_else(|e| panic!("reader rejected escape source `{escape_source}`: {e}"));
+        assert_eq!(forms.len(), 1, "escape source must read as one form");
+        assert_eq!(
+            forms[0],
+            Sexp::Atom(Atom::string(Atom::STR_DELIMITER.to_string())),
+            "self-escape `\\\"` inside STR_DELIMITER-wrapped payload \
+             drifted from Sexp::Atom(Atom::string(str_delim)) — the \
+             escape-handler's self-escape arm's pattern AND mapped value \
+             must both route through Atom::STR_DELIMITER",
+        );
+    }
+
+    #[test]
+    fn reader_bare_atom_terminator_disjunct_binds_to_atom_str_delimiter() {
+        // BARE-ATOM TERMINATOR CONTRACT: the bare-atom tokenizer's
+        // termination disjunct (`ch == Atom::STR_DELIMITER`) ensures
+        // a bare atom followed by a string (e.g. `foo"body"`)
+        // tokenizes as TWO distinct tokens — a `Token::Atom` for the
+        // symbol payload preceding the delimiter, then a
+        // `Token::Str` for the delimited payload. A regression that
+        // drops the disjunct (e.g. reverting `Atom::STR_DELIMITER`
+        // to a stale `'"'` literal, or renaming the constant without
+        // updating the reader arm) would silently absorb the `"`
+        // byte into the bare-atom accumulator and never emit the
+        // `Token::Str`.
+        let source = format!("foo{}body{}", Atom::STR_DELIMITER, Atom::STR_DELIMITER);
+        let tokens =
+            tokenize(&source).unwrap_or_else(|e| panic!("tokenize rejected `{source}`: {e}"));
+        assert_eq!(
+            tokens.len(),
+            2,
+            "bare atom + STR_DELIMITER-wrapped payload must tokenize as \
+             TWO distinct tokens, got {tokens:?}",
+        );
+        assert!(
+            matches!(&tokens[0], (Token::Atom(s), 0) if s == "foo"),
+            "first token must be Token::Atom(\"foo\") at position 0, got {:?}",
+            tokens[0],
+        );
+        assert!(
+            matches!(&tokens[1], (Token::Str(s), 3) if s == "body"),
+            "second token must be Token::Str(\"body\") at position 3, got {:?}",
+            tokens[1],
+        );
     }
 }

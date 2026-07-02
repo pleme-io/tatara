@@ -4932,6 +4932,127 @@ impl QuoteForm {
         }
     }
 
+    /// Project the typed marker to its canonical short diagnostic label —
+    /// `"quote"` for [`Self::Quote`], `"quasiquote"` for
+    /// [`Self::Quasiquote`], `"unquote"` for [`Self::Unquote`],
+    /// `"unquote-splice"` for [`Self::UnquoteSplice`]. Body composes
+    /// through `self.sexp_shape().label()` — routing through
+    /// [`Self::sexp_shape`] (the typed 4-of-12 outer-value → SexpShape
+    /// projection) then [`SexpShape::label`] (the canonical 12-arm
+    /// diagnostic-label projection) so the (QuoteForm variant, short
+    /// diagnostic string) pairing lives at ONE canonical site
+    /// ([`SexpShape::label`]'s four quote-family arms in `error.rs`)
+    /// rather than at four inline `&'static str` arms on the closed-set
+    /// `QuoteForm` algebra.
+    ///
+    /// The outer-shape peer of [`crate::ast::Sexp::type_name`] one
+    /// algebra layer up (`self.shape().label()` on outer-`Sexp`) and of
+    /// [`crate::ast::Atom::label`] one algebra layer down
+    /// (`self.kind().label()` on outer-`Atom` through [`AtomKind`]).
+    /// Where `Atom::label` composes through the atomic-payload 6-of-12
+    /// carving via [`AtomKind`] into [`SexpShape::label`], this method
+    /// composes through the quote-family 4-of-12 carving directly onto
+    /// [`SexpShape::label`] — the (label, sexp_shape, hash_discriminator)
+    /// trio the outer-`Atom` algebra closed one lift back
+    /// (`Atom::hash_discriminator`, e49f550) is now mirrored on the
+    /// `QuoteForm` algebra: `prefix` (reader punctuation) and
+    /// `iac_forge_tag` (CL canonical form) key the SAME closed set on
+    /// their own boundaries, and `label` keys it on the substrate's
+    /// operator-facing diagnostic boundary.
+    ///
+    /// Composition law: `qf.label() == qf.sexp_shape().label()` for every
+    /// `qf: QuoteForm`. Pinned by
+    /// `quote_form_label_composes_through_sexp_shape_label_for_every_variant`
+    /// across all four variants — the pin asserts pointer-equality on the
+    /// returned `&'static str` so a regression that re-inlines the four
+    /// literals here (and gains its own drift surface separate from the
+    /// canonical [`SexpShape::label`] site) surfaces immediately. Sibling
+    /// of `atom_label_composes_through_kind_label_for_every_variant` one
+    /// algebra layer down (on the outer-`Atom` value / `AtomKind` marker
+    /// pair) and
+    /// `sexp_type_name_method_composes_through_shape_label_for_every_outer_shape`
+    /// one algebra layer up (on the outer-`Sexp` value / `SexpShape`
+    /// marker pair).
+    ///
+    /// Cross-algebra agreement law: for every `qf: QuoteForm` and every
+    /// `inner: Sexp`, `qf.label() == qf.wrap(inner).type_name()`. The
+    /// (QuoteForm variant, canonical label) pairing lands at the SAME
+    /// `&'static str` regardless of whether the consumer holds the typed
+    /// marker directly or an outer-`Sexp` wrapper produced from
+    /// [`Self::wrap`] — so a regression that drifts one algebra layer's
+    /// label from the other (a `QuoteForm::label` re-inlined onto a
+    /// different literal, a `Sexp::type_name` re-routed through a stale
+    /// shape projection, a `QuoteForm::sexp_shape` arm that swaps two
+    /// markers) fails-loudly here rather than as a silent operator-facing
+    /// diagnostic drift at every consumer that pattern-matches on the
+    /// outer-`Sexp` label vs the outer-`QuoteForm` label independently.
+    /// Pinned by `quote_form_label_agrees_with_sexp_type_name_at_every_quote_form_arm`.
+    ///
+    /// Divergence law (boundary distinction with [`Self::iac_forge_tag`]):
+    /// at the [`Self::UnquoteSplice`] arm, `qf.label() == "unquote-splice"`
+    /// while `qf.iac_forge_tag() == "unquote-splicing"`. The two
+    /// projections key the SAME closed-set on TWO distinct boundaries
+    /// (substrate diagnostic surface vs cross-crate CL canonical form)
+    /// and their intentional divergence at the `Splice` arm is pinned by
+    /// `quote_form_label_diverges_from_iac_forge_tag_for_unquote_splice`
+    /// — sibling posture to
+    /// `quote_form_iac_forge_tag_diverges_from_sexp_shape_label_for_unquote_splice`
+    /// which pinned the divergence at the `sexp_shape().label()`
+    /// composition; this pin lifts the divergence contract onto the new
+    /// typed peer.
+    ///
+    /// The `&'static str` lifetime is load-bearing: every future consumer
+    /// with a `QuoteForm` in hand wanting the substrate's short
+    /// diagnostic string projects through this method into the
+    /// `LispError::TypeMismatch.got` slot / REPL / LSP surface without an
+    /// allocation, parallel to how [`Self::prefix`] projects the reader
+    /// punctuation and [`Self::iac_forge_tag`] projects the CL canonical
+    /// tag. A future homoiconic prefix-wrapper (e.g. hypothetical `,~`
+    /// reverse-unquote) extends [`Self`] AND [`SexpShape::label`]
+    /// together — rustc binds the diagnostic surface to the algebra
+    /// through the closed-set composition without touching this method.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (QuoteForm
+    /// variant, canonical short label) pairing becomes a TYPE projection
+    /// on the substrate algebra composed through the pre-existing outer-
+    /// shape projection, rather than at a per-callsite
+    /// `.sexp_shape().label()` two-hop the load-bearing pin already
+    /// carries as a composition-law contract. THEORY.md §II.1 invariant 2
+    /// — free middle; the outer-`QuoteForm` diagnostic-label algebra now
+    /// closes over THREE typed layers (`QuoteForm` → [`SexpShape`] →
+    /// `&'static str`) with rustc-enforced consistency across each — a
+    /// regression that drifts ONE layer's mapping from the others cannot
+    /// reach the substrate's runtime typed-witness surface,
+    /// `LispError::TypeMismatch.got` slot, or [`crate::error::SexpWitness::shape`]
+    /// projection. THEORY.md §VI.1 — generation over composition; the
+    /// outer-value diagnostic-label projection is the missing algebra
+    /// layer between the outer `QuoteForm` and the pre-existing marker-
+    /// level label projection — the two pre-existing typed layers become
+    /// a full THREE-layer typed composition through ONE new named
+    /// projection, closing the (prefix, iac_forge_tag, sexp_shape,
+    /// hash_discriminator, label) quintet on the outer-`QuoteForm`
+    /// algebra.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::OperationName::getStringRef()`
+    /// composed with an op-family typed projection — narrowing a
+    /// closed-set op-family value through its typed identity yields the
+    /// canonical diagnostic string identity in ONE typed composition on
+    /// the op-family algebra. Translated through the substrate's
+    /// [`QuoteForm`] outer-marker algebra, `qf.sexp_shape().label()`
+    /// closes the (typed marker, canonical diagnostic label) pairing at
+    /// ONE typed projection on the marker algebra composed through the
+    /// outer-shape's per-carving canonical site. Racket's `(quote-kind
+    /// qf)` composed with `(kind-label kind)` on the quote-family
+    /// taxonomy — the typed diagnostic label emerges from a two-hop
+    /// composition on the closed-set marker through the typed outer-shape
+    /// identity. `QuoteForm::label` is the Rust-typed peer on the
+    /// closed-set outer-[`QuoteForm`] algebra with [`SexpShape`] standing
+    /// in for Racket's quote-family taxonomy.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        self.sexp_shape().label()
+    }
+
     /// Project the typed marker back into its matching `Sexp::*` wrapper
     /// variant applied to `inner` — the structural inverse of
     /// [`crate::ast::Sexp::as_quote_form`]. [`Self::Quote`] yields
@@ -8109,6 +8230,181 @@ mod tests {
         assert_eq!(
             QuoteForm::UnquoteSplice.sexp_shape().label(),
             "unquote-splice"
+        );
+    }
+
+    #[test]
+    fn quote_form_label_projects_each_variant_to_canonical_diagnostic_label() {
+        // PER-ARM CONTRACT: pin the outer-`QuoteForm` `Self::label`
+        // projection produces the FOUR canonical short diagnostic labels
+        // byte-for-byte across every reachable quote-family variant.
+        // Pre-lift the outer-`QuoteForm` diagnostic-label projection had
+        // no typed primitive on the marker algebra — a consumer with a
+        // `QuoteForm` in hand wanting the canonical short label had to
+        // spell the two-step composition `qf.sexp_shape().label()` at
+        // every callsite (a shape pinned as a load-bearing composition
+        // law by `quote_form_sexp_shape_composes_with_label_for_canonical_short_diagnostic_string`
+        // one arm above), OR go through `qf.wrap(inner).type_name()`
+        // which wraps and projects for no runtime purpose. Post-lift the
+        // FOUR arms bind at ONE typed projection on the outer-`QuoteForm`
+        // algebra that routes through `SexpShape::label` — the
+        // (QuoteForm variant, label string) pairing binds at ONE typed
+        // algebra composition spanning THREE typed layers (`QuoteForm`
+        // → `SexpShape` → `&'static str`).
+        //
+        // Sibling-shape pin to
+        // `atom_label_projects_each_variant_to_canonical_diagnostic_label`
+        // one algebra layer down (outer-`Atom` label pin) and
+        // `sexp_type_name_covers_every_variant` one algebra layer up
+        // (outer-`Sexp` type_name pin). A regression that drifts ONE
+        // arm's mapping (e.g. renaming `"unquote-splice"` to `"splice"`
+        // inline here, dropping the `Unquote → "unquote"` boundary
+        // rename) fails-loudly at THIS test AND the sibling
+        // `SexpShape::label` per-arm pin.
+        assert_eq!(QuoteForm::Quote.label(), "quote");
+        assert_eq!(QuoteForm::Quasiquote.label(), "quasiquote");
+        assert_eq!(QuoteForm::Unquote.label(), "unquote");
+        assert_eq!(QuoteForm::UnquoteSplice.label(), "unquote-splice");
+    }
+
+    #[test]
+    fn quote_form_label_composes_through_sexp_shape_label_for_every_variant() {
+        // COMPOSITION-LAW CONTRACT: `qf.label() == qf.sexp_shape().label()`
+        // for every reachable quote-family marker — the outer-`QuoteForm`
+        // label projection is structurally derived through `Self::sexp_shape`
+        // + `SexpShape::label` rather than through a parallel four-arm
+        // inline match on the outer-`QuoteForm` algebra. Pin the
+        // composition law so a future refactor that re-inlines the four
+        // quote-family literals here (and gains its own drift surface
+        // separate from the `SexpShape::label` canonical site) surfaces
+        // immediately. The pointer-equality check pins the composition
+        // produces the SAME `&'static str` (not just a byte-equal copy)
+        // for every variant — proof the routing hits ONE static literal
+        // site (`SexpShape::label` via `QuoteForm::sexp_shape().label()`)
+        // rather than a parallel inline table on the outer-`QuoteForm`
+        // algebra.
+        //
+        // Sibling-shape pin to
+        // `atom_label_composes_through_kind_label_for_every_variant` on
+        // the outer-`Atom` value / `AtomKind` marker pair and
+        // `sexp_type_name_method_composes_through_shape_label_for_every_outer_shape`
+        // on the outer-`Sexp` value / `SexpShape` marker pair. The three
+        // routing pins jointly enforce the (outer-value, canonical label)
+        // pairing stays a full three-layer typed composition on every
+        // typed-value algebra rather than degrading to a per-layer inline
+        // literal table.
+        for qf in QuoteForm::ALL {
+            let via_label = qf.label();
+            let via_composition = qf.sexp_shape().label();
+            assert_eq!(
+                via_label, via_composition,
+                "QuoteForm::label() must route through self.sexp_shape().label() \
+                 for {qf:?} — drift here means the lift was reverted to inline arms",
+            );
+            assert!(
+                std::ptr::eq(via_label.as_ptr(), via_composition.as_ptr()),
+                "QuoteForm::label() must return the SAME `&'static str` as \
+                 self.sexp_shape().label() for {qf:?} — pointer drift means \
+                 the lift composes through a parallel literal table rather \
+                 than routing into the canonical SexpShape::label site",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_label_agrees_with_sexp_type_name_at_every_quote_form_arm() {
+        // CROSS-ALGEBRA AGREEMENT CONTRACT: for every quote-family marker
+        // `qf` and every inner body `inner`, `qf.label() ==
+        // qf.wrap(inner.clone()).type_name()`. The agreement is a TYPED
+        // CONSEQUENCE of the two typed compositions —
+        // `qf.wrap(inner).type_name()` routes through `Sexp::shape()`'s
+        // quote-family arms which compose with `SexpShape::label`
+        // byte-for-byte with `qf.sexp_shape().label()` (which itself IS
+        // the body of `qf.label()`). A regression that drifts either side
+        // of the cross-algebra bridge (an outer-`QuoteForm` label
+        // re-inlined onto a different literal, an outer-`Sexp` quote-arm
+        // re-routed through a stale shape projection, a
+        // `QuoteForm::sexp_shape` arm that swaps two markers) fails-
+        // loudly here rather than as a silent operator-facing diagnostic
+        // drift at every consumer that pattern-matches on the outer-
+        // `Sexp` label vs the outer-`QuoteForm` label independently.
+        //
+        // Sibling posture to
+        // `atom_label_agrees_with_sexp_type_name_at_every_atom_arm` on
+        // the atomic-payload carving — that pin binds the outer-value-
+        // level vocabulary containment (`Atom::label ==
+        // Sexp::Atom(_).type_name()`), this pin binds the same
+        // containment on the quote-family carving (`QuoteForm::label ==
+        // QuoteForm::wrap(_).type_name()`) so the THREE-layer typed
+        // composition on the outer-`QuoteForm` algebra and the FOUR-
+        // layer typed composition on the outer-`Sexp` algebra agree at
+        // their common quote-family arms.
+        let inner = Sexp::symbol("x");
+        for qf in QuoteForm::ALL {
+            let via_quote_form = qf.label();
+            let via_sexp = qf.wrap(inner.clone()).type_name();
+            assert_eq!(
+                via_quote_form, via_sexp,
+                "QuoteForm::label() must agree with QuoteForm::wrap(_).type_name() \
+                 for {qf:?} — cross-algebra label drift at the quote-family arms \
+                 would fracture the typed diagnostic vocabulary between the \
+                 outer-QuoteForm and outer-Sexp algebras",
+            );
+            assert!(
+                std::ptr::eq(via_quote_form.as_ptr(), via_sexp.as_ptr()),
+                "QuoteForm::label() must return the SAME `&'static str` as \
+                 QuoteForm::wrap(_).type_name() for {qf:?} — pointer drift means \
+                 one algebra layer re-inlined the literal rather than routing \
+                 into the canonical `SexpShape::label` site",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_label_diverges_from_iac_forge_tag_for_unquote_splice() {
+        // BOUNDARY-DISTINCT CONTRACT: at the `UnquoteSplice` arm,
+        // `qf.label() == "unquote-splice"` (the substrate's diagnostic
+        // label idiom) while `qf.iac_forge_tag() == "unquote-splicing"`
+        // (the Common-Lisp canonical form, load-bearing for canonical-
+        // form round-trip with the iac-forge ecosystem). The two
+        // projections key the SAME closed-set on TWO distinct boundaries
+        // — pinning the divergence on the NEW typed peer documents the
+        // intent: a future "consolidation" PR that homogenizes `label`
+        // and `iac_forge_tag` at the `UnquoteSplice` arm would silently
+        // break either the iac-forge canonical-form round-trip OR the
+        // operator-facing diagnostic surface. Sibling-arm posture to
+        // `quote_form_iac_forge_tag_diverges_from_sexp_shape_label_for_unquote_splice`
+        // which pinned the divergence at the `qf.sexp_shape().label()`
+        // composition; this pin lifts the divergence contract onto the
+        // NEW `QuoteForm::label` typed peer. The three other variants
+        // (Quote, Quasiquote, Unquote) DO match across both projections
+        // — pin that path-uniformity too so a regression that drifts one
+        // of the three matched arms surfaces immediately.
+        assert_eq!(
+            QuoteForm::Quote.iac_forge_tag(),
+            QuoteForm::Quote.label(),
+            "quote tag/label agreement",
+        );
+        assert_eq!(
+            QuoteForm::Quasiquote.iac_forge_tag(),
+            QuoteForm::Quasiquote.label(),
+            "quasiquote tag/label agreement",
+        );
+        assert_eq!(
+            QuoteForm::Unquote.iac_forge_tag(),
+            QuoteForm::Unquote.label(),
+            "unquote tag/label agreement",
+        );
+        // The intentional divergence — load-bearing for the iac-forge
+        // canonical form vs the substrate's diagnostic label.
+        assert_eq!(QuoteForm::UnquoteSplice.iac_forge_tag(), "unquote-splicing");
+        assert_eq!(QuoteForm::UnquoteSplice.label(), "unquote-splice");
+        assert_ne!(
+            QuoteForm::UnquoteSplice.iac_forge_tag(),
+            QuoteForm::UnquoteSplice.label(),
+            "the two projections must disagree at UnquoteSplice — the CL canonical \
+             form requires '-splicing' while the substrate's diagnostic label uses \
+             the shorter '-splice'; consolidating them would break either side",
         );
     }
 

@@ -452,11 +452,119 @@ impl Atom {
     #[must_use]
     pub fn bool_literal(b: bool) -> &'static str {
         if b {
-            "#t"
+            Self::TRUE_LITERAL
         } else {
-            "#f"
+            Self::FALSE_LITERAL
         }
     }
+
+    /// Canonical `&'static str` Scheme-bool spelling for the `true`
+    /// element of the closed `bool` domain — the `"#t"` bytes
+    /// [`Self::bool_literal`] projects `true` to, AND the
+    /// [`Self::from_lexeme`] reader classifier gates on. Sibling
+    /// posture to [`Self::FALSE_LITERAL`] (`"#f"`) on the same
+    /// bool-spelling algebra layer.
+    ///
+    /// Pre-lift the same `"#t"` bytes lived inline at [`Self::bool_literal`]'s
+    /// `true`-arm plus at five test-surface sites that pin the
+    /// canonical spelling — the ≥2 PRIME-DIRECTIVE trigger. Post-lift
+    /// the (`true`, canonical Scheme spelling) pairing binds at ONE
+    /// `pub const` on the closed-set [`Atom`] algebra: the
+    /// [`Self::bool_literal`] `true`-arm AND every consumer that pins
+    /// the exact bytes route through this constant, so a spelling
+    /// migration (e.g. a Common-Lisp-compat port to `"T"`, a JSON-compat
+    /// port to `"true"`, a Racket-compat port to `"#true"`) is ONE
+    /// edit HERE with the [`Self::bool_literal`] projection AND every
+    /// downstream reader/Display consumer mechanically picking it up.
+    ///
+    /// Sibling posture to the closed set of per-role canonical
+    /// `pub const` bytes on the substrate's other closed-set outer
+    /// algebras: [`Self::STR_DELIMITER`] (`'"'`),
+    /// [`Self::KEYWORD_MARKER`] (`":"`),
+    /// [`Sexp::LIST_OPEN`] (`'('`),
+    /// [`crate::error::MacroDefHead::DEFMACRO_KEYWORD`] (`"defmacro"`),
+    /// [`crate::macro_expand::MacroParams::REST_MARKER`] (`"&rest"`),
+    /// [`crate::macro_expand::MacroParams::OPTIONAL_MARKER`] (`"&optional"`).
+    ///
+    /// Structural round-trip contract (composed with the algebra's
+    /// [`Self::BOOL_LITERAL_LEAD`] axis peer):
+    /// `Self::TRUE_LITERAL.starts_with(Self::BOOL_LITERAL_LEAD)` — the
+    /// lead-byte-prefixes-spelling law from
+    /// `atom_bool_literal_lead_prefixes_every_bool_literal_spelling`
+    /// specialises byte-for-byte to this constant, pinning the
+    /// (`BOOL_LITERAL_LEAD`, `TRUE_LITERAL`) pairing on ONE typed
+    /// algebra.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (`true`, canonical Scheme spelling) pairing binds at ONE
+    /// `pub const` on the closed-set outer [`Atom`] algebra regardless
+    /// of which of the reader/Display surface consumers reaches in.
+    /// THEORY.md §VI.1 — generation over composition; the multi-site
+    /// inline `"#t"` literal collapses onto ONE named `pub const`,
+    /// matching the substrate's three-times rule. THEORY.md §V.1 —
+    /// knowable platform; the canonical `true`-spelling becomes a
+    /// TYPE-level constant on the substrate algebra rather than an
+    /// inline byte literal at every consumer surface.
+    pub const TRUE_LITERAL: &'static str = "#t";
+
+    /// Canonical `&'static str` Scheme-bool spelling for the `false`
+    /// element of the closed `bool` domain — the `"#f"` bytes
+    /// [`Self::bool_literal`] projects `false` to, AND the
+    /// [`Self::from_lexeme`] reader classifier gates on. Sibling
+    /// posture to [`Self::TRUE_LITERAL`] (`"#t"`) on the same
+    /// bool-spelling algebra layer.
+    ///
+    /// Pre-lift the same `"#f"` bytes lived inline at [`Self::bool_literal`]'s
+    /// `false`-arm plus at five test-surface sites that pin the
+    /// canonical spelling — the ≥2 PRIME-DIRECTIVE trigger. Post-lift
+    /// the (`false`, canonical Scheme spelling) pairing binds at ONE
+    /// `pub const` on the closed-set [`Atom`] algebra: the
+    /// [`Self::bool_literal`] `false`-arm AND every consumer that pins
+    /// the exact bytes route through this constant.
+    ///
+    /// Structural round-trip contract (composed with the algebra's
+    /// [`Self::BOOL_LITERAL_LEAD`] axis peer):
+    /// `Self::FALSE_LITERAL.starts_with(Self::BOOL_LITERAL_LEAD)`.
+    pub const FALSE_LITERAL: &'static str = "#f";
+
+    /// The closed set of two canonical `&'static str` Scheme-bool
+    /// spellings — the [`Self::TRUE_LITERAL`] (`"#t"`) canonical `true`
+    /// spelling followed by the [`Self::FALSE_LITERAL`] (`"#f"`)
+    /// canonical `false` spelling. Canonical declaration order matches
+    /// the `[true, false]` sweep order every existing sibling test in
+    /// the crate uses (see e.g. the `for b in [true, false]` sweeps at
+    /// `atom_bool_literal_lead_prefixes_every_bool_literal_spelling`)
+    /// so `Self::BOOL_LITERALS[i] == Self::bool_literal([true, false][i])`
+    /// element-wise — pinned by
+    /// `atom_bool_literals_align_with_bool_literal_by_index`.
+    ///
+    /// Sibling posture to
+    /// [`crate::error::MacroDefHead::KEYWORDS`] (`[&'static str; 3]`),
+    /// [`crate::macro_expand::MacroParams::LAMBDA_LIST_KEYWORDS`]
+    /// (`[&'static str; 2]`) — every closed-set spelling algebra now
+    /// pins its projection ALL array at the declaration site via a
+    /// forced-arity `[&'static str; N]` array whose length fails
+    /// compilation if a new spelling lands without being added to the
+    /// set. The closed `bool` domain admits exactly two spellings by
+    /// construction (a hypothetical third would require extending the
+    /// underlying `bool` type itself), so this array's `N == 2` is
+    /// pinned by the mathematics — the forced-arity `[_; 2]` here
+    /// records that invariant on the substrate algebra so a future
+    /// tri-valued-logic extension surfaces at the array-arity check
+    /// rather than as a silent drift.
+    ///
+    /// Future consumers that compose against [`Self::BOOL_LITERALS`]:
+    /// an LSP / REPL completion provider surfacing every `#…` partial
+    /// input against the closed set (`Self::BOOL_LITERALS.iter()` is
+    /// the ONE typed sweep over every legal bool spelling), a
+    /// `tatara-check` coverage assertion (every workspace `.lisp` file's
+    /// bare-`#`-prefixed lexeme must classify to some entry of
+    /// `Self::BOOL_LITERALS` OR be routed through the broader
+    /// hash-prefix reader-macro family), any future audit-trail metric
+    /// jointly labeled by the canonical Scheme spelling (e.g.
+    /// `tatara_lisp_bool_lexeme_total{literal="#t"}`) — the metric
+    /// label set IS [`Self::BOOL_LITERALS`].
+    pub const BOOL_LITERALS: [&'static str; 2] = [Self::TRUE_LITERAL, Self::FALSE_LITERAL];
 
     /// Canonical `#` LEAD byte shared across both [`Self::bool_literal`]
     /// spellings (`"#t"` for [`true`], `"#f"` for [`false`]) — the ONE
@@ -18479,6 +18587,181 @@ mod tests {
             assert_eq!(
                 round_tripped, a,
                 "bool round-trip through bool_literal drifted at b={b:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_true_literal_projects_canonical_pound_t_bytes() {
+        // Pins the exact `"#t"` bytes at the typed constant. A
+        // regression that drifts the constant (e.g. Common-Lisp-compat
+        // typo `"T"`, JSON-compat typo `"true"`, Racket-compat typo
+        // `"#true"`, or an accidental case swap `"#T"`) fails-loudly
+        // here. This is the single site the substrate's canonical-
+        // Scheme `true` spelling resolves to; every downstream consumer
+        // (`Atom::bool_literal`'s `true`-arm, `Atom::from_lexeme`'s
+        // reader-entry gate, `fmt::Display for Atom`'s `Bool(true)`
+        // arm, `Atom::BOOL_LITERALS[0]`) routes through this constant.
+        // Sibling posture to
+        // `macro_def_head_defmacro_keyword_projects_canonical_defmacro_bytes`
+        // on the head-keyword algebra.
+        assert_eq!(
+            Atom::TRUE_LITERAL,
+            "#t",
+            "Atom::TRUE_LITERAL drifted from the substrate-canonical \
+             Scheme spelling `#t` — the reader-entry classifier at \
+             Atom::from_lexeme + fmt::Display for Atom + \
+             Atom::bool_literal's true-arm ALL bind to this constant."
+        );
+    }
+
+    #[test]
+    fn atom_false_literal_projects_canonical_pound_f_bytes() {
+        // Pins the exact `"#f"` bytes at the typed constant. Peer of
+        // `atom_true_literal_projects_canonical_pound_t_bytes` on the
+        // `false` element of the closed `bool` domain.
+        assert_eq!(
+            Atom::FALSE_LITERAL,
+            "#f",
+            "Atom::FALSE_LITERAL drifted from the substrate-canonical \
+             Scheme spelling `#f` — the reader-entry classifier at \
+             Atom::from_lexeme + fmt::Display for Atom + \
+             Atom::bool_literal's false-arm ALL bind to this constant."
+        );
+    }
+
+    #[test]
+    fn atom_bool_literal_routes_through_typed_per_variant_constants() {
+        // PATH-UNIFORMITY: the inherent `Atom::bool_literal(b)` method
+        // MUST return the per-variant `pub const` byte-for-byte for
+        // each `b: bool`. A regression that reverts ONE arm to an
+        // inline `"#t"` / `"#f"` string literal (e.g. a merge-conflict
+        // resolution that picked the pre-lift form) silently
+        // reintroduces the ≥2 PRIME-DIRECTIVE trigger the lift
+        // resolved — this test catches that by pinning each arm's
+        // return value to the constant, so the two paths (inline vs.
+        // typed constant) cannot both hold. Sibling posture to
+        // `macro_def_head_keyword_method_routes_through_typed_constants`
+        // on the head-keyword algebra.
+        assert_eq!(
+            Atom::bool_literal(true),
+            Atom::TRUE_LITERAL,
+            "Atom::bool_literal(true) drifted from Atom::TRUE_LITERAL — \
+             the `true`-arm reverted to an inline literal"
+        );
+        assert_eq!(
+            Atom::bool_literal(false),
+            Atom::FALSE_LITERAL,
+            "Atom::bool_literal(false) drifted from Atom::FALSE_LITERAL \
+             — the `false`-arm reverted to an inline literal"
+        );
+    }
+
+    #[test]
+    fn atom_bool_literals_has_expected_cardinality() {
+        // Cardinality contract: `Self::BOOL_LITERALS.len() == 2` —
+        // pinned at the declaration site by rustc's forced-arity check
+        // on `[&'static str; 2]`. This test surfaces the arity as a
+        // fail-loud runtime pin so a future refactor that switches the
+        // array type to `&[&'static str]` (dropping the compile-time
+        // arity forcing) doesn't silently loosen the closed-set
+        // discipline the family relies on. The `N == 2` is pinned by
+        // the mathematics of the closed `bool` domain; a future tri-
+        // valued-logic extension surfaces at THIS pin. Sibling posture
+        // to `macro_def_head_keywords_has_expected_cardinality` on the
+        // head-keyword algebra AND to
+        // `macro_params_lambda_list_keywords_has_expected_cardinality`
+        // on the CL lambda-list-keyword family.
+        assert_eq!(
+            Atom::BOOL_LITERALS.len(),
+            2,
+            "Atom::BOOL_LITERALS cardinality drifted from 2 — the \
+             closed `bool` domain admits exactly two spellings by \
+             construction; a tri-valued extension surfaces here"
+        );
+    }
+
+    #[test]
+    fn atom_bool_literals_align_with_bool_literal_by_index() {
+        // ALIGNMENT CONTRACT: `Self::BOOL_LITERALS[i] ==
+        // Self::bool_literal([true, false][i])` element-wise. The
+        // `[true, false]` sweep order is the canonical declaration
+        // order every existing sibling test in the crate uses; a
+        // regression that reorders ONE array without reordering the
+        // other silently misaligns every `zip([true, false],
+        // Self::BOOL_LITERALS)` consumer (LSP completion providers,
+        // metric-label emitters, coverage reporters). Sibling posture
+        // to `macro_def_head_keywords_align_with_all_by_index` on the
+        // head-keyword algebra.
+        for (i, b) in [true, false].iter().enumerate() {
+            assert_eq!(
+                Atom::BOOL_LITERALS[i],
+                Atom::bool_literal(*b),
+                "Atom::BOOL_LITERALS[{i}] `{kw}` drifted from \
+                 Atom::bool_literal({b:?}) `{via_variant}` — the \
+                 canonical declaration order of the ALL array and the \
+                 bool_literal projection must match element-wise",
+                kw = Atom::BOOL_LITERALS[i],
+                via_variant = Atom::bool_literal(*b),
+            );
+        }
+    }
+
+    #[test]
+    fn atom_bool_literals_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: the two `&'static str` spellings on
+        // the bool-spelling algebra MUST differ so the reader-entry
+        // classifier's `s == Self::bool_literal(true|false)` cascade
+        // cannot route both bools through the same arm — otherwise
+        // `from_lexeme` on either spelling would classify to a single
+        // Bool variant, silently collapsing the typed distinction at
+        // the reader-entry boundary. Family-wide sweep over
+        // `BOOL_LITERALS × BOOL_LITERALS` — supersedes any single
+        // per-pair assertion and picks up new spellings mechanically
+        // (should the closed `bool` domain ever extend). Sibling
+        // posture to `macro_def_head_keywords_pairwise_distinct` on the
+        // head-keyword algebra AND to
+        // `atom_bool_literal_partitions_the_closed_bool_domain_injectively`
+        // on the direct-projection axis.
+        for (i, a) in Atom::BOOL_LITERALS.iter().enumerate() {
+            for (j, b) in Atom::BOOL_LITERALS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "Atom::BOOL_LITERALS[{i}] `{a}` collides with \
+                     Atom::BOOL_LITERALS[{j}] `{b}` — the reader-entry \
+                     classifier's cascade would route two bools through \
+                     the same arm"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn atom_bool_literals_all_route_through_bool_literal_leading_byte() {
+        // Structural round-trip pin composed with the algebra's
+        // `Atom::BOOL_LITERAL_LEAD` axis peer: every entry of
+        // `Self::BOOL_LITERALS` MUST start with `Self::BOOL_LITERAL_LEAD`.
+        // The lead-byte-prefixes-spelling law from
+        // `atom_bool_literal_lead_prefixes_every_bool_literal_spelling`
+        // sweeps [true, false] through `bool_literal`; THIS test
+        // sweeps the same invariant over the `BOOL_LITERALS` array
+        // directly, catching a regression where a per-role constant
+        // drifts from the shared lead byte (e.g. `FALSE_LITERAL` set
+        // to `"~f"` while `bool_literal(false)` still returns
+        // `FALSE_LITERAL`, which would preserve the projection
+        // contract but break the lead-byte contract). Sibling posture
+        // to `macro_def_head_keywords_all_round_trip_through_from_str`
+        // on the head-keyword algebra.
+        for kw in Atom::BOOL_LITERALS {
+            assert!(
+                kw.starts_with(Atom::BOOL_LITERAL_LEAD),
+                "Atom::BOOL_LITERALS entry `{kw}` does NOT start with \
+                 Atom::BOOL_LITERAL_LEAD ({lead:?}) — the per-role \
+                 constant drifted from the shared lead byte",
+                lead = Atom::BOOL_LITERAL_LEAD,
             );
         }
     }

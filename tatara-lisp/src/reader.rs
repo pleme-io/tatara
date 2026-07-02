@@ -53,6 +53,36 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
     let mut out = Vec::new();
     let mut chars = src.char_indices().peekable();
     while let Some(&(pos, c)) = chars.peek() {
+        // Quote-family outer dispatch — the (lead char, `QuoteForm`
+        // marker) pairing binds at ONE site on the closed-set
+        // [`QuoteForm`] algebra via [`QuoteForm::from_lead_char`].
+        // Pre-lift the four homoiconic prefixes (`'`, `` ` ``, `,`,
+        // `,@`) dispatched from four inline `char`-literal arms of
+        // this outer match (`'\''` / `` '`' `` / `','` with the
+        // `Token::Quoted(QuoteForm::UnquoteSplice)` construction
+        // buried inside the `','`-arm's peek branch); post-lift the
+        // reader pre-checks `QuoteForm::from_lead_char(c)` — which
+        // returns `Some(Unquote)` on the shared `,` lead char and
+        // `Some(Quote)` / `Some(Quasiquote)` on the two distinct
+        // singleton lead chars — then promotes the decoded
+        // `QuoteForm::Unquote` to `QuoteForm::UnquoteSplice` on
+        // second-char `@`, and emits ONE `Token::Quoted(final_qf)`.
+        // Adding a fifth homoiconic prefix extends [`QuoteForm`] AND
+        // [`QuoteForm::from_lead_char`] in lockstep — rustc binds
+        // the extension through exhaustiveness over the closed enum.
+        if let Some(qf_head) = QuoteForm::from_lead_char(c) {
+            chars.next();
+            let qf = if matches!(qf_head, QuoteForm::Unquote)
+                && chars.peek().map(|&(_, c)| c) == Some('@')
+            {
+                chars.next();
+                QuoteForm::UnquoteSplice
+            } else {
+                qf_head
+            };
+            out.push((Token::Quoted(qf), pos));
+            continue;
+        }
         match c {
             ws if ws.is_whitespace() => {
                 chars.next();
@@ -72,24 +102,6 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
             ')' => {
                 chars.next();
                 out.push((Token::RParen, pos));
-            }
-            '\'' => {
-                chars.next();
-                out.push((Token::Quoted(QuoteForm::Quote), pos));
-            }
-            '`' => {
-                chars.next();
-                out.push((Token::Quoted(QuoteForm::Quasiquote), pos));
-            }
-            ',' => {
-                chars.next();
-                // `,@` is splicing unquote; bare `,` is unquote.
-                if chars.peek().map(|&(_, c)| c) == Some('@') {
-                    chars.next();
-                    out.push((Token::Quoted(QuoteForm::UnquoteSplice), pos));
-                } else {
-                    out.push((Token::Quoted(QuoteForm::Unquote), pos));
-                }
             }
             // String-opening arm — the canonical `"` byte routed through
             // the [`Atom::STR_DELIMITER`] constant on the closed-set
@@ -134,20 +146,27 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
             _ => {
                 let mut s = String::new();
                 while let Some(&(_, ch)) = chars.peek() {
-                    // Bare-atom terminator disjunct — the seven
-                    // characters that end a `Token::Atom` run. The `"`
-                    // disjunct routes through `Atom::STR_DELIMITER` so
-                    // a bare atom followed by a string (e.g.
-                    // `foo"body"`) tokenizes as two distinct tokens
-                    // and the string-opening delimiter byte binds to
-                    // the SAME constant every other `"`-round-trip
-                    // site above binds to.
+                    // Bare-atom terminator disjunct — the five typed
+                    // gates (whitespace, `(`, `)`, `Atom::STR_DELIMITER`,
+                    // `;`) plus ONE quote-family gate that end a
+                    // `Token::Atom` run. Pre-lift the three
+                    // quote-family disjuncts (`ch == '\''` / `ch == '`'`
+                    // / `ch == ','`) were three parallel `char`-literal
+                    // checks scattered across this predicate; post-
+                    // lift they collapse to ONE
+                    // `QuoteForm::from_lead_char(ch).is_some()` gate
+                    // on the closed-set [`QuoteForm`] algebra so a
+                    // regression that drifts ONE bare-atom terminator
+                    // disjunct from the outer-dispatch's quote-family
+                    // arm becomes structurally impossible — there is
+                    // exactly ONE decode both sites consume, and
+                    // adding a fifth homoiconic prefix extends
+                    // [`QuoteForm::from_lead_char`] which propagates
+                    // through this predicate automatically.
                     if ch.is_whitespace()
                         || ch == '('
                         || ch == ')'
-                        || ch == '\''
-                        || ch == '`'
-                        || ch == ','
+                        || QuoteForm::from_lead_char(ch).is_some()
                         || ch == Atom::STR_DELIMITER
                         || ch == ';'
                     {
@@ -723,6 +742,128 @@ mod tests {
              escape-handler's self-escape arm's pattern AND mapped value \
              must both route through Atom::STR_DELIMITER",
         );
+    }
+
+    #[test]
+    fn tokenizer_quote_family_outer_dispatch_routes_through_quote_form_from_lead_char() {
+        // OUTER-DISPATCH CONTRACT: the reader's pre-lift four inline
+        // `char`-literal arms (`'\''` / `` '`' `` / `','`) collapsed
+        // to ONE pre-match `QuoteForm::from_lead_char(c)` decode; the
+        // splice promotion moved to the reader's peek arm inside the
+        // shared `,`-decoded `QuoteForm::Unquote` branch. Pin the
+        // composition end-to-end by sweeping every `QuoteForm` variant
+        // through the tokenizer: for each variant, construct a source
+        // string starting with the variant's rendered `prefix()`
+        // followed by a bare `xs` atom, and assert the tokenizer emits
+        // `Token::Quoted(qf)` at the expected typed marker. A regression
+        // that drifted the outer-dispatch (e.g. reverted to inline
+        // `char`-literal arms and got the `,@` / `,` order backwards)
+        // fails HERE at the typed-marker assertion.
+        for qf in QuoteForm::ALL {
+            let source = format!("{}xs", qf.prefix());
+            let tokens = tokenize(&source).unwrap_or_else(|e| {
+                panic!("tokenize rejected `{source}` for QuoteForm::{qf:?}: {e}")
+            });
+            assert!(
+                !tokens.is_empty(),
+                "QuoteForm::{qf:?} — tokenizer must emit at least one token for `{source}`",
+            );
+            match &tokens[0] {
+                (Token::Quoted(marker), 0) => assert_eq!(
+                    *marker, qf,
+                    "QuoteForm::{qf:?} — outer-dispatch marker drifted from decoded variant"
+                ),
+                other => {
+                    panic!("QuoteForm::{qf:?} — expected Token::Quoted at pos 0, got {other:?}")
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tokenizer_shared_comma_lead_char_disambiguates_at_peek_arm_not_at_from_lead_char() {
+        // SHARED-LEAD-CHAR PROMOTION CONTRACT: `,` is the sole shared
+        // lead char across the closed set — `QuoteForm::from_lead_char`
+        // returns `Some(QuoteForm::Unquote)` on `,`, and the
+        // tokenizer's peek-then-consume `@` arm PROMOTES the decoded
+        // `Unquote` to `UnquoteSplice` when the second char is `@`.
+        // Pin the promotion asymmetry by tokenizing all three forms
+        // side-by-side:
+        //   * `,x`  — bare unquote, one `Token::Quoted(Unquote)`.
+        //   * `,@x` — splice, one `Token::Quoted(UnquoteSplice)`.
+        //   * `,@`  — splice alone, one `Token::Quoted(UnquoteSplice)`.
+        // A regression that pushed the splice promotion INTO
+        // `from_lead_char` (a natural but wrong refactor once the
+        // outer dispatch collapses onto a single arm) would silently
+        // re-route every bare `,` through the splice arm; this triple
+        // catches the drift by pinning each shape's typed marker.
+        let bare = tokenize(",x").unwrap_or_else(|e| panic!("tokenize `,x` failed: {e}"));
+        assert!(
+            matches!(bare[0], (Token::Quoted(QuoteForm::Unquote), 0)),
+            "`,x` — first token must be Token::Quoted(Unquote) at pos 0, got {:?}",
+            bare[0],
+        );
+
+        let splice = tokenize(",@x").unwrap_or_else(|e| panic!("tokenize `,@x` failed: {e}"));
+        assert!(
+            matches!(splice[0], (Token::Quoted(QuoteForm::UnquoteSplice), 0)),
+            "`,@x` — first token must be Token::Quoted(UnquoteSplice) at pos 0, got {:?}",
+            splice[0],
+        );
+
+        let splice_alone = tokenize(",@").unwrap_or_else(|e| panic!("tokenize `,@` failed: {e}"));
+        assert_eq!(splice_alone.len(), 1, "`,@` must tokenize to one token");
+        assert!(
+            matches!(
+                splice_alone[0],
+                (Token::Quoted(QuoteForm::UnquoteSplice), 0)
+            ),
+            "`,@` — token must be Token::Quoted(UnquoteSplice) at pos 0, got {:?}",
+            splice_alone[0],
+        );
+    }
+
+    #[test]
+    fn tokenizer_bare_atom_terminator_disjunct_routes_through_quote_form_from_lead_char() {
+        // BARE-ATOM TERMINATOR CONTRACT: the pre-lift three parallel
+        // `char`-literal disjuncts (`ch == '\''` / `ch == '`'` /
+        // `ch == ','`) collapsed to ONE
+        // `QuoteForm::from_lead_char(ch).is_some()` gate. Pin the
+        // composition by sweeping every quote-family lead char and
+        // asserting a bare-atom lexeme followed by that lead char
+        // tokenizes as TWO distinct tokens — first the atom lexeme,
+        // then the `Token::Quoted(qf)` at the exact byte offset the
+        // atom terminator broke at. A regression that dropped one
+        // disjunct (e.g. re-inlined only two of the three lead chars,
+        // or drifted one from the substrate's `from_lead_char`
+        // projection) would silently absorb the lead char into the
+        // bare-atom accumulator and swallow the subsequent quote-family
+        // token — this sweep catches the drift for every arm.
+        for qf in [QuoteForm::Quote, QuoteForm::Quasiquote, QuoteForm::Unquote] {
+            let source = format!("foo{}xs", qf.prefix());
+            let tokens = tokenize(&source).unwrap_or_else(|e| {
+                panic!(
+                    "tokenize rejected `{source}` for terminator sweep of QuoteForm::{qf:?}: {e}"
+                )
+            });
+            assert!(
+                tokens.len() >= 2,
+                "QuoteForm::{qf:?} — bare atom + prefix must tokenize as at least TWO \
+                 tokens, got {tokens:?}",
+            );
+            assert!(
+                matches!(&tokens[0], (Token::Atom(s), 0) if s == "foo"),
+                "QuoteForm::{qf:?} — first token must be Token::Atom(\"foo\") at pos 0, \
+                 got {:?}",
+                tokens[0],
+            );
+            assert!(
+                matches!(&tokens[1], (Token::Quoted(marker), 3) if *marker == qf),
+                "QuoteForm::{qf:?} — second token must be Token::Quoted(qf) at pos 3, \
+                 got {:?}",
+                tokens[1],
+            );
+        }
     }
 
     #[test]

@@ -4947,6 +4947,147 @@ impl QuoteForm {
         }
     }
 
+    /// Canonical FIRST-char of [`Self::prefix`] — `'\''` for [`Self::Quote`],
+    /// `` '`' `` for [`Self::Quasiquote`], `','` for BOTH [`Self::Unquote`]
+    /// AND [`Self::UnquoteSplice`] (the splice's two-char `,@` prefix
+    /// shares its lead byte with bare unquote and disambiguates on the
+    /// peek-then-consume `@` second char inside [`crate::reader::tokenize`]).
+    /// The three-of-four collapse onto three distinct lead chars is
+    /// structurally fixed — the reader's outer tokenizer dispatch
+    /// selects between quote-family entry and every non-quote-family
+    /// arm on lead char alone, with the `,`-vs-`,@` disambiguation
+    /// falling out of the reader's second-char peek.
+    ///
+    /// Structural dual of [`Self::from_lead_char`]: this method projects
+    /// the closed-set marker to its canonical reader-punctuation lead
+    /// char; the sibling projects the lead char back to the DEFAULT
+    /// marker on that char (`,` → [`Self::Unquote`], with the splice
+    /// promotion living at the reader's peek arm rather than at
+    /// [`Self::from_lead_char`]'s decode). Every variant round-trips
+    /// through the composition `Self::from_lead_char(qf.lead_char())`,
+    /// with the `{Unquote, UnquoteSplice}` two-of-four collapsing onto
+    /// `Some(Unquote)` per the shared-lead-char structural identity.
+    ///
+    /// The `const` qualifier is load-bearing: [`crate::reader::tokenize`]
+    /// binds its outer-match quote-family dispatch to this projection
+    /// via a pre-match `Self::from_lead_char` check, and future consumer
+    /// sites (e.g. `const` array literals of every reader-recognized
+    /// lead byte the tokenizer could dispatch on, LSP completion
+    /// generators that pre-materialize the lead-char set) route through
+    /// this projection at compile time. Sibling posture to
+    /// [`crate::ast::Atom::STR_DELIMITER`] one axis over on the same
+    /// closed-set-lead-char algebra — that constant is the ONE `char`
+    /// the `Token::Str` open/close/self-escape/bare-atom-terminator
+    /// FOUR sites in the reader pair with; this method is the ONE
+    /// projection the `Token::Quoted(QuoteForm)` outer-dispatch AND
+    /// the same bare-atom-terminator disjunct pair with across FOUR
+    /// per-variant lead chars.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// reader's per-char quote-family dispatch IS the typed-entry gate,
+    /// and lifting its (char, `QuoteForm`) pairing to ONE projection
+    /// method plus one inverse (see [`Self::from_lead_char`]) closes
+    /// the tokenizer's outer-arm entry surface onto the closed-set
+    /// algebra rather than four inline `char` literals scattered across
+    /// three tokenizer arms (`'\''` / `` '`' `` / `','` outer-match arms)
+    /// AND three bare-atom-terminator disjuncts (`ch == '\''` / `ch ==
+    /// '`'` / `ch == ','`). THEORY.md §V.1 — knowable platform; the
+    /// closed set of quote-family lead chars becomes a TYPE (the
+    /// enum's arms projected through this method) rather than four
+    /// literal `char` values scattered across the reader's outer
+    /// dispatch AND its bare-atom terminator. THEORY.md §VI.1 —
+    /// generation over composition; a fifth homoiconic prefix
+    /// (hypothetical `,~` reverse-unquote, `#'` function-quote,
+    /// `#[…]` vector-quote) extends [`Self`] AND this method AND
+    /// [`Self::from_lead_char`] AND the tokenizer's pre-match check
+    /// in lockstep, with rustc binding the extension through
+    /// exhaustiveness over the closed enum.
+    #[must_use]
+    pub const fn lead_char(self) -> char {
+        match self {
+            Self::Quote => '\'',
+            Self::Quasiquote => '`',
+            Self::Unquote | Self::UnquoteSplice => ',',
+        }
+    }
+
+    /// Inverse of [`Self::lead_char`] on the three-of-four distinct
+    /// lead chars — `'\''` decodes to `Some(Self::Quote)`, `` '`' ``
+    /// decodes to `Some(Self::Quasiquote)`, `','` decodes to
+    /// `Some(Self::Unquote)` (the DEFAULT variant on the shared `,`
+    /// lead char; the two-char `,@` splice promotion lives at
+    /// [`crate::reader::tokenize`]'s peek-then-consume `@` disambiguator
+    /// rather than at this decode). Every other `char` yields `None` —
+    /// the closed-set guarantee on [`Self`] AND on the tokenizer's
+    /// outer-arm set (whitespace, `(`, `)`, [`crate::ast::Atom::STR_DELIMITER`],
+    /// `;`, bare atom) ensures the four typed markers partition the
+    /// three distinct lead chars injectively against every other
+    /// tokenizer-recognized entry char.
+    ///
+    /// ONE consumer entrypoint the reader's `tokenize` binds against:
+    /// the outer-match quote-family dispatch was pre-lift a hand-rolled
+    /// three-arm cascade (`'\''` / `` '`' `` / `','`) with per-arm
+    /// `Token::Quoted(QuoteForm::*)` construction and a fourth
+    /// `Token::Quoted(QuoteForm::UnquoteSplice)` arm buried inside the
+    /// `','`-arm's peek branch; post-lift the tokenizer pre-checks
+    /// `Self::from_lead_char(c)` before the outer match, promotes the
+    /// returned `Self::Unquote` to `Self::UnquoteSplice` on second-char
+    /// `@`, and emits ONE `Token::Quoted(final_qf)` — the (lead char,
+    /// [`Self`] marker) pairing binds at ONE site on the closed-set
+    /// algebra rather than at three inline `char` literals across
+    /// three outer-match arms. The bare-atom terminator disjunct at
+    /// the reader's `Token::Atom` accumulator loop routes through
+    /// `Self::from_lead_char(ch).is_some()` so the three
+    /// quote-family-lead disjuncts (`ch == '\''` / `ch == '`'` /
+    /// `ch == ','`) collapse to ONE gate — a regression that drifts
+    /// one bare-atom-terminator disjunct from the outer-dispatch's
+    /// quote-family arm becomes structurally impossible because
+    /// there is exactly ONE decode both sites consume.
+    ///
+    /// The two-of-four collapse onto `Some(Self::Unquote)` for the
+    /// `,` lead char is INTENTIONAL: `Self::UnquoteSplice` has NO
+    /// distinct lead char; the tokenizer must see two consecutive
+    /// chars (`,` then `@`) to promote the decoded `Self::Unquote`
+    /// to `Self::UnquoteSplice`. Placing the promotion at the
+    /// reader's peek arm rather than at this decode keeps the
+    /// (char → marker) projection at the closed-set algebra's
+    /// character-boundary surface (one char in, one variant out)
+    /// and the (two-char sequence → splice) promotion at the
+    /// tokenizer's streaming surface (peek and consume the second
+    /// char). This split parallels the reader's split of `Token::Str`
+    /// into open-delimiter dispatch ([`crate::ast::Atom::STR_DELIMITER`])
+    /// AND inner-payload accumulation — the closed-set char algebra
+    /// decodes the entry char; the streaming reader handles multi-
+    /// char follow-through.
+    ///
+    /// Sibling to [`crate::ast::Atom::from_lexeme`] one axis over on
+    /// the same typed-entry family — that method decodes a bare-atom
+    /// lexeme into a typed [`crate::ast::Atom`] variant; this method
+    /// decodes a single lead char into a typed [`Self`] variant. Both
+    /// map the reader's per-char / per-lexeme classification surface
+    /// onto the substrate's closed-set algebra so the reader's outer
+    /// dispatch binds through ONE typed decode rather than through
+    /// scattered per-arm `char` / `&str` literal patterns.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// reader's per-char quote-family classification IS the typed-entry
+    /// gate. THEORY.md §V.1 — knowable platform; the reader's outer
+    /// dispatch AND the bare-atom terminator each route through ONE
+    /// typed decode against the closed-set algebra rather than through
+    /// three (or four) parallel `char`-literal patterns that could
+    /// drift independently — a regression that renames one lead char
+    /// without updating the sibling site fails at rustc / test time
+    /// rather than as a silent tokenizer drift.
+    #[must_use]
+    pub const fn from_lead_char(c: char) -> Option<Self> {
+        match c {
+            '\'' => Some(Self::Quote),
+            '`' => Some(Self::Quasiquote),
+            ',' => Some(Self::Unquote),
+            _ => None,
+        }
+    }
+
     /// Stable, per-variant byte discriminator that paired with the
     /// recursive inner hash builds the substrate's `Hash for Sexp`
     /// projection — `3` for [`Self::Quote`], `4` for
@@ -8296,6 +8437,136 @@ mod tests {
         assert_eq!(QuoteForm::Quasiquote.prefix(), "`");
         assert_eq!(QuoteForm::Unquote.prefix(), ",");
         assert_eq!(QuoteForm::UnquoteSplice.prefix(), ",@");
+    }
+
+    #[test]
+    fn quote_form_lead_char_pins_first_char_of_prefix_for_every_variant() {
+        // Pin the (variant, lead char) pairing threaded through
+        // [`crate::reader::tokenize`]'s outer quote-family dispatch AND
+        // its bare-atom terminator disjunct. Quote/Quasiquote's
+        // singleton chars project to `'\''` / `` '`' `` respectively;
+        // Unquote AND UnquoteSplice BOTH project to `','` because the
+        // splice's two-char `,@` prefix shares its lead byte with bare
+        // unquote and the reader disambiguates on the peek-then-consume
+        // `@` second char. A regression that split the shared-lead-char
+        // collapse (e.g. gave UnquoteSplice a distinct lead char)
+        // silently re-shapes every splice tokenization; this test
+        // catches the drift at rustc + `cargo test` time rather than
+        // as an off-by-one reader miscue that surfaces only when a
+        // `,@xs` form parses wrong.
+        assert_eq!(QuoteForm::Quote.lead_char(), '\'');
+        assert_eq!(QuoteForm::Quasiquote.lead_char(), '`');
+        assert_eq!(QuoteForm::Unquote.lead_char(), ',');
+        assert_eq!(QuoteForm::UnquoteSplice.lead_char(), ',');
+    }
+
+    #[test]
+    fn quote_form_lead_char_is_first_char_of_prefix_for_every_variant() {
+        // COMPOSITION CONTRACT: `lead_char` MUST equal the first char of
+        // `prefix()` for every variant. Pin the composition so a
+        // regression that drifts one of the two projections (e.g. a
+        // rename of `Quote`'s prefix from `"'"` to `"‛"` without
+        // updating `lead_char`, or vice versa) surfaces immediately.
+        // The typed composition binds the (`QuoteForm`, lead char,
+        // full prefix) triple at ONE consistency check across every
+        // arm of the closed set — a future fifth homoiconic prefix
+        // extension must extend `prefix` AND `lead_char` in lockstep,
+        // and this sweep pins the invariant that connects them.
+        for qf in QuoteForm::ALL {
+            let prefix_first =
+                qf.prefix().chars().next().unwrap_or_else(|| {
+                    panic!("QuoteForm::{qf:?} prefix must have at least one char")
+                });
+            assert_eq!(
+                qf.lead_char(),
+                prefix_first,
+                "QuoteForm::{qf:?} — lead_char {:?} drifted from first char of prefix {:?}",
+                qf.lead_char(),
+                qf.prefix(),
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_from_lead_char_decodes_every_distinct_lead_char_to_default_variant() {
+        // Pin the inverse projection at every distinct lead char across
+        // the closed set. Quote/Quasiquote decode to their singleton
+        // owners; `,` decodes to `Some(Unquote)` (the DEFAULT variant on
+        // the shared `,` lead char) — the `,@` splice promotion lives
+        // at the reader's peek arm, NOT at this decode. Every other
+        // char yields `None`. Includes the tokenizer's non-quote entry
+        // chars (`'('`, `')'`, `';'`, `Atom::STR_DELIMITER`, ` `) as
+        // the rejection sweep — a regression that leaks a quote-family
+        // variant onto a non-quote lead char silently re-shapes every
+        // top-level program's tokenization; this rejection sweep
+        // catches the drift at test time.
+        assert_eq!(QuoteForm::from_lead_char('\''), Some(QuoteForm::Quote));
+        assert_eq!(QuoteForm::from_lead_char('`'), Some(QuoteForm::Quasiquote));
+        assert_eq!(QuoteForm::from_lead_char(','), Some(QuoteForm::Unquote));
+
+        // Non-quote reader entry chars must reject.
+        assert_eq!(QuoteForm::from_lead_char('('), None);
+        assert_eq!(QuoteForm::from_lead_char(')'), None);
+        assert_eq!(QuoteForm::from_lead_char(';'), None);
+        assert_eq!(QuoteForm::from_lead_char(Atom::STR_DELIMITER), None);
+        assert_eq!(QuoteForm::from_lead_char(' '), None);
+        assert_eq!(QuoteForm::from_lead_char('a'), None);
+        assert_eq!(QuoteForm::from_lead_char('@'), None);
+        assert_eq!(QuoteForm::from_lead_char(':'), None);
+        assert_eq!(QuoteForm::from_lead_char('#'), None);
+    }
+
+    #[test]
+    fn quote_form_lead_char_round_trips_through_from_lead_char_with_shared_lead_char_collapse() {
+        // ROUND-TRIP CONTRACT: for every variant, decoding its
+        // `lead_char()` back through `from_lead_char` produces
+        // `Some(default_variant_on_that_lead_char)`. For the three
+        // variants with singleton lead chars (`Quote`, `Quasiquote`,
+        // `Unquote`) the round-trip is the identity. For `UnquoteSplice`
+        // — which shares `,` with `Unquote` — the round-trip yields
+        // `Some(QuoteForm::Unquote)` because `,` alone cannot signal
+        // splice; the reader's peek-then-consume `@` disambiguator is
+        // where the splice promotion happens. Pin this asymmetry so
+        // a regression that pushed the splice promotion into
+        // `from_lead_char` (a natural but wrong refactor) surfaces
+        // here at test time — decoupling the char-level decode from
+        // the streaming reader's two-char sequence is load-bearing
+        // for the tokenizer's structure.
+        for qf in QuoteForm::ALL {
+            let decoded = QuoteForm::from_lead_char(qf.lead_char());
+            let expected = match qf {
+                QuoteForm::Quote => Some(QuoteForm::Quote),
+                QuoteForm::Quasiquote => Some(QuoteForm::Quasiquote),
+                // Both `,`-lead-char variants collapse onto Unquote;
+                // splice promotion lives at the reader's peek arm.
+                QuoteForm::Unquote | QuoteForm::UnquoteSplice => Some(QuoteForm::Unquote),
+            };
+            assert_eq!(
+                decoded, expected,
+                "QuoteForm::{qf:?} — from_lead_char(lead_char) round-trip drifted",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_from_lead_char_is_const_fn_over_the_closed_set() {
+        // Pin the `const fn` posture of both projections by binding a
+        // `const` array literal keyed on the closed set. A regression
+        // that removed the `const` qualifier (dropping the compile-
+        // time evaluability the reader's outer dispatch AND future
+        // static lookup tables key on) fails to compile HERE — the
+        // `const` context enforces the qualifier without a test-time
+        // assertion.
+        const _QUOTE: char = QuoteForm::Quote.lead_char();
+        const _QUASIQUOTE: char = QuoteForm::Quasiquote.lead_char();
+        const _UNQUOTE: char = QuoteForm::Unquote.lead_char();
+        const _SPLICE: char = QuoteForm::UnquoteSplice.lead_char();
+        const _FROM: Option<QuoteForm> = QuoteForm::from_lead_char(',');
+        assert_eq!(_QUOTE, '\'');
+        assert_eq!(_QUASIQUOTE, '`');
+        assert_eq!(_UNQUOTE, ',');
+        assert_eq!(_SPLICE, ',');
+        assert_eq!(_FROM, Some(QuoteForm::Unquote));
     }
 
     #[test]

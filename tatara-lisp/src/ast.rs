@@ -133,6 +133,61 @@ pub enum Atom {
 }
 
 impl Atom {
+    /// The canonical `:` marker prefix that a [`Self::Keyword`] payload
+    /// projects THROUGH when rendered as / classified from its
+    /// canonical-string surface across the substrate's four
+    /// Keyword-round-trip sites — the reader-entry classifier
+    /// ([`Self::from_lexeme`]), the Lisp-canonical-form projection
+    /// ([`fmt::Display for Atom`]), the JSON-canonical-form projection
+    /// ([`Self::to_json`]), and the iac-forge-canonical-form projection
+    /// ([`Self::to_iac_forge_sexpr`]).
+    ///
+    /// Pre-lift the same `":"` byte lived inline at four sites: `':'`
+    /// (as a `char` pattern) at the [`Self::from_lexeme`] strip site
+    /// and `":{s}"` (three byte-identical format-string literals) at the
+    /// three canonical-form projection sites. Post-lift the marker
+    /// byte lives at ONE canonical constant on the [`Atom`] algebra
+    /// that all four sites bind to; a future refactor that swaps the
+    /// marker (e.g. a Racket-compat port to `#:name`, a Clojure-compat
+    /// port to `::name`) touches ONE line rather than four inline
+    /// bytes that would silently drift out of round-trip agreement if
+    /// one was updated without the others.
+    ///
+    /// Load-bearing round-trip contract:
+    /// `Self::from_lexeme(&Self::keyword(name).to_string()) ==
+    /// Self::keyword(name)` — the reader-entry classifier's
+    /// `strip_prefix(Self::KEYWORD_MARKER)` gate and the Lisp-canonical
+    /// [`Display`]'s `write!(f, "{}{name}", Self::KEYWORD_MARKER)`
+    /// emission both bind to THIS constant so the pair cannot drift.
+    /// Cross-surface round-trip: `Self::to_json` and
+    /// [`Self::to_iac_forge_sexpr`] emit the same prefix so any BLAKE3
+    /// attestation over an iac-forge canonical form of a Keyword atom
+    /// matches the JSON canonical form byte-for-byte on the prefix
+    /// axis.
+    ///
+    /// Sibling-shape lift to the workspace's other prefix-marker
+    /// constants: [`crate::error::UnquoteForm::ALL`] projects each
+    /// template-marker variant to its punctuation prefix via
+    /// [`crate::ast::QuoteForm::prefix`] (`"'"`, `"`"`, `","`, `",@"`)
+    /// — a peer axis on the substrate's marker-byte algebra. This
+    /// constant sits on the [`Atom`] algebra at the atomic-payload
+    /// axis where the [`QuoteForm::prefix`] projection sits at the
+    /// homoiconic-wrapper axis.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Keyword payload, canonical `:` prefix) pairing now binds at
+    /// ONE constant on the closed-set [`Atom`] algebra regardless of
+    /// which of the four reader-entry / rendering surfaces reaches in.
+    /// THEORY.md §VI.1 — generation over composition; the four
+    /// byte-identical `":"` / `":{s}"` inline literals collapse onto
+    /// ONE named constant, matching the substrate's three-times rule
+    /// (four occurrences, well past the ≥2 lift threshold).
+    /// THEORY.md §V.1 — knowable platform; the canonical
+    /// keyword-marker byte becomes a TYPE-level constant on the
+    /// substrate algebra rather than four inline bytes at four
+    /// consumer surfaces.
+    pub const KEYWORD_MARKER: &'static str = ":";
+
     /// Canonical [`Self::Symbol`] constructor — first of the six per-
     /// variant typed-construct methods on the closed-set [`Atom`]
     /// algebra. Takes `impl Into<String>` so the consumer composes any
@@ -699,7 +754,7 @@ impl Atom {
     pub fn to_json(&self) -> serde_json::Value {
         match self {
             Self::Symbol(s) => serde_json::Value::String(s.clone()),
-            Self::Keyword(s) => serde_json::Value::String(format!(":{s}")),
+            Self::Keyword(s) => serde_json::Value::String(format!("{}{s}", Self::KEYWORD_MARKER)),
             Self::Str(s) => serde_json::Value::String(s.clone()),
             Self::Int(n) => serde_json::Value::Number((*n).into()),
             Self::Float(n) => serde_json::Number::from_f64(*n)
@@ -806,7 +861,7 @@ impl Atom {
             // Keywords encoded as `:name` symbols in canonical form —
             // same `:` prefix convention as `Atom::to_json`'s
             // string-prefixed encoding.
-            Self::Keyword(s) => SExpr::Symbol(format!(":{s}")),
+            Self::Keyword(s) => SExpr::Symbol(format!("{}{s}", Self::KEYWORD_MARKER)),
             Self::Str(s) => SExpr::String(s.clone()),
             Self::Int(n) => SExpr::Integer(*n),
             Self::Float(n) => SExpr::Float(*n),
@@ -889,7 +944,7 @@ impl Atom {
         if s == "#f" {
             return Self::Bool(false);
         }
-        if let Some(rest) = s.strip_prefix(':') {
+        if let Some(rest) = s.strip_prefix(Self::KEYWORD_MARKER) {
             return Self::Keyword(rest.to_owned());
         }
         if let Ok(n) = s.parse::<i64>() {
@@ -5822,7 +5877,7 @@ impl fmt::Display for Atom {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Symbol(s) => f.write_str(s),
-            Self::Keyword(s) => write!(f, ":{s}"),
+            Self::Keyword(s) => write!(f, "{}{s}", Self::KEYWORD_MARKER),
             Self::Str(s) => write!(f, "{s:?}"),
             Self::Int(n) => write!(f, "{n}"),
             Self::Float(n) => fmt_float(*n, f),
@@ -15642,5 +15697,89 @@ mod tests {
             Sexp::UnquoteSplice(Box::new(inner)),
             "Sexp::unquote_form(UnquoteForm::Splice, _) drifted from Sexp::UnquoteSplice(Box::new(_)) canonical tuple-variant shape",
         );
+    }
+
+    // ── `Atom::KEYWORD_MARKER` — the canonical `:` prefix routed through
+    // the four Keyword-round-trip sites (reader-entry classifier, Lisp
+    // canonical Display, JSON canonical projection, iac-forge canonical
+    // projection). Pins the constant value AND the four sites' composition
+    // through it so a regression that re-inlines any single site's byte
+    // literal drifts against these pins even when the rendered bytes still
+    // agree at that site.
+
+    #[test]
+    fn atom_keyword_marker_projects_canonical_colon_byte() {
+        assert_eq!(
+            Atom::KEYWORD_MARKER,
+            ":",
+            "KEYWORD_MARKER byte drifted from the substrate-canonical `:` \
+             prefix — the reader-round-trip contract at Self::from_lexeme \
+             + fmt::Display for Atom + Self::to_json + \
+             Self::to_iac_forge_sexpr all bind to this one constant.",
+        );
+    }
+
+    #[test]
+    fn atom_display_keyword_arm_routes_through_keyword_marker_constant() {
+        for name in ["parent", "class", "intent", "x", ""] {
+            let rendered = Atom::keyword(name).to_string();
+            let expected = format!("{}{name}", Atom::KEYWORD_MARKER);
+            assert_eq!(
+                rendered, expected,
+                "fmt::Display for Atom's Keyword arm drifted from the \
+                 KEYWORD_MARKER composition at name={name:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_to_json_keyword_arm_routes_through_keyword_marker_constant() {
+        for name in ["parent", "class", "intent", "x", ""] {
+            let projected = Atom::keyword(name).to_json();
+            let expected = serde_json::Value::String(format!("{}{name}", Atom::KEYWORD_MARKER));
+            assert_eq!(
+                projected, expected,
+                "Atom::to_json's Keyword arm drifted from the \
+                 KEYWORD_MARKER composition at name={name:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_from_lexeme_keyword_classifier_routes_through_keyword_marker_constant() {
+        for name in ["parent", "class", "intent", "x", ""] {
+            let lexeme = format!("{}{name}", Atom::KEYWORD_MARKER);
+            let classified = Atom::from_lexeme(&lexeme);
+            assert_eq!(
+                classified,
+                Atom::keyword(name),
+                "Atom::from_lexeme's Keyword classifier drifted from the \
+                 KEYWORD_MARKER strip at lexeme={lexeme:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_keyword_marker_closes_reader_display_round_trip_for_every_name() {
+        // The load-bearing round-trip contract:
+        //   Atom::from_lexeme(&Atom::keyword(name).to_string())
+        //   == Atom::keyword(name)
+        // Both sides bind to Atom::KEYWORD_MARKER — the reader-entry
+        // classifier strips it via strip_prefix, the canonical-form
+        // Display re-emits it via write!. A future refactor that
+        // silently drifts ONE site's byte (e.g. by re-inlining `":"` at
+        // Display while migrating `strip_prefix` to a different byte)
+        // breaks THIS round-trip even when both bytes happen to agree on
+        // the surface — because the round-trip binds to the composition
+        // through the constant at BOTH endpoints.
+        for name in ["parent", "class", "intent", "x", "kebab-cased-name"] {
+            let a = Atom::keyword(name);
+            let round_tripped = Atom::from_lexeme(&a.to_string());
+            assert_eq!(
+                round_tripped, a,
+                "keyword round-trip through KEYWORD_MARKER drifted at \
+                 name={name:?}",
+            );
+        }
     }
 }

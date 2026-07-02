@@ -408,6 +408,105 @@ impl Atom {
         self.kind().label()
     }
 
+    /// Project the atomic value into its outer-shape [`SexpShape`]
+    /// variant — `Symbol(_) → SexpShape::Symbol`,
+    /// `Keyword(_) → SexpShape::Keyword`, `Str(_) → SexpShape::String`,
+    /// `Int(_) → SexpShape::Int`, `Float(_) → SexpShape::Float`,
+    /// `Bool(_) → SexpShape::Bool`. The outer-value peer of
+    /// [`AtomKind::sexp_shape`] one algebra layer down and of
+    /// [`Sexp::shape`] one algebra layer up. Body composes through
+    /// `self.kind().sexp_shape()` — routing through [`Self::kind`]
+    /// (the typed 6-arm outer-value → marker projection) then
+    /// [`AtomKind::sexp_shape`] (the canonical 6-of-12 atomic-payload
+    /// carving of [`SexpShape`]) so the (Atom variant, SexpShape
+    /// variant) pairing lives at ONE canonical site
+    /// ([`AtomKind::sexp_shape`]'s six match arms in `ast.rs`) rather
+    /// than at six byte-identical inline arms across consumers.
+    ///
+    /// Same composition-through-carving-marker posture as [`Self::label`]
+    /// (`self.kind().label()`) one vocabulary axis over on the
+    /// outer-`Atom` algebra: [`Self::label`] closes the diagnostic-label
+    /// axis, this method closes the outer-shape-projection axis, and
+    /// both compose through the SAME typed marker layer
+    /// ([`Self::kind`] into [`AtomKind`]) into the outer-shape's
+    /// per-axis canonical site. The two methods now paint the
+    /// outer-`Atom` value with typed projections onto BOTH the
+    /// diagnostic-label vocabulary AND the outer-shape closed-set —
+    /// the pair mirrors how [`Sexp::type_name`] and [`Sexp::shape`]
+    /// paint the outer-`Sexp` value one algebra layer up.
+    ///
+    /// Composition law: `atom.sexp_shape() == atom.kind().sexp_shape()`
+    /// for every `atom: &Atom`. Pinned by
+    /// `atom_sexp_shape_composes_through_kind_sexp_shape_for_every_variant`
+    /// across a representative payload sweep (including NaN via
+    /// `f64::to_bits` round-trip on the Float arm, matching
+    /// [`Hash for Atom`]'s posture; both empty and non-empty
+    /// String/Symbol/Keyword arms; `i64::{MIN, MAX}` on the Int arm;
+    /// both Bool arms). Sibling of
+    /// `atom_label_composes_through_kind_label_for_every_variant` one
+    /// vocabulary axis over.
+    ///
+    /// Cross-algebra agreement law: for every `atom: &Atom`,
+    /// `atom.sexp_shape() == Sexp::Atom(atom.clone()).shape()`. The
+    /// outer-`Atom` shape projection routes into the SAME canonical
+    /// site the outer-`Sexp` [`Sexp::shape`] projection lands on for
+    /// every atomic-payload arm — pinned by
+    /// `atom_sexp_shape_agrees_with_sexp_shape_at_every_atom_arm` via
+    /// byte-equality on the `SexpShape` variant across all six atomic
+    /// arms. Sibling of
+    /// `atom_label_agrees_with_sexp_type_name_at_every_atom_arm` one
+    /// vocabulary axis over.
+    ///
+    /// Round-trip through the outer-shape's soft-projection sibling:
+    /// `atom.sexp_shape().as_atom_kind() == Some(atom.kind())` for
+    /// every `atom: &Atom` — the typed embed `Atom → AtomKind →
+    /// SexpShape` inverts through the soft-projection retraction
+    /// `SexpShape → AtomKind` exactly on the 6-of-12 atomic-payload
+    /// image. Pinned by
+    /// `atom_sexp_shape_round_trips_through_sexp_shape_as_atom_kind`.
+    ///
+    /// The `SexpShape` return type (owned; [`SexpShape`] is not `Copy`
+    /// because its `Unknown(String)` arm carries a `String`) is the
+    /// outer-shape closed set; consumers that want the diagnostic
+    /// label render string compose `atom.sexp_shape().label()`, and
+    /// that composition IS `atom.label()` byte-for-byte by the
+    /// composition-through-carving-marker posture the two methods
+    /// share.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the (outer
+    /// `Atom` variant, `SexpShape` variant) pairing becomes a TYPE
+    /// projection on the outermost atomic value-carrier algebra
+    /// composed through the pre-existing marker-level projection,
+    /// rather than at parallel inline match arms each future consumer
+    /// of the outer-shape from an outer-`Atom` value has to re-derive.
+    /// THEORY.md §II.1 invariant 2 — free middle; the outer-`Atom`
+    /// outer-shape algebra now closes over THREE typed layers (outer
+    /// `Atom` → [`AtomKind`] → [`SexpShape`]) with rustc-enforced
+    /// consistency across each — a regression that drifts ONE layer's
+    /// shape mapping from the others cannot reach the substrate's
+    /// runtime typed-witness surface, `LispError::TypeMismatch.got`
+    /// slot, or [`SexpWitness::shape`] projection. THEORY.md §VI.1 —
+    /// generation over composition; the outer-value projection is the
+    /// missing algebra layer between the outer `Atom` and the
+    /// pre-existing marker-level shape projection — the two
+    /// pre-existing typed layers become a full THREE-layer typed
+    /// composition through ONE new named projection.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::Attribute::getType()`
+    /// typed projection composed with the attribute-kind's typed
+    /// outer-type identity — narrowing an attribute-carrier value
+    /// through its typed kind identity yields the outer-type identity
+    /// in ONE typed composition on the outer attribute algebra.
+    /// Translated through the substrate's outer-`Atom` value-carrier
+    /// algebra, `atom.kind().sexp_shape()` closes the (outer value,
+    /// outer-shape) pairing at ONE typed projection on the value-
+    /// carrier algebra composed through the marker-level
+    /// outer-shape face.
+    #[must_use]
+    pub fn sexp_shape(&self) -> SexpShape {
+        self.kind().sexp_shape()
+    }
+
     /// Project the atomic payload to its canonical [`serde_json::Value`]
     /// rendering — the typed-algebra peer of [`fmt::Display for Atom`] at
     /// the JSON-projection boundary. Lifts six inline atom arms inside
@@ -9755,6 +9854,210 @@ mod tests {
                  means one algebra layer re-inlined the literal rather \
                  than routing into the canonical `SexpShape::label` \
                  site",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_sexp_shape_projects_each_variant_to_canonical_outer_shape() {
+        // PER-ARM CONTRACT: pin the outer-`Atom` `Self::sexp_shape`
+        // projection produces the SIX canonical `SexpShape` variants
+        // byte-for-byte across every reachable atomic-payload variant.
+        // Pre-lift the outer-`Atom` outer-shape projection had no typed
+        // primitive on the value-carrier algebra — a consumer with an
+        // `Atom` value in hand wanting the canonical outer-shape had to
+        // spell the two-step composition `atom.kind().sexp_shape()` at
+        // every callsite, OR go through `Sexp::Atom(atom.clone()).shape()`
+        // which wraps and unwraps for no runtime purpose. Post-lift the
+        // SIX arms bind at ONE typed projection on the outer-`Atom`
+        // algebra that routes through `AtomKind::sexp_shape` — the
+        // (Atom variant, SexpShape variant) pairing binds at ONE typed
+        // algebra composition spanning THREE typed layers.
+        //
+        // Sibling-shape pin to
+        // `atom_kind_sexp_shape_projects_each_variant_to_canonical_outer_shape`
+        // one algebra layer down and `atom_label_projects_each_variant_to_canonical_diagnostic_label`
+        // one vocabulary axis over. A regression that drifts ONE arm's
+        // mapping (e.g. swapping Int ↔ Float, dropping the `Str →
+        // SexpShape::String` boundary rename) fails-loudly at THIS
+        // test AND the sibling `AtomKind::sexp_shape` per-arm pin.
+        assert_eq!(
+            Atom::Symbol("foo".to_owned()).sexp_shape(),
+            SexpShape::Symbol
+        );
+        assert_eq!(
+            Atom::Keyword("kw".to_owned()).sexp_shape(),
+            SexpShape::Keyword
+        );
+        assert_eq!(Atom::Str("hi".to_owned()).sexp_shape(), SexpShape::String);
+        assert_eq!(Atom::Int(42).sexp_shape(), SexpShape::Int);
+        assert_eq!(Atom::Float(1.5).sexp_shape(), SexpShape::Float);
+        assert_eq!(Atom::Bool(true).sexp_shape(), SexpShape::Bool);
+        assert_eq!(Atom::Bool(false).sexp_shape(), SexpShape::Bool);
+    }
+
+    #[test]
+    fn atom_sexp_shape_composes_through_kind_sexp_shape_for_every_variant() {
+        // COMPOSITION-LAW CONTRACT: `atom.sexp_shape() ==
+        // atom.kind().sexp_shape()` for every reachable atomic payload
+        // — the outer-`Atom` outer-shape projection is structurally
+        // derived through `Self::kind` + `AtomKind::sexp_shape` rather
+        // than through a parallel six-arm inline match on the outer-
+        // `Atom` algebra. Pin the composition law so a future refactor
+        // that re-inlines the six atomic-arm literals here (and gains
+        // its own drift surface separate from the `AtomKind::sexp_shape`
+        // canonical site) surfaces immediately.
+        //
+        // `SexpShape` carries the `String`-carrying `Unknown` arm so
+        // it can't be `Copy`; the pointer-equality axis
+        // `atom_label_composes_through_kind_label_for_every_variant`
+        // uses on the `&'static str` axis doesn't apply here. Byte-
+        // equality on the `SexpShape` discriminant IS the routing
+        // contract this pin binds: a regression that re-inlines the
+        // mapping produces byte-equal SexpShape values yet gains its
+        // own drift surface at the outer-`Atom` layer separate from
+        // the canonical `AtomKind::sexp_shape` site.
+        //
+        // Sibling-shape pin to
+        // `atom_label_composes_through_kind_label_for_every_variant`
+        // one vocabulary axis over (the diagnostic-label axis) and
+        // `atom_kind_sexp_shape_partition_matches_sexp_shape_atomic_carving`
+        // one algebra layer down (which pins `AtomKind::sexp_shape`'s
+        // partition-membership against `SexpShape::as_atom_kind`).
+        // The three pins jointly enforce the (outer-`Atom` value,
+        // outer-shape) pairing stays a full three-layer typed
+        // composition (`Atom` → `AtomKind` → `SexpShape`) rather than
+        // degrading to a per-layer inline literal table on the
+        // outer-`Atom` algebra.
+        let samples: Vec<Atom> = vec![
+            Atom::Symbol("foo".to_owned()),
+            Atom::Symbol(String::new()),
+            Atom::Keyword("kw".to_owned()),
+            Atom::Keyword(String::new()),
+            Atom::Str("hi".to_owned()),
+            Atom::Str(String::new()),
+            Atom::Int(0),
+            Atom::Int(-7),
+            Atom::Int(i64::MIN),
+            Atom::Int(i64::MAX),
+            Atom::Float(0.0),
+            Atom::Float(-1.5),
+            Atom::Float(f64::INFINITY),
+            Atom::Float(f64::from_bits(f64::NAN.to_bits())),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ];
+        for atom in &samples {
+            let via_sexp_shape = atom.sexp_shape();
+            let via_composition = atom.kind().sexp_shape();
+            assert_eq!(
+                via_sexp_shape, via_composition,
+                "Atom::sexp_shape() must route through self.kind().sexp_shape() \
+                 for {atom:?} — drift here means the lift was reverted \
+                 to inline arms",
+            );
+            // Cross-projection agreement: the routed shape's diagnostic
+            // label is byte-equal to `atom.label()` (the sibling
+            // vocabulary axis' composition), pinning that the two typed
+            // projections through `AtomKind` (one via `label`, one via
+            // `sexp_shape`) agree at the canonical `SexpShape::label`
+            // site.
+            assert_eq!(
+                via_sexp_shape.label(),
+                atom.label(),
+                "atom.sexp_shape().label() must agree with atom.label() \
+                 for {atom:?} — cross-axis vocabulary drift at the \
+                 shape-projection site would fracture the FOUR-layer \
+                 diagnostic composition on the outer-Atom algebra",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_sexp_shape_agrees_with_sexp_shape_at_every_atom_arm() {
+        // CROSS-ALGEBRA AGREEMENT CONTRACT: for every atomic payload
+        // `a`, `a.sexp_shape() == Sexp::Atom(a.clone()).shape()`. The
+        // agreement is a TYPED CONSEQUENCE of the two typed
+        // compositions — `Sexp::Atom(a).shape()` routes through
+        // `Sexp::shape()`'s `Self::Atom(a) => a.kind().sexp_shape()`
+        // arm which byte-for-byte matches `a.sexp_shape()`'s composition
+        // through `Self::kind` + `AtomKind::sexp_shape`. A regression
+        // that drifts either side of the cross-algebra bridge (an
+        // outer-`Atom` shape re-inlined onto a different projection,
+        // an outer-`Sexp` Atom-arm re-routed through a stale kind
+        // projection, an `AtomKind::sexp_shape` arm that swaps Int ↔
+        // Float) fails-loudly here rather than as a silent operator-
+        // facing drift at every consumer that pattern-matches on the
+        // outer-`Sexp` shape vs the outer-`Atom` shape independently.
+        //
+        // Sibling posture to
+        // `atom_label_agrees_with_sexp_type_name_at_every_atom_arm`
+        // one vocabulary axis over — that pin binds the (outer-`Atom`,
+        // outer-`Sexp`) cross-algebra bridge on the diagnostic-label
+        // axis, this pin binds it on the outer-shape axis.
+        for atom in [
+            Atom::Symbol("foo".to_owned()),
+            Atom::Keyword("kw".to_owned()),
+            Atom::Str("hi".to_owned()),
+            Atom::Int(42),
+            Atom::Float(2.5),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ] {
+            let via_atom = atom.sexp_shape();
+            let via_sexp = Sexp::Atom(atom.clone()).shape();
+            assert_eq!(
+                via_atom, via_sexp,
+                "Atom::sexp_shape() must agree with Sexp::Atom(_).shape() \
+                 for {atom:?} — cross-algebra shape drift at the \
+                 atomic-payload arms would fracture the typed shape \
+                 vocabulary between the outer-Atom and outer-Sexp \
+                 algebras",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_sexp_shape_round_trips_through_sexp_shape_as_atom_kind() {
+        // ROUND-TRIP CONTRACT: for every atomic payload `a`,
+        // `a.sexp_shape().as_atom_kind() == Some(a.kind())`. The typed
+        // embed `Atom → AtomKind → SexpShape` inverts through the
+        // soft-projection retraction `SexpShape → AtomKind` exactly on
+        // the 6-of-12 atomic-payload image. A regression that ANY of
+        // the three embeds (`Self::kind`, `AtomKind::sexp_shape`) OR
+        // the soft-projection retraction `SexpShape::as_atom_kind`
+        // drifts on any arm fails-loudly here — the structural
+        // round-trip is the invariant that holds the closed-set-
+        // lattice's atomic-payload cell load-bearing across future
+        // edits.
+        //
+        // Peer to `unquote_form_sexp_shape_round_trips_through_sexp_shape_as_quote_form_and_as_unquote_form`
+        // (error.rs) one carving axis over on the substitution-subset
+        // side of the outer-shape lattice, and to `atom_kind_sexp_shape_round_trips_through_sexp_shape_as_atom_kind`
+        // one algebra layer down (which pins the marker-level round-
+        // trip). This pin extends the round-trip up to the outer-
+        // `Atom` value carrier.
+        for atom in [
+            Atom::Symbol("foo".to_owned()),
+            Atom::Keyword("kw".to_owned()),
+            Atom::Str("hi".to_owned()),
+            Atom::Int(0),
+            Atom::Int(i64::MIN),
+            Atom::Float(0.0),
+            Atom::Float(f64::INFINITY),
+            Atom::Bool(true),
+            Atom::Bool(false),
+        ] {
+            let shape = atom.sexp_shape();
+            let round_tripped = shape.as_atom_kind();
+            assert_eq!(
+                round_tripped,
+                Some(atom.kind()),
+                "Atom::sexp_shape() must round-trip through \
+                 SexpShape::as_atom_kind for {atom:?} — the typed embed \
+                 Atom → AtomKind → SexpShape is no longer a section of \
+                 SexpShape::as_atom_kind's inverse on the atomic \
+                 6-of-12 image",
             );
         }
     }

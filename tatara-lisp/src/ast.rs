@@ -188,6 +188,71 @@ impl Atom {
     /// consumer surfaces.
     pub const KEYWORD_MARKER: &'static str = ":";
 
+    /// Project the closed-set `bool` domain to its canonical Scheme-
+    /// spelling `&'static str` — `"#t"` for `true`, `"#f"` for `false`.
+    /// ONE projection on the [`Atom`] algebra that the substrate's
+    /// FOUR `Self::Bool`-round-trip inline byte-literals across TWO
+    /// consumer sites (the two-arm `Bool(true|false)` fork inside
+    /// [`fmt::Display for Atom`] and the two-line `if s == "#t"` /
+    /// `if s == "#f"` cascade inside [`Self::from_lexeme`]) collapse
+    /// onto — parallel to how [`Self::KEYWORD_MARKER`] is the ONE
+    /// canonical prefix the four Keyword-round-trip sites bind to.
+    ///
+    /// Pre-lift the same `"#t"` / `"#f"` bytes lived inline at four
+    /// sites: two `f.write_str("#t"|"#f")` arms at the Display impl and
+    /// two `if s == "#t"|"#f"` gates at [`Self::from_lexeme`]. Post-
+    /// lift the (typed `bool`, canonical Scheme spelling) pairing binds
+    /// at ONE projection on the [`Atom`] algebra that every consumer
+    /// routes through; a refactor that swaps the spelling (e.g. a
+    /// Common-Lisp-compat port to `T` / `NIL`, a JSON-compat port to
+    /// `true` / `false`) touches ONE method rather than four inline
+    /// bytes that would silently drift out of round-trip agreement if
+    /// one was updated without the others. The Display arm also
+    /// collapses from TWO variant-branches (`Bool(true) => "#t"`,
+    /// `Bool(false) => "#f"`) to ONE variant-branch
+    /// (`Bool(b) => Self::bool_literal(*b)`) — the fork on `bool`
+    /// happens at the projection, not at every consumer's match body.
+    ///
+    /// Load-bearing round-trip contract:
+    /// `Self::from_lexeme(&Self::boolean(b).to_string()) ==
+    /// Self::boolean(b)` for every `b: bool` — the reader-entry
+    /// classifier's `s == Self::bool_literal(true|false)` gates and the
+    /// Lisp-canonical [`Display`]'s
+    /// `f.write_str(Self::bool_literal(*b))` emission both bind to THIS
+    /// projection so the pair cannot drift. Guards against the
+    /// CLAUDE.md pin ("bare `true`/`false` are symbols → strings, not
+    /// bools") — the closed-set `bool` domain projects only through
+    /// this typed method, so a reader extension that later accepts
+    /// bare `true`/`false` extends the projection (or its reverse) at
+    /// ONE algebra site rather than at every callsite in lockstep.
+    ///
+    /// Sibling-shape peer of [`Self::KEYWORD_MARKER`]: where
+    /// `KEYWORD_MARKER` is the ONE `&'static str` prefix a Keyword
+    /// payload composes with at four round-trip sites, this method is
+    /// the ONE projection a Bool payload composes THROUGH at its two
+    /// round-trip sites. The [`Atom`] algebra's atomic-payload axis
+    /// now carries a canonical-marker/spelling for BOTH prefix-marked
+    /// (Keyword) and self-marked (Bool) variants.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Bool payload, canonical Scheme spelling) pairing now binds at
+    /// ONE projection on the closed-set [`Atom`] algebra regardless of
+    /// which of the two reader-entry / rendering surfaces reaches in.
+    /// THEORY.md §VI.1 — generation over composition; the four byte-
+    /// identical `"#t"` / `"#f"` inline literals collapse onto ONE
+    /// named projection, matching the substrate's three-times rule.
+    /// THEORY.md §V.1 — knowable platform; the canonical Scheme-bool
+    /// spellings become a TYPE-level projection on the substrate
+    /// algebra rather than four inline bytes at two consumer surfaces.
+    #[must_use]
+    pub fn bool_literal(b: bool) -> &'static str {
+        if b {
+            "#t"
+        } else {
+            "#f"
+        }
+    }
+
     /// Canonical [`Self::Symbol`] constructor — first of the six per-
     /// variant typed-construct methods on the closed-set [`Atom`]
     /// algebra. Takes `impl Into<String>` so the consumer composes any
@@ -938,10 +1003,10 @@ impl Atom {
     /// typed-entry classification surface.
     #[must_use]
     pub fn from_lexeme(s: &str) -> Self {
-        if s == "#t" {
+        if s == Self::bool_literal(true) {
             return Self::Bool(true);
         }
-        if s == "#f" {
+        if s == Self::bool_literal(false) {
             return Self::Bool(false);
         }
         if let Some(rest) = s.strip_prefix(Self::KEYWORD_MARKER) {
@@ -5881,8 +5946,13 @@ impl fmt::Display for Atom {
             Self::Str(s) => write!(f, "{s:?}"),
             Self::Int(n) => write!(f, "{n}"),
             Self::Float(n) => fmt_float(*n, f),
-            Self::Bool(true) => f.write_str("#t"),
-            Self::Bool(false) => f.write_str("#f"),
+            // Bool arm collapses to ONE branch routing through
+            // `Self::bool_literal` — the closed-set `bool` fork happens
+            // at the typed projection on the [`Atom`] algebra, not at
+            // this consumer's match body. Sibling lift to the Keyword
+            // arm, which routes through `Self::KEYWORD_MARKER` at the
+            // same algebra layer.
+            Self::Bool(b) => f.write_str(Self::bool_literal(*b)),
         }
     }
 }
@@ -15779,6 +15849,101 @@ mod tests {
                 round_tripped, a,
                 "keyword round-trip through KEYWORD_MARKER drifted at \
                  name={name:?}",
+            );
+        }
+    }
+
+    // ── `Atom::bool_literal` — the ONE projection routing the closed-set
+    // `bool` domain through its canonical Scheme spelling across the two
+    // Bool-round-trip sites (reader-entry classifier, Lisp canonical
+    // Display). Pins the projection's spellings for BOTH bool values AND
+    // both sites' composition through it so a regression that re-inlines
+    // any single site's byte literal drifts against these pins even when
+    // the rendered bytes still agree at that site.
+
+    #[test]
+    fn atom_bool_literal_projects_canonical_scheme_spellings() {
+        assert_eq!(
+            Atom::bool_literal(true),
+            "#t",
+            "Atom::bool_literal(true) drifted from the substrate-canonical \
+             Scheme spelling `#t` — the reader-round-trip contract at \
+             Self::from_lexeme + fmt::Display for Atom both bind to this \
+             projection.",
+        );
+        assert_eq!(
+            Atom::bool_literal(false),
+            "#f",
+            "Atom::bool_literal(false) drifted from the substrate-canonical \
+             Scheme spelling `#f` — the reader-round-trip contract at \
+             Self::from_lexeme + fmt::Display for Atom both bind to this \
+             projection.",
+        );
+    }
+
+    #[test]
+    fn atom_bool_literal_partitions_the_closed_bool_domain_injectively() {
+        // Sanity pin on the projection's shape: the two spellings partition
+        // the closed-set `bool` domain injectively (`true` and `false` do
+        // NOT alias to the same byte) — otherwise `from_lexeme` on either
+        // spelling would classify to a single Bool variant, silently
+        // collapsing the typed distinction at the reader-entry boundary.
+        assert_ne!(
+            Atom::bool_literal(true),
+            Atom::bool_literal(false),
+            "Atom::bool_literal collapsed the closed-set `bool` domain — \
+             both bools projected to the same Scheme spelling, breaking \
+             the reader-entry classifier's injection property.",
+        );
+    }
+
+    #[test]
+    fn atom_display_bool_arm_routes_through_bool_literal_projection() {
+        for b in [true, false] {
+            let rendered = Atom::boolean(b).to_string();
+            let expected = Atom::bool_literal(b);
+            assert_eq!(
+                rendered, expected,
+                "fmt::Display for Atom's Bool arm drifted from the \
+                 bool_literal composition at b={b:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_from_lexeme_bool_classifier_routes_through_bool_literal_projection() {
+        for b in [true, false] {
+            let lexeme = Atom::bool_literal(b);
+            let classified = Atom::from_lexeme(lexeme);
+            assert_eq!(
+                classified,
+                Atom::boolean(b),
+                "Atom::from_lexeme's Bool classifier drifted from the \
+                 bool_literal composition at lexeme={lexeme:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_bool_literal_closes_reader_display_round_trip_for_both_variants() {
+        // The load-bearing round-trip contract:
+        //   Atom::from_lexeme(&Atom::boolean(b).to_string())
+        //   == Atom::boolean(b)
+        // Both sides bind to Atom::bool_literal — the reader-entry
+        // classifier gates on `s == Self::bool_literal(true|false)`, the
+        // canonical-form Display re-emits it via
+        // `f.write_str(Self::bool_literal(*b))`. A future refactor that
+        // silently drifts ONE site's byte (e.g. by re-inlining `"#t"` at
+        // Display while migrating the classifier gate to a different
+        // spelling) breaks THIS round-trip even when both bytes happen to
+        // agree on the surface — because the round-trip binds to the
+        // composition through the projection at BOTH endpoints.
+        for b in [true, false] {
+            let a = Atom::boolean(b);
+            let round_tripped = Atom::from_lexeme(&a.to_string());
+            assert_eq!(
+                round_tripped, a,
+                "bool round-trip through bool_literal drifted at b={b:?}",
             );
         }
     }

@@ -66,17 +66,33 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
         // `Some(Quote)` / `Some(Quasiquote)` on the two distinct
         // singleton lead chars — then promotes the decoded
         // `QuoteForm::Unquote` to `QuoteForm::UnquoteSplice` on
-        // second-char `@`, and emits ONE `Token::Quoted(final_qf)`.
+        // second-char `@` via [`QuoteForm::promote_via_next_char`]
+        // (the `(Unquote, SPLICE_DISCRIMINATOR) → UnquoteSplice`
+        // promotion table on the closed-set algebra), and emits ONE
+        // `Token::Quoted(final_qf)`. Pre-lift the promotion arm carried
+        // its own inline `matches!(qf_head, QuoteForm::Unquote) &&
+        // chars.peek().map(|&(_, c)| c) == Some('@')` check paired
+        // with a per-branch `QuoteForm::UnquoteSplice` construction —
+        // the (variant, second-char, promoted variant) triple was the
+        // SEVENTH consumer site of the `QuoteForm` algebra the prior
+        // lifts did not reach. Post-lift the peek arm binds to the
+        // substrate algebra: the `Option<QuoteForm>` returned by
+        // `promote_via_next_char` signals BOTH whether the second-char
+        // was consumed AND the promoted variant to emit — no separate
+        // `matches!(...)` gate, no per-branch `QuoteForm::*` literal.
         // Adding a fifth homoiconic prefix extends [`QuoteForm`] AND
-        // [`QuoteForm::from_lead_char`] in lockstep — rustc binds
-        // the extension through exhaustiveness over the closed enum.
+        // [`QuoteForm::from_lead_char`] AND
+        // [`QuoteForm::promote_via_next_char`] in lockstep — rustc
+        // binds the extension through exhaustiveness over the closed
+        // enum.
         if let Some(qf_head) = QuoteForm::from_lead_char(c) {
             chars.next();
-            let qf = if matches!(qf_head, QuoteForm::Unquote)
-                && chars.peek().map(|&(_, c)| c) == Some('@')
+            let qf = if let Some(promoted) = chars
+                .peek()
+                .and_then(|&(_, next)| qf_head.promote_via_next_char(next))
             {
                 chars.next();
-                QuoteForm::UnquoteSplice
+                promoted
             } else {
                 qf_head
             };
@@ -832,6 +848,86 @@ mod tests {
                 other => {
                     panic!("QuoteForm::{qf:?} — expected Token::Quoted at pos 0, got {other:?}")
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn tokenizer_splice_promotion_routes_through_quote_form_promote_via_next_char() {
+        // PROMOTION-TABLE CONTRACT: pin that the reader's peek-then-
+        // consume `@` arm binds to the closed-set
+        // [`QuoteForm::promote_via_next_char`] table on the substrate
+        // algebra rather than to an inline `matches!(qf_head, Unquote)
+        // && c == '@'` check. Sweep every `QuoteForm::ALL` variant
+        // paired with the splice discriminator: only the `(Unquote,
+        // SPLICE_DISCRIMINATOR)` pair promotes to `UnquoteSplice`,
+        // every other variant emits its own `Token::Quoted(qf)` and
+        // leaves the discriminator (and any trailing chars) to the
+        // NEXT token. Pin the promotion behavior for the
+        // `(Unquote, '@')` path AND the non-promotion behavior for
+        // the three other variants (each of which must emit its own
+        // one-char prefix token AND leave the `@` byte for a
+        // subsequent `Token::Atom("@...")` accumulation). A regression
+        // that drifted the peek arm (e.g. re-inlined
+        // `matches!(qf_head, QuoteForm::Quote)` and silently promoted
+        // bare `'@` to a phantom variant) fails HERE at the typed-
+        // marker + token-count assertions across every arm.
+        //
+        // Sibling-shape pin to
+        // `tokenizer_shared_comma_lead_char_disambiguates_at_peek_arm_not_at_from_lead_char`
+        // — that pin covers the `(,@x, ,x)` shared-lead-char
+        // disambiguation at the reader's specific peek-and-consume
+        // shape; this pin extends the sweep onto every closed-set
+        // `QuoteForm` variant AND anchors the promotion table
+        // (`promote_via_next_char`) as the single typed source of
+        // truth the peek arm consumes.
+        for qf in QuoteForm::ALL {
+            let expected_promoted = qf.promote_via_next_char(QuoteForm::SPLICE_DISCRIMINATOR);
+            let source = format!("{}{}xs", qf.prefix(), QuoteForm::SPLICE_DISCRIMINATOR);
+            let tokens = tokenize(&source).unwrap_or_else(|e| {
+                panic!("tokenize rejected splice-sweep `{source}` for QuoteForm::{qf:?}: {e}")
+            });
+            assert!(
+                !tokens.is_empty(),
+                "QuoteForm::{qf:?} — tokenizer must emit at least one token for `{source}`",
+            );
+            match &tokens[0] {
+                (Token::Quoted(marker), 0) => match expected_promoted {
+                    Some(promoted) => assert_eq!(
+                        *marker,
+                        promoted,
+                        "QuoteForm::{qf:?} — reader peek arm drifted from \
+                         promote_via_next_char({:?}) = {promoted:?}",
+                        QuoteForm::SPLICE_DISCRIMINATOR,
+                    ),
+                    None => assert_eq!(
+                        *marker, qf,
+                        "QuoteForm::{qf:?} — reader peek arm phantom-promoted \
+                         a non-promotable variant on SPLICE_DISCRIMINATOR",
+                    ),
+                },
+                other => {
+                    panic!("QuoteForm::{qf:?} — expected Token::Quoted at pos 0, got {other:?}")
+                }
+            }
+            // Non-promotable variants must leave the discriminator byte
+            // to be consumed as the START of a bare atom (`@xs` in the
+            // sweep source) — pin the second-token identity to catch a
+            // regression that silently consumes the `@` byte at the
+            // reader's peek arm even when the promotion table rejects.
+            // The atom's byte offset is `qf.prefix().len()` — the reader
+            // consumes the FULL prefix (one char for Quote/Quasiquote/
+            // Unquote, two chars for UnquoteSplice) before the atom
+            // accumulator picks up the discriminator byte.
+            if expected_promoted.is_none() {
+                let expected_atom_pos = qf.prefix().len();
+                assert!(
+                    matches!(&tokens[1], (Token::Atom(s), pos) if s == "@xs" && *pos == expected_atom_pos),
+                    "QuoteForm::{qf:?} — non-promotable variant must leave \
+                     the SPLICE_DISCRIMINATOR byte for the next token at \
+                     position {expected_atom_pos}; got {:?}",
+                    tokens[1],
+                );
             }
         }
     }

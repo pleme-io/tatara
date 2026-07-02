@@ -5241,6 +5241,162 @@ impl QuoteForm {
         }
     }
 
+    /// Canonical SECOND char of [`Self::UnquoteSplice`]'s two-char `,@`
+    /// [`Self::prefix`] — the ONE `'@'` byte the reader's peek-then-
+    /// consume splice-promotion arm inside [`crate::reader::tokenize`]
+    /// disambiguates on. Sibling posture to [`crate::ast::Atom::STR_DELIMITER`]
+    /// (one-char Str-payload delimiter shared across four `"`-round-
+    /// trip sites) AND to [`crate::ast::Sexp::COMMENT_LEAD`] (one-char
+    /// line-comment lead shared across two `;`-boundary sites) — those
+    /// two constants project a single byte onto their respective closed-
+    /// set algebras (`Atom` and outer-`Sexp`); this constant projects
+    /// the single byte that composes the `,` [`Self::Unquote`]
+    /// [`Self::lead_char`] into the two-char [`Self::UnquoteSplice`]
+    /// [`Self::prefix`] onto the same closed-set [`Self`] algebra.
+    ///
+    /// The `,@` splice is the ONLY multi-char [`Self::prefix`] in the
+    /// closed set — [`Self::Quote`] / [`Self::Quasiquote`] / [`Self::Unquote`]
+    /// each render as a single [`Self::lead_char`] byte; only
+    /// [`Self::UnquoteSplice`] appends this discriminator. The
+    /// composition [`Self::Unquote::prefix()`] + `SPLICE_DISCRIMINATOR`
+    /// == [`Self::UnquoteSplice::prefix()`] IS the structural identity
+    /// the reader's peek arm depends on — pinned by
+    /// `quote_form_unquote_splice_prefix_composes_from_unquote_prefix_and_splice_discriminator`.
+    /// A future hypothetical fifth homoiconic prefix with its own two-
+    /// char extension (e.g. `,~` reverse-unquote via a `~` discriminator,
+    /// `#'` function-quote via a `'` discriminator) extends [`Self`]
+    /// AND a per-variant promotion peer (extending
+    /// [`Self::promote_via_next_char`]) in lockstep — rustc binds the
+    /// extension through exhaustiveness over the closed enum.
+    ///
+    /// The `const` qualifier is load-bearing: [`Self::promote_via_next_char`]'s
+    /// body binds through this constant in a `const fn` context so the
+    /// reader's peek arm consumes the promotion table at compile time.
+    /// Sibling posture to [`crate::ast::Atom::STR_DELIMITER`],
+    /// [`crate::ast::Atom::KEYWORD_MARKER`], [`crate::ast::Sexp::LIST_OPEN`],
+    /// [`crate::ast::Sexp::LIST_CLOSE`], [`crate::ast::Sexp::COMMENT_LEAD`] —
+    /// every canonical reader-punctuation constant on the substrate is a
+    /// `pub const` on its owning closed-set algebra.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// reader's two-char splice-promotion gate IS the typed-entry gate
+    /// on the `,@` boundary, and lifting the `@` discriminator to ONE
+    /// canonical byte on the closed-set algebra closes the gate's
+    /// entry-char identity onto the algebra rather than at an inline
+    /// `char` literal at the reader's peek arm. THEORY.md §V.1 —
+    /// knowable platform; the splice-promotion discriminator becomes a
+    /// TYPED byte on the substrate algebra rather than an inline `'@'`
+    /// scattered across the reader — a regression that renames the byte
+    /// without updating the sibling promotion peer fails at rustc /
+    /// test time rather than as a silent tokenizer drift where `,@xs`
+    /// forms silently degrade to `,` + `@xs` two-token sequences.
+    pub const SPLICE_DISCRIMINATOR: char = '@';
+
+    /// Promotion table on the closed-set quote-family algebra —
+    /// `Some(Self::UnquoteSplice)` iff `self == Self::Unquote &&
+    /// next == Self::SPLICE_DISCRIMINATOR`, else `None`. Encodes the
+    /// substrate's ONE (variant, next-char) → longer-variant mapping —
+    /// `,` [`Self::Unquote`] followed by `@` [`Self::SPLICE_DISCRIMINATOR`]
+    /// promotes to `,@` [`Self::UnquoteSplice`]. Every other pairing
+    /// (including [`Self::Quote`] / [`Self::Quasiquote`] / [`Self::UnquoteSplice`]
+    /// on ANY next-char, AND [`Self::Unquote`] on any non-discriminator
+    /// next-char) yields `None` — the closed set of promotions is the
+    /// singleton `{(Unquote, '@') → UnquoteSplice}` on the `Self × char
+    /// → Option<Self>` product.
+    ///
+    /// Structural sibling of [`Self::from_lead_char`] one axis over on
+    /// the same typed-entry family: [`Self::from_lead_char`] decodes
+    /// ONE lead char to its DEFAULT variant on that char; this method
+    /// decodes ONE (default variant, second char) pair to its PROMOTED
+    /// variant. Together the two methods close the reader's outer
+    /// quote-family entry surface onto the algebra: the tokenizer
+    /// consumes ONE lead char through [`Self::from_lead_char`], then
+    /// OPTIONALLY consumes one second char through this method — the
+    /// (lead char, second char) → typed marker projection binds at TWO
+    /// typed decodes rather than at inline `char`-literal patterns
+    /// scattered across the outer-match dispatch arm.
+    ///
+    /// ONE consumer entrypoint the reader's `tokenize` binds against:
+    /// the peek-then-consume `@` promotion inside the outer-match
+    /// quote-family dispatch was pre-lift a hand-rolled inline check
+    /// `matches!(qf_head, QuoteForm::Unquote) &&
+    /// chars.peek().map(|&(_, c)| c) == Some('@')` paired with a
+    /// per-branch `QuoteForm::UnquoteSplice` construction. The pairing
+    /// was load-bearing yet only enforced by callsite discipline at a
+    /// SEVENTH consumer site (alongside `Hash`, `Display`, `sexp_shape`,
+    /// `wrap`, `iac_forge_tag`, `as_unquote_form`) the prior closed-set
+    /// `QuoteForm` lifts did not reach. Post-lift the reader's peek
+    /// arm routes through this method, so the (Unquote, '@') →
+    /// UnquoteSplice promotion binds at ONE site on the typed algebra.
+    /// A regression that drifts the promotion table (e.g. re-inlines
+    /// `matches!(qf_head, QuoteForm::Quote)` at the peek arm and
+    /// silently promotes bare `'` to a phantom variant) becomes a
+    /// typed compile error against the `Option<Self>` return type.
+    ///
+    /// The single-promotion collapse (only `(Unquote, '@')` triggers)
+    /// is INTENTIONAL: [`Self::UnquoteSplice`] is the ONLY variant with
+    /// a two-char [`Self::prefix`], so the promotion table has exactly
+    /// ONE `Some` arm and every other pairing rejects. Placing the
+    /// promotion at the closed-set algebra rather than at the reader's
+    /// peek arm keeps the streaming reader's two-char peek-then-consume
+    /// shape at ONE site (the reader) while the (variant × second
+    /// char) → promoted variant projection lives on the substrate
+    /// algebra — parallel to the split that [`Self::from_lead_char`]
+    /// closes for the one-char entry surface. This split parallels the
+    /// reader's split of `Token::Str` into open-delimiter dispatch
+    /// ([`crate::ast::Atom::STR_DELIMITER`]) AND inner-payload
+    /// accumulation — the closed-set char algebra decodes the entry
+    /// chars; the streaming reader handles the peek-and-consume
+    /// follow-through.
+    ///
+    /// Composition identity: for every `qf: QuoteForm` and every
+    /// `c: char`, if `qf.promote_via_next_char(c) == Some(promoted)`
+    /// then `format!("{}{}", qf.prefix(), c) == promoted.prefix()`.
+    /// Pinned by
+    /// `quote_form_promote_via_next_char_composes_prefix_from_source_prefix_and_next_char`
+    /// across the singleton promotion arm — the pin asserts the
+    /// (variant, next char) → promoted-variant projection agrees with
+    /// the reader's rendered [`Self::prefix`] composition, so a
+    /// regression that drifts one side of the identity (a promotion
+    /// arm rerouted through the wrong variant, or a prefix renamed
+    /// without updating the promotion table) surfaces immediately.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// reader's two-char quote-family classification IS the typed-
+    /// entry gate on the `,@` boundary. THEORY.md §V.1 — knowable
+    /// platform; the (variant, next char) → promoted variant table
+    /// becomes a TYPE projection on the substrate algebra rather than
+    /// at an inline `matches!(qf, Unquote) && c == '@'` pattern
+    /// scattered at the reader's peek arm. THEORY.md §VI.1 —
+    /// generation over composition; a fifth homoiconic prefix with its
+    /// own two-char extension extends [`Self`] AND this method's match
+    /// arm in lockstep — rustc binds the extension through
+    /// exhaustiveness over the closed enum, and the `Option<Self>`
+    /// return shape leaves the promotion table structurally open for
+    /// future variants to append their own `Some` arms without
+    /// touching the existing arms' semantics.
+    ///
+    /// Frontier inspiration: Racket's `read-syntax` two-char
+    /// discriminator table (`(quote-abbrev-mapping char) → syntax`)
+    /// that maps `(#\' → 'quote)`, `(#\` → 'quasiquote)`, `(#\, →
+    /// 'unquote)`, `(#\, #\@) → 'unquote-splicing)` on the reader's
+    /// typed abbreviation surface. Translated through the substrate's
+    /// [`QuoteForm`] outer-marker algebra, the `(#\, #\@) → 'unquote-
+    /// splicing)` two-char arm becomes ONE typed `(Self::Unquote, '@')
+    /// → Some(Self::UnquoteSplice)` promotion on the closed-set
+    /// algebra with rustc binding the promotion identity through
+    /// exhaustiveness. Where Racket carries the promotion table
+    /// dynamically on the reader's abbreviation-mapping parameter,
+    /// this substrate carries it statically as `pub const fn` on the
+    /// closed-set marker.
+    #[must_use]
+    pub const fn promote_via_next_char(self, next: char) -> Option<Self> {
+        match (self, next) {
+            (Self::Unquote, Self::SPLICE_DISCRIMINATOR) => Some(Self::UnquoteSplice),
+            _ => None,
+        }
+    }
+
     /// Stable, per-variant byte discriminator that paired with the
     /// recursive inner hash builds the substrate's `Hash for Sexp`
     /// projection — `3` for [`Self::Quote`], `4` for
@@ -8745,6 +8901,213 @@ mod tests {
         assert_eq!(_UNQUOTE, ',');
         assert_eq!(_SPLICE, ',');
         assert_eq!(_FROM, Some(QuoteForm::Unquote));
+    }
+
+    #[test]
+    fn quote_form_splice_discriminator_projects_canonical_at_char() {
+        // Pin the constant's byte identity so a typo (`'!'`, `'?'`,
+        // `'~'`) or accidental redefinition surfaces immediately. The
+        // reader's peek arm inside [`crate::reader::tokenize`] AND the
+        // splice-promotion table [`QuoteForm::promote_via_next_char`]
+        // BOTH bind to this constant; a drift here would silently re-
+        // shape every `,@xs` tokenization into a `,` + `@xs` two-token
+        // sequence (or into a phantom promotion on a different
+        // second-char), and this pin catches the drift at test time.
+        assert_eq!(QuoteForm::SPLICE_DISCRIMINATOR, '@');
+    }
+
+    #[test]
+    fn quote_form_splice_discriminator_distinct_from_every_algebra_marker_char() {
+        // CROSS-AXIS DISJOINTNESS CONTRACT: the splice discriminator
+        // `@` must NOT alias any other canonical reader-punctuation
+        // constant on the substrate — every [`QuoteForm::lead_char`]
+        // projection, [`crate::ast::Atom::STR_DELIMITER`],
+        // [`crate::ast::Atom::KEYWORD_MARKER`]'s lead byte,
+        // [`crate::ast::Sexp::LIST_OPEN`], [`crate::ast::Sexp::LIST_CLOSE`],
+        // [`crate::ast::Sexp::COMMENT_LEAD`], and both
+        // [`crate::ast::Atom::bool_literal`] spellings' lead bytes.
+        // Otherwise the two-char `,@` splice-promotion arm inside the
+        // reader would ambiguously route through the splice arm AND a
+        // sibling algebra's arm at the outer dispatch — e.g. if
+        // `SPLICE_DISCRIMINATOR` aliased [`Sexp::LIST_OPEN`], a source
+        // `,(a b)` would ambiguously promote-and-consume the `(` before
+        // the list-opening arm ran. Pin the disjointness across every
+        // sibling constant so a future rename catches the collision at
+        // test time rather than as a silent tokenizer drift.
+        assert_ne!(
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            QuoteForm::Quote.lead_char()
+        );
+        assert_ne!(
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            QuoteForm::Quasiquote.lead_char()
+        );
+        assert_ne!(
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            QuoteForm::Unquote.lead_char()
+        );
+        assert_ne!(
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            QuoteForm::UnquoteSplice.lead_char()
+        );
+        assert_ne!(QuoteForm::SPLICE_DISCRIMINATOR, Atom::STR_DELIMITER);
+        assert_ne!(QuoteForm::SPLICE_DISCRIMINATOR, Sexp::LIST_OPEN);
+        assert_ne!(QuoteForm::SPLICE_DISCRIMINATOR, Sexp::LIST_CLOSE);
+        assert_ne!(QuoteForm::SPLICE_DISCRIMINATOR, Sexp::COMMENT_LEAD);
+        // KEYWORD_MARKER is a `&'static str`; compare against its first char.
+        assert_ne!(
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            Atom::KEYWORD_MARKER
+                .chars()
+                .next()
+                .expect("KEYWORD_MARKER must have at least one char"),
+        );
+        // Both `#t` / `#f` spellings share `#` as the lead byte.
+        assert_ne!(
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            Atom::bool_literal(true)
+                .chars()
+                .next()
+                .expect("bool_literal(true) must have at least one char"),
+        );
+        assert_ne!(
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            Atom::bool_literal(false)
+                .chars()
+                .next()
+                .expect("bool_literal(false) must have at least one char"),
+        );
+    }
+
+    #[test]
+    fn quote_form_promote_via_next_char_only_promotes_unquote_on_splice_discriminator() {
+        // Pin the closed-set promotion table: EXACTLY the singleton
+        // `(Unquote, SPLICE_DISCRIMINATOR) → Some(UnquoteSplice)` arm
+        // triggers; every other `(variant, char)` pairing yields
+        // `None`. Sweeps every `QuoteForm::ALL` variant against the
+        // splice discriminator AND against a broad rejection set
+        // (whitespace, `(`, `)`, `;`, `Atom::STR_DELIMITER`, `a`, `,`,
+        // `'`, `` ` ``) so a regression that widens the promotion
+        // table (e.g. promotes `Quote` on `@` to a phantom variant,
+        // or promotes `Unquote` on `'` after a copy-paste drift)
+        // surfaces at test time. Sibling to
+        // `quote_form_from_lead_char_decodes_every_distinct_lead_char_to_default_variant`
+        // one axis over on the closed-set entry-char algebra — this
+        // sweep pins the two-char extension of that one-char decode.
+        for qf in QuoteForm::ALL {
+            let promoted = qf.promote_via_next_char(QuoteForm::SPLICE_DISCRIMINATOR);
+            let expected = if matches!(qf, QuoteForm::Unquote) {
+                Some(QuoteForm::UnquoteSplice)
+            } else {
+                None
+            };
+            assert_eq!(
+                promoted, expected,
+                "QuoteForm::{qf:?} — promotion table drifted on SPLICE_DISCRIMINATOR",
+            );
+            // Every non-discriminator char must reject for every variant.
+            for rejection_char in [
+                ' ',
+                '\n',
+                '\t',
+                Sexp::LIST_OPEN,
+                Sexp::LIST_CLOSE,
+                Sexp::COMMENT_LEAD,
+                Atom::STR_DELIMITER,
+                'a',
+                ',',
+                '\'',
+                '`',
+                '#',
+                ':',
+                '!',
+                '?',
+                '~',
+            ] {
+                assert_eq!(
+                    qf.promote_via_next_char(rejection_char),
+                    None,
+                    "QuoteForm::{qf:?} — promotion table leaked on non-\
+                     discriminator char {rejection_char:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quote_form_promote_via_next_char_is_const_fn_over_the_closed_set() {
+        // Pin the `const fn` posture by binding a `const` array
+        // literal of promotions keyed on the closed set. A regression
+        // that removed the `const` qualifier (dropping the compile-
+        // time evaluability the reader's peek arm AND future static
+        // lookup tables key on) fails to compile HERE — the `const`
+        // context enforces the qualifier without a test-time
+        // assertion. Sibling posture to
+        // `quote_form_from_lead_char_is_const_fn_over_the_closed_set`.
+        const _QUOTE: Option<QuoteForm> =
+            QuoteForm::Quote.promote_via_next_char(QuoteForm::SPLICE_DISCRIMINATOR);
+        const _QUASIQUOTE: Option<QuoteForm> =
+            QuoteForm::Quasiquote.promote_via_next_char(QuoteForm::SPLICE_DISCRIMINATOR);
+        const _UNQUOTE: Option<QuoteForm> =
+            QuoteForm::Unquote.promote_via_next_char(QuoteForm::SPLICE_DISCRIMINATOR);
+        const _SPLICE: Option<QuoteForm> =
+            QuoteForm::UnquoteSplice.promote_via_next_char(QuoteForm::SPLICE_DISCRIMINATOR);
+        assert_eq!(_QUOTE, None);
+        assert_eq!(_QUASIQUOTE, None);
+        assert_eq!(_UNQUOTE, Some(QuoteForm::UnquoteSplice));
+        assert_eq!(_SPLICE, None);
+    }
+
+    #[test]
+    fn quote_form_promote_via_next_char_composes_prefix_from_source_prefix_and_next_char() {
+        // COMPOSITION IDENTITY: for every `qf: QuoteForm` and every
+        // `c: char`, if `qf.promote_via_next_char(c) == Some(promoted)`
+        // then `format!("{}{}", qf.prefix(), c) == promoted.prefix()`.
+        // Pin the (variant, next char) → promoted-variant projection
+        // agrees with the reader's rendered `Self::prefix` composition,
+        // so a regression that drifts one side of the identity
+        // surfaces immediately. Sibling to
+        // `quote_form_lead_char_is_first_char_of_prefix_for_every_variant`
+        // one axis up on the closed-set entry-char algebra.
+        for qf in QuoteForm::ALL {
+            if let Some(promoted) = qf.promote_via_next_char(QuoteForm::SPLICE_DISCRIMINATOR) {
+                let composed = format!("{}{}", qf.prefix(), QuoteForm::SPLICE_DISCRIMINATOR);
+                assert_eq!(
+                    composed,
+                    promoted.prefix(),
+                    "QuoteForm::{qf:?} — promotion composition drifted from \
+                     promoted prefix ({promoted:?}.prefix() = {:?})",
+                    promoted.prefix(),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quote_form_unquote_splice_prefix_composes_from_unquote_prefix_and_splice_discriminator() {
+        // STRUCTURAL COMPOSITION LAW: [`QuoteForm::UnquoteSplice`]'s
+        // two-char prefix `",@"` decomposes cleanly into
+        // [`QuoteForm::Unquote`]'s prefix `","` + the splice
+        // discriminator byte `'@'`. Pin the identity directly rather
+        // than through the promotion table so a regression that
+        // renamed the discriminator without touching the promotion
+        // table (or vice versa) surfaces here. This IS the structural
+        // identity the reader's peek-then-consume arm depends on: the
+        // tokenizer sees `,` (Unquote lead char), peeks `@`
+        // (SPLICE_DISCRIMINATOR), and emits UnquoteSplice — the
+        // rendered prefix identity closes the read↔write duality.
+        let composed = format!(
+            "{}{}",
+            QuoteForm::Unquote.prefix(),
+            QuoteForm::SPLICE_DISCRIMINATOR,
+        );
+        assert_eq!(
+            composed,
+            QuoteForm::UnquoteSplice.prefix(),
+            "UnquoteSplice.prefix() drifted from Unquote.prefix() + \
+             SPLICE_DISCRIMINATOR — the reader's two-char splice \
+             promotion identity is broken",
+        );
     }
 
     #[test]

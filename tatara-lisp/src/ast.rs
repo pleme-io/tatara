@@ -354,6 +354,92 @@ impl Atom {
     /// bytes at four consumer sites inside one reader file.
     pub const STR_DELIMITER: char = '"';
 
+    /// Canonical `\` escape-lead byte that OPENS a backslash-escape
+    /// sequence inside a [`Self::Str`] payload AND self-escapes to the
+    /// same byte inside that sequence — ONE canonical `char` on the
+    /// [`Atom`] algebra the substrate's TWO `\`-round-trip inline
+    /// `char` literals at [`crate::reader::tokenize`] bind to.
+    ///
+    /// Sibling constant of [`Self::STR_DELIMITER`] on the same
+    /// Str-payload delimiter axis of the closed-set [`Atom`] algebra:
+    /// where `STR_DELIMITER` is the ONE canonical delimiter that
+    /// BOUNDS a Str payload from the outside (opener, closer, self-
+    /// escape, bare-atom terminator), this constant is the ONE
+    /// canonical escape lead that ESCAPES-IN a following byte from
+    /// the INSIDE of the same payload. The two constants together
+    /// span the Str-tokenization boundary — every `char` the reader's
+    /// `Token::Str` accumulation loop specialises on binds to one of
+    /// them.
+    ///
+    /// The reader's TWO `\`-round-trip sites inside
+    /// [`crate::reader::tokenize`]:
+    ///   1. The escape-lead outer arm — the `\` byte that triggers the
+    ///      inner escape-handler branch that consumes the following
+    ///      byte as an escape sequence.
+    ///   2. The escape-handler's self-escape arm — inside the reader's
+    ///      six-arm escape table (`\n → \n`, `\t → \t`, `\r → \r`,
+    ///      `\" → "`, `\\ → \`, passthrough), the self-escape arm on
+    ///      the escape-lead axis: pattern AND mapped value both bind
+    ///      to THIS constant so `\\` unescapes to a single `\` byte
+    ///      in the accumulated payload. Sibling posture to the
+    ///      analogous self-escape arm on [`Self::STR_DELIMITER`] axis
+    ///      (`\"` unescapes to `"`) — the two self-escape arms are
+    ///      the escape table's ONLY pattern-equals-value arms; every
+    ///      other arm is pattern-distinct-from-value.
+    ///
+    /// Pre-lift the same `\` byte lived inline at two `char` literals
+    /// scattered across `crate::reader::tokenize`: one outer-arm
+    /// pattern (escape-lead detection), one inner-loop escape-handler
+    /// arm's pattern + value pair (the self-escape mapping). Post-
+    /// lift the (Str-payload escape lead, canonical `\` byte) pairing
+    /// binds at ONE `char` constant on the [`Atom`] algebra that every
+    /// reader consumer routes through; a refactor that swaps the
+    /// escape lead (e.g. a Rust-compat port to `\\` byte-strings, a
+    /// hypothetical Racket-compat port that adopts `#\` prefix syntax
+    /// as the escape lead, or a heredoc mode that suspends escaping
+    /// altogether) touches ONE constant + one reader table rather
+    /// than two inline byte literals that would silently drift out of
+    /// round-trip agreement if one was updated without the other
+    /// (e.g. the outer arm's pattern updated without the inner self-
+    /// escape's pattern + value would leak a stale escape lead through
+    /// the wrong branch).
+    ///
+    /// Load-bearing round-trip contract:
+    /// `read(&format!("{}{}{}{}", Atom::STR_DELIMITER,
+    /// Atom::STR_ESCAPE_LEAD, Atom::STR_ESCAPE_LEAD,
+    /// Atom::STR_DELIMITER))[0] ==
+    /// Sexp::Atom(Atom::string(Atom::STR_ESCAPE_LEAD.to_string()))`.
+    /// The `\\` inside a STR_DELIMITER-wrapped payload unescapes to
+    /// ONE `\` byte on the accumulated payload — pinning the (self-
+    /// escape pattern, self-escape mapped value) pair against
+    /// re-inlining. A regression that swaps ONE side of the self-
+    /// escape arm to a different byte fails this round-trip even when
+    /// the pattern OR value at the other side still agrees at the
+    /// surface, because both sides bind to THIS constant.
+    ///
+    /// Sibling-shape peer of [`Self::STR_DELIMITER`] on the closed-set
+    /// [`Atom`] algebra: where `STR_DELIMITER` partitions the outer-
+    /// tokenizer arm into `Token::Str` vs `Token::Atom`, this constant
+    /// partitions the inner-tokenizer arm (inside `Token::Str`
+    /// accumulation) into the escape-handler branch vs the passthrough
+    /// `Some((_, ch))` branch — both are the ONE canonical marker
+    /// byte the reader binds to when discriminating the Str-payload
+    /// accumulation loop's branch dispatch.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Str-payload escape lead, canonical `\` byte) pairing now binds
+    /// at ONE constant on the closed-set [`Atom`] algebra regardless
+    /// of which of the two reader tokenizer sites reaches in.
+    /// THEORY.md §VI.1 — generation over composition; two byte-
+    /// identical inline `'\\'` char literals in `crate::reader::tokenize`
+    /// collapse onto ONE named constant. Two occurrences at the ≥2
+    /// lift threshold — the substrate's three-times rule at the
+    /// Str-escape-lead axis. THEORY.md §V.1 — knowable platform; the
+    /// canonical string-escape-lead byte becomes a TYPE-level constant
+    /// on the substrate algebra rather than two inline bytes at two
+    /// consumer sites inside one reader file.
+    pub const STR_ESCAPE_LEAD: char = '\\';
+
     /// Canonical [`Self::Symbol`] constructor — first of the six per-
     /// variant typed-construct methods on the closed-set [`Atom`]
     /// algebra. Takes `impl Into<String>` so the consumer composes any
@@ -16963,6 +17049,135 @@ mod tests {
                  the Sexp::Atom(Atom::string(_)) typed-constructor shape",
             );
         }
+    }
+
+    // ── `Atom::STR_ESCAPE_LEAD` — the canonical `\` char routed
+    // through the TWO Str-escape-lead round-trip sites inside
+    // `crate::reader::tokenize` (escape-handler outer arm's escape-lead
+    // pattern, escape-handler's self-escape arm's pattern + value pair).
+    // Pins the constant value AND the composition against a byte-
+    // identical drift at either site. Sibling-shape peer of the
+    // `atom_str_delimiter_*` block above on the Str-payload delimiter
+    // axis — where those pin the OPENER/CLOSER byte's four round-trip
+    // sites, these pin the ESCAPE-LEAD byte's two round-trip sites.
+    // The two constants together span the reader's `Token::Str`
+    // tokenization boundary.
+
+    #[test]
+    fn atom_str_escape_lead_projects_canonical_backslash_char() {
+        // Pins the constant's exact `char` value so a typo (`'/'`,
+        // `'|'`, `'^'`) or an accidental redefinition surfaces
+        // immediately. Sibling-shape pin to
+        // `atom_str_delimiter_projects_canonical_double_quote_char`
+        // — pins the SAME shape on the Str-escape-lead axis of the
+        // closed-set [`Atom`] algebra.
+        assert_eq!(
+            Atom::STR_ESCAPE_LEAD,
+            '\\',
+            "STR_ESCAPE_LEAD char drifted from the substrate-canonical \
+             `\\` escape lead — the reader-round-trip contract at \
+             crate::reader::tokenize (escape-handler outer arm, escape-\
+             handler self-escape arm's pattern + value pair) all bind \
+             to this ONE constant.",
+        );
+    }
+
+    #[test]
+    fn atom_str_escape_lead_distinct_from_every_other_atom_marker() {
+        // Cross-axis disjointness pin: the Str-escape-lead byte
+        // (`Atom::STR_ESCAPE_LEAD`) must NOT alias the Str-delimiter
+        // (`Atom::STR_DELIMITER`), Keyword-marker prefix
+        // (`Atom::KEYWORD_MARKER`), or Bool-literal spellings
+        // (`Atom::bool_literal(true|false)`) — otherwise the reader's
+        // escape-lead outer arm would ambiguously route the alias
+        // byte through the escape-handler branch AND the alias's
+        // corresponding classifier arm. Guards the structural
+        // disjointness of the atomic-payload marker family on the
+        // closed-set [`Atom`] algebra so a future marker-swap that
+        // accidentally collides two axes surfaces at this pin rather
+        // than as a silent reader misclassification.
+        //
+        // In particular: `STR_ESCAPE_LEAD` (`'\\'`) MUST differ from
+        // `STR_DELIMITER` (`'"'`) so that the reader's `Token::Str`
+        // accumulation loop's inner branch dispatch (escape-lead
+        // outer arm vs string-closing arm vs passthrough) remains
+        // structurally disjoint — collapsing the two would make the
+        // opener/closer AND the escape-lead the SAME byte, breaking
+        // both dispatch axes at once.
+        assert_ne!(
+            Atom::STR_ESCAPE_LEAD,
+            Atom::STR_DELIMITER,
+            "STR_ESCAPE_LEAD and STR_DELIMITER share a byte — the \
+             reader's Token::Str inner loop's escape-lead outer arm \
+             would ambiguously route through the string-closing arm.",
+        );
+        assert_ne!(
+            Atom::STR_ESCAPE_LEAD.to_string(),
+            Atom::KEYWORD_MARKER,
+            "STR_ESCAPE_LEAD and KEYWORD_MARKER share a byte — a bare \
+             `{}foo` lexeme would ambiguously match the escape-lead \
+             AND begin a keyword classification.",
+            Atom::KEYWORD_MARKER,
+        );
+        for b in [true, false] {
+            assert!(
+                !Atom::bool_literal(b).starts_with(Atom::STR_ESCAPE_LEAD),
+                "bool_literal({b:?}) begins with STR_ESCAPE_LEAD — a bare \
+                 `{}` lexeme would ambiguously match the escape-lead AND \
+                 classify as a Bool.",
+                Atom::bool_literal(b),
+            );
+        }
+    }
+
+    #[test]
+    fn atom_str_escape_lead_closes_reader_self_escape_round_trip_for_backslash_payload() {
+        // Load-bearing round-trip contract for the reader's two
+        // Str-escape-lead round-trip sites — the reader's escape-lead
+        // outer arm AND the escape-handler's self-escape arm both bind
+        // to `Atom::STR_ESCAPE_LEAD`, so wrapping the constant's byte
+        // TWICE (i.e. the two-byte `\\` sequence) between two
+        // `STR_DELIMITER` bytes recovers a Str payload holding ONE
+        // `\` byte through the reader. A regression that drifts EITHER
+        // of the two arms (outer arm's pattern OR self-escape arm's
+        // pattern + value) fails HERE — even when the byte-value at
+        // the drifted site still agrees at the surface — because the
+        // round-trip binds to the constant at BOTH sites.
+        //
+        // Sibling-shape pin to
+        // `atom_str_delimiter_closes_reader_display_round_trip_for_escape_free_str_payloads`
+        // (the Str-payload delimiter axis's opener/closer round-trip)
+        // — where that pin sweeps escape-FREE payloads through the
+        // opener/closer pair, this pin exercises the SINGLE escape-lead
+        // self-escape composition end-to-end.
+        let source = format!(
+            "{}{}{}{}",
+            Atom::STR_DELIMITER,
+            Atom::STR_ESCAPE_LEAD,
+            Atom::STR_ESCAPE_LEAD,
+            Atom::STR_DELIMITER,
+        );
+        let forms = crate::reader::read(&source).unwrap_or_else(|e| {
+            panic!(
+                "reader rejected `{source}` composed from \
+                 STR_DELIMITER + STR_ESCAPE_LEAD self-escape: {e}"
+            )
+        });
+        assert_eq!(
+            forms.len(),
+            1,
+            "STR_ESCAPE_LEAD-self-escape source must read as exactly one \
+             form, got {forms:?}",
+        );
+        assert_eq!(
+            forms[0],
+            Sexp::Atom(Atom::string(Atom::STR_ESCAPE_LEAD.to_string())),
+            "STR_ESCAPE_LEAD self-escape drifted from the \
+             Sexp::Atom(Atom::string(str_escape_lead)) typed-constructor \
+             shape — the reader's escape-lead outer arm OR the escape-\
+             handler's self-escape arm's pattern + value pair drifted \
+             from the Atom::STR_ESCAPE_LEAD constant",
+        );
     }
 
     // ── `Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE` — the paired canonical

@@ -159,7 +159,22 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
                 let mut s = String::new();
                 loop {
                     match chars.next() {
-                        Some((_, '\\')) => {
+                        // Escape-lead arm — the canonical `\` byte routed
+                        // through the [`Atom::STR_ESCAPE_LEAD`] constant on
+                        // the closed-set [`Atom`] algebra. Sibling-shape
+                        // peer of the [`Atom::STR_DELIMITER`] arm above
+                        // (the Str-payload OPENER/CLOSER axis) on the
+                        // ESCAPE-LEAD axis of the same tokenization
+                        // boundary: where the outer arm partitions the
+                        // reader's top-level dispatch on the Str-payload
+                        // delimiter, this inner arm partitions the
+                        // `Token::Str` accumulation loop on the escape
+                        // lead. The (escape-handler outer-arm pattern,
+                        // canonical `\` byte) pairing binds at ONE
+                        // constant on the algebra so a delimiter swap
+                        // flips this arm AND the self-escape arm below
+                        // in lockstep at ONE constant.
+                        Some((_, Atom::STR_ESCAPE_LEAD)) => {
                             if let Some((_, esc)) = chars.next() {
                                 s.push(match esc {
                                     'n' => '\n',
@@ -172,7 +187,19 @@ fn tokenize(src: &str) -> Result<Vec<Spanned>> {
                                     // delimiter swap flips both sides in
                                     // lockstep at ONE constant.
                                     Atom::STR_DELIMITER => Atom::STR_DELIMITER,
-                                    '\\' => '\\',
+                                    // Self-escape: `\\` unescapes to the
+                                    // canonical escape-lead byte. Pattern
+                                    // AND mapped value both bind to
+                                    // [`Atom::STR_ESCAPE_LEAD`] so a
+                                    // future escape-lead swap flips both
+                                    // sides in lockstep at ONE constant.
+                                    // Sibling posture to the
+                                    // `Atom::STR_DELIMITER` self-escape
+                                    // arm above — the escape table's TWO
+                                    // pattern-equals-value arms sit on
+                                    // the algebra's two Str-payload
+                                    // delimiter-axis constants.
+                                    Atom::STR_ESCAPE_LEAD => Atom::STR_ESCAPE_LEAD,
                                     other => other,
                                 });
                             }
@@ -813,6 +840,59 @@ mod tests {
              drifted from Sexp::Atom(Atom::string(str_delim)) — the \
              escape-handler's self-escape arm's pattern AND mapped value \
              must both route through Atom::STR_DELIMITER",
+        );
+    }
+
+    #[test]
+    fn reader_str_escape_lead_outer_arm_and_self_escape_arm_route_through_atom_str_escape_lead() {
+        // ESCAPE-LEAD CONTRACT: the reader's `Token::Str` accumulation
+        // loop dispatches on `Atom::STR_ESCAPE_LEAD` at TWO sites — the
+        // escape-lead outer arm that triggers the escape-handler branch,
+        // AND the escape-handler's self-escape arm (`\\` → `\`) whose
+        // pattern AND mapped value both bind to the constant. Sibling-
+        // shape pin to
+        // `reader_str_escape_self_escape_arm_routes_through_atom_str_delimiter`
+        // (the Str-payload delimiter axis's self-escape arm) — where
+        // that pin covers the `\"` self-escape on the OPENER/CLOSER
+        // axis, this pin covers the `\\` self-escape on the ESCAPE-LEAD
+        // axis. The two self-escapes are the reader's ONLY two
+        // pattern-equals-value arms in the escape table; both bind to
+        // a typed `Atom` constant so a byte swap at either axis
+        // propagates through pattern AND value in lockstep.
+        //
+        // The source is `"\\"` — a STR_DELIMITER-wrapped payload
+        // containing the two-byte sequence `\\` — which the reader
+        // must decode to a Str payload holding ONE `\` byte. A
+        // regression that drops the outer arm (e.g. re-inlines the
+        // `\` pattern-literal at the escape-lead detection site AND
+        // renames `Atom::STR_ESCAPE_LEAD` without updating the arm)
+        // would consume the FIRST `\` as a passthrough byte AND then
+        // terminate the string on the SECOND `\`'s following
+        // `STR_DELIMITER`, silently corrupting every `\\` sequence.
+        // A regression that drops the inner self-escape arm's
+        // pattern-equals-value binding would emit the escape-handler's
+        // default passthrough on `\\` (returning the SECOND `\` byte
+        // unchanged) — indistinguishable from the correct value at
+        // the byte level BUT breaking the round-trip law if the
+        // escape-lead byte ever changes.
+        let escape_source = format!(
+            "{}{}{}{}",
+            Atom::STR_DELIMITER,
+            Atom::STR_ESCAPE_LEAD,
+            Atom::STR_ESCAPE_LEAD,
+            Atom::STR_DELIMITER,
+        );
+        let forms = read(&escape_source)
+            .unwrap_or_else(|e| panic!("reader rejected escape source `{escape_source}`: {e}"));
+        assert_eq!(forms.len(), 1, "escape source must read as one form");
+        assert_eq!(
+            forms[0],
+            Sexp::Atom(Atom::string(Atom::STR_ESCAPE_LEAD.to_string())),
+            "self-escape `\\\\` inside STR_DELIMITER-wrapped payload \
+             drifted from Sexp::Atom(Atom::string(str_escape_lead)) — \
+             the escape-lead outer arm AND the escape-handler's self- \
+             escape arm's pattern AND mapped value must all route \
+             through Atom::STR_ESCAPE_LEAD",
         );
     }
 

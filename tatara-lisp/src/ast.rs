@@ -5777,11 +5777,101 @@ impl QuoteForm {
         }
     }
 
-    /// Canonical FIRST-char of [`Self::prefix`] — `'\''` for [`Self::Quote`],
-    /// `` '`' `` for [`Self::Quasiquote`], `','` for BOTH [`Self::Unquote`]
-    /// AND [`Self::UnquoteSplice`] (the splice's two-char `,@` prefix
-    /// shares its lead byte with bare unquote and disambiguates on the
-    /// peek-then-consume `@` second char inside [`crate::reader::tokenize`]).
+    /// Canonical `'` LEAD `char` of [`Self::Quote`]'s [`Self::prefix`]
+    /// (`"'"`) — the ONE canonical `char` on the [`QuoteForm`] algebra the
+    /// substrate's Quote-family single-quote lead-byte disjointness
+    /// contract binds to.
+    ///
+    /// Sibling posture to the closed set of `pub const` reader-punctuation
+    /// canonical `char` bytes on the substrate:
+    /// [`Self::SPLICE_DISCRIMINATOR`] (`'@'`),
+    /// [`crate::ast::Atom::STR_DELIMITER`] (`'"'`),
+    /// [`crate::ast::Atom::STR_ESCAPE_LEAD`] (`'\\'`),
+    /// [`crate::ast::Atom::KEYWORD_MARKER_LEAD`] (`':'`),
+    /// [`crate::ast::Atom::BOOL_LITERAL_LEAD`] (`'#'`),
+    /// [`crate::ast::Sexp::LIST_OPEN`] (`'('`),
+    /// [`crate::ast::Sexp::LIST_CLOSE`] (`')'`),
+    /// [`crate::ast::Sexp::COMMENT_LEAD`] (`';'`),
+    /// [`crate::ast::Sexp::COMMENT_TERM`] (`'\n'`) — every canonical per-
+    /// role byte the reader's tokenizer specialises on is a `pub const`
+    /// on its owning closed-set algebra. This constant closes the Quote-
+    /// family single-quote lead byte at the SAME algebra as the
+    /// [`Self::lead_char`] projection (whose [`Self::Quote`] arm returns
+    /// this byte) AND the [`Self::from_lead_char`] inverse (whose match
+    /// arm decodes this byte back to [`Self::Quote`]).
+    ///
+    /// Structural round-trip contract:
+    /// `Self::from_lead_char(Self::QUOTE_LEAD) == Some(Self::Quote)`
+    /// AND `Self::Quote.lead_char() == Self::QUOTE_LEAD` — pinned by
+    /// `quote_form_lead_constants_round_trip_through_lead_char_projections`.
+    /// A regression that drifts EITHER the constant OR the paired
+    /// projection surfaces at the pin rather than at a silent tokenizer
+    /// drift where `'foo` classifies as a bare atom instead of
+    /// [`crate::ast::Sexp::Quote`].
+    ///
+    /// Disjointness contract: `QUOTE_LEAD`'s byte MUST differ from
+    /// [`Self::QUASIQUOTE_LEAD`], [`Self::UNQUOTE_LEAD`],
+    /// [`Self::SPLICE_DISCRIMINATOR`],
+    /// [`crate::ast::Atom::STR_DELIMITER`],
+    /// [`crate::ast::Atom::STR_ESCAPE_LEAD`],
+    /// [`crate::ast::Atom::KEYWORD_MARKER_LEAD`],
+    /// [`crate::ast::Atom::BOOL_LITERAL_LEAD`],
+    /// [`crate::ast::Sexp::LIST_OPEN`], [`crate::ast::Sexp::LIST_CLOSE`],
+    /// [`crate::ast::Sexp::COMMENT_LEAD`], and
+    /// [`crate::ast::Sexp::COMMENT_TERM`] — every other closed-set outer-
+    /// marker byte the reader's tokenizer specialises on. A collision
+    /// would silently break the reader's outer dispatch. Pinned by
+    /// `quote_form_lead_constants_distinct_from_every_other_algebra_marker_char`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (Quote-family single-quote lead byte, canonical `'\''`) pairing
+    /// binds at ONE constant on the closed-set [`QuoteForm`] algebra
+    /// regardless of which paired projection reaches in. THEORY.md §V.1
+    /// — knowable platform; the canonical Quote-family lead byte becomes
+    /// a TYPE-level constant on the substrate algebra rather than an
+    /// inline `'\''` char literal at [`Self::lead_char`]'s [`Self::Quote`]
+    /// arm AND at [`Self::from_lead_char`]'s decode arm.
+    pub const QUOTE_LEAD: char = '\'';
+
+    /// Canonical `` ` `` LEAD `char` of [`Self::Quasiquote`]'s
+    /// [`Self::prefix`] (`` "`" ``) — sibling of [`Self::QUOTE_LEAD`] on
+    /// the closed-set quote-family lead-byte axis. See
+    /// [`Self::QUOTE_LEAD`] for the algebra-level round-trip +
+    /// disjointness contracts every sibling shares. Bound by
+    /// [`Self::lead_char`]'s [`Self::Quasiquote`] arm AND
+    /// [`Self::from_lead_char`]'s decode arm.
+    pub const QUASIQUOTE_LEAD: char = '`';
+
+    /// Canonical `,` LEAD `char` SHARED by [`Self::Unquote`]'s
+    /// [`Self::prefix`] (`","`) AND [`Self::UnquoteSplice`]'s
+    /// [`Self::prefix`] (`",@"`) — the splice's two-char prefix opens
+    /// with this byte and disambiguates on the peek-then-consume
+    /// [`Self::SPLICE_DISCRIMINATOR`] second char inside
+    /// [`crate::reader::tokenize`]. Sibling of [`Self::QUOTE_LEAD`] on
+    /// the closed-set quote-family lead-byte axis; see
+    /// [`Self::QUOTE_LEAD`] for the algebra-level round-trip +
+    /// disjointness contracts every sibling shares. Bound by
+    /// [`Self::lead_char`]'s `Self::Unquote | Self::UnquoteSplice` merged
+    /// arm AND [`Self::from_lead_char`]'s decode arm.
+    ///
+    /// Composition identity with [`Self::SPLICE_DISCRIMINATOR`]:
+    /// `format!("{}{}", Self::UNQUOTE_LEAD, Self::SPLICE_DISCRIMINATOR)
+    /// == Self::UnquoteSplice.prefix()` — the two byte-level constants
+    /// on the closed-set [`QuoteForm`] algebra compose the ONLY two-char
+    /// [`Self::prefix`] in the closed set. Pinned by
+    /// `quote_form_unquote_splice_prefix_composes_from_unquote_lead_and_splice_discriminator`.
+    /// A regression that renames EITHER constant without touching the
+    /// paired [`Self::UnquoteSplice`]'s [`Self::prefix`] arm surfaces
+    /// here rather than as a silent `,@` reader drift.
+    pub const UNQUOTE_LEAD: char = ',';
+
+    /// Canonical FIRST-char of [`Self::prefix`] — [`Self::QUOTE_LEAD`]
+    /// for [`Self::Quote`], [`Self::QUASIQUOTE_LEAD`] for
+    /// [`Self::Quasiquote`], [`Self::UNQUOTE_LEAD`] for BOTH
+    /// [`Self::Unquote`] AND [`Self::UnquoteSplice`] (the splice's two-
+    /// char `,@` prefix shares its lead byte with bare unquote and
+    /// disambiguates on the peek-then-consume `@` second char inside
+    /// [`crate::reader::tokenize`]).
     /// The three-of-four collapse onto three distinct lead chars is
     /// structurally fixed — the reader's outer tokenizer dispatch
     /// selects between quote-family entry and every non-quote-family
@@ -5835,9 +5925,9 @@ impl QuoteForm {
     #[must_use]
     pub const fn lead_char(self) -> char {
         match self {
-            Self::Quote => '\'',
-            Self::Quasiquote => '`',
-            Self::Unquote | Self::UnquoteSplice => ',',
+            Self::Quote => Self::QUOTE_LEAD,
+            Self::Quasiquote => Self::QUASIQUOTE_LEAD,
+            Self::Unquote | Self::UnquoteSplice => Self::UNQUOTE_LEAD,
         }
     }
 
@@ -5911,9 +6001,9 @@ impl QuoteForm {
     #[must_use]
     pub const fn from_lead_char(c: char) -> Option<Self> {
         match c {
-            '\'' => Some(Self::Quote),
-            '`' => Some(Self::Quasiquote),
-            ',' => Some(Self::Unquote),
+            Self::QUOTE_LEAD => Some(Self::Quote),
+            Self::QUASIQUOTE_LEAD => Some(Self::Quasiquote),
+            Self::UNQUOTE_LEAD => Some(Self::Unquote),
             _ => None,
         }
     }
@@ -9578,6 +9668,173 @@ mod tests {
         assert_eq!(_UNQUOTE, ',');
         assert_eq!(_SPLICE, ',');
         assert_eq!(_FROM, Some(QuoteForm::Unquote));
+    }
+
+    #[test]
+    fn quote_form_lead_constants_project_canonical_chars() {
+        // Pin each constant's byte identity so a typo (`'‛'` for
+        // `QUOTE_LEAD`, `'’'` for `QUASIQUOTE_LEAD`, `';'` for
+        // `UNQUOTE_LEAD`) or accidental redefinition surfaces
+        // immediately. Every canonical per-role reader-punctuation byte
+        // on the substrate has its own byte-identity pin at its owning
+        // algebra
+        // (`atom_str_delimiter_projects_canonical_quote_char`,
+        // `atom_str_escape_lead_projects_canonical_backslash_char`,
+        // `atom_keyword_marker_lead_projects_canonical_colon_char`,
+        // `atom_bool_literal_lead_projects_canonical_hash_char`,
+        // `sexp_list_open_projects_canonical_char`,
+        // `sexp_list_close_projects_canonical_char`,
+        // `sexp_comment_lead_projects_canonical_char`,
+        // `sexp_comment_term_projects_canonical_char`,
+        // `quote_form_splice_discriminator_projects_canonical_at_char`);
+        // this pin closes the three quote-family lead-byte constants at
+        // the SAME shape.
+        assert_eq!(QuoteForm::QUOTE_LEAD, '\'');
+        assert_eq!(QuoteForm::QUASIQUOTE_LEAD, '`');
+        assert_eq!(QuoteForm::UNQUOTE_LEAD, ',');
+    }
+
+    #[test]
+    fn quote_form_lead_constants_round_trip_through_lead_char_projections() {
+        // ROUND-TRIP CONTRACT: for each of the three distinct-lead-byte
+        // variants (`Quote`, `Quasiquote`, `Unquote`) the (variant →
+        // constant → variant) triangle closes exactly.
+        // `Self::from_lead_char(Self::X_LEAD) == Some(Self::X)` AND
+        // `Self::X.lead_char() == Self::X_LEAD` — the constants ARE the
+        // canonical per-variant lead byte both projections route
+        // through. `UnquoteSplice` shares its lead byte with `Unquote`
+        // (see the merged arm in `lead_char`), so `UnquoteSplice.lead_char()
+        // == Self::UNQUOTE_LEAD` too — the splice's SECOND-char
+        // `SPLICE_DISCRIMINATOR` promotion lives at the reader's peek
+        // arm, not at this decode. Pin the triangle at every variant so
+        // a regression that drifts EITHER a constant OR one of the two
+        // projection sites surfaces at test time.
+        assert_eq!(
+            QuoteForm::from_lead_char(QuoteForm::QUOTE_LEAD),
+            Some(QuoteForm::Quote),
+        );
+        assert_eq!(QuoteForm::Quote.lead_char(), QuoteForm::QUOTE_LEAD);
+
+        assert_eq!(
+            QuoteForm::from_lead_char(QuoteForm::QUASIQUOTE_LEAD),
+            Some(QuoteForm::Quasiquote),
+        );
+        assert_eq!(
+            QuoteForm::Quasiquote.lead_char(),
+            QuoteForm::QUASIQUOTE_LEAD,
+        );
+
+        assert_eq!(
+            QuoteForm::from_lead_char(QuoteForm::UNQUOTE_LEAD),
+            Some(QuoteForm::Unquote),
+        );
+        assert_eq!(QuoteForm::Unquote.lead_char(), QuoteForm::UNQUOTE_LEAD);
+        // UnquoteSplice's `lead_char` collapses onto the shared
+        // `UNQUOTE_LEAD` byte because the splice's `,@` prefix opens
+        // with `,`; the promotion is a two-char peek in the reader.
+        assert_eq!(
+            QuoteForm::UnquoteSplice.lead_char(),
+            QuoteForm::UNQUOTE_LEAD,
+        );
+    }
+
+    #[test]
+    fn quote_form_lead_constants_distinct_from_every_other_algebra_marker_char() {
+        // CROSS-AXIS DISJOINTNESS CONTRACT: each of the three quote-
+        // family lead bytes MUST differ from every other canonical
+        // reader-punctuation constant on the substrate — the other two
+        // quote-family lead bytes, `SPLICE_DISCRIMINATOR`,
+        // `Atom::STR_DELIMITER`, `Atom::STR_ESCAPE_LEAD`,
+        // `Atom::KEYWORD_MARKER_LEAD`, `Atom::BOOL_LITERAL_LEAD`,
+        // `Sexp::LIST_OPEN`, `Sexp::LIST_CLOSE`, `Sexp::COMMENT_LEAD`,
+        // and `Sexp::COMMENT_TERM`. Otherwise the reader's outer
+        // dispatch would ambiguously route a `'` / `` ` `` / `,` lead
+        // byte through the aliased sibling arm — e.g. if `QUOTE_LEAD`
+        // aliased `Sexp::LIST_OPEN`, a source `'foo` would ambiguously
+        // trigger the list-open arm before the quote-family arm ran.
+        // Sibling-shape peer of
+        // `quote_form_splice_discriminator_distinct_from_every_algebra_marker_char`
+        // one axis over.
+        let leads = [
+            QuoteForm::QUOTE_LEAD,
+            QuoteForm::QUASIQUOTE_LEAD,
+            QuoteForm::UNQUOTE_LEAD,
+        ];
+        // Within-family: the three lead bytes are pairwise distinct.
+        for (i, a) in leads.iter().enumerate() {
+            for b in &leads[i + 1..] {
+                assert_ne!(a, b, "quote-family lead bytes must be pairwise distinct",);
+            }
+        }
+        // Cross-family disjointness against every other single-char
+        // algebra marker on the substrate.
+        for lead in leads {
+            assert_ne!(lead, QuoteForm::SPLICE_DISCRIMINATOR);
+            assert_ne!(lead, Atom::STR_DELIMITER);
+            assert_ne!(lead, Atom::STR_ESCAPE_LEAD);
+            assert_ne!(lead, Atom::KEYWORD_MARKER_LEAD);
+            assert_ne!(lead, Atom::BOOL_LITERAL_LEAD);
+            assert_ne!(lead, Sexp::LIST_OPEN);
+            assert_ne!(lead, Sexp::LIST_CLOSE);
+            assert_ne!(lead, Sexp::COMMENT_LEAD);
+            assert_ne!(lead, Sexp::COMMENT_TERM);
+        }
+    }
+
+    #[test]
+    fn quote_form_unquote_splice_prefix_composes_from_unquote_lead_and_splice_discriminator() {
+        // STRUCTURAL COMPOSITION LAW: [`QuoteForm::UnquoteSplice`]'s
+        // two-char prefix `",@"` decomposes cleanly into
+        // [`QuoteForm::UNQUOTE_LEAD`] (the `,` byte shared with
+        // [`QuoteForm::Unquote`]) + [`QuoteForm::SPLICE_DISCRIMINATOR`]
+        // (the `@` byte promoted by the reader's peek arm). The two
+        // BYTE-LEVEL constants on the closed-set [`QuoteForm`] algebra
+        // compose the ONLY two-char [`Self::prefix`] in the closed set
+        // — a stronger form of the pre-existing
+        // `quote_form_unquote_splice_prefix_composes_from_unquote_prefix_and_splice_discriminator`
+        // pin (which composes through the `&'static str` prefix of the
+        // Unquote variant). Where that pin binds the `&'static str`-level
+        // composition, this pin binds the `char`-level composition; both
+        // pins fail loudly on any drift of the `,` or `@` bytes. The
+        // reader's two-char peek-then-consume splice-promotion arm
+        // reads `Self::UNQUOTE_LEAD` then peeks `Self::SPLICE_DISCRIMINATOR`
+        // to promote to `UnquoteSplice` — this identity closes the
+        // read↔write duality at the byte level.
+        let composed = format!(
+            "{}{}",
+            QuoteForm::UNQUOTE_LEAD,
+            QuoteForm::SPLICE_DISCRIMINATOR,
+        );
+        assert_eq!(
+            composed,
+            QuoteForm::UnquoteSplice.prefix(),
+            "UnquoteSplice.prefix() drifted from UNQUOTE_LEAD + \
+             SPLICE_DISCRIMINATOR — the reader's two-char splice \
+             promotion identity is broken at the byte level",
+        );
+    }
+
+    #[test]
+    fn quote_form_lead_constants_are_const_evaluable_over_the_closed_set() {
+        // Pin the `const` posture of the three lead constants by binding
+        // `const` bindings that ROUTE through the `const fn` lead_char /
+        // from_lead_char projections — the compile-time evaluation
+        // context enforces the qualifier without a test-time assertion.
+        // Sibling posture to
+        // `quote_form_from_lead_char_is_const_fn_over_the_closed_set`.
+        const _QUOTE: char = QuoteForm::QUOTE_LEAD;
+        const _QUASIQUOTE: char = QuoteForm::QUASIQUOTE_LEAD;
+        const _UNQUOTE: char = QuoteForm::UNQUOTE_LEAD;
+        const _FROM_QUOTE: Option<QuoteForm> = QuoteForm::from_lead_char(QuoteForm::QUOTE_LEAD);
+        const _FROM_QUASIQUOTE: Option<QuoteForm> =
+            QuoteForm::from_lead_char(QuoteForm::QUASIQUOTE_LEAD);
+        const _FROM_UNQUOTE: Option<QuoteForm> = QuoteForm::from_lead_char(QuoteForm::UNQUOTE_LEAD);
+        assert_eq!(_QUOTE, '\'');
+        assert_eq!(_QUASIQUOTE, '`');
+        assert_eq!(_UNQUOTE, ',');
+        assert_eq!(_FROM_QUOTE, Some(QuoteForm::Quote));
+        assert_eq!(_FROM_QUASIQUOTE, Some(QuoteForm::Quasiquote));
+        assert_eq!(_FROM_UNQUOTE, Some(QuoteForm::Unquote));
     }
 
     #[test]

@@ -2631,6 +2631,105 @@ impl UnquoteForm {
     /// sweep over every template marker in a typed sequence.
     pub const ALL: [Self; 2] = [Self::Unquote, Self::Splice];
 
+    /// Canonical `&'static str` template-marker bytes for the
+    /// [`Self::Unquote`] substitution — aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_PREFIX`] on the UnquoteForm ⊂
+    /// QuoteForm 2-of-4 subset carving so the marker-level per-role
+    /// bytes bind at ONE `pub const` on the parent superset's Unquote
+    /// arm rather than at TWO sites (the per-role `pub const` AND a
+    /// parallel inline literal). Per-role peer of `Self::Unquote` on
+    /// the closed-set template-substitution algebra; consumers reach
+    /// for `UnquoteForm::UNQUOTE_MARKER` when the caller has a variant
+    /// in hand at compile time and wants the canonical diagnostic
+    /// bytes without runtime dispatch through [`Self::marker`].
+    ///
+    /// Sibling posture to [`crate::ast::AtomKind::SYMBOL_LABEL`] et al
+    /// (commit fc126b8) — both pin the invariant that a typed-subset
+    /// enum's per-role bytes are structurally derived from the parent
+    /// superset's per-role `pub const` via a `pub const = Parent::CONST`
+    /// alias rather than through parallel literal-discipline sites.
+    pub const UNQUOTE_MARKER: &'static str = crate::ast::QuoteForm::UNQUOTE_PREFIX;
+
+    /// Canonical `&'static str` template-marker bytes for the
+    /// [`Self::Splice`] list-substitution — aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_PREFIX`] on the
+    /// UnquoteForm ⊂ QuoteForm 2-of-4 subset carving. Per-role peer of
+    /// `Self::Splice`; the `,@` two-byte prefix is the ONLY multi-char
+    /// bytes payload on the UnquoteForm algebra — every other marker
+    /// is a single-byte comma rendered as `&'static str`.
+    pub const SPLICE_MARKER: &'static str = crate::ast::QuoteForm::UNQUOTE_SPLICE_PREFIX;
+
+    /// Closed-set forced-arity ALL array over the canonical template-
+    /// marker `&'static str` bytes, in declaration order matching
+    /// [`Self::ALL`] element-wise (pinned by
+    /// `unquote_form_markers_align_with_all_by_index`). Sibling posture
+    /// to [`crate::ast::QuoteForm::PREFIXES`] (`[&'static str; 4]` —
+    /// the superset carving this UnquoteForm subset embeds into),
+    /// [`crate::ast::AtomKind::LABELS`] (`[&'static str; 6]` — sibling
+    /// subset-through-parent alias on the AtomKind ⊂ SexpShape
+    /// carving), [`SexpShape::LABELS`] (`[&'static str; 12]`),
+    /// [`ExpectedKwargShape::LABELS`] (`[&'static str; 7]`),
+    /// [`KwargPathKind::LABELS`] (`[&'static str; 3]`),
+    /// [`MacroDefHead::KEYWORDS`] (`[&'static str; 3]`),
+    /// [`crate::ast::Atom::BOOL_LITERALS`] (`[&'static str; 2]`), and
+    /// [`crate::macro_expand::MacroParams::LAMBDA_LIST_KEYWORDS`]
+    /// (`[&'static str; 2]`) — every closed-set outer projection on
+    /// the substrate that carries an `&'static str`-per-variant marker
+    /// now pins its per-role canonical bytes at ONE `pub const` per
+    /// role PLUS an ALL array for family-wide consumers.
+    ///
+    /// Pre-lift the two template-marker bytes had NO per-role primitive
+    /// on this closed-set subset algebra — a consumer with an
+    /// `UnquoteForm` variant in hand at compile time reaching for the
+    /// canonical marker bytes had to spell
+    /// `UnquoteForm::Splice.marker()` (runtime dispatch through the
+    /// composition [`Self::to_quote_form`] +
+    /// [`crate::ast::QuoteForm::prefix`]) OR reach across the algebra
+    /// boundary into [`crate::ast::QuoteForm::UNQUOTE_SPLICE_PREFIX`]
+    /// and re-derive the UnquoteForm ⊂ QuoteForm variant pairing at
+    /// the call site. Post-lift the TWO canonical bytes bind at ONE
+    /// `pub const` per role on the typed [`UnquoteForm`] algebra AND
+    /// at [`Self::MARKERS`] as a family-wide forced-arity array — a
+    /// future LSP / REPL completion bar keyed on
+    /// `UnquoteForm::MARKERS`, a `tatara-check` coverage sweep over
+    /// the template-marker arms of a `NonSymbolUnquoteTarget` /
+    /// `UnboundTemplateVar` corpus, or a Sekiban audit-trail metric
+    /// jointly labeled by the template marker
+    /// (`tatara_lisp_unbound_template_var_total{prefix=","}`) reads
+    /// through the typed constants on this subset algebra without
+    /// re-deriving the 2-of-4 carving inline.
+    ///
+    /// Each entry is byte-for-byte identical to the corresponding
+    /// [`crate::ast::QuoteForm`] Unquote / UnquoteSplice arm — an
+    /// intentional cross-axis overlap pinned by
+    /// `unquote_form_per_role_markers_alias_quote_form_per_role_prefixes_byte_for_byte`
+    /// so a future marker rename on EITHER side (a
+    /// [`crate::ast::QuoteForm`] `","` → `",."` drift, or an
+    /// [`UnquoteForm`] rename that skips the alias) fails-loudly at
+    /// the alias test rather than as a silent operator-facing
+    /// vocabulary fracture. Adding a hypothetical third template-
+    /// marker (e.g. a `,~` reverse-unquote, a `,?` conditional-unquote)
+    /// extends [`Self::ALL`] AND [`Self::MARKERS`] AND adds ONE per-
+    /// role `pub const` alias in lockstep — rustc's forced-arity check
+    /// on the two `[_; N]` arrays fails compilation if EITHER ALL
+    /// array grows without the other.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// canonical template-marker bytes bind at ONE typed
+    /// `[&'static str; 2]` array on the closed-set UnquoteForm algebra
+    /// rather than at zero-primitive-on-this-subset-plus-two-inline-
+    /// lookups scattered across the substrate. THEORY.md §V.1 —
+    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// level constant on the substrate algebra rather than a per-
+    /// consumer runtime dispatch through the composition. THEORY.md
+    /// §VI.1 — generation over composition; the family-wide contract
+    /// sweeps (alignment with `ALL`, pairwise disjointness, membership
+    /// through [`Self::marker`]) emerge from the composition of TWO
+    /// substrate primitives (this `pub const` array + the two per-role
+    /// `pub const *_MARKER` aliases) rather than as per-variant inline
+    /// assertions duplicated at each call site.
+    pub const MARKERS: [&'static str; 2] = [Self::UNQUOTE_MARKER, Self::SPLICE_MARKER];
+
     /// Project the typed `UnquoteForm` to the canonical `&'static str`
     /// literal — feeds the `LispError::UnboundTemplateVar` /
     /// `LispError::NonSymbolUnquoteTarget` Display rendering via the
@@ -12909,6 +13008,142 @@ mod tests {
                 std::ptr::eq(from_marker.as_ptr(), from_composition.as_ptr()),
                 "UnquoteForm::{uf:?}.marker() and .to_quote_form().prefix() disagree on `&'static str` address — pointer drift means the lift composes through a parallel literal table rather than routing into the canonical QuoteForm::prefix site",
             );
+        }
+    }
+
+    #[test]
+    fn unquote_form_per_role_markers_alias_quote_form_per_role_prefixes_byte_for_byte() {
+        // ALIAS CONTRACT: pin both per-role `pub const UnquoteForm::*_MARKER`
+        // aliases equal the corresponding `pub const QuoteForm::*_PREFIX`
+        // byte-for-byte — so the UnquoteForm ⊂ QuoteForm marker-vocabulary
+        // containment routes through the typed
+        // `pub const UnquoteForm::V_MARKER: &'static str = QuoteForm::V_PREFIX`
+        // alias chain rather than through two independent literal-discipline
+        // sites. A regression that renames the QuoteForm side without
+        // updating the UnquoteForm alias pointing at it fails-loudly here
+        // with the exact axis identified (UNQUOTE / SPLICE); a regression
+        // that re-inlines the UnquoteForm constant to a fresh literal still
+        // passes this pin but loses the alias-chain typing (which is what
+        // `unquote_form_marker_arms_route_through_per_role_markers_for_every_variant`
+        // + `unquote_form_markers_align_with_all_by_index` catch in
+        // combination).
+        //
+        // Sibling posture to
+        // `atom_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+        // (commit fc126b8): both pin the invariant that a typed-subset
+        // enum's per-role bytes are structurally derived from the parent
+        // superset's per-role bytes via a `pub const = Parent::CONST`
+        // alias rather than through parallel literal tables. The subset
+        // there is AtomKind ⊂ SexpShape (6-of-12 on the atomic-payload
+        // axis); the subset here is UnquoteForm ⊂ QuoteForm (2-of-4 on
+        // the template-substitution axis) — both are load-bearing
+        // structural carvings whose per-role vocabularies MUST agree
+        // byte-for-byte with their parent's.
+        use crate::ast::QuoteForm;
+        assert_eq!(UnquoteForm::UNQUOTE_MARKER, QuoteForm::UNQUOTE_PREFIX);
+        assert_eq!(UnquoteForm::SPLICE_MARKER, QuoteForm::UNQUOTE_SPLICE_PREFIX);
+    }
+
+    #[test]
+    fn unquote_form_marker_arms_route_through_per_role_markers_for_every_variant() {
+        // PATH-UNIFORMITY: `UnquoteForm::V.marker()` MUST equal the
+        // per-role `pub const UnquoteForm::V_MARKER` for every
+        // `v: UnquoteForm`. Pre-lift the two template-marker bytes
+        // were reachable through `UnquoteForm::marker` (the composition
+        // `self.to_quote_form().prefix()` — routing into
+        // `QuoteForm::UNQUOTE_PREFIX` / `UNQUOTE_SPLICE_PREFIX`) OR
+        // through direct `QuoteForm::UNQUOTE_PREFIX` reach-across;
+        // post-lift each variant's canonical bytes are reachable
+        // through the per-role `UnquoteForm::*_MARKER` alias too. Pin
+        // the byte-equality between the runtime projection and the
+        // compile-time alias so a regression that renames the alias
+        // without updating the arm (or vice versa) fails-loudly at
+        // the exact axis.
+        //
+        // Sibling-shape pin to
+        // `atom_kind_label_arms_route_through_per_role_labels_for_every_variant`
+        // one algebra layer over — the AtomKind subset algebra's per-
+        // role aliases are pinned against `AtomKind::label`'s
+        // composition-routed arms there; this pin binds the
+        // UnquoteForm subset algebra's per-role aliases against
+        // `UnquoteForm::marker`'s composition-routed arms so the two
+        // template-marker bytes project through ONE aliased typed
+        // source of truth per role rather than through per-consumer
+        // inline literals.
+        assert_eq!(UnquoteForm::Unquote.marker(), UnquoteForm::UNQUOTE_MARKER);
+        assert_eq!(UnquoteForm::Splice.marker(), UnquoteForm::SPLICE_MARKER);
+    }
+
+    #[test]
+    fn unquote_form_markers_has_expected_cardinality() {
+        // Cardinality pin: `MARKERS.len() == 2` matches `ALL.len()` so
+        // a refactor that loosens the type to `&'static [&'static str]`
+        // fails HERE (the `[_; 2]` slot cannot be sliced silently),
+        // and a variant added to `ALL` without a matching `MARKERS`
+        // row fails the pair-arity gate at the array literal itself
+        // before this test even runs. The pin doubles as an operator-
+        // visible mark of the family's cardinality across the
+        // substrate — two template markers, matching the 2-of-4
+        // carving of the parent `QuoteForm::PREFIXES` (the
+        // substitution-subset of the four canonical homoiconic prefix
+        // bytes).
+        assert_eq!(UnquoteForm::MARKERS.len(), 2);
+        assert_eq!(UnquoteForm::MARKERS.len(), UnquoteForm::ALL.len());
+    }
+
+    #[test]
+    fn unquote_form_markers_align_with_all_by_index() {
+        // ALIGNMENT PIN: sweep `MARKERS[i] == ALL[i].marker()` so any
+        // `zip(ALL, MARKERS)` consumer reads a coherent (variant,
+        // marker) pair off ONE forced-arity array pair. The
+        // declaration-order pin makes a family-wide consumer that
+        // walks the ALL / MARKERS pair in lockstep (an LSP completion
+        // bar keyed on `UnquoteForm::MARKERS`, a Sekiban metric
+        // emitter labeling
+        // `tatara_lisp_unbound_template_var_total{prefix}` by the
+        // per-index marker) read one canonical (variant, bytes) pair
+        // per slot rather than routing through per-consumer paired-
+        // iteration. A regression that reorders MARKERS without also
+        // reordering ALL (or vice versa) fails-loudly at the exact
+        // index that drifted.
+        assert_eq!(UnquoteForm::MARKERS.len(), UnquoteForm::ALL.len());
+        for (i, form) in UnquoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                UnquoteForm::MARKERS[i],
+                form.marker(),
+                "UnquoteForm::MARKERS[{i}] `{mkr}` drifted from \
+                 UnquoteForm::ALL[{i}].marker() `{via_variant}` — the \
+                 canonical ALL ordering and the MARKERS ordering must \
+                 match element-wise",
+                mkr = UnquoteForm::MARKERS[i],
+                via_variant = form.marker(),
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_markers_pairwise_distinct() {
+        // 2x2 pairwise sweep so a collision between the two markers
+        // (which would silently degrade two distinct template-
+        // substitution markers to the SAME diagnostic bytes and
+        // violate the closed-set FromStr round-trip) fails-loudly at
+        // the exact pair. Distinctness is already enforced
+        // structurally by `assert_closed_set_well_formed::<UnquoteForm>()`
+        // (clause 3), so this pin is a secondary guard focused on the
+        // per-role `pub const` surface directly rather than the
+        // runtime projection through the trait's default `labels()`.
+        for (i, a) in UnquoteForm::MARKERS.iter().enumerate() {
+            for (j, b) in UnquoteForm::MARKERS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "UnquoteForm::MARKERS[{i}] ({a:?}) collides with \
+                     UnquoteForm::MARKERS[{j}] ({b:?}) — two distinct \
+                     template markers cannot share diagnostic bytes",
+                );
+            }
         }
     }
 

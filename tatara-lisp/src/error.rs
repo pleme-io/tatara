@@ -3990,6 +3990,161 @@ impl SexpShape {
         Self::UnquoteSplice,
     ];
 
+    /// Canonical `&'static str` bytes for the [`Self::Nil`] outer-shape —
+    /// projects [`crate::ast::Sexp::Nil`] into the `got {got}` slot of every
+    /// `LispError::*` Display rendering. Per-role peer of `Self::Nil` on
+    /// the closed-set outer algebra.
+    pub const NIL_LABEL: &'static str = "nil";
+
+    /// Canonical `&'static str` bytes for the [`Self::Symbol`] outer-shape —
+    /// projects [`crate::ast::Sexp::Atom`] `(Symbol(_))` into diagnostic
+    /// rendering. Per-role peer of `Self::Symbol`.
+    pub const SYMBOL_LABEL: &'static str = "symbol";
+
+    /// Canonical `&'static str` bytes for the [`Self::Keyword`] outer-shape —
+    /// projects [`crate::ast::Sexp::Atom`] `(Keyword(_))` into diagnostic
+    /// rendering. Per-role peer of `Self::Keyword`; matches
+    /// [`ExpectedKwargShape::KEYWORD_LABEL`] byte-for-byte — the cross-axis
+    /// overlap on the same `Sexp` algebra is intentional and load-bearing,
+    /// pinned by `sexp_shape_atom_carving_labels_align_with_expected_kwarg_shape_labels`.
+    pub const KEYWORD_LABEL: &'static str = "keyword";
+
+    /// Canonical `&'static str` bytes for the [`Self::String`] outer-shape —
+    /// projects [`crate::ast::Sexp::Atom`] `(Str(_))` into diagnostic
+    /// rendering. Per-role peer of `Self::String`; matches
+    /// [`ExpectedKwargShape::STRING_LABEL`] byte-for-byte.
+    pub const STRING_LABEL: &'static str = "string";
+
+    /// Canonical `&'static str` bytes for the [`Self::Int`] outer-shape —
+    /// projects [`crate::ast::Sexp::Atom`] `(Int(_))` into diagnostic
+    /// rendering. Per-role peer of `Self::Int`; matches
+    /// [`ExpectedKwargShape::INT_LABEL`] byte-for-byte.
+    pub const INT_LABEL: &'static str = "int";
+
+    /// Canonical `&'static str` bytes for the [`Self::Float`] outer-shape —
+    /// projects [`crate::ast::Sexp::Atom`] `(Float(_))` into diagnostic
+    /// rendering. Per-role peer of `Self::Float`; distinct from
+    /// [`ExpectedKwargShape::NUMBER_LABEL`] (which is the wider numeric-
+    /// union label emitted at `extract_float` gates).
+    pub const FLOAT_LABEL: &'static str = "float";
+
+    /// Canonical `&'static str` bytes for the [`Self::Bool`] outer-shape —
+    /// projects [`crate::ast::Sexp::Atom`] `(Bool(_))` into diagnostic
+    /// rendering. Per-role peer of `Self::Bool`; matches
+    /// [`ExpectedKwargShape::BOOL_LABEL`] byte-for-byte.
+    pub const BOOL_LABEL: &'static str = "bool";
+
+    /// Canonical `&'static str` bytes for the [`Self::List`] outer-shape —
+    /// projects [`crate::ast::Sexp::List`] into diagnostic rendering.
+    /// Per-role peer of `Self::List`; matches
+    /// [`ExpectedKwargShape::LIST_LABEL`] byte-for-byte.
+    pub const LIST_LABEL: &'static str = "list";
+
+    /// Canonical `&'static str` bytes for the [`Self::Quote`] outer-shape —
+    /// projects [`crate::ast::Sexp::Quote`] into diagnostic rendering.
+    /// Per-role peer of `Self::Quote`; matches
+    /// [`crate::ast::QuoteForm::QUOTE_IAC_FORGE_TAG`] byte-for-byte — the
+    /// cross-axis overlap on the shared quote-family sub-vocabulary is
+    /// intentional and load-bearing, pinned by
+    /// `sexp_shape_quote_carving_labels_align_with_quote_form_iac_forge_tags`.
+    pub const QUOTE_LABEL: &'static str = "quote";
+
+    /// Canonical `&'static str` bytes for the [`Self::Quasiquote`] outer-
+    /// shape — projects [`crate::ast::Sexp::Quasiquote`] into diagnostic
+    /// rendering. Per-role peer of `Self::Quasiquote`; matches
+    /// [`crate::ast::QuoteForm::QUASIQUOTE_IAC_FORGE_TAG`] byte-for-byte.
+    pub const QUASIQUOTE_LABEL: &'static str = "quasiquote";
+
+    /// Canonical `&'static str` bytes for the [`Self::Unquote`] outer-shape
+    /// — projects [`crate::ast::Sexp::Unquote`] into diagnostic rendering.
+    /// Per-role peer of `Self::Unquote`; matches
+    /// [`crate::ast::QuoteForm::UNQUOTE_IAC_FORGE_TAG`] byte-for-byte.
+    pub const UNQUOTE_LABEL: &'static str = "unquote";
+
+    /// Canonical `&'static str` bytes for the [`Self::UnquoteSplice`]
+    /// outer-shape — projects [`crate::ast::Sexp::UnquoteSplice`] into
+    /// diagnostic rendering. Per-role peer of `Self::UnquoteSplice`;
+    /// DIFFERS from [`crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG`]
+    /// (`"unquote-splicing"`) by design — the SexpShape diagnostic layer
+    /// uses the SHORTER `"unquote-splice"` bytes across every `LispError::*`
+    /// Display rendering while the iac-forge canonical-form tag uses the
+    /// LONGER `"unquote-splicing"` for cross-crate byte-identical
+    /// interoperability. The two-byte spelling asymmetry is the ONE
+    /// intentional exception to the quote-family cross-axis label
+    /// alignment; pinned by
+    /// `sexp_shape_unquote_splice_label_differs_from_quote_form_iac_forge_tag`.
+    pub const UNQUOTE_SPLICE_LABEL: &'static str = "unquote-splice";
+
+    /// Closed-set forced-arity ALL array over the canonical outer-shape
+    /// `&'static str` bytes, in declaration order matching [`Self::ALL`]
+    /// element-wise (pinned by
+    /// `sexp_shape_labels_align_with_all_by_index`). Sibling posture to
+    /// [`ExpectedKwargShape::LABELS`] (`[&'static str; 7]`),
+    /// [`KwargPathKind::LABELS`] (`[&'static str; 3]`),
+    /// [`MacroDefHead::KEYWORDS`] (`[&'static str; 3]`),
+    /// [`crate::ast::Atom::BOOL_LITERALS`] (`[&'static str; 2]`), and
+    /// [`crate::ast::QuoteForm::PREFIXES`] (`[&'static str; 4]`) — every
+    /// closed-set outer projection on the substrate that carries an
+    /// `&'static str`-per-variant label now pins its per-role canonical
+    /// bytes at ONE `pub const` per role PLUS an ALL array for
+    /// family-wide consumers.
+    ///
+    /// Pre-lift the twelve canonical outer-shape label bytes lived inline
+    /// at four sites: [`Self::label`]'s twelve match arms, plus three
+    /// truth-table tests
+    /// (`sexp_shape_label_renders_canonical_string_for_every_variant`,
+    /// `sexp_shape_display_matches_label_for_every_variant`,
+    /// `sexp_shape_label_round_trips_through_from_str`) enumerating the
+    /// twelve `&'static str` literals byte-for-byte. Post-lift the
+    /// per-role bytes bind at ONE `pub const` per role on the typed
+    /// [`SexpShape`] algebra so every consumer routes through the typed
+    /// constants — the label match arms, the truth-table tests, and every
+    /// future consumer (LSP completion, `tatara-check` coverage
+    /// assertion, Sekiban audit-trail metric labeled by the shape) picks
+    /// up the same canonical bytes from ONE source of truth.
+    ///
+    /// Future consumers that compose against [`Self::LABELS`]: LSP / REPL
+    /// completion surfacing every `got X` diagnostic label in a
+    /// `got=` metrics query bar, a `tatara-check` coverage assertion
+    /// sweeping [`Self::LABELS`] over workspace `.lisp` files' shape-
+    /// rejection sites, a Sekiban audit-trail metric jointly labeled by
+    /// the canonical shape (e.g.
+    /// `tatara_lisp_type_mismatch_total{got="symbol"}`) whose metric-
+    /// label set IS [`Self::LABELS`]. Adding a hypothetical thirteenth
+    /// variant (`Vector` for `#(...)` reader syntax, `Map` for `{...}`,
+    /// `Char` for `#\x`) extends [`Self::ALL`] AND [`Self::LABELS`] AND
+    /// [`Self::label`]'s arm AND one new per-role `pub const` in
+    /// lockstep — rustc's forced-arity check on the two `[_; N]` arrays
+    /// fails compilation if EITHER ALL array grows without the other.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the twelve
+    /// canonical outer-shape label bytes bind at ONE typed `[&'static
+    /// str; 12]` array on the closed-set outer [`SexpShape`] algebra
+    /// rather than as twelve inline literals scattered across four
+    /// substrate sites. THEORY.md §V.1 — knowable platform; the family's
+    /// cardinality becomes a TYPE-level constant on the substrate
+    /// algebra rather than a per-consumer hand-rolled enumeration of the
+    /// twelve labels. THEORY.md §VI.1 — generation over composition; the
+    /// family-wide contract sweeps (alignment with `ALL`, pairwise
+    /// disjointness, membership through `label()`) emerge from the
+    /// composition of TWO substrate primitives (this `pub const` array +
+    /// the twelve per-role `pub const *_LABEL`s) rather than as per-
+    /// variant inline assertions the current pins duplicate structurally.
+    pub const LABELS: [&'static str; 12] = [
+        Self::NIL_LABEL,
+        Self::SYMBOL_LABEL,
+        Self::KEYWORD_LABEL,
+        Self::STRING_LABEL,
+        Self::INT_LABEL,
+        Self::FLOAT_LABEL,
+        Self::BOOL_LABEL,
+        Self::LIST_LABEL,
+        Self::QUOTE_LABEL,
+        Self::QUASIQUOTE_LABEL,
+        Self::UNQUOTE_LABEL,
+        Self::UNQUOTE_SPLICE_LABEL,
+    ];
+
     /// Project the typed `SexpShape` to the canonical `&'static str`
     /// literal — feeds the `LispError::TypeMismatch` /
     /// `LispError::NamedFormNonSymbolName` Display rendering via the
@@ -3999,6 +4154,18 @@ impl SexpShape {
     /// `ExpectedKwargShape::label()`, `MacroDefHead::keyword()`,
     /// `UnquoteForm::marker()`, and `CompilerSpecIoStage::operation()` /
     /// `label()` feed their respective `LispError::*` Display impls.
+    ///
+    /// Each arm routes through the per-role `pub const` on `impl Self`
+    /// ([`Self::NIL_LABEL`], [`Self::SYMBOL_LABEL`],
+    /// [`Self::KEYWORD_LABEL`], [`Self::STRING_LABEL`],
+    /// [`Self::INT_LABEL`], [`Self::FLOAT_LABEL`], [`Self::BOOL_LABEL`],
+    /// [`Self::LIST_LABEL`], [`Self::QUOTE_LABEL`],
+    /// [`Self::QUASIQUOTE_LABEL`], [`Self::UNQUOTE_LABEL`],
+    /// [`Self::UNQUOTE_SPLICE_LABEL`]) so the twelve canonical
+    /// outer-shape byte-strings bind at ONE typed source of truth per
+    /// role rather than as inline literals scattered across the `match`
+    /// body. Sibling posture to
+    /// [`ExpectedKwargShape::label`]'s post-lift arms.
     ///
     /// The bidirectional contract is anchored by tests:
     /// `sexp_shape_label_renders_canonical_string_for_every_variant` pins
@@ -4013,18 +4180,18 @@ impl SexpShape {
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::Nil => "nil",
-            Self::Symbol => "symbol",
-            Self::Keyword => "keyword",
-            Self::String => "string",
-            Self::Int => "int",
-            Self::Float => "float",
-            Self::Bool => "bool",
-            Self::List => "list",
-            Self::Quote => "quote",
-            Self::Quasiquote => "quasiquote",
-            Self::Unquote => "unquote",
-            Self::UnquoteSplice => "unquote-splice",
+            Self::Nil => Self::NIL_LABEL,
+            Self::Symbol => Self::SYMBOL_LABEL,
+            Self::Keyword => Self::KEYWORD_LABEL,
+            Self::String => Self::STRING_LABEL,
+            Self::Int => Self::INT_LABEL,
+            Self::Float => Self::FLOAT_LABEL,
+            Self::Bool => Self::BOOL_LABEL,
+            Self::List => Self::LIST_LABEL,
+            Self::Quote => Self::QUOTE_LABEL,
+            Self::Quasiquote => Self::QUASIQUOTE_LABEL,
+            Self::Unquote => Self::UNQUOTE_LABEL,
+            Self::UnquoteSplice => Self::UNQUOTE_SPLICE_LABEL,
         }
     }
 
@@ -11835,6 +12002,185 @@ mod tests {
         assert_eq!(format!("{}", SexpShape::Quasiquote), "quasiquote");
         assert_eq!(format!("{}", SexpShape::Unquote), "unquote");
         assert_eq!(format!("{}", SexpShape::UnquoteSplice), "unquote-splice");
+    }
+
+    #[test]
+    fn sexp_shape_label_routes_through_typed_per_variant_constants() {
+        // PATH-UNIFORMITY: `SexpShape::label(v)` MUST equal the per-role
+        // `pub const V_LABEL` for every `v`. Pre-lift the twelve arms
+        // held inline `&'static str` literals; post-lift each arm binds
+        // to its per-role constant. A regression that reverts ANY arm
+        // to an inline literal (e.g. `Self::Symbol => "symbol"`) still
+        // renders identically at runtime but silently disagrees with
+        // the typed source of truth — this pin closes that drift.
+        assert_eq!(SexpShape::Nil.label(), SexpShape::NIL_LABEL);
+        assert_eq!(SexpShape::Symbol.label(), SexpShape::SYMBOL_LABEL);
+        assert_eq!(SexpShape::Keyword.label(), SexpShape::KEYWORD_LABEL);
+        assert_eq!(SexpShape::String.label(), SexpShape::STRING_LABEL);
+        assert_eq!(SexpShape::Int.label(), SexpShape::INT_LABEL);
+        assert_eq!(SexpShape::Float.label(), SexpShape::FLOAT_LABEL);
+        assert_eq!(SexpShape::Bool.label(), SexpShape::BOOL_LABEL);
+        assert_eq!(SexpShape::List.label(), SexpShape::LIST_LABEL);
+        assert_eq!(SexpShape::Quote.label(), SexpShape::QUOTE_LABEL);
+        assert_eq!(SexpShape::Quasiquote.label(), SexpShape::QUASIQUOTE_LABEL);
+        assert_eq!(SexpShape::Unquote.label(), SexpShape::UNQUOTE_LABEL);
+        assert_eq!(
+            SexpShape::UnquoteSplice.label(),
+            SexpShape::UNQUOTE_SPLICE_LABEL
+        );
+    }
+
+    #[test]
+    fn sexp_shape_labels_has_expected_cardinality() {
+        // Cardinality contract: `Self::LABELS.len() == 12` — the closed
+        // set of Sexp outermost shapes has EXACTLY twelve members. A
+        // regression that loosens the type to `&[&'static str]` fails
+        // HERE, as does a refactor that adds a thirteenth variant to
+        // ALL without adding its label to LABELS (rustc's forced-arity
+        // check on `[&'static str; 12]` fails compilation).
+        assert_eq!(
+            SexpShape::LABELS.len(),
+            12,
+            "SexpShape::LABELS cardinality drifted from 12 — the twelve \
+             reachable Sexp outermost shapes were extended without \
+             extending the LABELS array in lockstep"
+        );
+        assert_eq!(SexpShape::LABELS.len(), SexpShape::ALL.len(),);
+    }
+
+    #[test]
+    fn sexp_shape_labels_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::LABELS[i] == Self::ALL[i].label()`
+        // element-wise. Binds the closed-set outer algebra's ordering
+        // to the per-role LABEL constant ordering so any
+        // `zip(SexpShape::ALL, SexpShape::LABELS)` consumer (LSP
+        // completion, `tatara-check` coverage sweep, Sekiban metric-
+        // label emitter) reads a coherent (variant, label) pair off
+        // ONE forced-arity array pair rather than through a per-
+        // consumer paired-iteration convention.
+        for (i, v) in SexpShape::ALL.iter().enumerate() {
+            assert_eq!(
+                SexpShape::LABELS[i],
+                v.label(),
+                "SexpShape::LABELS[{i}] `{kw}` drifted from \
+                 SexpShape::ALL[{i}].label() `{via_variant}` — the \
+                 canonical ALL ordering and the LABELS ordering must \
+                 match element-wise",
+                kw = SexpShape::LABELS[i],
+                via_variant = v.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_labels_pairwise_distinct() {
+        // Pairwise disjointness contract: every distinct pair of rows
+        // in `Self::LABELS` MUST be byte-distinct. A collision would
+        // silently degrade a `TypeMismatch { got: SexpShape::Int, ... }`
+        // and a `TypeMismatch { got: SexpShape::Float, ... }` to
+        // identically-rendered diagnostics, defeating the closed-set
+        // typed-slot promotion. Twelve labels × twelve rows sweeps
+        // `LABELS × LABELS` — supersedes any single collision pin.
+        for (i, a) in SexpShape::LABELS.iter().enumerate() {
+            for (j, b) in SexpShape::LABELS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "SexpShape::LABELS[{i}] `{a}` collides with \
+                     SexpShape::LABELS[{j}] `{b}` — the diagnostic \
+                     label surface must be pairwise byte-distinct across \
+                     the twelve reachable Sexp outermost shapes"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sexp_shape_atom_carving_labels_align_with_expected_kwarg_shape_labels() {
+        // CROSS-AXIS IDENTITY: the SexpShape's atomic-payload carving
+        // ({Symbol, Keyword, String, Int, Bool, List}) shares FIVE
+        // label-bytes byte-for-byte with ExpectedKwargShape's
+        // corresponding per-role constants — the ExpectedKwargShape
+        // docstrings on `KEYWORD_LABEL`, `STRING_LABEL`, `INT_LABEL`,
+        // `BOOL_LABEL`, `LIST_LABEL` already anticipate this identity
+        // ("matches `SexpShape::X_LABEL` byte-for-byte"). Post-lift the
+        // identity is a compile-time cross-const composition pin
+        // rather than a per-consumer byte-string convention.
+        //
+        // The overlap is intentional and load-bearing: consumer
+        // diagnostic strings like `"expected keyword, got keyword"`
+        // reuse the SAME byte-string on both sides of the got/expected
+        // gate, so a spelling migration on ONE axis without the OTHER
+        // would introduce a silent diagnostic asymmetry. Pinned here.
+        assert_eq!(SexpShape::KEYWORD_LABEL, ExpectedKwargShape::KEYWORD_LABEL);
+        assert_eq!(SexpShape::STRING_LABEL, ExpectedKwargShape::STRING_LABEL);
+        assert_eq!(SexpShape::INT_LABEL, ExpectedKwargShape::INT_LABEL);
+        assert_eq!(SexpShape::BOOL_LABEL, ExpectedKwargShape::BOOL_LABEL);
+        assert_eq!(SexpShape::LIST_LABEL, ExpectedKwargShape::LIST_LABEL);
+        // Non-overlapping bytes on the sibling axes: SexpShape::Float
+        // ("float") is the narrower element-type; ExpectedKwargShape's
+        // NUMBER_LABEL ("number") is the wider numeric-union label the
+        // `extract_float` gate emits. The pair is intentionally
+        // distinct — pin it so a naive rename doesn't collapse them.
+        assert_ne!(SexpShape::FLOAT_LABEL, ExpectedKwargShape::NUMBER_LABEL);
+    }
+
+    #[test]
+    fn sexp_shape_quote_carving_labels_align_with_quote_form_iac_forge_tags() {
+        // CROSS-AXIS IDENTITY: SexpShape's quote-family carving
+        // ({Quote, Quasiquote, Unquote}) shares THREE label-bytes
+        // byte-for-byte with QuoteForm's corresponding iac-forge tag
+        // constants. Post-lift the identity is a compile-time cross-
+        // const composition pin rather than a per-consumer convention.
+        //
+        // The UnquoteSplice variant is the ONE intentional exception:
+        // SexpShape::UNQUOTE_SPLICE_LABEL is `"unquote-splice"` (short
+        // form used in `LispError::TypeMismatch` diagnostic Display)
+        // while QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG is
+        // `"unquote-splicing"` (long form used for cross-crate byte-
+        // identical interoperability with the iac-forge canonical
+        // form). The asymmetry is documented in the per-role constant's
+        // docstring and pinned in
+        // `sexp_shape_unquote_splice_label_differs_from_quote_form_iac_forge_tag`.
+        assert_eq!(
+            SexpShape::QUOTE_LABEL,
+            crate::ast::QuoteForm::QUOTE_IAC_FORGE_TAG
+        );
+        assert_eq!(
+            SexpShape::QUASIQUOTE_LABEL,
+            crate::ast::QuoteForm::QUASIQUOTE_IAC_FORGE_TAG
+        );
+        assert_eq!(
+            SexpShape::UNQUOTE_LABEL,
+            crate::ast::QuoteForm::UNQUOTE_IAC_FORGE_TAG
+        );
+    }
+
+    #[test]
+    fn sexp_shape_unquote_splice_label_differs_from_quote_form_iac_forge_tag() {
+        // ONE intentional cross-axis asymmetry: SexpShape's diagnostic
+        // label surface uses the SHORTER `"unquote-splice"` bytes while
+        // QuoteForm's iac-forge canonical-form tag surface uses the
+        // LONGER `"unquote-splicing"` bytes. Pin the asymmetry so a
+        // naive rename on either surface doesn't collapse the two
+        // sibling label vocabularies onto ONE spelling.
+        assert_ne!(
+            SexpShape::UNQUOTE_SPLICE_LABEL,
+            crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG,
+            "SexpShape::UNQUOTE_SPLICE_LABEL and \
+             QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG collapsed to ONE \
+             spelling — the two sibling label surfaces must render \
+             distinct bytes so the UnquoteSplice diagnostic renders \
+             the short `\"unquote-splice\"` bytes while iac-forge \
+             canonical-form emits the long `\"unquote-splicing\"` bytes"
+        );
+        assert_eq!(SexpShape::UNQUOTE_SPLICE_LABEL, "unquote-splice");
+        assert_eq!(
+            crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG,
+            "unquote-splicing"
+        );
     }
 
     #[test]

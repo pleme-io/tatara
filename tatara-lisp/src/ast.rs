@@ -2391,6 +2391,117 @@ impl AtomKind {
         Self::Bool,
     ];
 
+    /// Canonical `&'static str` bytes for the [`Self::Symbol`] atomic-
+    /// payload marker — aliases [`SexpShape::SYMBOL_LABEL`] on the
+    /// AtomKind ⊂ SexpShape carving so the marker-level per-role bytes
+    /// bind at ONE `pub const` on the parent superset's atomic arm
+    /// rather than at TWO sites (the per-role `pub const` AND a
+    /// parallel inline literal). Per-role peer of `Self::Symbol` on the
+    /// closed-set atomic algebra; consumers reach for
+    /// `AtomKind::SYMBOL_LABEL` when the caller has a variant in hand
+    /// at compile time and wants the canonical diagnostic bytes without
+    /// runtime dispatch through [`Self::label`].
+    pub const SYMBOL_LABEL: &'static str = SexpShape::SYMBOL_LABEL;
+
+    /// Canonical `&'static str` bytes for the [`Self::Keyword`] atomic-
+    /// payload marker — aliases [`SexpShape::KEYWORD_LABEL`] on the
+    /// AtomKind ⊂ SexpShape carving. Per-role peer of `Self::Keyword`.
+    pub const KEYWORD_LABEL: &'static str = SexpShape::KEYWORD_LABEL;
+
+    /// Canonical `&'static str` bytes for the [`Self::Str`] atomic-
+    /// payload marker — aliases [`SexpShape::STRING_LABEL`] on the
+    /// AtomKind ⊂ SexpShape carving. Per-role peer of `Self::Str`; the
+    /// `Str → "string"` wire-shape rename matches
+    /// [`SexpShape::String`]'s label projection so the AtomKind marker
+    /// and its SexpShape peer emit byte-identical diagnostic bytes.
+    pub const STRING_LABEL: &'static str = SexpShape::STRING_LABEL;
+
+    /// Canonical `&'static str` bytes for the [`Self::Int`] atomic-
+    /// payload marker — aliases [`SexpShape::INT_LABEL`] on the
+    /// AtomKind ⊂ SexpShape carving. Per-role peer of `Self::Int`.
+    pub const INT_LABEL: &'static str = SexpShape::INT_LABEL;
+
+    /// Canonical `&'static str` bytes for the [`Self::Float`] atomic-
+    /// payload marker — aliases [`SexpShape::FLOAT_LABEL`] on the
+    /// AtomKind ⊂ SexpShape carving. Per-role peer of `Self::Float`.
+    pub const FLOAT_LABEL: &'static str = SexpShape::FLOAT_LABEL;
+
+    /// Canonical `&'static str` bytes for the [`Self::Bool`] atomic-
+    /// payload marker — aliases [`SexpShape::BOOL_LABEL`] on the
+    /// AtomKind ⊂ SexpShape carving. Per-role peer of `Self::Bool`.
+    pub const BOOL_LABEL: &'static str = SexpShape::BOOL_LABEL;
+
+    /// Closed-set forced-arity ALL array over the canonical atomic-
+    /// payload marker `&'static str` bytes, in declaration order
+    /// matching [`Self::ALL`] element-wise (pinned by
+    /// `atom_kind_labels_align_with_all_by_index`). Sibling posture to
+    /// [`SexpShape::LABELS`] (`[&'static str; 12]` — the superset
+    /// carving this AtomKind subset embeds into),
+    /// [`crate::error::ExpectedKwargShape::LABELS`] (`[&'static str; 7]`),
+    /// [`crate::error::KwargPathKind::LABELS`] (`[&'static str; 3]`),
+    /// [`crate::error::MacroDefHead::KEYWORDS`] (`[&'static str; 3]`),
+    /// [`Atom::BOOL_LITERALS`] (`[&'static str; 2]`), and
+    /// [`QuoteForm::PREFIXES`] (`[&'static str; 4]`) — every closed-set
+    /// outer projection on the substrate that carries an `&'static str`-
+    /// per-variant label now pins its per-role canonical bytes at ONE
+    /// `pub const` per role PLUS an ALL array for family-wide consumers.
+    ///
+    /// Pre-lift the six atomic-payload marker bytes had NO per-role
+    /// primitive on this closed-set algebra — a consumer with an
+    /// `AtomKind` variant in hand at compile time reaching for the
+    /// canonical diagnostic bytes had to spell
+    /// `AtomKind::Symbol.label()` (runtime dispatch through the
+    /// composition [`Self::sexp_shape`] + [`SexpShape::label`]) OR
+    /// reach across the algebra boundary into
+    /// [`SexpShape::SYMBOL_LABEL`] and re-derive the AtomKind ⊂
+    /// SexpShape variant pairing at the call site. Post-lift the SIX
+    /// canonical bytes bind at ONE `pub const` per role on the typed
+    /// [`AtomKind`] algebra AND at [`Self::LABELS`] as a family-wide
+    /// forced-arity array — a future LSP / REPL completion bar keyed on
+    /// `AtomKind::LABELS`, a `tatara-check` coverage sweep over the
+    /// atomic-payload arms of a `TypeMismatch.got` corpus, or a Sekiban
+    /// audit-trail metric jointly labeled by the atomic marker
+    /// (`tatara_lisp_atom_type_mismatch_total{kind="symbol"}`) reads
+    /// through the typed constants on this subset algebra without
+    /// re-deriving the 6-of-12 carving inline.
+    ///
+    /// Each entry is byte-for-byte identical to the corresponding
+    /// [`SexpShape`] atomic arm — an intentional cross-axis overlap
+    /// pinned by
+    /// `atom_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+    /// so a future label rename on EITHER side (a SexpShape `"string"`
+    /// → `"str"` drift, or an AtomKind rename that skips the alias)
+    /// fails-loudly at the alias test rather than as a silent
+    /// operator-facing vocabulary fracture. Adding a hypothetical
+    /// seventh atomic kind (e.g. `Char` for `#\x` reader syntax,
+    /// `Bigint` for arbitrary-precision integers) extends [`Self::ALL`]
+    /// AND [`Self::LABELS`] AND adds ONE per-role `pub const` alias in
+    /// lockstep — rustc's forced-arity check on the two `[_; N]` arrays
+    /// fails compilation if EITHER ALL array grows without the other.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the six canonical
+    /// atomic-payload marker bytes bind at ONE typed
+    /// `[&'static str; 6]` array on the closed-set AtomKind algebra
+    /// rather than at zero-primitive-on-this-subset-plus-six-inline-
+    /// lookups scattered across the substrate. THEORY.md §V.1 —
+    /// knowable platform; the family's cardinality becomes a TYPE-level
+    /// constant on the substrate algebra rather than a per-consumer
+    /// runtime dispatch through the composition. THEORY.md §VI.1 —
+    /// generation over composition; the family-wide contract sweeps
+    /// (alignment with `ALL`, pairwise disjointness, membership through
+    /// [`Self::label`]) emerge from the composition of TWO substrate
+    /// primitives (this `pub const` array + the six per-role
+    /// `pub const *_LABEL` aliases) rather than as per-variant inline
+    /// assertions duplicated at each call site.
+    pub const LABELS: [&'static str; 6] = [
+        Self::SYMBOL_LABEL,
+        Self::KEYWORD_LABEL,
+        Self::STRING_LABEL,
+        Self::INT_LABEL,
+        Self::FLOAT_LABEL,
+        Self::BOOL_LABEL,
+    ];
+
     /// Project the typed marker to the canonical `&'static str`
     /// diagnostic label — `"symbol"` for [`Self::Symbol`],
     /// `"keyword"` for [`Self::Keyword`], `"string"` for [`Self::Str`]
@@ -13472,6 +13583,144 @@ mod tests {
         // listing forced through `Self::ALL` fails-loudly here in
         // isolation from the per-variant truth tables above.
         crate::assert_closed_set_well_formed::<AtomKind>();
+    }
+
+    #[test]
+    fn atom_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte() {
+        // ALIAS CONTRACT: pin every one of the six per-role
+        // `pub const AtomKind::*_LABEL` aliases equals the corresponding
+        // `pub const SexpShape::*_LABEL` byte-for-byte — so the AtomKind
+        // ⊂ SexpShape marker-vocabulary containment routes through the
+        // typed `pub const AtomKind::V_LABEL: &'static str =
+        // SexpShape::V_LABEL` alias chain rather than through two
+        // independent literal-discipline sites. A regression that
+        // renames the SexpShape side without updating the AtomKind
+        // alias pointing at it fails-loudly here with the exact axis
+        // identified (SYMBOL / KEYWORD / STRING / INT / FLOAT / BOOL);
+        // a regression that re-inlines the AtomKind constant to a
+        // fresh literal still passes this pin but loses the alias-
+        // chain typing (which is what
+        // `atom_kind_label_arms_route_through_per_role_labels_for_every_variant`
+        // + `atom_kind_labels_align_with_all_by_index` catch in
+        // combination).
+        //
+        // Six per-role checks, each spelled out so a regression on ONE
+        // variant surfaces the exact axis rather than through a
+        // variant-loop that hides which arm drifted. The `Str →
+        // String` boundary rename is intentional and load-bearing (the
+        // wire vocabulary is `"string"` on both axes) — the
+        // STRING_LABEL alias is the canonical bridge, so a future
+        // rename that reverses the `Str → "string"` rename to a
+        // literal `"str"` fails the byte-equality pin at THIS test.
+        assert_eq!(AtomKind::SYMBOL_LABEL, SexpShape::SYMBOL_LABEL);
+        assert_eq!(AtomKind::KEYWORD_LABEL, SexpShape::KEYWORD_LABEL);
+        assert_eq!(AtomKind::STRING_LABEL, SexpShape::STRING_LABEL);
+        assert_eq!(AtomKind::INT_LABEL, SexpShape::INT_LABEL);
+        assert_eq!(AtomKind::FLOAT_LABEL, SexpShape::FLOAT_LABEL);
+        assert_eq!(AtomKind::BOOL_LABEL, SexpShape::BOOL_LABEL);
+    }
+
+    #[test]
+    fn atom_kind_label_arms_route_through_per_role_labels_for_every_variant() {
+        // PATH-UNIFORMITY: `AtomKind::V.label()` MUST equal the per-
+        // role `pub const AtomKind::V_LABEL` for every `v: AtomKind`.
+        // Pre-lift the six atomic-payload marker bytes were reachable
+        // through `AtomKind::label` (the composition
+        // `self.sexp_shape().label()` — routing into
+        // `SexpShape::*_LABEL`) OR through direct
+        // `SexpShape::*_LABEL` reach-across; post-lift each variant's
+        // canonical bytes are reachable through the per-role
+        // `AtomKind::*_LABEL` alias too. Pin the byte-equality between
+        // the runtime projection and the compile-time alias so a
+        // regression that renames the alias without updating the arm
+        // (or vice versa) fails-loudly at the exact axis.
+        //
+        // Sibling-shape pin to
+        // `sexp_shape_label_routes_through_typed_per_variant_constants`
+        // one algebra layer up — the parent superset's per-role
+        // constants are pinned against `SexpShape::label`'s arms
+        // there; this pin binds the AtomKind subset algebra's per-
+        // role aliases against `AtomKind::label`'s composition-routed
+        // arms so the six atomic-payload marker labels project through
+        // ONE aliased typed source of truth per role rather than
+        // through per-consumer inline literals.
+        assert_eq!(AtomKind::Symbol.label(), AtomKind::SYMBOL_LABEL);
+        assert_eq!(AtomKind::Keyword.label(), AtomKind::KEYWORD_LABEL);
+        assert_eq!(AtomKind::Str.label(), AtomKind::STRING_LABEL);
+        assert_eq!(AtomKind::Int.label(), AtomKind::INT_LABEL);
+        assert_eq!(AtomKind::Float.label(), AtomKind::FLOAT_LABEL);
+        assert_eq!(AtomKind::Bool.label(), AtomKind::BOOL_LABEL);
+    }
+
+    #[test]
+    fn atom_kind_labels_has_expected_cardinality() {
+        // Cardinality pin: `LABELS.len() == 6` matches `ALL.len()` so a
+        // refactor that loosens the type to `&'static [&'static str]`
+        // fails HERE (the `[_; 6]` slot cannot be sliced silently), and
+        // a variant added to `ALL` without a matching `LABELS` row fails
+        // the pair-arity gate at the array literal itself before this
+        // test even runs. The pin doubles as an operator-visible mark
+        // of the family's cardinality across the substrate — six
+        // atomic-payload markers, matching the six-arm carving of the
+        // parent `SexpShape::LABELS` (the atomic subset of the twelve
+        // canonical outer-shape labels).
+        assert_eq!(AtomKind::LABELS.len(), 6);
+        assert_eq!(AtomKind::LABELS.len(), AtomKind::ALL.len());
+    }
+
+    #[test]
+    fn atom_kind_labels_align_with_all_by_index() {
+        // ALIGNMENT PIN: sweep `LABELS[i] == ALL[i].label()` so any
+        // `zip(ALL, LABELS)` consumer reads a coherent (variant, label)
+        // pair off ONE forced-arity array pair. The declaration-order
+        // pin makes a family-wide consumer that walks the ALL /
+        // LABELS pair in lockstep (an LSP completion bar keyed on
+        // `AtomKind::LABELS`, a Sekiban metric emitter labeling
+        // `tatara_lisp_atom_type_mismatch_total{kind}` by the
+        // per-index label) read one canonical (variant, bytes) pair per
+        // slot rather than routing through per-consumer paired-
+        // iteration. A regression that reorders LABELS without also
+        // reordering ALL (or vice versa) fails-loudly at the exact
+        // index that drifted.
+        assert_eq!(AtomKind::LABELS.len(), AtomKind::ALL.len());
+        for (i, kind) in AtomKind::ALL.iter().enumerate() {
+            assert_eq!(
+                AtomKind::LABELS[i],
+                kind.label(),
+                "AtomKind::LABELS[{i}] `{lbl}` drifted from \
+                 AtomKind::ALL[{i}].label() `{via_variant}` — the \
+                 canonical ALL ordering and the LABELS ordering must \
+                 match element-wise",
+                lbl = AtomKind::LABELS[i],
+                via_variant = kind.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn atom_kind_labels_pairwise_distinct() {
+        // 6x6 pairwise sweep so a collision between any two labels
+        // (which would silently degrade two distinct atomic-payload
+        // markers to the SAME diagnostic bytes and violate the
+        // closed-set FromStr round-trip) fails-loudly at the exact
+        // pair. Distinctness is already enforced structurally by
+        // `assert_closed_set_well_formed::<AtomKind>()` (clause 3), so
+        // this pin is a secondary guard focused on the per-role
+        // `pub const` surface directly rather than the runtime
+        // projection through the trait's default `labels()`.
+        for (i, a) in AtomKind::LABELS.iter().enumerate() {
+            for (j, b) in AtomKind::LABELS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "AtomKind::LABELS[{i}] ({a:?}) collides with \
+                     AtomKind::LABELS[{j}] ({b:?}) — two distinct \
+                     atomic-payload markers cannot share diagnostic bytes",
+                );
+            }
+        }
     }
 
     #[test]

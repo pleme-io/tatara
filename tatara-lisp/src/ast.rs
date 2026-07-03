@@ -6585,6 +6585,142 @@ impl QuoteForm {
         }
     }
 
+    /// Canonical `&'static str` iac-forge canonical-form tag of
+    /// [`Self::Quote`] — `"quote"`. The ONE canonical bytes-payload on
+    /// the closed-set [`QuoteForm`] algebra shared by [`Self::iac_forge_tag`]'s
+    /// [`Self::Quote`] arm AND the [`crate::interop`] `From<&Sexp> for
+    /// iac_forge::sexpr::SExpr` arm the projection feeds.
+    ///
+    /// Sibling posture to the closed set of per-role `pub const` bytes
+    /// on the substrate's other closed-set outer algebras:
+    /// [`Self::QUOTE_PREFIX`] / [`Self::QUASIQUOTE_PREFIX`] /
+    /// [`Self::UNQUOTE_PREFIX`] / [`Self::UNQUOTE_SPLICE_PREFIX`] (per-
+    /// role reader-prefix algebra on the SAME [`QuoteForm`] closed set),
+    /// [`crate::error::MacroDefHead::DEFMACRO_KEYWORD`] /
+    /// [`crate::error::MacroDefHead::DEFPOINT_TEMPLATE_KEYWORD`] /
+    /// [`crate::error::MacroDefHead::DEFCHECK_KEYWORD`] (per-role
+    /// head-keyword algebra on the CL macro-definition surface),
+    /// [`Atom::TRUE_LITERAL`] / [`Atom::FALSE_LITERAL`] (per-role
+    /// Scheme-bool spelling algebra on the atomic-payload surface).
+    ///
+    /// The (canonical iac-forge tag) axis lives ORTHOGONAL to the
+    /// (canonical reader prefix) axis: `Self::QUOTE_PREFIX` (`"'"`) and
+    /// `Self::QUOTE_IAC_FORGE_TAG` (`"quote"`) both project the same
+    /// variant but through two distinct byte vocabularies — the reader
+    /// axis for the Lisp source-code surface, the iac-forge axis for
+    /// the cross-crate canonical-form surface (BLAKE3 attestation,
+    /// render cache). A regression that inlines the `"quote"` literal
+    /// at [`Self::iac_forge_tag`]'s [`Self::Quote`] arm and drifts the
+    /// constant silently (e.g. a hypothetical rename to `"literal-quote"`
+    /// on the iac-forge side while leaving the prefix `"'"` intact)
+    /// fails at the algebra's `iac_forge_tag()` path-uniformity pin
+    /// (`quote_form_iac_forge_tag_routes_through_typed_per_role_constants`)
+    /// rather than at silent canonical-form drift where downstream
+    /// BLAKE3 attestation keys silently mis-hash.
+    pub const QUOTE_IAC_FORGE_TAG: &'static str = "quote";
+
+    /// Canonical `&'static str` iac-forge canonical-form tag of
+    /// [`Self::Quasiquote`] — `"quasiquote"`. Sibling of
+    /// [`Self::QUOTE_IAC_FORGE_TAG`] on the closed-set per-role
+    /// quote-family iac-forge tag-bytes axis; see
+    /// [`Self::QUOTE_IAC_FORGE_TAG`] for the algebra-level round-trip +
+    /// disjointness contracts every sibling shares.
+    pub const QUASIQUOTE_IAC_FORGE_TAG: &'static str = "quasiquote";
+
+    /// Canonical `&'static str` iac-forge canonical-form tag of
+    /// [`Self::Unquote`] — `"unquote"`. Sibling of
+    /// [`Self::QUOTE_IAC_FORGE_TAG`] on the closed-set per-role
+    /// quote-family iac-forge tag-bytes axis.
+    ///
+    /// Byte-identical to the substrate's shorter diagnostic label
+    /// [`crate::error::SexpShape::Unquote`]'s label projection
+    /// (`SexpShape::label` returns `"unquote"` for this variant) — the
+    /// two projections happen to agree on this variant's bytes but
+    /// live at distinct algebraic layers (iac-forge canonical form vs
+    /// substrate diagnostic surface); the divergence is load-bearing on
+    /// the [`Self::UnquoteSplice`] arm (`"unquote-splicing"` vs
+    /// `"unquote-splice"`) and this byte-level agreement here does not
+    /// license a consolidation of the two axes. Pinned by
+    /// `quote_form_iac_forge_tag_diverges_from_sexp_shape_label_for_unquote_splice`.
+    pub const UNQUOTE_IAC_FORGE_TAG: &'static str = "unquote";
+
+    /// Canonical `&'static str` iac-forge canonical-form tag of
+    /// [`Self::UnquoteSplice`] — `"unquote-splicing"`. The Common-Lisp-
+    /// canonical spelling: a `,@x` form encodes as `(unquote-splicing x)`
+    /// rather than `(unquote-splice x)`. That tag-string choice is
+    /// INTENTIONALLY DISTINCT from the substrate's shorter diagnostic
+    /// label projected by [`crate::error::SexpShape::label`] (which
+    /// renders `[`Self::UnquoteSplice`]` as `"unquote-splice"` — the
+    /// shorter idiom appropriate for `expected …, got unquote-splice`
+    /// error surfaces). The two projections key the SAME closed set on
+    /// TWO distinct boundaries — pinning the divergence at the typed
+    /// per-role `pub const` documents the intent structurally: a
+    /// future "consolidation" PR that homogenizes them would have to
+    /// touch this constant explicitly, surfacing the boundary-distinct
+    /// invariant at code-review time rather than silently.
+    ///
+    /// Sibling of [`Self::QUOTE_IAC_FORGE_TAG`] on the closed-set
+    /// per-role quote-family iac-forge tag-bytes axis. The ONLY entry
+    /// on this axis whose bytes disagree with the peer-axis
+    /// [`crate::error::SexpShape::label`] projection — pinned by
+    /// `quote_form_iac_forge_tag_diverges_from_sexp_shape_label_for_unquote_splice`
+    /// alongside the three matched-arm agreements.
+    pub const UNQUOTE_SPLICE_IAC_FORGE_TAG: &'static str = "unquote-splicing";
+
+    /// The closed-set forced-arity ALL array over the quote-family
+    /// iac-forge canonical-form tag `&'static str` bytes in canonical
+    /// declaration order matching [`Self::ALL`] element-wise. Sibling
+    /// posture to [`Self::PREFIXES`] (`[&'static str; 4]` on the
+    /// reader-prefix axis of the SAME [`QuoteForm`] closed set),
+    /// [`crate::error::MacroDefHead::KEYWORDS`] (`[&'static str; 3]`
+    /// on the CL macro-definition head algebra),
+    /// [`Atom::BOOL_LITERALS`] (`[&'static str; 2]` on the Scheme-bool
+    /// spelling algebra), and
+    /// [`crate::macro_expand::MacroParams::LAMBDA_LIST_KEYWORDS`]
+    /// (`[&'static str; 2]` on the CL lambda-list-keyword algebra) —
+    /// every closed-set outer projection on the substrate now pins its
+    /// canonical bytes at ONE `pub const` per role plus an ALL array
+    /// for family-wide consumers.
+    ///
+    /// The (canonical iac-forge tag) axis + the (canonical reader
+    /// prefix) axis together span the two production byte-vocabularies
+    /// the [`QuoteForm`] closed set carries — [`Self::PREFIXES`] holds
+    /// the Lisp source-code prefixes (`"'"`, `` "`" ``, `","`, `",@"`)
+    /// the reader tokenizes on, [`Self::IAC_FORGE_TAGS`] holds the
+    /// cross-crate canonical-form tag strings (`"quote"`,
+    /// `"quasiquote"`, `"unquote"`, `"unquote-splicing"`) the
+    /// iac-forge interop layer round-trips through. Adding a
+    /// hypothetical fifth homoiconic prefix (a `,~` reverse-unquote, a
+    /// `,?` conditional-unquote, a `#'` Common-Lisp function-quote)
+    /// extends [`Self::ALL`] AND [`Self::PREFIXES`] AND
+    /// [`Self::IAC_FORGE_TAGS`] AND [`Self::prefix`]'s arm AND
+    /// [`Self::iac_forge_tag`]'s arm AND two new per-role `pub const`s
+    /// (one on each axis) in lockstep — rustc's forced-arity check on
+    /// `[&'static str; N]` fails compilation if any of the three ALL
+    /// arrays grows without the others.
+    ///
+    /// Future consumers that compose against [`Self::IAC_FORGE_TAGS`]:
+    /// - Cross-crate canonical-form completion (an authoring tool
+    ///   surfacing every legal iac-forge tag in a `(<tag> <inner>)`
+    ///   template — the completion set IS [`Self::IAC_FORGE_TAGS`]
+    ///   rather than four hand-enumerated `&'static str` literals per
+    ///   completion provider).
+    /// - `tatara-check` coverage assertions that sweep workspace
+    ///   attestation payloads for every canonical iac-forge tag —
+    ///   the typed sweep replaces per-consumer inline enumeration of
+    ///   the four literals.
+    /// - Any future audit-trail metric jointly labeled by
+    ///   [`Self::iac_forge_tag`] (e.g.
+    ///   `tatara_lisp_iac_forge_tag_total{tag="quote"}`) — the metric
+    ///   label set IS [`Self::IAC_FORGE_TAGS`] mapped through
+    ///   [`Self::iac_forge_tag`].
+    pub const IAC_FORGE_TAGS: [&'static str; 4] = [
+        Self::QUOTE_IAC_FORGE_TAG,
+        Self::QUASIQUOTE_IAC_FORGE_TAG,
+        Self::UNQUOTE_IAC_FORGE_TAG,
+        Self::UNQUOTE_SPLICE_IAC_FORGE_TAG,
+    ];
+
     /// Canonical iac-forge interop tag — the symbol head the canonical
     /// 2-element-list encoding of a quote-family wrapper uses when
     /// projecting `tatara_lisp::Sexp` into `iac_forge::sexpr::SExpr`:
@@ -6653,10 +6789,10 @@ impl QuoteForm {
     #[must_use]
     pub fn iac_forge_tag(self) -> &'static str {
         match self {
-            Self::Quote => "quote",
-            Self::Quasiquote => "quasiquote",
-            Self::Unquote => "unquote",
-            Self::UnquoteSplice => "unquote-splicing",
+            Self::Quote => Self::QUOTE_IAC_FORGE_TAG,
+            Self::Quasiquote => Self::QUASIQUOTE_IAC_FORGE_TAG,
+            Self::Unquote => Self::UNQUOTE_IAC_FORGE_TAG,
+            Self::UnquoteSplice => Self::UNQUOTE_SPLICE_IAC_FORGE_TAG,
         }
     }
 
@@ -10654,6 +10790,186 @@ mod tests {
         assert_eq!(QuoteForm::Quasiquote.iac_forge_tag(), "quasiquote");
         assert_eq!(QuoteForm::Unquote.iac_forge_tag(), "unquote");
         assert_eq!(QuoteForm::UnquoteSplice.iac_forge_tag(), "unquote-splicing");
+    }
+
+    // ── `QuoteForm::{QUOTE_IAC_FORGE_TAG, QUASIQUOTE_IAC_FORGE_TAG,
+    // UNQUOTE_IAC_FORGE_TAG, UNQUOTE_SPLICE_IAC_FORGE_TAG,
+    // IAC_FORGE_TAGS}` — per-role `&'static str` iac-forge canonical-
+    // form tag algebra on the closed-set outer [`QuoteForm`]. Peer of
+    // the reader-prefix axis's [`QuoteForm::{QUOTE_PREFIX,
+    // QUASIQUOTE_PREFIX, UNQUOTE_PREFIX, UNQUOTE_SPLICE_PREFIX,
+    // PREFIXES}`] block above — the same closed set carries TWO
+    // orthogonal byte vocabularies (the Lisp reader prefixes the
+    // tokenizer classifies on, the iac-forge canonical-form tags the
+    // cross-crate attestation layer round-trips through), each now
+    // pinned at a per-role `pub const` plus a paired ALL array.
+    #[test]
+    fn quote_form_per_role_iac_forge_tags_pin_canonical_bytes() {
+        // Pin each per-role `pub const` at its exact canonical byte
+        // sequence. Sweeping via a per-variant pair rather than four
+        // hand-rolled `assert_eq!(QuoteForm::X_IAC_FORGE_TAG, "x")`
+        // asserts (a) that each constant IS the load-bearing byte
+        // string, and (b) that the pairing between the const and the
+        // spelling is enforced at rustc's constant-folding-level so a
+        // future rename of the const surfaces here as a spelling drift
+        // rather than as a silent canonical-form regression.
+        for (label, actual, expected) in [
+            (
+                "QUOTE_IAC_FORGE_TAG",
+                QuoteForm::QUOTE_IAC_FORGE_TAG,
+                "quote",
+            ),
+            (
+                "QUASIQUOTE_IAC_FORGE_TAG",
+                QuoteForm::QUASIQUOTE_IAC_FORGE_TAG,
+                "quasiquote",
+            ),
+            (
+                "UNQUOTE_IAC_FORGE_TAG",
+                QuoteForm::UNQUOTE_IAC_FORGE_TAG,
+                "unquote",
+            ),
+            (
+                "UNQUOTE_SPLICE_IAC_FORGE_TAG",
+                QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG,
+                "unquote-splicing",
+            ),
+        ] {
+            assert_eq!(
+                actual, expected,
+                "QuoteForm::{label} drifted from canonical `{expected}` bytes"
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_iac_forge_tag_routes_through_typed_per_role_constants() {
+        // PATH-UNIFORMITY: `Self::iac_forge_tag(self)` returns the
+        // per-role `pub const` byte-for-byte per variant, catching a
+        // regression that reverts ONE arm to an inline `"quote"` /
+        // `"quasiquote"` / `"unquote"` / `"unquote-splicing"` string
+        // literal (or drifts one arm's bytes silently). Sibling posture
+        // to `quote_form_prefix_routes_through_typed_per_role_constants`
+        // on the reader-prefix axis of the SAME closed set.
+        for (qf, expected) in [
+            (QuoteForm::Quote, QuoteForm::QUOTE_IAC_FORGE_TAG),
+            (QuoteForm::Quasiquote, QuoteForm::QUASIQUOTE_IAC_FORGE_TAG),
+            (QuoteForm::Unquote, QuoteForm::UNQUOTE_IAC_FORGE_TAG),
+            (
+                QuoteForm::UnquoteSplice,
+                QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG,
+            ),
+        ] {
+            let actual = qf.iac_forge_tag();
+            assert_eq!(
+                actual, expected,
+                "QuoteForm::{qf:?}.iac_forge_tag() `{actual}` drifted from \
+                 per-role constant `{expected}` — the arm must route \
+                 through the typed constant rather than an inline literal",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_iac_forge_tags_has_expected_cardinality() {
+        // Cardinality contract: `Self::IAC_FORGE_TAGS.len() == 4` —
+        // pinned at the declaration site by rustc's forced-arity check
+        // on `[&'static str; 4]`. This test surfaces the arity as a
+        // fail-loud runtime pin so a future refactor that switches the
+        // array type to `&[&'static str]` (dropping the compile-time
+        // arity forcing) doesn't silently loosen the closed-set
+        // discipline the family relies on. Sibling posture to
+        // `quote_form_prefixes_has_expected_cardinality` on the peer
+        // reader-prefix axis.
+        assert_eq!(
+            QuoteForm::IAC_FORGE_TAGS.len(),
+            4,
+            "QuoteForm::IAC_FORGE_TAGS cardinality drifted from 4 — the \
+             closed homoiconic-prefix domain admits exactly four \
+             wrappers by construction; a fifth extension surfaces here"
+        );
+    }
+
+    #[test]
+    fn quote_form_iac_forge_tags_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::IAC_FORGE_TAGS[i] ==
+        // Self::ALL[i].iac_forge_tag()` element-wise. Pins that the
+        // typed variant ALL and the `&'static str` IAC_FORGE_TAGS ALL
+        // stay in lockstep under any reorder — a regression that
+        // reorders ONE array without reordering the other silently
+        // misaligns every `zip(ALL, IAC_FORGE_TAGS)` consumer (cross-
+        // crate attestation renderers, LSP canonical-form completion
+        // providers, metric-label emitters, coverage reporters).
+        // Sibling posture to `quote_form_prefixes_align_with_all_by_index`
+        // on the peer reader-prefix axis.
+        for (i, qf) in QuoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                QuoteForm::IAC_FORGE_TAGS[i],
+                qf.iac_forge_tag(),
+                "QuoteForm::IAC_FORGE_TAGS[{i}] `{tag}` drifted from \
+                 QuoteForm::ALL[{i}] ({qf:?}).iac_forge_tag() `{via_variant}` \
+                 — the canonical declaration order of the ALL array \
+                 and the iac-forge tag projection must match element-wise",
+                tag = QuoteForm::IAC_FORGE_TAGS[i],
+                via_variant = qf.iac_forge_tag(),
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_iac_forge_tags_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: every entry of the `IAC_FORGE_TAGS`
+        // array must differ so the cross-crate canonical-form decoder
+        // (any future `IAC_FORGE_TAGS.iter().find(|t| *t == head)`
+        // sweep, any BLAKE3 attestation key comparison) cannot route
+        // two homoiconic prefixes through the same tag arm. Family-wide
+        // sweep over `IAC_FORGE_TAGS × IAC_FORGE_TAGS` — supersedes any
+        // per-pair pin and picks up new tags mechanically. Sibling
+        // posture to `quote_form_prefixes_pairwise_distinct` on the
+        // peer reader-prefix axis.
+        for (i, a) in QuoteForm::IAC_FORGE_TAGS.iter().enumerate() {
+            for (j, b) in QuoteForm::IAC_FORGE_TAGS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "QuoteForm::IAC_FORGE_TAGS[{i}] `{a}` collides with \
+                     QuoteForm::IAC_FORGE_TAGS[{j}] `{b}` — the \
+                     canonical-form decoder's cascade would route two \
+                     homoiconic prefixes through the same tag arm"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quote_form_iac_forge_tags_diverge_from_prefixes_pairwise() {
+        // AXIS-ORTHOGONALITY: `IAC_FORGE_TAGS` (the cross-crate
+        // canonical-form axis) and `PREFIXES` (the Lisp reader-prefix
+        // axis) span two distinct byte vocabularies on the SAME closed
+        // set. Every per-variant pair must disagree: the canonical
+        // tags are word-length identifiers (`"quote"`, `"quasiquote"`,
+        // `"unquote"`, `"unquote-splicing"`) while the reader prefixes
+        // are punctuation (`"'"`, `` "`" ``, `","`, `",@"`). A
+        // regression that collapsed the two axes (a hypothetical
+        // consolidation PR that reused `iac_forge_tag()`'s bytes at
+        // the reader prefix site, or vice versa) would silently break
+        // either the source-code round-trip (readers no longer see
+        // `"'"`) OR the canonical-form round-trip (attestation keys
+        // no longer see `"quote"`). Sweep every variant's per-axis
+        // pair — supersedes any per-variant pin and picks up new
+        // prefix/tag pairs mechanically.
+        for (i, qf) in QuoteForm::ALL.iter().enumerate() {
+            let prefix = QuoteForm::PREFIXES[i];
+            let tag = QuoteForm::IAC_FORGE_TAGS[i];
+            assert_ne!(
+                prefix, tag,
+                "QuoteForm::{qf:?} — reader prefix `{prefix}` collides \
+                 with iac-forge tag `{tag}`; the two axes must span \
+                 distinct byte vocabularies on the closed set",
+            );
+        }
     }
 
     #[test]

@@ -232,12 +232,26 @@ mod iac_forge_impl {
             // already keyed on `(unquote-splicing ...)`. Pin the tag at
             // the interop boundary directly so the intent is enforced
             // even if a future refactor renames `QuoteForm::iac_forge_tag`.
+            //
+            // Binds the canonical tag bytes at the typed
+            // [`crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG`]
+            // `pub const` rather than the inline `"unquote-splicing"`
+            // literal — the interop-boundary test and the typed
+            // per-role `pub const` bytes now share ONE source of truth,
+            // so a byte-level rename touches the constant AND surfaces
+            // through this test in lockstep rather than leaving the
+            // inline literal here as a silent parallel bytes source.
             let splice = Sexp::UnquoteSplice(Box::new(Sexp::symbol("xs")));
             let canonical: SExpr = (&splice).into();
             match canonical {
                 SExpr::List(items) => {
                     assert_eq!(items.len(), 2);
-                    assert_eq!(items[0], SExpr::Symbol("unquote-splicing".to_string()));
+                    assert_eq!(
+                        items[0],
+                        SExpr::Symbol(
+                            crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG.to_string()
+                        ),
+                    );
                 }
                 other => panic!("expected canonical list shape, got {other:?}"),
             }

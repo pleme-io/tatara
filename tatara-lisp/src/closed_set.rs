@@ -484,6 +484,84 @@ pub trait ClosedSet: Sized + Copy + 'static {
         labels
     }
 
+    /// Render the closed set's canonical labels in ASCII-`sort_unstable`
+    /// lexicographic order, joined by `sep` — the substrate-wide
+    /// canonical-ordered candidate-list-as-string shape consumers thread
+    /// into structured-rejection diagnostics that want alphabetized
+    /// rendering (`expected one of: aplicacao/container/flux/guest/lisp/nix`,
+    /// LSP completion bars sorted for humans, `tatara-check` "did you
+    /// mean X?" hints that walk a byte-wise-sorted candidate table).
+    ///
+    /// Default body composes [`Self::sorted_labels`] with
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// — the sorted-and-joined rendering is a typed CONSEQUENCE of
+    /// [`Self::ALL`] + [`Self::label`] + ASCII lexicographic ordering +
+    /// the chosen separator. Implementors override only when the sort
+    /// / join surface needs to diverge from the natural
+    /// `sorted_labels().join(sep)` shape (no production implementor
+    /// reaches for this today — the axis exists for the same reason
+    /// `via`, `set_label`, `labels`, `labels_joined`, `sorted_labels`,
+    /// `suggest_closest`, `parse_label_with_hint` overrides exist: a
+    /// typed escape hatch the trait surface exposes rather than forcing
+    /// the implementor to hand-roll the impl).
+    ///
+    /// Sibling posture to the closed set of substrate-wide
+    /// candidate-list-as-string projections: [`Self::labels_joined`]
+    /// renders declaration-ordered labels (the `INTENT_KIND_LIST`-shaped
+    /// production constants that pin canonical serialization order),
+    /// [`Self::sorted_labels`] returns lexicographic-ordered labels as
+    /// a `Vec<&'static str>` (the truth-table shape per-implementor
+    /// `_all_is_unique_and_complete` tests key on), and THIS method
+    /// closes the third corner — the lexicographic-ordered
+    /// candidate-list-as-string. The three projections partition the
+    /// (declaration-vs-lexicographic ordering, Vec-vs-String surface)
+    /// cross-product exhaustively: declaration+Vec is [`Self::labels`],
+    /// declaration+String is [`Self::labels_joined`], lexicographic+Vec
+    /// is [`Self::sorted_labels`], lexicographic+String is this method.
+    /// A future consumer that wants a fifth surface (Oxford-comma joins,
+    /// Unicode-collation-aware sorting, a bulleted-list renderer) lands
+    /// at ONE additional trait method composed from these primitives,
+    /// not per-implementor.
+    ///
+    /// Future consumers — an LSP completion bar rendering
+    /// `aplicacao | container | flux | guest | lisp | nix` in
+    /// alphabetized grammar-style form, a `tatara-check` diagnostic
+    /// rendering `expected one of: aplicacao, container, flux, guest,
+    /// lisp, nix` for a natural-language alphabetized surface, a
+    /// deterministic-across-machines metric label whose canonical
+    /// ordering must not depend on `Self::ALL`'s declaration order —
+    /// bind to ONE trait method instead of hand-rolling the
+    /// `sorted_labels().join(sep)` compound at each call site, and the
+    /// closed-set projection's alphabetized-rendering surface evolves
+    /// at ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §V.1 — knowable platform; the alphabetized
+    /// candidate-list-as-string shape sits as an unnamed compound of
+    /// [`Self::sorted_labels`] + [`slice::join`] pre-lift; naming it on
+    /// the trait makes the projection a TYPED CONSEQUENCE of
+    /// [`Self::labels`] + ASCII lexicographic ordering + the chosen
+    /// separator — generic consumers see ONE method, not ONE
+    /// sort-then-join compound per crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// alphabetized-candidate-list rendering emerges from the
+    /// composition of FOUR substrate primitives ([`Self::ALL`],
+    /// [`Self::label`], `slice::sort_unstable`, `slice::join`) rather
+    /// than as a per-consumer inline `sort+join` pair. A future
+    /// tightening of either primitive (a Unicode-collation-aware sort,
+    /// an Oxford-comma-aware join, a locale-sensitive rendering)
+    /// propagates to every closed-set consumer through ONE trait body.
+    ///
+    /// Frontier inspiration: Idris's `show` composed with `sort` over a
+    /// finite-type universe — the canonical-ordered rendering emits as
+    /// a single typed projection on the finite-type layer rather than
+    /// per-instance inline compound. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's existing
+    /// [`Self::sorted_labels`] surface with the `slice::join`
+    /// standard-library primitive — no new dep, no new IR layer.
+    fn sorted_labels_joined(sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::sorted_labels().join(sep)
+    }
+
     /// Project `needle` onto the closest variant whose
     /// [`Self::label`] sits within the substrate-wide bounded edit
     /// distance — the typed bridge between an unrecognized input and
@@ -727,6 +805,26 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///    declaration order instead of lexicographic) loudly rather than
 ///    silently bifurcating the canonical-ordered candidate-list surface
 ///    every LSP / `tatara-check` / metrics consumer routes through.
+/// 10. [`ClosedSet::sorted_labels_joined`] composes
+///     [`ClosedSet::sorted_labels`] with
+///     [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+///     verbatim — the alphabetized joined-candidate-list rendering
+///     every diagnostic / metrics consumer that wants a
+///     lexicographic-ordered `expected one of: ...` shape routes
+///     through emits at ONE trait body. The sweep walks the same three
+///     representative separators clause (8) uses (`"/"`, `", "`, `"|"`)
+///     so a drift in any one of the three rendering surfaces (slash
+///     for ordering-independent production constants, comma-space for
+///     natural-language alphabetized `expected one of: ...` shapes,
+///     pipe for grammar-style alphabetized alternative lists) fails
+///     the testkit on every implementor. The default trait body
+///     satisfies the clause for free; the assertion catches a future
+///     implementor whose override returns a different sort-then-join
+///     shape (a different separator threading, a subset of labels,
+///     declaration order instead of lexicographic) loudly rather than
+///     silently bifurcating the alphabetized-candidate-list-as-string
+///     rendering every LSP / `tatara-check` / metrics consumer routes
+///     through.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -920,6 +1018,29 @@ where
         lifted_sorted, natural_sorted,
         "{type_name}: T::sorted_labels() drifted from `let mut v = T::labels(); v.sort_unstable(); v` — the canonical-ordered candidate-list surface every LSP / `tatara-check` / metrics consumer routes through no longer matches the natural labels-then-sort projection",
     );
+    // (10) — `T::sorted_labels_joined(sep)` composes
+    // `T::sorted_labels()` with `slice::join` verbatim. The default
+    // trait body satisfies the clause for free; the assertion catches
+    // a future implementor whose override returns a different shape
+    // (a subset of labels, a different ordering, declaration order
+    // instead of lexicographic, a wrong separator threading) loudly
+    // rather than silently bifurcating the alphabetized-
+    // candidate-list-as-string surface every LSP / `tatara-check` /
+    // metrics consumer routes through. Sweep the same three
+    // representative separators clause (8) uses (`"/"`, `", "`, `"|"`)
+    // so an isolated drift on any of the three natural rendering
+    // surfaces (slash for ordering-independent production constants,
+    // comma-space for natural-language alphabetized `expected one of:
+    // ...` shapes, pipe for grammar-style alphabetized alternative
+    // lists) fails the testkit on every implementor.
+    for sep in ["/", ", ", "|"] {
+        let lifted = T::sorted_labels_joined(sep);
+        let natural = T::sorted_labels().join(sep);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::sorted_labels_joined({sep:?}) drifted from T::sorted_labels().join({sep:?}) — the alphabetized joined-candidate-list rendering every diagnostic / metrics consumer routes through no longer matches the natural sorted-labels-then-join projection",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1414,6 +1535,171 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_labels override drifted from the natural labels-then-sort composition",
+        );
+    }
+
+    #[test]
+    fn sorted_labels_joined_renders_lexicographic_labels_through_chosen_separator() {
+        // The alphabetized joined-candidate-list surface —
+        // `T::sorted_labels_joined(sep)` composes `T::sorted_labels()`
+        // with `slice::join` verbatim. Pinning the rendering across THREE
+        // representative separators (slash for ordering-independent
+        // production constants, comma-space for natural-language
+        // alphabetized `expected one of: ...` shapes, pipe for grammar-
+        // style alphabetized alternative lists) means a regression that
+        // drifts the composition at the trait method (a future override
+        // that strips a label, threads a different separator, returns
+        // declaration order rather than lexicographic) fails this
+        // contract before any per-implementor surface depends on the
+        // rendering downstream. `StubKind`'s labels (`alpha`/`beta`/
+        // `gamma`) are already in lexicographic declaration order, so
+        // the sorted rendering coincides with the natural
+        // `labels_joined` rendering; the ReverseStubKind pin below
+        // exercises the actual sort discipline.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_labels_joined("/"),
+            "alpha/beta/gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_labels_joined(", "),
+            "alpha, beta, gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_labels_joined("|"),
+            "alpha|beta|gamma",
+        );
+    }
+
+    #[test]
+    fn sorted_labels_joined_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the joined surface —
+        // `T::sorted_labels_joined(sep)` MUST normalize an arbitrary
+        // declaration order into ASCII lexicographic order BEFORE
+        // joining, regardless of the implementor's `ALL`-array layout.
+        // A regression that returns `labels_joined(sep)` verbatim
+        // (without the sort step) would pass
+        // `sorted_labels_joined_renders_lexicographic_labels_through_chosen_separator`
+        // on `StubKind` (because its labels already sit in order) but
+        // silently bifurcate the alphabetized-rendering surface for any
+        // implementor whose declaration order differs from byte-wise
+        // sort order. Pinning the sort discipline here with a
+        // deliberately-out-of-order stub catches that drift directly.
+        // Sibling posture to `sorted_labels_normalizes_arbitrary_declaration_order`
+        // one axis over (Vec) — this pin covers the String surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseJoinStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseJoinStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseJoinStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse join stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseJoinStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse join stub kind";
+            type Unknown = UnknownReverseJoinStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseJoinStubKind(s.to_owned())
+            }
+        }
+        // `labels_joined` preserves declaration order — `gamma/beta/alpha`.
+        assert_eq!(
+            <ReverseJoinStubKind as ClosedSet>::labels_joined("/"),
+            "gamma/beta/alpha",
+        );
+        // `sorted_labels_joined` normalizes to ASCII lexicographic order
+        // BEFORE joining — `alpha/beta/gamma`. The composition with
+        // `sort_unstable` is the load-bearing step the lift names.
+        assert_eq!(
+            <ReverseJoinStubKind as ClosedSet>::sorted_labels_joined("/"),
+            "alpha/beta/gamma",
+        );
+    }
+
+    #[test]
+    fn sorted_labels_joined_threads_empty_separator_into_a_concatenated_sorted_run() {
+        // Edge case — an empty separator concatenates the sorted labels
+        // without delimitation, distinct from
+        // `labels_joined_threads_empty_separator_into_a_concatenated_run`
+        // only in that the concatenation happens on the lexicographic-
+        // ordered labels rather than the declaration-ordered ones.
+        // Pinning it here means a future override that special-cases
+        // the empty-separator path (an over-eager optimization that
+        // returns a constant, a normalization step that swaps `""` for
+        // `", "`) fails-loudly rather than silently bifurcating the
+        // alphabetized-rendering surface. The joined output stays a
+        // valid `String` — `slice::join` does not allocate per-separator
+        // -byte when the separator is empty.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_labels_joined(""),
+            "alphabetagamma",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_labels_joined_and_composition() {
+        // The well-formedness sweep's (10) clause —
+        // `T::sorted_labels_joined(sep)` MUST compose `T::sorted_labels()`
+        // with `slice::join` verbatim across every representative
+        // separator. A hand-impl'd implementor whose override drifts
+        // the composition (drops a label, threads a different
+        // separator, returns declaration order rather than
+        // lexicographic) fails the sweep loudly rather than silently
+        // bifurcating the alphabetized-joined-candidate-list surface
+        // every consumer routes through. Pinning the failure path here
+        // keeps the testkit's (10) clause guaranteed-to-fire — a
+        // regression that makes the assertion permissive (e.g. a
+        // future "any superset" relaxation) breaks this stub-level
+        // contract before any per-implementor sweep runs. Sibling
+        // posture to the eight sibling `_catches_drift_between_*`
+        // pins above (clauses 5-9); together they close the
+        // structural-drift-catches sweep on every default composition
+        // the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedJoinKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedJoinKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedJoinKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted join kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedJoinKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted sorted join kind";
+            type Unknown = UnknownDriftedSortedJoinKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedJoinKind(s.to_owned())
+            }
+            fn sorted_labels_joined(_sep: &str) -> String {
+                // Drifted override — returns a hard-coded literal that
+                // ignores the caller-supplied separator and the
+                // implementor's actual sorted-labels surface.
+                String::from("WRONG")
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedSortedJoinKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_labels_joined override drifted from the natural sorted-labels-then-join composition",
         );
     }
 

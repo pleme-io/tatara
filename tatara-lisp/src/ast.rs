@@ -910,12 +910,116 @@ impl Atom {
     /// (e.g. a Racket-compat port, a heredoc mode, a raw-string
     /// mode) plugs a peer projection onto the same algebra rather
     /// than forking the reader.
+    ///
+    /// Canonical newline-escape SOURCE char — the ONE `'n'` byte
+    /// [`Self::decode_str_escape`]'s newline arm pattern-matches on.
+    /// Sibling constant of [`Self::NEWLINE_ESCAPE_DECODED`] on the
+    /// same (source, decoded) escape-arm axis: the (`'n'`, `'\n'`)
+    /// pairing is the first of the substrate's three named-escape
+    /// arms; each pairing binds at ONE `pub const` per role rather
+    /// than at an inline `char` literal at the match-arm pattern +
+    /// value. Sibling posture to [`Self::STR_DELIMITER`] /
+    /// [`Self::STR_ESCAPE_LEAD`] one axis over on the same
+    /// Str-payload tokenization boundary — those two constants pin
+    /// the ONE canonical delimiter byte AND the ONE canonical
+    /// escape-lead byte the reader's outer + inner branch dispatch
+    /// specialises on; this constant + its five per-role peers
+    /// close the (named-escape, self-escape) decode-arm surface at
+    /// the same closed-set [`Atom`] algebra.
+    pub const NEWLINE_ESCAPE_SOURCE: char = 'n';
+
+    /// Canonical newline-escape DECODED byte — the ONE `'\n'` C0
+    /// control byte [`Self::decode_str_escape`]'s newline arm
+    /// value-emits when the source char is [`Self::NEWLINE_ESCAPE_SOURCE`].
+    /// Peer of the SOURCE constant on the SAME (source, decoded)
+    /// escape-arm axis; the pairing (`NEWLINE_ESCAPE_SOURCE`,
+    /// `NEWLINE_ESCAPE_DECODED`) IS the first row of the
+    /// [`Self::NAMED_ESCAPE_TABLE`] two-column algebra.
+    pub const NEWLINE_ESCAPE_DECODED: char = '\n';
+
+    /// Canonical tab-escape SOURCE char — the ONE `'t'` byte
+    /// [`Self::decode_str_escape`]'s tab arm pattern-matches on.
+    /// Second of the three named-escape SOURCE `pub const` peers.
+    pub const TAB_ESCAPE_SOURCE: char = 't';
+
+    /// Canonical tab-escape DECODED byte — the ONE `'\t'` C0
+    /// control byte [`Self::decode_str_escape`]'s tab arm
+    /// value-emits when the source char is [`Self::TAB_ESCAPE_SOURCE`].
+    /// Peer of the SOURCE constant on the SAME (source, decoded)
+    /// escape-arm axis; the pairing (`TAB_ESCAPE_SOURCE`,
+    /// `TAB_ESCAPE_DECODED`) IS the second row of the
+    /// [`Self::NAMED_ESCAPE_TABLE`] two-column algebra.
+    pub const TAB_ESCAPE_DECODED: char = '\t';
+
+    /// Canonical carriage-return-escape SOURCE char — the ONE `'r'`
+    /// byte [`Self::decode_str_escape`]'s carriage-return arm
+    /// pattern-matches on. Third of the three named-escape SOURCE
+    /// `pub const` peers.
+    pub const CARRIAGE_RETURN_ESCAPE_SOURCE: char = 'r';
+
+    /// Canonical carriage-return-escape DECODED byte — the ONE
+    /// `'\r'` C0 control byte [`Self::decode_str_escape`]'s
+    /// carriage-return arm value-emits when the source char is
+    /// [`Self::CARRIAGE_RETURN_ESCAPE_SOURCE`]. Peer of the SOURCE
+    /// constant on the SAME (source, decoded) escape-arm axis; the
+    /// pairing (`CARRIAGE_RETURN_ESCAPE_SOURCE`,
+    /// `CARRIAGE_RETURN_ESCAPE_DECODED`) IS the third row of the
+    /// [`Self::NAMED_ESCAPE_TABLE`] two-column algebra.
+    pub const CARRIAGE_RETURN_ESCAPE_DECODED: char = '\r';
+
+    /// Canonical NAMED-escape table — the closed-set ALL array over
+    /// the substrate's three (SOURCE, DECODED) pairings the
+    /// pattern-distinct-from-value named-escape arms of
+    /// [`Self::decode_str_escape`] emit, in canonical declaration
+    /// order (newline / tab / carriage-return). Forced-arity
+    /// `[(char, char); 3]` composition — a hypothetical fourth
+    /// named-escape arm (e.g. `'0' → '\0'` for the NUL byte, `'e'
+    /// → '\x1b'` for ESC, or a Racket-compat `'a' → '\x07'` for
+    /// BEL) extends [`Self::decode_str_escape`]'s match ONCE +
+    /// this array ONCE + TWO new per-role `pub const`s (one on
+    /// each axis) in lockstep; rustc's forced-arity check on
+    /// `[(char, char); N]` binds the extension through the array
+    /// declaration site. Sibling posture to
+    /// [`QuoteForm::PREFIXES`] / [`QuoteForm::IAC_FORGE_TAGS`] on
+    /// the outer-tokenizer quote-family axis — where those ALL
+    /// arrays close the reader-prefix + canonical-form byte
+    /// vocabularies on the [`QuoteForm`] closed set, this array
+    /// closes the named-escape (source, decoded) pairing vocabulary
+    /// on the inner-tokenizer Str-escape axis of the [`Atom`]
+    /// closed set.
+    ///
+    /// The `[(char, char); 3]` shape (rather than a `[char; 3]`
+    /// singleton) is load-bearing: the escape-arm is a projection
+    /// from a source byte to a decoded byte, both bytes are typed
+    /// data, and pinning them as a PAIR at the array declaration
+    /// site closes the drift channel between pattern (source) and
+    /// value (decoded) that a scalar array would leave open.
+    ///
+    /// Excludes the two pattern-equals-value self-escape arms
+    /// (`Self::STR_DELIMITER → Self::STR_DELIMITER`,
+    /// `Self::STR_ESCAPE_LEAD → Self::STR_ESCAPE_LEAD`) because
+    /// those bind through [`Self::STR_DELIMITER`] +
+    /// [`Self::STR_ESCAPE_LEAD`] one axis over on the Str-payload
+    /// delimiter axis — the (source, decoded) pairing there is
+    /// definitionally the identity by algebra design (a delimiter-
+    /// swap propagates through pattern AND value at ONE constant
+    /// per axis). This array closes the OTHER three arms — the
+    /// pattern-DISTINCT-from-value named-escape rows.
+    pub const NAMED_ESCAPE_TABLE: [(char, char); 3] = [
+        (Self::NEWLINE_ESCAPE_SOURCE, Self::NEWLINE_ESCAPE_DECODED),
+        (Self::TAB_ESCAPE_SOURCE, Self::TAB_ESCAPE_DECODED),
+        (
+            Self::CARRIAGE_RETURN_ESCAPE_SOURCE,
+            Self::CARRIAGE_RETURN_ESCAPE_DECODED,
+        ),
+    ];
+
     #[must_use]
     pub const fn decode_str_escape(esc: char) -> char {
         match esc {
-            'n' => '\n',
-            't' => '\t',
-            'r' => '\r',
+            Self::NEWLINE_ESCAPE_SOURCE => Self::NEWLINE_ESCAPE_DECODED,
+            Self::TAB_ESCAPE_SOURCE => Self::TAB_ESCAPE_DECODED,
+            Self::CARRIAGE_RETURN_ESCAPE_SOURCE => Self::CARRIAGE_RETURN_ESCAPE_DECODED,
             Self::STR_DELIMITER => Self::STR_DELIMITER,
             Self::STR_ESCAPE_LEAD => Self::STR_ESCAPE_LEAD,
             other => other,
@@ -19839,23 +19943,24 @@ mod tests {
         // shorthand) surfaces at this pin rather than at some
         // downstream Str-payload round-trip.
         assert_eq!(
-            Atom::decode_str_escape('n'),
-            '\n',
-            "decode_str_escape('n') drifted from the substrate-canonical \
-             newline (`\\n`) shorthand — the reader's escape-handler \
-             branch's `'n' → '\\n'` arm binds to THIS projection.",
+            Atom::decode_str_escape(Atom::NEWLINE_ESCAPE_SOURCE),
+            Atom::NEWLINE_ESCAPE_DECODED,
+            "decode_str_escape(NEWLINE_ESCAPE_SOURCE) drifted from the \
+             substrate-canonical newline (`\\n`) shorthand — the reader's \
+             escape-handler branch's `'n' → '\\n'` arm binds to THIS \
+             projection.",
         );
         assert_eq!(
-            Atom::decode_str_escape('t'),
-            '\t',
-            "decode_str_escape('t') drifted from the substrate-canonical \
-             tab (`\\t`) shorthand.",
+            Atom::decode_str_escape(Atom::TAB_ESCAPE_SOURCE),
+            Atom::TAB_ESCAPE_DECODED,
+            "decode_str_escape(TAB_ESCAPE_SOURCE) drifted from the \
+             substrate-canonical tab (`\\t`) shorthand.",
         );
         assert_eq!(
-            Atom::decode_str_escape('r'),
-            '\r',
-            "decode_str_escape('r') drifted from the substrate-canonical \
-             carriage-return (`\\r`) shorthand.",
+            Atom::decode_str_escape(Atom::CARRIAGE_RETURN_ESCAPE_SOURCE),
+            Atom::CARRIAGE_RETURN_ESCAPE_DECODED,
+            "decode_str_escape(CARRIAGE_RETURN_ESCAPE_SOURCE) drifted from \
+             the substrate-canonical carriage-return (`\\r`) shorthand.",
         );
     }
 
@@ -19916,7 +20021,7 @@ mod tests {
             // conflates passthrough with a typed decode and no longer
             // pins the fallthrough identity.
             assert!(
-                !matches!(esc, 'n' | 't' | 'r')
+                !Atom::NAMED_ESCAPE_TABLE.iter().any(|&(src, _)| src == esc)
                     && esc != Atom::STR_DELIMITER
                     && esc != Atom::STR_ESCAPE_LEAD,
                 "passthrough sweep char `{esc}` aliases a typed \
@@ -19930,6 +20035,234 @@ mod tests {
                  identity — every non-named-escape byte must decode to \
                  itself so the reader's `\\{esc}` sequence yields the \
                  payload byte `{esc}`.",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_named_escape_per_role_constants_pin_canonical_bytes() {
+        // PER-ROLE CANONICAL-BYTE PIN: each of the six per-role
+        // `pub const`s carries its exact substrate-canonical byte.
+        // A regression that swaps a SOURCE letter (e.g. drifts
+        // `NEWLINE_ESCAPE_SOURCE` from `'n'` to `'N'`) or a DECODED
+        // C0 control (e.g. drifts `TAB_ESCAPE_DECODED` from `'\t'`
+        // to `'\0'`) surfaces at this pin before the round-trip
+        // sweep below has a chance to conflate the two. Sibling
+        // shape to `atom_str_delimiter_projects_canonical_double_quote_char`
+        // on the same closed-set [`Atom`] algebra.
+        assert_eq!(
+            Atom::NEWLINE_ESCAPE_SOURCE,
+            'n',
+            "NEWLINE_ESCAPE_SOURCE drifted from the substrate-canonical `n` letter.",
+        );
+        assert_eq!(
+            Atom::NEWLINE_ESCAPE_DECODED,
+            '\n',
+            "NEWLINE_ESCAPE_DECODED drifted from the substrate-canonical `\\n` C0 control byte.",
+        );
+        assert_eq!(
+            Atom::TAB_ESCAPE_SOURCE,
+            't',
+            "TAB_ESCAPE_SOURCE drifted from the substrate-canonical `t` letter.",
+        );
+        assert_eq!(
+            Atom::TAB_ESCAPE_DECODED,
+            '\t',
+            "TAB_ESCAPE_DECODED drifted from the substrate-canonical `\\t` C0 control byte.",
+        );
+        assert_eq!(
+            Atom::CARRIAGE_RETURN_ESCAPE_SOURCE,
+            'r',
+            "CARRIAGE_RETURN_ESCAPE_SOURCE drifted from the substrate-canonical `r` letter.",
+        );
+        assert_eq!(
+            Atom::CARRIAGE_RETURN_ESCAPE_DECODED,
+            '\r',
+            "CARRIAGE_RETURN_ESCAPE_DECODED drifted from the substrate-canonical `\\r` C0 control byte.",
+        );
+    }
+
+    #[test]
+    fn atom_named_escape_table_composes_from_per_role_constants_in_declaration_order() {
+        // COMPOSITION LAW: the ALL array's rows are exactly the
+        // per-role (SOURCE, DECODED) pairings in canonical
+        // declaration order. Pins the composition at ONE site so a
+        // reorder of ONE row without reordering the per-role
+        // `pub const`s silently misaligns every consumer that sweeps
+        // the array by index. Sibling posture to
+        // `quote_form_iac_forge_tags_align_with_all_by_index` on the
+        // outer-tokenizer quote-family axis.
+        assert_eq!(
+            Atom::NAMED_ESCAPE_TABLE,
+            [
+                (Atom::NEWLINE_ESCAPE_SOURCE, Atom::NEWLINE_ESCAPE_DECODED),
+                (Atom::TAB_ESCAPE_SOURCE, Atom::TAB_ESCAPE_DECODED),
+                (
+                    Atom::CARRIAGE_RETURN_ESCAPE_SOURCE,
+                    Atom::CARRIAGE_RETURN_ESCAPE_DECODED,
+                ),
+            ],
+            "NAMED_ESCAPE_TABLE drifted from its per-role (SOURCE, \
+             DECODED) `pub const` composition in canonical declaration \
+             order (newline / tab / carriage-return).",
+        );
+    }
+
+    #[test]
+    fn atom_named_escape_table_has_expected_cardinality() {
+        // ARITY PIN: the forced-arity `[(char, char); 3]` shape
+        // survives at runtime. Pins the closed-set size against a
+        // refactor that loosens the array's type to
+        // `&'static [(char, char)]` or `Vec<(char, char)>` (which
+        // would drop the compile-time arity forcing rustc bakes
+        // into `[T; N]` declarations). Sibling posture to
+        // `quote_form_iac_forge_tags_has_expected_cardinality` on
+        // the outer-tokenizer quote-family axis.
+        assert_eq!(
+            Atom::NAMED_ESCAPE_TABLE.len(),
+            3,
+            "NAMED_ESCAPE_TABLE cardinality drifted from the \
+             substrate-canonical THREE named-escape arms (newline / \
+             tab / carriage-return).",
+        );
+    }
+
+    #[test]
+    fn atom_named_escape_table_sources_pairwise_distinct() {
+        // SOURCE DISJOINTNESS: every SOURCE char in the array is
+        // distinct from every other SOURCE. A regression that
+        // aliased two source letters (e.g. drifts
+        // `TAB_ESCAPE_SOURCE` to `'n'`, colliding with
+        // `NEWLINE_ESCAPE_SOURCE`) would silently route two escape
+        // sequences through the first-matching decoded byte in
+        // `decode_str_escape`'s match. Pin the closed-set injective
+        // shape on the SOURCE axis. Sibling posture to
+        // `quote_form_iac_forge_tags_pairwise_distinct` on the outer
+        // quote-family axis.
+        let sources: Vec<char> = Atom::NAMED_ESCAPE_TABLE
+            .iter()
+            .map(|&(src, _)| src)
+            .collect();
+        for i in 0..sources.len() {
+            for j in (i + 1)..sources.len() {
+                assert_ne!(
+                    sources[i], sources[j],
+                    "NAMED_ESCAPE_TABLE SOURCE chars at indices {i} and {j} \
+                     alias — every named-escape arm must specialize on a \
+                     distinct SOURCE letter.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn atom_named_escape_table_decoded_pairwise_distinct() {
+        // DECODED DISJOINTNESS: every DECODED byte in the array is
+        // distinct from every other DECODED byte. A regression that
+        // aliased two decoded bytes (e.g. drifts
+        // `TAB_ESCAPE_DECODED` to `'\n'`, colliding with
+        // `NEWLINE_ESCAPE_DECODED`) would silently collapse two
+        // canonical whitespace shorthands to the same emitted byte
+        // — a `\t` in a Str payload would decode to a newline.
+        // Sibling posture to the SOURCE-axis disjointness pin above.
+        let decoded: Vec<char> = Atom::NAMED_ESCAPE_TABLE
+            .iter()
+            .map(|&(_, dec)| dec)
+            .collect();
+        for i in 0..decoded.len() {
+            for j in (i + 1)..decoded.len() {
+                assert_ne!(
+                    decoded[i], decoded[j],
+                    "NAMED_ESCAPE_TABLE DECODED bytes at indices {i} and {j} \
+                     alias — every named-escape arm must emit a distinct \
+                     DECODED byte.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn atom_named_escape_table_pattern_distinct_from_value_per_row() {
+        // PATTERN-DISTINCT-FROM-VALUE INVARIANT: every named-escape
+        // row's SOURCE differs from its DECODED byte. This is the
+        // structural axis that distinguishes the three named-escape
+        // rows from the two pattern-EQUALS-value self-escape arms
+        // (`STR_DELIMITER → STR_DELIMITER`,
+        // `STR_ESCAPE_LEAD → STR_ESCAPE_LEAD`) EXCLUDED from this
+        // array by design. A regression that drifted a named row
+        // into pattern-equals-value (e.g. `TAB_ESCAPE_DECODED = 't'`)
+        // silently promoted it to a passthrough and lost the
+        // canonical whitespace shorthand — pinned HERE at the
+        // typed-algebra level.
+        for (i, &(src, dec)) in Atom::NAMED_ESCAPE_TABLE.iter().enumerate() {
+            assert_ne!(
+                src, dec,
+                "NAMED_ESCAPE_TABLE row {i} pattern-EQUALS-value — the \
+                 named-escape rows are structurally pattern-DISTINCT; \
+                 the two pattern-equals-value arms live at \
+                 STR_DELIMITER / STR_ESCAPE_LEAD one axis over.",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_named_escape_table_disjoint_from_self_escape_algebra_constants() {
+        // CROSS-AXIS DISJOINTNESS: no SOURCE or DECODED byte in the
+        // named-escape table aliases either of the two self-escape
+        // algebra constants (`Self::STR_DELIMITER`,
+        // `Self::STR_ESCAPE_LEAD`). A regression that drifted ONE
+        // named-escape SOURCE to `'\\'` (colliding with
+        // `STR_ESCAPE_LEAD`) or ONE DECODED to `'"'` (colliding
+        // with `STR_DELIMITER`) would silently reshuffle the
+        // decode-arm dispatch order in `decode_str_escape` (the
+        // named arm would fire before the self-escape arm, or vice
+        // versa). Pins the two escape-family axes as structurally
+        // disjoint sub-vocabularies of the Str-payload tokenization
+        // boundary.
+        for (i, &(src, dec)) in Atom::NAMED_ESCAPE_TABLE.iter().enumerate() {
+            assert_ne!(
+                src,
+                Atom::STR_DELIMITER,
+                "NAMED_ESCAPE_TABLE row {i} SOURCE aliases STR_DELIMITER",
+            );
+            assert_ne!(
+                src,
+                Atom::STR_ESCAPE_LEAD,
+                "NAMED_ESCAPE_TABLE row {i} SOURCE aliases STR_ESCAPE_LEAD",
+            );
+            assert_ne!(
+                dec,
+                Atom::STR_DELIMITER,
+                "NAMED_ESCAPE_TABLE row {i} DECODED aliases STR_DELIMITER",
+            );
+            assert_ne!(
+                dec,
+                Atom::STR_ESCAPE_LEAD,
+                "NAMED_ESCAPE_TABLE row {i} DECODED aliases STR_ESCAPE_LEAD",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_decode_str_escape_routes_through_named_escape_table_for_every_row() {
+        // PATH-UNIFORMITY PIN: `decode_str_escape` returns the
+        // DECODED byte of every `NAMED_ESCAPE_TABLE` row when called
+        // with that row's SOURCE. Path-uniformity contract between
+        // the projection method and the closed-set algebra — a
+        // regression that reverted `decode_str_escape`'s named arms
+        // to inline `'n' => '\n'` literals AND drifted the SOURCE
+        // per-role `pub const` (or vice versa) fails HERE at the
+        // first mismatched row rather than at a distant Str-payload
+        // round-trip. Sibling posture to
+        // `quote_form_iac_forge_tag_routes_through_typed_per_role_constants`
+        // on the outer-tokenizer quote-family axis.
+        for (i, &(src, dec)) in Atom::NAMED_ESCAPE_TABLE.iter().enumerate() {
+            assert_eq!(
+                Atom::decode_str_escape(src),
+                dec,
+                "decode_str_escape drifted from NAMED_ESCAPE_TABLE row {i} \
+                 — the projection's named-escape arm must route through \
+                 the per-role (SOURCE, DECODED) `pub const` pairing.",
             );
         }
     }
@@ -19957,9 +20290,9 @@ mod tests {
         // the escape-lead axis end-to-end, this sweep exercises the
         // FULL closed-set table on the same axis.
         for esc in [
-            'n',
-            't',
-            'r',
+            Atom::NEWLINE_ESCAPE_SOURCE,
+            Atom::TAB_ESCAPE_SOURCE,
+            Atom::CARRIAGE_RETURN_ESCAPE_SOURCE,
             Atom::STR_DELIMITER,
             Atom::STR_ESCAPE_LEAD,
             'x',

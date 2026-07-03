@@ -6454,6 +6454,98 @@ impl QuoteForm {
     /// here rather than as a silent `,@` reader drift.
     pub const UNQUOTE_LEAD: char = ',';
 
+    /// The closed-set forced-arity ALL array over the quote-family
+    /// DISTINCT reader-lead-byte `char`s in canonical declaration
+    /// order matching [`Self::ALL`]'s three-of-four distinct-lead-
+    /// byte projection through [`Self::lead_char`] — [`Self::QUOTE_LEAD`]
+    /// (`'\''` — the [`Self::Quote`] lead byte), [`Self::QUASIQUOTE_LEAD`]
+    /// (`` '`' `` — the [`Self::Quasiquote`] lead byte),
+    /// [`Self::UNQUOTE_LEAD`] (`','` — the SHARED lead byte of BOTH
+    /// [`Self::Unquote`] AND [`Self::UnquoteSplice`], with the splice
+    /// promotion living at the reader's peek-then-consume
+    /// [`Self::SPLICE_DISCRIMINATOR`] second-char arm rather than at a
+    /// distinct lead byte).
+    ///
+    /// The `[char; 3]` cardinality (vs the peer [`Self::PREFIXES`]
+    /// `[&'static str; 4]`) IS the structural axis distinguishing the
+    /// DISTINCT-lead-byte sub-vocabulary from the PER-VARIANT-prefix
+    /// sub-vocabulary — three-of-four distinct-lead-byte collapse is
+    /// definitional (only [`Self::UnquoteSplice`]'s two-char `,@`
+    /// prefix shares its lead byte with a sibling variant; every other
+    /// variant owns its lead byte outright). The shape asymmetry
+    /// between the two ALL arrays encodes the shared-lead-byte
+    /// collapse identity on the closed-set [`QuoteForm`] algebra at
+    /// the type-system level: a consumer that reaches for
+    /// [`Self::LEADS`] reads the distinct-lead-byte cardinality
+    /// directly off the array's forced arity rather than through a
+    /// per-consumer `HashSet`-then-count over [`Self::PREFIXES`]'s
+    /// first chars.
+    ///
+    /// Sibling posture to [`Self::PREFIXES`] (`[&'static str; 4]` on
+    /// the per-variant reader-prefix axis) AND [`Self::IAC_FORGE_TAGS`]
+    /// (`[&'static str; 4]` on the per-variant canonical-form tag
+    /// axis) — those two ALL arrays close the per-variant axes of the
+    /// outer-tokenizer `QuoteForm` closed set; this ALL array closes
+    /// the peer DISTINCT-lead-byte axis at the SHAPE-ASYMMETRIC
+    /// `[char; N]` cardinality. Also sibling-shape to
+    /// [`crate::ast::Sexp::LIST_DELIMITERS`] (`[char; 2]` on the outer-
+    /// structural paired-delimiter axis), [`Atom::SELF_ESCAPE_TABLE`]
+    /// (`[char; 2]` on the inner-Str-payload self-escape axis), and
+    /// [`Atom::BOOL_LITERALS`] (`[&'static str; 2]` on the Scheme-bool
+    /// spelling axis) — every closed-set outer projection on the
+    /// substrate now pins its canonical bytes at ONE `pub const` per
+    /// role plus an ALL array for family-wide consumers.
+    ///
+    /// Adding a hypothetical fifth homoiconic prefix with a DISTINCT
+    /// lead byte (a `~` reverse-unquote, a `?` conditional-unquote, a
+    /// `#` reader-macro-lead) extends [`Self::ALL`] AND
+    /// [`Self::PREFIXES`] AND [`Self::LEADS`] AND [`Self::lead_char`]'s
+    /// arm AND [`Self::from_lead_char`]'s arm AND one new per-role
+    /// `pub const` in lockstep — rustc's forced-arity check on
+    /// `[char; N]` fails compilation if the LEADS array grows without
+    /// the paired algebra constant, and the paired PREFIXES /
+    /// IAC_FORGE_TAGS arrays extend by ONE row each in lockstep. A
+    /// fifth prefix that SHARES its lead byte with an existing variant
+    /// (like the splice's `,@` sharing with unquote's `,`) leaves
+    /// [`Self::LEADS`]'s cardinality unchanged — the DISTINCT-lead-
+    /// byte set is invariant under such an extension, closing the
+    /// splice-family promotion pattern at the ALL-array level.
+    ///
+    /// Future consumers that compose against [`Self::LEADS`]:
+    /// - LSP / REPL completion for the operator-facing reader-entry
+    ///   lead-byte set — the completion set IS [`Self::LEADS`] rather
+    ///   than three hand-enumerated `char` literals per completion
+    ///   provider.
+    /// - The reader's outer tokenizer pre-match check that gates the
+    ///   quote-family dispatch — the check IS
+    ///   `Self::LEADS.contains(&ch)` rather than three inline
+    ///   `ch == Self::QUOTE_LEAD || ch == Self::QUASIQUOTE_LEAD ||
+    ///   ch == Self::UNQUOTE_LEAD` disjuncts, and the sweep binds
+    ///   through the ALL array's forced arity.
+    /// - A hypothetical `tatara_lisp_quote_family_lead_total{lead="'"}`
+    ///   metric surface — the label-set generator sweeps
+    ///   [`Self::LEADS`] verbatim rather than re-typing the three
+    ///   distinct-lead bytes inline at each recorder.
+    /// - Any future syntax-highlighter / structural editor that needs
+    ///   the reader-entry lead-byte set for classification — the
+    ///   editor's per-char classifier binds through [`Self::LEADS`]
+    ///   rather than three parallel `char`-literal patterns.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the three
+    /// distinct quote-family reader-lead bytes now bind at ONE typed
+    /// `[char; 3]` array on the closed-set [`QuoteForm`] algebra
+    /// rather than as three inline algebra-constant enumerations at
+    /// every consumer that iterates the distinct-lead-byte sub-
+    /// vocabulary. THEORY.md §V.1 — knowable platform; the distinct-
+    /// lead-byte sub-vocabulary becomes load-bearing typed data on
+    /// the closed-set outer [`QuoteForm`] algebra. THEORY.md §VI.1 —
+    /// generation over composition; the shared-lead-byte collapse
+    /// identity (four variants → three distinct lead bytes)
+    /// composes at ONE typed ALL array whose shape-asymmetric
+    /// cardinality (3 vs [`Self::PREFIXES`]'s 4) IS the collapse
+    /// invariant carried at the type-system level.
+    pub const LEADS: [char; 3] = [Self::QUOTE_LEAD, Self::QUASIQUOTE_LEAD, Self::UNQUOTE_LEAD];
+
     /// Canonical FIRST-char of [`Self::prefix`] — [`Self::QUOTE_LEAD`]
     /// for [`Self::Quote`], [`Self::QUASIQUOTE_LEAD`] for
     /// [`Self::Quasiquote`], [`Self::UNQUOTE_LEAD`] for BOTH
@@ -10680,11 +10772,11 @@ mod tests {
         // Sibling-shape peer of
         // `quote_form_splice_discriminator_distinct_from_every_algebra_marker_char`
         // one axis over.
-        let leads = [
-            QuoteForm::QUOTE_LEAD,
-            QuoteForm::QUASIQUOTE_LEAD,
-            QuoteForm::UNQUOTE_LEAD,
-        ];
+        // The three distinct-lead-byte rows bind through the typed
+        // [`QuoteForm::LEADS`] ALL array — the sub-vocabulary sweep
+        // now iterates ONE forced-arity `[char; 3]` array rather than
+        // three inline algebra-constant enumerations.
+        let leads = QuoteForm::LEADS;
         // Within-family: the three lead bytes are pairwise distinct.
         for (i, a) in leads.iter().enumerate() {
             for b in &leads[i + 1..] {
@@ -10760,6 +10852,219 @@ mod tests {
         assert_eq!(_FROM_QUOTE, Some(QuoteForm::Quote));
         assert_eq!(_FROM_QUASIQUOTE, Some(QuoteForm::Quasiquote));
         assert_eq!(_FROM_UNQUOTE, Some(QuoteForm::Unquote));
+    }
+
+    #[test]
+    fn quote_form_leads_composes_from_algebra_constants_in_declaration_order() {
+        // FAMILY COMPOSITION LAW: pin that the ALL array's rows are the
+        // three distinct-lead-byte algebra constants (`Self::QUOTE_LEAD`,
+        // `Self::QUASIQUOTE_LEAD`, `Self::UNQUOTE_LEAD`) in canonical
+        // declaration order matching [`QuoteForm::ALL`]'s three-of-four
+        // distinct-lead-byte projection through [`QuoteForm::lead_char`].
+        // A reorder of ONE row without reordering the underlying algebra
+        // constants silently misaligns every index-sweep consumer (a
+        // hypothetical reader outer-dispatch pre-check that keys on
+        // `QuoteForm::LEADS[0]`, an LSP completion generator that
+        // materialises the distinct-lead-byte set in this order). Sibling-
+        // shape pin to
+        // `sexp_list_delimiters_composes_from_algebra_constants_in_declaration_order`
+        // on the peer `[char; 2]` sub-vocabulary at
+        // [`Sexp::LIST_DELIMITERS`].
+        assert_eq!(
+            QuoteForm::LEADS,
+            [
+                QuoteForm::QUOTE_LEAD,
+                QuoteForm::QUASIQUOTE_LEAD,
+                QuoteForm::UNQUOTE_LEAD,
+            ],
+            "QuoteForm::LEADS composition drifted from the canonical \
+             (QUOTE_LEAD, QUASIQUOTE_LEAD, UNQUOTE_LEAD) triple — the \
+             distinct-lead-byte sub-vocabulary lift must route through \
+             the three typed algebra constants in that order.",
+        );
+    }
+
+    #[test]
+    fn quote_form_leads_has_expected_cardinality() {
+        // CARDINALITY PIN: `[char; 3]` at rustc — this assert pins the
+        // runtime observable so a refactor that loosens the array's type
+        // to `&[char]` (dropping the compile-time arity forcing) fails
+        // HERE at the runtime cardinality assertion rather than silently
+        // allowing a fourth or absent row. The 3 vs [`QuoteForm::PREFIXES`]'s
+        // 4 shape asymmetry IS the structural axis distinguishing the
+        // DISTINCT-lead-byte sub-vocabulary from the PER-VARIANT-prefix
+        // sub-vocabulary — three-of-four distinct-lead-byte collapse is
+        // definitional (only [`QuoteForm::UnquoteSplice`]'s two-char
+        // `,@` prefix shares its lead byte with a sibling variant). A
+        // regression that grew LEADS to 4 without the shared-lead-byte
+        // collapse breaking (i.e. by adding a fourth distinct-lead-byte
+        // variant WITHOUT drifting [`QuoteForm::PREFIXES`]'s cardinality
+        // to 5 in lockstep) fails at this cardinality pin. Sibling-shape
+        // pin to `sexp_list_delimiters_has_expected_cardinality`.
+        assert_eq!(
+            QuoteForm::LEADS.len(),
+            3,
+            "QuoteForm::LEADS cardinality drifted from 3 — the distinct-\
+             lead-byte sub-vocabulary MUST be exactly three rows because \
+             UnquoteSplice shares its lead byte with Unquote by the \
+             splice's two-char `,@` prefix construction.",
+        );
+    }
+
+    #[test]
+    fn quote_form_leads_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: the three distinct-lead-byte rows MUST
+        // NOT alias — the closed-set outer [`QuoteForm`] algebra's
+        // three-of-four collapse identity depends on Quote / Quasiquote /
+        // Unquote owning distinct lead bytes (only UnquoteSplice shares
+        // Unquote's lead byte, via the splice's two-char `,@` prefix).
+        // A regression that collapsed Quote and Quasiquote onto the same
+        // lead byte would silently break the reader's outer dispatch
+        // (the tokenizer would ambiguously route both `'foo` and
+        // `` `foo `` through the same arm). Sibling-shape pin to
+        // `sexp_list_delimiters_pairwise_distinct` on the peer
+        // `[char; 2]` sub-vocabulary at [`Sexp::LIST_DELIMITERS`].
+        for (i, a) in QuoteForm::LEADS.iter().enumerate() {
+            for (j, b) in QuoteForm::LEADS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "QuoteForm::LEADS rows [{i}] and [{j}] share a byte \
+                     ({a:?} == {b:?}) — the distinct-lead-byte contract \
+                     across Quote / Quasiquote / Unquote would collapse.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quote_form_leads_disjoint_from_splice_discriminator() {
+        // CROSS-AXIS DISJOINTNESS (splice discriminator): no row of
+        // [`QuoteForm::LEADS`] may alias
+        // [`QuoteForm::SPLICE_DISCRIMINATOR`] — otherwise the reader's
+        // two-char peek-then-consume splice-promotion arm inside
+        // [`crate::reader::tokenize`] would ambiguously promote on a
+        // sibling lead byte (e.g. if `SPLICE_DISCRIMINATOR` aliased
+        // [`QuoteForm::UNQUOTE_LEAD`], a source `,,foo` would silently
+        // promote to `UnquoteSplice(,foo)` rather than parsing as
+        // `Unquote(Unquote(foo))`). Sibling-shape pin to
+        // `sexp_list_delimiters_disjoint_from_str_delimiter`: both close
+        // the cross-sub-vocabulary disjointness contract at the ALL-array
+        // level rather than as an inline disjunction per consumer.
+        for (i, ch) in QuoteForm::LEADS.iter().enumerate() {
+            assert_ne!(
+                *ch,
+                QuoteForm::SPLICE_DISCRIMINATOR,
+                "QuoteForm::LEADS[{i}] ({ch:?}) aliases \
+                 QuoteForm::SPLICE_DISCRIMINATOR ({:?}) — the reader's \
+                 distinct-lead-byte arm would collide with the two-char \
+                 splice promotion arm at the same byte.",
+                QuoteForm::SPLICE_DISCRIMINATOR,
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_lead_char_routes_through_leads_for_every_variant() {
+        // PATH-UNIFORMITY PIN: every [`QuoteForm::lead_char`] projection
+        // over the closed set MUST land on a row of [`QuoteForm::LEADS`]
+        // — the shared-lead-byte collapse identity (Quote / Quasiquote /
+        // Unquote / UnquoteSplice → three distinct lead bytes) binds
+        // through the ALL array's `.contains` sweep. A regression that
+        // reverted `lead_char`'s arms to inline `char` literals AND
+        // drifted one of the four arms without drifting a paired algebra
+        // constant fails HERE at the first mismatched variant rather than
+        // at a distant reader outer-dispatch drift where a quote-family
+        // form silently routes through a bare-atom arm. Sibling-shape
+        // pin to
+        // `sexp_is_bare_atom_boundary_routes_through_list_delimiters_for_every_row`
+        // on the peer `[char; 2]` sub-vocabulary at
+        // [`Sexp::LIST_DELIMITERS`], lifted to the four-variant closed
+        // set: every one of the four variants collapses onto one of the
+        // three LEADS rows.
+        for qf in QuoteForm::ALL {
+            assert!(
+                QuoteForm::LEADS.contains(&qf.lead_char()),
+                "QuoteForm::{qf:?}.lead_char() = {:?} is NOT a row of \
+                 QuoteForm::LEADS — the shared-lead-byte collapse drifted \
+                 from the ALL array's distinct-lead-byte sub-vocabulary.",
+                qf.lead_char(),
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_from_lead_char_decodes_every_row_of_leads_to_some() {
+        // INVERSE PATH-UNIFORMITY PIN: every row of [`QuoteForm::LEADS`]
+        // MUST decode through [`QuoteForm::from_lead_char`] to
+        // `Some(_variant_)` (the DEFAULT variant on that lead byte —
+        // Unquote on `,`, Quote on `'`, Quasiquote on `` ` ``). A
+        // regression that dropped one of the three arms in
+        // `from_lead_char`'s match without shrinking [`QuoteForm::LEADS`]
+        // in lockstep fails HERE at the first mismatched row rather than
+        // as a silent reader outer-dispatch drift where a quote-family
+        // lead byte silently falls through to the None arm. This pin
+        // closes the round-trip from the DISTINCT-lead-byte axis back
+        // through the decode projection at the ALL-array level. Sibling-
+        // shape pin to
+        // `atom_decode_str_escape_routes_through_self_escape_table_for_every_row`
+        // on the peer sub-vocabulary at [`Atom::SELF_ESCAPE_TABLE`].
+        for (i, ch) in QuoteForm::LEADS.iter().enumerate() {
+            assert!(
+                QuoteForm::from_lead_char(*ch).is_some(),
+                "QuoteForm::LEADS[{i}] ({ch:?}) decodes to None through \
+                 QuoteForm::from_lead_char — the distinct-lead-byte \
+                 sub-vocabulary drifted from the decode projection's \
+                 non-None arm-set.",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_leads_matches_dedup_of_prefixes_first_char_set() {
+        // CROSS-ARRAY IDENTITY: [`QuoteForm::LEADS`] IS the deduplicated
+        // first-char set of [`QuoteForm::PREFIXES`] — the four per-
+        // variant prefixes' first chars (`'\''`, `` '`' ``, `','`, `','`)
+        // deduplicate onto the three DISTINCT lead bytes exactly matching
+        // [`QuoteForm::LEADS`]'s rows. This pin binds the SHAPE-ASYMMETRIC
+        // (3 vs 4) relationship between the two ALL arrays: [`QuoteForm::PREFIXES`]
+        // enumerates the per-variant prefix-bytes axis; [`QuoteForm::LEADS`]
+        // enumerates the DISTINCT lead-byte axis; the two ALL arrays
+        // compose through the (first-char, dedup) projection. A regression
+        // that drifted EITHER array without drifting the other (e.g. an
+        // ELisp-compat port of Quote's prefix to `"#'"` without updating
+        // [`QuoteForm::QUOTE_LEAD`]) surfaces here rather than as a
+        // silent reader outer-dispatch drift. Sibling-shape pin to
+        // `quote_form_per_role_prefixes_route_through_matching_lead_char_for_every_variant`
+        // one axis over — that pin binds per-variant; this pin binds
+        // per-distinct-lead-byte via the dedup composition. Peer at the
+        // ALL-array level to the pre-existing composition tests between
+        // NAMED_ESCAPE_TABLE + SELF_ESCAPE_TABLE (which SPAN a total
+        // arm-set cardinality; this pin composes a DEDUP arm-set
+        // cardinality).
+        let mut deduped_first_chars: Vec<char> = QuoteForm::PREFIXES
+            .iter()
+            .map(|p| {
+                p.chars().next().unwrap_or_else(|| {
+                    panic!("QuoteForm::PREFIXES entry `{p}` must have at least one char")
+                })
+            })
+            .collect();
+        deduped_first_chars.sort_unstable();
+        deduped_first_chars.dedup();
+
+        let mut leads_sorted: Vec<char> = QuoteForm::LEADS.to_vec();
+        leads_sorted.sort_unstable();
+
+        assert_eq!(
+            deduped_first_chars, leads_sorted,
+            "QuoteForm::LEADS drifted from the deduplicated first-char \
+             set of QuoteForm::PREFIXES — the (per-variant prefix axis) \
+             × (distinct-lead-byte axis) shape-asymmetric composition \
+             identity is broken.",
+        );
     }
 
     #[test]

@@ -1660,16 +1660,139 @@ impl CompilerSpecIoStage {
         }
     }
 
+    /// The canonical `&'static str` bytes returned by
+    /// [`Self::label`] for the [`Self::RealizeToDiskSerialize`]
+    /// variant — the `"serialize"` `{stage}` slot of the legacy
+    /// `"{stage}: {error}"` message shape emitted when
+    /// `serde_json::to_string_pretty` errors inside `realize_to_disk`.
+    /// Sibling posture to [`Self::REALIZE_TO_DISK_WRITE_LABEL`]
+    /// (`"write"`), [`Self::LOAD_FROM_DISK_READ_LABEL`] (`"read"`),
+    /// and [`Self::LOAD_FROM_DISK_DESERIALIZE_LABEL`]
+    /// (`"deserialize"`) on the same disk-persistence stage-label
+    /// algebra.
+    ///
+    /// Pre-lift the same `"serialize"` bytes lived inline at the
+    /// [`Self::label`] match arm plus at the paired
+    /// `compiler_spec_io_stage_label_projects_canonical_stage_strings`
+    /// truth-table test plus at the `stage="serialize"` metric-label
+    /// pin. Post-lift the (`RealizeToDiskSerialize` variant, canonical
+    /// `&'static str`) pairing binds at ONE `pub const` on the typed
+    /// [`CompilerSpecIoStage`] algebra — the pre-lift ≥2 PRIME-
+    /// DIRECTIVE trigger becomes ONE typed source of truth. Consumers
+    /// that need the `"serialize"` bytes at compile time
+    /// (`disallowed_names` clippy config; static-dispatch metric-label
+    /// tables in Prometheus recorders; `tatara-check` grep budgets)
+    /// bind against `CompilerSpecIoStage::REALIZE_TO_DISK_SERIALIZE_LABEL`
+    /// rather than re-typing the literal.
+    pub const REALIZE_TO_DISK_SERIALIZE_LABEL: &'static str = "serialize";
+
+    /// The canonical `&'static str` bytes returned by
+    /// [`Self::label`] for the [`Self::RealizeToDiskWrite`] variant —
+    /// the `"write"` `{stage}` slot of the legacy `"{stage}: {error}"`
+    /// message shape emitted when `std::fs::write` of the serialized
+    /// `CompilerSpec` JSON errors inside `realize_to_disk`. Sibling
+    /// posture to [`Self::REALIZE_TO_DISK_SERIALIZE_LABEL`]
+    /// (`"serialize"`), [`Self::LOAD_FROM_DISK_READ_LABEL`]
+    /// (`"read"`), and [`Self::LOAD_FROM_DISK_DESERIALIZE_LABEL`]
+    /// (`"deserialize"`) on the same disk-persistence stage-label
+    /// algebra.
+    pub const REALIZE_TO_DISK_WRITE_LABEL: &'static str = "write";
+
+    /// The canonical `&'static str` bytes returned by
+    /// [`Self::label`] for the [`Self::LoadFromDiskRead`] variant —
+    /// the `"read"` `{stage}` slot of the legacy `"{stage}: {error}"`
+    /// message shape emitted when `std::fs::read_to_string` of the
+    /// on-disk `CompilerSpec` JSON errors inside `load_from_disk`.
+    /// Sibling posture to [`Self::REALIZE_TO_DISK_SERIALIZE_LABEL`]
+    /// (`"serialize"`), [`Self::REALIZE_TO_DISK_WRITE_LABEL`]
+    /// (`"write"`), and [`Self::LOAD_FROM_DISK_DESERIALIZE_LABEL`]
+    /// (`"deserialize"`) on the same disk-persistence stage-label
+    /// algebra.
+    pub const LOAD_FROM_DISK_READ_LABEL: &'static str = "read";
+
+    /// The canonical `&'static str` bytes returned by
+    /// [`Self::label`] for the [`Self::LoadFromDiskDeserialize`]
+    /// variant — the `"deserialize"` `{stage}` slot of the legacy
+    /// `"{stage}: {error}"` message shape emitted when
+    /// `serde_json::from_str` of the on-disk `CompilerSpec` JSON
+    /// errors inside `load_from_disk`. Sibling posture to
+    /// [`Self::REALIZE_TO_DISK_SERIALIZE_LABEL`] (`"serialize"`),
+    /// [`Self::REALIZE_TO_DISK_WRITE_LABEL`] (`"write"`), and
+    /// [`Self::LOAD_FROM_DISK_READ_LABEL`] (`"read"`) on the same
+    /// disk-persistence stage-label algebra.
+    pub const LOAD_FROM_DISK_DESERIALIZE_LABEL: &'static str = "deserialize";
+
+    /// The closed set of four canonical `&'static str` stage labels —
+    /// the [`Self::REALIZE_TO_DISK_SERIALIZE_LABEL`] (`"serialize"`)
+    /// `serde_json::to_string_pretty` failure followed by the
+    /// [`Self::REALIZE_TO_DISK_WRITE_LABEL`] (`"write"`)
+    /// `std::fs::write` failure followed by the
+    /// [`Self::LOAD_FROM_DISK_READ_LABEL`] (`"read"`)
+    /// `std::fs::read_to_string` failure followed by the
+    /// [`Self::LOAD_FROM_DISK_DESERIALIZE_LABEL`] (`"deserialize"`)
+    /// `serde_json::from_str` failure. Canonical declaration order
+    /// matches [`Self::ALL`] so `Self::LABELS[i] == Self::ALL[i].label()`
+    /// element-wise — pinned by
+    /// `compiler_spec_io_stage_labels_align_with_all_by_index`.
+    ///
+    /// Sibling posture to [`KwargPathKind::LABELS`]
+    /// (`[&'static str; 3]`), [`ExpectedKwargShape::LABELS`]
+    /// (`[&'static str; 7]`), and [`MacroDefHead::KEYWORDS`]
+    /// (`[&'static str; 3]`) — every closed-set algebra now pins its
+    /// label-projection ALL array at the declaration site via a
+    /// forced-arity `[&'static str; N]` array whose length fails
+    /// compilation if a new variant lands without being added to the
+    /// set. Adding a hypothetical fifth pair (a
+    /// `LoadFromStrDeserialize` once an in-memory `load_from_str`
+    /// lands, a `RealizeToDiskAtomicReplace` if the realize path grows
+    /// a crash-safe-rename stage) extends [`Self::ALL`] ONCE +
+    /// [`Self::label`] ONCE + [`Self::LABELS`] ONCE + adds ONE
+    /// per-role label `pub const` — rustc's forced-arity check on the
+    /// `[Self; N]` array + `[&'static str; N]` array pair enforces
+    /// every downstream consumer picks up the extension mechanically.
+    ///
+    /// Future consumers that compose against [`Self::LABELS`]: an
+    /// LSP / REPL completion provider surfacing every legal stage
+    /// label in a `stage=` metrics query bar (`Self::LABELS.iter()` is
+    /// the ONE typed sweep over every legal disk-persistence stage
+    /// label), a `tatara-check` coverage assertion (every workspace
+    /// `.lisp` file's `CompilerSpec` rejection must classify to some
+    /// entry of `Self::LABELS`), a Sekiban audit-trail metric jointly
+    /// labeled by [`Self::label`] whose metric-label set IS
+    /// `Self::LABELS` (e.g.
+    /// `tatara_lisp_compiler_spec_io_total{operation="realize_to_disk",
+    /// stage="serialize"}`).
+    pub const LABELS: [&'static str; 4] = [
+        Self::REALIZE_TO_DISK_SERIALIZE_LABEL,
+        Self::REALIZE_TO_DISK_WRITE_LABEL,
+        Self::LOAD_FROM_DISK_READ_LABEL,
+        Self::LOAD_FROM_DISK_DESERIALIZE_LABEL,
+    ];
+
     /// The step within the operation that failed — the `{stage}` slot
     /// of the legacy `"{stage}: {error}"` message shape. One of
     /// `"serialize"`, `"write"`, `"read"`, `"deserialize"`.
+    ///
+    /// Body routes each arm through the per-role
+    /// [`Self::REALIZE_TO_DISK_SERIALIZE_LABEL`] /
+    /// [`Self::REALIZE_TO_DISK_WRITE_LABEL`] /
+    /// [`Self::LOAD_FROM_DISK_READ_LABEL`] /
+    /// [`Self::LOAD_FROM_DISK_DESERIALIZE_LABEL`] `pub const` so the
+    /// four canonical `&'static str` labels live at ONE `pub const`
+    /// per variant rather than at TWO sites (the per-role `pub const`
+    /// AND an inline arm literal). Sibling posture to
+    /// [`KwargPathKind::label`]'s arms routing through the per-role
+    /// [`KwargPathKind::NAMED_LABEL`] / [`KwargPathKind::ITEM_LABEL`]
+    /// / [`KwargPathKind::SLOT_LABEL`] constants, and to
+    /// [`ExpectedKwargShape::label`]'s arms routing through
+    /// [`ExpectedKwargShape::KEYWORD_LABEL`] etc.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::RealizeToDiskSerialize => "serialize",
-            Self::RealizeToDiskWrite => "write",
-            Self::LoadFromDiskRead => "read",
-            Self::LoadFromDiskDeserialize => "deserialize",
+            Self::RealizeToDiskSerialize => Self::REALIZE_TO_DISK_SERIALIZE_LABEL,
+            Self::RealizeToDiskWrite => Self::REALIZE_TO_DISK_WRITE_LABEL,
+            Self::LoadFromDiskRead => Self::LOAD_FROM_DISK_READ_LABEL,
+            Self::LoadFromDiskDeserialize => Self::LOAD_FROM_DISK_DESERIALIZE_LABEL,
         }
     }
 
@@ -8686,6 +8809,149 @@ mod tests {
             super::CompilerSpecIoStage::LoadFromDiskDeserialize.label(),
             "deserialize"
         );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_label_method_routes_through_typed_constants() {
+        // PATH-UNIFORMITY: the inherent `Self::label(self)` method
+        // MUST return the per-role `pub const` byte-for-byte for
+        // each reachable variant. A regression that reverts ONE arm
+        // to an inline `"serialize"` string literal (e.g. a merge-
+        // conflict resolution that picked the pre-lift form)
+        // silently reintroduces the ≥2 PRIME-DIRECTIVE trigger the
+        // lift resolved — this test catches that by pinning the
+        // arm's return value to the constant, so the two paths
+        // (inline vs. typed constant) cannot both hold. Sibling
+        // posture to
+        // `kwarg_path_kind_label_method_routes_through_typed_constants`
+        // on the `KwargPathKind` category-label algebra.
+        assert_eq!(
+            super::CompilerSpecIoStage::RealizeToDiskSerialize.label(),
+            super::CompilerSpecIoStage::REALIZE_TO_DISK_SERIALIZE_LABEL,
+            "CompilerSpecIoStage::RealizeToDiskSerialize.label() \
+             drifted from CompilerSpecIoStage::\
+             REALIZE_TO_DISK_SERIALIZE_LABEL — the match arm reverted \
+             to an inline literal"
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::RealizeToDiskWrite.label(),
+            super::CompilerSpecIoStage::REALIZE_TO_DISK_WRITE_LABEL,
+            "CompilerSpecIoStage::RealizeToDiskWrite.label() drifted \
+             from CompilerSpecIoStage::REALIZE_TO_DISK_WRITE_LABEL — \
+             the match arm reverted to an inline literal"
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::LoadFromDiskRead.label(),
+            super::CompilerSpecIoStage::LOAD_FROM_DISK_READ_LABEL,
+            "CompilerSpecIoStage::LoadFromDiskRead.label() drifted \
+             from CompilerSpecIoStage::LOAD_FROM_DISK_READ_LABEL — \
+             the match arm reverted to an inline literal"
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::LoadFromDiskDeserialize.label(),
+            super::CompilerSpecIoStage::LOAD_FROM_DISK_DESERIALIZE_LABEL,
+            "CompilerSpecIoStage::LoadFromDiskDeserialize.label() \
+             drifted from CompilerSpecIoStage::\
+             LOAD_FROM_DISK_DESERIALIZE_LABEL — the match arm reverted \
+             to an inline literal"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_labels_has_expected_cardinality() {
+        // Cardinality contract: `Self::LABELS.len() == 4` — pinned
+        // at the declaration site by rustc's forced-arity check on
+        // `[&'static str; 4]`. This test surfaces the arity as a
+        // fail-loud runtime pin so a future refactor that switches
+        // the array type to `&[&'static str]` (dropping the
+        // compile-time arity forcing) doesn't silently loosen the
+        // closed-set discipline the family relies on. Sibling
+        // posture to `kwarg_path_kind_labels_has_expected_cardinality`
+        // on the `KwargPathKind::LABELS` family.
+        assert_eq!(
+            super::CompilerSpecIoStage::LABELS.len(),
+            4,
+            "CompilerSpecIoStage::LABELS cardinality drifted from 4 \
+             — the disk-persistence stage-label closed set gained or \
+             lost a variant without the ALL / LABELS pair being \
+             updated in tandem"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_labels_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::LABELS[i] ==
+        // Self::ALL[i].label()` element-wise. The two ALL arrays
+        // (typed variants, canonical `&'static str` labels) share
+        // ONE canonical declaration order — a regression that
+        // reorders ONE array without reordering the other silently
+        // misaligns every `zip(Self::ALL, Self::LABELS)` consumer
+        // (LSP completion providers, metric-label emitters, coverage
+        // reporters). Pinning by-index alignment here catches the
+        // reorder at test time. Sibling posture to
+        // `kwarg_path_kind_labels_align_with_all_by_index` on the
+        // `KwargPathKind::LABELS` family.
+        assert_eq!(
+            super::CompilerSpecIoStage::LABELS.len(),
+            super::CompilerSpecIoStage::ALL.len(),
+            "CompilerSpecIoStage::LABELS and CompilerSpecIoStage::ALL \
+             diverged in cardinality — the per-role constants and \
+             enum variants must stay in lockstep"
+        );
+        for (i, stage) in super::CompilerSpecIoStage::ALL.iter().enumerate() {
+            assert_eq!(
+                super::CompilerSpecIoStage::LABELS[i],
+                stage.label(),
+                "CompilerSpecIoStage::LABELS[{i}] `{lb}` drifted from \
+                 CompilerSpecIoStage::ALL[{i}].label() `{via_variant}` \
+                 — the canonical declaration order of the two ALL \
+                 arrays must match element-wise",
+                lb = super::CompilerSpecIoStage::LABELS[i],
+                via_variant = stage.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_labels_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: the four `&'static str` labels on
+        // the disk-persistence stage-label algebra MUST differ so
+        // any consumer that keys a hashmap / dispatch table on the
+        // label bytes (`match label { "serialize" => ...,
+        // "deserialize" => ..., ... }`) cannot route two variants
+        // through the same arm. Family-wide sweep over LABELS ×
+        // LABELS — supersedes any single per-pair assertion and
+        // picks up new variants mechanically when the array grows.
+        // Sibling posture to `kwarg_path_kind_labels_pairwise_distinct`
+        // on the `KwargPathKind::LABELS` family.
+        //
+        // Note: unlike `KwargPathKind` / `ExpectedKwargShape`, the
+        // parent enum keys `FromStr` on the compound
+        // `"{operation}: {label}"` key rather than on `label` alone
+        // (see `CompilerSpecIoStage::from_str`), so pairwise-distinct
+        // labels are not a hard load-bearing invariant for the
+        // FromStr sweep. But they ARE the load-bearing invariant for
+        // every downstream consumer that keys on the label alone
+        // (metric-label tables, LSP completion, `tatara-check` grep
+        // budgets on the `{stage}:` prefix), and pinning the
+        // property here catches a regression that collides two
+        // variants on their singular label projection before those
+        // consumer sites drift.
+        for (i, a) in super::CompilerSpecIoStage::LABELS.iter().enumerate() {
+            for (j, b) in super::CompilerSpecIoStage::LABELS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "CompilerSpecIoStage::LABELS[{i}] `{a}` collides \
+                     with CompilerSpecIoStage::LABELS[{j}] `{b}` — \
+                     the singular label projection is no longer a \
+                     bijection with ALL, breaking every consumer that \
+                     keys on the label alone"
+                );
+            }
+        }
     }
 
     #[test]

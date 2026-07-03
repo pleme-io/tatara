@@ -2682,6 +2682,83 @@ impl Sexp {
     /// rendering's right char) all bind here.
     pub const LIST_CLOSE: char = ')';
 
+    /// Canonical paired list-delimiter closed-set ALL array — composes
+    /// [`Self::LIST_OPEN`] followed by [`Self::LIST_CLOSE`] in canonical
+    /// declaration order, forced-arity `[char; 2]` so a hypothetical
+    /// third list-delimiter row would extend this array + one algebra
+    /// constant in lockstep. Peer to [`Atom::SELF_ESCAPE_TABLE`]
+    /// (`[char; 2]` on the Str-payload self-escape sub-vocabulary axis
+    /// of the closed-set [`Atom`] algebra): where `SELF_ESCAPE_TABLE`
+    /// closes the two pattern-EQUALS-value inner-tokenizer arms of
+    /// `Atom::decode_str_escape` as ONE typed forced-arity array,
+    /// `LIST_DELIMITERS` closes the two outer-structural list-delimiter
+    /// arms of the reader's outer-dispatch as the analogous typed
+    /// forced-arity array one axis over on the closed-set outer
+    /// [`Sexp`] algebra.
+    ///
+    /// Pre-lift the two-element `[Self::LIST_OPEN, Self::LIST_CLOSE]`
+    /// composition lived inline at TWO sites: the two `|| ch ==
+    /// Self::LIST_{OPEN,CLOSE}` disjuncts inside
+    /// [`Self::is_bare_atom_boundary`]'s reader-boundary projection
+    /// (spanning TWO of the SIX categories the projection carries), AND
+    /// the `[Sexp::LIST_OPEN, Sexp::LIST_CLOSE].iter().collect()` array
+    /// literal at the `Nil` Display composition-pin test that binds the
+    /// two-char `()` rendering to the two typed constants. Post-lift
+    /// the sub-vocabulary sweep binds at ONE typed forced-arity array
+    /// on the closed-set outer [`Sexp`] algebra rather than at two
+    /// inline algebra-constant enumerations per consumer. Adding a
+    /// hypothetical Racket-compat square-bracket list mode
+    /// (`[Self::LIST_OPEN, Self::LIST_CLOSE, Self::VEC_OPEN,
+    /// Self::VEC_CLOSE]`) would extend `LIST_DELIMITERS` ONCE +
+    /// `Self::is_bare_atom_boundary`'s sub-vocabulary sweep ONCE + two
+    /// new algebra constants (opener + closer) in lockstep; rustc's
+    /// forced-arity check on `[char; N]` binds the extension through
+    /// the array declaration site.
+    ///
+    /// Structural invariant carried at the SHAPE level: `[char; 2]`
+    /// pairs section-for-retraction one-to-one with
+    /// [`Atom::SELF_ESCAPE_TABLE`]'s `[char; 2]` — the two arrays
+    /// sit on distinct closed-set algebras (outer-structural
+    /// list-delimiter vocabulary on [`Sexp`]; inner-Str-payload
+    /// self-escape vocabulary on [`Atom`]) but share the same
+    /// forced-arity shape at their respective sub-vocabulary
+    /// axes. A consumer that reaches for one of the two arrays
+    /// encodes its vocabulary's paired-role identity in the SHAPE
+    /// it iterates rather than in a per-site convention.
+    ///
+    /// Composition law (round-trip): `LIST_DELIMITERS[0] ==
+    /// Self::LIST_OPEN` AND `LIST_DELIMITERS[1] == Self::LIST_CLOSE`
+    /// AND `LIST_DELIMITERS.len() == 2`. The forced-arity + canonical
+    /// declaration order together pin every downstream index-sweep
+    /// consumer to the (opener, closer) pairing at rustc time; a
+    /// reorder without reordering the underlying algebra constants
+    /// fails at the composition pin below.
+    ///
+    /// Cross-axis disjointness pinned structurally at
+    /// [`sexp_list_delimiters_distinct_from_every_other_algebra_marker`]:
+    /// neither element aliases any sibling outer-marker char on the
+    /// substrate's other closed-set algebras — the Str-payload
+    /// delimiter (`Atom::STR_DELIMITER`), the Keyword-marker prefix
+    /// (`Atom::KEYWORD_MARKER_LEAD`), the Comment-lead byte
+    /// (`Self::COMMENT_LEAD`), every quote-family lead char
+    /// (`QuoteForm::lead_char`), and every Bool-literal spelling's
+    /// first char.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the paired
+    /// (opener, closer) list-delimiter sub-vocabulary becomes a typed
+    /// forced-arity ALL array on the closed-set outer [`Sexp`]
+    /// algebra rather than as two inline algebra-constant
+    /// enumerations at every consumer that iterates the paired
+    /// delimiter axis. THEORY.md §V.1 — knowable platform; the
+    /// paired-delimiter sub-vocabulary now binds as load-bearing
+    /// typed data at the algebra level rather than as two per-site
+    /// disjuncts. THEORY.md §VI.1 — generation over composition; the
+    /// paired-delimiter (opener + closer) composition regenerates
+    /// identically through this ONE typed forced-arity array rather
+    /// than through two inline algebra-constant enumerations per
+    /// consumer.
+    pub const LIST_DELIMITERS: [char; 2] = [Self::LIST_OPEN, Self::LIST_CLOSE];
+
     /// Canonical `;` char that begins a line-comment run in the reader's
     /// tokenizer AND (as a bare-atom terminator disjunct) breaks a
     /// `Token::Atom` accumulator when the byte is encountered mid-lexeme.
@@ -2908,8 +2985,7 @@ impl Sexp {
     #[must_use]
     pub fn is_bare_atom_boundary(ch: char) -> bool {
         ch.is_whitespace()
-            || ch == Self::LIST_OPEN
-            || ch == Self::LIST_CLOSE
+            || Self::LIST_DELIMITERS.contains(&ch)
             || QuoteForm::from_lead_char(ch).is_some()
             || ch == Atom::STR_DELIMITER
             || ch == Self::COMMENT_LEAD
@@ -20693,7 +20769,7 @@ mod tests {
         // OR drifts ONE of the two typed-constant bindings fails
         // loudly at this composition pin.
         let rendered = format!("{}", Sexp::Nil);
-        let expected: String = [Sexp::LIST_OPEN, Sexp::LIST_CLOSE].iter().collect();
+        let expected: String = Sexp::LIST_DELIMITERS.iter().collect();
         assert_eq!(
             rendered, expected,
             "Sexp::Nil Display drifted from the [LIST_OPEN, LIST_CLOSE] \
@@ -20790,6 +20866,141 @@ mod tests {
                 reread[0], original,
                 "read(display(list)) drifted from list for {original:?} \
                  — rendered={rendered:?} reread={reread:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_list_delimiters_composes_from_algebra_constants_in_declaration_order() {
+        // FAMILY COMPOSITION LAW: pin that the ALL array's rows are the
+        // two paired-delimiter algebra constants (`Self::LIST_OPEN`,
+        // `Self::LIST_CLOSE`) in canonical declaration order matching
+        // the substrate-canonical (opener, closer) pair shape every
+        // consumer expects. A reorder of ONE row without reordering
+        // the underlying algebra constants silently misaligns every
+        // index-sweep consumer (`Nil` Display's `.iter().collect()`
+        // routing, a hypothetical `Sexp::LIST_DELIMITERS[0]` opener
+        // lookup, the sub-vocabulary sweep at
+        // `is_bare_atom_boundary`). Sibling-shape pin to
+        // `atom_self_escape_table_composes_from_algebra_constants_in_declaration_order`
+        // on the peer `[char; 2]` sub-vocabulary at
+        // [`Atom::SELF_ESCAPE_TABLE`].
+        assert_eq!(
+            Sexp::LIST_DELIMITERS,
+            [Sexp::LIST_OPEN, Sexp::LIST_CLOSE],
+            "LIST_DELIMITERS composition drifted from the canonical \
+             (LIST_OPEN, LIST_CLOSE) pair — the paired-delimiter \
+             sub-vocabulary lift must route through the two typed \
+             algebra constants in that order.",
+        );
+    }
+
+    #[test]
+    fn sexp_list_delimiters_has_expected_cardinality() {
+        // CARDINALITY PIN: `[char; 2]` at rustc — this assert pins the
+        // runtime observable so a refactor that loosens the array's
+        // type to `&[char]` (dropping the compile-time arity forcing)
+        // fails HERE at the runtime cardinality assertion rather than
+        // silently allowing a third or absent row. Sibling-shape pin
+        // to `atom_self_escape_table_has_expected_cardinality`.
+        assert_eq!(
+            Sexp::LIST_DELIMITERS.len(),
+            2,
+            "LIST_DELIMITERS cardinality drifted from 2 — the paired \
+             (opener, closer) sub-vocabulary MUST be exactly two rows.",
+        );
+    }
+
+    #[test]
+    fn sexp_list_delimiters_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: the two paired-delimiter rows MUST NOT
+        // alias (a hypothetical `[` opener + `[` closer degenerate
+        // list-mode would silently collapse the paired-delimiter
+        // contract and lose the ability to bracket a well-formed list
+        // — the reader's `Token::LParen` and `Token::RParen` arms
+        // would collide at the same byte). Sibling-shape pin to
+        // `atom_self_escape_table_pairwise_distinct` on the peer
+        // `[char; 2]` sub-vocabulary at [`Atom::SELF_ESCAPE_TABLE`].
+        for (i, a) in Sexp::LIST_DELIMITERS.iter().enumerate() {
+            for (j, b) in Sexp::LIST_DELIMITERS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "LIST_DELIMITERS rows [{i}] and [{j}] share a byte \
+                     ({a:?} == {b:?}) — the paired-delimiter contract \
+                     would collapse.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sexp_list_delimiters_disjoint_from_str_delimiter() {
+        // CROSS-AXIS DISJOINTNESS (Str-delimiter): no row of
+        // `LIST_DELIMITERS` may alias `Atom::STR_DELIMITER` — otherwise
+        // the reader's `Token::LParen` / `Token::RParen` outer-dispatch
+        // arms would collide with `Token::Str`'s opener/closer arm at
+        // the same byte. Sibling-shape pin to
+        // `atom_named_escape_table_disjoint_from_self_escape_algebra_constants`:
+        // both close the cross-sub-vocabulary disjointness contract at
+        // the ALL-array level rather than as an inline disjunction per
+        // consumer.
+        for (i, ch) in Sexp::LIST_DELIMITERS.iter().enumerate() {
+            assert_ne!(
+                *ch,
+                Atom::STR_DELIMITER,
+                "LIST_DELIMITERS[{i}] ({ch:?}) aliases Atom::STR_DELIMITER \
+                 ({:?}) — the reader's list-delimiter arm would collide \
+                 with the Str-payload delimiter arm at the same byte.",
+                Atom::STR_DELIMITER,
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_list_delimiters_disjoint_from_comment_lead() {
+        // CROSS-AXIS DISJOINTNESS (comment lead): no row of
+        // `LIST_DELIMITERS` may alias `Sexp::COMMENT_LEAD` — otherwise
+        // the reader's list-delimiter arm would collide with the
+        // line-comment discard arm at the same byte. Closes the
+        // structural coherence contract between the outer-structural
+        // list-delimiter sub-vocabulary and the reader-discard
+        // sub-vocabulary on the SAME closed-set outer [`Sexp`]
+        // algebra.
+        for (i, ch) in Sexp::LIST_DELIMITERS.iter().enumerate() {
+            assert_ne!(
+                *ch,
+                Sexp::COMMENT_LEAD,
+                "LIST_DELIMITERS[{i}] ({ch:?}) aliases Sexp::COMMENT_LEAD \
+                 ({:?}) — the reader's list-delimiter arm would collide \
+                 with the line-comment lead arm at the same byte.",
+                Sexp::COMMENT_LEAD,
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_is_bare_atom_boundary_routes_through_list_delimiters_for_every_row() {
+        // PATH-UNIFORMITY PIN: every row of `LIST_DELIMITERS` MUST
+        // classify as a bare-atom boundary via
+        // `Sexp::is_bare_atom_boundary`. A regression that reverted the
+        // projection's list-delimiter disjunct to two inline
+        // `|| ch == Self::LIST_OPEN || ch == Self::LIST_CLOSE`
+        // enumerations AND drifted one of the two constants (or vice
+        // versa) fails HERE at the first mismatched row rather than at
+        // a distant tokenize-round-trip. Sibling-shape pin to
+        // `atom_decode_str_escape_routes_through_self_escape_table_for_every_row`
+        // on the peer `[char; 2]` sub-vocabulary at
+        // [`Atom::SELF_ESCAPE_TABLE`].
+        for (i, ch) in Sexp::LIST_DELIMITERS.iter().enumerate() {
+            assert!(
+                Sexp::is_bare_atom_boundary(*ch),
+                "LIST_DELIMITERS[{i}] ({ch:?}) does NOT classify as a \
+                 bare-atom boundary via Sexp::is_bare_atom_boundary — \
+                 the paired-delimiter sub-vocabulary sweep drifted from \
+                 the reader's outer-dispatch arm-set.",
             );
         }
     }

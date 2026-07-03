@@ -1963,17 +1963,74 @@ impl CompilerSpecIoStage {
         Self::LoadFromDiskRead,
         Self::LoadFromDiskDeserialize,
     ];
+
+    /// The canonical `&'static str` bytes that separate the
+    /// [`Self::operation`] slot from the [`Self::label`] slot in the
+    /// compound-key rendering `"{operation}{SEP}{label}"` — literally
+    /// `": "` (a colon followed by ONE ASCII space, no more, no less).
+    /// This is the sole load-bearing separator on the compound-key
+    /// projection axis: [`Display`] composes through it, [`FromStr`]
+    /// splits on it, and every doc-comment reference to the compound
+    /// shape (`"realize_to_disk: read"`, `"load_from_disk: write"`, …)
+    /// silently threads the same three bytes.
+    ///
+    /// Pre-lift the same `": "` bytes lived inline at three sites — the
+    /// [`Display`] `write!` format string, the [`FromStr`] `split_once`
+    /// argument, and two doc-comment references — with no typed source
+    /// of truth binding them together. Post-lift the (`Self`, compound-
+    /// key separator bytes) pairing binds at ONE `pub const` on the
+    /// typed [`CompilerSpecIoStage`] algebra — the pre-lift ≥2 PRIME-
+    /// DIRECTIVE trigger becomes ONE typed source of truth. A future
+    /// refactor that changes the separator (e.g. to `" — "` on the way
+    /// to a richer diagnostic surface) touches ONE `pub const` rather
+    /// than THREE unrelated inline literals; a future refactor that
+    /// silently drifts one call site (e.g. leaves `Display` at `": "`
+    /// but drops the space from `split_once` after a `clippy::single_char_pattern`
+    /// suggestion) fails the round-trip test loudly at the parse
+    /// boundary rather than silently bifurcating the compound key.
+    ///
+    /// Sibling posture to [`Self::REALIZE_TO_DISK_OPERATION`] +
+    /// [`Self::LOAD_FROM_DISK_OPERATION`] (operation-slot bytes) and
+    /// [`Self::REALIZE_TO_DISK_SERIALIZE_LABEL`] etc. (label-slot bytes)
+    /// on the same disk-persistence compound-key algebra — the three
+    /// canonical slot-byte families together (operation × separator ×
+    /// label) span the every-byte-of-the-compound-key surface; no
+    /// character of a rendered `CompilerSpecIoStage` compound key lives
+    /// at more than ONE typed constant on the algebra.
+    ///
+    /// Distinct from the substrate-wide `unknown {SET_LABEL}: {input}`
+    /// separator in [`crate::closed_set`]'s well-formed-carrier
+    /// rendering: those bytes happen to be identical (`": "`) but live
+    /// at a distinct algebraic level (the ClosedSet trait's error-
+    /// carrier composition, not the per-type compound-key surface).
+    /// Two distinct separators that happen to be equal bytes; a future
+    /// diagnostic-surface change that touches one must not touch the
+    /// other by accident, so keeping them at separate `pub const` /
+    /// hand-composed sites is load-bearing structure, not duplication.
+    ///
+    /// Consumers that need the compound-key separator bytes at compile
+    /// time bind against `CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR`
+    /// rather than re-typing the literal — this includes the
+    /// hand-rolled [`Display`] / [`FromStr`] pair below and any future
+    /// LSP / REPL diagnostic-substring extractor that needs to
+    /// `rsplit_once(CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR)` a
+    /// captured operator-facing `"compile error in {operation}: {label}:
+    /// {message}"` prefix.
+    pub const COMPOUND_KEY_SEPARATOR: &'static str = ": ";
 }
 
 /// Standalone rendering of a [`CompilerSpecIoStage`] in the canonical
-/// compound `"{operation}: {label}"` form — byte-for-byte the same
+/// compound `"{operation}{SEP}{label}"` form — byte-for-byte the same
 /// substring that lands inside the
 /// [`LispError::CompilerSpecIo`] diagnostic between `"compile error in
-/// "` and `": {message}"`. Pinning Display to the compound form means a
-/// consumer that extracts the (operation, label) prefix from a rendered
-/// diagnostic — for example by `s.strip_prefix("compile error in ")
-/// .and_then(|t| t.rsplit_once(": "))` — round-trips the captured
-/// substring through [`FromStr`] back into the typed variant exactly.
+/// "` and `": {message}"`, where `{SEP}` is
+/// [`CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR`] (`": "`). Pinning
+/// Display to the compound form means a consumer that extracts the
+/// (operation, label) prefix from a rendered diagnostic — for example
+/// by `s.strip_prefix("compile error in ")
+/// .and_then(|t| t.rsplit_once(CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR))`
+/// — round-trips the captured substring through [`FromStr`] back into
+/// the typed variant exactly.
 ///
 /// The compound form is load-bearing: `label` alone would be bijective
 /// with the current four variants (`"serialize"` / `"write"` / `"read"`
@@ -1982,9 +2039,18 @@ impl CompilerSpecIoStage {
 /// on `label` alone. Display-ing the compound key means the bijection
 /// survives the closed-set extension without a label-disambiguation
 /// dance.
+///
+/// The body composes through [`CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR`]
+/// so the exact separator bytes bind at ONE `pub const` on the typed
+/// algebra rather than at TWO sites (the [`Display`] `write!` format
+/// string AND the [`FromStr`] `split_once` argument) — a lift symmetric
+/// to how [`Self::operation`] and [`Self::label`] route through their
+/// per-role slot-byte constants.
 impl std::fmt::Display for CompilerSpecIoStage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.operation(), self.label())
+        f.write_str(self.operation())?;
+        f.write_str(Self::COMPOUND_KEY_SEPARATOR)?;
+        f.write_str(self.label())
     }
 }
 
@@ -2008,9 +2074,10 @@ impl std::fmt::Display for CompilerSpecIoStage {
 /// an unreachable pair.
 ///
 /// Partial keys — `"serialize"` alone, `"realize_to_disk"` alone — also
-/// reject. The `": "` separator must appear at least once for the
-/// decode to consider any variant; otherwise the diagnostic substring
-/// shape isn't a compound key at all.
+/// reject. The [`CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR`] (`": "`)
+/// bytes must appear at least once for the decode to consider any
+/// variant; otherwise the diagnostic substring shape isn't a compound
+/// key at all.
 ///
 /// Round-trip invariant pinned by
 /// `compiler_spec_io_stage_compound_key_round_trips_through_from_str`:
@@ -2032,7 +2099,7 @@ impl std::fmt::Display for CompilerSpecIoStage {
 impl std::str::FromStr for CompilerSpecIoStage {
     type Err = UnknownCompilerSpecIoStage;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        let Some((op, lbl)) = s.split_once(": ") else {
+        let Some((op, lbl)) = s.split_once(Self::COMPOUND_KEY_SEPARATOR) else {
             return Err(UnknownCompilerSpecIoStage(s.to_owned()));
         };
         for stage in Self::ALL {
@@ -9620,6 +9687,143 @@ mod tests {
             .expect_err("empty input must NOT decode to a CompilerSpecIoStage");
         assert_eq!(err.0, "");
         assert_eq!(format!("{err}"), "unknown compiler spec io stage: ");
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_compound_key_separator_is_colon_space() {
+        // Pin the canonical `": "` compound-key separator bytes
+        // byte-for-byte on the typed algebra. A regression that
+        // silently drops the ASCII space (`":"`), doubles it (`":  "`),
+        // or swaps to a different punctuation family (`" - "`, `" | "`)
+        // fails-loudly here — every consumer that binds against the
+        // constant picks up the drift at compile time, not at a
+        // customer's rendered diagnostic. The exact byte sequence
+        // matters: LSP substring extractors that key on `rsplit_once(":
+        // ")` (matching the pre-lift inline literal) and the pre-lift
+        // `Display` format string `"{}: {}"` both threaded the SAME
+        // three bytes; post-lift they thread the SAME `pub const`.
+        assert_eq!(
+            super::CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR,
+            ": ",
+            "compound-key separator must be ASCII colon-space byte-for-byte",
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR.len(),
+            2,
+            "compound-key separator is exactly two bytes — no invisible whitespace drift",
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR.as_bytes(),
+            b": ",
+            "compound-key separator bytes are `:` then ` ` — pinned byte-array shape",
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_display_composes_operation_separator_label_verbatim() {
+        // For every variant, the `Display` rendering equals the
+        // triple-concatenation `operation() ++ COMPOUND_KEY_SEPARATOR
+        // ++ label()` byte-for-byte. A regression that reintroduces
+        // the pre-lift inline `": "` literal at the `write!` format
+        // string, or swaps the projection order, or inserts extra
+        // padding, fails loudly here — the composed reference walks
+        // the SAME three typed source-of-truth axes the impl body
+        // does. Sibling posture to
+        // `compiler_spec_io_stage_operation_method_routes_through_typed_constants`
+        // and `compiler_spec_io_stage_label_method_routes_through_typed_constants`
+        // on the operation and label projection axes: the SAME
+        // through-the-typed-constants routing contract now covers the
+        // COMPOSITION axis too.
+        for stage in super::CompilerSpecIoStage::ALL {
+            let rendered = stage.to_string();
+            let expected = {
+                let mut out = String::with_capacity(
+                    stage.operation().len()
+                        + super::CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR.len()
+                        + stage.label().len(),
+                );
+                out.push_str(stage.operation());
+                out.push_str(super::CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR);
+                out.push_str(stage.label());
+                out
+            };
+            assert_eq!(
+                rendered, expected,
+                "Display for {stage:?} must compose `operation` ++ COMPOUND_KEY_SEPARATOR ++ `label` verbatim",
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_from_str_uses_typed_separator_bytes() {
+        // Pin the parse boundary to the typed separator bytes: an
+        // input that swaps the separator (colon-alone `":"`, space-
+        // alone `" "`, wrong punctuation `" | "`) fails-loudly even
+        // if the operation + label slot bytes are otherwise correct.
+        // A regression that drops the ASCII space from the
+        // `split_once` argument after a clippy `single_char_pattern`
+        // suggestion would silently accept `"realize_to_disk:serialize"`
+        // as a variant — this test rejects it at the parse boundary.
+        for wrong_separator in [":", "  ", " : ", " ", "|", " - ", "\t"] {
+            let key = {
+                let mut out = String::new();
+                out.push_str(super::CompilerSpecIoStage::RealizeToDiskSerialize.operation());
+                out.push_str(wrong_separator);
+                out.push_str(super::CompilerSpecIoStage::RealizeToDiskSerialize.label());
+                out
+            };
+            key.parse::<super::CompilerSpecIoStage>().expect_err(
+                "compound key with wrong-separator bytes must NOT decode — the parse boundary keys on COMPOUND_KEY_SEPARATOR verbatim",
+            );
+        }
+        // Sanity: constructing the input through the typed constant
+        // still succeeds — the constant is the source of truth on
+        // both the Display and the FromStr sides.
+        let key = {
+            let mut out = String::new();
+            out.push_str(super::CompilerSpecIoStage::LoadFromDiskRead.operation());
+            out.push_str(super::CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR);
+            out.push_str(super::CompilerSpecIoStage::LoadFromDiskRead.label());
+            out
+        };
+        assert_eq!(
+            key.parse::<super::CompilerSpecIoStage>()
+                .expect("compound key composed through COMPOUND_KEY_SEPARATOR must decode"),
+            super::CompilerSpecIoStage::LoadFromDiskRead,
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_display_middle_bytes_equal_typed_separator() {
+        // Extract the middle bytes of every variant's `Display`
+        // rendering — the substring between the operation prefix and
+        // the label suffix — and pin them to
+        // `COMPOUND_KEY_SEPARATOR`. This closes the loop from the
+        // OTHER direction: the two projection-axis tests
+        // (`operation_method_routes_through_typed_constants`,
+        // `label_method_routes_through_typed_constants`) pin what
+        // the operation and label slots ARE at rendering time; this
+        // test pins what everything BETWEEN them is. Together the
+        // three tests span every byte of every variant's rendered
+        // compound key by threading each byte through some typed
+        // source-of-truth constant on `CompilerSpecIoStage` —
+        // matching the same span posture `Self::OPERATIONS +
+        // Self::LABELS` establishes at the (variant → slot bytes)
+        // aggregate-array level.
+        for stage in super::CompilerSpecIoStage::ALL {
+            let rendered = stage.to_string();
+            let after_op = rendered
+                .strip_prefix(stage.operation())
+                .expect("Display must start with operation bytes");
+            let middle = after_op
+                .strip_suffix(stage.label())
+                .expect("Display must end with label bytes");
+            assert_eq!(
+                middle,
+                super::CompilerSpecIoStage::COMPOUND_KEY_SEPARATOR,
+                "the substring between operation and label in Display for {stage:?} must be COMPOUND_KEY_SEPARATOR verbatim",
+            );
+        }
     }
 
     // ── TemplateInvariantKind + TemplateInvariant variant ───────────

@@ -1062,6 +1062,126 @@ impl Atom {
     /// shapes reflecting the identity-relation asymmetry.
     pub const SELF_ESCAPE_TABLE: [char; 2] = [Self::STR_DELIMITER, Self::STR_ESCAPE_LEAD];
 
+    /// Canonical closed-set ALL array over every escape-SOURCE byte
+    /// [`Self::decode_str_escape`] has a non-passthrough arm for — the
+    /// SPAN of the two peer sub-vocabulary source columns
+    /// ([`Self::NAMED_ESCAPE_TABLE`]'s three (SOURCE, DECODED) pairs'
+    /// SOURCE column + [`Self::SELF_ESCAPE_TABLE`]'s two rows) in
+    /// canonical declaration order matching `decode_str_escape`'s
+    /// match-arm order. Forced-arity `[char; 5]` composition — a
+    /// hypothetical sixth non-passthrough arm (e.g. a `'0' → '\0'`
+    /// NUL-byte extension, a Racket-compat `'a' → '\x07'` BEL, a raw-
+    /// string mode adopting `'#'` as an additional self-escaping
+    /// delimiter) extends [`Self::decode_str_escape`]'s match ONCE +
+    /// EITHER `NAMED_ESCAPE_TABLE` or `SELF_ESCAPE_TABLE` ONCE + this
+    /// ALL array ONCE + one new per-role `pub const` (or pair) in
+    /// lockstep; rustc's forced-arity check on `[char; N]` binds the
+    /// extension through the array declaration site.
+    ///
+    /// Cross-sub-vocabulary SPAN peer to [`Self::NAMED_ESCAPE_TABLE`] +
+    /// [`Self::SELF_ESCAPE_TABLE`] at the ALL-array level: where those
+    /// two arrays partition the FIVE non-passthrough arms of
+    /// [`Self::decode_str_escape`] into the pattern-DISTINCT-from-value
+    /// sub-vocabulary (3 rows, `[(char, char); 3]`) AND the pattern-
+    /// EQUALS-value sub-vocabulary (2 rows, `[char; 2]`), this array
+    /// closes the UNION of the SOURCE columns at ONE typed
+    /// `[char; 5]` on the SAME closed-set [`Atom`] algebra. Pre-lift
+    /// the SPAN identity lived at TWO sites: the runtime iterator
+    /// chain
+    /// `Atom::NAMED_ESCAPE_TABLE.iter().map(|&(src, _)| src)
+    /// .chain(Atom::SELF_ESCAPE_TABLE.iter().copied()).collect()` at
+    /// `atom_decode_str_escape_composes_end_to_end_through_reader_for_every_named_arm`
+    /// AND the prose docstring for [`Self::SELF_ESCAPE_TABLE`] naming
+    /// "the FIVE non-passthrough arms" as a cardinality identity. Post-
+    /// lift the SPAN binds at ONE forced-arity `[char; 5]` on the
+    /// [`Atom`] algebra so consumers that want "every char for which
+    /// decode_str_escape is not the identity passthrough" iterate the
+    /// typed array rather than reassembling the two peer arrays at
+    /// each callsite.
+    ///
+    /// Also sibling-shape to [`Sexp::LIST_DELIMITERS`] (`[char; 2]` on
+    /// the outer-structural paired-delimiter axis of the closed-set
+    /// [`Sexp`] algebra), [`Sexp::COMMENT_DELIMITERS`] (`[char; 2]` on
+    /// the reader-discard paired-delimiter axis of the SAME [`Sexp`]
+    /// algebra), [`Atom::BOOL_LITERALS`] (`[&'static str; 2]` on the
+    /// Scheme-bool spelling axis of this same [`Atom`] algebra), and
+    /// [`QuoteForm::LEADS`] (`[char; 3]` on the DISTINCT-lead-byte
+    /// sub-vocabulary axis of the closed-set [`QuoteForm`] algebra) —
+    /// every closed-set outer projection on the substrate that carries
+    /// a scalar `[char; N]` sub-vocabulary now pins its canonical
+    /// bytes at ONE `pub const` per role plus a forced-arity ALL array
+    /// for family-wide consumers.
+    ///
+    /// Composition law (SPAN): `ESCAPE_SOURCES ==
+    /// [NAMED_ESCAPE_TABLE[0].0, NAMED_ESCAPE_TABLE[1].0,
+    /// NAMED_ESCAPE_TABLE[2].0, SELF_ESCAPE_TABLE[0],
+    /// SELF_ESCAPE_TABLE[1]]` AND `ESCAPE_SOURCES.len() ==
+    /// NAMED_ESCAPE_TABLE.len() + SELF_ESCAPE_TABLE.len()` — the
+    /// forced-arity + canonical declaration order together pin every
+    /// downstream index-sweep consumer to the (named-source-column
+    /// prefix, self-source-column suffix) partition at rustc time; a
+    /// reorder that broke the partition (e.g. interleaving the two
+    /// sub-vocabularies' rows) fails at the composition pin below.
+    ///
+    /// Path-uniformity contract carried at the row level: for every
+    /// `esc` in `ESCAPE_SOURCES`, `Self::decode_str_escape(esc) != esc`
+    /// iff `esc` is a NAMED_ESCAPE_TABLE SOURCE row (the three
+    /// pattern-DISTINCT-from-value arms), and `Self::decode_str_escape
+    /// (esc) == esc` iff `esc` is a SELF_ESCAPE_TABLE row (the two
+    /// pattern-EQUALS-value arms). The union is exhaustive over the
+    /// FIVE non-passthrough arms so no `ESCAPE_SOURCES` row projects
+    /// through the `other => other` passthrough branch — the arm-set
+    /// closure is pinned structurally at
+    /// `atom_escape_sources_every_row_projects_through_a_non_passthrough_arm_of_decode_str_escape`.
+    ///
+    /// Pairwise disjointness: every row is distinct from every other
+    /// row — the closed-set SPAN inherits pairwise disjointness from
+    /// the two peer sub-vocabularies (each already pairwise distinct
+    /// via `atom_named_escape_table_sources_pairwise_distinct` +
+    /// `atom_self_escape_table_pairwise_distinct`) PLUS the cross-
+    /// sub-vocabulary disjointness pinned by
+    /// `atom_self_escape_table_disjoint_from_named_escape_table`. This
+    /// ALL array's own `atom_escape_sources_pairwise_distinct` test
+    /// closes the disjointness contract at the SPAN-level so a future
+    /// refactor that added a sixth arm whose SOURCE aliased an
+    /// existing arm surfaces HERE rather than at a distant reader
+    /// round-trip.
+    ///
+    /// Future consumers that compose against [`Self::ESCAPE_SOURCES`]:
+    /// - LSP / REPL completion for the escape-source vocabulary — the
+    ///   completion set IS `Self::ESCAPE_SOURCES` rather than a
+    ///   per-consumer chain over the two peer arrays.
+    /// - `tatara-check` coverage assertions that a `.lisp` corpus
+    ///   exercises every non-passthrough escape arm — the sweep IS
+    ///   `Self::ESCAPE_SOURCES.iter()` rather than a runtime chain
+    ///   over `NAMED_ESCAPE_TABLE.iter().map(|&(src, _)| src)
+    ///   .chain(SELF_ESCAPE_TABLE.iter().copied())`.
+    /// - Any future syntax-highlighter that colors escape sequences —
+    ///   the classifier binds through `Self::ESCAPE_SOURCES` rather
+    ///   than through two parallel per-sub-vocabulary lookups.
+    /// - Any future fuzz-input generator that biases toward escape
+    ///   sequences — the source-byte pool IS `Self::ESCAPE_SOURCES`
+    ///   rather than reassembled from the two peer arrays.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the FIVE non-
+    /// passthrough source bytes now bind at ONE typed `[char; 5]` on
+    /// the closed-set [`Atom`] algebra rather than at a runtime chain
+    /// over the two peer sub-vocabulary arrays reassembled per
+    /// consumer. THEORY.md §V.1 — knowable platform; the non-
+    /// passthrough source-byte SPAN becomes load-bearing typed data at
+    /// the algebra level. THEORY.md §VI.1 — generation over
+    /// composition; the "FIVE non-passthrough arms" identity that
+    /// lived as prose in the [`Self::SELF_ESCAPE_TABLE`] docstring AND
+    /// as a runtime iterator chain at one test site regenerates
+    /// identically through this ONE typed forced-arity array.
+    pub const ESCAPE_SOURCES: [char; 5] = [
+        Self::NEWLINE_ESCAPE_SOURCE,
+        Self::TAB_ESCAPE_SOURCE,
+        Self::CARRIAGE_RETURN_ESCAPE_SOURCE,
+        Self::STR_DELIMITER,
+        Self::STR_ESCAPE_LEAD,
+    ];
+
     #[must_use]
     pub const fn decode_str_escape(esc: char) -> char {
         match esc {
@@ -21231,6 +21351,222 @@ mod tests {
         );
     }
 
+    // ── `Atom::ESCAPE_SOURCES` — the closed-set forced-arity ALL array
+    // over every escape-SOURCE byte `Atom::decode_str_escape` has a
+    // non-passthrough arm for. Cross-sub-vocabulary SPAN peer of
+    // `NAMED_ESCAPE_TABLE` (three pattern-DISTINCT-from-value rows'
+    // SOURCE column) + `SELF_ESCAPE_TABLE` (two pattern-EQUALS-value
+    // rows) at ONE typed `[char; 5]` on the SAME closed-set [`Atom`]
+    // algebra. The pins below anchor (a) the SPAN composition against
+    // the two peer sub-vocabulary arrays' SOURCE columns in canonical
+    // declaration order, (b) the forced-arity cardinality against a
+    // refactor that loosens the array to `&[char]`, (c) pairwise
+    // disjointness inherited from the two peer sub-vocabularies' own
+    // pairwise disjointness + cross-sub-vocabulary disjointness, (d)
+    // the "every row hits a non-passthrough arm" closure identity
+    // against a refactor that added a stale ESCAPE_SOURCES row without
+    // extending `decode_str_escape`, and (e) the load-bearing partition
+    // NAMED-source-column prefix / SELF-source-column suffix that the
+    // declaration order encodes for consumers that walk the array by
+    // index. Sibling-shape to the composition-pin block above for
+    // `SELF_ESCAPE_TABLE` — those pins bind the peer sub-vocabulary at
+    // the same closed-set algebra; this block binds the SPAN of the
+    // two sub-vocabularies at ONE array up.
+
+    #[test]
+    fn atom_escape_sources_composes_from_named_and_self_escape_sub_vocabularies_in_declaration_order(
+    ) {
+        // COMPOSITION LAW: the ALL array's rows are (NAMED_ESCAPE_TABLE
+        // SOURCE column, then SELF_ESCAPE_TABLE rows) in canonical
+        // declaration order matching `decode_str_escape`'s match-arm
+        // order. Pins the SPAN composition at ONE site so a reorder
+        // that broke the (named prefix, self suffix) partition (e.g.
+        // interleaving the two sub-vocabularies' rows, sorting
+        // alphabetically) silently misaligns every consumer that
+        // sweeps the array by index. Sibling-shape pin to
+        // `atom_self_escape_table_composes_from_algebra_constants_in_declaration_order`
+        // one axis over on the peer sub-vocabulary at
+        // `Atom::SELF_ESCAPE_TABLE`, and to
+        // `atom_named_escape_table_composes_from_per_role_constants_in_declaration_order`
+        // on the SOURCE column of the other peer sub-vocabulary at
+        // `Atom::NAMED_ESCAPE_TABLE`.
+        assert_eq!(
+            Atom::ESCAPE_SOURCES,
+            [
+                Atom::NAMED_ESCAPE_TABLE[0].0,
+                Atom::NAMED_ESCAPE_TABLE[1].0,
+                Atom::NAMED_ESCAPE_TABLE[2].0,
+                Atom::SELF_ESCAPE_TABLE[0],
+                Atom::SELF_ESCAPE_TABLE[1],
+            ],
+            "ESCAPE_SOURCES composition drifted from the canonical \
+             (NAMED SOURCE column, then SELF rows) SPAN in declaration \
+             order — the SPAN lift must route through the two peer \
+             sub-vocabulary arrays' rows in the exact order \
+             decode_str_escape's match arms fire on them.",
+        );
+    }
+
+    #[test]
+    fn atom_escape_sources_has_expected_cardinality() {
+        // ARITY PIN: the forced-arity `[char; 5]` shape survives at
+        // runtime AND matches the two peer sub-vocabularies' summed
+        // cardinality. Pins the closed-set size against a refactor
+        // that loosens the array's type to `&'static [char]` or
+        // `Vec<char>` (which would drop the compile-time arity
+        // forcing rustc bakes into `[T; N]` declarations) AND against
+        // a refactor that drifted this array's arity without extending
+        // one of the two peer sub-vocabularies (which would silently
+        // desynchronize the SPAN identity from its two source arrays).
+        // Sibling posture to
+        // `atom_named_and_self_escape_tables_span_the_five_non_passthrough_arms`
+        // — where that pin binds the summed cardinality at ONE
+        // assert_eq!, this pin binds the SPAN's OWN cardinality at
+        // the ALL array level so a future refactor that added a
+        // NAMED_ESCAPE_TABLE row without extending ESCAPE_SOURCES
+        // fails HERE at the paired-length equality rather than at a
+        // distant sweep site.
+        assert_eq!(
+            Atom::ESCAPE_SOURCES.len(),
+            5,
+            "ESCAPE_SOURCES cardinality drifted from the substrate-\
+             canonical FIVE non-passthrough arms of \
+             Atom::decode_str_escape.",
+        );
+        assert_eq!(
+            Atom::ESCAPE_SOURCES.len(),
+            Atom::NAMED_ESCAPE_TABLE.len() + Atom::SELF_ESCAPE_TABLE.len(),
+            "ESCAPE_SOURCES cardinality drifted from the SUM of the two \
+             peer sub-vocabulary arrays' cardinalities — the SPAN \
+             identity is broken.",
+        );
+    }
+
+    #[test]
+    fn atom_escape_sources_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: every row is distinct from every
+        // other row. The closed-set SPAN inherits pairwise
+        // disjointness from the two peer sub-vocabularies (each
+        // pinned pairwise distinct at their own sibling tests) PLUS
+        // the cross-sub-vocabulary disjointness pinned by
+        // `atom_self_escape_table_disjoint_from_named_escape_table` —
+        // this test closes the disjointness contract at the SPAN
+        // level so a future refactor that added a sixth arm whose
+        // SOURCE aliased an existing row surfaces HERE rather than
+        // at a distant reader round-trip. Sibling posture to
+        // `atom_self_escape_table_pairwise_distinct` +
+        // `atom_named_escape_table_sources_pairwise_distinct` on the
+        // two peer sub-vocabularies.
+        for i in 0..Atom::ESCAPE_SOURCES.len() {
+            for j in (i + 1)..Atom::ESCAPE_SOURCES.len() {
+                assert_ne!(
+                    Atom::ESCAPE_SOURCES[i],
+                    Atom::ESCAPE_SOURCES[j],
+                    "ESCAPE_SOURCES bytes at indices {i} and {j} alias \
+                     — every non-passthrough arm must specialize on a \
+                     distinct SOURCE byte.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn atom_escape_sources_partitions_into_named_source_prefix_and_self_source_suffix() {
+        // PARTITION PIN: the SPAN's canonical declaration order
+        // encodes a (named prefix, self suffix) partition —
+        // `ESCAPE_SOURCES[0..3]` IS `NAMED_ESCAPE_TABLE`'s SOURCE
+        // column, `ESCAPE_SOURCES[3..5]` IS `SELF_ESCAPE_TABLE`. Pin
+        // the partition at the index level so a reorder that broke
+        // the sub-vocabulary boundary (e.g. moved `STR_DELIMITER` to
+        // index 2 to sort alphabetically, or interleaved a self row
+        // between two named rows) fails HERE rather than as silent
+        // drift where consumers that walk the array by index would
+        // route the wrong sub-vocabulary's row through the wrong
+        // downstream handler.
+        for (i, &(src, _)) in Atom::NAMED_ESCAPE_TABLE.iter().enumerate() {
+            assert_eq!(
+                Atom::ESCAPE_SOURCES[i],
+                src,
+                "ESCAPE_SOURCES[{i}] ({}) drifted from \
+                 NAMED_ESCAPE_TABLE[{i}].0 ({src}) — the named-prefix \
+                 partition is broken.",
+                Atom::ESCAPE_SOURCES[i],
+            );
+        }
+        for (i, &self_byte) in Atom::SELF_ESCAPE_TABLE.iter().enumerate() {
+            let span_index = Atom::NAMED_ESCAPE_TABLE.len() + i;
+            assert_eq!(
+                Atom::ESCAPE_SOURCES[span_index],
+                self_byte,
+                "ESCAPE_SOURCES[{span_index}] ({}) drifted from \
+                 SELF_ESCAPE_TABLE[{i}] ({self_byte}) — the self-suffix \
+                 partition is broken.",
+                Atom::ESCAPE_SOURCES[span_index],
+            );
+        }
+    }
+
+    #[test]
+    fn atom_escape_sources_every_row_projects_through_a_non_passthrough_arm_of_decode_str_escape() {
+        // NON-PASSTHROUGH-CLOSURE CONTRACT: every row of
+        // `ESCAPE_SOURCES` MUST project through a NON-passthrough arm
+        // of `decode_str_escape` — the SPAN is definitionally the set
+        // of SOURCE bytes for which `decode_str_escape` has a typed
+        // arm. Pin the closure structurally so a refactor that added
+        // an `ESCAPE_SOURCES` row without extending
+        // `decode_str_escape`'s match (or vice versa) surfaces HERE at
+        // the first drifted row rather than at a distant sweep-site
+        // regression. The row projects through a non-passthrough arm
+        // iff EITHER (a) it's a `NAMED_ESCAPE_TABLE` SOURCE and
+        // `decode_str_escape` returns the paired DECODED byte
+        // (`decode(src) != src`), OR (b) it's a `SELF_ESCAPE_TABLE`
+        // row and `decode_str_escape` returns the SAME byte
+        // (`decode(esc) == esc` by definitional identity — the arm
+        // exists AND fires, but the projection is pattern-EQUALS-
+        // value). Both arm-kinds are non-passthrough because they
+        // have a TYPED arm in the match; the `other => other`
+        // passthrough only fires for chars NOT in the SPAN. Pin the
+        // dispatch identity by checking each row lives in exactly ONE
+        // of the two peer sub-vocabularies.
+        for (i, &esc) in Atom::ESCAPE_SOURCES.iter().enumerate() {
+            let in_named = Atom::NAMED_ESCAPE_TABLE.iter().any(|&(src, _)| src == esc);
+            let in_self = Atom::SELF_ESCAPE_TABLE.contains(&esc);
+            assert!(
+                in_named ^ in_self,
+                "ESCAPE_SOURCES[{i}] ({esc:?}) must belong to EXACTLY \
+                 ONE peer sub-vocabulary (in_named={in_named}, \
+                 in_self={in_self}) — the SPAN identity requires each \
+                 row to fire a typed non-passthrough arm on either \
+                 the pattern-DISTINCT-from-value axis (NAMED) OR the \
+                 pattern-EQUALS-value axis (SELF), never both, never \
+                 neither.",
+            );
+            // Consistency check: the arm's projection must agree with
+            // the row's sub-vocabulary identity. NAMED rows project to
+            // the paired DECODED byte (which the pairwise-distinct pin
+            // guarantees differs from SOURCE); SELF rows project to
+            // the row byte itself.
+            let decoded = Atom::decode_str_escape(esc);
+            if in_named {
+                assert_ne!(
+                    decoded, esc,
+                    "ESCAPE_SOURCES[{i}] ({esc:?}) is a NAMED SOURCE — \
+                     decode_str_escape MUST project to the paired \
+                     DECODED byte (distinct from SOURCE) but returned \
+                     {decoded:?}.",
+                );
+            } else {
+                assert_eq!(
+                    decoded, esc,
+                    "ESCAPE_SOURCES[{i}] ({esc:?}) is a SELF row — \
+                     decode_str_escape MUST project to the same byte \
+                     (pattern-EQUALS-value by definitional identity) \
+                     but returned {decoded:?}.",
+                );
+            }
+        }
+    }
+
     #[test]
     fn atom_decode_str_escape_composes_end_to_end_through_reader_for_every_named_arm() {
         // END-TO-END COMPOSITION CONTRACT: pin that every typed
@@ -21253,10 +21589,19 @@ mod tests {
         // — where that pin exercises the SINGLE self-escape arm on
         // the escape-lead axis end-to-end, this sweep exercises the
         // FULL closed-set table on the same axis.
-        let escs: Vec<char> = Atom::NAMED_ESCAPE_TABLE
+        // Pre-lift the (NAMED_ESCAPE_TABLE.iter().map(|&(src, _)| src)
+        // .chain(SELF_ESCAPE_TABLE.iter().copied())) runtime iterator
+        // chain reassembled the FIVE non-passthrough source bytes at
+        // this callsite; post-lift the SPAN binds at ONE forced-arity
+        // `Atom::ESCAPE_SOURCES: [char; 5]` on the closed-set [`Atom`]
+        // algebra so the sweep iterates the typed ALL array directly.
+        // The trailing `'x'` is a representative PASSTHROUGH byte
+        // (deliberately NOT in `ESCAPE_SOURCES`) — the sweep exercises
+        // BOTH the non-passthrough closed set AND the passthrough
+        // default-arm through the same reader pipeline in ONE loop.
+        let escs: Vec<char> = Atom::ESCAPE_SOURCES
             .iter()
-            .map(|&(src, _)| src)
-            .chain(Atom::SELF_ESCAPE_TABLE.iter().copied())
+            .copied()
             .chain(std::iter::once('x'))
             .collect();
         for esc in escs {

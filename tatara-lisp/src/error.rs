@@ -2730,6 +2730,133 @@ impl UnquoteForm {
     /// assertions duplicated at each call site.
     pub const MARKERS: [&'static str; 2] = [Self::UNQUOTE_MARKER, Self::SPLICE_MARKER];
 
+    /// Canonical `&'static str` iac-forge canonical-form tag bytes for
+    /// the [`Self::Unquote`] substitution — aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_IAC_FORGE_TAG`] on the
+    /// UnquoteForm ⊂ QuoteForm 2-of-4 subset carving so the
+    /// iac-forge-tag-level per-role bytes bind at ONE `pub const` on
+    /// the parent superset's Unquote arm rather than at TWO sites (the
+    /// per-role `pub const` AND a parallel inline literal). Per-role
+    /// peer of [`Self::Unquote`] on the closed-set template-
+    /// substitution algebra; consumers reach for
+    /// `UnquoteForm::UNQUOTE_IAC_FORGE_TAG` when the caller has a
+    /// variant in hand at compile time and wants the canonical iac-
+    /// forge interop-tag bytes without runtime dispatch through
+    /// [`Self::iac_forge_tag`].
+    ///
+    /// Sibling posture to [`Self::UNQUOTE_MARKER`] (commit 3640f76) —
+    /// both pin the invariant that a typed-subset enum's per-role
+    /// bytes are structurally derived from the parent superset's
+    /// per-role `pub const` via a `pub const = Parent::CONST` alias
+    /// rather than through parallel literal-discipline sites. Where
+    /// [`Self::UNQUOTE_MARKER`] aliases the reader-punctuation
+    /// vocabulary (`","`) shared with the Lisp source-code surface,
+    /// this constant aliases the iac-forge canonical-form vocabulary
+    /// (`"unquote"`) shared with the cross-crate attestation surface
+    /// — the two peer axes span the two production byte-vocabularies
+    /// the parent [`crate::ast::QuoteForm`] closed set carries, and
+    /// both now bind through the same aliased typed source of truth on
+    /// this UnquoteForm subset.
+    pub const UNQUOTE_IAC_FORGE_TAG: &'static str = crate::ast::QuoteForm::UNQUOTE_IAC_FORGE_TAG;
+
+    /// Canonical `&'static str` iac-forge canonical-form tag bytes for
+    /// the [`Self::Splice`] list-substitution — aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG`] on the
+    /// UnquoteForm ⊂ QuoteForm 2-of-4 subset carving. Per-role peer of
+    /// [`Self::Splice`]; the `"unquote-splicing"` bytes are the ONLY
+    /// hyphenated multi-syllable canonical-form tag on the UnquoteForm
+    /// algebra — the other iac-forge tag is a single word.
+    ///
+    /// INTENTIONALLY diverges from [`crate::error::SexpShape::label`]'s
+    /// splice arm (which renders `"unquote-splice"` for the diagnostic
+    /// surface) — the iac-forge canonical-form REQUIRES the
+    /// `unquote-splicing` spelling, while the substrate's operator-
+    /// facing diagnostic surface renders the shorter idiom. The typed
+    /// per-role `pub const` documents the divergence structurally: a
+    /// future "consolidation" PR that homogenizes the two axes would
+    /// have to touch this constant explicitly, surfacing the boundary-
+    /// distinct invariant at code-review time rather than silently.
+    pub const SPLICE_IAC_FORGE_TAG: &'static str =
+        crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG;
+
+    /// Closed-set forced-arity ALL array over the canonical iac-forge
+    /// canonical-form tag `&'static str` bytes, in declaration order
+    /// matching [`Self::ALL`] element-wise (pinned by
+    /// `unquote_form_iac_forge_tags_align_with_all_by_index`). Sibling
+    /// posture to [`Self::MARKERS`] (`[&'static str; 2]` on the reader-
+    /// punctuation axis of the SAME [`UnquoteForm`] closed set — commit
+    /// 3640f76) and to [`crate::ast::QuoteForm::IAC_FORGE_TAGS`]
+    /// (`[&'static str; 4]` — the superset carving this UnquoteForm
+    /// subset embeds into on the SAME iac-forge canonical-form axis).
+    /// The (canonical iac-forge tag) axis + the (canonical reader
+    /// marker) axis together span the two production byte-vocabularies
+    /// the [`UnquoteForm`] closed set carries — [`Self::MARKERS`] holds
+    /// the Lisp source-code prefixes (`","`, `",@"`) the reader
+    /// tokenizes on, [`Self::IAC_FORGE_TAGS`] holds the cross-crate
+    /// canonical-form tag strings (`"unquote"`, `"unquote-splicing"`)
+    /// the iac-forge interop layer round-trips through.
+    ///
+    /// Pre-lift the two iac-forge tag bytes had NO per-role primitive
+    /// on this closed-set subset algebra — a consumer with an
+    /// [`UnquoteForm`] variant in hand at compile time reaching for
+    /// the canonical tag bytes had to spell
+    /// `UnquoteForm::Splice.iac_forge_tag()` (runtime dispatch through
+    /// the composition [`Self::to_quote_form`] +
+    /// [`crate::ast::QuoteForm::iac_forge_tag`]) OR reach across the
+    /// algebra boundary into
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG`] and
+    /// re-derive the UnquoteForm ⊂ QuoteForm variant pairing at the
+    /// call site. Post-lift the TWO canonical bytes bind at ONE
+    /// `pub const` per role on the typed [`UnquoteForm`] algebra AND
+    /// at [`Self::IAC_FORGE_TAGS`] as a family-wide forced-arity array
+    /// — a future LSP / REPL completion bar keyed on
+    /// `UnquoteForm::IAC_FORGE_TAGS`, a `tatara-check` coverage sweep
+    /// over the template-marker arms of an attestation-payload corpus,
+    /// or a Sekiban audit-trail metric jointly labeled by the iac-
+    /// forge tag (`tatara_lisp_iac_forge_tag_total{tag="unquote"}`)
+    /// reads through the typed constants on this subset algebra
+    /// without re-deriving the 2-of-4 carving inline.
+    ///
+    /// Each entry is byte-for-byte identical to the corresponding
+    /// [`crate::ast::QuoteForm`] Unquote / UnquoteSplice arm — an
+    /// intentional cross-axis overlap pinned by
+    /// `unquote_form_per_role_iac_forge_tags_alias_quote_form_per_role_iac_forge_tags_byte_for_byte`
+    /// so a future canonical-form tag rename on EITHER side (a
+    /// [`crate::ast::QuoteForm`] `"unquote"` → `"unquote-value"` drift,
+    /// or an [`UnquoteForm`] rename that skips the alias) fails-loudly
+    /// at the alias test rather than as a silent cross-crate
+    /// canonical-form vocabulary fracture that mis-hashes BLAKE3
+    /// attestation keys. Adding a hypothetical third template-marker
+    /// (e.g. a `,~` reverse-unquote with its own canonical `"reverse-
+    /// unquote"` tag, a `,?` conditional-unquote with its own tag)
+    /// extends [`Self::ALL`] AND [`Self::IAC_FORGE_TAGS`] AND adds ONE
+    /// per-role `pub const` alias in lockstep — rustc's forced-arity
+    /// check on the two `[_; N]` arrays fails compilation if EITHER
+    /// ALL array grows without the other.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// canonical iac-forge tag bytes bind at ONE typed
+    /// `[&'static str; 2]` array on the closed-set UnquoteForm algebra
+    /// rather than at zero-primitive-on-this-subset-plus-two-inline-
+    /// lookups scattered across the substrate. THEORY.md §V.1 —
+    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// level constant on the substrate algebra rather than a per-
+    /// consumer runtime dispatch through the composition. THEORY.md
+    /// §V.3 — three-pillar attestation; the canonical iac-forge tag
+    /// bytes are the surface the substrate's cross-crate `intent_hash`
+    /// pillar composes over for every substitution-subset arm of a
+    /// homoiconic template AST — binding the two bytes on the typed
+    /// algebra makes attestation-key drift a compile error rather than
+    /// a silent BLAKE3 mis-hash. THEORY.md §VI.1 — generation over
+    /// composition; the family-wide contract sweeps (alignment with
+    /// `ALL`, pairwise disjointness, membership through
+    /// [`Self::iac_forge_tag`]) emerge from the composition of TWO
+    /// substrate primitives (this `pub const` array + the two per-role
+    /// `pub const *_IAC_FORGE_TAG` aliases) rather than as per-variant
+    /// inline assertions duplicated at each call site.
+    pub const IAC_FORGE_TAGS: [&'static str; 2] =
+        [Self::UNQUOTE_IAC_FORGE_TAG, Self::SPLICE_IAC_FORGE_TAG];
+
     /// Project the typed `UnquoteForm` to the canonical `&'static str`
     /// literal — feeds the `LispError::UnboundTemplateVar` /
     /// `LispError::NonSymbolUnquoteTarget` Display rendering via the
@@ -13142,6 +13269,164 @@ mod tests {
                     "UnquoteForm::MARKERS[{i}] ({a:?}) collides with \
                      UnquoteForm::MARKERS[{j}] ({b:?}) — two distinct \
                      template markers cannot share diagnostic bytes",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unquote_form_per_role_iac_forge_tags_alias_quote_form_per_role_iac_forge_tags_byte_for_byte()
+    {
+        // ALIAS CONTRACT: pin both per-role
+        // `pub const UnquoteForm::*_IAC_FORGE_TAG` aliases equal the
+        // corresponding `pub const QuoteForm::*_IAC_FORGE_TAG`
+        // byte-for-byte — so the UnquoteForm ⊂ QuoteForm iac-forge-
+        // canonical-form vocabulary containment routes through the
+        // typed
+        // `pub const UnquoteForm::V_IAC_FORGE_TAG: &'static str = QuoteForm::V_IAC_FORGE_TAG`
+        // alias chain rather than through two independent literal-
+        // discipline sites. A regression that renames the QuoteForm
+        // side (e.g. a Common-Lisp-standard rename of `"unquote-
+        // splicing"` on the iac-forge canonical-form surface) without
+        // updating the UnquoteForm alias pointing at it fails-loudly
+        // here with the exact axis identified (UNQUOTE / SPLICE); a
+        // regression that re-inlines the UnquoteForm constant to a
+        // fresh literal still passes this pin but loses the alias-
+        // chain typing (which is what
+        // `unquote_form_iac_forge_tag_arms_route_through_per_role_iac_forge_tags_for_every_variant`
+        // + `unquote_form_iac_forge_tags_align_with_all_by_index`
+        // catch in combination).
+        //
+        // Sibling posture to
+        // `unquote_form_per_role_markers_alias_quote_form_per_role_prefixes_byte_for_byte`
+        // (commit 3640f76): both pin the invariant that the
+        // UnquoteForm subset algebra's per-role bytes are structurally
+        // derived from the parent QuoteForm superset's per-role bytes
+        // via a `pub const = Parent::CONST` alias rather than through
+        // parallel literal tables — the axis there is the reader-
+        // punctuation vocabulary; the axis here is the iac-forge
+        // canonical-form vocabulary. Both axes span the two production
+        // byte-vocabularies the parent [`QuoteForm`] closed set
+        // carries, and both bind through the same aliased typed source
+        // of truth on this UnquoteForm subset.
+        use crate::ast::QuoteForm;
+        assert_eq!(
+            UnquoteForm::UNQUOTE_IAC_FORGE_TAG,
+            QuoteForm::UNQUOTE_IAC_FORGE_TAG,
+        );
+        assert_eq!(
+            UnquoteForm::SPLICE_IAC_FORGE_TAG,
+            QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG,
+        );
+    }
+
+    #[test]
+    fn unquote_form_iac_forge_tag_arms_route_through_per_role_iac_forge_tags_for_every_variant() {
+        // PATH-UNIFORMITY: `UnquoteForm::V.iac_forge_tag()` MUST equal
+        // the per-role `pub const UnquoteForm::V_IAC_FORGE_TAG` for
+        // every `v: UnquoteForm`. Pre-lift the two iac-forge canonical-
+        // form tag bytes were reachable through
+        // `UnquoteForm::iac_forge_tag` (the composition
+        // `self.to_quote_form().iac_forge_tag()` — routing into
+        // `QuoteForm::UNQUOTE_IAC_FORGE_TAG` /
+        // `UNQUOTE_SPLICE_IAC_FORGE_TAG`) OR through direct
+        // `QuoteForm::UNQUOTE_IAC_FORGE_TAG` reach-across; post-lift
+        // each variant's canonical bytes are reachable through the
+        // per-role `UnquoteForm::*_IAC_FORGE_TAG` alias too. Pin the
+        // byte-equality between the runtime projection and the
+        // compile-time alias so a regression that renames the alias
+        // without updating the arm (or vice versa) fails-loudly at the
+        // exact axis.
+        //
+        // Sibling-shape pin to
+        // `unquote_form_marker_arms_route_through_per_role_markers_for_every_variant`
+        // one vocabulary over on the SAME subset algebra — the reader-
+        // punctuation axis is pinned there; the iac-forge canonical-
+        // form axis is pinned here. Together the two pins close the
+        // subset algebra's `pub const *_MARKER` + `pub const
+        // *_IAC_FORGE_TAG` surfaces against the runtime projections
+        // that feed the two production byte-vocabularies.
+        assert_eq!(
+            UnquoteForm::Unquote.iac_forge_tag(),
+            UnquoteForm::UNQUOTE_IAC_FORGE_TAG,
+        );
+        assert_eq!(
+            UnquoteForm::Splice.iac_forge_tag(),
+            UnquoteForm::SPLICE_IAC_FORGE_TAG,
+        );
+    }
+
+    #[test]
+    fn unquote_form_iac_forge_tags_has_expected_cardinality() {
+        // Cardinality pin: `IAC_FORGE_TAGS.len() == 2` matches
+        // `ALL.len()` so a refactor that loosens the type to
+        // `&'static [&'static str]` fails HERE (the `[_; 2]` slot
+        // cannot be sliced silently), and a variant added to `ALL`
+        // without a matching `IAC_FORGE_TAGS` row fails the pair-arity
+        // gate at the array literal itself before this test even runs.
+        // The pin doubles as an operator-visible mark of the family's
+        // cardinality across the substrate — two iac-forge tags,
+        // matching the 2-of-4 carving of the parent
+        // `QuoteForm::IAC_FORGE_TAGS` (the substitution-subset of the
+        // four canonical homoiconic canonical-form tag strings).
+        assert_eq!(UnquoteForm::IAC_FORGE_TAGS.len(), 2);
+        assert_eq!(UnquoteForm::IAC_FORGE_TAGS.len(), UnquoteForm::ALL.len(),);
+    }
+
+    #[test]
+    fn unquote_form_iac_forge_tags_align_with_all_by_index() {
+        // ALIGNMENT PIN: sweep `IAC_FORGE_TAGS[i] ==
+        // ALL[i].iac_forge_tag()` so any `zip(ALL, IAC_FORGE_TAGS)`
+        // consumer reads a coherent (variant, iac-forge tag) pair off
+        // ONE forced-arity array pair. The declaration-order pin
+        // makes a family-wide consumer that walks the
+        // ALL / IAC_FORGE_TAGS pair in lockstep (an LSP completion
+        // bar keyed on `UnquoteForm::IAC_FORGE_TAGS`, a Sekiban
+        // audit-trail metric labeling
+        // `tatara_lisp_iac_forge_tag_total{tag}` by the per-index
+        // iac-forge tag) read one canonical (variant, bytes) pair per
+        // slot rather than routing through per-consumer paired-
+        // iteration. A regression that reorders IAC_FORGE_TAGS without
+        // also reordering ALL (or vice versa) fails-loudly at the
+        // exact index that drifted.
+        assert_eq!(UnquoteForm::IAC_FORGE_TAGS.len(), UnquoteForm::ALL.len(),);
+        for (i, form) in UnquoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                UnquoteForm::IAC_FORGE_TAGS[i],
+                form.iac_forge_tag(),
+                "UnquoteForm::IAC_FORGE_TAGS[{i}] `{tag}` drifted \
+                 from UnquoteForm::ALL[{i}].iac_forge_tag() \
+                 `{via_variant}` — the canonical ALL ordering and \
+                 the IAC_FORGE_TAGS ordering must match element-wise",
+                tag = UnquoteForm::IAC_FORGE_TAGS[i],
+                via_variant = form.iac_forge_tag(),
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_iac_forge_tags_pairwise_distinct() {
+        // 2x2 pairwise sweep so a collision between the two iac-forge
+        // canonical-form tags (which would silently degrade two
+        // distinct template-substitution markers to the SAME cross-
+        // crate canonical-form bytes and mis-hash the substrate's
+        // BLAKE3 attestation intent-hash pillar) fails-loudly at the
+        // exact pair. Sibling-shape pin to
+        // `unquote_form_markers_pairwise_distinct` one vocabulary over
+        // on the SAME subset algebra — the reader-punctuation axis is
+        // pinned there; the iac-forge canonical-form axis is pinned
+        // here.
+        for (i, a) in UnquoteForm::IAC_FORGE_TAGS.iter().enumerate() {
+            for (j, b) in UnquoteForm::IAC_FORGE_TAGS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "UnquoteForm::IAC_FORGE_TAGS[{i}] ({a:?}) \
+                     collides with UnquoteForm::IAC_FORGE_TAGS[{j}] \
+                     ({b:?}) — two distinct template markers cannot \
+                     share cross-crate canonical-form bytes",
                 );
             }
         }

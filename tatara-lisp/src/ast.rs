@@ -3016,6 +3016,150 @@ impl Sexp {
     /// `crate::reader::tokenize`.
     pub const COMMENT_TERM: char = '\n';
 
+    /// Canonical paired line-comment delimiter closed-set ALL array —
+    /// composes [`Self::COMMENT_LEAD`] followed by [`Self::COMMENT_TERM`]
+    /// in canonical (opener, terminator) declaration order, forced-arity
+    /// `[char; 2]` so a hypothetical alternative comment convention (a
+    /// Scheme R7RS `#;` datum-comment lead paired with a next-datum
+    /// terminator, an Emacs-style CRLF paired terminator, a Common-Lisp
+    /// `#|…|#` block comment closed by `|#`) would extend this array +
+    /// one algebra constant per new row in lockstep — rustc's forced-
+    /// arity check on `[char; N]` binds the extension through the array
+    /// declaration site.
+    ///
+    /// Cross-axis peer to [`Self::LIST_DELIMITERS`] (`[char; 2]` on the
+    /// outer-structural paired-delimiter axis of the SAME closed-set
+    /// outer [`Sexp`] algebra) — both close a paired-role byte
+    /// sub-vocabulary at the SAME shape (`[char; 2]`, `(opener,
+    /// closer_or_terminator)` canonical declaration order) but on
+    /// DISTINCT roles: [`Self::LIST_DELIMITERS`] closes the two typed
+    /// constants that shape a [`Self::List`] payload
+    /// ([`Self::LIST_OPEN`] / [`Self::LIST_CLOSE`], BOTH of which
+    /// classify as bare-atom boundaries and both non-whitespace);
+    /// [`Self::COMMENT_DELIMITERS`] closes the two typed constants that
+    /// shape the reader's line-comment discard run
+    /// ([`Self::COMMENT_LEAD`] / [`Self::COMMENT_TERM`], where the LEAD
+    /// row is a bare-atom boundary AND non-whitespace, and the TERM row
+    /// is a whitespace-family char absorbed by the reader's
+    /// `ch.is_whitespace()` outer-dispatch arm rather than a distinct
+    /// bare-atom boundary). The two arrays partition the SIX-category
+    /// outer-dispatch arm-set into a per-axis paired shape (2 rows for
+    /// list delimiters + 2 rows for comment delimiters + 1 row for
+    /// [`Atom::STR_DELIMITER`] + 3-of-4 rows for [`QuoteForm::LEADS`] +
+    /// the residual whitespace family), each axis carrying its own
+    /// forced-arity ALL array.
+    ///
+    /// Also sibling-shape to [`Atom::SELF_ESCAPE_TABLE`] (`[char; 2]` on
+    /// the inner-Str-payload self-escape sub-vocabulary axis of the
+    /// closed-set [`Atom`] algebra), [`Atom::BOOL_LITERALS`]
+    /// (`[&'static str; 2]` on the Scheme-bool spelling axis), and
+    /// [`crate::error::UnquoteForm::MARKERS`] / [`crate::error::UnquoteForm::IAC_FORGE_TAGS`]
+    /// (`[&'static str; 2]` on the template-substitution subset algebra
+    /// — the 2-of-4 subset carving of [`QuoteForm`]) — every closed-set
+    /// outer projection on the substrate that carries a paired-role
+    /// two-row axis now pins its canonical bytes at ONE `pub const` per
+    /// role plus a forced-arity ALL array for family-wide consumers.
+    ///
+    /// Pre-lift the two-element `[Self::COMMENT_LEAD, Self::COMMENT_TERM]`
+    /// composition had NO typed source of truth on the substrate — the
+    /// two constants each existed independently on the algebra
+    /// ([`Self::COMMENT_LEAD`] shipped in the initial reader-discard
+    /// lift; [`Self::COMMENT_TERM`] shipped in the follow-on paired-
+    /// terminator lift `bb1bd5e`) and consumers that wanted the
+    /// (opener, terminator) shape had to reach across the algebra
+    /// through TWO `pub const` sites. Post-lift the paired-role
+    /// sub-vocabulary binds at ONE forced-arity ALL array on the closed-
+    /// set outer [`Sexp`] algebra alongside the peer
+    /// [`Self::LIST_DELIMITERS`] array on the outer-structural axis; a
+    /// consumer that walks EITHER axis of the outer-structural /
+    /// reader-discard cross-product reads the paired-role identity off
+    /// the shared `[char; 2]` shape.
+    ///
+    /// Structural invariant carried at the SHAPE level: [`char; 2`]
+    /// pairs section-for-retraction one-to-one with
+    /// [`Self::LIST_DELIMITERS`]'s `[char; 2]` — the two arrays sit at
+    /// distinct roles on the SAME closed-set outer [`Sexp`] algebra
+    /// (outer-structural payload-delimiter role for `LIST_DELIMITERS`;
+    /// reader-discard opener/terminator role for `COMMENT_DELIMITERS`)
+    /// but share the same forced-arity shape at their respective axes.
+    /// A consumer that reaches for one of the two arrays encodes its
+    /// axis's paired-role identity in the SHAPE it iterates rather than
+    /// in a per-site convention.
+    ///
+    /// Composition law (round-trip): `COMMENT_DELIMITERS[0] ==
+    /// Self::COMMENT_LEAD` AND `COMMENT_DELIMITERS[1] ==
+    /// Self::COMMENT_TERM` AND `COMMENT_DELIMITERS.len() == 2`. The
+    /// forced-arity + canonical declaration order together pin every
+    /// downstream index-sweep consumer to the (opener, terminator)
+    /// pairing at rustc time; a reorder without reordering the
+    /// underlying algebra constants fails at the composition pin below.
+    ///
+    /// Path-uniformity contract pinned per-row: `COMMENT_DELIMITERS[0]`
+    /// (the LEAD row) MUST classify as a bare-atom boundary via
+    /// [`Self::is_bare_atom_boundary`] (the reader's outer-dispatch's
+    /// dedicated line-comment arm is one of the SIX categories that
+    /// projection covers), AND `COMMENT_DELIMITERS[1]` (the TERM row)
+    /// MUST classify as a whitespace-family char via
+    /// [`char::is_whitespace`] (the reader's `ch.is_whitespace()` arm
+    /// absorbs the terminator so the discard loop's post-loop hand-off
+    /// to the outer-dispatch fires the whitespace arm rather than a
+    /// distinct comment-terminator arm). The per-row asymmetry is
+    /// LOAD-BEARING and structurally distinct from
+    /// [`Self::LIST_DELIMITERS`]'s BOTH-rows-are-bare-atom-boundaries
+    /// contract (both `(` and `)` are non-whitespace outer-dispatch
+    /// arms). Pinned by
+    /// `sexp_comment_delimiters_lead_row_is_bare_atom_boundary` +
+    /// `sexp_comment_delimiters_term_row_is_whitespace_family_char`.
+    ///
+    /// Cross-axis disjointness pinned structurally at
+    /// `sexp_comment_delimiters_disjoint_from_list_delimiters`: no row
+    /// of `COMMENT_DELIMITERS` aliases any row of
+    /// [`Self::LIST_DELIMITERS`] — the reader-discard sub-vocabulary
+    /// and the outer-structural list-delimiter sub-vocabulary partition
+    /// their respective bytes disjointly on the SAME closed-set outer
+    /// [`Sexp`] algebra. Cross-algebra disjointness pinned at
+    /// `sexp_comment_delimiters_disjoint_from_str_delimiter`: no row
+    /// aliases [`Atom::STR_DELIMITER`] — the reader-discard arm and the
+    /// Str-payload arm partition their bytes across the two closed-set
+    /// algebras disjointly.
+    ///
+    /// Future consumers that compose against [`Self::COMMENT_DELIMITERS`]:
+    /// a hypothetical `tatara_lisp_comment_delimiter_total{delimiter=";"|"\n"}`
+    /// Sekiban metric surface at Prometheus recording time — the
+    /// label-set generator sweeps this array verbatim rather than
+    /// re-typing the two paired bytes inline at each recorder, and
+    /// rustc-binds the metric-label set to the closed set through the
+    /// forced-arity ALL array; an LSP / structural-editor that
+    /// highlights line-comment runs — the (opener, terminator) pair the
+    /// editor spans over IS this array's two rows; a hypothetical
+    /// `Sexp::BLOCK_COMMENT_DELIMITERS` peer array for a future
+    /// `#|…|#` block-comment mode would follow the same shape
+    /// mechanically, extending the reader-discard axis by ONE peer
+    /// array without touching this one's shape.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the paired
+    /// (opener, terminator) reader-discard sub-vocabulary of the
+    /// reader's outer-dispatch arm-set now binds at ONE typed `[char;
+    /// 2]` array on the closed-set outer [`Sexp`] algebra rather than
+    /// as two independent algebra constants (`Self::COMMENT_LEAD`,
+    /// `Self::COMMENT_TERM`) accessed independently at every consumer
+    /// that wants the paired-role shape. The shared `[char; 2]` shape
+    /// with [`Self::LIST_DELIMITERS`] encodes the paired-role identity
+    /// relation across the two axes of the SAME closed-set algebra at
+    /// the type system level. THEORY.md §V.1 — knowable platform; the
+    /// paired-discard-delimiter sub-vocabulary becomes load-bearing
+    /// typed data on the closed-set outer [`Sexp`] algebra. THEORY.md
+    /// §VI.1 — generation over composition; the paired-delimiter
+    /// (opener + terminator) composition regenerates identically
+    /// through this ONE typed forced-arity array rather than through
+    /// two independent algebra constants at every consumer. THEORY.md
+    /// §II.1 invariant 5 — composition preserves proofs; the two-axis
+    /// (outer-structural, reader-discard) cross-product on the closed-
+    /// set outer [`Sexp`] algebra now carries the SAME opener/closer
+    /// discipline on BOTH axes through two forced-arity ALL arrays
+    /// with byte-identical shape.
+    pub const COMMENT_DELIMITERS: [char; 2] = [Self::COMMENT_LEAD, Self::COMMENT_TERM];
+
     /// Reader-level boundary predicate — returns `true` iff `ch` is one
     /// of the SIX outer-dispatch category-leading chars the reader's
     /// tokenizer specialises on: whitespace, [`Self::LIST_OPEN`],
@@ -21792,6 +21936,201 @@ mod tests {
                  byte — the reader's line-comment discard loop would \
                  terminate on the SAME byte the quote-family outer- \
                  dispatch arm binds to.",
+            );
+        }
+    }
+
+    // ── `Sexp::COMMENT_DELIMITERS` — the paired (opener, terminator)
+    // reader-discard sub-vocabulary on the closed-set outer [`Sexp`]
+    // algebra. Sibling-shape tests to the `sexp_list_delimiters_*` block
+    // above (outer-structural paired-delimiter axis), lifted onto the
+    // reader-discard axis of the SAME algebra at the SAME `[char; 2]`
+    // shape.
+
+    #[test]
+    fn sexp_comment_delimiters_composes_from_algebra_constants_in_declaration_order() {
+        // FAMILY COMPOSITION LAW: pin that the ALL array's rows are the
+        // two paired reader-discard algebra constants
+        // (`Self::COMMENT_LEAD`, `Self::COMMENT_TERM`) in canonical
+        // (opener, terminator) declaration order matching the
+        // substrate-canonical paired-role shape every consumer expects.
+        // A reorder of ONE row without reordering the underlying
+        // algebra constants silently misaligns every index-sweep
+        // consumer (a hypothetical `Sexp::COMMENT_DELIMITERS[0]` opener
+        // lookup, an LSP span-highlighter that renders the (opener,
+        // terminator) span as-is, the metric label-set generator that
+        // walks the array). Sibling-shape pin to
+        // `sexp_list_delimiters_composes_from_algebra_constants_in_declaration_order`
+        // on the outer-structural axis; both close the (opener,
+        // closer_or_terminator) pair contract at ONE typed ALL array.
+        assert_eq!(
+            Sexp::COMMENT_DELIMITERS,
+            [Sexp::COMMENT_LEAD, Sexp::COMMENT_TERM],
+            "COMMENT_DELIMITERS composition drifted from the canonical \
+             (COMMENT_LEAD, COMMENT_TERM) pair — the paired-discard \
+             sub-vocabulary lift must route through the two typed \
+             algebra constants in that order.",
+        );
+    }
+
+    #[test]
+    fn sexp_comment_delimiters_has_expected_cardinality() {
+        // CARDINALITY PIN: `[char; 2]` at rustc — this assert pins the
+        // runtime observable so a refactor that loosens the array's
+        // type to `&[char]` (dropping the compile-time arity forcing)
+        // fails HERE at the runtime cardinality assertion rather than
+        // silently allowing a third or absent row. Sibling-shape pin
+        // to `sexp_list_delimiters_has_expected_cardinality` on the
+        // outer-structural axis.
+        assert_eq!(
+            Sexp::COMMENT_DELIMITERS.len(),
+            2,
+            "COMMENT_DELIMITERS cardinality drifted from 2 — the paired \
+             (opener, terminator) reader-discard sub-vocabulary MUST be \
+             exactly two rows.",
+        );
+    }
+
+    #[test]
+    fn sexp_comment_delimiters_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: the two paired reader-discard rows
+        // MUST NOT alias (a hypothetical degenerate `;` opener + `;`
+        // terminator convention would collapse the paired-delimiter
+        // contract — the discard loop's terminator check `ch ==
+        // Sexp::COMMENT_TERM` inside a run led by `Sexp::COMMENT_LEAD`
+        // would fire on the very byte that opened the run, breaking
+        // the loop after zero characters and leaving the actual comment
+        // body in the token stream). Sibling-shape pin to
+        // `sexp_list_delimiters_pairwise_distinct` on the outer-
+        // structural axis; both close the pairwise-distinctness
+        // contract at the ALL-array level rather than at an inline
+        // `assert_ne!(LEAD, TERM)` per consumer.
+        for (i, a) in Sexp::COMMENT_DELIMITERS.iter().enumerate() {
+            for (j, b) in Sexp::COMMENT_DELIMITERS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "COMMENT_DELIMITERS rows [{i}] and [{j}] share a byte \
+                     ({a:?} == {b:?}) — the paired-discard contract \
+                     would collapse.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sexp_comment_delimiters_lead_row_is_bare_atom_boundary() {
+        // PATH-UNIFORMITY PIN (LEAD row, non-whitespace): the [0] row
+        // (`Sexp::COMMENT_LEAD`, `;`) MUST classify as a bare-atom
+        // boundary via `Sexp::is_bare_atom_boundary` — the reader's
+        // outer-dispatch cascade has a DEDICATED line-comment arm
+        // keyed on this byte, so the projection's disjunction
+        // enumerates it. A regression that dropped the LEAD from
+        // `is_bare_atom_boundary`'s disjunction OR that pointed
+        // `COMMENT_DELIMITERS[0]` at a byte the projection doesn't
+        // recognize as a boundary fails HERE rather than at a distant
+        // tokenize-round-trip. Sibling-shape pin to
+        // `sexp_is_bare_atom_boundary_routes_through_list_delimiters_for_every_row`
+        // — the LIST_DELIMITERS peer sweeps BOTH rows through the
+        // predicate; this pin sweeps ONLY the LEAD row (index 0),
+        // because the TERM row (index 1) classifies through the
+        // whitespace-family axis, NOT the bare-atom-boundary predicate
+        // directly.
+        assert!(
+            Sexp::is_bare_atom_boundary(Sexp::COMMENT_DELIMITERS[0]),
+            "COMMENT_DELIMITERS[0] ({:?}) does NOT classify as a \
+             bare-atom boundary via Sexp::is_bare_atom_boundary — the \
+             reader-discard opener row drifted from the reader's \
+             outer-dispatch arm-set.",
+            Sexp::COMMENT_DELIMITERS[0],
+        );
+    }
+
+    #[test]
+    fn sexp_comment_delimiters_term_row_is_whitespace_family_char() {
+        // PATH-UNIFORMITY PIN (TERM row, whitespace): the [1] row
+        // (`Sexp::COMMENT_TERM`, `'\n'`) MUST classify as a whitespace
+        // char via `char::is_whitespace` — the reader's line-comment
+        // discard loop consumes bytes up to and including the FIRST
+        // COMMENT_TERM, then hands control back to the outer-dispatch's
+        // `ws if ws.is_whitespace()` arm which absorbs any lingering
+        // COMMENT_TERM byte cleanly. A regression that repointed
+        // `COMMENT_DELIMITERS[1]` at a NON-whitespace byte (e.g. a `#`
+        // reader-macro-lead) would break the post-discard hand-off:
+        // the reader would either loop indefinitely on the byte or
+        // silently tokenize it into the next Token::Atom. Pinning the
+        // whitespace-family membership at the array's TERM row keeps
+        // the outer-dispatch's cascading arm-set structurally coherent
+        // through the ALL array. Sibling-shape pin to
+        // `sexp_comment_term_is_whitespace_family_char` above; that
+        // pin binds the whitespace-family membership to the
+        // `Self::COMMENT_TERM` constant directly, this pin binds it to
+        // the ALL array's [1] row so any override of the TERM row via
+        // a refactored `pub const` misalignment surfaces HERE too.
+        assert!(
+            Sexp::COMMENT_DELIMITERS[1].is_whitespace(),
+            "COMMENT_DELIMITERS[1] ({:?}) does NOT classify as a \
+             whitespace char via char::is_whitespace — the reader's \
+             line-comment discard loop's post-loop hand-off to the \
+             outer-dispatch's whitespace arm would break at the \
+             non-whitespace terminator.",
+            Sexp::COMMENT_DELIMITERS[1],
+        );
+    }
+
+    #[test]
+    fn sexp_comment_delimiters_disjoint_from_list_delimiters() {
+        // CROSS-AXIS DISJOINTNESS (same-algebra): no row of
+        // `COMMENT_DELIMITERS` may alias any row of
+        // `LIST_DELIMITERS` — the reader-discard axis and the
+        // outer-structural list-delimiter axis partition their
+        // respective bytes disjointly on the SAME closed-set outer
+        // [`Sexp`] algebra. Otherwise the reader's dedicated line-
+        // comment arm would collide with the `Token::LParen` /
+        // `Token::RParen` arms at the same byte, silently reclassifying
+        // a bare `(` or `)` as a comment lead or vice versa. Sibling-
+        // shape pin to `sexp_list_delimiters_disjoint_from_comment_lead`
+        // above (the outer-structural axis's mirror pin against the
+        // LEAD row); this pin closes the FULL 2×2 cross-axis
+        // disjointness contract rather than only the LEAD row against
+        // both LIST rows.
+        for (i, ch) in Sexp::COMMENT_DELIMITERS.iter().enumerate() {
+            for (j, other) in Sexp::LIST_DELIMITERS.iter().enumerate() {
+                assert_ne!(
+                    *ch, *other,
+                    "COMMENT_DELIMITERS[{i}] ({ch:?}) aliases \
+                     LIST_DELIMITERS[{j}] ({other:?}) — the reader- \
+                     discard axis and the outer-structural list- \
+                     delimiter axis share a byte, silently reclassifying \
+                     the shared byte at the reader's outer dispatch.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sexp_comment_delimiters_disjoint_from_str_delimiter() {
+        // CROSS-ALGEBRA DISJOINTNESS (Str-delimiter): no row of
+        // `COMMENT_DELIMITERS` may alias `Atom::STR_DELIMITER` —
+        // otherwise the reader's line-comment discard arm would
+        // collide with `Token::Str`'s opener/closer arm at the same
+        // byte. The disjointness contract binds ACROSS the two closed-
+        // set algebras (outer [`Sexp`] discard vocabulary vs. inner
+        // [`Atom`] Str-payload vocabulary), matching the sibling-shape
+        // pin `sexp_list_delimiters_disjoint_from_str_delimiter` on
+        // the outer-structural axis of the SAME [`Sexp`] algebra.
+        for (i, ch) in Sexp::COMMENT_DELIMITERS.iter().enumerate() {
+            assert_ne!(
+                *ch,
+                Atom::STR_DELIMITER,
+                "COMMENT_DELIMITERS[{i}] ({ch:?}) aliases \
+                 Atom::STR_DELIMITER ({:?}) — the reader's line- \
+                 comment discard arm would collide with the Str-payload \
+                 delimiter arm at the same byte across the two closed- \
+                 set algebras.",
+                Atom::STR_DELIMITER,
             );
         }
     }

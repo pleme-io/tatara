@@ -1014,6 +1014,54 @@ impl Atom {
         ),
     ];
 
+    /// Canonical SELF-escape table — the closed-set ALL array over the
+    /// substrate's TWO pattern-EQUALS-value arms of
+    /// [`Self::decode_str_escape`], in canonical declaration order
+    /// ([`Self::STR_DELIMITER`], [`Self::STR_ESCAPE_LEAD`]) matching
+    /// the projection's match-arm order. Forced-arity `[char; 2]`
+    /// composition — a hypothetical third self-escape byte (e.g. a
+    /// raw-string mode adopting `'#'` as an additional self-escaping
+    /// delimiter, or a Racket-compat `'|'` verbatim-symbol boundary)
+    /// extends [`Self::decode_str_escape`]'s match ONCE + this array
+    /// ONCE + ONE new `pub const` on the closed-set [`Atom`] algebra
+    /// in lockstep; rustc's forced-arity check on `[char; N]` binds
+    /// the extension through the array declaration site.
+    ///
+    /// Peer to [`Self::NAMED_ESCAPE_TABLE`] on the SAME Str-payload
+    /// tokenization boundary: where `NAMED_ESCAPE_TABLE` closes the
+    /// THREE pattern-DISTINCT-from-value named-escape rows (`'n' →
+    /// '\n'`, `'t' → '\t'`, `'r' → '\r'`), this array closes the TWO
+    /// pattern-EQUALS-value self-escape rows (`STR_DELIMITER →
+    /// STR_DELIMITER`, `STR_ESCAPE_LEAD → STR_ESCAPE_LEAD`). The two
+    /// arrays together span the FIVE non-passthrough arms of
+    /// [`Self::decode_str_escape`] — every byte the reader's
+    /// `Token::Str` escape-handler branch specialises on lives in
+    /// exactly ONE of the two closed-set arrays OR falls through the
+    /// `other => other` passthrough at the algebra's projection.
+    ///
+    /// The `[char; 2]` shape (rather than a `[(char, char); 2]`
+    /// pairing peer to `NAMED_ESCAPE_TABLE`) is load-bearing: the
+    /// self-escape arm is definitionally the identity by algebra
+    /// design (a delimiter-swap propagates through pattern AND value
+    /// at ONE constant per axis), so the PAIRING collapses to a
+    /// SCALAR on this sub-vocabulary. The SHAPE ASYMMETRY between the
+    /// two peer arrays ([(char, char); N] vs [char; N]) IS the
+    /// structural axis distinguishing the pattern-DISTINCT-from-value
+    /// vocabulary from the pattern-EQUALS-value vocabulary — a
+    /// consumer that reaches for the array shape encodes its
+    /// vocabulary's identity relation in the SHAPE it iterates.
+    ///
+    /// Sibling posture to [`QuoteForm::PREFIXES`] +
+    /// [`QuoteForm::IAC_FORGE_TAGS`] on the outer-tokenizer
+    /// quote-family axis — where those ALL arrays close the TWO
+    /// byte-vocabulary axes (reader prefix + iac-forge tag) of the
+    /// outer-tokenizer `QuoteForm` closed set with parallel shapes,
+    /// `NAMED_ESCAPE_TABLE` + `SELF_ESCAPE_TABLE` close the TWO
+    /// sub-vocabularies (pattern-distinct + pattern-equals) of the
+    /// inner-tokenizer `Atom` Str-escape closed set with asymmetric
+    /// shapes reflecting the identity-relation asymmetry.
+    pub const SELF_ESCAPE_TABLE: [char; 2] = [Self::STR_DELIMITER, Self::STR_ESCAPE_LEAD];
+
     #[must_use]
     pub const fn decode_str_escape(esc: char) -> char {
         match esc {
@@ -20022,8 +20070,7 @@ mod tests {
             // pins the fallthrough identity.
             assert!(
                 !Atom::NAMED_ESCAPE_TABLE.iter().any(|&(src, _)| src == esc)
-                    && esc != Atom::STR_DELIMITER
-                    && esc != Atom::STR_ESCAPE_LEAD,
+                    && !Atom::SELF_ESCAPE_TABLE.contains(&esc),
                 "passthrough sweep char `{esc}` aliases a typed \
                  escape-table arm — the sweep no longer pins the \
                  `other => other` fallthrough",
@@ -20268,6 +20315,149 @@ mod tests {
     }
 
     #[test]
+    fn atom_self_escape_table_composes_from_algebra_constants_in_declaration_order() {
+        // COMPOSITION LAW: the ALL array's rows are the two closed-set
+        // [`Atom`] algebra constants in canonical declaration order
+        // ([`Atom::STR_DELIMITER`], [`Atom::STR_ESCAPE_LEAD`]) matching
+        // `decode_str_escape`'s match-arm order. Pins the composition
+        // at ONE site so a reorder of ONE row without reordering the
+        // constants silently misaligns every consumer that sweeps the
+        // array by index. Sibling posture to
+        // `atom_named_escape_table_composes_from_per_role_constants_in_declaration_order`
+        // one axis over.
+        assert_eq!(
+            Atom::SELF_ESCAPE_TABLE,
+            [Atom::STR_DELIMITER, Atom::STR_ESCAPE_LEAD],
+            "SELF_ESCAPE_TABLE drifted from its algebra-constant \
+             composition in canonical declaration order \
+             (STR_DELIMITER / STR_ESCAPE_LEAD).",
+        );
+    }
+
+    #[test]
+    fn atom_self_escape_table_has_expected_cardinality() {
+        // ARITY PIN: the forced-arity `[char; 2]` shape survives at
+        // runtime. Pins the closed-set size against a refactor that
+        // loosens the array's type to `&'static [char]` or
+        // `Vec<char>` (which would drop the compile-time arity
+        // forcing rustc bakes into `[T; N]` declarations). Sibling
+        // posture to `atom_named_escape_table_has_expected_cardinality`
+        // on the peer pattern-DISTINCT-from-value sub-vocabulary.
+        assert_eq!(
+            Atom::SELF_ESCAPE_TABLE.len(),
+            2,
+            "SELF_ESCAPE_TABLE cardinality drifted from the substrate-\
+             canonical TWO self-escape arms (STR_DELIMITER / \
+             STR_ESCAPE_LEAD).",
+        );
+    }
+
+    #[test]
+    fn atom_self_escape_table_pairwise_distinct() {
+        // DISJOINTNESS: every byte in the array is distinct from every
+        // other byte. A regression that aliased the two self-escape
+        // bytes (e.g. adopting `'"'` as ALSO the escape lead in a
+        // hypothetical smart-quote reader mode) would silently collapse
+        // the two pattern-EQUALS-value arms of `decode_str_escape` to
+        // one and lose the ability to escape one delimiter without
+        // shadowing the other. Sibling posture to
+        // `atom_named_escape_table_sources_pairwise_distinct` on the
+        // peer sub-vocabulary.
+        for i in 0..Atom::SELF_ESCAPE_TABLE.len() {
+            for j in (i + 1)..Atom::SELF_ESCAPE_TABLE.len() {
+                assert_ne!(
+                    Atom::SELF_ESCAPE_TABLE[i],
+                    Atom::SELF_ESCAPE_TABLE[j],
+                    "SELF_ESCAPE_TABLE bytes at indices {i} and {j} \
+                     alias — every self-escape arm must specialize on \
+                     a distinct byte.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn atom_self_escape_table_disjoint_from_named_escape_table() {
+        // CROSS-AXIS DISJOINTNESS: no byte in the self-escape table
+        // aliases any SOURCE or DECODED byte in the named-escape
+        // table. A regression that drifted a self-escape byte into
+        // the named vocabulary (e.g. adopted `'n'` as an additional
+        // self-escaping delimiter) OR a named byte into the self
+        // vocabulary would reshuffle the decode-arm dispatch order in
+        // `decode_str_escape` — the two sub-vocabularies must remain
+        // structurally disjoint sub-tables of the FIVE non-passthrough
+        // arms. Sibling posture (inverse direction) to
+        // `atom_named_escape_table_disjoint_from_self_escape_algebra_constants`
+        // — where that pin sweeps from the named side outward, this
+        // sweeps from the self side outward; both pin the same
+        // cross-axis disjointness invariant.
+        for (i, &self_byte) in Atom::SELF_ESCAPE_TABLE.iter().enumerate() {
+            for (j, &(src, dec)) in Atom::NAMED_ESCAPE_TABLE.iter().enumerate() {
+                assert_ne!(
+                    self_byte, src,
+                    "SELF_ESCAPE_TABLE row {i} aliases NAMED_ESCAPE_TABLE \
+                     row {j} SOURCE — the pattern-EQUALS-value and \
+                     pattern-DISTINCT-from-value sub-vocabularies must \
+                     remain disjoint.",
+                );
+                assert_ne!(
+                    self_byte, dec,
+                    "SELF_ESCAPE_TABLE row {i} aliases NAMED_ESCAPE_TABLE \
+                     row {j} DECODED — the pattern-EQUALS-value and \
+                     pattern-DISTINCT-from-value sub-vocabularies must \
+                     remain disjoint.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn atom_decode_str_escape_routes_through_self_escape_table_for_every_row() {
+        // PATH-UNIFORMITY PIN: `decode_str_escape` returns the SAME
+        // byte for every `SELF_ESCAPE_TABLE` row — the pattern-EQUALS-
+        // value invariant is exercised on every row. A regression
+        // that reverted `decode_str_escape`'s two self-escape arms to
+        // inline `'"' => '"'` / `'\\' => '\\'` literals AND drifted
+        // one of the two constants (or vice versa) fails HERE at the
+        // first mismatched row rather than at a downstream Str-payload
+        // round-trip. Sibling posture to
+        // `atom_decode_str_escape_routes_through_named_escape_table_for_every_row`
+        // — where that pin exercises the pattern-DISTINCT-from-value
+        // path-uniformity contract on the peer sub-vocabulary, this
+        // pins the pattern-EQUALS-value axis on the self-escape
+        // sub-vocabulary.
+        for (i, &esc) in Atom::SELF_ESCAPE_TABLE.iter().enumerate() {
+            assert_eq!(
+                Atom::decode_str_escape(esc),
+                esc,
+                "decode_str_escape drifted from SELF_ESCAPE_TABLE row \
+                 {i} — the projection's self-escape arm must map \
+                 pattern to the SAME byte (definitional identity).",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_named_and_self_escape_tables_span_the_five_non_passthrough_arms() {
+        // TOTAL-DECODE PIN: the two sub-vocabulary ALL arrays
+        // together account for exactly the FIVE non-passthrough arms
+        // of [`Atom::decode_str_escape`]. Pins the closed-set
+        // decomposition against a refactor that adds a sixth typed
+        // arm to `decode_str_escape` without extending one of the
+        // ALL arrays (which would leak a stale byte through
+        // `other => other` at the sweep sites). The three named arms
+        // + two self arms = five typed arms; the sixth branch is the
+        // `other => other` passthrough at the algebra's projection.
+        assert_eq!(
+            Atom::NAMED_ESCAPE_TABLE.len() + Atom::SELF_ESCAPE_TABLE.len(),
+            5,
+            "NAMED_ESCAPE_TABLE + SELF_ESCAPE_TABLE cardinality drifted \
+             from the substrate-canonical FIVE non-passthrough arms of \
+             Atom::decode_str_escape.",
+        );
+    }
+
+    #[test]
     fn atom_decode_str_escape_composes_end_to_end_through_reader_for_every_named_arm() {
         // END-TO-END COMPOSITION CONTRACT: pin that every typed
         // escape-table arm — the three named-escape arms + the two
@@ -20289,14 +20479,13 @@ mod tests {
         // — where that pin exercises the SINGLE self-escape arm on
         // the escape-lead axis end-to-end, this sweep exercises the
         // FULL closed-set table on the same axis.
-        for esc in [
-            Atom::NEWLINE_ESCAPE_SOURCE,
-            Atom::TAB_ESCAPE_SOURCE,
-            Atom::CARRIAGE_RETURN_ESCAPE_SOURCE,
-            Atom::STR_DELIMITER,
-            Atom::STR_ESCAPE_LEAD,
-            'x',
-        ] {
+        let escs: Vec<char> = Atom::NAMED_ESCAPE_TABLE
+            .iter()
+            .map(|&(src, _)| src)
+            .chain(Atom::SELF_ESCAPE_TABLE.iter().copied())
+            .chain(std::iter::once('x'))
+            .collect();
+        for esc in escs {
             let source = format!(
                 "{}{}{}{}",
                 Atom::STR_DELIMITER,

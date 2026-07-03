@@ -5974,13 +5974,144 @@ impl QuoteForm {
         Self::UnquoteSplice,
     ];
 
+    /// Canonical `&'static str` reader-prefix of [`Self::Quote`] —
+    /// `"'"`. The ONE canonical bytes-payload on the closed-set
+    /// [`QuoteForm`] algebra shared by [`Self::prefix`]'s [`Self::Quote`]
+    /// arm AND the [`crate::ast::Sexp`] `Display` arm the arm feeds.
+    ///
+    /// Sibling posture to the closed set of per-role `pub const`
+    /// bytes on the substrate's other closed-set outer algebras:
+    /// [`crate::error::MacroDefHead::DEFMACRO_KEYWORD`] /
+    /// [`crate::error::MacroDefHead::DEFPOINT_TEMPLATE_KEYWORD`] /
+    /// [`crate::error::MacroDefHead::DEFCHECK_KEYWORD`] (per-role
+    /// head-keyword algebra on the CL macro-definition surface),
+    /// [`crate::ast::Atom::TRUE_LITERAL`] /
+    /// [`crate::ast::Atom::FALSE_LITERAL`] (per-role Scheme-bool
+    /// spelling algebra on the atomic-payload surface),
+    /// [`crate::macro_expand::MacroParams::REST_MARKER`] /
+    /// [`crate::macro_expand::MacroParams::OPTIONAL_MARKER`] (per-role
+    /// CL lambda-list-keyword algebra on the macro-param surface).
+    ///
+    /// The `char`-level peer of THIS `&'static str` constant is
+    /// [`Self::QUOTE_LEAD`] — the first (and only) char of this
+    /// prefix. The structural round-trip law between the two is
+    /// `Self::QUOTE_PREFIX.chars().next() == Some(Self::QUOTE_LEAD)`
+    /// AND `Self::QUOTE_PREFIX.len() ==
+    /// Self::QUOTE_LEAD.len_utf8()` — the ONE `char` byte
+    /// composes the ONE `&'static str` prefix. Pinned by
+    /// `quote_form_per_role_prefixes_route_through_matching_lead_char_for_single_char_prefixes`.
+    ///
+    /// A regression that inlines the `"'"` literal at
+    /// [`Self::prefix`]'s [`Self::Quote`] arm and drifts the constant
+    /// silently (e.g. an ELisp-compat port of the quote prefix to
+    /// `#'`, a hypothetical Racket-compat swap to a distinct byte)
+    /// fails at the algebra's `prefix()` path-uniformity pin
+    /// (`quote_form_prefix_routes_through_typed_per_role_constants`)
+    /// rather than at silent reader-family drift where the
+    /// [`Sexp::Display`] round-trip breaks.
+    pub const QUOTE_PREFIX: &'static str = "'";
+
+    /// Canonical `&'static str` reader-prefix of [`Self::Quasiquote`]
+    /// — `` "`" ``. Sibling of [`Self::QUOTE_PREFIX`] on the closed-set
+    /// per-role quote-family prefix-bytes axis; see
+    /// [`Self::QUOTE_PREFIX`] for the algebra-level round-trip +
+    /// disjointness contracts every sibling shares. The `char`-level
+    /// peer is [`Self::QUASIQUOTE_LEAD`].
+    pub const QUASIQUOTE_PREFIX: &'static str = "`";
+
+    /// Canonical `&'static str` reader-prefix of [`Self::Unquote`] —
+    /// `","`. Sibling of [`Self::QUOTE_PREFIX`] on the closed-set
+    /// per-role quote-family prefix-bytes axis; see
+    /// [`Self::QUOTE_PREFIX`] for the algebra-level round-trip +
+    /// disjointness contracts every sibling shares. The `char`-level
+    /// peer is [`Self::UNQUOTE_LEAD`] (shared with
+    /// [`Self::UNQUOTE_SPLICE_PREFIX`]'s lead byte — see the
+    /// [`Self::UNQUOTE_LEAD`] docstring for the shared-lead-char
+    /// discipline the two prefixes disambiguate on).
+    pub const UNQUOTE_PREFIX: &'static str = ",";
+
+    /// Canonical `&'static str` reader-prefix of [`Self::UnquoteSplice`]
+    /// — `",@"`. The ONLY two-char prefix on the closed set; every
+    /// other [`Self::PREFIXES`] entry is a single `char` rendered as
+    /// `&'static str`. Sibling of [`Self::QUOTE_PREFIX`] on the closed-
+    /// set per-role quote-family prefix-bytes axis.
+    ///
+    /// Structural composition law: `Self::UNQUOTE_SPLICE_PREFIX ==
+    /// format!("{}{}", Self::UNQUOTE_LEAD, Self::SPLICE_DISCRIMINATOR)`
+    /// — the two-char prefix decomposes cleanly into the ONE shared
+    /// lead byte [`Self::UNQUOTE_LEAD`] + the ONE splice-promotion
+    /// discriminator [`Self::SPLICE_DISCRIMINATOR`], both `char`-level
+    /// constants on this algebra. Pinned by
+    /// `quote_form_unquote_splice_prefix_constant_composes_from_unquote_lead_and_splice_discriminator`
+    /// (byte-level composition through the per-role `pub const`) as a
+    /// section-for-retraction peer of the pre-existing
+    /// `quote_form_unquote_splice_prefix_composes_from_unquote_lead_and_splice_discriminator`
+    /// pin (byte-level composition through the [`Self::prefix`]
+    /// method).
+    pub const UNQUOTE_SPLICE_PREFIX: &'static str = ",@";
+
+    /// The closed-set forced-arity ALL array over the quote-family
+    /// reader-prefix `&'static str` bytes in canonical declaration
+    /// order matching [`Self::ALL`] element-wise. Sibling posture to
+    /// [`crate::error::MacroDefHead::KEYWORDS`] (`[&'static str; 3]`
+    /// on the CL macro-definition head algebra),
+    /// [`crate::ast::Atom::BOOL_LITERALS`] (`[&'static str; 2]` on the
+    /// Scheme-bool spelling algebra), and
+    /// [`crate::macro_expand::MacroParams::LAMBDA_LIST_KEYWORDS`]
+    /// (`[&'static str; 2]` on the CL lambda-list-keyword algebra) —
+    /// every closed-set outer projection on the substrate now pins
+    /// its canonical bytes at ONE `pub const` per role plus an ALL
+    /// array for family-wide consumers.
+    ///
+    /// Adding a hypothetical fifth homoiconic prefix (a `,~`
+    /// reverse-unquote, a `,?` conditional-unquote, a `#'` Common-
+    /// Lisp function-quote) extends [`Self::ALL`] AND
+    /// [`Self::PREFIXES`] AND [`Self::prefix`]'s arm AND one new
+    /// per-role `pub const` in lockstep — rustc's forced-arity check
+    /// on `[&'static str; N]` fails compilation if either ALL array
+    /// grows without the other.
+    ///
+    /// Future consumers that compose against [`Self::PREFIXES`]:
+    /// - LSP / REPL completion for the operator-facing rendered
+    ///   homoiconic prefix bar — the completion set IS
+    ///   [`Self::PREFIXES`] rather than four hand-enumerated
+    ///   `&'static str` literals per completion provider.
+    /// - `tatara-check` coverage assertions that sweep workspace
+    ///   `.lisp` files for every canonical quote-family prefix — the
+    ///   typed sweep replaces per-consumer inline enumeration of the
+    ///   four literals.
+    /// - Any future audit-trail metric jointly labeled by
+    ///   [`Self::prefix`] (e.g.
+    ///   `tatara_lisp_quote_family_total{prefix="'"}`) — the metric
+    ///   label set IS [`Self::PREFIXES`] mapped through
+    ///   [`Self::prefix`].
+    pub const PREFIXES: [&'static str; 4] = [
+        Self::QUOTE_PREFIX,
+        Self::QUASIQUOTE_PREFIX,
+        Self::UNQUOTE_PREFIX,
+        Self::UNQUOTE_SPLICE_PREFIX,
+    ];
+
     /// Canonical `&'static str` prefix that paired with the variant
-    /// renders the homoiconic form — `"'"` for [`Self::Quote`],
-    /// `` "`" `` for [`Self::Quasiquote`], `","` for [`Self::Unquote`],
-    /// `",@"` for [`Self::UnquoteSplice`]. Threaded through
+    /// renders the homoiconic form — [`Self::QUOTE_PREFIX`] for
+    /// [`Self::Quote`], [`Self::QUASIQUOTE_PREFIX`] for
+    /// [`Self::Quasiquote`], [`Self::UNQUOTE_PREFIX`] for
+    /// [`Self::Unquote`], [`Self::UNQUOTE_SPLICE_PREFIX`] for
+    /// [`Self::UnquoteSplice`]. Threaded through
     /// [`crate::ast::Sexp`]'s `Display` impl so the per-variant prefix
     /// rendering lives at ONE site on this algebra rather than four
     /// inline literal strings across the Display arms.
+    ///
+    /// Post-lift the four arms route through the per-role `pub const`
+    /// bytes on the closed-set [`QuoteForm`] algebra rather than
+    /// inline `&'static str` literals — so a rename of ONE canonical
+    /// prefix bytes (an ELisp-compat port of `Quote` to `"#'"`, a
+    /// hypothetical Racket-compat swap of `Quasiquote`, a Common-Lisp-
+    /// standard rename of `UnquoteSplice` to `",."`) lands as ONE
+    /// edit to the matching `pub const` — every downstream consumer
+    /// that binds to the algebra ([`crate::ast::Sexp`]'s `Display`
+    /// impl, the reader's tokenizer round-trip law, the future
+    /// canonical-form taggers) inherits the rename mechanically.
     ///
     /// Structural dual of the reader's [`crate::reader::read_quoted`]
     /// dispatch: the reader maps prefix-tokens to `Sexp::{Quote,
@@ -6000,10 +6131,10 @@ impl QuoteForm {
     #[must_use]
     pub fn prefix(self) -> &'static str {
         match self {
-            Self::Quote => "'",
-            Self::Quasiquote => "`",
-            Self::Unquote => ",",
-            Self::UnquoteSplice => ",@",
+            Self::Quote => Self::QUOTE_PREFIX,
+            Self::Quasiquote => Self::QUASIQUOTE_PREFIX,
+            Self::Unquote => Self::UNQUOTE_PREFIX,
+            Self::UnquoteSplice => Self::UNQUOTE_SPLICE_PREFIX,
         }
     }
 
@@ -9768,6 +9899,206 @@ mod tests {
         assert_eq!(QuoteForm::Quasiquote.prefix(), "`");
         assert_eq!(QuoteForm::Unquote.prefix(), ",");
         assert_eq!(QuoteForm::UnquoteSplice.prefix(), ",@");
+    }
+
+    // ── `QuoteForm::{QUOTE_PREFIX, QUASIQUOTE_PREFIX, UNQUOTE_PREFIX,
+    // UNQUOTE_SPLICE_PREFIX, PREFIXES}` — per-role `&'static str`
+    // reader-prefix algebra on the closed-set outer [`QuoteForm`]. Peer
+    // of [`crate::error::MacroDefHead::KEYWORDS`] (head-keyword
+    // algebra), [`Atom::BOOL_LITERALS`] (Scheme-bool spelling algebra),
+    // and [`crate::macro_expand::MacroParams::LAMBDA_LIST_KEYWORDS`]
+    // (CL lambda-list-keyword algebra) — every closed-set outer
+    // projection on the substrate now pins its canonical bytes at ONE
+    // `pub const` per role plus an ALL array for family-wide consumers.
+
+    #[test]
+    fn quote_form_quote_prefix_projects_canonical_single_quote_bytes() {
+        // Pin the exact `"'"` bytes at the typed constant. A regression
+        // that renames the constant to a different byte fails HERE
+        // rather than at silent reader-family drift where `'foo`
+        // classifies as a bare atom (or through a different quote-family
+        // variant) instead of `Sexp::Quote`.
+        assert_eq!(QuoteForm::QUOTE_PREFIX, "'");
+    }
+
+    #[test]
+    fn quote_form_quasiquote_prefix_projects_canonical_backtick_bytes() {
+        // Pin the exact `` "`" `` bytes at the typed constant. Sibling
+        // posture to `quote_form_quote_prefix_projects_canonical_single_quote_bytes`.
+        assert_eq!(QuoteForm::QUASIQUOTE_PREFIX, "`");
+    }
+
+    #[test]
+    fn quote_form_unquote_prefix_projects_canonical_comma_bytes() {
+        // Pin the exact `","` bytes at the typed constant.
+        assert_eq!(QuoteForm::UNQUOTE_PREFIX, ",");
+    }
+
+    #[test]
+    fn quote_form_unquote_splice_prefix_projects_canonical_comma_at_bytes() {
+        // Pin the exact `",@"` bytes at the typed constant — the ONLY
+        // two-char prefix on the closed set. A regression that lost the
+        // `@` discriminator (dropping to just `","`, colliding with
+        // `UNQUOTE_PREFIX`) surfaces HERE rather than as a silent
+        // reader classifier collision.
+        assert_eq!(QuoteForm::UNQUOTE_SPLICE_PREFIX, ",@");
+    }
+
+    #[test]
+    fn quote_form_prefix_routes_through_typed_per_role_constants() {
+        // PATH-UNIFORMITY: `Self::prefix(self)` returns the per-role
+        // `pub const` byte-for-byte per variant, catching a regression
+        // that reverts ONE arm to an inline `"'"` / `` "`" `` / `","`
+        // / `",@"` string literal (or drifts one arm's bytes silently).
+        // Sibling posture to
+        // `atom_bool_literal_routes_through_typed_per_variant_constants`
+        // on the Scheme-bool spelling algebra.
+        for (qf, expected) in [
+            (QuoteForm::Quote, QuoteForm::QUOTE_PREFIX),
+            (QuoteForm::Quasiquote, QuoteForm::QUASIQUOTE_PREFIX),
+            (QuoteForm::Unquote, QuoteForm::UNQUOTE_PREFIX),
+            (QuoteForm::UnquoteSplice, QuoteForm::UNQUOTE_SPLICE_PREFIX),
+        ] {
+            let actual = qf.prefix();
+            assert_eq!(
+                actual, expected,
+                "QuoteForm::{qf:?}.prefix() `{actual}` drifted from \
+                 per-role constant `{expected}` — the arm must route \
+                 through the typed constant rather than an inline literal",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_prefixes_has_expected_cardinality() {
+        // Cardinality contract: `Self::PREFIXES.len() == 4` — pinned at
+        // the declaration site by rustc's forced-arity check on
+        // `[&'static str; 4]`. This test surfaces the arity as a
+        // fail-loud runtime pin so a future refactor that switches the
+        // array type to `&[&'static str]` (dropping the compile-time
+        // arity forcing) doesn't silently loosen the closed-set
+        // discipline the family relies on. Sibling posture to
+        // `atom_bool_literals_has_expected_cardinality` and
+        // `macro_def_head_keywords_has_expected_cardinality`.
+        assert_eq!(
+            QuoteForm::PREFIXES.len(),
+            4,
+            "QuoteForm::PREFIXES cardinality drifted from 4 — the \
+             closed homoiconic-prefix domain admits exactly four \
+             wrappers by construction; a fifth extension surfaces here"
+        );
+    }
+
+    #[test]
+    fn quote_form_prefixes_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::PREFIXES[i] == Self::ALL[i].prefix()`
+        // element-wise. Pins that the typed variant ALL and the
+        // `&'static str` PREFIXES ALL stay in lockstep under any
+        // reorder — a regression that reorders ONE array without
+        // reordering the other silently misaligns every `zip(ALL,
+        // PREFIXES)` consumer (LSP completion providers, metric-label
+        // emitters, coverage reporters). Sibling posture to
+        // `macro_def_head_keywords_align_with_all_by_index`.
+        for (i, qf) in QuoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                QuoteForm::PREFIXES[i],
+                qf.prefix(),
+                "QuoteForm::PREFIXES[{i}] `{prefix}` drifted from \
+                 QuoteForm::ALL[{i}] ({qf:?}).prefix() `{via_variant}` \
+                 — the canonical declaration order of the ALL array \
+                 and the prefix projection must match element-wise",
+                prefix = QuoteForm::PREFIXES[i],
+                via_variant = qf.prefix(),
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_prefixes_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: every entry of the `PREFIXES` array
+        // must differ so the reader-entry classifier (whether inline
+        // as at [`crate::reader::tokenize`]'s outer arm or via a
+        // hypothetical future `PREFIXES.iter()` sweep) cannot route
+        // two homoiconic prefixes through the same arm. Family-wide
+        // sweep over `PREFIXES × PREFIXES` — supersedes any per-pair
+        // pin and picks up new prefixes mechanically. Sibling posture
+        // to `atom_bool_literals_pairwise_distinct` on the Scheme-bool
+        // algebra AND `macro_def_head_keywords_pairwise_distinct` on
+        // the head-keyword algebra.
+        for (i, a) in QuoteForm::PREFIXES.iter().enumerate() {
+            for (j, b) in QuoteForm::PREFIXES.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "QuoteForm::PREFIXES[{i}] `{a}` collides with \
+                     QuoteForm::PREFIXES[{j}] `{b}` — the reader-entry \
+                     classifier's cascade would route two homoiconic \
+                     prefixes through the same arm"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quote_form_per_role_prefixes_route_through_matching_lead_char_for_every_variant() {
+        // CROSS-AXIS ROUND-TRIP: every entry of `Self::PREFIXES` MUST
+        // start with the corresponding variant's `lead_char()` — the
+        // per-role `pub const` on the reader-prefix axis composes byte-
+        // for-byte with the per-role `char` on the reader-lead-byte axis
+        // ([`Self::QUOTE_LEAD`], [`Self::QUASIQUOTE_LEAD`],
+        // [`Self::UNQUOTE_LEAD`]) via the [`Self::lead_char`] projection.
+        // Both `Unquote` AND `UnquoteSplice` start with `UNQUOTE_LEAD`
+        // (the shared `,` lead byte) — the two-char splice prefix's
+        // second byte is [`Self::SPLICE_DISCRIMINATOR`], which the
+        // reader's peek-then-consume arm disambiguates on. Sibling
+        // posture to `atom_bool_literals_all_route_through_bool_literal_leading_byte`
+        // on the Scheme-bool spelling algebra.
+        for (i, qf) in QuoteForm::ALL.iter().enumerate() {
+            let prefix = QuoteForm::PREFIXES[i];
+            let expected_lead = qf.lead_char();
+            let actual_lead = prefix.chars().next().unwrap_or_else(|| {
+                panic!("QuoteForm::PREFIXES[{i}] `{prefix}` for {qf:?} must have at least one char")
+            });
+            assert_eq!(
+                actual_lead, expected_lead,
+                "QuoteForm::PREFIXES[{i}] `{prefix}` for {qf:?} — first \
+                 char {actual_lead:?} drifted from lead_char {expected_lead:?} — \
+                 the per-role prefix constant drifted from the shared \
+                 lead byte"
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_unquote_splice_prefix_constant_composes_from_unquote_lead_and_splice_discriminator(
+    ) {
+        // STRUCTURAL COMPOSITION LAW at the `pub const` level:
+        // [`Self::UNQUOTE_SPLICE_PREFIX`] decomposes cleanly into
+        // [`Self::UNQUOTE_LEAD`] + [`Self::SPLICE_DISCRIMINATOR`]. The
+        // ONLY two-char prefix on the closed set composes from the two
+        // `char`-level constants on the algebra. Section-for-retraction
+        // peer of the pre-existing
+        // `quote_form_unquote_splice_prefix_composes_from_unquote_lead_and_splice_discriminator`
+        // pin (which composes at the [`Self::prefix`] method level);
+        // where that pin composes through the runtime projection, this
+        // pin composes at the `pub const` level so a regression that
+        // drifts the two-char constant WITHOUT drifting the runtime
+        // projection (unlikely but structurally distinct) surfaces
+        // here.
+        let composed = format!(
+            "{}{}",
+            QuoteForm::UNQUOTE_LEAD,
+            QuoteForm::SPLICE_DISCRIMINATOR,
+        );
+        assert_eq!(
+            composed,
+            QuoteForm::UNQUOTE_SPLICE_PREFIX,
+            "QuoteForm::UNQUOTE_SPLICE_PREFIX drifted from UNQUOTE_LEAD + \
+             SPLICE_DISCRIMINATOR — the reader's two-char splice \
+             promotion identity is broken at the pub-const byte level",
+        );
     }
 
     #[test]

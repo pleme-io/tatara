@@ -3098,6 +3098,92 @@ impl KwargPathKind {
     /// constant.
     pub const ALL: [Self; 3] = [Self::Named, Self::Item, Self::Slot];
 
+    /// Canonical `&'static str` category label for [`Self::Named`] —
+    /// the `:<key>` failure category emitted by every typed-atom
+    /// extractor (`extract_string`, `extract_int`, `extract_float`,
+    /// `extract_bool`, and their `Option<T>` siblings). Sibling
+    /// posture to [`Self::ITEM_LABEL`] (`"item"`) and
+    /// [`Self::SLOT_LABEL`] (`"slot"`) on the same category-label
+    /// algebra layer.
+    ///
+    /// Pre-lift the same `"named"` bytes lived inline at the
+    /// [`Self::label`] match arm plus at the sibling truth-table tests
+    /// (`kwarg_path_kind_all_is_unique_and_complete` sorted-labels
+    /// pin, `kwarg_path_kind_label_does_not_overlap_kwarg_path_display_renderings`
+    /// disjointness sweep) — the ≥2 PRIME-DIRECTIVE trigger. Post-lift
+    /// the (`Named` variant, canonical `&'static str`) pairing binds
+    /// at ONE `pub const` on the typed [`KwargPathKind`] algebra: the
+    /// [`Self::label`] arm and every consumer that pins the exact
+    /// bytes route through this constant. Sibling posture to the
+    /// closed set of per-role canonical `&'static str` labels on the
+    /// substrate's other closed-set outer algebras:
+    /// [`MacroDefHead::DEFMACRO_KEYWORD`] (`"defmacro"`),
+    /// [`crate::ast::Atom::TRUE_LITERAL`] (`"#t"`),
+    /// [`crate::ast::QuoteForm::QUOTE_PREFIX`] (`"'"`),
+    /// [`crate::macro_expand::MacroParams::REST_MARKER`] (`"&rest"`).
+    pub const NAMED_LABEL: &'static str = "named";
+
+    /// Canonical `&'static str` category label for [`Self::Item`] —
+    /// the `:<key>[<idx>]` failure category emitted by
+    /// `extract_string_list`'s per-item gate. Sibling posture to
+    /// [`Self::NAMED_LABEL`] (`"named"`) and [`Self::SLOT_LABEL`]
+    /// (`"slot"`) on the same category-label algebra layer.
+    ///
+    /// Pre-lift the same `"item"` bytes lived inline at the
+    /// [`Self::label`] match arm plus at the sibling truth-table
+    /// tests. Post-lift the (`Item` variant, canonical `&'static str`)
+    /// pairing binds at ONE `pub const` on the typed [`KwargPathKind`]
+    /// algebra.
+    pub const ITEM_LABEL: &'static str = "item";
+
+    /// Canonical `&'static str` category label for [`Self::Slot`] —
+    /// the `kwargs[<idx>]` failure category emitted by
+    /// `parse_kwargs`'s slot-must-be-a-keyword gate. Sibling posture
+    /// to [`Self::NAMED_LABEL`] (`"named"`) and [`Self::ITEM_LABEL`]
+    /// (`"item"`) on the same category-label algebra layer.
+    ///
+    /// Pre-lift the same `"slot"` bytes lived inline at the
+    /// [`Self::label`] match arm plus at the sibling truth-table
+    /// tests. Post-lift the (`Slot` variant, canonical `&'static str`)
+    /// pairing binds at ONE `pub const` on the typed [`KwargPathKind`]
+    /// algebra.
+    pub const SLOT_LABEL: &'static str = "slot";
+
+    /// The closed set of three canonical `&'static str` category
+    /// labels — the [`Self::NAMED_LABEL`] (`"named"`) typed-atom-
+    /// extractor failure category followed by the [`Self::ITEM_LABEL`]
+    /// (`"item"`) list-item failure category followed by the
+    /// [`Self::SLOT_LABEL`] (`"slot"`) kwargs-slice-slot failure
+    /// category. Canonical declaration order matches [`Self::ALL`] so
+    /// `Self::LABELS[i] == Self::ALL[i].label()` element-wise —
+    /// pinned by `kwarg_path_kind_labels_align_with_all_by_index`.
+    ///
+    /// Sibling posture to [`MacroDefHead::KEYWORDS`]
+    /// (`[&'static str; 3]`) — every closed-set algebra now pins its
+    /// label-projection ALL array at the declaration site via a
+    /// forced-arity `[&'static str; N]` array whose length fails
+    /// compilation if a new variant lands without being added to the
+    /// set. Adding a hypothetical fourth category (a `Root` failure
+    /// category for a future kwargs-root-level rejection, a `Tail`
+    /// failure category for a future nested-list-tail extractor)
+    /// extends [`Self::ALL`] ONCE + [`Self::label`] ONCE +
+    /// [`Self::LABELS`] ONCE + adds ONE per-role label `pub const`
+    /// — rustc's forced-arity check on the `[Self; N]` array +
+    /// `[&'static str; N]` array pair enforces every downstream
+    /// consumer picks up the extension mechanically.
+    ///
+    /// Future consumers that compose against [`Self::LABELS`]: an
+    /// LSP / REPL completion provider surfacing every legal category
+    /// name in a `path_kind=` metrics query bar
+    /// (`Self::LABELS.iter()` is the ONE typed sweep over every legal
+    /// kwarg-path category), a `tatara-check` coverage assertion
+    /// (every workspace `.lisp` file's typed-atom rejection must
+    /// classify to some entry of `Self::LABELS`), a Sekiban
+    /// audit-trail metric jointly labeled by [`Self::label`] whose
+    /// metric-label set IS `Self::LABELS` (e.g.
+    /// `tatara_lisp_kwarg_type_mismatch_total{path_kind="named"}`).
+    pub const LABELS: [&'static str; 3] = [Self::NAMED_LABEL, Self::ITEM_LABEL, Self::SLOT_LABEL];
+
     /// Project the typed [`KwargPathKind`] to the canonical `&'static str`
     /// literal — lowercase byte-equal to the variant name (`"named"` /
     /// `"item"` / `"slot"`). The labels are kept distinct from the
@@ -3107,15 +3193,24 @@ impl KwargPathKind {
     /// makes more sense at the kind boundary than a path-prefix template
     /// would.
     ///
+    /// Body routes each arm through the per-role [`Self::NAMED_LABEL`] /
+    /// [`Self::ITEM_LABEL`] / [`Self::SLOT_LABEL`] `pub const` so the
+    /// three canonical `&'static str` labels live at ONE `pub const`
+    /// per variant rather than at TWO sites (the per-role `pub const`
+    /// AND an inline arm literal). Sibling posture to
+    /// [`MacroDefHead::keyword`]'s arms routing through the per-role
+    /// [`MacroDefHead::DEFMACRO_KEYWORD`] / [`MacroDefHead::DEFPOINT_TEMPLATE_KEYWORD`]
+    /// / [`MacroDefHead::DEFCHECK_KEYWORD`] constants.
+    ///
     /// Same shape every sibling kind-projection in the workspace uses
     /// (`AutoTerminateKind::as_str`, `TerminateReasonKind::as_str`,
     /// [`SexpShape::label`], [`ExpectedKwargShape::label`]).
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Named => "named",
-            Self::Item => "item",
-            Self::Slot => "slot",
+            Self::Named => Self::NAMED_LABEL,
+            Self::Item => Self::ITEM_LABEL,
+            Self::Slot => Self::SLOT_LABEL,
         }
     }
 }
@@ -9997,6 +10092,217 @@ mod tests {
             assert!(
                 !label.contains('['),
                 "kind label {label:?} must not contain `[` (would collide with KwargPath::Item/Slot rendering)"
+            );
+        }
+    }
+
+    // ── `KwargPathKind::{NAMED_LABEL, ITEM_LABEL, SLOT_LABEL, LABELS}`
+    // — the typed per-role category-label algebra ─────────────────────
+    //
+    // Sibling posture to `MacroDefHead::{DEFMACRO_KEYWORD,
+    // DEFPOINT_TEMPLATE_KEYWORD, DEFCHECK_KEYWORD, KEYWORDS}` — the
+    // per-role canonical `&'static str` marker + closed-set
+    // `[&'static str; N]` array pattern applied to the
+    // `KwargPathKind` closed set. Pre-lift the three canonical
+    // category labels lived at TWO structural sites — the
+    // `Self::label` match arm AND the sibling truth-table tests
+    // (`kwarg_path_kind_all_is_unique_and_complete` sorted-labels
+    // pin, `kwarg_path_kind_label_does_not_overlap_kwarg_path_display_renderings`
+    // disjointness sweep). Post-lift each (variant, canonical
+    // `&'static str`) pairing binds at ONE `pub const` on the typed
+    // `KwargPathKind` algebra the `Self::label` arm routes through.
+
+    #[test]
+    fn kwarg_path_kind_named_label_projects_canonical_named_bytes() {
+        // Pins the exact `"named"` bytes at the typed constant. A
+        // regression that drifts the constant (e.g. typo `"name"`,
+        // `"Named"` in PascalCase, or an accidental trailing
+        // whitespace) fails-loudly here. This is the single site
+        // the substrate's canonical typed-atom-extractor failure
+        // category resolves to; every downstream consumer (Display,
+        // FromStr, tests, LSP completion, metric labels) routes
+        // through this constant.
+        assert_eq!(
+            KwargPathKind::NAMED_LABEL,
+            "named",
+            "KwargPathKind::NAMED_LABEL drifted from the substrate-\
+             canonical typed-atom-extractor failure category `\"named\"`"
+        );
+    }
+
+    #[test]
+    fn kwarg_path_kind_item_label_projects_canonical_item_bytes() {
+        // Pins the exact `"item"` bytes at the typed constant. The
+        // `extract_string_list` per-item gate emits this exact
+        // category; any drift here silently breaks every metric or
+        // diagnostic consumer that partitions failures by category.
+        assert_eq!(
+            KwargPathKind::ITEM_LABEL,
+            "item",
+            "KwargPathKind::ITEM_LABEL drifted from the substrate-\
+             canonical list-item failure category `\"item\"`"
+        );
+    }
+
+    #[test]
+    fn kwarg_path_kind_slot_label_projects_canonical_slot_bytes() {
+        // Pins the exact `"slot"` bytes at the typed constant. The
+        // `parse_kwargs` slot-must-be-a-keyword gate emits this
+        // exact category; any drift here silently breaks every
+        // metric or diagnostic consumer that partitions failures by
+        // category.
+        assert_eq!(
+            KwargPathKind::SLOT_LABEL,
+            "slot",
+            "KwargPathKind::SLOT_LABEL drifted from the substrate-\
+             canonical kwargs-slice-slot failure category `\"slot\"`"
+        );
+    }
+
+    #[test]
+    fn kwarg_path_kind_label_method_routes_through_typed_constants() {
+        // PATH-UNIFORMITY: the inherent `Self::label(self)` method
+        // MUST return the per-role `pub const` byte-for-byte for
+        // each reachable variant. A regression that reverts ONE arm
+        // to an inline `"named"` string literal (e.g. a merge-
+        // conflict resolution that picked the pre-lift form)
+        // silently reintroduces the ≥2 PRIME-DIRECTIVE trigger the
+        // lift resolved — this test catches that by pinning the
+        // arm's return value to the constant, so the two paths
+        // (inline vs. typed constant) cannot both hold. Sibling
+        // posture to `macro_def_head_keyword_method_routes_through_typed_constants`
+        // on the `MacroDefHead` head-keyword algebra.
+        assert_eq!(
+            KwargPathKind::Named.label(),
+            KwargPathKind::NAMED_LABEL,
+            "KwargPathKind::Named.label() drifted from \
+             KwargPathKind::NAMED_LABEL — the match arm reverted to \
+             an inline literal"
+        );
+        assert_eq!(
+            KwargPathKind::Item.label(),
+            KwargPathKind::ITEM_LABEL,
+            "KwargPathKind::Item.label() drifted from \
+             KwargPathKind::ITEM_LABEL — the match arm reverted to \
+             an inline literal"
+        );
+        assert_eq!(
+            KwargPathKind::Slot.label(),
+            KwargPathKind::SLOT_LABEL,
+            "KwargPathKind::Slot.label() drifted from \
+             KwargPathKind::SLOT_LABEL — the match arm reverted to \
+             an inline literal"
+        );
+    }
+
+    #[test]
+    fn kwarg_path_kind_labels_has_expected_cardinality() {
+        // Cardinality contract: `Self::LABELS.len() == 3` — pinned
+        // at the declaration site by rustc's forced-arity check on
+        // `[&'static str; 3]`. This test surfaces the arity as a
+        // fail-loud runtime pin so a future refactor that switches
+        // the array type to `&[&'static str]` (dropping the
+        // compile-time arity forcing) doesn't silently loosen the
+        // closed-set discipline the family relies on. Sibling
+        // posture to `macro_def_head_keywords_has_expected_cardinality`
+        // on the `MacroDefHead::KEYWORDS` family.
+        assert_eq!(
+            KwargPathKind::LABELS.len(),
+            3,
+            "KwargPathKind::LABELS cardinality drifted from 3 — the \
+             category-label closed set gained or lost a variant \
+             without the ALL / LABELS pair being updated in tandem"
+        );
+    }
+
+    #[test]
+    fn kwarg_path_kind_labels_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::LABELS[i] ==
+        // Self::ALL[i].label()` element-wise. The two ALL arrays
+        // (typed variants, canonical `&'static str` labels) share
+        // ONE canonical declaration order — a regression that
+        // reorders ONE array without reordering the other silently
+        // misaligns every `zip(Self::ALL, Self::LABELS)` consumer
+        // (LSP completion providers, metric-label emitters, coverage
+        // reporters). Pinning by-index alignment here catches the
+        // reorder at test time. Sibling posture to
+        // `macro_def_head_keywords_align_with_all_by_index` on the
+        // `MacroDefHead::KEYWORDS` family.
+        assert_eq!(
+            KwargPathKind::LABELS.len(),
+            KwargPathKind::ALL.len(),
+            "KwargPathKind::LABELS and KwargPathKind::ALL diverged in \
+             cardinality — the per-role constants and enum variants \
+             must stay in lockstep"
+        );
+        for (i, kind) in KwargPathKind::ALL.iter().enumerate() {
+            assert_eq!(
+                KwargPathKind::LABELS[i],
+                kind.label(),
+                "KwargPathKind::LABELS[{i}] `{lb}` drifted from \
+                 KwargPathKind::ALL[{i}].label() `{via_variant}` — \
+                 the canonical declaration order of the two ALL \
+                 arrays must match element-wise",
+                lb = KwargPathKind::LABELS[i],
+                via_variant = kind.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn kwarg_path_kind_labels_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: the three `&'static str` labels on
+        // the category-label algebra MUST differ so the derive-
+        // generated FromStr's linear sweep cannot route two variants
+        // through the same arm. Family-wide sweep over LABELS ×
+        // LABELS — supersedes any single per-pair assertion and
+        // picks up new variants mechanically when the array grows.
+        // Sibling posture to `macro_def_head_keywords_pairwise_distinct`
+        // on the `MacroDefHead::KEYWORDS` family.
+        for (i, a) in KwargPathKind::LABELS.iter().enumerate() {
+            for (j, b) in KwargPathKind::LABELS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "KwargPathKind::LABELS[{i}] `{a}` collides with \
+                     KwargPathKind::LABELS[{j}] `{b}` — the derive-\
+                     generated FromStr sweep would route two variants \
+                     through the same arm"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn kwarg_path_kind_labels_all_round_trip_through_from_str() {
+        // Family-wide bidirection: every entry of `Self::LABELS`
+        // MUST parse back to some `KwargPathKind` variant AND that
+        // variant's `label()` MUST equal the original entry.
+        // Sibling posture to `macro_def_head_keywords_all_round_trip_through_from_str`
+        // (which sweeps over `Self::ALL`); this test sweeps over the
+        // per-role `&'static str` constants directly, catching a
+        // regression where one of the three constants drifts from
+        // the corresponding `Self::label` arm (e.g. `SLOT_LABEL` set
+        // to `"slice"` while `Self::Slot.label()` still returns
+        // `Self::SLOT_LABEL`, which would parse to
+        // `KwargPathKind::Slot` correctly but break every downstream
+        // consumer that pinned the literal `"slot"` bytes).
+        for lb in KwargPathKind::LABELS {
+            let parsed: KwargPathKind = lb.parse().unwrap_or_else(|_| {
+                panic!(
+                    "KwargPathKind::LABELS entry `{lb}` failed to parse \
+                     — the entry drifted from Self::label"
+                )
+            });
+            assert_eq!(
+                parsed.label(),
+                lb,
+                "KwargPathKind::LABELS entry `{lb}` parses to a variant \
+                 whose label() `{}` does not match — the constant and \
+                 the match arm drifted apart",
+                parsed.label(),
             );
         }
     }

@@ -3389,6 +3389,103 @@ impl ExpectedKwargShape {
         Self::ListOfStrings,
     ];
 
+    /// Canonical `&'static str` bytes for the `Keyword` expected-shape —
+    /// emitted by `parse_kwargs`'s slot-must-be-a-keyword gate. Per-role
+    /// peer of `Self::Keyword` on the closed-set outer algebra; every
+    /// consumer of the `"keyword"` bytes (Display, FromStr, the derive-
+    /// generated `UnknownExpectedKwargShape` carrier, LSP completion,
+    /// audit-trail metric labels) routes through THIS constant, so a
+    /// spelling migration (a hypothetical port to `":keyword"`,
+    /// `"kwarg-key"`, or a case-fold to `"Keyword"`) is ONE edit HERE.
+    pub const KEYWORD_LABEL: &'static str = "keyword";
+
+    /// Canonical `&'static str` bytes for the `String` expected-shape —
+    /// emitted by `extract_string` / `extract_optional_string` AND by
+    /// `extract_string_list`'s per-item gate. Per-role peer of
+    /// `Self::String` on the closed-set outer algebra; matches
+    /// `SexpShape::STRING_LABEL` byte-for-byte (the cross-axis overlap
+    /// on the same `Sexp` algebra is intentional and load-bearing —
+    /// see `expected_kwarg_shape_from_str_accepts_only_canonical_labels`).
+    pub const STRING_LABEL: &'static str = "string";
+
+    /// Canonical `&'static str` bytes for the `Int` expected-shape —
+    /// emitted by `extract_int` / `extract_optional_int` when the
+    /// kwarg's value isn't a `Sexp::Atom(Int(_))`. Per-role peer of
+    /// `Self::Int` on the closed-set outer algebra; the sibling
+    /// `NUMBER_LABEL` distinguishes the wider numeric-union case
+    /// `extract_float` emits.
+    pub const INT_LABEL: &'static str = "int";
+
+    /// Canonical `&'static str` bytes for the `Number` expected-shape —
+    /// emitted by `extract_float` / `extract_optional_float` when the
+    /// kwarg's value isn't a numeric atom. The "number" naming (not
+    /// "float") is load-bearing: `extract_float` accepts BOTH
+    /// `Sexp::Atom(Float(_))` and `Sexp::Atom(Int(_))` via
+    /// `Sexp::as_float`, so the expected-shape label names the union
+    /// rather than the narrower Float element-type.
+    pub const NUMBER_LABEL: &'static str = "number";
+
+    /// Canonical `&'static str` bytes for the `Bool` expected-shape —
+    /// emitted by `extract_bool` / `extract_optional_bool` when the
+    /// kwarg's value isn't a `Sexp::Atom(Bool(_))`. Per-role peer of
+    /// `Self::Bool` on the closed-set outer algebra.
+    pub const BOOL_LABEL: &'static str = "bool";
+
+    /// Canonical `&'static str` bytes for the `List` expected-shape —
+    /// emitted by `extract_vec_via_serde`'s outer-shape gate when the
+    /// kwarg's value isn't a `Sexp::List(_)`. Per-role peer of
+    /// `Self::List` on the closed-set outer algebra; wider `LIST_OF_STRINGS_LABEL`
+    /// names the element-typed variant.
+    pub const LIST_LABEL: &'static str = "list";
+
+    /// Canonical `&'static str` bytes for the `ListOfStrings`
+    /// expected-shape — emitted by `extract_string_list`'s outer-shape
+    /// gate when the kwarg's value isn't a `Sexp::List(_)`. The
+    /// `"list of strings"` naming is load-bearing: it names the
+    /// element-type (String) so the diagnostic reads `expected list of
+    /// strings, got string` instead of the ambiguous `expected list,
+    /// got string`. The per-item gate fires `STRING_LABEL` (the
+    /// narrower element-type failure).
+    pub const LIST_OF_STRINGS_LABEL: &'static str = "list of strings";
+
+    /// Closed-set forced-arity ALL array over the canonical expected-
+    /// shape `&'static str` bytes, in declaration order matching
+    /// [`Self::ALL`] element-wise (pinned by
+    /// `expected_kwarg_shape_labels_align_with_all_by_index`). Sibling
+    /// posture to `KwargPathKind::LABELS: [&'static str; 3]`,
+    /// `MacroDefHead::KEYWORDS: [&'static str; 3]`,
+    /// `MacroParams::LAMBDA_LIST_KEYWORDS: [&'static str; 2]`,
+    /// `Atom::BOOL_LITERALS: [&'static str; 2]`, and
+    /// `QuoteForm::PREFIXES: [&'static str; 4]` — every closed-set
+    /// outer projection on the substrate that carries an `&'static
+    /// str`-per-variant label now pins its per-role canonical bytes
+    /// at ONE `pub const` per role PLUS an ALL array for family-wide
+    /// consumers.
+    ///
+    /// Future consumers that compose against `LABELS`: LSP completion
+    /// surfacing the seven expected-shape labels in a
+    /// `expected=` metrics query bar, a `tatara-check` coverage
+    /// assertion sweeping `LABELS` over workspace `.lisp` files'
+    /// kwarg-gate rejection sites, a Sekiban audit-trail metric
+    /// labeled by the canonical expected-shape (e.g.
+    /// `tatara_lisp_type_mismatch_total{expected="number"}`) whose
+    /// metric-label set IS `LABELS`. Adding an eighth variant (e.g.
+    /// `Float` once `extract_float` stops accepting integers,
+    /// `Symbol`, or a parameterized `ListOfInts`) extends
+    /// [`Self::ALL`] AND [`Self::LABELS`] AND [`Self::label`]'s arm
+    /// AND one new per-role `pub const` in lockstep — rustc's forced-
+    /// arity check on the two `[_; N]` arrays fails compilation if
+    /// EITHER ALL array grows without the other.
+    pub const LABELS: [&'static str; 7] = [
+        Self::KEYWORD_LABEL,
+        Self::STRING_LABEL,
+        Self::INT_LABEL,
+        Self::NUMBER_LABEL,
+        Self::BOOL_LABEL,
+        Self::LIST_LABEL,
+        Self::LIST_OF_STRINGS_LABEL,
+    ];
+
     /// Project the typed `ExpectedKwargShape` to the canonical
     /// `&'static str` literal — feeds the `LispError::TypeMismatch`
     /// Display rendering via the `#[error(...)]` annotation. The
@@ -3399,6 +3496,16 @@ impl ExpectedKwargShape {
     /// `UnquoteForm::marker()`, [`SexpShape::label`], and
     /// `CompilerSpecIoStage::operation()` / `label()` feed their
     /// respective `LispError::*` Display impls.
+    ///
+    /// Each arm routes through the per-role `pub const` on
+    /// `impl Self` ([`Self::KEYWORD_LABEL`], [`Self::STRING_LABEL`],
+    /// [`Self::INT_LABEL`], [`Self::NUMBER_LABEL`],
+    /// [`Self::BOOL_LABEL`], [`Self::LIST_LABEL`],
+    /// [`Self::LIST_OF_STRINGS_LABEL`]) so the seven canonical
+    /// expected-shape byte-strings bind at ONE typed source of truth
+    /// per role rather than as inline literals scattered across the
+    /// `match` body. Sibling posture to
+    /// `KwargPathKind::label`'s post-lift arms.
     ///
     /// The bidirectional contract is anchored by tests:
     /// `label_renders_canonical_string_for_every_variant` pins each
@@ -3413,13 +3520,13 @@ impl ExpectedKwargShape {
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Self::Keyword => "keyword",
-            Self::String => "string",
-            Self::Int => "int",
-            Self::Number => "number",
-            Self::Bool => "bool",
-            Self::List => "list",
-            Self::ListOfStrings => "list of strings",
+            Self::Keyword => Self::KEYWORD_LABEL,
+            Self::String => Self::STRING_LABEL,
+            Self::Int => Self::INT_LABEL,
+            Self::Number => Self::NUMBER_LABEL,
+            Self::Bool => Self::BOOL_LABEL,
+            Self::List => Self::LIST_LABEL,
+            Self::ListOfStrings => Self::LIST_OF_STRINGS_LABEL,
         }
     }
 }
@@ -10575,6 +10682,341 @@ mod tests {
         );
         "number".parse::<SexpShape>().unwrap_err();
         "list of strings".parse::<SexpShape>().unwrap_err();
+    }
+
+    // ── ExpectedKwargShape per-role `pub const` + LABELS ALL array lift ─
+    //
+    // Sibling posture to `KwargPathKind::{NAMED_LABEL, ITEM_LABEL,
+    // SLOT_LABEL, LABELS}` on the kwarg-path category algebra —
+    // per-role canonical `&'static str` marker + closed-set
+    // `[&'static str; N]` array pattern applied to the
+    // `ExpectedKwargShape` closed set. Pre-lift the seven canonical
+    // expected-shape labels lived at TWO structural sites — the
+    // `Self::label` match arms AND the sibling truth-table tests
+    // (`label_renders_canonical_string_for_every_variant`,
+    // `expected_kwarg_shape_all_is_unique_and_complete` sorted-labels
+    // pin). Post-lift each (variant, canonical `&'static str`)
+    // pairing binds at ONE `pub const` on the typed algebra the
+    // `Self::label` arm routes through.
+
+    #[test]
+    fn expected_kwarg_shape_keyword_label_projects_canonical_keyword_bytes() {
+        // Pins the exact `"keyword"` bytes at the typed constant. The
+        // `parse_kwargs` slot-must-be-a-keyword gate emits this exact
+        // expected-shape; any drift here silently breaks every metric
+        // or diagnostic consumer that partitions failures by expected-
+        // shape. Sibling posture to
+        // `kwarg_path_kind_named_label_projects_canonical_named_bytes`.
+        assert_eq!(
+            ExpectedKwargShape::KEYWORD_LABEL,
+            "keyword",
+            "ExpectedKwargShape::KEYWORD_LABEL drifted from the \
+             substrate-canonical slot-must-be-a-keyword gate label \
+             `\"keyword\"`"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_string_label_projects_canonical_string_bytes() {
+        // Pins the exact `"string"` bytes at the typed constant.
+        // `extract_string` / `extract_optional_string` / the
+        // `extract_string_list` per-item gate all emit this exact
+        // expected-shape; any drift here silently breaks every
+        // consumer. Byte-equal to `SexpShape::STRING_LABEL` (future
+        // lift) — the cross-axis overlap on the same `Sexp` algebra
+        // is load-bearing.
+        assert_eq!(
+            ExpectedKwargShape::STRING_LABEL,
+            "string",
+            "ExpectedKwargShape::STRING_LABEL drifted from the \
+             substrate-canonical extract-string gate label \
+             `\"string\"`"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_int_label_projects_canonical_int_bytes() {
+        // Pins the exact `"int"` bytes at the typed constant.
+        // `extract_int` / `extract_optional_int` emit this exact
+        // expected-shape; the sibling `NUMBER_LABEL` names the wider
+        // numeric-union the `extract_float` extractor emits.
+        assert_eq!(
+            ExpectedKwargShape::INT_LABEL,
+            "int",
+            "ExpectedKwargShape::INT_LABEL drifted from the substrate-\
+             canonical extract-int gate label `\"int\"`"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_number_label_projects_canonical_number_bytes() {
+        // Pins the exact `"number"` bytes at the typed constant.
+        // `extract_float` / `extract_optional_float` emit this exact
+        // expected-shape; the naming (not `"float"`) is load-bearing
+        // — `extract_float` accepts BOTH `Sexp::Atom(Float(_))` and
+        // `Sexp::Atom(Int(_))` via `Sexp::as_float`, so the label
+        // names the union rather than the narrower Float element-
+        // type. A regression to `"float"` here would silently narrow
+        // the diagnostic's semantics without changing the extractor's
+        // acceptance set.
+        assert_eq!(
+            ExpectedKwargShape::NUMBER_LABEL,
+            "number",
+            "ExpectedKwargShape::NUMBER_LABEL drifted from the \
+             substrate-canonical extract-float gate label \
+             `\"number\"`"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_bool_label_projects_canonical_bool_bytes() {
+        // Pins the exact `"bool"` bytes at the typed constant.
+        // `extract_bool` / `extract_optional_bool` emit this exact
+        // expected-shape.
+        assert_eq!(
+            ExpectedKwargShape::BOOL_LABEL,
+            "bool",
+            "ExpectedKwargShape::BOOL_LABEL drifted from the substrate-\
+             canonical extract-bool gate label `\"bool\"`"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_list_label_projects_canonical_list_bytes() {
+        // Pins the exact `"list"` bytes at the typed constant.
+        // `extract_vec_via_serde`'s outer-shape gate emits this exact
+        // expected-shape; the sibling `LIST_OF_STRINGS_LABEL` names
+        // the element-typed variant `extract_string_list`'s outer
+        // gate emits.
+        assert_eq!(
+            ExpectedKwargShape::LIST_LABEL,
+            "list",
+            "ExpectedKwargShape::LIST_LABEL drifted from the substrate-\
+             canonical extract-vec-via-serde gate label `\"list\"`"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_list_of_strings_label_projects_canonical_bytes() {
+        // Pins the exact `"list of strings"` bytes at the typed
+        // constant. `extract_string_list`'s outer-shape gate emits
+        // this exact expected-shape; the naming (not the narrower
+        // `"list"`) is load-bearing — it names the element-type so
+        // the diagnostic reads `expected list of strings, got
+        // string` instead of the ambiguous `expected list, got
+        // string`. A regression to `"list"` here would silently
+        // collapse the two structurally distinct extractor gates
+        // into one indistinguishable diagnostic.
+        assert_eq!(
+            ExpectedKwargShape::LIST_OF_STRINGS_LABEL,
+            "list of strings",
+            "ExpectedKwargShape::LIST_OF_STRINGS_LABEL drifted from \
+             the substrate-canonical extract-string-list outer-shape \
+             gate label `\"list of strings\"`"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_label_method_routes_through_typed_constants() {
+        // PATH-UNIFORMITY: the inherent `Self::label(self)` method
+        // MUST return the per-role `pub const` byte-for-byte for
+        // each reachable variant. A regression that reverts ONE arm
+        // to an inline `"number"` / `"list of strings"` string
+        // literal (e.g. a merge-conflict resolution that picked the
+        // pre-lift form) silently reintroduces the ≥2 PRIME-DIRECTIVE
+        // trigger the lift resolved — this test catches that by
+        // pinning the arm's return value to the constant, so the two
+        // paths (inline vs. typed constant) cannot both hold.
+        // Sibling posture to
+        // `kwarg_path_kind_label_method_routes_through_typed_constants`.
+        assert_eq!(
+            ExpectedKwargShape::Keyword.label(),
+            ExpectedKwargShape::KEYWORD_LABEL,
+            "ExpectedKwargShape::Keyword.label() drifted from \
+             ExpectedKwargShape::KEYWORD_LABEL — the match arm \
+             reverted to an inline literal"
+        );
+        assert_eq!(
+            ExpectedKwargShape::String.label(),
+            ExpectedKwargShape::STRING_LABEL,
+            "ExpectedKwargShape::String.label() drifted from \
+             ExpectedKwargShape::STRING_LABEL — the match arm \
+             reverted to an inline literal"
+        );
+        assert_eq!(
+            ExpectedKwargShape::Int.label(),
+            ExpectedKwargShape::INT_LABEL,
+            "ExpectedKwargShape::Int.label() drifted from \
+             ExpectedKwargShape::INT_LABEL — the match arm reverted \
+             to an inline literal"
+        );
+        assert_eq!(
+            ExpectedKwargShape::Number.label(),
+            ExpectedKwargShape::NUMBER_LABEL,
+            "ExpectedKwargShape::Number.label() drifted from \
+             ExpectedKwargShape::NUMBER_LABEL — the match arm \
+             reverted to an inline literal"
+        );
+        assert_eq!(
+            ExpectedKwargShape::Bool.label(),
+            ExpectedKwargShape::BOOL_LABEL,
+            "ExpectedKwargShape::Bool.label() drifted from \
+             ExpectedKwargShape::BOOL_LABEL — the match arm reverted \
+             to an inline literal"
+        );
+        assert_eq!(
+            ExpectedKwargShape::List.label(),
+            ExpectedKwargShape::LIST_LABEL,
+            "ExpectedKwargShape::List.label() drifted from \
+             ExpectedKwargShape::LIST_LABEL — the match arm reverted \
+             to an inline literal"
+        );
+        assert_eq!(
+            ExpectedKwargShape::ListOfStrings.label(),
+            ExpectedKwargShape::LIST_OF_STRINGS_LABEL,
+            "ExpectedKwargShape::ListOfStrings.label() drifted from \
+             ExpectedKwargShape::LIST_OF_STRINGS_LABEL — the match \
+             arm reverted to an inline literal"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_labels_has_expected_cardinality() {
+        // Cardinality contract: `Self::LABELS.len() == 7` — pinned at
+        // the declaration site by rustc's forced-arity check on
+        // `[&'static str; 7]`. This test surfaces the arity as a
+        // fail-loud runtime pin so a future refactor that switches
+        // the array type to `&[&'static str]` (dropping the compile-
+        // time arity forcing) doesn't silently loosen the closed-set
+        // discipline the family relies on. Sibling posture to
+        // `kwarg_path_kind_labels_has_expected_cardinality` on the
+        // `KwargPathKind::LABELS` family.
+        assert_eq!(
+            ExpectedKwargShape::LABELS.len(),
+            7,
+            "ExpectedKwargShape::LABELS cardinality drifted from 7 \
+             — the expected-shape closed set gained or lost a variant \
+             without the ALL / LABELS pair being updated in tandem"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_labels_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::LABELS[i] ==
+        // Self::ALL[i].label()` element-wise. The two ALL arrays
+        // (typed variants, canonical `&'static str` labels) share
+        // ONE canonical declaration order — a regression that
+        // reorders ONE array without reordering the other silently
+        // misaligns every `zip(Self::ALL, Self::LABELS)` consumer
+        // (LSP completion providers, metric-label emitters, coverage
+        // reporters). Pinning by-index alignment here catches the
+        // reorder at test time. Sibling posture to
+        // `kwarg_path_kind_labels_align_with_all_by_index`.
+        assert_eq!(
+            ExpectedKwargShape::LABELS.len(),
+            ExpectedKwargShape::ALL.len(),
+            "ExpectedKwargShape::LABELS and ExpectedKwargShape::ALL \
+             diverged in cardinality — the per-role constants and \
+             enum variants must stay in lockstep"
+        );
+        for (i, shape) in ExpectedKwargShape::ALL.iter().enumerate() {
+            assert_eq!(
+                ExpectedKwargShape::LABELS[i],
+                shape.label(),
+                "ExpectedKwargShape::LABELS[{i}] `{lb}` drifted from \
+                 ExpectedKwargShape::ALL[{i}].label() `{via_variant}` \
+                 — the canonical declaration order of the two ALL \
+                 arrays must match element-wise",
+                lb = ExpectedKwargShape::LABELS[i],
+                via_variant = shape.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn expected_kwarg_shape_labels_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: the seven `&'static str` labels on
+        // the expected-shape algebra MUST differ so the derive-
+        // generated FromStr's linear sweep cannot route two variants
+        // through the same arm. Family-wide sweep over LABELS ×
+        // LABELS — supersedes any single per-pair assertion and picks
+        // up new variants mechanically when the array grows. Sibling
+        // posture to `kwarg_path_kind_labels_pairwise_distinct`.
+        for (i, a) in ExpectedKwargShape::LABELS.iter().enumerate() {
+            for (j, b) in ExpectedKwargShape::LABELS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "ExpectedKwargShape::LABELS[{i}] `{a}` collides \
+                     with ExpectedKwargShape::LABELS[{j}] `{b}` — the \
+                     derive-generated FromStr sweep would route two \
+                     variants through the same arm"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn expected_kwarg_shape_labels_all_round_trip_through_from_str() {
+        // Family-wide bidirection: every entry of `Self::LABELS` MUST
+        // parse back to some `ExpectedKwargShape` variant AND that
+        // variant's `label()` MUST equal the original entry. Sibling
+        // posture to
+        // `kwarg_path_kind_labels_all_round_trip_through_from_str`
+        // (sweeps over `Self::ALL`); this test sweeps over the per-
+        // role `&'static str` constants directly, catching a
+        // regression where one of the seven constants drifts from
+        // the corresponding `Self::label` arm (e.g.
+        // `LIST_OF_STRINGS_LABEL` set to `"list-of-strings"` while
+        // `Self::ListOfStrings.label()` still returns
+        // `Self::LIST_OF_STRINGS_LABEL`, which would parse to
+        // `ExpectedKwargShape::ListOfStrings` correctly but break
+        // every downstream consumer that pinned the literal `"list of
+        // strings"` bytes).
+        for lb in ExpectedKwargShape::LABELS {
+            let parsed: ExpectedKwargShape = lb.parse().unwrap_or_else(|_| {
+                panic!(
+                    "ExpectedKwargShape::LABELS entry `{lb}` failed to \
+                     parse — the entry drifted from Self::label"
+                )
+            });
+            assert_eq!(
+                parsed.label(),
+                lb,
+                "ExpectedKwargShape::LABELS entry `{lb}` parses to a \
+                 variant whose label() `{}` does not match — the \
+                 constant and the match arm drifted apart",
+                parsed.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn expected_kwarg_shape_labels_cover_sorted_closed_set() {
+        // Family-wide sweep: `Self::LABELS`, projected through sort,
+        // MUST equal the derive-generated `sorted_labels()` on the
+        // `ClosedSet` trait. Catches a regression where a new
+        // variant is added to `Self::ALL` + `Self::label` (so
+        // `sorted_labels()` grows) but the maintainer forgets to
+        // extend the parallel per-role `pub const` + `Self::LABELS`
+        // pair. Distinct from `_align_with_all_by_index` (which pins
+        // ORDER preservation) and `_pairwise_distinct` (which pins
+        // WITHIN-array uniqueness): this pin cross-checks the LABELS
+        // array against the derive-generated candidate-list on the
+        // trait, so a partial extension where LABELS grows but ALL
+        // doesn't (or vice-versa) surfaces at both this pin AND
+        // `_align_with_all_by_index`.
+        let mut sorted_labels: Vec<&'static str> = ExpectedKwargShape::LABELS.to_vec();
+        sorted_labels.sort_unstable();
+        assert_eq!(
+            sorted_labels,
+            <ExpectedKwargShape as crate::ClosedSet>::sorted_labels(),
+            "ExpectedKwargShape::LABELS diverged from the derive-\
+             generated `sorted_labels()` — a variant was added or \
+             removed from one array without the other tracking"
+        );
     }
 
     // ── SexpShape closed-set lift ───────────────────────────────────────

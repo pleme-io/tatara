@@ -1182,6 +1182,136 @@ impl Atom {
         Self::STR_ESCAPE_LEAD,
     ];
 
+    /// Canonical closed-set ALL array over every DECODED byte
+    /// [`Self::decode_str_escape`] can emit from a non-passthrough arm
+    /// — the SPAN of the two peer sub-vocabulary DECODED columns
+    /// ([`Self::NAMED_ESCAPE_TABLE`]'s three (SOURCE, DECODED) pairs'
+    /// DECODED column + [`Self::SELF_ESCAPE_TABLE`]'s two rows, which
+    /// are pattern-EQUALS-value so their DECODED column is definitionally
+    /// the row byte itself) in canonical declaration order matching
+    /// `decode_str_escape`'s match-arm order. Forced-arity `[char; 5]`
+    /// composition — a hypothetical sixth non-passthrough arm (e.g. a
+    /// `'0' → '\0'` NUL-byte extension, a Racket-compat `'a' → '\x07'`
+    /// BEL, a raw-string mode adopting `'#'` as an additional
+    /// self-escaping delimiter) extends [`Self::decode_str_escape`]'s
+    /// match ONCE + EITHER `NAMED_ESCAPE_TABLE` or `SELF_ESCAPE_TABLE`
+    /// ONCE + this ALL array ONCE + [`Self::ESCAPE_SOURCES`] ONCE + one
+    /// new per-role `pub const` (or pair) in lockstep; rustc's forced-
+    /// arity check on `[char; N]` binds the extension through the array
+    /// declaration site.
+    ///
+    /// Column-dual peer to [`Self::ESCAPE_SOURCES`] on the SAME closed-set
+    /// [`Atom`] algebra: where `ESCAPE_SOURCES` closes the SOURCE column
+    /// of the FIVE non-passthrough arms at ONE typed `[char; 5]`, this
+    /// array closes the DECODED column at the SAME shape. Together the
+    /// two arrays close the (SOURCE, DECODED) cross-product of
+    /// `decode_str_escape`'s non-passthrough arm-set at two byte-
+    /// identical `[char; 5]` shapes on the SAME closed-set [`Atom`]
+    /// algebra — the shape symmetry across the two columns of the SAME
+    /// arm-set is itself a typed load-bearing invariant carrying the
+    /// column-dual identity relation on the algebra.
+    ///
+    /// Cross-sub-vocabulary SPAN peer to [`Self::NAMED_ESCAPE_TABLE`] +
+    /// [`Self::SELF_ESCAPE_TABLE`] at the ALL-array level: where those
+    /// two arrays partition the FIVE non-passthrough arms of
+    /// [`Self::decode_str_escape`] into the pattern-DISTINCT-from-value
+    /// sub-vocabulary (3 rows, `[(char, char); 3]`) AND the pattern-
+    /// EQUALS-value sub-vocabulary (2 rows, `[char; 2]`), this array
+    /// closes the UNION of the DECODED columns at ONE typed
+    /// `[char; 5]` on the SAME closed-set [`Atom`] algebra. Pre-lift
+    /// the DECODED SPAN identity lived at ZERO callsites — the substrate
+    /// had a typed SOURCE-column SPAN ([`Self::ESCAPE_SOURCES`]) but the
+    /// DECODED-column SPAN was only reachable by iterating the two peer
+    /// sub-vocabulary arrays' DECODED columns per consumer OR by mapping
+    /// `ESCAPE_SOURCES` through [`Self::decode_str_escape`] at runtime;
+    /// post-lift the DECODED SPAN binds at ONE forced-arity `[char; 5]`
+    /// on the [`Atom`] algebra so consumers that want "every byte
+    /// decode_str_escape can emit from a typed non-passthrough arm"
+    /// iterate the typed array rather than reassembling it per callsite.
+    ///
+    /// Also sibling-shape to [`Sexp::LIST_DELIMITERS`] (`[char; 2]` on
+    /// the outer-structural paired-delimiter axis of the closed-set
+    /// [`Sexp`] algebra), [`Sexp::COMMENT_DELIMITERS`] (`[char; 2]` on
+    /// the reader-discard paired-delimiter axis of the SAME [`Sexp`]
+    /// algebra), [`Atom::BOOL_LITERALS`] (`[&'static str; 2]` on the
+    /// Scheme-bool spelling axis of this same [`Atom`] algebra), and
+    /// [`QuoteForm::LEADS`] (`[char; 3]` on the DISTINCT-lead-byte
+    /// sub-vocabulary axis of the closed-set [`QuoteForm`] algebra) —
+    /// every closed-set outer projection on the substrate that carries
+    /// a scalar `[char; N]` sub-vocabulary now pins its canonical bytes
+    /// at ONE `pub const` per role plus a forced-arity ALL array for
+    /// family-wide consumers.
+    ///
+    /// Composition law (SPAN): `ESCAPE_DECODED ==
+    /// [NAMED_ESCAPE_TABLE[0].1, NAMED_ESCAPE_TABLE[1].1,
+    /// NAMED_ESCAPE_TABLE[2].1, SELF_ESCAPE_TABLE[0],
+    /// SELF_ESCAPE_TABLE[1]]` AND `ESCAPE_DECODED.len() ==
+    /// NAMED_ESCAPE_TABLE.len() + SELF_ESCAPE_TABLE.len()` — the
+    /// forced-arity + canonical declaration order together pin every
+    /// downstream index-sweep consumer to the (named-decoded-column
+    /// prefix, self-decoded-column suffix) partition at rustc time; a
+    /// reorder that broke the partition (e.g. interleaving the two
+    /// sub-vocabularies' rows) fails at the composition pin below.
+    ///
+    /// Column-dual pointwise projection law: for every index `i` in
+    /// `0..5`, `ESCAPE_DECODED[i] == Self::decode_str_escape(
+    /// ESCAPE_SOURCES[i])`. The two forced-arity `[char; 5]` arrays are
+    /// the SOURCE column and DECODED column of `decode_str_escape`'s
+    /// non-passthrough arm-set — the pointwise projection identity is
+    /// pinned structurally at
+    /// `atom_escape_decoded_projects_pointwise_from_escape_sources_through_decode_str_escape`.
+    ///
+    /// Pairwise disjointness: every row is distinct from every other
+    /// row — `'\n'`, `'\t'`, `'\r'`, `'"'`, `'\\'` are five distinct
+    /// C0-and-ASCII bytes. Distinctness on the DECODED column follows
+    /// from (a) the NAMED sub-vocabulary's DECODED-column pairwise
+    /// distinctness at `atom_named_escape_table_decoded_pairwise_distinct`,
+    /// (b) the SELF sub-vocabulary's pairwise distinctness at
+    /// `atom_self_escape_table_pairwise_distinct`, and (c) the fact
+    /// that no NAMED-DECODED byte (`'\n'`, `'\t'`, `'\r'` — all C0
+    /// control bytes) can alias a SELF byte (`'"'`, `'\\'` — printable
+    /// ASCII bytes). The pairwise-distinctness pin below closes the
+    /// contract at the SPAN level so a future refactor that added a
+    /// sixth arm whose DECODED aliased an existing row surfaces HERE
+    /// rather than at a distant reader round-trip.
+    ///
+    /// Future consumers that compose against [`Self::ESCAPE_DECODED`]:
+    /// - A Str-render / encoder consumer that needs to escape a DECODED
+    ///   byte back into its SOURCE form — the classifier IS "is this
+    ///   byte in `Self::ESCAPE_DECODED`?" rather than a per-consumer
+    ///   chain over the two peer sub-vocabularies' DECODED columns.
+    /// - LSP / REPL diagnostic rendering that needs to name every byte
+    ///   the substrate's escape-handler can emit — the completion set
+    ///   IS `Self::ESCAPE_DECODED` rather than a runtime map through
+    ///   `decode_str_escape` from `ESCAPE_SOURCES`.
+    /// - A syntax-highlighter that colors decoded-escape byte payloads —
+    ///   the classifier binds through `Self::ESCAPE_DECODED` rather
+    ///   than through two parallel per-sub-vocabulary lookups.
+    /// - A fuzz-input generator that biases toward decoded-escape byte
+    ///   payloads (probing the reader's error-recovery path when a
+    ///   raw C0 byte appears inside a Str payload) — the target-byte
+    ///   pool IS `Self::ESCAPE_DECODED` rather than reassembled from
+    ///   the two peer arrays.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the FIVE
+    /// DECODED bytes of the non-passthrough arm-set now bind at ONE
+    /// typed `[char; 5]` on the closed-set [`Atom`] algebra rather than
+    /// at a runtime map through `decode_str_escape` from
+    /// `ESCAPE_SOURCES`. THEORY.md §V.1 — knowable platform; the
+    /// non-passthrough DECODED-byte SPAN becomes load-bearing typed
+    /// data at the algebra level. THEORY.md §VI.1 — generation over
+    /// composition; the column-dual identity that lived only as a
+    /// runtime `decode_str_escape` projection of the peer SOURCE-column
+    /// SPAN regenerates identically through this ONE typed forced-arity
+    /// array.
+    pub const ESCAPE_DECODED: [char; 5] = [
+        Self::NEWLINE_ESCAPE_DECODED,
+        Self::TAB_ESCAPE_DECODED,
+        Self::CARRIAGE_RETURN_ESCAPE_DECODED,
+        Self::STR_DELIMITER,
+        Self::STR_ESCAPE_LEAD,
+    ];
+
     #[must_use]
     pub const fn decode_str_escape(esc: char) -> char {
         match esc {
@@ -21633,6 +21763,208 @@ mod tests {
                  {decoded:?}).to_string()) — the reader's escape-handler \
                  branch OR Atom::decode_str_escape drifted from the ONE \
                  shared closed-set escape-table projection",
+            );
+        }
+    }
+
+    // ── `Atom::ESCAPE_DECODED` — the closed-set forced-arity ALL array
+    // over every DECODED byte `Atom::decode_str_escape` can emit from a
+    // non-passthrough arm. Column-dual peer of `Atom::ESCAPE_SOURCES` at
+    // the SAME `[char; 5]` shape on the SAME closed-set [`Atom`] algebra:
+    // together the two arrays close the (SOURCE, DECODED) cross-product
+    // of `decode_str_escape`'s non-passthrough arm-set at two byte-
+    // identical `[char; 5]` shapes. Cross-sub-vocabulary SPAN peer of
+    // `NAMED_ESCAPE_TABLE` (three pattern-DISTINCT-from-value rows'
+    // DECODED column) + `SELF_ESCAPE_TABLE` (two pattern-EQUALS-value
+    // rows whose DECODED column is definitionally the row byte itself)
+    // at ONE typed `[char; 5]` on the SAME closed-set [`Atom`] algebra.
+    // The pins below anchor (a) the SPAN composition against the two
+    // peer sub-vocabulary arrays' DECODED columns in canonical
+    // declaration order, (b) the forced-arity cardinality against a
+    // refactor that loosens the array to `&[char]`, (c) pairwise
+    // disjointness on the DECODED column, (d) the load-bearing
+    // partition NAMED-decoded-column prefix / SELF-decoded-column suffix
+    // that the declaration order encodes for consumers that walk the
+    // array by index, and (e) the column-dual POINTWISE projection
+    // identity that pins `ESCAPE_DECODED[i] ==
+    // decode_str_escape(ESCAPE_SOURCES[i])` for every index — the
+    // NEW load-bearing invariant this SPAN adds on top of `ESCAPE_SOURCES`.
+
+    #[test]
+    fn atom_escape_decoded_composes_from_named_and_self_escape_sub_vocabularies_in_declaration_order(
+    ) {
+        // COMPOSITION LAW: the ALL array's rows are (NAMED_ESCAPE_TABLE
+        // DECODED column, then SELF_ESCAPE_TABLE rows) in canonical
+        // declaration order matching `decode_str_escape`'s match-arm
+        // order. Pins the SPAN composition at ONE site so a reorder
+        // that broke the (named prefix, self suffix) partition (e.g.
+        // interleaving the two sub-vocabularies' rows, sorting by C0
+        // byte value) silently misaligns every consumer that sweeps the
+        // array by index. Sibling-shape pin to
+        // `atom_escape_sources_composes_from_named_and_self_escape_sub_vocabularies_in_declaration_order`
+        // one column over on the peer SOURCE-column SPAN at
+        // `Atom::ESCAPE_SOURCES`.
+        assert_eq!(
+            Atom::ESCAPE_DECODED,
+            [
+                Atom::NAMED_ESCAPE_TABLE[0].1,
+                Atom::NAMED_ESCAPE_TABLE[1].1,
+                Atom::NAMED_ESCAPE_TABLE[2].1,
+                Atom::SELF_ESCAPE_TABLE[0],
+                Atom::SELF_ESCAPE_TABLE[1],
+            ],
+            "ESCAPE_DECODED composition drifted from the canonical \
+             (NAMED DECODED column, then SELF rows) SPAN in declaration \
+             order — the SPAN lift must route through the two peer \
+             sub-vocabulary arrays' rows in the exact order \
+             decode_str_escape's match arms fire on them.",
+        );
+    }
+
+    #[test]
+    fn atom_escape_decoded_has_expected_cardinality() {
+        // ARITY PIN: the forced-arity `[char; 5]` shape survives at
+        // runtime AND matches the two peer sub-vocabularies' summed
+        // cardinality AND matches the column-dual peer
+        // `ESCAPE_SOURCES`'s arity. Pins the closed-set size against a
+        // refactor that loosens the array's type to `&'static [char]`
+        // or `Vec<char>` (which would drop the compile-time arity
+        // forcing rustc bakes into `[T; N]` declarations) AND against a
+        // refactor that drifted this array's arity without extending
+        // one of the two peer sub-vocabularies (which would silently
+        // desynchronize the SPAN identity from its two source arrays)
+        // AND against a refactor that broke the column-dual shape
+        // symmetry with `ESCAPE_SOURCES`. Sibling posture to
+        // `atom_escape_sources_has_expected_cardinality` on the peer
+        // SOURCE-column SPAN.
+        assert_eq!(
+            Atom::ESCAPE_DECODED.len(),
+            5,
+            "ESCAPE_DECODED cardinality drifted from the substrate-\
+             canonical FIVE non-passthrough arms of \
+             Atom::decode_str_escape.",
+        );
+        assert_eq!(
+            Atom::ESCAPE_DECODED.len(),
+            Atom::NAMED_ESCAPE_TABLE.len() + Atom::SELF_ESCAPE_TABLE.len(),
+            "ESCAPE_DECODED cardinality drifted from the SUM of the two \
+             peer sub-vocabulary arrays' cardinalities — the SPAN \
+             identity is broken.",
+        );
+        assert_eq!(
+            Atom::ESCAPE_DECODED.len(),
+            Atom::ESCAPE_SOURCES.len(),
+            "ESCAPE_DECODED cardinality drifted from the column-dual peer \
+             ESCAPE_SOURCES's cardinality — the column-dual shape \
+             symmetry `[char; 5]` × `[char; 5]` on decode_str_escape's \
+             non-passthrough arm-set is broken.",
+        );
+    }
+
+    #[test]
+    fn atom_escape_decoded_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: every row is distinct from every
+        // other row. On the DECODED column this is TIGHTER than on
+        // the SOURCE column: the NAMED sub-vocabulary's DECODED rows
+        // are C0 control bytes (`'\n'`, `'\t'`, `'\r'` — bytes 0x0A,
+        // 0x09, 0x0D) and the SELF sub-vocabulary's rows are printable
+        // ASCII bytes (`'"'`, `'\\'` — bytes 0x22, 0x5C), so no
+        // NAMED-DECODED byte can alias a SELF byte by byte-class
+        // disjointness. This test closes the disjointness contract at
+        // the SPAN level so a future refactor that added a sixth arm
+        // whose DECODED aliased an existing row (e.g. drifted
+        // TAB_ESCAPE_DECODED from `'\t'` to `'\n'`, collapsing two
+        // arms onto the same DECODED byte) surfaces HERE rather than
+        // at a distant reader round-trip. Sibling posture to
+        // `atom_escape_sources_pairwise_distinct` on the peer
+        // SOURCE-column SPAN.
+        for i in 0..Atom::ESCAPE_DECODED.len() {
+            for j in (i + 1)..Atom::ESCAPE_DECODED.len() {
+                assert_ne!(
+                    Atom::ESCAPE_DECODED[i],
+                    Atom::ESCAPE_DECODED[j],
+                    "ESCAPE_DECODED bytes at indices {i} and {j} alias \
+                     — every non-passthrough arm must emit a distinct \
+                     DECODED byte.",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn atom_escape_decoded_partitions_into_named_decoded_prefix_and_self_decoded_suffix() {
+        // PARTITION PIN: the SPAN's canonical declaration order
+        // encodes a (named prefix, self suffix) partition —
+        // `ESCAPE_DECODED[0..3]` IS `NAMED_ESCAPE_TABLE`'s DECODED
+        // column, `ESCAPE_DECODED[3..5]` IS `SELF_ESCAPE_TABLE` (the
+        // SELF sub-vocabulary's DECODED column IS its row column by
+        // pattern-EQUALS-value identity). Pin the partition at the
+        // index level so a reorder that broke the sub-vocabulary
+        // boundary (e.g. moved a SELF row to index 2 to sort by C0
+        // byte value, or interleaved a self row between two named
+        // rows) fails HERE rather than as silent drift where consumers
+        // that walk the array by index would route the wrong
+        // sub-vocabulary's row through the wrong downstream handler.
+        // Sibling-shape pin to
+        // `atom_escape_sources_partitions_into_named_source_prefix_and_self_source_suffix`
+        // one column over on the peer SOURCE-column SPAN.
+        for (i, &(_, dec)) in Atom::NAMED_ESCAPE_TABLE.iter().enumerate() {
+            assert_eq!(
+                Atom::ESCAPE_DECODED[i],
+                dec,
+                "ESCAPE_DECODED[{i}] ({}) drifted from \
+                 NAMED_ESCAPE_TABLE[{i}].1 ({dec}) — the named-decoded-\
+                 prefix partition is broken.",
+                Atom::ESCAPE_DECODED[i],
+            );
+        }
+        for (i, &self_byte) in Atom::SELF_ESCAPE_TABLE.iter().enumerate() {
+            let span_index = Atom::NAMED_ESCAPE_TABLE.len() + i;
+            assert_eq!(
+                Atom::ESCAPE_DECODED[span_index],
+                self_byte,
+                "ESCAPE_DECODED[{span_index}] ({}) drifted from \
+                 SELF_ESCAPE_TABLE[{i}] ({self_byte}) — the self-decoded-\
+                 suffix partition is broken (SELF rows are pattern-\
+                 EQUALS-value so DECODED == SOURCE by definitional \
+                 identity).",
+                Atom::ESCAPE_DECODED[span_index],
+            );
+        }
+    }
+
+    #[test]
+    fn atom_escape_decoded_projects_pointwise_from_escape_sources_through_decode_str_escape() {
+        // COLUMN-DUAL POINTWISE PROJECTION LAW: the two forced-arity
+        // `[char; 5]` peer arrays [`Atom::ESCAPE_SOURCES`] +
+        // [`Atom::ESCAPE_DECODED`] are the SOURCE column and DECODED
+        // column of `decode_str_escape`'s non-passthrough arm-set — for
+        // every index `i` in `0..5`,
+        // `ESCAPE_DECODED[i] == Atom::decode_str_escape(
+        // ESCAPE_SOURCES[i])`. This is the NEW load-bearing invariant
+        // this SPAN adds on top of `ESCAPE_SOURCES`: the column-dual
+        // pointwise projection identity that pins the two `[char; 5]`
+        // arrays as the two columns of the SAME arm-set at the SAME
+        // row-order at rustc time. Pin the projection identity
+        // structurally so a refactor that drifted either array's
+        // declaration order OR drifted `decode_str_escape`'s match-arm
+        // ordering surfaces HERE at the first drifted index rather
+        // than at a distant sweep site. A regression that swapped
+        // (e.g.) rows 3 and 4 in `ESCAPE_DECODED` without swapping
+        // them in `ESCAPE_SOURCES` (or vice versa) would silently
+        // collapse the column-dual identity; this pin catches the
+        // divergence at the first drifted index.
+        for (i, &src) in Atom::ESCAPE_SOURCES.iter().enumerate() {
+            let expected = Atom::decode_str_escape(src);
+            assert_eq!(
+                Atom::ESCAPE_DECODED[i],
+                expected,
+                "ESCAPE_DECODED[{i}] ({}) drifted from \
+                 decode_str_escape(ESCAPE_SOURCES[{i}] = {src:?}) = \
+                 {expected:?} — the column-dual pointwise projection \
+                 law from ESCAPE_SOURCES onto ESCAPE_DECODED through \
+                 decode_str_escape is broken at index {i}.",
+                Atom::ESCAPE_DECODED[i],
             );
         }
     }

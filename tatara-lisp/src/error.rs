@@ -1648,15 +1648,132 @@ pub enum CompilerSpecIoStage {
 }
 
 impl CompilerSpecIoStage {
+    /// The canonical `&'static str` bytes returned by
+    /// [`Self::operation`] for the [`Self::RealizeToDiskSerialize`]
+    /// and [`Self::RealizeToDiskWrite`] variants — the
+    /// `"realize_to_disk"` `{operation}` slot of the legacy
+    /// `Compile`-shaped triple emitted by the public
+    /// `CompilerSpec::realize_to_disk` entry point.
+    ///
+    /// Sibling posture to [`Self::LOAD_FROM_DISK_OPERATION`]
+    /// (`"load_from_disk"`) on the same disk-persistence
+    /// operation-label algebra, and to
+    /// [`Self::REALIZE_TO_DISK_SERIALIZE_LABEL`] /
+    /// [`Self::REALIZE_TO_DISK_WRITE_LABEL`] /
+    /// [`Self::LOAD_FROM_DISK_READ_LABEL`] /
+    /// [`Self::LOAD_FROM_DISK_DESERIALIZE_LABEL`] on the paired
+    /// stage-label algebra — together the two axes span the
+    /// (operation × stage) compound-key surface every
+    /// [`CompilerSpecIoStage`] variant projects through.
+    ///
+    /// Pre-lift the same `"realize_to_disk"` bytes lived inline at
+    /// the [`Self::operation`] match arm plus at the paired
+    /// `compiler_spec_io_stage_operation_projects_realize_for_serialize_and_write`
+    /// truth-table test plus at every `operation="realize_to_disk"`
+    /// metric-label pin. Post-lift the (`RealizeToDiskSerialize |
+    /// RealizeToDiskWrite`, canonical `&'static str`) pairing binds
+    /// at ONE `pub const` on the typed [`CompilerSpecIoStage`]
+    /// algebra — the pre-lift ≥2 PRIME-DIRECTIVE trigger becomes ONE
+    /// typed source of truth. Consumers that need the
+    /// `"realize_to_disk"` bytes at compile time (`disallowed_names`
+    /// clippy config; static-dispatch metric-label tables in
+    /// Prometheus recorders; `tatara-check` grep budgets) bind
+    /// against `CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION`
+    /// rather than re-typing the literal.
+    pub const REALIZE_TO_DISK_OPERATION: &'static str = "realize_to_disk";
+
+    /// The canonical `&'static str` bytes returned by
+    /// [`Self::operation`] for the [`Self::LoadFromDiskRead`] and
+    /// [`Self::LoadFromDiskDeserialize`] variants — the
+    /// `"load_from_disk"` `{operation}` slot of the legacy
+    /// `Compile`-shaped triple emitted by the public
+    /// `CompilerSpec::load_from_disk` entry point.
+    ///
+    /// Sibling posture to [`Self::REALIZE_TO_DISK_OPERATION`]
+    /// (`"realize_to_disk"`) on the same disk-persistence
+    /// operation-label algebra.
+    pub const LOAD_FROM_DISK_OPERATION: &'static str = "load_from_disk";
+
+    /// The closed set of four canonical `&'static str` operation
+    /// labels — one per variant of [`Self::ALL`] in the SAME
+    /// declaration order, so `Self::OPERATIONS[i] ==
+    /// Self::ALL[i].operation()` element-wise (pinned by
+    /// `compiler_spec_io_stage_operations_align_with_all_by_index`).
+    ///
+    /// Unlike [`Self::LABELS`] — whose four elements are pairwise
+    /// distinct because each `label()` projection is bijective with
+    /// its variant — [`Self::OPERATIONS`] contains DUPLICATES by
+    /// construction: the operation projection is 2-of-2-to-2 (both
+    /// `Realize…` variants share `"realize_to_disk"`, both `Load…`
+    /// variants share `"load_from_disk"`), pinned by
+    /// `compiler_spec_io_stage_operations_partition_all_two_ways`.
+    /// This asymmetry between the two projection axes IS the load-
+    /// bearing structural property of the (operation × label)
+    /// compound-key surface — a naive lift that omits it would
+    /// silently collapse the two-way partition on the operation
+    /// axis by pinning distinctness where it doesn't hold.
+    ///
+    /// Sibling posture to [`Self::LABELS`] (`[&'static str; 4]`) on
+    /// the same disk-persistence stage-label algebra —
+    /// [`Self::OPERATIONS`] and [`Self::LABELS`] together span the
+    /// (operation, label) compound-key rendering surface every
+    /// [`Display`] / [`FromStr`] round-trip walks, with rustc's
+    /// forced-arity `[&'static str; 4]` check on BOTH arrays
+    /// enforcing that any future fifth pair (`LoadFromStrDeserialize`
+    /// once an in-memory `load_from_str` lands, `RealizeToDiskAtomicReplace`
+    /// if the realize path grows a crash-safe-rename stage) extends
+    /// [`Self::ALL`] ONCE + [`Self::operation`] ONCE +
+    /// [`Self::OPERATIONS`] ONCE + [`Self::label`] ONCE +
+    /// [`Self::LABELS`] ONCE + adds ONE per-role label `pub const`
+    /// — the (variant → (operation, label)) product surface picks
+    /// up the extension mechanically at every downstream consumer.
+    ///
+    /// Future consumers that compose against [`Self::OPERATIONS`]:
+    /// an LSP / REPL completion provider surfacing every legal
+    /// operation label in an `operation=` metrics query bar
+    /// ([`Self::OPERATIONS`] deduped is the ONE typed sweep over
+    /// every legal disk-persistence entry-point name); a
+    /// `tatara-check` coverage assertion (every workspace `.lisp`
+    /// file's `CompilerSpec` rejection must classify to some
+    /// entry of [`Self::OPERATIONS`]); a Sekiban audit-trail metric
+    /// jointly labeled by [`Self::operation`] × [`Self::label`]
+    /// whose `operation=` label set IS the deduped
+    /// [`Self::OPERATIONS`] (e.g.
+    /// `tatara_lisp_compiler_spec_io_total{operation="realize_to_disk",
+    /// stage="serialize"}`).
+    pub const OPERATIONS: [&'static str; 4] = [
+        Self::REALIZE_TO_DISK_OPERATION,
+        Self::REALIZE_TO_DISK_OPERATION,
+        Self::LOAD_FROM_DISK_OPERATION,
+        Self::LOAD_FROM_DISK_OPERATION,
+    ];
+
     /// The public entry point's name — the `{form}` slot of the legacy
     /// `Compile`-shaped diagnostic. `realize_to_disk` for the
     /// serialize / write variants; `load_from_disk` for the read /
     /// deserialize variants.
+    ///
+    /// Body routes each arm through the per-role
+    /// [`Self::REALIZE_TO_DISK_OPERATION`] /
+    /// [`Self::LOAD_FROM_DISK_OPERATION`] `pub const` so the two
+    /// canonical `&'static str` operation labels live at ONE
+    /// `pub const` per role rather than at TWO sites (the per-role
+    /// `pub const` AND an inline arm literal). Sibling posture to
+    /// [`Self::label`]'s arms routing through the per-role
+    /// [`Self::REALIZE_TO_DISK_SERIALIZE_LABEL`] /
+    /// [`Self::REALIZE_TO_DISK_WRITE_LABEL`] /
+    /// [`Self::LOAD_FROM_DISK_READ_LABEL`] /
+    /// [`Self::LOAD_FROM_DISK_DESERIALIZE_LABEL`] constants on the
+    /// paired stage-label algebra.
     #[must_use]
     pub fn operation(self) -> &'static str {
         match self {
-            Self::RealizeToDiskSerialize | Self::RealizeToDiskWrite => "realize_to_disk",
-            Self::LoadFromDiskRead | Self::LoadFromDiskDeserialize => "load_from_disk",
+            Self::RealizeToDiskSerialize | Self::RealizeToDiskWrite => {
+                Self::REALIZE_TO_DISK_OPERATION
+            }
+            Self::LoadFromDiskRead | Self::LoadFromDiskDeserialize => {
+                Self::LOAD_FROM_DISK_OPERATION
+            }
         }
     }
 
@@ -8952,6 +9069,172 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_operation_method_routes_through_typed_constants() {
+        // PATH-UNIFORMITY: the inherent `Self::operation(self)` method
+        // MUST return the per-role `pub const` byte-for-byte for
+        // each reachable variant. A regression that reverts ONE arm
+        // to an inline `"realize_to_disk"` string literal (e.g. a
+        // merge-conflict resolution that picked the pre-lift form)
+        // silently reintroduces the ≥2 PRIME-DIRECTIVE trigger the
+        // lift resolved — this test catches that by pinning each
+        // arm's return value to the constant, so the two paths
+        // (inline vs. typed constant) cannot both hold. Sibling
+        // posture to
+        // `compiler_spec_io_stage_label_method_routes_through_typed_constants`
+        // on the paired stage-label algebra.
+        assert_eq!(
+            super::CompilerSpecIoStage::RealizeToDiskSerialize.operation(),
+            super::CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION,
+            "CompilerSpecIoStage::RealizeToDiskSerialize.operation() \
+             drifted from CompilerSpecIoStage::\
+             REALIZE_TO_DISK_OPERATION — the match arm reverted to an \
+             inline literal"
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::RealizeToDiskWrite.operation(),
+            super::CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION,
+            "CompilerSpecIoStage::RealizeToDiskWrite.operation() \
+             drifted from CompilerSpecIoStage::\
+             REALIZE_TO_DISK_OPERATION — the match arm reverted to an \
+             inline literal"
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::LoadFromDiskRead.operation(),
+            super::CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION,
+            "CompilerSpecIoStage::LoadFromDiskRead.operation() drifted \
+             from CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION — the \
+             match arm reverted to an inline literal"
+        );
+        assert_eq!(
+            super::CompilerSpecIoStage::LoadFromDiskDeserialize.operation(),
+            super::CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION,
+            "CompilerSpecIoStage::LoadFromDiskDeserialize.operation() \
+             drifted from CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION \
+             — the match arm reverted to an inline literal"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_operations_has_expected_cardinality() {
+        // Cardinality contract: `Self::OPERATIONS.len() == 4` —
+        // pinned at the declaration site by rustc's forced-arity
+        // check on `[&'static str; 4]`. This test surfaces the arity
+        // as a fail-loud runtime pin so a future refactor that
+        // switches the array type to `&[&'static str]` (dropping the
+        // compile-time arity forcing) doesn't silently loosen the
+        // closed-set discipline the family relies on. Sibling posture
+        // to `compiler_spec_io_stage_labels_has_expected_cardinality`
+        // on the paired stage-label algebra.
+        assert_eq!(
+            super::CompilerSpecIoStage::OPERATIONS.len(),
+            4,
+            "CompilerSpecIoStage::OPERATIONS cardinality drifted from \
+             4 — the disk-persistence operation-label closed set \
+             gained or lost a variant without the ALL / OPERATIONS \
+             pair being updated in tandem"
+        );
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_operations_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::OPERATIONS[i] ==
+        // Self::ALL[i].operation()` element-wise. The two ALL arrays
+        // (typed variants, canonical `&'static str` operation labels)
+        // share ONE canonical declaration order — a regression that
+        // reorders ONE array without reordering the other silently
+        // misaligns every `zip(Self::ALL, Self::OPERATIONS)` consumer
+        // (LSP completion providers keyed on the operation slot,
+        // metric-label emitters, coverage reporters that walk the
+        // operation × stage compound-key surface). Pinning by-index
+        // alignment here catches the reorder at test time. Sibling
+        // posture to `compiler_spec_io_stage_labels_align_with_all_by_index`
+        // on the paired stage-label algebra.
+        assert_eq!(
+            super::CompilerSpecIoStage::OPERATIONS.len(),
+            super::CompilerSpecIoStage::ALL.len(),
+            "CompilerSpecIoStage::OPERATIONS and \
+             CompilerSpecIoStage::ALL diverged in cardinality — the \
+             per-role constants and enum variants must stay in \
+             lockstep"
+        );
+        for (i, stage) in super::CompilerSpecIoStage::ALL.iter().enumerate() {
+            assert_eq!(
+                super::CompilerSpecIoStage::OPERATIONS[i],
+                stage.operation(),
+                "CompilerSpecIoStage::OPERATIONS[{i}] `{op}` drifted \
+                 from CompilerSpecIoStage::ALL[{i}].operation() \
+                 `{via_variant}` — the canonical declaration order \
+                 of the two ALL arrays must match element-wise",
+                op = super::CompilerSpecIoStage::OPERATIONS[i],
+                via_variant = stage.operation(),
+            );
+        }
+    }
+
+    #[test]
+    fn compiler_spec_io_stage_operations_partition_all_two_ways() {
+        // TWO-WAY PARTITION CONTRACT: unlike `Self::LABELS` — whose
+        // four elements are pairwise distinct because each `label()`
+        // projection is bijective with its variant — `Self::OPERATIONS`
+        // contains DUPLICATES by construction. The operation
+        // projection bifurcates the closed set into exactly two
+        // disjoint groups of two: `{RealizeToDiskSerialize,
+        // RealizeToDiskWrite}` share `"realize_to_disk"` and
+        // `{LoadFromDiskRead, LoadFromDiskDeserialize}` share
+        // `"load_from_disk"`. The 2-of-2-to-2 shape is load-bearing
+        // for the compound-key `"{operation}: {label}"` surface —
+        // if the operation projection ever grew bijective with
+        // `ALL` the compound key would collapse to `label`-only and
+        // the parse boundary would silently accept unreachable
+        // cross-product pairs. Pin the exact multiplicities here so
+        // a future refactor that (a) adds a distinct per-variant
+        // operation, or (b) collapses the two operations into one
+        // shared string, fails-loudly. Sibling posture to
+        // `compiler_spec_io_stage_labels_pairwise_distinct` on the
+        // paired stage-label algebra — where LABELS pins
+        // distinctness, OPERATIONS pins the exact two-way partition
+        // multiplicity.
+        let realize_count = super::CompilerSpecIoStage::OPERATIONS
+            .iter()
+            .filter(|&&op| op == super::CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION)
+            .count();
+        let load_count = super::CompilerSpecIoStage::OPERATIONS
+            .iter()
+            .filter(|&&op| op == super::CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION)
+            .count();
+        assert_eq!(
+            realize_count, 2,
+            "CompilerSpecIoStage::OPERATIONS multiplicity of \
+             REALIZE_TO_DISK_OPERATION drifted from 2 — the \
+             realize-side bifurcation over {{serialize, write}} is \
+             load-bearing for the compound-key surface"
+        );
+        assert_eq!(
+            load_count, 2,
+            "CompilerSpecIoStage::OPERATIONS multiplicity of \
+             LOAD_FROM_DISK_OPERATION drifted from 2 — the load-side \
+             bifurcation over {{read, deserialize}} is load-bearing \
+             for the compound-key surface"
+        );
+        assert_eq!(
+            realize_count + load_count,
+            super::CompilerSpecIoStage::OPERATIONS.len(),
+            "CompilerSpecIoStage::OPERATIONS gained an operation label \
+             outside the two-way partition — the closed-set operation \
+             axis is no longer a clean {{realize_to_disk ⊎ load_from_disk}} \
+             bifurcation"
+        );
+        assert_ne!(
+            super::CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION,
+            super::CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION,
+            "CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION collided \
+             with CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION — the \
+             two-way partition collapsed to one group, breaking every \
+             compound-key `{{operation}}: {{label}}` round-trip"
+        );
     }
 
     #[test]

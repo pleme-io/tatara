@@ -7956,6 +7956,160 @@ impl QuoteForm {
         self.sexp_shape().label()
     }
 
+    /// Canonical `&'static str` bytes for the [`Self::Quote`] quote-family
+    /// marker — aliases [`SexpShape::QUOTE_LABEL`] on the QuoteForm ⊂
+    /// SexpShape carving so the marker-level per-role bytes bind at ONE
+    /// `pub const` on the parent superset's quote-family arm rather than
+    /// at TWO sites (the per-role `pub const` AND a parallel inline
+    /// literal). Per-role peer of `Self::Quote` on the closed-set quote-
+    /// family algebra; consumers reach for `QuoteForm::QUOTE_LABEL` when
+    /// the caller has a variant in hand at compile time and wants the
+    /// canonical diagnostic bytes without runtime dispatch through
+    /// [`Self::label`].
+    ///
+    /// Sibling posture to the peer 6-of-12 atomic-payload carving's per-
+    /// role LABEL aliases ([`crate::ast::AtomKind::SYMBOL_LABEL`] …
+    /// [`crate::ast::AtomKind::BOOL_LABEL`] — every one an alias of its
+    /// [`SexpShape`] peer) and the peer 2-of-12 structural-residual
+    /// carving's per-role LABEL aliases
+    /// ([`crate::error::StructuralKind::NIL_LABEL`] +
+    /// [`crate::error::StructuralKind::LIST_LABEL`]) — this closes the
+    /// fourth and final closed-set sub-carving of [`SexpShape`] whose
+    /// per-role diagnostic-label bytes are surfaced through the same
+    /// alias-chain shape rather than reachable only through the
+    /// composition [`Self::sexp_shape`] + [`SexpShape::label`]. Every
+    /// SexpShape sub-carving (atomic payload, quote family, structural
+    /// residual) now exposes its per-role LABEL bytes at ONE `pub const`
+    /// per role on its subset algebra AS WELL AS at the parent
+    /// superset's `SexpShape::*_LABEL`.
+    ///
+    /// The prefix-family peer of THIS `&'static str` constant is
+    /// [`Self::QUOTE_PREFIX`] (`"'"` — reader-punctuation byte); the
+    /// canonical-form peer is [`Self::QUOTE_IAC_FORGE_TAG`] (`"quote"` —
+    /// cross-crate iac-forge tag). At the `Quote` arm the label and
+    /// the iac-forge tag agree byte-for-byte (`"quote"`); the divergence
+    /// axis lives at [`Self::UNQUOTE_SPLICE_LABEL`] (`"unquote-splice"`)
+    /// vs [`Self::UNQUOTE_SPLICE_IAC_FORGE_TAG`] (`"unquote-splicing"`).
+    /// The three parallel per-role `pub const` families (prefix, label,
+    /// iac-forge tag) close the (reader, diagnostic, canonical-form)
+    /// triple on the outer-`QuoteForm` algebra.
+    pub const QUOTE_LABEL: &'static str = SexpShape::QUOTE_LABEL;
+
+    /// Canonical `&'static str` bytes for the [`Self::Quasiquote`] quote-
+    /// family marker — aliases [`SexpShape::QUASIQUOTE_LABEL`] on the
+    /// QuoteForm ⊂ SexpShape carving. Per-role peer of `Self::Quasiquote`.
+    /// See [`Self::QUOTE_LABEL`] for the alias-chain shape every sibling
+    /// shares.
+    pub const QUASIQUOTE_LABEL: &'static str = SexpShape::QUASIQUOTE_LABEL;
+
+    /// Canonical `&'static str` bytes for the [`Self::Unquote`] quote-
+    /// family marker — aliases [`SexpShape::UNQUOTE_LABEL`] on the
+    /// QuoteForm ⊂ SexpShape carving. Per-role peer of `Self::Unquote`.
+    /// See [`Self::QUOTE_LABEL`] for the alias-chain shape every sibling
+    /// shares.
+    pub const UNQUOTE_LABEL: &'static str = SexpShape::UNQUOTE_LABEL;
+
+    /// Canonical `&'static str` bytes for the [`Self::UnquoteSplice`]
+    /// quote-family marker — aliases [`SexpShape::UNQUOTE_SPLICE_LABEL`]
+    /// on the QuoteForm ⊂ SexpShape carving. Per-role peer of
+    /// `Self::UnquoteSplice`; the `"unquote-splice"` short label matches
+    /// [`SexpShape::UNQUOTE_SPLICE_LABEL`] byte-for-byte and diverges
+    /// INTENTIONALLY from [`Self::UNQUOTE_SPLICE_IAC_FORGE_TAG`]
+    /// (`"unquote-splicing"`) — the two projections key the SAME closed
+    /// set on TWO distinct boundaries (substrate diagnostic surface vs
+    /// cross-crate Common-Lisp canonical form). The divergence is pinned
+    /// by `quote_form_label_diverges_from_iac_forge_tag_for_unquote_splice`
+    /// on the runtime projection and by the byte-equality pins on THIS
+    /// constant vs its iac-forge peer on the per-role `pub const`
+    /// surface. See [`Self::QUOTE_LABEL`] for the alias-chain shape
+    /// every sibling shares.
+    pub const UNQUOTE_SPLICE_LABEL: &'static str = SexpShape::UNQUOTE_SPLICE_LABEL;
+
+    /// Closed-set forced-arity ALL array over the canonical quote-family
+    /// marker `&'static str` bytes, in declaration order matching
+    /// [`Self::ALL`] element-wise (pinned by
+    /// `quote_form_labels_align_with_all_by_index`). Sibling posture to
+    /// [`crate::error::SexpShape::LABELS`] (`[&'static str; 12]` — the
+    /// superset carving this QuoteForm subset embeds into),
+    /// [`crate::ast::AtomKind::LABELS`] (`[&'static str; 6]` — the peer
+    /// 6-of-12 atomic-payload carving's ALL array),
+    /// [`crate::error::StructuralKind::LABELS`] (`[&'static str; 2]` —
+    /// the peer 2-of-12 structural-residual carving's ALL array),
+    /// [`Self::PREFIXES`] (`[&'static str; 4]` — reader-prefix axis on
+    /// this same algebra), and [`Self::IAC_FORGE_TAGS`]
+    /// (`[&'static str; 4]` — canonical-form tag axis on this same
+    /// algebra) — every closed-set outer projection on the substrate
+    /// that carries an `&'static str`-per-variant label now pins its
+    /// per-role canonical bytes at ONE `pub const` per role PLUS an ALL
+    /// array for family-wide consumers.
+    ///
+    /// Pre-lift the four quote-family marker labels had NO per-role
+    /// primitive on this closed-set algebra — a consumer with a
+    /// [`QuoteForm`] variant in hand at compile time reaching for the
+    /// canonical diagnostic bytes had to spell `QuoteForm::Quote.label()`
+    /// (runtime dispatch through the composition [`Self::sexp_shape`] +
+    /// [`SexpShape::label`]) OR reach across the algebra boundary into
+    /// [`SexpShape::QUOTE_LABEL`] and re-derive the QuoteForm ⊂
+    /// SexpShape variant pairing at the call site. Post-lift the FOUR
+    /// canonical labels bind at ONE `pub const` per role on the typed
+    /// [`QuoteForm`] algebra AND at [`Self::LABELS`] as a family-wide
+    /// forced-arity array — a future LSP / REPL completion bar keyed on
+    /// `QuoteForm::LABELS` for the "quote-family" carving-axis column,
+    /// a `tatara-check` coverage sweep over the quote-family arms of a
+    /// `TypeMismatch.got` corpus, or a Sekiban audit-trail metric
+    /// jointly labeled by the quote-family marker
+    /// (`tatara_lisp_quote_family_label_total{label="quote"}`) reads
+    /// through the typed constants on this subset algebra without re-
+    /// deriving the 4-of-12 carving inline OR reaching across into the
+    /// superset's twelve-entry `SexpShape::LABELS` array + filtering.
+    ///
+    /// Each entry is byte-for-byte identical to the corresponding
+    /// [`SexpShape`] quote-family arm — an intentional cross-axis
+    /// overlap pinned by
+    /// `quote_form_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+    /// so a future label rename on EITHER side (a `SexpShape`
+    /// `"quote"` → `"cite"` drift, a `QuoteForm` rename that skips the
+    /// alias, a hypothetical Racket-compat swap of `"quasiquote"`)
+    /// fails-loudly at the alias test rather than as a silent operator-
+    /// facing vocabulary fracture. Adding a hypothetical fifth
+    /// homoiconic prefix-wrapper (a `,~` reverse-unquote, a `,?`
+    /// conditional-unquote, a `#'` Common-Lisp function-quote) extends
+    /// [`Self::ALL`] AND [`Self::LABELS`] AND adds ONE per-role
+    /// `pub const` alias in lockstep — rustc's forced-arity check on
+    /// the two `[_; N]` arrays fails compilation if EITHER ALL array
+    /// grows without the other.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the four
+    /// canonical quote-family marker labels bind at ONE typed
+    /// `[&'static str; 4]` array on the closed-set [`QuoteForm`]
+    /// algebra rather than at zero-primitive-on-this-subset-plus-four-
+    /// inline-lookups scattered across the substrate. Closes the
+    /// fourth SexpShape sub-carving's per-role LABEL parity with
+    /// [`AtomKind`] and [`crate::error::StructuralKind`]. THEORY.md
+    /// §V.1 — knowable platform; the family's cardinality becomes a
+    /// TYPE-level constant on the substrate algebra rather than a per-
+    /// consumer runtime dispatch through the composition. The alias-
+    /// chain shape is load-bearing: a [`SexpShape`]-side rename
+    /// propagates through the const-eval alias chain byte-for-byte
+    /// without silent drift. THEORY.md §VI.1 — generation over
+    /// composition; the family-wide contract sweeps (alignment with
+    /// [`Self::ALL`], pairwise disjointness, membership through
+    /// [`Self::label`]) emerge from the composition of TWO substrate
+    /// primitives (this `pub const` array + the four per-role
+    /// `pub const *_LABEL` aliases) rather than as per-variant inline
+    /// assertions duplicated at each call site. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the alias-chain
+    /// composition law `QuoteForm::LABELS[i] ==
+    /// QuoteForm::ALL[i].sexp_shape().label()` binds the family-wide
+    /// array to the composition through [`Self::sexp_shape`] +
+    /// [`SexpShape::label`] at rustc time.
+    pub const LABELS: [&'static str; 4] = [
+        Self::QUOTE_LABEL,
+        Self::QUASIQUOTE_LABEL,
+        Self::UNQUOTE_LABEL,
+        Self::UNQUOTE_SPLICE_LABEL,
+    ];
+
     /// Project the typed marker back into its matching `Sexp::*` wrapper
     /// variant applied to `inner` — the structural inverse of
     /// [`crate::ast::Sexp::as_quote_form`]. [`Self::Quote`] yields
@@ -12431,6 +12585,186 @@ mod tests {
              form requires '-splicing' while the substrate's diagnostic label uses \
              the shorter '-splice'; consolidating them would break either side",
         );
+    }
+
+    #[test]
+    fn quote_form_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte() {
+        // ALIAS CONTRACT: pin every one of the four per-role
+        // `pub const QuoteForm::*_LABEL` aliases equals the corresponding
+        // `pub const SexpShape::*_LABEL` byte-for-byte — so the QuoteForm
+        // ⊂ SexpShape marker-vocabulary containment routes through the
+        // typed `pub const QuoteForm::V_LABEL: &'static str =
+        // SexpShape::V_LABEL` alias chain rather than through two
+        // independent literal-discipline sites. A regression that renames
+        // the SexpShape side without updating the QuoteForm alias
+        // pointing at it fails-loudly here with the exact axis identified
+        // (QUOTE / QUASIQUOTE / UNQUOTE / UNQUOTE_SPLICE); a regression
+        // that re-inlines the QuoteForm constant to a fresh literal still
+        // passes this pin but loses the alias-chain typing (which is what
+        // `quote_form_label_arms_route_through_per_role_labels_for_every_variant`
+        // + `quote_form_labels_align_with_all_by_index` catch in
+        // combination).
+        //
+        // Sibling-shape pin to
+        // `atom_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+        // on the peer 6-of-12 atomic-payload carving and
+        // `structural_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+        // on the peer 2-of-12 structural-residual carving — this pin
+        // closes the fourth and final SexpShape sub-carving's alias-chain
+        // contract at the exact same shape.
+        assert_eq!(QuoteForm::QUOTE_LABEL, SexpShape::QUOTE_LABEL);
+        assert_eq!(QuoteForm::QUASIQUOTE_LABEL, SexpShape::QUASIQUOTE_LABEL);
+        assert_eq!(QuoteForm::UNQUOTE_LABEL, SexpShape::UNQUOTE_LABEL);
+        assert_eq!(
+            QuoteForm::UNQUOTE_SPLICE_LABEL,
+            SexpShape::UNQUOTE_SPLICE_LABEL,
+        );
+    }
+
+    #[test]
+    fn quote_form_label_arms_route_through_per_role_labels_for_every_variant() {
+        // PATH-UNIFORMITY: `QuoteForm::V.label()` MUST equal the per-role
+        // `pub const QuoteForm::V_LABEL` for every `v: QuoteForm`. Pre-
+        // lift the four quote-family marker labels were reachable through
+        // `QuoteForm::label` (the composition `self.sexp_shape().label()`
+        // — routing into `SexpShape::*_LABEL`) OR through direct
+        // `SexpShape::*_LABEL` reach-across; post-lift each variant's
+        // canonical bytes are reachable through the per-role
+        // `QuoteForm::*_LABEL` alias too. Pin the byte-equality between
+        // the runtime projection and the compile-time alias so a
+        // regression that renames the alias without updating the arm (or
+        // vice versa) fails-loudly at the exact axis.
+        //
+        // Sibling-shape pin to
+        // `atom_kind_label_arms_route_through_per_role_labels_for_every_variant`
+        // and
+        // `structural_kind_label_arms_route_through_per_role_labels_for_every_variant`
+        // — those pin the peer 6-of-12 and 2-of-12 sub-carvings; this pin
+        // binds the QuoteForm 4-of-12 subset algebra's per-role aliases
+        // against `QuoteForm::label`'s composition-routed arms so the
+        // four quote-family marker labels project through ONE aliased
+        // typed source of truth per role rather than through per-consumer
+        // inline literals.
+        assert_eq!(QuoteForm::Quote.label(), QuoteForm::QUOTE_LABEL);
+        assert_eq!(QuoteForm::Quasiquote.label(), QuoteForm::QUASIQUOTE_LABEL);
+        assert_eq!(QuoteForm::Unquote.label(), QuoteForm::UNQUOTE_LABEL);
+        assert_eq!(
+            QuoteForm::UnquoteSplice.label(),
+            QuoteForm::UNQUOTE_SPLICE_LABEL,
+        );
+    }
+
+    #[test]
+    fn quote_form_labels_has_expected_cardinality() {
+        // Cardinality pin: `LABELS.len() == 4` matches `ALL.len()` so a
+        // refactor that loosens the type to `&'static [&'static str]`
+        // fails HERE (the `[_; 4]` slot cannot be sliced silently), and
+        // a variant added to `ALL` without a matching `LABELS` row fails
+        // the pair-arity gate at the array literal itself before this
+        // test even runs. The pin doubles as an operator-visible mark of
+        // the family's cardinality across the substrate — four quote-
+        // family markers, matching the four-arm carving of the parent
+        // `SexpShape::LABELS` (the quote-family subset of the twelve
+        // canonical outer-shape labels).
+        assert_eq!(QuoteForm::LABELS.len(), 4);
+        assert_eq!(QuoteForm::LABELS.len(), QuoteForm::ALL.len());
+    }
+
+    #[test]
+    fn quote_form_labels_align_with_all_by_index() {
+        // ALIGNMENT PIN: sweep `LABELS[i] == ALL[i].label()` so any
+        // `zip(ALL, LABELS)` consumer reads a coherent (variant, label)
+        // pair off ONE forced-arity array pair. The declaration-order
+        // pin makes a family-wide consumer that walks the ALL / LABELS
+        // pair in lockstep (an LSP completion bar keyed on
+        // `QuoteForm::LABELS`, a Sekiban metric emitter labeling
+        // `tatara_lisp_quote_family_label_total{label}` by the per-index
+        // label) read one canonical (variant, bytes) pair per slot
+        // rather than routing through per-consumer paired-iteration. A
+        // regression that reorders LABELS without also reordering ALL
+        // (or vice versa) fails-loudly at the exact index that drifted.
+        assert_eq!(QuoteForm::LABELS.len(), QuoteForm::ALL.len());
+        for (i, qf) in QuoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                QuoteForm::LABELS[i],
+                qf.label(),
+                "QuoteForm::LABELS[{i}] `{lbl}` drifted from \
+                 QuoteForm::ALL[{i}].label() `{via_variant}` — the \
+                 canonical ALL ordering and the LABELS ordering must \
+                 match element-wise",
+                lbl = QuoteForm::LABELS[i],
+                via_variant = qf.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_labels_pairwise_distinct() {
+        // 4x4 pairwise sweep so a collision between any two labels
+        // (which would silently degrade two distinct quote-family
+        // markers to the SAME diagnostic bytes and violate the closed-
+        // set FromStr round-trip through `SexpShape::from_str`) fails-
+        // loudly at the exact pair. Distinctness is already enforced
+        // structurally at the parent superset by
+        // `sexp_shape_labels_pairwise_distinct` (the twelve-variant
+        // sweep), but this pin is a secondary guard focused on the per-
+        // role `pub const` surface of the QuoteForm 4-of-12 subset
+        // directly rather than the runtime projection through
+        // `SexpShape::label`.
+        for (i, a) in QuoteForm::LABELS.iter().enumerate() {
+            for (j, b) in QuoteForm::LABELS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "QuoteForm::LABELS[{i}] ({a:?}) collides with \
+                     QuoteForm::LABELS[{j}] ({b:?}) — two distinct \
+                     quote-family markers cannot share diagnostic bytes",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quote_form_labels_match_sexp_shape_labels_element_wise_via_alias_chain() {
+        // CROSS-AXIS PIN: `QuoteForm::LABELS[i] ==
+        // QuoteForm::ALL[i].sexp_shape().label()` for every index. Closes
+        // the alias-chain identity at the family-wide array level:
+        // LABELS is NOT a fresh literal table but the projection of ALL
+        // through the composition, materialized once at declaration time
+        // through the four per-role aliases. A regression that re-inlines
+        // LABELS to fresh literals (or that re-inlines each per-role
+        // constant off the aliased `SexpShape::*_LABEL` source of truth)
+        // still passes the pairwise-distinct + cardinality + alignment
+        // pins but drifts the alias chain — this pin catches that drift.
+        //
+        // Sibling-shape pin to
+        // `atom_kind_labels_match_sexp_shape_labels_element_wise_via_alias_chain`
+        // and
+        // `structural_kind_labels_match_sexp_shape_labels_element_wise_via_alias_chain`
+        // — those pin the peer 6-of-12 and 2-of-12 sub-carvings' alias
+        // chains through their `SexpShape` parents; this pin closes the
+        // fourth and final SexpShape sub-carving's alias-chain identity
+        // at the same shape.
+        assert_eq!(QuoteForm::LABELS.len(), QuoteForm::ALL.len());
+        for (i, qf) in QuoteForm::ALL.iter().enumerate() {
+            let via_composition = qf.sexp_shape().label();
+            assert_eq!(
+                QuoteForm::LABELS[i],
+                via_composition,
+                "QuoteForm::LABELS[{i}] `{lbl}` drifted from \
+                 QuoteForm::ALL[{i}].sexp_shape().label() `{via}` — \
+                 the alias-chain composition law `LABELS[i] == \
+                 ALL[i].sexp_shape().label()` binds the family-wide \
+                 array to the composition through sexp_shape + \
+                 SexpShape::label; a drift here means the per-role \
+                 aliases were re-inlined off their SexpShape source of \
+                 truth",
+                lbl = QuoteForm::LABELS[i],
+                via = via_composition,
+            );
+        }
     }
 
     #[test]

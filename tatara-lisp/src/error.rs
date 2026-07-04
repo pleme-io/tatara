@@ -2857,6 +2857,125 @@ impl UnquoteForm {
     pub const IAC_FORGE_TAGS: [&'static str; 2] =
         [Self::UNQUOTE_IAC_FORGE_TAG, Self::SPLICE_IAC_FORGE_TAG];
 
+    /// Canonical `&'static str` diagnostic label bytes for the
+    /// [`Self::Unquote`] substitution — aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_LABEL`] on the UnquoteForm ⊂
+    /// QuoteForm 2-of-4 subset carving so the label-level per-role
+    /// bytes bind at ONE `pub const` on the parent superset's Unquote
+    /// arm (which itself aliases [`SexpShape::UNQUOTE_LABEL`] on the
+    /// QuoteForm ⊂ SexpShape 4-of-12 subset carving) rather than at
+    /// multiple sites (the per-role `pub const` PLUS a parallel inline
+    /// literal). Per-role peer of [`Self::Unquote`] on the closed-set
+    /// template-substitution algebra; consumers reach for
+    /// `UnquoteForm::UNQUOTE_LABEL` when the caller has a variant in
+    /// hand at compile time and wants the canonical diagnostic bytes
+    /// without runtime dispatch through [`Self::label`].
+    ///
+    /// Sibling posture to [`Self::UNQUOTE_MARKER`] (commit 3640f76 —
+    /// aliases the reader-punctuation vocabulary `","`) and to
+    /// [`Self::UNQUOTE_IAC_FORGE_TAG`] (commit 6acab84 — aliases the
+    /// iac-forge canonical-form vocabulary `"unquote"`) — this THIRD
+    /// per-role `pub const` axis closes the (reader punctuation,
+    /// diagnostic label, iac-forge canonical-form) triple on the
+    /// UnquoteForm subset algebra in lockstep with the same triple
+    /// on the parent [`crate::ast::QuoteForm`] superset. At the
+    /// Unquote arm the diagnostic label AND the iac-forge tag AND the
+    /// substrate-facing `SexpShape::UNQUOTE_LABEL` all agree
+    /// byte-for-byte on `"unquote"`; the divergence axis lives at
+    /// [`Self::SPLICE_LABEL`] (`"unquote-splice"`) vs
+    /// [`Self::SPLICE_IAC_FORGE_TAG`] (`"unquote-splicing"`).
+    pub const UNQUOTE_LABEL: &'static str = crate::ast::QuoteForm::UNQUOTE_LABEL;
+
+    /// Canonical `&'static str` diagnostic label bytes for the
+    /// [`Self::Splice`] list-substitution — aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_LABEL`] on the
+    /// UnquoteForm ⊂ QuoteForm 2-of-4 subset carving. Per-role peer of
+    /// [`Self::Splice`]. The `"unquote-splice"` short label matches
+    /// [`SexpShape::UNQUOTE_SPLICE_LABEL`] byte-for-byte through the
+    /// alias chain and diverges INTENTIONALLY from
+    /// [`Self::SPLICE_IAC_FORGE_TAG`] (`"unquote-splicing"`) — the two
+    /// projections key the SAME closed set on TWO distinct boundaries
+    /// (substrate diagnostic surface vs cross-crate Common-Lisp
+    /// canonical form). See [`Self::UNQUOTE_LABEL`] for the alias-
+    /// chain shape both siblings share.
+    pub const SPLICE_LABEL: &'static str = crate::ast::QuoteForm::UNQUOTE_SPLICE_LABEL;
+
+    /// Closed-set forced-arity ALL array over the canonical diagnostic
+    /// label `&'static str` bytes, in declaration order matching
+    /// [`Self::ALL`] element-wise (pinned by
+    /// `unquote_form_labels_align_with_all_by_index`). Sibling posture
+    /// to [`Self::MARKERS`] (`[&'static str; 2]` — reader-punctuation
+    /// axis) and [`Self::IAC_FORGE_TAGS`] (`[&'static str; 2]` — iac-
+    /// forge canonical-form axis) on the SAME UnquoteForm closed set,
+    /// and to [`crate::ast::QuoteForm::LABELS`] (`[&'static str; 4]` —
+    /// the superset carving this UnquoteForm subset embeds into on the
+    /// SAME diagnostic-label axis). The (diagnostic label) axis + the
+    /// (reader punctuation) axis + the (iac-forge canonical-form)
+    /// axis together span the THREE production byte-vocabularies the
+    /// [`UnquoteForm`] closed set carries — [`Self::MARKERS`] holds
+    /// the Lisp source-code prefixes (`","`, `",@"`), [`Self::LABELS`]
+    /// holds the substrate diagnostic labels (`"unquote"`,
+    /// `"unquote-splice"`), [`Self::IAC_FORGE_TAGS`] holds the cross-
+    /// crate canonical-form tag strings (`"unquote"`, `"unquote-
+    /// splicing"`).
+    ///
+    /// Pre-lift the two diagnostic-label bytes had NO per-role
+    /// primitive on this closed-set subset algebra — a consumer with
+    /// an [`UnquoteForm`] variant in hand at compile time reaching for
+    /// the canonical diagnostic bytes had to spell the two-step
+    /// composition `uf.to_quote_form().label()` OR reach across the
+    /// algebra boundary into
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_LABEL`] and re-derive
+    /// the UnquoteForm ⊂ QuoteForm variant pairing at the call site.
+    /// Post-lift the TWO canonical bytes bind at ONE `pub const` per
+    /// role on the typed [`UnquoteForm`] algebra AND at
+    /// [`Self::LABELS`] as a family-wide forced-arity array — a
+    /// future LSP / REPL completion bar keyed on
+    /// `UnquoteForm::LABELS`, a `tatara-check` coverage sweep over
+    /// the template-marker arms of a diagnostic corpus, or a Sekiban
+    /// audit-trail metric jointly labeled by the diagnostic label
+    /// (`tatara_lisp_unbound_template_var_total{label="unquote"}`)
+    /// reads through the typed constants on this subset algebra
+    /// without re-deriving the 2-of-4 carving inline.
+    ///
+    /// Each entry is byte-for-byte identical to the corresponding
+    /// [`crate::ast::QuoteForm`] Unquote / UnquoteSplice arm — an
+    /// intentional cross-axis overlap pinned by
+    /// `unquote_form_per_role_labels_alias_quote_form_per_role_labels_byte_for_byte`
+    /// so a future label rename on EITHER side (a
+    /// [`crate::ast::QuoteForm`] `"unquote"` → `"substitute"` drift,
+    /// or an [`UnquoteForm`] rename that skips the alias) fails-
+    /// loudly at the alias test rather than as a silent operator-
+    /// facing vocabulary fracture. Adding a hypothetical third
+    /// template-marker (e.g. a `,~` reverse-unquote) extends
+    /// [`Self::ALL`] AND [`Self::LABELS`] AND adds ONE per-role
+    /// `pub const` alias in lockstep — rustc's forced-arity check on
+    /// the two `[_; N]` arrays fails compilation if EITHER array
+    /// grows without the other.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// canonical diagnostic label bytes bind at ONE typed
+    /// `[&'static str; 2]` array on the closed-set UnquoteForm algebra
+    /// rather than at zero-primitive-on-this-subset-plus-two-inline-
+    /// lookups scattered across the substrate. Closes the THIRD
+    /// per-role `pub const` axis on the UnquoteForm subset carving in
+    /// lockstep with the same triple on [`crate::ast::QuoteForm`].
+    /// THEORY.md §V.1 — knowable platform; the family's cardinality
+    /// becomes a TYPE-level constant on the substrate algebra rather
+    /// than a per-consumer runtime dispatch through the composition.
+    /// THEORY.md §VI.1 — generation over composition; the family-wide
+    /// contract sweeps (alignment with `ALL`, pairwise disjointness,
+    /// membership through [`Self::label`]) emerge from the composition
+    /// of TWO substrate primitives (this `pub const` array + the two
+    /// per-role `pub const *_LABEL` aliases) rather than as per-
+    /// variant inline assertions duplicated at each call site.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the alias-chain composition law `UnquoteForm::LABELS[i] ==
+    /// UnquoteForm::ALL[i].to_quote_form().label()` binds the family-
+    /// wide array to the composition through [`Self::to_quote_form`] +
+    /// [`crate::ast::QuoteForm::label`] at rustc time.
+    pub const LABELS: [&'static str; 2] = [Self::UNQUOTE_LABEL, Self::SPLICE_LABEL];
+
     /// Project the typed `UnquoteForm` to the canonical `&'static str`
     /// literal — feeds the `LispError::UnboundTemplateVar` /
     /// `LispError::NonSymbolUnquoteTarget` Display rendering via the
@@ -3271,6 +3390,87 @@ impl UnquoteForm {
     #[must_use]
     pub fn iac_forge_tag(self) -> &'static str {
         self.to_quote_form().iac_forge_tag()
+    }
+
+    /// Project the 2-of-4 template-substitution subset marker into its
+    /// canonical substrate diagnostic label — [`Self::Unquote`] →
+    /// `"unquote"`, [`Self::Splice`] → `"unquote-splice"`. Feeds the
+    /// same `SexpShape::label`-backed diagnostic surface consumers
+    /// reach for on the parent [`crate::ast::QuoteForm::label`]
+    /// projection, restricted through [`Self::to_quote_form`] to the
+    /// substitution-subset carving.
+    ///
+    /// Composition law: `self.label() ==
+    /// self.to_quote_form().label()` for every `self: UnquoteForm`.
+    /// The body composes [`Self::to_quote_form`] (the typed 2-of-4
+    /// subset → superset projection) with
+    /// [`crate::ast::QuoteForm::label`] (the canonical 4-of-4
+    /// diagnostic-label projection through
+    /// [`crate::ast::QuoteForm::sexp_shape`] +
+    /// [`SexpShape::label`]), so the two `&'static str` literals live
+    /// at ONE canonical site ([`SexpShape::UNQUOTE_LABEL`] /
+    /// [`SexpShape::UNQUOTE_SPLICE_LABEL`] in `error.rs`) — the
+    /// (subset marker, canonical diagnostic label) pairing binds at
+    /// ONE closed-set match on the superset algebra rather than at a
+    /// parallel two-arm inline match table on this subset. Matches
+    /// the posture [`Self::marker`] takes through
+    /// [`crate::ast::QuoteForm::prefix`], [`Self::wrap`] takes through
+    /// [`crate::ast::QuoteForm::wrap`], [`Self::sexp_shape`] takes
+    /// through [`crate::ast::QuoteForm::sexp_shape`], and
+    /// [`Self::iac_forge_tag`] takes through
+    /// [`crate::ast::QuoteForm::iac_forge_tag`] — the FIFTH
+    /// composition-through-`to_quote_form` axis the closed-set subset
+    /// algebra closes.
+    ///
+    /// The `&'static str` lifetime is load-bearing: every future
+    /// diagnostic consumer with an `UnquoteForm` marker in hand
+    /// projects through this method into the canonical
+    /// SexpShape-label vocabulary without an allocation, parallel to
+    /// how [`Self::marker`] projects the reader-punctuation vocabulary
+    /// and [`Self::iac_forge_tag`] projects the cross-crate iac-forge
+    /// vocabulary. The diagnostic label stays intentionally distinct
+    /// from [`Self::marker`] (reader punctuation: `","` / `",@"`) AND
+    /// diverges INTENTIONALLY from [`Self::iac_forge_tag`] at the
+    /// `Splice` arm — `label` renders `"unquote-splice"` (substrate
+    /// diagnostic surface) while `iac_forge_tag` renders `"unquote-
+    /// splicing"` (Common-Lisp canonical form). The typed method
+    /// documents the boundary-distinct invariant structurally: a
+    /// future "consolidation" that homogenizes the two axes would
+    /// have to touch this method explicitly.
+    ///
+    /// Note: `#[closed_set(via = "marker")]` on the enum's derive
+    /// wires the trait-side [`crate::ClosedSet::label`] projection to
+    /// [`Self::marker`] (the reader-punctuation byte), NOT to this
+    /// inherent `label` (which is the SexpShape-diagnostic label).
+    /// The inherent surface takes precedence for direct `uf.label()`
+    /// calls; generic consumers reaching through the trait
+    /// (`<UnquoteForm as ClosedSet>::label(uf)`) still see the marker.
+    /// This mirrors [`crate::ast::QuoteForm::label`]'s posture on the
+    /// parent superset ([`crate::ast::QuoteForm`]'s trait `label` is
+    /// wired via `#[closed_set(via = "prefix")]` to `prefix`, while
+    /// its inherent `label` returns `sexp_shape().label()`) — the
+    /// UnquoteForm subset now closes the SAME (inherent-diagnostic,
+    /// trait-punctuation) split on its subset algebra.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// (subset marker, canonical diagnostic label) pairing becomes a
+    /// TYPE projection on the substrate algebra rather than a per-
+    /// callsite `.to_quote_form().label()` two-step. THEORY.md §II.1
+    /// invariant 2 — free middle; every consumer that has an
+    /// `UnquoteForm` marker and wants the canonical diagnostic label
+    /// routes through the SAME typed method. THEORY.md §VI.1 —
+    /// generation over composition; the pairing emerges from ONE
+    /// typed-algebra composition on the subset algebra rather than
+    /// from parallel per-consumer per-variant literals. A future
+    /// third template-substitution marker (e.g. `,~` reverse-unquote)
+    /// extends [`Self::ALL`] + [`Self::to_quote_form`]'s dispatch
+    /// table in lockstep — rustc-enforced through the closed-set
+    /// exhaustiveness — with THIS method inheriting the extension
+    /// through the [`crate::ast::QuoteForm::label`] composition site
+    /// without a per-site edit.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        self.to_quote_form().label()
     }
 
     /// Stable, per-variant byte discriminator that paired with the
@@ -13529,6 +13729,227 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn unquote_form_label_routes_through_to_quote_form_label_via_composition() {
+        // Post-lift composition pin: for every `uf: UnquoteForm`,
+        // `uf.label()` and `uf.to_quote_form().label()` agree on BOTH
+        // axes — (a) byte equality (the rendered diagnostic literal
+        // cannot drift between the two projections); (b) pointer
+        // equality (the canonical `&'static str` literal lives at ONE
+        // site — `SexpShape::UNQUOTE_LABEL` /
+        // `SexpShape::UNQUOTE_SPLICE_LABEL` — reached through
+        // `QuoteForm::label`'s composition through
+        // `sexp_shape().label()`, and `UnquoteForm::label` routes
+        // through that ONE address via the two-hop typed composition
+        // `to_quote_form().label()`).
+        //
+        // The pointer-equality axis is load-bearing: a regression that
+        // re-inlines the literals at `UnquoteForm::label` as a
+        // parallel match-table fails the pointer pin even when the
+        // rendered bytes still agree (the inline-literal-table copy
+        // lives at a different `&'static str` address). Sibling-shape
+        // pin to
+        // `unquote_form_marker_routes_through_to_quote_form_prefix_via_composition`
+        // and
+        // `unquote_form_iac_forge_tag_routes_through_to_quote_form_iac_forge_tag_via_composition`
+        // — this closes the THIRD composition-through-`to_quote_form`
+        // per-role-bytes projection on the subset algebra pinned
+        // against the superset's canonical site.
+        for uf in UnquoteForm::ALL {
+            let from_label = uf.label();
+            let from_composition = uf.to_quote_form().label();
+            assert_eq!(
+                from_label, from_composition,
+                "UnquoteForm::{uf:?}.label() bytes drifted from .to_quote_form().label() bytes — the subset's diagnostic vocabulary is no longer derived from the superset's canonical site",
+            );
+            assert!(
+                std::ptr::eq(from_label.as_ptr(), from_composition.as_ptr()),
+                "UnquoteForm::{uf:?}.label() and .to_quote_form().label() disagree on `&'static str` address — pointer drift means the lift composes through a parallel literal table rather than routing into the canonical QuoteForm::label / SexpShape::*_LABEL site",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_per_role_labels_alias_quote_form_per_role_labels_byte_for_byte() {
+        // ALIAS CONTRACT: pin both per-role
+        // `pub const UnquoteForm::*_LABEL` aliases equal the
+        // corresponding `pub const QuoteForm::*_LABEL` byte-for-byte
+        // — so the UnquoteForm ⊂ QuoteForm diagnostic-label
+        // vocabulary containment routes through the typed
+        // `pub const UnquoteForm::V_LABEL: &'static str = QuoteForm::V_LABEL`
+        // alias chain (which itself aliases the ultimate canonical
+        // site at `SexpShape::*_LABEL`) rather than through two
+        // independent literal-discipline sites. A regression that
+        // renames the QuoteForm side without updating the UnquoteForm
+        // alias pointing at it fails-loudly here with the exact axis
+        // identified (UNQUOTE / SPLICE); a regression that re-inlines
+        // the UnquoteForm constant to a fresh literal still passes
+        // this pin but loses the alias-chain typing (which is what
+        // `unquote_form_label_arms_route_through_per_role_labels_for_every_variant`
+        // + `unquote_form_labels_align_with_all_by_index` catch in
+        // combination).
+        //
+        // Sibling posture to
+        // `unquote_form_per_role_markers_alias_quote_form_per_role_prefixes_byte_for_byte`
+        // (commit 3640f76) and
+        // `unquote_form_per_role_iac_forge_tags_alias_quote_form_per_role_iac_forge_tags_byte_for_byte`
+        // (commit 6acab84): all three pin the invariant that the
+        // UnquoteForm subset algebra's per-role bytes are structurally
+        // derived from the parent QuoteForm superset's per-role bytes
+        // via a `pub const = Parent::CONST` alias rather than through
+        // parallel literal tables — the axis there is the reader-
+        // punctuation vocabulary and the iac-forge canonical-form
+        // vocabulary; the axis here is the substrate diagnostic-label
+        // vocabulary. All three axes span the THREE production byte-
+        // vocabularies the parent [`QuoteForm`] closed set carries,
+        // and all three bind through the same aliased typed source of
+        // truth on this UnquoteForm subset.
+        use crate::ast::QuoteForm;
+        assert_eq!(UnquoteForm::UNQUOTE_LABEL, QuoteForm::UNQUOTE_LABEL);
+        assert_eq!(UnquoteForm::SPLICE_LABEL, QuoteForm::UNQUOTE_SPLICE_LABEL);
+    }
+
+    #[test]
+    fn unquote_form_label_arms_route_through_per_role_labels_for_every_variant() {
+        // PATH-UNIFORMITY: `UnquoteForm::V.label()` MUST equal the
+        // per-role `pub const UnquoteForm::V_LABEL` for every
+        // `v: UnquoteForm`. Pre-lift the two diagnostic-label bytes
+        // were reachable through the two-step composition
+        // `uf.to_quote_form().label()` OR through direct
+        // `QuoteForm::UNQUOTE_LABEL` reach-across; post-lift each
+        // variant's canonical bytes are reachable through the per-
+        // role `UnquoteForm::*_LABEL` alias AND through the inherent
+        // `label()` method too. Pin the byte-equality between the
+        // runtime projection and the compile-time alias so a
+        // regression that renames the alias without updating the arm
+        // (or vice versa) fails-loudly at the exact axis.
+        //
+        // Sibling-shape pin to
+        // `unquote_form_marker_arms_route_through_per_role_markers_for_every_variant`
+        // and
+        // `unquote_form_iac_forge_tag_arms_route_through_per_role_iac_forge_tags_for_every_variant`
+        // one vocabulary over on the SAME subset algebra — together
+        // the three pins close the subset algebra's
+        // `pub const *_MARKER` + `pub const *_IAC_FORGE_TAG` +
+        // `pub const *_LABEL` surfaces against the runtime
+        // projections that feed the three production byte-
+        // vocabularies.
+        assert_eq!(UnquoteForm::Unquote.label(), UnquoteForm::UNQUOTE_LABEL);
+        assert_eq!(UnquoteForm::Splice.label(), UnquoteForm::SPLICE_LABEL);
+    }
+
+    #[test]
+    fn unquote_form_labels_has_expected_cardinality() {
+        // Cardinality pin: `LABELS.len() == 2` matches `ALL.len()` so
+        // a refactor that loosens the type to `&'static [&'static str]`
+        // fails HERE (the `[_; 2]` slot cannot be sliced silently),
+        // and a variant added to `ALL` without a matching `LABELS`
+        // row fails the pair-arity gate at the array literal itself
+        // before this test even runs.
+        assert_eq!(UnquoteForm::LABELS.len(), 2);
+        assert_eq!(UnquoteForm::LABELS.len(), UnquoteForm::ALL.len());
+    }
+
+    #[test]
+    fn unquote_form_labels_align_with_all_by_index() {
+        // ALIGNMENT PIN: sweep `LABELS[i] == ALL[i].label()` so any
+        // `zip(ALL, LABELS)` consumer reads a coherent (variant,
+        // label) pair off ONE forced-arity array pair. A regression
+        // that reorders LABELS without also reordering ALL (or vice
+        // versa) fails-loudly at the exact index that drifted.
+        assert_eq!(UnquoteForm::LABELS.len(), UnquoteForm::ALL.len());
+        for (i, form) in UnquoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                UnquoteForm::LABELS[i],
+                form.label(),
+                "UnquoteForm::LABELS[{i}] `{lbl}` drifted from \
+                 UnquoteForm::ALL[{i}].label() `{via_variant}` — the \
+                 canonical ALL ordering and the LABELS ordering must \
+                 match element-wise",
+                lbl = UnquoteForm::LABELS[i],
+                via_variant = form.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_labels_pairwise_distinct() {
+        // 2x2 pairwise sweep so a collision between the two
+        // diagnostic labels (which would silently degrade two distinct
+        // template-substitution markers to the SAME operator-facing
+        // rendered vocabulary) fails-loudly at the exact pair.
+        // Sibling-shape pin to `unquote_form_markers_pairwise_distinct`
+        // and `unquote_form_iac_forge_tags_pairwise_distinct` one
+        // vocabulary over on the SAME subset algebra.
+        for (i, a) in UnquoteForm::LABELS.iter().enumerate() {
+            for (j, b) in UnquoteForm::LABELS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "UnquoteForm::LABELS[{i}] ({a:?}) collides with \
+                     UnquoteForm::LABELS[{j}] ({b:?}) — two distinct \
+                     template markers cannot share diagnostic bytes",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unquote_form_label_emits_canonical_sexp_shape_label_for_every_marker() {
+        // Per-arm truth-table pin of the canonical (UnquoteForm
+        // variant, diagnostic label) mapping: `UnquoteForm::Unquote →
+        // "unquote"` and `UnquoteForm::Splice → "unquote-splice"`
+        // byte-for-byte. The `-splice` short form on `Splice` is
+        // load-bearing: the substrate diagnostic surface renders
+        // `unquote-splice`, distinct from the iac-forge canonical
+        // form's `unquote-splicing` — a regression that homogenizes
+        // the two axes surfaces here on the diagnostic-surface side
+        // (`unquote_form_iac_forge_tag_diverges_from_sexp_shape_label_at_splice_arm`
+        // surfaces it on the iac-forge-surface side). Sibling of
+        // `unquote_form_iac_forge_tag_emits_canonical_cl_tag_for_every_marker`
+        // on the iac-forge axis rather than the diagnostic axis.
+        assert_eq!(
+            UnquoteForm::Unquote.label(),
+            "unquote",
+            "UnquoteForm::Unquote.label() drifted from canonical substrate 'unquote' diagnostic",
+        );
+        assert_eq!(
+            UnquoteForm::Splice.label(),
+            "unquote-splice",
+            "UnquoteForm::Splice.label() drifted from canonical substrate 'unquote-splice' \
+             diagnostic — the short form is load-bearing (distinct from iac-forge 'unquote-splicing')",
+        );
+    }
+
+    #[test]
+    fn unquote_form_label_diverges_from_iac_forge_tag_at_splice_arm() {
+        // BOUNDARY-DISTINCT CONTRACT (subset peer): the diagnostic
+        // label for `UnquoteForm::Splice` is `"unquote-splice"` (short
+        // substrate form), distinct from `UnquoteForm::Splice.iac_forge_tag()`
+        // which renders the longer `"unquote-splicing"` (Common-Lisp
+        // canonical form). Pins the divergence on the substitution-
+        // subset carving. On the non-`Splice` arm the two projections
+        // MUST agree (both spell `"unquote"` at the substitution-
+        // subset's `Unquote` arm). Peer of
+        // `unquote_form_iac_forge_tag_diverges_from_sexp_shape_label_at_splice_arm`
+        // one composition path over — that pin routes through
+        // `sexp_shape().label()`; this pin routes through the direct
+        // subset `label()` inherent (which composes through
+        // `to_quote_form().label()`).
+        assert_eq!(
+            UnquoteForm::Unquote.label(),
+            UnquoteForm::Unquote.iac_forge_tag(),
+            "UnquoteForm::Unquote.label() and .iac_forge_tag() must agree on 'unquote' — the two axes only diverge at the Splice arm",
+        );
+        assert_ne!(
+            UnquoteForm::Splice.label(),
+            UnquoteForm::Splice.iac_forge_tag(),
+            "UnquoteForm::Splice.label() and .iac_forge_tag() must diverge — substrate renders 'unquote-splice', iac-forge canonical form is 'unquote-splicing'",
+        );
     }
 
     #[test]

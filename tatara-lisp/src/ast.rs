@@ -3073,6 +3073,124 @@ impl AtomKind {
         Self::BOOL_HASH_DISCRIMINATOR,
     ];
 
+    /// Canonical `u8` OUTER-`Sexp` cache-key byte at which ALL SIX
+    /// atomic-payload shapes collapse when hashed at the outer
+    /// [`Hash for Sexp`](crate::ast::Sexp) level — `1`. The
+    /// outer-carve peer of [`Self::HASH_DISCRIMINATORS`] (the six
+    /// nested INNER cache-key bytes `{0..=5}` that specialise INSIDE
+    /// [`Hash for Atom`] after the outer marker byte is emitted).
+    /// The lift moves the byte the outer-Sexp cache-key algebra uses
+    /// to distinguish [`crate::ast::Sexp::Atom(_)`] from every other
+    /// outer-Sexp variant off inline `1u8` literals scattered across
+    /// [`crate::error::SexpShape::hash_discriminator`]'s six-arm
+    /// atomic collapse + the two structural-carve joint-partition
+    /// disjointness pins and onto ONE `pub(crate) const` on the
+    /// [`AtomKind`] algebra it names.
+    ///
+    /// Where the byte appears at the outer-Sexp cache-key algebra:
+    /// [`crate::error::SexpShape::hash_discriminator`]'s atomic-arm
+    /// collapse `Self::Symbol | Self::Keyword | Self::String |
+    /// Self::Int | Self::Float | Self::Bool => 1` binds directly to
+    /// this constant; every one of the six atomic shapes routes
+    /// through the shape-level projection into the outer-Sexp cache
+    /// key at THIS byte. The nested inner
+    /// [`Self::HASH_DISCRIMINATORS`] `{0..=5}` bytes then specialise
+    /// the atomic payload INSIDE [`Hash for Atom`] via a second
+    /// discriminator emission (`self.hash_discriminator().hash(h)`
+    /// on the [`Atom`] value carrier), so the two byte spaces live
+    /// at different hash-sequence positions and do not collide.
+    ///
+    /// Sibling posture to [`crate::error::StructuralKind::HASH_DISCRIMINATORS`]
+    /// (`[u8; 2]` at `{0, 2}` on the outer-Sexp cache-key space) and
+    /// to [`crate::error::QuoteForm::HASH_DISCRIMINATORS`] (`[u8; 4]`
+    /// at `{3, 4, 5, 6}` on the same space) — together with THIS
+    /// scalar the three sibling carvings' byte spaces jointly
+    /// partition the outer-Sexp discriminator space `{0..=6}`
+    /// injectively. Post-lift the outer-Sexp cache-key algebra
+    /// closes over FOUR typed byte primitives:
+    ///   * [`Self::OUTER_HASH_DISCRIMINATOR`] (this constant) —
+    ///     scalar `1u8` for the atomic-payload outer-carve;
+    ///   * [`crate::error::StructuralKind::HASH_DISCRIMINATORS`] —
+    ///     `{0, 2}` for the structural-residual carve;
+    ///   * [`crate::error::QuoteForm::HASH_DISCRIMINATORS`] —
+    ///     `{3..=6}` for the quote-family carve;
+    ///   * [`Self::HASH_DISCRIMINATORS`] — the nested inner
+    ///     `{0..=5}` byte-set INSIDE [`Hash for Atom`], NOT on the
+    ///     outer-Sexp space.
+    ///
+    /// The scalar shape (single `u8`, NOT an array) is intrinsic to
+    /// the carve: all six atomic-payload arms of
+    /// [`crate::error::SexpShape`] collapse to the SAME outer byte
+    /// (the outer-Sexp distinguisher is variant-level: `Sexp::Atom(_)`
+    /// vs the six sibling `Sexp` variants); per-atom-kind
+    /// specialisation lives at the nested inner
+    /// [`Self::HASH_DISCRIMINATORS`] carve inside [`Hash for Atom`].
+    /// The other two carvings' `HASH_DISCRIMINATORS` are arrays
+    /// because their shape-level arms each carry a DISTINCT outer
+    /// byte; the atomic carve is a scalar because its arms carry the
+    /// SAME outer byte.
+    ///
+    /// `pub(crate)` because the byte is an implementation detail of
+    /// the substrate's `Hash for Sexp` cache-key contract; exposing
+    /// it publicly would leak the cache-key shape through the API
+    /// without enabling any external consumer the public projections
+    /// ([`Self::label`], [`Self::sexp_shape`]) don't already serve.
+    /// Same posture as [`Self::HASH_DISCRIMINATORS`] +
+    /// [`Self::SYMBOL_HASH_DISCRIMINATOR`] and the sibling carvings'
+    /// per-role `pub(crate) const` peers.
+    ///
+    /// Pre-lift the outer-Atom marker byte lived at THREE sites: the
+    /// inline `1u8` literal at
+    /// [`crate::error::SexpShape::hash_discriminator`]'s six-arm
+    /// atomic collapse; the inline `1u8` literal at
+    /// `sexp_shape_hash_discriminator_atomic_arms_collapse_to_outer_atom_marker`'s
+    /// assertion body; the inline `1u8` literal at
+    /// `sexp_shape_hash_discriminator_partitions_by_three_way_carving_disjointly`'s
+    /// `expected_atomic` fixture; PLUS a duplicated local `const
+    /// ATOM_OUTER_CARVE_BYTE: u8 = 1` inside
+    /// `structural_kind_hash_discriminator_disjoint_from_atom_outer_carve_byte_and_quote_form_hash_discriminator_partition`.
+    /// The (byte, algebra) pairing had no typed home — a consumer
+    /// with a typed [`AtomKind`] identity in hand reaching for the
+    /// outer-Sexp cache-key byte the atomic arm collapses to had to
+    /// re-derive the byte from the shape-level projection method's
+    /// atomic collapse arm inline, OR re-derive the pre-lift local
+    /// `ATOM_OUTER_CARVE_BYTE` fixture at every joint-partition-check
+    /// site. Post-lift the byte binds at ONE `pub(crate) const` on
+    /// the closed-set [`AtomKind`] algebra it names; every downstream
+    /// consumer (the shape-level projection, the joint-partition
+    /// disjointness pins, the three-way carving image pin, a future
+    /// `tatara-check` predicate that verifies the outer-Sexp cache-
+    /// key partition structurally, a future
+    /// [`crate::macro_expand::Expander`] cache-warmup pass that
+    /// hashes the outer-Sexp byte-set upfront) picks up the same
+    /// canonical byte from ONE source of truth.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the (AtomKind ⊂ SexpShape carve, outer-Sexp
+    /// cache-key byte) pairing binds at rustc time by byte equality
+    /// against the shape-level projection's atomic collapse arm.
+    /// THEORY.md §III — the typescape; the outer-Atom cache-key byte
+    /// binds at ONE `pub(crate) const` on the typed algebra rather
+    /// than as inline `1u8` literals at every joint-partition + shape-
+    /// level-collapse site. THEORY.md §V.1 — knowable platform; the
+    /// outer-Sexp cache-key space's four-way partition (this scalar
+    /// PLUS the three sibling carvings' arrays) becomes a TYPE-level
+    /// constant on the substrate algebra rather than a per-callsite
+    /// hand-rolled `{0, 1, 2, 3, 4, 5, 6}` re-enumeration. THEORY.md
+    /// §V.3 — three-pillar attestation; the outer-Sexp cache-key
+    /// partition is the substrate's outer [`Sexp`] `intent_hash`
+    /// composition axis — binding the four-way partition's atomic-
+    /// carve byte on the typed algebra makes attestation-key drift a
+    /// compile error rather than a silent BLAKE3 mis-hash. A future
+    /// eighth [`Sexp`] variant (e.g. `Vector` for `#(...)` reader
+    /// syntax, `Map` for `{...}`, `Char` for `#\x`) picks a fresh
+    /// cache-key byte outside `{0..=6}` (e.g. `7u8`), extends the
+    /// closed-set [`crate::error::SexpShape`] enum + its shape-level
+    /// `hash_discriminator` and either an existing carving OR a fresh
+    /// sub-algebra — the outer-Atom scalar itself stays untouched
+    /// unless the new variant is also an atomic-payload arm.
+    pub(crate) const OUTER_HASH_DISCRIMINATOR: u8 = 1;
+
     /// Project the typed marker to the canonical `&'static str`
     /// diagnostic label — `"symbol"` for [`Self::Symbol`],
     /// `"keyword"` for [`Self::Keyword`], `"string"` for [`Self::Str`]
@@ -15029,6 +15147,98 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn atom_kind_outer_hash_discriminator_pins_legacy_atomic_carve_outer_marker_byte() {
+        // Pin `AtomKind::OUTER_HASH_DISCRIMINATOR` at its exact canonical
+        // `u8` byte — the outer-Sexp cache-key byte at which ALL SIX
+        // atomic-payload shapes collapse when hashed at the outer
+        // `Hash for Sexp` level. Pre-lift the same byte lived at four
+        // sites: the inline `1u8` literal at
+        // `SexpShape::hash_discriminator`'s six-arm atomic collapse (in
+        // error.rs), the inline `1u8` literal at
+        // `sexp_shape_hash_discriminator_atomic_arms_collapse_to_outer_atom_marker`'s
+        // assertion body, the inline `1u8` literal at
+        // `sexp_shape_hash_discriminator_partitions_by_three_way_carving_disjointly`'s
+        // `expected_atomic` fixture, PLUS a duplicated local `const
+        // ATOM_OUTER_CARVE_BYTE: u8 = 1` inside
+        // `structural_kind_hash_discriminator_disjoint_from_atom_outer_carve_byte_and_quote_form_hash_discriminator_partition`.
+        // Post-lift the byte binds at ONE `pub(crate) const` on the
+        // closed-set `AtomKind` algebra; every downstream consumer
+        // (the shape-level projection's atomic collapse arm, the two
+        // three-way carving pins in error.rs, the joint-partition
+        // disjointness pin in error.rs, a future `tatara-check`
+        // predicate on the outer-Sexp cache-key partition) picks up
+        // the same canonical byte from ONE source of truth. Sibling
+        // posture to `atom_kind_hash_discriminators_pin_legacy_cache_key_bytes`
+        // (which pins the six NESTED INNER `{0..=5}` bytes on the
+        // per-atom-kind inner algebra) — this pin closes the (nested,
+        // outer) pairing on the same `AtomKind` algebra by naming the
+        // outer-Sexp marker byte alongside the nested inner carve.
+        // The cache-key partition is load-bearing for the outer
+        // `Hash for Sexp` prefix-uniqueness contract — a `1u8` drift
+        // to `0u8` would silently collide the atomic-carve outer
+        // marker with `StructuralKind::Nil`'s outer byte (`0`) and
+        // mis-hash every `Sexp::Atom(_)` through the `Sexp::Nil`
+        // arm's cache slot; a drift to `2u8` would collide with
+        // `StructuralKind::List`'s outer byte and mis-hash through
+        // the `Sexp::List(_)` arm's slot; a drift to `3u8` /
+        // `4u8` / `5u8` / `6u8` would collide with the quote-family
+        // carve's four bytes.
+        assert_eq!(AtomKind::OUTER_HASH_DISCRIMINATOR, 1);
+    }
+
+    #[test]
+    fn atom_kind_outer_hash_discriminator_disjoint_from_inner_hash_discriminators_at_outer_sexp_level(
+    ) {
+        // OUTER-vs-INNER SEPARATION: the outer-Sexp cache-key algebra
+        // uses TWO distinct byte spaces at TWO hash-sequence positions
+        // for the atomic-carve: `AtomKind::OUTER_HASH_DISCRIMINATOR`
+        // (`1u8` at the outer `Hash for Sexp` position) AND the
+        // NESTED INNER `AtomKind::HASH_DISCRIMINATORS` bytes (`{0..=5}`
+        // at the inner `Hash for Atom` position). The two byte spaces
+        // OVERLAP numerically (both contain `1u8`) but do NOT collide
+        // at the cache because they live at DIFFERENT hash-sequence
+        // positions in the composed `(outer_discriminator,
+        // inner_discriminator, inner_payload)` triple. Pin the outer
+        // scalar's byte at `AtomKind::OUTER_HASH_DISCRIMINATOR` and
+        // the inner set at `AtomKind::HASH_DISCRIMINATORS` so a future
+        // refactor that conflates the two axes (e.g. drops the outer
+        // marker byte at `Hash for Sexp`'s Atom arm and expects the
+        // inner byte to distinguish outer-Sexp variants directly)
+        // surfaces at THIS test as a documentation-of-intent failure.
+        // The check is intentionally structural: it asserts the outer
+        // scalar is IN the same numeric range as the inner set (both
+        // are `u8`, both live within `{0..=6}` on the outer cache-key
+        // partition) BUT that the outer scalar sits at position 1
+        // where the inner byte space would otherwise have
+        // `AtomKind::KEYWORD_HASH_DISCRIMINATOR` collide. That
+        // numeric-collision without cache-collision is the
+        // load-bearing property this lift documents: the two axes are
+        // typed distinct because they live at typed distinct
+        // positions in the composed hash sequence, even though their
+        // byte spaces overlap.
+        assert!(
+            AtomKind::HASH_DISCRIMINATORS.contains(&AtomKind::OUTER_HASH_DISCRIMINATOR),
+            "the outer-carve marker byte `{outer}` MUST lie within the \
+             inner cache-key partition `{inner:?}` — the two axes' \
+             byte spaces overlap by design (the outer distinguishes \
+             `Sexp::Atom(_)` from every other outer-Sexp variant at \
+             the outer hash position; the inner distinguishes the six \
+             atomic-payload variants at the nested inner hash \
+             position). If this contains check fails, the outer \
+             scalar has drifted OUTSIDE the inner partition and the \
+             (outer, inner) numeric-overlap-without-cache-collision \
+             property this lift documents no longer holds — which \
+             would in turn mean either the outer byte drifted out of \
+             `{{0..=5}}` (compile the substrate against the resulting \
+             outer-Sexp partition to find the drift) or the inner \
+             partition shrank below `{{0..=5}}` (`atom_kind_hash_discriminators_align_with_all_by_index` \
+             fails-loudly first).",
+            outer = AtomKind::OUTER_HASH_DISCRIMINATOR,
+            inner = AtomKind::HASH_DISCRIMINATORS,
+        );
     }
 
     #[test]

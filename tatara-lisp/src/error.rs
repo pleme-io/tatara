@@ -5332,6 +5332,105 @@ impl StructuralKind {
     /// every residual shape in a typed sequence.
     pub const ALL: [Self; 2] = [Self::Nil, Self::List];
 
+    /// Canonical `&'static str` bytes for the [`Self::Nil`] structural-
+    /// residual marker — aliases [`SexpShape::NIL_LABEL`] on the
+    /// StructuralKind ⊂ SexpShape carving so the marker-level per-role
+    /// bytes bind at ONE `pub const` on the parent superset's residual
+    /// arm rather than at TWO sites (the per-role `pub const` AND a
+    /// parallel inline literal). Per-role peer of `Self::Nil` on the
+    /// closed-set structural-residual algebra; consumers reach for
+    /// `StructuralKind::NIL_LABEL` when the caller has a variant in
+    /// hand at compile time and wants the canonical diagnostic bytes
+    /// without runtime dispatch through [`Self::label`].
+    ///
+    /// Sibling posture to the peer 6-of-12 atomic-payload carving's
+    /// per-role aliases ([`crate::ast::AtomKind::SYMBOL_LABEL`] …
+    /// [`crate::ast::AtomKind::BOOL_LABEL`] — every one an alias of
+    /// its [`SexpShape`] peer) and the peer 4-of-12 quote-family
+    /// carving's per-role prefixes on [`crate::ast::QuoteForm`] — the
+    /// third and final closed-set carving of [`SexpShape`] now
+    /// surfaces its per-role marker bytes through the same alias-chain
+    /// shape rather than through the composition
+    /// [`Self::sexp_shape`] + [`SexpShape::label`] alone.
+    pub const NIL_LABEL: &'static str = SexpShape::NIL_LABEL;
+
+    /// Canonical `&'static str` bytes for the [`Self::List`]
+    /// structural-residual marker — aliases [`SexpShape::LIST_LABEL`]
+    /// on the StructuralKind ⊂ SexpShape carving. Per-role peer of
+    /// `Self::List`; matches [`ExpectedKwargShape::LIST_LABEL`] byte-
+    /// for-byte through the SexpShape canonical site (the same
+    /// cross-axis overlap [`SexpShape::LIST_LABEL`]'s docstring pins).
+    pub const LIST_LABEL: &'static str = SexpShape::LIST_LABEL;
+
+    /// Closed-set forced-arity ALL array over the canonical structural-
+    /// residual marker `&'static str` bytes, in declaration order
+    /// matching [`Self::ALL`] element-wise (pinned by
+    /// `structural_kind_labels_align_with_all_by_index`). Sibling
+    /// posture to [`SexpShape::LABELS`] (`[&'static str; 12]` — the
+    /// superset carving this StructuralKind subset embeds into),
+    /// [`crate::ast::AtomKind::LABELS`] (`[&'static str; 6]` — the
+    /// peer 6-of-12 atomic-payload carving's ALL array),
+    /// [`ExpectedKwargShape::LABELS`] (`[&'static str; 7]`),
+    /// [`KwargPathKind::LABELS`] (`[&'static str; 3]`),
+    /// [`MacroDefHead::KEYWORDS`] (`[&'static str; 3]`),
+    /// [`crate::ast::Atom::BOOL_LITERALS`] (`[&'static str; 2]`), and
+    /// [`crate::ast::QuoteForm::PREFIXES`] (`[&'static str; 4]`) —
+    /// every closed-set outer projection on the substrate that carries
+    /// an `&'static str`-per-variant label now pins its per-role
+    /// canonical bytes at ONE `pub const` per role PLUS an ALL array
+    /// for family-wide consumers.
+    ///
+    /// Pre-lift the two structural-residual marker bytes had NO per-
+    /// role primitive on this closed-set algebra — a consumer with a
+    /// `StructuralKind` variant in hand at compile time reaching for
+    /// the canonical diagnostic bytes had to spell
+    /// `StructuralKind::Nil.label()` (runtime dispatch through the
+    /// composition [`Self::sexp_shape`] + [`SexpShape::label`]) OR
+    /// reach across the algebra boundary into
+    /// [`SexpShape::NIL_LABEL`] and re-derive the StructuralKind ⊂
+    /// SexpShape variant pairing at the call site. Post-lift the TWO
+    /// canonical bytes bind at ONE `pub const` per role on the typed
+    /// [`StructuralKind`] algebra AND at [`Self::LABELS`] as a family-
+    /// wide forced-arity array — a future LSP / REPL completion bar
+    /// keyed on `StructuralKind::LABELS` for the "structural" carving-
+    /// axis column, a `tatara-check` coverage sweep over the residual
+    /// arms of a `TypeMismatch.got` corpus, or a Sekiban audit-trail
+    /// metric jointly labeled by the structural marker
+    /// (`tatara_lisp_structural_shape_total{kind="list"}`) reads
+    /// through the typed constants on this subset algebra without
+    /// re-deriving the 2-of-12 carving inline.
+    ///
+    /// Each entry is byte-for-byte identical to the corresponding
+    /// [`SexpShape`] residual arm — an intentional cross-axis overlap
+    /// pinned by
+    /// `structural_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+    /// so a future label rename on EITHER side (a SexpShape `"nil"` →
+    /// `"empty"` drift, or a StructuralKind rename that skips the
+    /// alias) fails-loudly at the alias test rather than as a silent
+    /// operator-facing vocabulary fracture. Adding a hypothetical
+    /// third structural-residual variant (e.g. `Vector` for `#(...)`
+    /// reader syntax, `Map` for `{...}`) extends [`Self::ALL`] AND
+    /// [`Self::LABELS`] AND adds ONE per-role `pub const` alias in
+    /// lockstep — rustc's forced-arity check on the two `[_; N]`
+    /// arrays fails compilation if EITHER ALL array grows without the
+    /// other.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// canonical structural-residual marker bytes bind at ONE typed
+    /// `[&'static str; 2]` array on the closed-set StructuralKind
+    /// algebra rather than at zero-primitive-on-this-subset-plus-two-
+    /// inline-lookups scattered across the substrate. THEORY.md §V.1
+    /// — knowable platform; the family's cardinality becomes a TYPE-
+    /// level constant on the substrate algebra rather than a per-
+    /// consumer runtime dispatch through the composition. THEORY.md
+    /// §VI.1 — generation over composition; the family-wide contract
+    /// sweeps (alignment with `ALL`, pairwise disjointness, membership
+    /// through [`Self::label`]) emerge from the composition of TWO
+    /// substrate primitives (this `pub const` array + the two per-
+    /// role `pub const *_LABEL` aliases) rather than as per-variant
+    /// inline assertions duplicated at each call site.
+    pub const LABELS: [&'static str; 2] = [Self::NIL_LABEL, Self::LIST_LABEL];
+
     /// Project the typed `StructuralKind` to the canonical `&'static
     /// str` diagnostic label — `"nil"` for [`Self::Nil`], `"list"` for
     /// [`Self::List`]. Each label is byte-for-byte identical to the
@@ -14815,6 +14914,166 @@ mod tests {
         // `Self::ALL` (cardinality 2 = every structural-residual
         // outer shape) fails-loudly here.
         crate::assert_closed_set_well_formed::<StructuralKind>();
+    }
+
+    #[test]
+    fn structural_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte() {
+        // ALIAS CONTRACT: pin every one of the two per-role `pub const
+        // StructuralKind::*_LABEL` aliases equals the corresponding
+        // `pub const SexpShape::*_LABEL` byte-for-byte — so the
+        // StructuralKind ⊂ SexpShape marker-vocabulary containment
+        // routes through the typed `pub const StructuralKind::V_LABEL:
+        // &'static str = SexpShape::V_LABEL` alias chain rather than
+        // through two independent literal-discipline sites. Sibling-
+        // shape pin to
+        // `atom_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+        // on the peer 6-of-12 atomic-payload carving — the two pins
+        // together bind the two SexpShape sub-carvings' per-role
+        // alias chains at the SAME shape (parent's canonical bytes on
+        // the RHS, subset's alias on the LHS). A regression that
+        // renames the SexpShape side without updating the
+        // StructuralKind alias pointing at it fails-loudly here with
+        // the exact axis identified (NIL / LIST); a regression that
+        // re-inlines the StructuralKind constant to a fresh literal
+        // still passes this pin but loses the alias-chain typing
+        // (which is what
+        // `structural_kind_label_arms_route_through_per_role_labels_for_every_variant`
+        // + `structural_kind_labels_align_with_all_by_index` catch in
+        // combination).
+        assert_eq!(StructuralKind::NIL_LABEL, SexpShape::NIL_LABEL);
+        assert_eq!(StructuralKind::LIST_LABEL, SexpShape::LIST_LABEL);
+    }
+
+    #[test]
+    fn structural_kind_label_arms_route_through_per_role_labels_for_every_variant() {
+        // PATH-UNIFORMITY: `StructuralKind::V.label()` MUST equal the
+        // per-role `pub const StructuralKind::V_LABEL` for every `v:
+        // StructuralKind`. Pre-lift the two structural-residual marker
+        // bytes were reachable through `StructuralKind::label` (the
+        // composition `self.sexp_shape().label()` — routing into
+        // `SexpShape::*_LABEL`) OR through direct
+        // `SexpShape::*_LABEL` reach-across; post-lift each variant's
+        // canonical bytes are reachable through the per-role
+        // `StructuralKind::*_LABEL` alias too. Pin the byte-equality
+        // between the runtime projection and the compile-time alias
+        // so a regression that renames the alias without updating the
+        // arm (or vice versa) fails-loudly at the exact axis.
+        //
+        // Sibling-shape pin to
+        // `atom_kind_label_arms_route_through_per_role_labels_for_every_variant`
+        // on the peer 6-of-12 atomic-payload carving — the two pins
+        // together bind BOTH SexpShape sub-carvings' per-role alias
+        // chains against their respective label projections.
+        assert_eq!(StructuralKind::Nil.label(), StructuralKind::NIL_LABEL);
+        assert_eq!(StructuralKind::List.label(), StructuralKind::LIST_LABEL);
+    }
+
+    #[test]
+    fn structural_kind_labels_has_expected_cardinality() {
+        // Cardinality pin: `LABELS.len() == 2` matches `ALL.len()` so
+        // a refactor that loosens the type to `&'static [&'static
+        // str]` fails HERE (the `[_; 2]` slot cannot be sliced
+        // silently), and a variant added to `ALL` without a matching
+        // `LABELS` row fails the pair-arity gate at the array literal
+        // itself before this test even runs. The pin doubles as an
+        // operator-visible mark of the family's cardinality across
+        // the substrate — two structural-residual markers, matching
+        // the two-arm carving of the parent `SexpShape::LABELS` (the
+        // residual subset of the twelve canonical outer-shape labels).
+        assert_eq!(StructuralKind::LABELS.len(), 2);
+        assert_eq!(StructuralKind::LABELS.len(), StructuralKind::ALL.len());
+    }
+
+    #[test]
+    fn structural_kind_labels_align_with_all_by_index() {
+        // ALIGNMENT PIN: sweep `LABELS[i] == ALL[i].label()` so any
+        // `zip(ALL, LABELS)` consumer reads a coherent (variant,
+        // label) pair off ONE forced-arity array pair. The
+        // declaration-order pin makes a family-wide consumer that
+        // walks the ALL / LABELS pair in lockstep (an LSP completion
+        // bar keyed on `StructuralKind::LABELS`, a Sekiban metric
+        // emitter labeling `tatara_lisp_structural_shape_total{kind}`
+        // by the per-index label) read one canonical (variant, bytes)
+        // pair per slot rather than routing through per-consumer
+        // paired-iteration. A regression that reorders LABELS without
+        // also reordering ALL (or vice versa) fails-loudly at the
+        // exact index that drifted.
+        assert_eq!(StructuralKind::LABELS.len(), StructuralKind::ALL.len());
+        for (i, kind) in StructuralKind::ALL.iter().enumerate() {
+            assert_eq!(
+                StructuralKind::LABELS[i],
+                kind.label(),
+                "StructuralKind::LABELS[{i}] `{lbl}` drifted from \
+                 StructuralKind::ALL[{i}].label() `{via_variant}` — \
+                 the canonical ALL ordering and the LABELS ordering \
+                 must match element-wise",
+                lbl = StructuralKind::LABELS[i],
+                via_variant = kind.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn structural_kind_labels_pairwise_distinct() {
+        // 2x2 pairwise sweep so a collision between the two labels
+        // (which would silently degrade two distinct structural-
+        // residual markers to the SAME diagnostic bytes and violate
+        // the closed-set FromStr round-trip) fails-loudly at the
+        // exact pair. Distinctness is already enforced structurally
+        // by `assert_closed_set_well_formed::<StructuralKind>()`
+        // (clause 3), so this pin is a secondary guard focused on
+        // the per-role `pub const` surface directly rather than the
+        // runtime projection through the trait's default `labels()`.
+        for (i, a) in StructuralKind::LABELS.iter().enumerate() {
+            for (j, b) in StructuralKind::LABELS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "StructuralKind::LABELS[{i}] ({a:?}) collides with \
+                     StructuralKind::LABELS[{j}] ({b:?}) — two distinct \
+                     structural-residual markers cannot share \
+                     diagnostic bytes",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn structural_kind_labels_match_sexp_shape_labels_element_wise_via_alias_chain() {
+        // CROSS-AXIS PIN: sweep `StructuralKind::LABELS[i] ==
+        // StructuralKind::ALL[i].sexp_shape().label()` so the ALL
+        // array projected through the [`Self::sexp_shape`] embed +
+        // [`SexpShape::label`] composition agrees with LABELS byte-
+        // for-byte at every index. The pin closes the alias-chain
+        // identity at the family-wide array level: the LABELS array
+        // is NOT a fresh literal table but the projection of ALL
+        // through the composition, materialized once at declaration
+        // time through the two per-role `pub const *_LABEL` aliases.
+        // A regression that re-inlines LABELS to fresh literals still
+        // passes the pairwise-distinct + cardinality + alignment
+        // pins but drifts the alias chain — this pin catches that
+        // drift by comparing against the composition on the SAME
+        // ALL ordering.
+        //
+        // Sibling-shape pin to the peer 6-of-12 atomic-payload
+        // carving's family-wide alias-chain pin (implicit in
+        // `atom_kind_labels_align_with_all_by_index` +
+        // `atom_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+        // together); this pin binds the 2-of-12 residual carving's
+        // family-wide alias chain in ONE test at the family-wide
+        // array level.
+        for (i, kind) in StructuralKind::ALL.iter().enumerate() {
+            assert_eq!(
+                StructuralKind::LABELS[i],
+                kind.sexp_shape().label(),
+                "StructuralKind::LABELS[{i}] drifted from \
+                 StructuralKind::ALL[{i}].sexp_shape().label() — the \
+                 LABELS array must project through the sexp_shape + \
+                 SexpShape::label composition byte-for-byte",
+            );
+        }
     }
 
     #[test]

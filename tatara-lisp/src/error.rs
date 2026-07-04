@@ -5806,11 +5806,164 @@ impl StructuralKind {
     /// the ≥2 PRIME-DIRECTIVE trigger once the structural shape is
     /// named, and post-lift this method's two arms are the ONE
     /// canonical site the outer-Sexp Hash body composes through.
+    /// Canonical `u8` cache-key byte for [`Self::Nil`]'s
+    /// [`Self::hash_discriminator`] arm — `0`. Per-role peer of
+    /// [`Self::Nil`] on the closed-set structural-residual cache-key-
+    /// byte axis; consumers reach for
+    /// `StructuralKind::NIL_HASH_DISCRIMINATOR` when the caller has a
+    /// variant in hand at compile time and wants the canonical byte
+    /// without runtime dispatch through [`Self::hash_discriminator`].
+    /// The byte is load-bearing because the macro-expansion cache
+    /// ([`crate::macro_expand::Expander`]'s cache) keys on
+    /// [`Hash for Sexp`](crate::ast::Sexp), and any renumbering
+    /// silently invalidates every cached expansion AND risks collision
+    /// with the reserved bytes the other two closed-set carvings' arms
+    /// use (`1u8` for the [`crate::ast::Sexp::Atom`] outer-carve
+    /// marker, `3..=6` for the quote-family via
+    /// [`crate::ast::QuoteForm::hash_discriminator`]).
+    ///
+    /// Sibling posture to
+    /// [`crate::ast::AtomKind::SYMBOL_HASH_DISCRIMINATOR`] on the
+    /// atomic-payload sub-carving of the SAME outer-`Sexp` Hash body
+    /// AND to [`crate::ast::QuoteForm::QUOTE_HASH_DISCRIMINATOR`] on
+    /// the quote-family sub-carving — the third and final closed-set
+    /// carving of [`SexpShape`] now surfaces its per-role cache-key
+    /// bytes at ONE `pub(crate) const` per variant PLUS a family-wide
+    /// [`Self::HASH_DISCRIMINATORS`] array.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the alias-chain composition law
+    /// `StructuralKind::HASH_DISCRIMINATORS[i] ==
+    /// StructuralKind::ALL[i].hash_discriminator()` binds the family-
+    /// wide array to the projection method at rustc time, pinned by
+    /// byte equality. THEORY.md §III — the typescape; the two
+    /// canonical cache-key bytes bind at ONE `pub(crate) const` per
+    /// role on the typed algebra rather than as inline `u8` literals
+    /// in the [`Self::hash_discriminator`] match arms.
+    pub(crate) const NIL_HASH_DISCRIMINATOR: u8 = 0;
+
+    /// Canonical `u8` cache-key byte for [`Self::List`]'s
+    /// [`Self::hash_discriminator`] arm — `2`. Sibling of
+    /// [`Self::NIL_HASH_DISCRIMINATOR`] on the closed-set per-role
+    /// structural-residual cache-key-byte axis; see
+    /// [`Self::NIL_HASH_DISCRIMINATOR`] for the algebra-level round-
+    /// trip + disjointness contracts every sibling shares.
+    ///
+    /// The gap at `1u8` between [`Self::NIL_HASH_DISCRIMINATOR`] and
+    /// this constant is intentional and load-bearing: it reserves the
+    /// outer-carve byte [`crate::ast::Sexp::Atom(_)`] uses at the
+    /// outer [`Hash for Sexp`](crate::ast::Sexp) body — the joint
+    /// partition `{0, 1, 2, 3, 4, 5, 6}` binds bit-for-bit across the
+    /// three closed-set carvings AND the atomic-carve outer marker.
+    pub(crate) const LIST_HASH_DISCRIMINATOR: u8 = 2;
+
+    /// Closed-set forced-arity ALL array over the canonical
+    /// structural-residual cache-key `u8` bytes, in declaration order
+    /// matching [`Self::ALL`] element-wise (pinned by
+    /// `structural_kind_hash_discriminators_align_with_all_by_index`).
+    /// Sibling posture to [`Self::LABELS`] (`[&'static str; 2]` — the
+    /// diagnostic-label `&'static str` axis on the SAME closed set),
+    /// [`crate::ast::AtomKind::HASH_DISCRIMINATORS`] (`[u8; 6]` — the
+    /// atomic-payload sub-carving's cache-key-byte peer at the nested
+    /// [`crate::ast::Atom`] Hash level), and
+    /// [`crate::ast::QuoteForm::HASH_DISCRIMINATORS`] (`[u8; 4]` —
+    /// the quote-family sub-carving's cache-key-byte peer at the same
+    /// outer [`Hash for Sexp`](crate::ast::Sexp) body). Every closed-
+    /// set carving of [`SexpShape`] now pins its per-role canonical
+    /// cache-key bytes at ONE `pub(crate) const` per role PLUS an ALL
+    /// array for family-wide consumers.
+    ///
+    /// Pre-lift the two cache-key bytes had NO per-role primitive on
+    /// this closed-set algebra — a consumer with a [`StructuralKind`]
+    /// variant in hand at compile time reaching for the canonical byte
+    /// had to spell `StructuralKind::Nil.hash_discriminator()`
+    /// (runtime dispatch through the match arm) OR reach across into
+    /// the inline `0u8` at the pre-lift match arm's [`Self::Nil`]
+    /// branch and re-derive the (variant, byte) pairing at the call
+    /// site. Post-lift the TWO canonical bytes bind at ONE
+    /// `pub(crate) const` per role on the typed [`StructuralKind`]
+    /// algebra AND at [`Self::HASH_DISCRIMINATORS`] as a family-wide
+    /// forced-arity array — a future substrate-facing cache-key
+    /// introspection tool (a `tatara-check` predicate `(check-outer-
+    /// sexp-cache-key-partition-injective …)` that asserts the joint
+    /// `{0, 1, 2, 3, 4, 5, 6}` partition structurally by sweeping the
+    /// three carvings' `HASH_DISCRIMINATORS` arrays, a Sekiban audit-
+    /// trail metric jointly labeled by the structural-residual cache-
+    /// key partition, a future `TypedRewriter<StructuralKindOp>` sweep
+    /// zipping ALL / LABELS / HASH_DISCRIMINATORS in lockstep for a
+    /// family-wide (variant, label, byte) triple render) reads
+    /// through the typed constants without re-deriving the two-arm
+    /// carving inline.
+    ///
+    /// Each entry is byte-for-byte identical to the pre-lift inline
+    /// `u8` literal at the corresponding [`Self::hash_discriminator`]
+    /// arm — pinned by
+    /// `structural_kind_hash_discriminators_pin_legacy_cache_key_bytes`
+    /// so a regression that drifts ONE `pub(crate) const` from its
+    /// pre-lift byte silently invalidates every cached expansion of
+    /// a [`crate::ast::Sexp::Nil`] / [`crate::ast::Sexp::List`]
+    /// participating in [`crate::macro_expand::Expander::cache`],
+    /// fails-loudly at the alias test rather than at a silent cache
+    /// mis-hash. Adding a hypothetical third structural-residual
+    /// variant (e.g. `Vector` for `#(...)` reader syntax, `Map` for
+    /// `{...}`) extends [`Self::ALL`] AND [`Self::HASH_DISCRIMINATORS`]
+    /// AND adds ONE per-role `pub(crate) const` in lockstep — rustc's
+    /// forced-arity check on the two `[_; N]` arrays fails
+    /// compilation if EITHER array grows without the other, closing
+    /// the extensibility gap that pre-lift silently allowed a
+    /// discriminator collision on `7u8` (the next free byte on the
+    /// outer [`Sexp`](crate::ast::Sexp) cache-key space) or an
+    /// accidental re-use of the `1u8` outer-carve byte reserved for
+    /// [`crate::ast::Sexp::Atom(_)`].
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// canonical cache-key bytes bind at ONE typed `[u8; 2]` array on
+    /// the closed-set [`StructuralKind`] algebra rather than at zero-
+    /// primitive-plus-two-inline-`u8`-literals scattered across the
+    /// [`Self::hash_discriminator`] match arms. THEORY.md §V.1 —
+    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// level constant on the substrate algebra rather than a per-
+    /// consumer runtime dispatch through the match table. THEORY.md
+    /// §V.3 — three-pillar attestation; the cache-key partition is
+    /// the substrate's outer [`Sexp`](crate::ast::Sexp) `intent_hash`
+    /// composition axis for every structural-residual arm — binding
+    /// the two bytes on the typed algebra makes attestation-key drift
+    /// a compile error rather than a silent BLAKE3 mis-hash.
+    /// THEORY.md §VI.1 — generation over composition; the family-
+    /// wide contract sweeps (alignment with `ALL`, pairwise
+    /// disjointness, membership through [`Self::hash_discriminator`])
+    /// emerge from the composition of TWO substrate primitives (this
+    /// `pub(crate) const` array + the two per-role
+    /// `pub(crate) const *_HASH_DISCRIMINATOR` aliases) rather than
+    /// as per-variant inline assertions duplicated at each call site.
+    ///
+    /// The `#[allow(dead_code)]` posture matches
+    /// [`crate::ast::AtomKind::HASH_DISCRIMINATORS`] and
+    /// [`crate::ast::QuoteForm::HASH_DISCRIMINATORS`]: the substrate's
+    /// current [`Hash for Sexp`](crate::ast::Sexp) body composes
+    /// through the per-variant [`Self::hash_discriminator`] projection
+    /// arm-by-arm rather than sweeping the family-wide array, so no
+    /// non-test caller currently reaches this ALL array directly. The
+    /// lift lands the substrate primitive so future consumers keyed
+    /// on the whole family (a future
+    /// [`crate::macro_expand::Expander`] cache-warmup pass that
+    /// hashes the structural-residual byte-set upfront, a future
+    /// `tatara-check` predicate `(check-outer-sexp-cache-key-
+    /// partition-injective …)` that verifies the joint
+    /// `{0, 1, 2, 3, 4, 5, 6}` partition structurally, a future
+    /// `TypedRewriter<StructuralKindOp>` sweep zipping ALL / LABELS /
+    /// HASH_DISCRIMINATORS in lockstep for a family-wide (variant,
+    /// label, byte) triple render) bind to ONE `[u8; 2]` primitive
+    /// rather than re-deriving the array inline per callsite.
+    #[allow(dead_code)]
+    pub(crate) const HASH_DISCRIMINATORS: [u8; 2] =
+        [Self::NIL_HASH_DISCRIMINATOR, Self::LIST_HASH_DISCRIMINATOR];
+
     #[must_use]
     pub(crate) fn hash_discriminator(self) -> u8 {
         match self {
-            Self::Nil => 0,
-            Self::List => 2,
+            Self::Nil => Self::NIL_HASH_DISCRIMINATOR,
+            Self::List => Self::LIST_HASH_DISCRIMINATOR,
         }
     }
 }
@@ -15230,6 +15383,138 @@ mod tests {
             "the three-carving-plus-atom-marker joint discriminator space {union:?} must partition without overlap",
         );
         assert_eq!(union, vec![0, 1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn structural_kind_hash_discriminators_pin_legacy_cache_key_bytes() {
+        // Pin each per-role `pub(crate) const` at its exact canonical
+        // `u8` byte. Sibling of
+        // `structural_kind_hash_discriminator_pins_legacy_cache_key_bytes`
+        // (which pins the method's projection) — this pin asserts the
+        // `pub(crate) const` value itself, so a regression that drifts
+        // the constant but leaves the method's arm literal in place
+        // (unlikely post-lift but structurally distinct) surfaces
+        // here. The cache-key partition `{0, 2}` is load-bearing for
+        // the outer [`Hash for Sexp`](crate::ast::Sexp) prefix-
+        // uniqueness contract — a `2u8` drift to `1u8` would silently
+        // collide `Sexp::List(_)` with the reserved atomic-carve
+        // outer marker and mis-hash every List through the Atom
+        // arm's cache slot.
+        assert_eq!(StructuralKind::NIL_HASH_DISCRIMINATOR, 0);
+        assert_eq!(StructuralKind::LIST_HASH_DISCRIMINATOR, 2);
+    }
+
+    #[test]
+    fn structural_kind_hash_discriminator_routes_through_typed_per_role_constants() {
+        // PATH-UNIFORMITY: `Self::hash_discriminator(self)` returns
+        // the per-role `pub(crate) const` byte-for-byte per variant,
+        // catching a regression that reverts ONE arm to an inline
+        // `0` / `2` `u8` literal (or drifts one arm's byte silently).
+        // Sibling posture to
+        // `atom_kind_hash_discriminator_routes_through_typed_per_role_constants`
+        // on the atomic-payload sub-carving AND to
+        // `quote_form_hash_discriminator_routes_through_typed_per_role_constants`
+        // on the quote-family sub-carving of the SAME outer-`Sexp`
+        // Hash body.
+        for (kind, expected) in [
+            (StructuralKind::Nil, StructuralKind::NIL_HASH_DISCRIMINATOR),
+            (
+                StructuralKind::List,
+                StructuralKind::LIST_HASH_DISCRIMINATOR,
+            ),
+        ] {
+            let actual = kind.hash_discriminator();
+            assert_eq!(
+                actual, expected,
+                "StructuralKind::{kind:?}.hash_discriminator() `{actual}` \
+                 drifted from per-role constant `{expected}` — the arm \
+                 must route through the typed `pub(crate) const` rather \
+                 than an inline `u8` literal",
+            );
+        }
+    }
+
+    #[test]
+    fn structural_kind_hash_discriminators_has_expected_cardinality() {
+        // Cardinality contract: `Self::HASH_DISCRIMINATORS.len() == 2`
+        // — pinned at the declaration site by rustc's forced-arity
+        // check on `[u8; 2]`. This test surfaces the arity as a
+        // fail-loud runtime pin so a future refactor that switches
+        // the array type to `&[u8]` (dropping the compile-time arity
+        // forcing) doesn't silently loosen the closed-set discipline
+        // the family relies on. Sibling posture to
+        // `structural_kind_labels_has_expected_cardinality` on the
+        // diagnostic label axis of the SAME closed set, and to
+        // `atom_kind_hash_discriminators_has_expected_cardinality` +
+        // `quote_form_hash_discriminators_has_expected_cardinality`
+        // on the two sibling carvings' cache-key-byte peers.
+        assert_eq!(
+            StructuralKind::HASH_DISCRIMINATORS.len(),
+            2,
+            "StructuralKind::HASH_DISCRIMINATORS cardinality drifted \
+             from 2 — the closed structural-residual domain admits \
+             exactly two kinds by construction; a third extension \
+             surfaces here"
+        );
+    }
+
+    #[test]
+    fn structural_kind_hash_discriminators_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::HASH_DISCRIMINATORS[i] ==
+        // Self::ALL[i].hash_discriminator()` element-wise. Pins that
+        // the typed variant ALL and the `u8` HASH_DISCRIMINATORS ALL
+        // stay in lockstep under any reorder — a regression that
+        // reorders ONE array without reordering the other silently
+        // misaligns every `zip(ALL, HASH_DISCRIMINATORS)` consumer.
+        // Sibling posture to
+        // `structural_kind_labels_align_with_all_by_index` on the
+        // diagnostic label axis of the SAME closed set.
+        for (i, kind) in StructuralKind::ALL.iter().enumerate() {
+            assert_eq!(
+                StructuralKind::HASH_DISCRIMINATORS[i],
+                kind.hash_discriminator(),
+                "StructuralKind::HASH_DISCRIMINATORS[{i}] `{disc}` \
+                 drifted from StructuralKind::ALL[{i}] ({kind:?}).hash_discriminator() \
+                 `{via_variant}` — the canonical declaration order of \
+                 the ALL array and the hash_discriminator projection \
+                 must match element-wise",
+                disc = StructuralKind::HASH_DISCRIMINATORS[i],
+                via_variant = kind.hash_discriminator(),
+            );
+        }
+    }
+
+    #[test]
+    fn structural_kind_hash_discriminators_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: every entry of the
+        // `HASH_DISCRIMINATORS` array must differ so the outer-`Sexp`
+        // Hash body cannot route two structural-residual variants
+        // through the same cache-key byte — a collision would
+        // silently mis-hash two structurally-distinct residual shapes
+        // (`Sexp::Nil` and `Sexp::List(_)`) to the same
+        // `Expander::cache` slot. Family-wide sweep over
+        // `HASH_DISCRIMINATORS × HASH_DISCRIMINATORS` — supersedes any
+        // per-pair pin and picks up new discriminators mechanically.
+        // Sibling posture to
+        // `structural_kind_hash_discriminator_bytes_are_pairwise_disjoint`
+        // (which sweeps via the projection) — this sweep pins the
+        // array itself so a regression that lifts a fresh entry with
+        // a colliding byte surfaces at the ALL sweep.
+        for (i, a) in StructuralKind::HASH_DISCRIMINATORS.iter().enumerate() {
+            for (j, b) in StructuralKind::HASH_DISCRIMINATORS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "StructuralKind::HASH_DISCRIMINATORS[{i}] `{a}` \
+                     collides with StructuralKind::HASH_DISCRIMINATORS[{j}] \
+                     `{b}` — the outer-Sexp Hash body's cache-key \
+                     partition would route two structural-residual \
+                     variants through the same slot"
+                );
+            }
+        }
     }
 
     #[test]

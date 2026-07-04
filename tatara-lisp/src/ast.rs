@@ -7504,6 +7504,204 @@ impl QuoteForm {
         }
     }
 
+    /// Canonical `u8` cache-key byte for [`Self::Quote`]'s
+    /// [`Self::hash_discriminator`] arm — `3`. ONE canonical byte on
+    /// the closed-set [`QuoteForm`] algebra shared by
+    /// [`Self::hash_discriminator`]'s [`Self::Quote`] arm AND every
+    /// downstream consumer (the [`Hash for Sexp`](crate::ast::Sexp)
+    /// cache-key body, the expansion cache
+    /// (`crate::macro_expand::Expander::cache`) that keys on that hash).
+    ///
+    /// Sibling posture to the closed set of per-role `pub(crate) const`
+    /// / `pub const` bytes on the substrate's other closed-set outer
+    /// algebras: [`Self::QUOTE_PREFIX`] / [`Self::QUASIQUOTE_PREFIX`]
+    /// / [`Self::UNQUOTE_PREFIX`] / [`Self::UNQUOTE_SPLICE_PREFIX`]
+    /// (per-role reader-prefix `&'static str` algebra on the SAME
+    /// [`QuoteForm`] closed set — commit a08e61f),
+    /// [`Self::QUOTE_LABEL`] / [`Self::QUASIQUOTE_LABEL`] /
+    /// [`Self::UNQUOTE_LABEL`] / [`Self::UNQUOTE_SPLICE_LABEL`] (per-
+    /// role diagnostic-label `&'static str` algebra on the SAME closed
+    /// set — commit 70be157), [`Self::QUOTE_IAC_FORGE_TAG`] /
+    /// [`Self::QUASIQUOTE_IAC_FORGE_TAG`] / [`Self::UNQUOTE_IAC_FORGE_TAG`]
+    /// / [`Self::UNQUOTE_SPLICE_IAC_FORGE_TAG`] (per-role iac-forge
+    /// canonical-form tag `&'static str` algebra on the SAME closed set
+    /// — commit bdd624b). This constant closes the FOURTH per-role
+    /// axis on [`QuoteForm`] — the `u8` cache-key axis paired with the
+    /// three pre-existing `&'static str` axes.
+    ///
+    /// The FOUR canonical bytes `{3, 4, 5, 6}` partition the outer-
+    /// [`crate::ast::Sexp`] `Hash` body's quote-family arm-set against
+    /// the reserved bytes the non-quote-family arms use (`0u8` for
+    /// [`crate::error::StructuralKind::Nil`] via
+    /// [`crate::error::StructuralKind::hash_discriminator`], `1u8` for
+    /// [`crate::ast::Sexp::Atom`]'s outer-carve marker via the
+    /// pre-existing inline `1u8` at [`Hash for Sexp`](crate::ast::Sexp)'s
+    /// atom arm, `2u8` for [`crate::error::StructuralKind::List`] via
+    /// [`crate::error::StructuralKind::hash_discriminator`]) — the
+    /// three carvings of the outer-[`crate::ast::Sexp`] cache-key
+    /// space jointly cover the `{0, 1, 2, 3, 4, 5, 6}` byte-set with
+    /// no gaps AND no overlaps.
+    ///
+    /// A regression that inlines the `3` literal at
+    /// [`Self::hash_discriminator`]'s [`Self::Quote`] arm and drifts
+    /// the constant silently (e.g. a re-numbering that collides with
+    /// the reserved `2u8` for [`crate::error::StructuralKind::List`],
+    /// silently mis-hashing every cached expansion across the substrate)
+    /// fails at the algebra's `hash_discriminator()` path-uniformity
+    /// pin
+    /// (`quote_form_hash_discriminator_routes_through_typed_per_role_constants`)
+    /// rather than at silent cache-key drift where
+    /// `crate::macro_expand::Expander::cache` mis-collides live
+    /// expansions.
+    ///
+    /// `pub(crate)` because the byte-discriminator surface is an
+    /// implementation detail of the substrate's [`Hash for Sexp`](crate::ast::Sexp)
+    /// cache-key contract; exposing it publicly would leak the cache-
+    /// key shape through the API without enabling any external
+    /// consumer the public projections ([`Self::as_quote_form`],
+    /// [`Self::prefix`], [`Self::as_unquote_form`]) don't already
+    /// serve — same visibility rationale as [`Self::hash_discriminator`]
+    /// itself.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the alias-chain composition law
+    /// `QuoteForm::HASH_DISCRIMINATORS[i] ==
+    /// QuoteForm::ALL[i].hash_discriminator()` binds the family-wide
+    /// array to the projection method at rustc time, pinned by byte
+    /// equality. THEORY.md §III — the typescape; the four canonical
+    /// cache-key bytes bind at ONE `pub(crate) const` per role on the
+    /// typed algebra rather than as inline `u8` literals in the
+    /// `hash_discriminator` match arms.
+    pub(crate) const QUOTE_HASH_DISCRIMINATOR: u8 = 3;
+
+    /// Canonical `u8` cache-key byte for [`Self::Quasiquote`]'s
+    /// [`Self::hash_discriminator`] arm — `4`. Sibling of
+    /// [`Self::QUOTE_HASH_DISCRIMINATOR`] on the closed-set per-role
+    /// quote-family cache-key-byte axis; see
+    /// [`Self::QUOTE_HASH_DISCRIMINATOR`] for the algebra-level round-
+    /// trip + disjointness contracts every sibling shares.
+    pub(crate) const QUASIQUOTE_HASH_DISCRIMINATOR: u8 = 4;
+
+    /// Canonical `u8` cache-key byte for [`Self::Unquote`]'s
+    /// [`Self::hash_discriminator`] arm — `5`. Sibling of
+    /// [`Self::QUOTE_HASH_DISCRIMINATOR`] on the closed-set per-role
+    /// quote-family cache-key-byte axis. Byte-for-byte distinct from
+    /// [`Self::UNQUOTE_SPLICE_HASH_DISCRIMINATOR`] — the two template-
+    /// substitution arms partition `{5, 6}` on the outer-Sexp cache-
+    /// key space.
+    pub(crate) const UNQUOTE_HASH_DISCRIMINATOR: u8 = 5;
+
+    /// Canonical `u8` cache-key byte for [`Self::UnquoteSplice`]'s
+    /// [`Self::hash_discriminator`] arm — `6`. Sibling of
+    /// [`Self::QUOTE_HASH_DISCRIMINATOR`] on the closed-set per-role
+    /// quote-family cache-key-byte axis. The HIGHEST byte on the
+    /// closed set — a future fifth quote-family variant would extend
+    /// the partition to `{3, 4, 5, 6, 7}` and land the new
+    /// discriminator at `7u8`.
+    pub(crate) const UNQUOTE_SPLICE_HASH_DISCRIMINATOR: u8 = 6;
+
+    /// Closed-set forced-arity ALL array over the canonical cache-key
+    /// `u8` bytes, in declaration order matching [`Self::ALL`] element-
+    /// wise (pinned by `quote_form_hash_discriminators_align_with_all_by_index`).
+    /// Sibling posture to [`Self::PREFIXES`] (`[&'static str; 4]` —
+    /// the reader-prefix `&'static str` axis on the SAME closed set),
+    /// [`Self::LABELS`] (`[&'static str; 4]` — the diagnostic-label
+    /// `&'static str` axis), [`Self::IAC_FORGE_TAGS`] (`[&'static str;
+    /// 4]` — the iac-forge canonical-form tag `&'static str` axis) —
+    /// every closed-set outer projection on the substrate's
+    /// [`QuoteForm`] algebra now pins its per-role canonical bytes at
+    /// ONE `pub(crate) const` / `pub const` per role PLUS an ALL array
+    /// for family-wide consumers, across ALL FOUR production
+    /// vocabularies the closed set carries (reader prefix, diagnostic
+    /// label, iac-forge canonical-form tag, outer-Sexp cache-key byte).
+    ///
+    /// Pre-lift the four cache-key bytes had NO per-role primitive on
+    /// this closed-set algebra — a consumer with a [`QuoteForm`]
+    /// variant in hand at compile time reaching for the canonical byte
+    /// had to spell `QuoteForm::Unquote.hash_discriminator()` (runtime
+    /// dispatch through the match arm) OR reach across into the inline
+    /// `5u8` at the pre-lift match arm's [`Self::Unquote`] branch and
+    /// re-derive the (variant, byte) pairing at the call site.
+    /// Post-lift the FOUR canonical bytes bind at ONE `pub(crate) const`
+    /// per role on the typed [`QuoteForm`] algebra AND at
+    /// [`Self::HASH_DISCRIMINATORS`] as a family-wide forced-arity
+    /// array — a future substrate-facing cache-key introspection tool
+    /// (a `tatara-check` predicate that asserts every quote-family
+    /// arm's discriminator disjoint from the reserved
+    /// [`crate::ast::Sexp::Atom`] byte, a Sekiban audit-trail metric
+    /// jointly labeled by the cache-key partition, a future
+    /// `TypedRewriter<QuoteFormOp>` sweep zipping ALL / PREFIXES /
+    /// LABELS / IAC_FORGE_TAGS / HASH_DISCRIMINATORS in lockstep for a
+    /// family-wide (variant, four-vocabulary quadruple) render) reads
+    /// through the typed constants without re-deriving the four-arm
+    /// carving inline.
+    ///
+    /// Each entry is byte-for-byte identical to the pre-lift inline
+    /// `u8` literal at the corresponding [`Self::hash_discriminator`]
+    /// arm — pinned by
+    /// `quote_form_hash_discriminators_pin_legacy_cache_key_bytes` so
+    /// a regression that drifts ONE `pub(crate) const` from its pre-
+    /// lift byte silently invalidates every cached expansion AND mis-
+    /// collides with the reserved bytes the non-quote-family arms use,
+    /// fails-loudly at the alias test rather than at a silent
+    /// [`crate::macro_expand::Expander::cache`] mis-hash. Adding a
+    /// hypothetical fifth homoiconic prefix (a `,~` reverse-unquote, a
+    /// `,?` conditional-unquote) extends [`Self::ALL`] AND
+    /// [`Self::HASH_DISCRIMINATORS`] AND adds ONE per-role
+    /// `pub(crate) const` in lockstep — rustc's forced-arity check on
+    /// the two `[_; N]` arrays fails compilation if EITHER array grows
+    /// without the other, closing the extensibility gap that pre-lift
+    /// silently allowed a discriminator collision on `7u8` (the next
+    /// free byte).
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the four
+    /// canonical cache-key bytes bind at ONE typed `[u8; 4]` array on
+    /// the closed-set [`QuoteForm`] algebra rather than at zero-
+    /// primitive-plus-four-inline-`u8`-literals scattered across the
+    /// [`Self::hash_discriminator`] match arms. THEORY.md §V.1 —
+    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// level constant on the substrate algebra rather than a per-
+    /// consumer runtime dispatch through the match table. THEORY.md
+    /// §V.3 — three-pillar attestation; the cache-key partition is
+    /// the substrate's outer-Sexp `intent_hash` composition axis for
+    /// every quote-family arm — binding the four bytes on the typed
+    /// algebra makes attestation-key drift a compile error rather
+    /// than a silent BLAKE3 mis-hash. THEORY.md §VI.1 — generation
+    /// over composition; the family-wide contract sweeps (alignment
+    /// with `ALL`, pairwise disjointness, membership through
+    /// [`Self::hash_discriminator`]) emerge from the composition of
+    /// TWO substrate primitives (this `pub(crate) const` array + the
+    /// four per-role `pub(crate) const *_HASH_DISCRIMINATOR` aliases)
+    /// rather than as per-variant inline assertions duplicated at
+    /// each call site.
+    ///
+    /// The `#[allow(dead_code)]` posture is deliberate: the substrate's
+    /// current [`Hash for Sexp`](crate::ast::Sexp) body composes
+    /// through the per-variant [`Self::hash_discriminator`] projection
+    /// arm-by-arm rather than sweeping the family-wide array, so no
+    /// non-test caller currently reaches this ALL array directly. The
+    /// lift lands the substrate primitive so future consumers keyed
+    /// on the whole family (a future
+    /// [`crate::macro_expand::Expander`] cache-warmup pass that hashes
+    /// the quote-family byte-set upfront, a future `tatara-check`
+    /// predicate `(check-cache-key-partition-disjoint …)` that
+    /// verifies the `{3, 4, 5, 6}` partition against the reserved
+    /// `{0, 1, 2}` bytes structurally, a future
+    /// `TypedRewriter<QuoteFormOp>` sweep zipping ALL / PREFIXES /
+    /// LABELS / IAC_FORGE_TAGS / HASH_DISCRIMINATORS in lockstep for a
+    /// family-wide (variant, four-vocabulary quadruple) render) bind
+    /// to ONE `[u8; 4]` primitive rather than re-deriving the array
+    /// inline per callsite. Matches the preemptive-primitive posture
+    /// the prior-run [`crate::error::UnquoteForm::hash_discriminator`]
+    /// lift carried before its downstream consumers materialized.
+    #[allow(dead_code)]
+    pub(crate) const HASH_DISCRIMINATORS: [u8; 4] = [
+        Self::QUOTE_HASH_DISCRIMINATOR,
+        Self::QUASIQUOTE_HASH_DISCRIMINATOR,
+        Self::UNQUOTE_HASH_DISCRIMINATOR,
+        Self::UNQUOTE_SPLICE_HASH_DISCRIMINATOR,
+    ];
+
     /// Stable, per-variant byte discriminator that paired with the
     /// recursive inner hash builds the substrate's `Hash for Sexp`
     /// projection — `3` for [`Self::Quote`], `4` for
@@ -7520,6 +7718,21 @@ impl QuoteForm {
     /// rustc binding the consistency through exhaustiveness over the
     /// closed enum.
     ///
+    /// Post-lift the four arms route through the per-role
+    /// `pub(crate) const` bytes on the closed-set [`QuoteForm`]
+    /// algebra ([`Self::QUOTE_HASH_DISCRIMINATOR`],
+    /// [`Self::QUASIQUOTE_HASH_DISCRIMINATOR`],
+    /// [`Self::UNQUOTE_HASH_DISCRIMINATOR`],
+    /// [`Self::UNQUOTE_SPLICE_HASH_DISCRIMINATOR`]) rather than
+    /// inline `u8` literals — so a re-numbering that would silently
+    /// invalidate every cached expansion lands as ONE edit to the
+    /// matching `pub(crate) const` rather than at four scattered
+    /// arm-literals. Every downstream consumer that binds to the
+    /// algebra ([`Hash for Sexp`](crate::ast::Sexp)'s outer sweep,
+    /// the [`crate::macro_expand::Expander::cache`] cache-key
+    /// composition, the future coverage-tool sweeps) inherits the
+    /// rename mechanically.
+    ///
     /// `pub(crate)` because the byte-discriminator surface is an
     /// implementation detail of the substrate's `Hash for Sexp` cache-
     /// key contract; exposing it publicly would leak the cache-key
@@ -7529,10 +7742,10 @@ impl QuoteForm {
     #[must_use]
     pub(crate) fn hash_discriminator(self) -> u8 {
         match self {
-            Self::Quote => 3,
-            Self::Quasiquote => 4,
-            Self::Unquote => 5,
-            Self::UnquoteSplice => 6,
+            Self::Quote => Self::QUOTE_HASH_DISCRIMINATOR,
+            Self::Quasiquote => Self::QUASIQUOTE_HASH_DISCRIMINATOR,
+            Self::Unquote => Self::UNQUOTE_HASH_DISCRIMINATOR,
+            Self::UnquoteSplice => Self::UNQUOTE_SPLICE_HASH_DISCRIMINATOR,
         }
     }
 
@@ -12099,6 +12312,183 @@ mod tests {
         assert_eq!(QuoteForm::Quasiquote.hash_discriminator(), 4);
         assert_eq!(QuoteForm::Unquote.hash_discriminator(), 5);
         assert_eq!(QuoteForm::UnquoteSplice.hash_discriminator(), 6);
+    }
+
+    // ── `QuoteForm::{QUOTE_HASH_DISCRIMINATOR,
+    // QUASIQUOTE_HASH_DISCRIMINATOR, UNQUOTE_HASH_DISCRIMINATOR,
+    // UNQUOTE_SPLICE_HASH_DISCRIMINATOR, HASH_DISCRIMINATORS}` —
+    // per-role `u8` cache-key byte algebra on the closed-set outer
+    // [`QuoteForm`]. Fourth per-role axis on the algebra alongside the
+    // reader-prefix (commit a08e61f), diagnostic-label (commit
+    // 70be157), and iac-forge canonical-form tag (commit bdd624b)
+    // `&'static str` axes — closes the FOUR production
+    // byte-vocabularies the closed set carries at ONE `pub(crate)
+    // const` per (role, vocabulary) pair plus a family-wide ALL array
+    // per vocabulary.
+
+    #[test]
+    fn quote_form_hash_discriminators_pin_legacy_cache_key_bytes() {
+        // Pin each per-role `pub(crate) const` at its exact canonical
+        // `u8` byte. Sibling of
+        // `quote_form_hash_discriminator_pins_legacy_cache_key_bytes`
+        // (which pins the method's projection) — this pin asserts the
+        // `pub(crate) const` value itself, so a regression that drifts
+        // the constant but leaves the method's arm literal in place
+        // (unlikely post-lift but structurally distinct) surfaces
+        // here. The cache-key partition `{3, 4, 5, 6}` is load-bearing
+        // for the outer-`Sexp` `Hash` body's disjointness contract
+        // with the reserved bytes `{0, 1, 2}` the non-quote-family
+        // arms use — a `4u8` drift to `2u8` would silently collide
+        // with `StructuralKind::List`'s cache-key byte and mis-hash
+        // every quasi-quote through the list-arm's path.
+        assert_eq!(QuoteForm::QUOTE_HASH_DISCRIMINATOR, 3);
+        assert_eq!(QuoteForm::QUASIQUOTE_HASH_DISCRIMINATOR, 4);
+        assert_eq!(QuoteForm::UNQUOTE_HASH_DISCRIMINATOR, 5);
+        assert_eq!(QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR, 6);
+    }
+
+    #[test]
+    fn quote_form_hash_discriminator_routes_through_typed_per_role_constants() {
+        // PATH-UNIFORMITY: `Self::hash_discriminator(self)` returns
+        // the per-role `pub(crate) const` byte-for-byte per variant,
+        // catching a regression that reverts ONE arm to an inline
+        // `3` / `4` / `5` / `6` `u8` literal (or drifts one arm's
+        // byte silently). Sibling posture to
+        // `quote_form_prefix_routes_through_typed_per_role_constants`
+        // on the reader-prefix axis of the SAME closed set.
+        for (qf, expected) in [
+            (QuoteForm::Quote, QuoteForm::QUOTE_HASH_DISCRIMINATOR),
+            (
+                QuoteForm::Quasiquote,
+                QuoteForm::QUASIQUOTE_HASH_DISCRIMINATOR,
+            ),
+            (QuoteForm::Unquote, QuoteForm::UNQUOTE_HASH_DISCRIMINATOR),
+            (
+                QuoteForm::UnquoteSplice,
+                QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR,
+            ),
+        ] {
+            let actual = qf.hash_discriminator();
+            assert_eq!(
+                actual, expected,
+                "QuoteForm::{qf:?}.hash_discriminator() `{actual}` \
+                 drifted from per-role constant `{expected}` — the \
+                 arm must route through the typed `pub(crate) const` \
+                 rather than an inline `u8` literal",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_hash_discriminators_has_expected_cardinality() {
+        // Cardinality contract: `Self::HASH_DISCRIMINATORS.len() == 4`
+        // — pinned at the declaration site by rustc's forced-arity
+        // check on `[u8; 4]`. This test surfaces the arity as a
+        // fail-loud runtime pin so a future refactor that switches
+        // the array type to `&[u8]` (dropping the compile-time arity
+        // forcing) doesn't silently loosen the closed-set discipline
+        // the family relies on. Sibling posture to
+        // `quote_form_prefixes_has_expected_cardinality`,
+        // `quote_form_labels_has_expected_cardinality`, and
+        // `quote_form_iac_forge_tags_has_expected_cardinality` on the
+        // other three per-role axes of the SAME [`QuoteForm`] closed
+        // set.
+        assert_eq!(
+            QuoteForm::HASH_DISCRIMINATORS.len(),
+            4,
+            "QuoteForm::HASH_DISCRIMINATORS cardinality drifted from \
+             4 — the closed homoiconic-prefix domain admits exactly \
+             four wrappers by construction; a fifth extension \
+             surfaces here"
+        );
+    }
+
+    #[test]
+    fn quote_form_hash_discriminators_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::HASH_DISCRIMINATORS[i] ==
+        // Self::ALL[i].hash_discriminator()` element-wise. Pins that
+        // the typed variant ALL and the `u8` HASH_DISCRIMINATORS ALL
+        // stay in lockstep under any reorder — a regression that
+        // reorders ONE array without reordering the other silently
+        // misaligns every `zip(ALL, HASH_DISCRIMINATORS)` consumer.
+        // Sibling posture to `quote_form_prefixes_align_with_all_by_index`
+        // on the reader-prefix axis.
+        for (i, qf) in QuoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                QuoteForm::HASH_DISCRIMINATORS[i],
+                qf.hash_discriminator(),
+                "QuoteForm::HASH_DISCRIMINATORS[{i}] `{disc}` drifted \
+                 from QuoteForm::ALL[{i}] ({qf:?}).hash_discriminator() \
+                 `{via_variant}` — the canonical declaration order of \
+                 the ALL array and the hash_discriminator projection \
+                 must match element-wise",
+                disc = QuoteForm::HASH_DISCRIMINATORS[i],
+                via_variant = qf.hash_discriminator(),
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_hash_discriminators_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: every entry of the
+        // `HASH_DISCRIMINATORS` array must differ so the outer-`Sexp`
+        // `Hash` body cannot route two homoiconic prefixes through
+        // the same cache-key byte — a collision would silently mis-
+        // hash two structurally-distinct forms to the same
+        // `Expander::cache` slot. Family-wide sweep over
+        // `HASH_DISCRIMINATORS × HASH_DISCRIMINATORS` — supersedes
+        // any per-pair pin and picks up new discriminators
+        // mechanically. Sibling posture to
+        // `quote_form_prefixes_pairwise_distinct`.
+        for (i, a) in QuoteForm::HASH_DISCRIMINATORS.iter().enumerate() {
+            for (j, b) in QuoteForm::HASH_DISCRIMINATORS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "QuoteForm::HASH_DISCRIMINATORS[{i}] `{a}` \
+                     collides with QuoteForm::HASH_DISCRIMINATORS[{j}] \
+                     `{b}` — the outer-Sexp Hash body's cache-key \
+                     partition would route two homoiconic prefixes \
+                     through the same slot"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quote_form_hash_discriminators_disjoint_from_reserved_outer_sexp_bytes() {
+        // CROSS-AXIS DISJOINTNESS CONTRACT: every entry of
+        // `Self::HASH_DISCRIMINATORS` must differ from the reserved
+        // outer-`Sexp` bytes the non-quote-family arms use — `0u8`
+        // for [`crate::error::StructuralKind::Nil`], `1u8` for the
+        // [`crate::ast::Sexp::Atom`] outer-carve marker, `2u8` for
+        // [`crate::error::StructuralKind::List`]. The three carvings
+        // of the outer-`Sexp` cache-key space jointly cover
+        // `{0, 1, 2, 3, 4, 5, 6}` with no gaps AND no overlaps; a
+        // regression that re-numbers a quote-family discriminator
+        // into the reserved region silently mis-hashes every affected
+        // form. Pin the disjointness across every reserved byte so a
+        // future rename catches the collision at test time rather
+        // than as a silent cache-key drift where
+        // `Expander::cache` mis-collides live expansions.
+        let reserved_non_quote_family_bytes: [u8; 3] = [
+            crate::error::StructuralKind::Nil.hash_discriminator(),
+            1u8, // Sexp::Atom outer-carve marker (pre-lift inline literal in Hash for Sexp)
+            crate::error::StructuralKind::List.hash_discriminator(),
+        ];
+        for (i, quote_family_byte) in QuoteForm::HASH_DISCRIMINATORS.iter().enumerate() {
+            for reserved_byte in reserved_non_quote_family_bytes {
+                assert_ne!(
+                    *quote_family_byte, reserved_byte,
+                    "QuoteForm::HASH_DISCRIMINATORS[{i}] `{quote_family_byte}` \
+                     collides with reserved non-quote-family cache-key byte \
+                     `{reserved_byte}` — the outer-Sexp Hash body's three-\
+                     carving partition is broken"
+                );
+            }
+        }
     }
 
     #[test]

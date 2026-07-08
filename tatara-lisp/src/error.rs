@@ -2187,23 +2187,205 @@ pub enum TemplateInvariantKind {
 }
 
 impl TemplateInvariantKind {
+    /// Canonical `&'static str` bytes for [`Self::EndListEmptyStack`] —
+    /// the mid-loop stack-gate invariant fired inside the bytecode
+    /// runtime when `TemplateOp::EndList` runs against an empty stack.
+    /// Per-role peer of `Self::EndListEmptyStack` on the STATIC 2-of-4
+    /// subset carving of the four-arm closed set.
+    ///
+    /// Pre-lift the same `"compiled template: EndList with empty stack"`
+    /// bytes lived inline at [`Self::message`]'s match arm plus at the
+    /// truth-table test `template_invariant_kind_message_for_endlist_empty_stack`
+    /// — the ≥2 PRIME-DIRECTIVE trigger. Post-lift the
+    /// (`EndListEmptyStack` variant, canonical `&'static str`) pairing
+    /// binds at ONE `pub const` on the typed [`TemplateInvariantKind`]
+    /// algebra: the [`Self::message`] arm routes through this constant
+    /// via [`Self::message_static`], the peer [`Self::STATIC_MESSAGES`]
+    /// array composes it into a forced-arity `[&'static str; 2]` at ONE
+    /// site, and every downstream consumer that pins the exact bytes
+    /// (an LSP quick-fix that surfaces the invariant-name inline, a
+    /// Sekiban audit-trail metric labeled by the invariant identity)
+    /// binds through here.
+    ///
+    /// Sibling posture to the closed set of per-role canonical
+    /// `pub const` bytes on the substrate's other closed-set outer
+    /// algebras: [`MacroDefHead::DEFMACRO_KEYWORD`] (`"defmacro"`),
+    /// [`CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION`] (`"realize
+    /// to disk"`), [`UnquoteForm::UNQUOTE_LABEL`] (`","`),
+    /// [`SexpShape::NIL_LABEL`] (`"nil"`). Each closed-set enum in the
+    /// substrate now names its canonical per-variant bytes at ONE
+    /// `pub const` per role rather than at TWO sites (the projection-
+    /// method arm AND at least one truth-table test).
+    pub const END_LIST_EMPTY_STACK_MESSAGE: &'static str =
+        "compiled template: EndList with empty stack";
+
+    /// Canonical `&'static str` bytes for [`Self::FinalNoValue`] — the
+    /// post-loop final-pop invariant fired after the bytecode runtime
+    /// exhausts its op stream and the final `stack.pop()` yields no
+    /// value. Per-role peer of `Self::FinalNoValue` on the STATIC
+    /// 2-of-4 subset carving of the four-arm closed set.
+    ///
+    /// Pre-lift the same `"compiled template produced no value"` bytes
+    /// lived inline at [`Self::message`]'s match arm plus at the truth-
+    /// table test `template_invariant_kind_message_for_final_no_value`.
+    /// Post-lift the (`FinalNoValue` variant, canonical `&'static str`)
+    /// pairing binds at ONE `pub const` on the typed
+    /// [`TemplateInvariantKind`] algebra: the [`Self::message`] arm
+    /// routes through this constant via [`Self::message_static`], the
+    /// peer [`Self::STATIC_MESSAGES`] array composes it into a forced-
+    /// arity `[&'static str; 2]` at ONE site.
+    ///
+    /// Sibling posture to [`Self::END_LIST_EMPTY_STACK_MESSAGE`] on
+    /// the same STATIC 2-of-4 subset carving — the dynamic arms
+    /// (`SubstBadIndex(usize)` / `SpliceBadIndex(usize)`) format their
+    /// `usize` payload into the message and cannot bind to a
+    /// `&'static str` on this axis. The 2-of-4 STATIC subset is where
+    /// the `Option<&'static str>` typed subset projection
+    /// [`Self::message_static`] lives.
+    pub const FINAL_NO_VALUE_MESSAGE: &'static str = "compiled template produced no value";
+
+    /// The closed set of two canonical `&'static str` bytes on the
+    /// STATIC 2-of-4 subset carving of [`TemplateInvariantKind`]'s
+    /// four-arm closed set — the [`Self::END_LIST_EMPTY_STACK_MESSAGE`]
+    /// (`"compiled template: EndList with empty stack"`) mid-loop
+    /// stack-gate invariant followed by the [`Self::FINAL_NO_VALUE_MESSAGE`]
+    /// (`"compiled template produced no value"`) post-loop final-pop
+    /// invariant. Canonical declaration order matches
+    /// [`Self::message_static`]'s arm order so
+    /// `Self::STATIC_MESSAGES[0] == Self::message_static(Self::EndListEmptyStack).unwrap()`
+    /// and `Self::STATIC_MESSAGES[1] == Self::message_static(Self::FinalNoValue).unwrap()`
+    /// element-wise — pinned by
+    /// `template_invariant_kind_static_messages_align_with_message_static_by_index`.
+    ///
+    /// Sibling posture to every other closed-set STATIC-subset ALL
+    /// array on the substrate: peer 2-of-4 carving to
+    /// [`OptionalParamMalformedReason`]'s hypothetical STATIC subset
+    /// (`EmptyList` / `MissingDefault` / `NonSymbolName` — a 3-of-4
+    /// static carving on the sibling optional-section-malformed
+    /// surface), 3-of-3 total to [`KwargPathKind::LABELS`],
+    /// [`MacroDefHead::KEYWORDS`], and 7-of-7 to
+    /// [`ExpectedKwargShape::LABELS`]. Adding a hypothetical fifth
+    /// static invariant (e.g. `WrongOpcode` — a bytecode-header gate
+    /// naming a malformed bytecode header at the type level with a
+    /// `&'static str` message payload) extends [`Self::STATIC_MESSAGES`]
+    /// ONCE + [`Self::message_static`]'s arms ONCE + adds ONE per-role
+    /// message `pub const` — rustc's forced-arity check on the
+    /// `[&'static str; N]` array fails compilation if the array grows
+    /// without the projection method being extended.
+    ///
+    /// Future consumers that compose against [`Self::STATIC_MESSAGES`]:
+    /// an LSP quick-fix that surfaces the static-message vocabulary
+    /// inline at every `LispError::TemplateInvariant` diagnostic
+    /// (`Self::STATIC_MESSAGES.iter()` is the ONE typed sweep over
+    /// every legal static bytecode-invariant message); a
+    /// `tatara-check` coverage assertion (every workspace `.lisp`
+    /// file's macro-body must expand without producing a
+    /// `TemplateInvariantKind` rejection whose message lies OUTSIDE
+    /// [`Self::STATIC_MESSAGES`] ∪ formatted-dynamic-arm messages —
+    /// the typed sweep replaces the per-call-site vocabulary of two
+    /// `&'static str` literals); a Sekiban audit-trail metric jointly
+    /// labeled by the STATIC-subset invariant message (e.g.
+    /// `tatara_lisp_template_invariant_total{message="compiled
+    /// template produced no value"}` — the metric label set on the
+    /// STATIC subset IS [`Self::STATIC_MESSAGES`]).
+    pub const STATIC_MESSAGES: [&'static str; 2] = [
+        Self::END_LIST_EMPTY_STACK_MESSAGE,
+        Self::FINAL_NO_VALUE_MESSAGE,
+    ];
+
+    /// Typed `Option<&'static str>` zero-allocation projection over the
+    /// STATIC 2-of-4 subset carving of [`TemplateInvariantKind`]'s
+    /// four-arm closed set. Returns `Some(bytes)` for the two arms
+    /// whose diagnostic bytes bind at a per-role `pub const &'static
+    /// str` ([`Self::EndListEmptyStack`] →
+    /// [`Self::END_LIST_EMPTY_STACK_MESSAGE`], [`Self::FinalNoValue`] →
+    /// [`Self::FINAL_NO_VALUE_MESSAGE`]) and `None` for the two arms
+    /// whose bytes format their `usize` payload dynamically
+    /// ([`Self::SubstBadIndex`] / [`Self::SpliceBadIndex`]) and
+    /// cannot bind to a `&'static str` on this axis.
+    ///
+    /// The `const fn` posture matches [`MacroDefHead::keyword`],
+    /// [`UnquoteForm::label`], [`SexpShape::label`], and every peer
+    /// closed-set projection method on the substrate — the projection
+    /// evaluates at rustc const-eval time when the variant is a
+    /// const, so a future const-context consumer (an
+    /// `#[allow(dead_code)] const _: Option<&'static str> = ...`
+    /// static assertion, a `tatara-check` predicate binding at
+    /// module-init time) picks up the STATIC-subset selector without
+    /// runtime dispatch.
+    ///
+    /// Sibling posture to a hypothetical
+    /// `OptionalParamMalformedReason::label_static` on the peer
+    /// 3-of-4 static carving of the sibling optional-section-malformed
+    /// four-arm closed set: both project the STATIC subset of a
+    /// mixed-payload closed set (payload-carrying dynamic arms
+    /// project to `None`) into a typed `Option<&'static str>` — the
+    /// same idiom applied at two peer boundaries of the substrate's
+    /// bytecode-runtime and macro-authoring surfaces.
+    ///
+    /// Post-lift the substrate's STATIC-subset selector over the
+    /// four-arm closed set binds at ONE typed function on the algebra
+    /// rather than at zero-primitive-plus-runtime-dispatch through
+    /// [`Self::message`]'s match body (which pre-lift owned the
+    /// selector by matching two `&'static str` literals inline). A
+    /// hypothetical fifth arm on the STATIC subset (e.g.
+    /// `WrongOpcode` — a bytecode-header gate) extends
+    /// [`Self::STATIC_MESSAGES`] AND [`Self::message_static`]'s arms
+    /// AND adds ONE per-role message `pub const` in lockstep —
+    /// rustc's exhaustive-match check on the four-arm closed set
+    /// fails compilation without the new arm's inclusion.
+    #[must_use]
+    pub const fn message_static(self) -> Option<&'static str> {
+        match self {
+            Self::EndListEmptyStack => Some(Self::END_LIST_EMPTY_STACK_MESSAGE),
+            Self::FinalNoValue => Some(Self::FINAL_NO_VALUE_MESSAGE),
+            Self::SubstBadIndex(_) | Self::SpliceBadIndex(_) => None,
+        }
+    }
+
     /// The `{message}` slot of the legacy `LispError::Compile { form:
     /// macro_name, message: <invariant> }` shape. Each variant projects
     /// to the canonical message string the pre-lift inline triples
     /// emitted — byte-for-byte equivalent so authoring-tool substring
     /// greps (`tatara-check`, REPL) see no drift across the lift.
+    ///
+    /// Body composes through [`Self::message_static`] — the two
+    /// STATIC arms project into their per-role `&'static str` bytes
+    /// (`Some(EndListEmptyStack) => END_LIST_EMPTY_STACK_MESSAGE`,
+    /// `Some(FinalNoValue) => FINAL_NO_VALUE_MESSAGE`), and the two
+    /// dynamic arms format their `usize` payload in the fallthrough
+    /// closure. The two duplicated `.into()` sites in the pre-lift
+    /// `message` body collapse into ONE `map_or_else` composition:
+    /// the STATIC arms bind through the typed subset projection, the
+    /// dynamic arms format specialized. Sibling posture to a
+    /// hypothetical `OptionalParamMalformedReason::label` composing
+    /// through `label_static` on the peer 3-of-4 static carving.
     #[must_use]
     pub fn message(self) -> String {
-        match self {
-            Self::SubstBadIndex(idx) => {
-                format!("compiled template referenced bad param index {idx}")
-            }
-            Self::SpliceBadIndex(idx) => {
-                format!("compiled template referenced bad splice index {idx}")
-            }
-            Self::EndListEmptyStack => "compiled template: EndList with empty stack".into(),
-            Self::FinalNoValue => "compiled template produced no value".into(),
-        }
+        self.message_static().map_or_else(
+            || match self {
+                Self::SubstBadIndex(idx) => {
+                    format!("compiled template referenced bad param index {idx}")
+                }
+                Self::SpliceBadIndex(idx) => {
+                    format!("compiled template referenced bad splice index {idx}")
+                }
+                Self::EndListEmptyStack | Self::FinalNoValue => {
+                    // Unreachable: message_static() returned Some(_)
+                    // for these arms above. Kept as an exhaustive
+                    // match arm rather than an `unreachable!()` so a
+                    // future refactor that adds a fifth static arm
+                    // without extending `message_static` fails
+                    // compilation at THIS callsite rather than at
+                    // runtime.
+                    unreachable!(
+                        "message_static returned Some for static variant {self:?} — \
+                         the outer map_or_else's None branch is unreachable"
+                    )
+                }
+            },
+            str::to_string,
+        )
     }
 }
 
@@ -11908,6 +12090,169 @@ mod tests {
         assert_eq!(
             super::TemplateInvariantKind::FinalNoValue.message(),
             "compiled template produced no value"
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_static_message_constants_pin_canonical_bytes() {
+        // Pin each per-role `pub const *_MESSAGE: &'static str` at its
+        // exact canonical byte string — the source-of-truth constants
+        // the `message` projection routes the STATIC 2-of-4 subset
+        // arms through. A rename here (say, if a future extension
+        // ports the byte prefix from `"compiled template"` to
+        // `"compiled macro template"`) must land at ONE `pub const`
+        // per role rather than at TWO sites (the per-role const AND
+        // an inline arm literal). Sibling posture to
+        // `macro_def_head_keyword_constants_pin_canonical_bytes` /
+        // `unquote_form_label_constants_pin_canonical_bytes` /
+        // `expected_kwarg_shape_label_constants_pin_canonical_bytes`
+        // on the peer closed-set surfaces.
+        assert_eq!(
+            super::TemplateInvariantKind::END_LIST_EMPTY_STACK_MESSAGE,
+            "compiled template: EndList with empty stack",
+            "END_LIST_EMPTY_STACK_MESSAGE must pin the exact mid-loop stack-gate diagnostic bytes",
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::FINAL_NO_VALUE_MESSAGE,
+            "compiled template produced no value",
+            "FINAL_NO_VALUE_MESSAGE must pin the exact post-loop final-pop diagnostic bytes",
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_static_messages_pin_two_arm_forced_arity_array() {
+        // Pin `STATIC_MESSAGES: [&'static str; 2]` as the family-wide
+        // forced-arity ALL array over the STATIC 2-of-4 subset
+        // carving. The array literal's arity IS the closed-set-size
+        // proof — rustc's `[&'static str; 2]` check on the const's
+        // type fails compilation if a future refactor adds a third
+        // static arm without extending the array's length in
+        // lockstep. Cardinality pin at the runtime layer is a
+        // fail-loud belt-and-braces peer to the compile-time
+        // `[_; 2]` check: a hypothetical port to `&[&'static str]`
+        // (a slice, losing the arity discipline) fails here rather
+        // than silently loosening the closed-set discipline.
+        assert_eq!(
+            super::TemplateInvariantKind::STATIC_MESSAGES.len(),
+            2,
+            "STATIC_MESSAGES must have exactly two entries — the 2-of-4 static subset carving",
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::STATIC_MESSAGES,
+            [
+                super::TemplateInvariantKind::END_LIST_EMPTY_STACK_MESSAGE,
+                super::TemplateInvariantKind::FINAL_NO_VALUE_MESSAGE,
+            ],
+            "STATIC_MESSAGES must compose from the two per-role message constants in declaration order",
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_message_static_projects_static_subset_to_typed_option() {
+        // Pin `message_static(self) -> Option<&'static str>`'s per-arm
+        // truth table: the two STATIC arms project to `Some(bytes)`
+        // routed through the per-role `pub const`s; the two dynamic
+        // arms (regardless of payload) project to `None`. Payload
+        // invariance on the dynamic arms is load-bearing: a
+        // regression that surfaces the payload's `usize` bytes on
+        // the `Option<&'static str>` axis (say, by lifting the
+        // format prefix to a per-role static-str) would silently
+        // widen the static subset — this test pins the current
+        // 2-of-4 carving.
+        assert_eq!(
+            super::TemplateInvariantKind::EndListEmptyStack.message_static(),
+            Some(super::TemplateInvariantKind::END_LIST_EMPTY_STACK_MESSAGE),
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::FinalNoValue.message_static(),
+            Some(super::TemplateInvariantKind::FINAL_NO_VALUE_MESSAGE),
+        );
+        // Dynamic arms project to None regardless of payload value —
+        // the `usize` bytes format into `message()`'s dynamic
+        // fallthrough closure and cannot bind to a `&'static str`
+        // on this axis.
+        for idx in [0_usize, 1, 42, 99, usize::MAX] {
+            assert_eq!(
+                super::TemplateInvariantKind::SubstBadIndex(idx).message_static(),
+                None,
+                "SubstBadIndex({idx}) must project to None — the `usize` payload cannot bind to a &'static str",
+            );
+            assert_eq!(
+                super::TemplateInvariantKind::SpliceBadIndex(idx).message_static(),
+                None,
+                "SpliceBadIndex({idx}) must project to None — the `usize` payload cannot bind to a &'static str",
+            );
+        }
+    }
+
+    #[test]
+    fn template_invariant_kind_static_messages_align_with_message_static_by_index() {
+        // Pin the ALIGNMENT contract:
+        // `Self::STATIC_MESSAGES[0] == Self::EndListEmptyStack.message_static().unwrap()`
+        // and
+        // `Self::STATIC_MESSAGES[1] == Self::FinalNoValue.message_static().unwrap()`
+        // element-wise. A regression that swaps the array's ordering
+        // against the projection method's arm order (say, a future
+        // refactor that reorders the enum variants without
+        // reordering the array) fails loudly here. Sibling posture
+        // to `kwarg_path_kind_labels_align_with_all_by_index`,
+        // `expected_kwarg_shape_labels_align_with_all_by_index`,
+        // `macro_def_head_keywords_align_with_all_by_index` on the
+        // peer closed-set surfaces.
+        assert_eq!(
+            super::TemplateInvariantKind::STATIC_MESSAGES[0],
+            super::TemplateInvariantKind::EndListEmptyStack
+                .message_static()
+                .unwrap(),
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::STATIC_MESSAGES[1],
+            super::TemplateInvariantKind::FinalNoValue
+                .message_static()
+                .unwrap(),
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_message_delegates_static_arms_through_message_static() {
+        // Pin the `message()` composition contract: for every arm on
+        // the STATIC 2-of-4 subset,
+        // `variant.message() == variant.message_static().unwrap().to_string()`
+        // — the projection method routes the STATIC arms through
+        // `message_static()`, and any regression that re-inlines the
+        // per-role `.into()` at `message()` (undoing the composition)
+        // still passes the per-variant byte pins but fails THIS
+        // composition assertion. Sibling posture to a hypothetical
+        // `OptionalParamMalformedReason::label_delegates_static_arms_through_label_static`
+        // on the peer 3-of-4 static carving of the sibling optional-
+        // section-malformed four-arm closed set.
+        for (variant, static_bytes) in [
+            (
+                super::TemplateInvariantKind::EndListEmptyStack,
+                super::TemplateInvariantKind::END_LIST_EMPTY_STACK_MESSAGE,
+            ),
+            (
+                super::TemplateInvariantKind::FinalNoValue,
+                super::TemplateInvariantKind::FINAL_NO_VALUE_MESSAGE,
+            ),
+        ] {
+            assert_eq!(
+                variant.message(),
+                static_bytes,
+                "message() for {variant:?} must equal its message_static() bytes — routed through the typed subset projection",
+            );
+        }
+        // Dynamic arms retain the format!() behavior — the composition
+        // routes them through the fallthrough closure. Pin that the
+        // outer `map_or_else` did not accidentally swallow the
+        // payload's `usize` bytes.
+        assert_eq!(
+            super::TemplateInvariantKind::SubstBadIndex(7).message(),
+            "compiled template referenced bad param index 7",
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::SpliceBadIndex(11).message(),
+            "compiled template referenced bad splice index 11",
         );
     }
 

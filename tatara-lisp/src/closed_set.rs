@@ -1222,6 +1222,121 @@ pub trait ClosedSet: Sized + Copy + 'static {
                 "ClosedSet::index_of: Self::ALL is missing self — implementor's ALL slice doesn't cover every variant",
             )
     }
+
+    /// Recover the typed variant at declaration-order position `i` in
+    /// [`Self::ALL`], or [`None`] if `i >= Self::CARDINALITY`.
+    ///
+    /// The typed inverse of [`Self::index_of`] on the (typed variant ↔
+    /// `usize` array index) bijection: [`Self::index_of`] projects a
+    /// variant onto its `usize` position through the [`Self::ALL`]
+    /// slice; this method projects a `usize` position back onto its
+    /// typed variant. Together the two projections close the bijection
+    /// with `0..Self::CARDINALITY` at BOTH directions — every generic
+    /// consumer that stores a `variant.index_of()` for later decode
+    /// (a compact wire encoding that emits `variant.index_of() as u8`
+    /// and later recovers the variant, a slotted lookup table
+    /// `[Payload; T::CARDINALITY]` scanned back to `(variant, payload)`
+    /// pairs for exhaustive iteration, a bitset over the closed set
+    /// walked back to the set of observed variants, a metrics
+    /// aggregator that stores per-index counters and later renders
+    /// `<variant>: <count>` diagnostics) binds to ONE typed inverse
+    /// method rather than hand-rolling either `Self::ALL.get(i).copied()`
+    /// (which re-derives the same three-primitive composition at every
+    /// call site) OR a per-implementor inline `match i { 0 => Some(v0),
+    /// 1 => Some(v1), _ => None }` (which re-derives the per-variant
+    /// literal → variant table at every callsite AND drifts silently
+    /// when [`Self::ALL`] gains a new variant).
+    ///
+    /// Sibling posture to [`Self::find_by_label`] on the (label decode,
+    /// index decode) axis of the closed-set inbound-projection surface:
+    /// [`Self::find_by_label`] projects a `&str` label back onto its
+    /// typed variant through the [`Self::ALL`] × [`Self::label`] sweep,
+    /// this method projects a `usize` position back onto its typed
+    /// variant through direct [`Self::ALL`] slice indexing. Both
+    /// return an [`Option<Self>`] because the input carrier is wider
+    /// than the closed set — every non-canonical `&str` decodes to
+    /// [`None`] on the label side, every out-of-range `usize` decodes
+    /// to [`None`] on the index side. Both share the SAME
+    /// zero-allocation shape and the SAME `Option`-typed rejection
+    /// arm; a generic consumer freely swaps between the two decode
+    /// surfaces based on its carrier without changing the program's
+    /// structured-decode semantics.
+    ///
+    /// The (return-type × input-carrier) axis of the closed-set
+    /// inbound-projection surface partitions post-lift:
+    ///
+    /// | Input carrier    | Return type          | Projection surface        |
+    /// |------------------|----------------------|---------------------------|
+    /// | `&str` label     | `Result<Self, U>`    | [`Self::parse_label`]     |
+    /// | `&str` label     | `Option<Self>`       | [`Self::find_by_label`]   |
+    /// | `&str` label     | `bool`               | [`Self::contains_label`]  |
+    /// | `usize` index    | `Option<Self>`       | [`Self::from_index`]      |
+    ///
+    /// Default body composes ONE substrate primitive ([`Self::ALL`])
+    /// with the standard-library `<[T]>::get` bounded-index projection —
+    /// no discriminant sweep, no `PartialEq` bound, no per-variant
+    /// `match`. Implementors override with a per-index `match` when
+    /// the O(1) slice lookup shows up on a hot-path profile (the
+    /// substrate-wide typed-emission bind: no production site today
+    /// calls `from_index` on a per-message hot path, so the default
+    /// slice lookup costs nothing measurable, and the override axis
+    /// exists for the same reason `via` / `set_label` / `labels` /
+    /// `index_of` overrides exist — a typed escape hatch the trait
+    /// surface exposes rather than forcing the implementor to
+    /// hand-roll the impl).
+    ///
+    /// The bounded-index contract — the out-of-range arm returns
+    /// [`None`] for every `i >= Self::CARDINALITY` — is guaranteed by
+    /// the default `<[T]>::get` composition; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (16)
+    /// pins the both-directions equality on every implementor, so a
+    /// passing well-formedness sweep means every generic consumer can
+    /// call `from_index` on any `usize` payload and expect the same
+    /// `Option`-typed answer at every crate boundary.
+    ///
+    /// THEORY.md §III — the typescape; the (array index → typed
+    /// variant) projection becomes a TYPE projection on the trait
+    /// rather than a per-consumer inline `Self::ALL.get(i).copied()`
+    /// composition at every downstream index-decode site. The
+    /// (variant → `usize`, `usize` → variant) direction axis of the
+    /// (variant ↔ array-index) bijection partitions exhaustively into
+    /// TWO typed projections, each with a distinct load-bearing
+    /// consumer surface — array indexing for [`Self::index_of`],
+    /// variant recovery for this method.
+    /// THEORY.md §V.1 — knowable platform; the (array index → typed
+    /// variant) projection was an unnamed compound of [`Self::ALL`] +
+    /// `<[T]>::get` + `Option::copied` pre-lift; naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of
+    /// [`Self::ALL`] — generic consumers see ONE method, not ONE
+    /// slice-lookup-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (array
+    /// index → typed variant) projection emerges from the composition
+    /// of ONE substrate primitive ([`Self::ALL`]) with the
+    /// standard-library `<[T]>::get` bounded-index projection and the
+    /// standard-library `Option::copied` primitive rather than as a
+    /// per-implementor inline `match` block. A future tightening of
+    /// [`Self::ALL`] (a future `#[closed_set(cardinality = N)]` derive
+    /// attribute that pins N at the source, a future declaration-time
+    /// position-assertion) propagates to every closed-set const-generic
+    /// inverse-decode consumer through ONE trait method.
+    ///
+    /// Frontier inspiration: Idris's `Fin n` finite-cardinality type
+    /// with `natToFin : Nat -> (n : Nat) -> Maybe (Fin n)` — the
+    /// finite-type universe exposes a canonical (natural → element)
+    /// bounded-decode projection every downstream compact-encoding
+    /// binds to, complementing `finToNat` in the opposite direction;
+    /// Racket's `enum->object` on a closed enum decodes an index back
+    /// to its variant; MLIR's `RegisteredOperationName::get(int)` on
+    /// the Op registry decodes a stable index back to its Op kind;
+    /// Rust's `strum::EnumIter::nth` composed with `Iterator::nth` —
+    /// the same shape one vocabulary over. Translation through
+    /// pleme-io primitives: a pure default method composing the
+    /// trait's existing [`Self::ALL`] surface with `<[T]>::get` and
+    /// `Option::copied` — no new dep, no new IR layer, no supertrait
+    /// bound.
+    fn from_index(i: usize) -> Option<Self> {
+        Self::ALL.get(i).copied()
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -1443,6 +1558,56 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     `[Payload; T::CARDINALITY]` and iterates `T::ALL` in lockstep
 ///     stays sound at both the type-level dimension AND the runtime
 ///     iteration boundary.
+/// 15. For every `i in 0..T::ALL.len()`,
+///     `T::ALL[i].index_of()` equals `i` — the (typed variant →
+///     `usize` array index) bijection with `0..T::CARDINALITY` holds
+///     on every declaration-order position. The default trait body's
+///     discriminant-keyed `Iterator::position` sweep satisfies the
+///     clause for free; the assertion catches a future implementor
+///     whose override drifts from the natural `ALL`-position
+///     projection (a hand-rolled `match` that swaps two arms, a
+///     constant that reports the same index for every variant, an
+///     over-eager caching layer that returns a stale index after a
+///     variant-listing edit) loudly rather than silently bifurcating
+///     the (variant → array index) bijection every downstream
+///     per-variant lookup-table `[Payload; T::CARDINALITY]` /
+///     bitset / compact-encoding consumer routes through. Sibling
+///     posture to clause (14) — clause (14) pins the const-visible
+///     cardinality against `T::ALL`'s slice length, this clause pins
+///     the per-variant position against `T::ALL`'s indexed access so
+///     the closed set's (typed variant ↔ array-index position)
+///     bijection stays sound at the compile-time dimension (clause
+///     14) AND the runtime per-variant projection (this clause).
+/// 16. For every `i in 0..T::CARDINALITY`, `T::from_index(i)` equals
+///     `Some(T::ALL[i])`, AND `T::from_index(T::CARDINALITY)` equals
+///     [`None`] — the (`usize` array index → typed variant) inverse
+///     projection agrees with direct [`ClosedSet::ALL`] slice indexing
+///     on the in-range domain AND rejects the first out-of-range
+///     index. Clauses (15) + (16) together pin the (typed variant ↔
+///     `usize` array index) bijection at BOTH directions: clause (15)
+///     covers the forward `variant.index_of() == i` projection, this
+///     clause covers the inverse `T::from_index(i) == Some(v)`
+///     projection AND the out-of-range guard. The default trait body's
+///     `Self::ALL.get(i).copied()` composition satisfies the clause
+///     for free; the assertion catches a future implementor whose
+///     override drifts the bounded-decode arm (a permissive override
+///     that returns `Some` for an out-of-range index, folding an
+///     out-of-range serialized index onto an in-range variant; a
+///     strict override that returns `None` for a valid in-range index,
+///     silently dropping variants at the compact-decode boundary; a
+///     swapped override that recovers the wrong variant for a valid
+///     index, silently bifurcating the (variant ↔ index) round-trip)
+///     loudly rather than silently bifurcating the inverse-decode
+///     surface every downstream compact-encoding / bitset-observed-
+///     variant / lookup-table-iteration consumer routes through.
+///     Sibling posture to clause (12) on the (label decode, index
+///     decode) axis of the closed-set inbound-projection surface —
+///     both close the inbound-projection surface with an
+///     [`Option`]-typed rejection arm, [`ClosedSet::find_by_label`]
+///     for the `&str` carrier, [`ClosedSet::from_index`] for the
+///     `usize` carrier; the pin verifies the alignment across both
+///     carriers on the (in-range accept, out-of-range reject)
+///     partition.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -1816,6 +1981,36 @@ where
             "{type_name}: T::ALL[{i}].index_of() drifted from its declaration-order position — the (variant → array index) bijection with 0..T::CARDINALITY broke on this variant, so a per-variant lookup-table `[Payload; T::CARDINALITY]` consumer keyed by `variant.index_of()` would land on the wrong slot",
         );
     }
+    // (16) — For every `i in 0..T::CARDINALITY`, `T::from_index(i)`
+    // MUST equal `Some(T::ALL[i])`, AND `T::from_index(T::CARDINALITY)`
+    // MUST return `None`. The default trait body's
+    // `Self::ALL.get(i).copied()` composition satisfies the clause for
+    // free; the assertion catches a future implementor whose override
+    // drifts the bounded-decode arm (a permissive override that
+    // returns `Some` for an out-of-range index, folding an out-of-
+    // range serialized index onto an in-range variant; a strict
+    // override that returns `None` for a valid in-range index,
+    // silently dropping variants at the compact-decode boundary; a
+    // swapped override that recovers the wrong variant for a valid
+    // index, silently bifurcating the (variant ↔ index) round-trip).
+    // Sibling posture to clause (15) — clause (15) pins the forward
+    // `variant.index_of() == i` projection on every declaration-order
+    // position, this clause pins the inverse `T::from_index(i) ==
+    // Some(v)` projection AND the out-of-range `T::from_index(N) ==
+    // None` guard so the (typed variant ↔ `usize` array index)
+    // bijection stays sound at BOTH directions on every implementor.
+    for (i, &v) in T::ALL.iter().enumerate() {
+        let recovered = T::from_index(i);
+        assert_eq!(
+            recovered,
+            Some(v),
+            "{type_name}: T::from_index({i}) drifted from Some(T::ALL[{i}]) — the (array index → typed variant) inverse projection broke on this slot, so a downstream compact-encoding consumer that stores `variant.index_of() as u8` and later recovers the variant through `T::from_index(byte as usize)` would land on the wrong variant",
+        );
+    }
+    assert!(
+        T::from_index(T::CARDINALITY).is_none(),
+        "{type_name}: T::from_index(T::CARDINALITY) returned Some — the out-of-range guard drifted, so a per-variant lookup-table `[Payload; T::CARDINALITY]` consumer that decodes an out-of-range serialized index would silently fold onto an in-range variant rather than surfacing the corruption at the decode boundary",
+    );
 }
 
 #[cfg(test)]
@@ -3516,6 +3711,245 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an index_of override drifted from the natural T::ALL-position projection",
+        );
+    }
+
+    #[test]
+    fn from_index_returns_declaration_order_variant_for_every_index() {
+        // The (array index → variant) projection — each in-range
+        // `from_index(i)` returns `Some(v)` where `v` is `T::ALL[i]`,
+        // pinning the direct slice-lookup arm the default trait body
+        // exposes. The `StubKind` variants (Alpha, Beta, Gamma)
+        // declare in the (0, 1, 2) positions the trait's default
+        // `Self::ALL.get(i).copied()` composition MUST recover.
+        assert_eq!(
+            <StubKind as ClosedSet>::from_index(0),
+            Some(StubKind::Alpha),
+        );
+        assert_eq!(<StubKind as ClosedSet>::from_index(1), Some(StubKind::Beta));
+        assert_eq!(
+            <StubKind as ClosedSet>::from_index(2),
+            Some(StubKind::Gamma),
+        );
+    }
+
+    #[test]
+    fn from_index_returns_none_for_out_of_range_index() {
+        // The bounded-decode contract — `from_index(i)` returns `None`
+        // for every `i >= T::CARDINALITY`. Pinning the out-of-range
+        // guard here means a downstream compact-encoding consumer that
+        // decodes a corrupt serialized index (a wire byte that
+        // survived a bit flip, a deserializer that fed the wrong u8
+        // slot) surfaces the corruption at the decode boundary as
+        // `None` rather than silently folding onto an in-range
+        // variant. Sweep the first out-of-range index (equals
+        // `T::CARDINALITY`) AND a far-out-of-range index
+        // (`T::CARDINALITY + 100`) AND the `usize::MAX` sentinel — the
+        // three probes catch a permissive override that widens the
+        // in-range domain by any amount OR one that special-cases the
+        // `T::CARDINALITY` boundary while accepting `T::CARDINALITY +
+        // 100` OR one that accepts `usize::MAX` through an unchecked
+        // arithmetic path.
+        let card = <StubKind as ClosedSet>::CARDINALITY;
+        assert!(
+            <StubKind as ClosedSet>::from_index(card).is_none(),
+            "from_index(CARDINALITY = {card}) returned Some — the out-of-range guard drifted at the boundary",
+        );
+        assert!(
+            <StubKind as ClosedSet>::from_index(card + 100).is_none(),
+            "from_index(CARDINALITY + 100) returned Some — the out-of-range guard drifted for far-out-of-range indices",
+        );
+        assert!(
+            <StubKind as ClosedSet>::from_index(usize::MAX).is_none(),
+            "from_index(usize::MAX) returned Some — the out-of-range guard drifted for the top-rank sentinel",
+        );
+    }
+
+    #[test]
+    fn from_index_round_trips_through_index_of_into_the_original_variant() {
+        // The forward round-trip — `from_index(v.index_of()) ==
+        // Some(v)` for every variant `v in T::ALL.iter()`. Pinning the
+        // round-trip here means the (typed variant → array index)
+        // projection AND the (array index → typed variant) projection
+        // stay aligned at the trait surface; a downstream consumer
+        // that stores `variant.index_of()` for later decode (a compact
+        // wire encoding, a slotted lookup table walked back to
+        // `(variant, payload)` pairs, a metrics aggregator rendered
+        // back as `<variant>: <count>` diagnostics) MUST see the same
+        // variant on both sides of the projection pair. A regression
+        // on EITHER side of the bijection (a permissive `index_of`
+        // override, a strict `from_index` override that drops a valid
+        // in-range index) fails this contract stub-level before any
+        // per-implementor sweep depends on the bijection downstream.
+        // Sibling posture to
+        // `index_of_round_trips_through_all_indexing_into_the_original_variant`
+        // one direction over — that pin covers the direct
+        // `T::ALL[v.index_of()] == v` round-trip, this pin covers the
+        // typed inverse `T::from_index(v.index_of()) == Some(v)`
+        // round-trip so both round-trip surfaces stay honest.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let idx = <StubKind as ClosedSet>::index_of(v);
+            let recovered = <StubKind as ClosedSet>::from_index(idx);
+            assert_eq!(
+                recovered,
+                Some(v),
+                "from_index(index_of({v:?}) = {idx}) failed to recover the original variant — the (variant ↔ array index) forward round-trip broke",
+            );
+        }
+    }
+
+    #[test]
+    fn from_index_reverse_round_trips_through_index_of_into_the_original_index() {
+        // The reverse round-trip — `from_index(i).unwrap().index_of()
+        // == i` for every `i in 0..T::CARDINALITY`. Pinning the
+        // reverse round-trip here means the (array index → typed
+        // variant → array index) composition stays the identity
+        // permutation on the closed set's `0..T::CARDINALITY` index
+        // domain; a downstream consumer that iterates a `[Payload;
+        // T::CARDINALITY]` lookup table by index, decodes each slot's
+        // index back to a typed variant, and re-encodes for storage
+        // MUST see the same index on both sides of the projection
+        // pair. Sibling posture to
+        // `from_index_round_trips_through_index_of_into_the_original_variant`
+        // one direction over — that pin covers the (variant → index →
+        // variant) forward round-trip, this pin covers the (index →
+        // variant → index) reverse round-trip so both round-trip
+        // surfaces close the bijection with `0..T::CARDINALITY` in
+        // BOTH directions.
+        let card = <StubKind as ClosedSet>::CARDINALITY;
+        for i in 0..card {
+            let v = <StubKind as ClosedSet>::from_index(i)
+                .expect("from_index in 0..CARDINALITY returned None on a valid index");
+            let round_tripped = <StubKind as ClosedSet>::index_of(v);
+            assert_eq!(
+                round_tripped, i,
+                "index_of(from_index({i}) = {v:?}) failed to recover the original index — the (array index ↔ variant) reverse round-trip broke",
+            );
+        }
+    }
+
+    #[test]
+    fn from_index_projects_zero_to_cardinality_and_from_index_into_all_verbatim() {
+        // The exhaustive-permutation contract — collecting
+        // `from_index(i).unwrap()` for each `i in 0..T::CARDINALITY`
+        // yields the `T::ALL` slice verbatim. Pinning the permutation
+        // shape here means a regression that folds two indices onto
+        // the same variant (a hand-rolled `match i` that returns a
+        // constant, an over-eager caching layer that stales on a
+        // variant-listing edit) fails this stub-level contract even
+        // when the individual per-index assertions would still pass
+        // in isolation. The identity-permutation shape is the
+        // bijection every downstream per-variant lookup-table /
+        // bitset consumer implicitly relies on — no two indices
+        // decode to the same variant, and every variant in `T::ALL`
+        // is reached by some index in `0..T::CARDINALITY`.
+        let card = <StubKind as ClosedSet>::CARDINALITY;
+        let variants: Vec<StubKind> = (0..card)
+            .map(|i| {
+                <StubKind as ClosedSet>::from_index(i)
+                    .expect("from_index in 0..CARDINALITY returned None on a valid index")
+            })
+            .collect();
+        let all: Vec<StubKind> = <StubKind as ClosedSet>::ALL.to_vec();
+        assert_eq!(
+            variants, all,
+            "0..T::CARDINALITY projected through from_index failed to yield T::ALL verbatim — the (array index → variant) inverse projection drifted from the natural T::ALL indexing",
+        );
+    }
+
+    #[test]
+    fn from_index_agrees_with_all_get_copied_on_every_probe() {
+        // The natural-projection alignment — `from_index(i)` MUST
+        // equal `T::ALL.get(i).copied()` on every representative
+        // input: every in-range index (`0..T::CARDINALITY`) matches
+        // (`Some(T::ALL[i])`), the first out-of-range index
+        // (`T::CARDINALITY`) rejects (`None`), and the top-rank
+        // sentinel (`usize::MAX`) rejects (`None`). The default trait
+        // body `Self::ALL.get(i).copied()` composition satisfies the
+        // alignment for free; the alignment lets a generic consumer
+        // freely swap between the trait method and the inline
+        // `T::ALL.get(i).copied()` composition without changing the
+        // program's structured-decode semantics.
+        let card = <StubKind as ClosedSet>::CARDINALITY;
+        for i in 0..card {
+            assert_eq!(
+                <StubKind as ClosedSet>::from_index(i),
+                <StubKind as ClosedSet>::ALL.get(i).copied(),
+                "from_index({i}) drifted from ALL.get({i}).copied() on the in-range domain",
+            );
+        }
+        assert_eq!(
+            <StubKind as ClosedSet>::from_index(card),
+            <StubKind as ClosedSet>::ALL.get(card).copied(),
+            "from_index(CARDINALITY) drifted from ALL.get(CARDINALITY).copied() at the boundary",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::from_index(usize::MAX),
+            <StubKind as ClosedSet>::ALL.get(usize::MAX).copied(),
+            "from_index(usize::MAX) drifted from ALL.get(usize::MAX).copied() at the top-rank sentinel",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_from_index_and_all_indexing() {
+        // The well-formedness sweep's (16) clause — `T::from_index(i)
+        // == Some(T::ALL[i])` on the in-range domain AND
+        // `T::from_index(T::CARDINALITY) == None` at the out-of-range
+        // boundary. A hand-impl'd implementor whose override drifts
+        // the bounded-decode arm (a permissive override that returns
+        // `Some` for an out-of-range index, a strict override that
+        // returns `None` for a valid in-range index, a swapped
+        // override that recovers the wrong variant for a valid index)
+        // fails the sweep loudly rather than silently bifurcating the
+        // (array index → typed variant) inverse projection every
+        // downstream compact-encoding / bitset / lookup-table
+        // consumer routes through. Pinning the failure path here
+        // keeps the testkit's (16) clause guaranteed-to-fire — a
+        // regression that makes the assertion permissive (e.g. a
+        // future "any variant within bound" relaxation) breaks this
+        // stub-level contract before any per-implementor sweep runs.
+        // Sibling posture to the fifteen sibling
+        // `_catches_drift_between_*` pins above (clauses 5-15);
+        // together they close the structural-drift-catches sweep on
+        // every default composition the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedFromIndexKind {
+            First,
+            Second,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedFromIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedFromIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted from_index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedFromIndexKind {
+            const ALL: &'static [Self] = &[Self::First, Self::Second];
+            const SET_LABEL: &'static str = "drifted from_index kind";
+            type Unknown = UnknownDriftedFromIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::First => "first",
+                    Self::Second => "second",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedFromIndexKind(s.to_owned())
+            }
+            fn from_index(_i: usize) -> Option<Self> {
+                // Drifted override — always returns `Some(First)`,
+                // folding index 1 onto index 0's variant AND accepting
+                // every out-of-range index. Breaks BOTH the in-range
+                // per-slot bijection AND the out-of-range guard.
+                Some(Self::First)
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedFromIndexKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a from_index override drifted from the natural Self::ALL.get(i).copied() projection",
         );
     }
 }

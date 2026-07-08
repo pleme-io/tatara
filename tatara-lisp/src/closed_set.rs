@@ -899,6 +899,125 @@ pub trait ClosedSet: Sized + Copy + 'static {
             Err(unknown) => Err((unknown, Self::suggest_closest(s))),
         }
     }
+
+    /// Zero-allocation typed decode of `s`, threading a typed
+    /// [`Self::suggest_closest`] hint into the rejection envelope —
+    /// the structured-diagnostic surface that composes
+    /// [`Self::find_by_label`] + [`Self::suggest_closest`] into ONE
+    /// call a downstream LSP / config-decoder / filter-map consumer
+    /// takes as `T: ClosedSet` WITHOUT paying the
+    /// [`Self::make_unknown`] carrier allocation
+    /// [`Self::parse_label_with_hint`] threads on rejection.
+    ///
+    /// On exact match returns `Ok(v)` — the hint slot stays absent
+    /// because [`Self::suggest_closest`] is "near-miss only" by
+    /// contract (a successful lookup short-circuits before
+    /// [`Self::suggest_closest`] runs, so the substrate-wide
+    /// "did you mean …?" surface never double-emits the same
+    /// variant once as a successful decode and once as a hint).
+    /// On miss returns `Err(hint)` where `hint` is the typed variant
+    /// [`Self::suggest_closest`] keys on — `Some(v)` when a
+    /// canonical label sits within the substrate-wide bounded edit
+    /// distance, `None` when no candidate qualifies (the
+    /// conservative-suggestion contract — silent over guessing).
+    ///
+    /// Peer of [`Self::parse_label_with_hint`] on the (allocating
+    /// carrier decode, non-allocating typed decode) axis of the
+    /// closed-set surface: [`Self::parse_label_with_hint`]
+    /// materializes the typed [`Self::Unknown`] carrier (owning a
+    /// [`String`] copy of `s`) on the reject path even when the
+    /// caller drops it immediately with `.map_err(|(_, hint)| hint)`;
+    /// this method answers the SAME structural question —
+    /// "which canonical variant does `s` decode to (or hint at), if
+    /// any?" — without ever entering [`Self::make_unknown`].
+    ///
+    /// The (side-effect × hint) 2×2 matrix over the closed-set
+    /// decoded-arm return type partitions exhaustively post-lift:
+    ///
+    /// | Side-effect on reject         | No hint                     | With hint                          |
+    /// |-------------------------------|-----------------------------|------------------------------------|
+    /// | Allocating (materialize carrier) | [`Self::parse_label`]    | [`Self::parse_label_with_hint`]    |
+    /// | Non-allocating (typed decode) | [`Self::find_by_label`]     | [`Self::find_by_label_with_hint`]  |
+    ///
+    /// Default body composes [`Self::find_by_label`] with
+    /// [`Self::suggest_closest`] verbatim — the structured shape is
+    /// a typed CONSEQUENCE of the two pre-existing primitives, not a
+    /// third codepath. Implementors override only when the
+    /// composition needs to diverge (no production implementor
+    /// reaches for this today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` / `suggest_closest` /
+    /// `parse_label_with_hint` overrides exist — a typed escape
+    /// hatch the trait surface exposes rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::find_by_label`] propagates the override
+    /// through this default body to the structured typed-decode arm
+    /// automatically; the (allocating carrier decode, non-allocating
+    /// typed decode) axis funnels every sweep through ONE typed
+    /// primitive on each of the (no-hint, with-hint) columns.
+    ///
+    /// Future consumers — an LSP hover pass that resolves the typed
+    /// variant under the operator's cursor AND (on miss) renders a
+    /// `did you mean <v.label()>?` next to a bare rejection WITHOUT
+    /// paying carrier allocation per non-matching hover, a
+    /// config-field decoder with a natural fallback AND a typed
+    /// hint the operator sees when the field's value is a near-miss
+    /// (`T::find_by_label_with_hint(cfg).unwrap_or_else(|hint|
+    /// { emit_hint(hint); T::default_kind() })`), a `filter_map`-
+    /// shaped stream projection over cluster-wide `tatara.pleme.io/*`
+    /// annotation keys that partitions each element into
+    /// (typed_variant, typed_hint, bare_unrecognized_key) via
+    /// `find_by_label_with_hint` — bind to ONE trait method instead
+    /// of hand-rolling the
+    /// `find_by_label(s).ok_or_else(|| suggest_closest(s))`
+    /// composition at each callsite, and the closed-set
+    /// zero-allocation structured-decode surface evolves at ONE site
+    /// rather than per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the structured typed-decode
+    /// becomes a TYPE projection on the trait rather than a
+    /// per-consumer hand-rolled
+    /// (`find_by_label(s).ok_or_else(|| suggest_closest(s))`) call
+    /// at every zero-allocation decode boundary. The (allocating
+    /// carrier decode, non-allocating typed decode) × (no-hint,
+    /// with-hint) 2×2 matrix partitions the structured-decode
+    /// surface exhaustively into FOUR typed projections, each with
+    /// a distinct load-bearing consumer surface.
+    /// THEORY.md §V.1 — knowable platform; the structured
+    /// typed-decode was an unnamed compound of
+    /// [`Self::find_by_label`] + [`Self::suggest_closest`] pre-lift.
+    /// Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two substrate primitives — generic
+    /// consumers see ONE method, not ONE structured-decode-shape-
+    /// per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// structured-diagnostic shape emerges from the composition of
+    /// TWO substrate primitives ([`Self::find_by_label`],
+    /// [`Self::suggest_closest`]) rather than as a per-implementor
+    /// structured-decode impl. A future tightening of either
+    /// primitive (a future perfect-hash lookup on
+    /// [`Self::find_by_label`], a future Damerau-Levenshtein lift
+    /// on [`Self::suggest_closest`], a future case-insensitive
+    /// projection axis) propagates to every closed-set structured
+    /// zero-allocation consumer through ONE trait body.
+    ///
+    /// Frontier inspiration: rustc's `find_best_match_for_name`
+    /// composed with `Symbol::intern` — the typed-symbol lookup with
+    /// a bounded near-miss adornment slot, without materializing a
+    /// diagnostic on miss when the caller supplies a natural
+    /// fallback. MLIR's `Operation::dyn_cast<T>` composed with the
+    /// diagnostic engine's registered "did you mean" hook — the
+    /// typed op lookup returns `Option<T>` on miss, and the hint is
+    /// a separate typed projection over the op-kind registry.
+    /// Translation through pleme-io primitives: a pure default
+    /// method composing the trait's existing [`Self::find_by_label`]
+    /// with [`Self::suggest_closest`] — no new primitive, no new
+    /// dep, no new IR layer.
+    fn find_by_label_with_hint(s: &str) -> Result<Self, Option<Self>> {
+        match Self::find_by_label(s) {
+            Some(v) => Ok(v),
+            None => Err(Self::suggest_closest(s)),
+        }
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -1071,6 +1190,39 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     return-type axis — both walk the SAME (`Self::ALL`,
 ///     `Self::label`) primitive pair and MUST agree on the
 ///     underlying (accept, reject) partition; the pin verifies the
+///     alignment across both arms of the axis.
+/// 13. [`ClosedSet::find_by_label_with_hint`] composes
+///     [`ClosedSet::find_by_label`] and [`ClosedSet::suggest_closest`]
+///     verbatim — the zero-allocation structured-decode surface
+///     every consumer that needs the typed variant AND (on miss) the
+///     typed hint, without paying the [`ClosedSet::Unknown`] carrier
+///     allocation [`ClosedSet::parse_label_with_hint`] threads on
+///     rejection, routes through emits at ONE trait body. Every
+///     variant in `T::ALL` decodes to `Ok(v)` through the structured
+///     surface (the hint slot is structurally absent on the Ok arm),
+///     and the sweep's reserved probe input rejects with `Err(None)`
+///     — the probe sits beyond [`ClosedSet::suggest_closest`]'s
+///     bounded edit distance by construction (its 38-char body
+///     shares no characters with any plausible canonical label), so
+///     the conservative-suggestion contract demands the absent hint
+///     slot. The default trait body satisfies the clause for free;
+///     the assertion catches a future implementor whose
+///     `find_by_label_with_hint` override drifts from the natural
+///     composition (a degenerate axis the trait surface exposes for
+///     the same reason `via` / `set_label` / `labels` overrides
+///     exist — a typed escape hatch rather than forcing the
+///     implementor to hand-roll the impl). A drifted override that
+///     accepts the probe as `Ok`, fabricates a hint for the
+///     unrecognizable probe, OR emits the wrong typed decode on a
+///     canonical variant fails this clause loudly rather than
+///     silently bifurcating the zero-allocation structured-decode
+///     surface every LSP / config-decoder / filter-map consumer
+///     routes through. Sibling posture to clause (7) on the
+///     (allocating carrier decode, non-allocating typed decode)
+///     axis — both compose the SAME [`ClosedSet::suggest_closest`]
+///     hint primitive next to the underlying typed-decode primitive
+///     on their respective (allocating, non-allocating) columns of
+///     the (side-effect × hint) 2×2 matrix; the pin verifies the
 ///     alignment across both arms of the axis.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
@@ -1357,6 +1509,44 @@ where
         T::find_by_label("").is_none(),
         "{type_name}: T::find_by_label(\"\") returned Some(_) — the zero-allocation typed decode accepted the empty-string boundary that clause (4) reserves as structurally outside every closed set",
     );
+    // (13) — `T::find_by_label_with_hint` composes `find_by_label` +
+    // `suggest_closest` verbatim. Every variant decodes to `Ok(v)`
+    // through the structured surface; the probe rejects with
+    // `Err(None)` — the same 38-char probe clause (7) reserves as
+    // beyond `suggest_closest`'s bounded edit distance by
+    // construction. The default trait body satisfies the clause for
+    // free; the assertion catches an override that drifts the
+    // composition (accepts the probe as Ok, fabricates a hint for
+    // the unrecognizable probe, OR emits the wrong typed decode on
+    // a canonical variant). Sibling posture to clause (7) on the
+    // (allocating carrier decode, non-allocating typed decode) axis
+    // of the closed-set surface — both compose the SAME
+    // `suggest_closest` hint primitive next to the underlying
+    // typed-decode primitive on their respective columns of the
+    // (side-effect × hint) 2×2 matrix.
+    for &v in T::ALL {
+        let label = v.label();
+        match T::find_by_label_with_hint(label) {
+            Ok(decoded) => assert_eq!(
+                decoded, v,
+                "{type_name}: find_by_label_with_hint round-trip {label:?} → variant decoded to a different variant",
+            ),
+            Err(_) => panic!(
+                "{type_name}: find_by_label_with_hint round-trip {label:?} → variant rejected by find_by_label_with_hint",
+            ),
+        }
+    }
+    match T::find_by_label_with_hint(probe) {
+        Ok(_) => panic!(
+            "{type_name}: find_by_label_with_hint accepted the reserved probe input — the structured zero-allocation surface MUST reject every input outside the closed set",
+        ),
+        Err(hint) => {
+            assert!(
+                hint.is_none(),
+                "{type_name}: find_by_label_with_hint fabricated a `did you mean ...?` hint for the unrecognizable probe — the conservative-suggestion contract demands `None` for inputs beyond the bounded edit distance",
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2594,6 +2784,190 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a contains_label override that accepted the reserved probe input",
+        );
+    }
+
+    #[test]
+    fn find_by_label_with_hint_returns_ok_variant_for_exact_match() {
+        // The exact-match arm — `find_by_label_with_hint("alpha")`
+        // returns `Ok(Alpha)` and never enters `suggest_closest`.
+        // The hint slot is structurally absent on the Ok arm because
+        // the substrate-wide `did you mean …?` surface never double-
+        // emits the same variant once as a successful decode and once
+        // as a hint. Sibling posture to
+        // `parse_label_with_hint_returns_ok_variant_for_exact_match`
+        // one axis over on the (allocating carrier decode, non-
+        // allocating typed decode) column of the (side-effect × hint)
+        // 2×2 matrix. Pinning the exact-match shape here means a
+        // generic consumer can lean on the Ok(v) shape to short-
+        // circuit before any structured-diagnostic materialization.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let outcome = <StubKind as ClosedSet>::find_by_label_with_hint(v.label());
+            assert_eq!(outcome, Ok(v));
+        }
+    }
+
+    #[test]
+    fn find_by_label_with_hint_returns_hint_for_near_miss() {
+        // The near-miss arm — `find_by_label_with_hint("alpa")`
+        // returns `Err(Some(Alpha))`: the typed decode misses (the
+        // input isn't a canonical label), and the substrate-wide
+        // bounded edit distance places "alpha" within reach
+        // (Levenshtein distance 1 ≤ bound 2 for 4-char input). The
+        // hint adornment is the typed variant a downstream LSP /
+        // `tatara-check` consumer renders next to a bare rejection
+        // WITHOUT paying the `make_unknown` carrier allocation
+        // `parse_label_with_hint` threads on the same reject path.
+        // Sibling posture to
+        // `parse_label_with_hint_returns_unknown_with_hint_for_near_miss`
+        // one axis over — this pin covers the non-allocating column
+        // of the (side-effect × hint) 2×2 matrix.
+        let outcome = <StubKind as ClosedSet>::find_by_label_with_hint("alpa");
+        assert_eq!(outcome, Err(Some(StubKind::Alpha)));
+    }
+
+    #[test]
+    fn find_by_label_with_hint_returns_none_hint_for_far_miss() {
+        // The conservative-suggestion arm — an input whose closest
+        // label sits beyond the substrate-wide bounded edit distance
+        // returns `Err(None)` rather than `Err(Some(best_of_the_bunch))`.
+        // The hint slot stays absent so the "did you mean …?" surface
+        // doesn't fabricate an unrelated suggestion. Sibling posture
+        // to `parse_label_with_hint_returns_unknown_without_hint_for_far_miss`
+        // one axis over. Pinning the contract here means a generic
+        // structured-diagnostic consumer that takes the hint slot can
+        // rely on its presence as a signal — the operator sees
+        // `did you mean …?` only when the substrate has a typed
+        // near-miss to point at.
+        let outcome = <StubKind as ClosedSet>::find_by_label_with_hint("xxxxxxxx");
+        assert_eq!(outcome, Err(None));
+    }
+
+    #[test]
+    fn find_by_label_with_hint_rejects_unknown_input_without_allocating_carrier() {
+        // Zero-allocation structured-decode reject arm — an input
+        // outside the closed set returns `Err(hint)` WITHOUT
+        // threading through `make_unknown` (i.e. without materializing
+        // an owned `String` copy of the input in a typed carrier).
+        // The (allocating carrier decode, non-allocating typed
+        // decode) axis of the (side-effect × hint) 2×2 matrix
+        // partitions cleanly at the return-type boundary:
+        // `parse_label_with_hint(s)` on the same reject path
+        // allocates `UnknownStubKind("zzzz".to_owned())` next to the
+        // hint slot; this method returns a bare `Err(hint)`. Pinning
+        // the reject shape here means a generic LSP hover pass /
+        // config-decoder consumer can lean on
+        // `find_by_label_with_hint` for a zero-alloc structured
+        // typed projection — the two columns of the 2×2 matrix stay
+        // semantically aligned (both agree on membership) while the
+        // allocation cost partitions per consumer's needs. The probe
+        // "zzzz" (4 chars → suggestion-bound 2) sits at Levenshtein
+        // distance ≥ 4 from every canonical `StubKind` label, so the
+        // far-miss `Err(None)` hint shape isolates the reject arm's
+        // carrier-non-allocation property from the near-miss hint
+        // shape `find_by_label_with_hint_returns_hint_for_near_miss`
+        // pins one axis over.
+        let outcome = <StubKind as ClosedSet>::find_by_label_with_hint("zzzz");
+        assert_eq!(outcome, Err(None));
+    }
+
+    #[test]
+    fn find_by_label_with_hint_agrees_with_parse_label_with_hint_on_every_probe() {
+        // The (side-effect × hint) 2×2 matrix on the return-type axis
+        // MUST stay semantically aligned on every input the sweep
+        // walks. This test pins the alignment against a representative
+        // 6-input probe set covering (a) every canonical variant
+        // label — both arms return the acceptance side (`Ok(v)`) AND
+        // project to the SAME typed variant; (b) a near-miss —
+        // both arms return `Err(_, Some(v))` / `Err(Some(v))` on the
+        // hint slot alignment; (c) a far miss — both arms return
+        // `Err(_, None)` / `Err(None)` on the hint slot alignment;
+        // (d) the empty-string boundary. The alignment is the
+        // load-bearing contract that lets a generic consumer freely
+        // swap between the two columns of the 2×2 matrix based on
+        // its allocation needs without changing the program's
+        // structured-decode semantics. A regression that drifts the
+        // hint slot on either arm (a permissive
+        // `find_by_label_with_hint` override that fabricates a hint
+        // for an unknown string, a strict `parse_label_with_hint`
+        // override that drops a valid hint on a near-miss) fails
+        // this pin stub-level before any per-implementor sweep
+        // depends on the alignment downstream.
+        let inputs: [&str; 6] = ["alpha", "beta", "gamma", "alpa", "xxxxxxxx", ""];
+        for input in inputs {
+            let parsed = <StubKind as ClosedSet>::parse_label_with_hint(input);
+            let found = <StubKind as ClosedSet>::find_by_label_with_hint(input);
+            match (parsed, found) {
+                (Ok(a), Ok(b)) => assert_eq!(
+                    a, b,
+                    "parse_label_with_hint({input:?}) and find_by_label_with_hint({input:?}) decoded to different variants — the structured typed-decode axis bifurcated",
+                ),
+                (Err((_, hint_p)), Err(hint_f)) => assert_eq!(
+                    hint_p, hint_f,
+                    "parse_label_with_hint({input:?}) and find_by_label_with_hint({input:?}) disagreed on the typed hint slot — the (side-effect × hint) 2×2 matrix bifurcated on the hint column",
+                ),
+                (Ok(_), Err(_)) | (Err(_), Ok(_)) => panic!(
+                    "parse_label_with_hint({input:?}) and find_by_label_with_hint({input:?}) disagreed on the (accept, reject) partition — the structured decode axis bifurcated",
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_find_by_label_with_hint_and_composition()
+    {
+        // The well-formedness sweep's (13) clause —
+        // `find_by_label_with_hint` MUST compose `find_by_label` +
+        // `suggest_closest` verbatim. A hand-impl'd implementor whose
+        // override drifts the composition (accepts the probe as Ok,
+        // fabricates a hint for the unrecognizable probe, emits the
+        // wrong typed decode on a canonical variant) fails the sweep
+        // loudly rather than silently bifurcating the zero-allocation
+        // structured-decode surface every LSP / config-decoder /
+        // filter-map consumer routes through. Pinning the failure
+        // path here keeps the testkit's (13) clause guaranteed-to-
+        // fire — a regression that makes the assertion permissive
+        // breaks this stub-level contract before any per-implementor
+        // sweep runs. Sibling posture to the twelve sibling
+        // `_catches_drift_between_*` pins above (clauses 5-12);
+        // together they close the structural-drift-catches sweep on
+        // every default composition the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedFindHintKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedFindHintKind(pub String);
+        impl core::fmt::Display for UnknownDriftedFindHintKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted find hint kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedFindHintKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted find hint kind";
+            type Unknown = UnknownDriftedFindHintKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedFindHintKind(s.to_owned())
+            }
+            fn find_by_label_with_hint(_s: &str) -> Result<Self, Option<Self>> {
+                // Drifted override — fabricates a hint for every
+                // input, including the unrecognizable probe the
+                // testkit's clause (13) reserves. Fails the
+                // conservative-suggestion contract on the non-
+                // allocating column of the (side-effect × hint) 2×2
+                // matrix.
+                Err(Some(Self::Only))
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedFindHintKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a find_by_label_with_hint override that fabricated a hint for the unrecognizable probe",
         );
     }
 }

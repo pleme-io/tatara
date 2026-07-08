@@ -2514,29 +2514,170 @@ pub enum OptionalParamMalformedReason {
 }
 
 impl OptionalParamMalformedReason {
+    /// Canonical `&'static str` diagnostic-label bytes for the
+    /// [`Self::EmptyList`] rejection — `"empty list"`. Per-role peer of
+    /// [`Self::EmptyList`] on the closed-set optional-spec-rejection
+    /// algebra; consumers reach for
+    /// `OptionalParamMalformedReason::EMPTY_LIST_LABEL` when the caller
+    /// has a variant in hand at compile time and wants the canonical
+    /// diagnostic bytes without an intermediate `.to_string()`
+    /// allocation through [`Self::label`].
+    ///
+    /// Sibling posture to [`crate::error::MacroDefHead::DEFMACRO_KEYWORD`]
+    /// et al (per-role reserved-word algebra on the macro-definition-head
+    /// closed set) and [`crate::error::StructuralKind::NIL_LABEL`] et al
+    /// (per-role structural-residual algebra on the SexpShape 2-of-12
+    /// carving): every closed-set outer algebra the substrate carries
+    /// now pins its per-variant canonical bytes at ONE `pub const` per
+    /// role.
+    ///
+    /// The three per-role static labels here (this constant,
+    /// [`Self::MISSING_DEFAULT_LABEL`], [`Self::NON_SYMBOL_NAME_LABEL`])
+    /// close the STATIC subset of the four-arm closed set — the fourth
+    /// arm [`Self::ExtraElements`] carries a `usize` payload and formats
+    /// its label dynamically, so it stays inline at [`Self::label`] and
+    /// does NOT admit a per-role `&'static str` constant on this axis.
+    /// The 3-of-4 carving is pinned by
+    /// [`Self::STATIC_LABELS`]'s `[&'static str; 3]` forced-arity array.
+    ///
+    /// Cross-axis overlap: this label's `"empty list"` bytes are
+    /// byte-for-byte identical to the fallback body emitted by
+    /// [`missing_head_symbol_suffix`]'s `None` arm (the "no head symbol,
+    /// list is empty" rejection at [`LispError::MissingHeadSymbol`]).
+    /// The two sites SHARE the surface bytes but carry DISTINCT
+    /// semantic scopes (this arm scopes to the `&optional` section
+    /// gate; the sibling site scopes to a bare call-head list-empty
+    /// gate), so the alias is intentionally NOT lifted to a
+    /// substrate-wide constant — a future disambiguation drift on
+    /// EITHER side must land at the semantic-scope site rather than at
+    /// a shared canonical byte.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the (variant, canonical-bytes) pairing binds
+    /// at ONE `pub const` on the typed algebra rather than at TWO
+    /// sites (a match-arm literal AND a Display-test literal).
+    /// THEORY.md §III — the typescape; the canonical diagnostic bytes
+    /// bind at ONE `pub const` on the closed-set algebra rather than
+    /// at inline `.to_string()` literals in the [`Self::label`] match
+    /// arms.
+    pub const EMPTY_LIST_LABEL: &'static str = "empty list";
+
+    /// Canonical `&'static str` diagnostic-label bytes for the
+    /// [`Self::MissingDefault`] rejection — `"missing default"`.
+    /// Sibling of [`Self::EMPTY_LIST_LABEL`] on the closed-set per-role
+    /// static-label axis; see [`Self::EMPTY_LIST_LABEL`] for the
+    /// algebra-level round-trip contract every sibling shares.
+    pub const MISSING_DEFAULT_LABEL: &'static str = "missing default";
+
+    /// Canonical `&'static str` diagnostic-label bytes for the
+    /// [`Self::NonSymbolName`] rejection — `"name not a symbol"`.
+    /// Sibling of [`Self::EMPTY_LIST_LABEL`] on the closed-set per-role
+    /// static-label axis; see [`Self::EMPTY_LIST_LABEL`] for the
+    /// algebra-level round-trip contract every sibling shares.
+    pub const NON_SYMBOL_NAME_LABEL: &'static str = "name not a symbol";
+
+    /// Closed-set forced-arity ALL array over the canonical STATIC
+    /// diagnostic-label `&'static str` bytes — the three arms that
+    /// project to a `&'static str` label under [`Self::label`], in
+    /// canonical declaration order matching the enum's static-label
+    /// subset ([`Self::EmptyList`], [`Self::MissingDefault`],
+    /// [`Self::NonSymbolName`] — the fourth variant
+    /// [`Self::ExtraElements`] formats a `usize` payload dynamically
+    /// and is excluded from this array).
+    ///
+    /// Sibling posture to [`crate::error::StructuralKind::LABELS`]
+    /// (`[&'static str; 2]` — the 2-of-12 structural-residual carving),
+    /// [`crate::error::MacroDefHead::KEYWORDS`] (`[&'static str; 3]` —
+    /// the 3-arm macro-definition-head algebra), and
+    /// [`crate::ast::AtomKind::LABELS`] (`[&'static str; 6]` — the
+    /// 6-of-12 atomic-payload carving) — every closed-set outer
+    /// algebra that carries an `&'static str`-per-variant label now
+    /// pins its per-role canonical bytes at ONE `pub const` per role
+    /// PLUS an ALL array for family-wide consumers.
+    ///
+    /// Pre-lift the three static rejection-label bytes had NO per-role
+    /// primitive on this closed-set algebra — a consumer with a
+    /// [`OptionalParamMalformedReason`] variant in hand at compile time
+    /// reaching for the canonical bytes had to spell
+    /// `OptionalParamMalformedReason::EmptyList.label()` (runtime
+    /// dispatch through the match arm PLUS a `.to_string()` heap
+    /// allocation) OR inline the `"empty list"` literal at the call
+    /// site AND at every Display-round-trip test's assertion body.
+    /// Post-lift the THREE canonical bytes bind at ONE `pub const` per
+    /// role on the typed algebra AND at [`Self::STATIC_LABELS`] as a
+    /// family-wide forced-arity array — a future LSP / REPL completion
+    /// bar keyed on this rejection surface, a `tatara-check` coverage
+    /// sweep over the `&optional`-spec-malformed arm-set of a
+    /// `LispError` corpus, or a Sekiban audit-trail metric jointly
+    /// labeled by the rejection reason
+    /// (`tatara_lisp_optional_param_malformed_total{reason="empty
+    /// list"}`) reads through the typed constants without re-deriving
+    /// the 3-of-4 static-subset carving inline.
+    ///
+    /// Adding a hypothetical fifth STATIC rejection reason (e.g. a
+    /// `KeywordName` rejection for `&optional (:foo default)` if
+    /// keywords ever became legal in the `&optional` name slot) extends
+    /// this array AND adds ONE per-role `pub const` in lockstep —
+    /// rustc's forced-arity check on `[&'static str; N]` fails
+    /// compilation if the array grows without the const.
+    ///
+    /// The `#[allow(dead_code)]` posture matches
+    /// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`] and other
+    /// prior-run family-wide ALL arrays: the substrate's current
+    /// [`Self::label`] body composes through the per-variant match arm
+    /// rather than sweeping the family-wide array, so no non-test
+    /// caller currently reaches this array directly. The lift lands
+    /// the substrate primitive so future consumers keyed on the whole
+    /// static-subset (a Sekiban metric, a `tatara-check` predicate,
+    /// a `TypedRewriter<OptionalParamMalformedReasonOp>` sweep) bind
+    /// to ONE `[&'static str; 3]` primitive rather than re-deriving
+    /// the array inline per callsite.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the three
+    /// canonical rejection-label bytes bind at ONE typed
+    /// `[&'static str; 3]` array on the closed-set algebra rather
+    /// than at zero-primitive-plus-three-inline-`.to_string()`-literals
+    /// scattered across [`Self::label`]. THEORY.md §V.1 — knowable
+    /// platform; the static-subset's cardinality becomes a TYPE-level
+    /// constant on the substrate algebra rather than a per-consumer
+    /// runtime dispatch through the label match. THEORY.md §VI.1 —
+    /// generation over composition; the family-wide contract
+    /// (alignment with the enum's static-label subset, membership
+    /// through [`Self::label`]) emerges from the composition of FOUR
+    /// substrate primitives (this `pub const` array + the three
+    /// per-role `pub const *_LABEL` aliases) rather than as per-
+    /// variant inline assertions duplicated at each call site.
+    #[allow(dead_code)]
+    pub const STATIC_LABELS: [&'static str; 3] = [
+        Self::EMPTY_LIST_LABEL,
+        Self::MISSING_DEFAULT_LABEL,
+        Self::NON_SYMBOL_NAME_LABEL,
+    ];
+
     /// Short human-readable clause for the parenthetical suffix of
     /// `LispError::OptionalParamMalformed`'s Display. The variants
     /// project to:
     ///
-    ///   * `EmptyList`          → `"empty list"`
-    ///   * `MissingDefault`     → `"missing default"`
-    ///   * `ExtraElements{N}`   → `"N elements (need 2)"`
-    ///   * `NonSymbolName`      → `"name not a symbol"`
+    ///   * `EmptyList`          → [`Self::EMPTY_LIST_LABEL`] (`"empty list"`)
+    ///   * `MissingDefault`     → [`Self::MISSING_DEFAULT_LABEL`] (`"missing default"`)
+    ///   * `ExtraElements{N}`   → `"N elements (need 2)"` (dynamic)
+    ///   * `NonSymbolName`      → [`Self::NON_SYMBOL_NAME_LABEL`] (`"name not a symbol"`)
     ///
     /// `label` returns `String` (rather than `&'static str`) because the
     /// `ExtraElements` arm formats its `length` payload — the other three
-    /// arms produce literal `&'static str` values which `.to_string()`
-    /// projects through. Mirror of `TemplateInvariantKind::message()`:
-    /// both return `String`, both project the closed-set typed reason
-    /// into the `LispError::Display` rendering via the variant's
-    /// `#[error(...)]` annotation.
+    /// arms route through per-role [`Self::EMPTY_LIST_LABEL`] /
+    /// [`Self::MISSING_DEFAULT_LABEL`] / [`Self::NON_SYMBOL_NAME_LABEL`]
+    /// constants which `.to_string()` projects through. Mirror of
+    /// `TemplateInvariantKind::message()`: both return `String`, both
+    /// project the closed-set typed reason into the `LispError::Display`
+    /// rendering via the variant's `#[error(...)]` annotation.
     #[must_use]
     pub fn label(self) -> String {
         match self {
-            Self::EmptyList => "empty list".to_string(),
-            Self::MissingDefault => "missing default".to_string(),
+            Self::EmptyList => Self::EMPTY_LIST_LABEL.to_string(),
+            Self::MissingDefault => Self::MISSING_DEFAULT_LABEL.to_string(),
             Self::ExtraElements { length } => format!("{length} elements (need 2)"),
-            Self::NonSymbolName => "name not a symbol".to_string(),
+            Self::NonSymbolName => Self::NON_SYMBOL_NAME_LABEL.to_string(),
         }
     }
 }
@@ -7857,6 +7998,81 @@ mod tests {
             format!("{nonsym}"),
             "compile error in defmacro params: malformed &optional spec, got (5 default) (position 0, name not a symbol)"
         );
+    }
+
+    #[test]
+    fn optional_param_malformed_reason_static_labels_pin_legacy_label_bytes() {
+        // Each per-role `pub const *_LABEL: &'static str` on the closed-set
+        // `OptionalParamMalformedReason` algebra binds byte-for-byte to the
+        // pre-lift inline literal at `label()`'s matching arm — so a
+        // regression that renames ONE constant silently fractures the
+        // operator-facing rejection wording. The three static-subset arms
+        // route through the typed constants; the fourth arm
+        // (`ExtraElements`) formats a `usize` payload dynamically and is
+        // excluded from this pin.
+        assert_eq!(OptionalParamMalformedReason::EMPTY_LIST_LABEL, "empty list");
+        assert_eq!(
+            OptionalParamMalformedReason::MISSING_DEFAULT_LABEL,
+            "missing default"
+        );
+        assert_eq!(
+            OptionalParamMalformedReason::NON_SYMBOL_NAME_LABEL,
+            "name not a symbol"
+        );
+
+        // The `label()` projection routes through the typed per-role
+        // constants — pinned by string equality against each constant.
+        assert_eq!(
+            OptionalParamMalformedReason::EmptyList.label(),
+            OptionalParamMalformedReason::EMPTY_LIST_LABEL
+        );
+        assert_eq!(
+            OptionalParamMalformedReason::MissingDefault.label(),
+            OptionalParamMalformedReason::MISSING_DEFAULT_LABEL
+        );
+        assert_eq!(
+            OptionalParamMalformedReason::NonSymbolName.label(),
+            OptionalParamMalformedReason::NON_SYMBOL_NAME_LABEL
+        );
+
+        // The dynamic `ExtraElements` arm is EXCLUDED from the static
+        // subset — its label is `format!("{length} elements (need 2)")`
+        // and cannot bind to a `&'static str` constant. The three
+        // per-role constants close the STATIC subset; the fourth arm
+        // stays inline at `label()`.
+        assert_eq!(
+            OptionalParamMalformedReason::ExtraElements { length: 4 }.label(),
+            "4 elements (need 2)"
+        );
+
+        // Family-wide `STATIC_LABELS` array closes the 3-of-4 carving —
+        // `[&'static str; 3]` with rustc-enforced arity.
+        assert_eq!(OptionalParamMalformedReason::STATIC_LABELS.len(), 3);
+        assert_eq!(
+            OptionalParamMalformedReason::STATIC_LABELS,
+            [
+                OptionalParamMalformedReason::EMPTY_LIST_LABEL,
+                OptionalParamMalformedReason::MISSING_DEFAULT_LABEL,
+                OptionalParamMalformedReason::NON_SYMBOL_NAME_LABEL,
+            ]
+        );
+
+        // Pairwise disjointness across the static subset — a future
+        // rename that collides `MISSING_DEFAULT_LABEL` onto the
+        // `EMPTY_LIST_LABEL` bytes silently merges two distinct
+        // rejection wordings into one; the disjointness pin fails-
+        // loudly at rustc-test time rather than at silent operator-
+        // facing vocabulary fracture.
+        let labels = OptionalParamMalformedReason::STATIC_LABELS;
+        for i in 0..labels.len() {
+            for j in (i + 1)..labels.len() {
+                assert_ne!(
+                    labels[i], labels[j],
+                    "OptionalParamMalformedReason::STATIC_LABELS[{i}] and [{j}] collide on `{}`",
+                    labels[i]
+                );
+            }
+        }
     }
 
     #[test]

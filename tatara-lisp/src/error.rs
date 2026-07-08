@@ -2762,6 +2762,90 @@ impl OptionalParamMalformedReason {
         }
     }
 
+    /// Zero-allocation projection over the STATIC subset of the closed
+    /// set — `Some(&'static str)` for the three arms whose diagnostic
+    /// bytes bind at a per-role [`Self::EMPTY_LIST_LABEL`] /
+    /// [`Self::MISSING_DEFAULT_LABEL`] / [`Self::NON_SYMBOL_NAME_LABEL`]
+    /// constant, and `None` for the fourth arm [`Self::ExtraElements`]
+    /// whose diagnostic bytes format the `length` payload dynamically
+    /// through `format!("{length} elements (need {})",
+    /// [`Self::OPTIONAL_PARAM_SPEC_ARITY`])` and cannot bind to a
+    /// `&'static str` constant on this axis.
+    ///
+    /// This is the STATIC-subset typed projection over the 3-of-4
+    /// carving [`Self::STATIC_LABELS`] enumerates — the same 3-of-4
+    /// shape pinned as a `[&'static str; 3]` forced-arity array on
+    /// that constant. Callers that KNOW they've matched a static arm
+    /// at compile time reach for the per-role `pub const *_LABEL`
+    /// directly; callers that hold a variant of unknown identity
+    /// reach for this projection to filter the STATIC subset without
+    /// paying an allocation for the failing branch. The composition
+    /// gives every downstream site — Sekiban audit-trail metrics
+    /// (`tatara_lisp_optional_param_malformed_total{reason="empty
+    /// list"}` where the label is a `&'static str` label slot with
+    /// no heap indirection), an LSP quick-fix keyed on the STATIC
+    /// subset, a `tatara-check` predicate that filters a corpus's
+    /// `OptionalParamMalformed` rejections into static-arm vs
+    /// dynamic-arm buckets — one typed subset selector rather than
+    /// three inline `matches!(reason, Self::EmptyList |
+    /// Self::MissingDefault | Self::NonSymbolName)` gates threaded
+    /// through per-consumer allocation.
+    ///
+    /// Sibling posture to [`Self::classify_arity`] (typed `usize` →
+    /// `Option<Self>` projection over the arity-derivable 3-of-4
+    /// carving) — both methods carve the same closed set along the
+    /// same 3-of-4 axis (the fourth variant [`Self::NonSymbolName`]
+    /// on the classify side, [`Self::ExtraElements`] on this side)
+    /// and pin the carving at ONE typed function on the algebra.
+    /// The two carvings compose: a caller with an arity `n` in hand
+    /// runs `classify_arity(n)` to get `Option<Self>`, then runs
+    /// `label_static(reason)` on the `Some` result to get
+    /// `Option<&'static str>` — the double-`Option` collapses the
+    /// arity → reason → static-label pipeline into TWO typed
+    /// projections composable at zero allocation cost for the STATIC
+    /// subset.
+    ///
+    /// [`Self::label`] composes this projection with the dynamic
+    /// [`Self::ExtraElements`] format arm — an `Option::unwrap_or_else`
+    /// over `label_static()` that lands on the `format!` branch iff
+    /// the variant is [`Self::ExtraElements`]. Pre-lift `label`'s
+    /// body carried FOUR match arms — three inline `.to_string()`
+    /// literals routing through the per-role `pub const`s AND one
+    /// `format!` arm formatting the `length` payload. Post-lift
+    /// `label`'s body reduces to `label_static().map(str::to_string)
+    /// .unwrap_or_else(|| format!(...))`, and the three per-role
+    /// static arms bind at ONE typed subset projection rather than
+    /// at three duplicated `.to_string()` sites.
+    ///
+    /// Const-fn on `Self` because the four arms match on unit
+    /// / payload-carrying variants alike without allocation — the
+    /// `Self::ExtraElements { .. }` arm ignores the payload via
+    /// `{ .. }` because the projection routes to `None` regardless
+    /// of the `length` value.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the STATIC-
+    /// subset projection binds at ONE typed function on the
+    /// algebra rather than at three inline `matches!` gates
+    /// scattered across consumers. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; a hypothetical fifth static
+    /// rejection reason (e.g. `KeywordName` for `&optional (:foo
+    /// default)`) extends this projection AND [`Self::STATIC_LABELS`]
+    /// in lockstep — rustc's exhaustive-match check on this method
+    /// fails compilation without the new arm. THEORY.md §VI.1 —
+    /// generation over composition; [`Self::label`]'s dynamic body
+    /// emerges from the composition of TWO substrate primitives (this
+    /// static-subset projection + the [`Self::ExtraElements`] format
+    /// arm) rather than as four duplicated match arms.
+    #[must_use]
+    pub const fn label_static(self) -> Option<&'static str> {
+        match self {
+            Self::EmptyList => Some(Self::EMPTY_LIST_LABEL),
+            Self::MissingDefault => Some(Self::MISSING_DEFAULT_LABEL),
+            Self::NonSymbolName => Some(Self::NON_SYMBOL_NAME_LABEL),
+            Self::ExtraElements { .. } => None,
+        }
+    }
+
     /// Short human-readable clause for the parenthetical suffix of
     /// `LispError::OptionalParamMalformed`'s Display. The variants
     /// project to:
@@ -2780,19 +2864,34 @@ impl OptionalParamMalformedReason {
     /// `TemplateInvariantKind::message()`: both return `String`, both
     /// project the closed-set typed reason into the `LispError::Display`
     /// rendering via the variant's `#[error(...)]` annotation.
+    ///
+    /// Composes [`Self::label_static`] (the STATIC-subset zero-allocation
+    /// projection over the 3-of-4 carving) with an
+    /// `Option::unwrap_or_else` fallthrough onto the dynamic
+    /// [`Self::ExtraElements`] format arm. Pre-lift the three static
+    /// arms carried inline `.to_string()` literals routing through the
+    /// per-role `pub const`s — post-lift they bind at ONE typed subset
+    /// projection ([`Self::label_static`]) rather than at three
+    /// duplicated match arms. The dynamic arm stays specialized inline
+    /// because its bytes format a `usize` payload that cannot bind to
+    /// a `&'static str`.
     #[must_use]
     pub fn label(self) -> String {
-        match self {
-            Self::EmptyList => Self::EMPTY_LIST_LABEL.to_string(),
-            Self::MissingDefault => Self::MISSING_DEFAULT_LABEL.to_string(),
-            Self::ExtraElements { length } => {
-                format!(
+        self.label_static().map_or_else(
+            || match self {
+                Self::ExtraElements { length } => format!(
                     "{length} elements (need {})",
                     Self::OPTIONAL_PARAM_SPEC_ARITY
-                )
-            }
-            Self::NonSymbolName => Self::NON_SYMBOL_NAME_LABEL.to_string(),
-        }
+                ),
+                Self::EmptyList | Self::MissingDefault | Self::NonSymbolName => {
+                    unreachable!(
+                        "label_static returns Some(&'static str) for every non-ExtraElements arm; \
+                         the None branch is reachable iff the variant is ExtraElements"
+                    )
+                }
+            },
+            str::to_string,
+        )
     }
 }
 
@@ -8255,6 +8354,140 @@ mod tests {
                 "(need {})",
                 OptionalParamMalformedReason::OPTIONAL_PARAM_SPEC_ARITY
             )));
+    }
+
+    #[test]
+    fn label_static_projects_static_subset_to_typed_option() {
+        // The typed STATIC-subset projection carves the 4-arm closed set
+        // along the same 3-of-4 axis STATIC_LABELS enumerates — three
+        // arms whose diagnostic bytes bind at a `pub const &'static str`
+        // (`Some(bytes)`) and one dynamic arm (`ExtraElements`) whose
+        // bytes format a `usize` payload (`None`).
+        //
+        // Pre-lift the STATIC-subset selector was three inline
+        // `matches!(reason, EmptyList | MissingDefault | NonSymbolName)`
+        // gates duplicated across consumers (`label`'s three static match
+        // arms, plus any downstream site that wanted a zero-allocation
+        // path over the static subset). Post-lift the carving binds at
+        // ONE typed function on the algebra with rustc-enforced exhaust-
+        // iveness — a hypothetical fifth static arm extends the match
+        // body AND `STATIC_LABELS` in lockstep.
+        use OptionalParamMalformedReason as R;
+        assert_eq!(R::EmptyList.label_static(), Some(R::EMPTY_LIST_LABEL));
+        assert_eq!(
+            R::MissingDefault.label_static(),
+            Some(R::MISSING_DEFAULT_LABEL)
+        );
+        assert_eq!(
+            R::NonSymbolName.label_static(),
+            Some(R::NON_SYMBOL_NAME_LABEL)
+        );
+        // ExtraElements returns None regardless of the `length` payload —
+        // the projection is payload-invariant on the dynamic arm.
+        assert_eq!(R::ExtraElements { length: 3 }.label_static(), None);
+        assert_eq!(R::ExtraElements { length: 0 }.label_static(), None);
+        assert_eq!(R::ExtraElements { length: 42 }.label_static(), None);
+
+        // Composition with `label()`: for every static arm,
+        // `label_static().unwrap().to_string() == label()` byte-for-byte
+        // — the `label()` body threads through `label_static` for the
+        // static subset rather than re-deriving the per-role match arms
+        // inline.
+        for reason in [R::EmptyList, R::MissingDefault, R::NonSymbolName] {
+            assert_eq!(reason.label_static().unwrap().to_string(), reason.label());
+        }
+    }
+
+    #[test]
+    fn label_static_matches_static_labels_array_in_declaration_order() {
+        // The three `Some(&'static str)` results, taken in the closed
+        // set's declaration order (EmptyList, MissingDefault,
+        // NonSymbolName — same order as STATIC_LABELS), equal
+        // STATIC_LABELS byte-for-byte. This pins the carving axis: the
+        // `label_static` projection and the `STATIC_LABELS` array carve
+        // the same 3-of-4 subset in the same order. A future rename that
+        // reorders one against the other (e.g. swaps two variants in
+        // `label_static`'s match without updating `STATIC_LABELS`) fails
+        // here.
+        use OptionalParamMalformedReason as R;
+        let projected = [
+            R::EmptyList.label_static().unwrap(),
+            R::MissingDefault.label_static().unwrap(),
+            R::NonSymbolName.label_static().unwrap(),
+        ];
+        assert_eq!(projected, R::STATIC_LABELS);
+    }
+
+    #[test]
+    fn label_static_composes_with_classify_arity_over_the_3_of_4_carving() {
+        // The two typed subset projections carve the same closed set
+        // along overlapping 3-of-4 axes:
+        //
+        //   * `classify_arity(n)` returns `Option<Self>` — `None` at
+        //     accept-arity, `Some(reason)` for the 3-of-4 arity-derivable
+        //     rejections (EmptyList, MissingDefault, ExtraElements).
+        //   * `label_static(reason)` returns `Option<&'static str>` —
+        //     `Some(bytes)` for the 3-of-4 static arms (EmptyList,
+        //     MissingDefault, NonSymbolName), `None` for ExtraElements.
+        //
+        // The 2-of-4 intersection (EmptyList, MissingDefault) is the
+        // arms both carvings agree on: classify_arity emits them AND
+        // label_static gives them a `&'static str`. Composition pins:
+        // for arity 0 or 1 the pipeline yields a `Some(&'static str)`.
+        use OptionalParamMalformedReason as R;
+        assert_eq!(
+            R::classify_arity(0).and_then(R::label_static),
+            Some(R::EMPTY_LIST_LABEL)
+        );
+        assert_eq!(
+            R::classify_arity(1).and_then(R::label_static),
+            Some(R::MISSING_DEFAULT_LABEL)
+        );
+        // At accept-arity, `classify_arity` returns None — the
+        // composition short-circuits.
+        assert_eq!(
+            R::classify_arity(R::OPTIONAL_PARAM_SPEC_ARITY).and_then(R::label_static),
+            None
+        );
+        // At arity ≥3, `classify_arity` returns
+        // `Some(ExtraElements{length})` and `label_static` returns None
+        // — the composition also short-circuits, because the two
+        // carvings' `None` arms disagree (arity-derivable but NOT
+        // static-labeled).
+        assert_eq!(R::classify_arity(3).and_then(R::label_static), None);
+        assert_eq!(R::classify_arity(17).and_then(R::label_static), None);
+    }
+
+    #[test]
+    fn label_delegates_static_arms_through_label_static() {
+        // The `label()` body composes `label_static()` (the STATIC-subset
+        // projection) with an `unwrap_or_else` fallthrough onto the
+        // dynamic `ExtraElements` format arm. Pin that the three static
+        // arms' `label()` bytes ARE the `label_static()` bytes with a
+        // `.to_string()` allocation, and the fourth arm's `label()`
+        // bytes ARE the format arm's rendering. A regression that
+        // re-inlines the per-role `.to_string()` at `label()` (drifting
+        // from the `label_static` composition) still passes the
+        // per-variant byte-equality assertions above but fails this
+        // composition pin.
+        use OptionalParamMalformedReason as R;
+        // Static arms — `label()` bytes route through `label_static`.
+        for (variant, static_bytes) in [
+            (R::EmptyList, R::EMPTY_LIST_LABEL),
+            (R::MissingDefault, R::MISSING_DEFAULT_LABEL),
+            (R::NonSymbolName, R::NON_SYMBOL_NAME_LABEL),
+        ] {
+            assert_eq!(variant.label_static(), Some(static_bytes));
+            assert_eq!(variant.label(), static_bytes.to_string());
+        }
+        // Dynamic arm — `label_static()` is None; `label()` falls
+        // through to the `ExtraElements` format arm.
+        let extra = R::ExtraElements { length: 5 };
+        assert_eq!(extra.label_static(), None);
+        assert_eq!(
+            extra.label(),
+            format!("5 elements (need {})", R::OPTIONAL_PARAM_SPEC_ARITY)
+        );
     }
 
     #[test]

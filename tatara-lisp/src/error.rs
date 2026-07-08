@@ -3258,6 +3258,248 @@ impl OptionalParamMalformedReason {
         }
     }
 
+    /// Canonical `&'static str` noun-descriptor for the
+    /// [`Self::ExtraElements`] rejection's dynamic format template —
+    /// `"elements"`. Per-role peer of `Self::ExtraElements` on the
+    /// DYNAMIC 1-of-4 subset carving of the four-arm closed set.
+    ///
+    /// Pre-lift the `"elements"` noun lived inline inside
+    /// [`Self::label`]'s `format!("{length} elements (need {})", …)`
+    /// arm — a single site, but one that any downstream sweep over
+    /// dynamic-arm nouns had to substring-match rather than bind to a
+    /// typed constant. Post-lift the (`ExtraElements` variant, canonical
+    /// noun bytes) pairing binds at ONE `pub const` on the typed
+    /// [`OptionalParamMalformedReason`] algebra: [`Self::label_dynamic`]
+    /// composes this constant into the shared `"{length} {descriptor}
+    /// (need {})"` format template, the peer [`Self::DYNAMIC_DESCRIPTORS`]
+    /// array closes the DYNAMIC carving as a forced-arity
+    /// `[&'static str; 1]` at ONE site, and [`Self::descriptor_dynamic`]
+    /// carries the variant→noun projection.
+    ///
+    /// Sibling posture to
+    /// [`TemplateInvariantKind::SUBST_BAD_INDEX_DESCRIPTOR`] /
+    /// [`TemplateInvariantKind::SPLICE_BAD_INDEX_DESCRIPTOR`] on the peer
+    /// bytecode-runtime algebra's DYNAMIC 2-of-4 subset carving — both
+    /// pin per-role noun-descriptor bytes at ONE `pub const` on their
+    /// closed-set algebra rather than at inline literals inside a
+    /// `format!(...)` arm. The peer's DYNAMIC subset is TWO arms wide
+    /// (`SubstBadIndex`, `SpliceBadIndex`); this algebra's DYNAMIC subset
+    /// is ONE arm wide (`ExtraElements`) — the same carving idiom applied
+    /// at asymmetric widths.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the canonical
+    /// noun-descriptor of the ExtraElements arm's dynamic format
+    /// template binds at ONE typed `pub const &'static str` on the
+    /// closed-set algebra rather than at an inline literal inside
+    /// [`Self::label`]'s `format!` body. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; a rename of the noun (e.g. from
+    /// `"elements"` to `"items"` if an evaluator surface ever admits a
+    /// more general list-shape) lands at ONE `pub const` edit — every
+    /// downstream projection ([`Self::label_dynamic`],
+    /// [`Self::DYNAMIC_DESCRIPTORS`], the [`Self::label`] composition,
+    /// every truth-table test) recomputes against the new bytes.
+    /// THEORY.md §VI.1 — generation over composition; the shared format
+    /// template that emitted the `"elements"` literal inline at ONE site
+    /// pre-lift now composes ONE typed const AND ONE typed projection
+    /// AND ONE typed arity, so future dynamic-arm siblings extend at
+    /// exactly these three axes rather than at inline duplication.
+    pub const EXTRA_ELEMENTS_DESCRIPTOR: &'static str = "elements";
+
+    /// Closed-set forced-arity ALL array over the canonical DYNAMIC
+    /// noun-descriptor `&'static str` bytes — the ONE arm that projects
+    /// to a `&'static str` descriptor under [`Self::descriptor_dynamic`],
+    /// in canonical declaration order matching the enum's dynamic-label
+    /// subset ([`Self::ExtraElements`] — the other three variants
+    /// [`Self::EmptyList`], [`Self::MissingDefault`],
+    /// [`Self::NonSymbolName`] carry their FULL bytes on the STATIC axis
+    /// via [`Self::STATIC_LABELS`] and are excluded from this array).
+    ///
+    /// Peer 1-of-4 carving to [`Self::STATIC_LABELS`] — together the
+    /// two arrays partition the four-arm closed set into its STATIC ⊕
+    /// DYNAMIC halves. The STATIC array carries the three arms whose
+    /// FULL diagnostic is `&'static str`; this DYNAMIC array carries the
+    /// one arm whose NOUN slot is `&'static str` and whose full label is
+    /// a `format!("{length} {descriptor} (need {})")` composition over
+    /// [`Self::OPTIONAL_PARAM_SPEC_ARITY`]. Adding a hypothetical fifth
+    /// static rejection reason (e.g. `KeywordName` for `&optional (:foo
+    /// default)`) lands only on the STATIC array; adding a hypothetical
+    /// fifth dynamic rejection reason (e.g. `NestedList { depth: usize
+    /// }` naming a spec whose `NAME` slot is itself a list rather than a
+    /// symbol) lands only on this array — rustc's forced-arity check on
+    /// the `[&'static str; N]` shape fails compilation if the array
+    /// grows without the corresponding per-role descriptor +
+    /// [`Self::descriptor_dynamic`] arm being extended in lockstep.
+    ///
+    /// Sibling posture to
+    /// [`TemplateInvariantKind::DYNAMIC_DESCRIPTORS`] (`[&'static str;
+    /// 2]` — the peer bytecode-runtime algebra's DYNAMIC 2-of-4 carving)
+    /// — every closed-set outer algebra the substrate carries now pins
+    /// BOTH its STATIC-subset canonical-bytes array AND its DYNAMIC-
+    /// subset per-role-slot array at ONE `pub const` per axis rather
+    /// than at N inline literals scattered across projections and tests.
+    /// The two peer algebras carry the same STATIC ⊕ DYNAMIC partition
+    /// idiom at asymmetric widths (`TemplateInvariantKind` is 2 ⊕ 2;
+    /// `OptionalParamMalformedReason` is 3 ⊕ 1).
+    ///
+    /// The `#[allow(dead_code)]` posture matches
+    /// [`TemplateInvariantKind::DYNAMIC_DESCRIPTORS`] and
+    /// [`Self::STATIC_LABELS`]: the substrate's current [`Self::label`]
+    /// body composes through [`Self::descriptor_dynamic`] rather than
+    /// sweeping the family-wide array, so no non-test caller currently
+    /// reaches this array directly. The lift lands the substrate
+    /// primitive so future consumers keyed on the whole dynamic subset
+    /// (a Sekiban metric, a `tatara-check` predicate, a
+    /// `TypedRewriter<OptionalParamMalformedReasonOp>` sweep) bind to
+    /// ONE `[&'static str; 1]` primitive rather than re-deriving the
+    /// array inline per callsite.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the ONE canonical
+    /// dynamic-arm noun-descriptor byte binds at ONE typed
+    /// `[&'static str; 1]` array on the closed-set algebra rather than
+    /// at zero-primitive-plus-one-inline-literal inside [`Self::label`]'s
+    /// `format!` body. THEORY.md §V.1 — knowable platform; the DYNAMIC-
+    /// subset's cardinality becomes a TYPE-level constant on the
+    /// substrate algebra rather than a per-consumer runtime dispatch
+    /// through the label match. THEORY.md §VI.1 — generation over
+    /// composition; the family-wide contract (alignment with the enum's
+    /// dynamic-label subset, membership through
+    /// [`Self::descriptor_dynamic`]) emerges from the composition of TWO
+    /// substrate primitives (this `pub const` array + the one per-role
+    /// `pub const EXTRA_ELEMENTS_DESCRIPTOR` alias) rather than as
+    /// per-variant inline assertions duplicated at each call site.
+    #[allow(dead_code)]
+    pub const DYNAMIC_DESCRIPTORS: [&'static str; 1] = [Self::EXTRA_ELEMENTS_DESCRIPTOR];
+
+    /// Zero-allocation projection over the DYNAMIC subset of the closed
+    /// set — `Some(&'static str)` for the one arm whose diagnostic bytes
+    /// carry a `usize` payload and format through the shared
+    /// `"{length} {descriptor} (need {})"` template
+    /// ([`Self::ExtraElements`] → [`Self::EXTRA_ELEMENTS_DESCRIPTOR`]
+    /// (`"elements"`)), and `None` for the three arms whose full
+    /// diagnostic bytes bind at a `&'static str` on the STATIC axis
+    /// ([`Self::EmptyList`], [`Self::MissingDefault`],
+    /// [`Self::NonSymbolName`]) and carry no per-role descriptor slot.
+    ///
+    /// Peer projection to [`Self::label_static`] on the sibling STATIC
+    /// 3-of-4 subset carving — the two projections together partition
+    /// the four-arm closed set into its STATIC ⊕ DYNAMIC halves at zero
+    /// allocation cost. Callers holding a variant of unknown identity
+    /// thread it through BOTH projections; exactly ONE of
+    /// `label_static(self)` and `descriptor_dynamic(self)` returns
+    /// `Some` for every legal variant (`label_static` on the three-arm
+    /// STATIC subset, `descriptor_dynamic` on the one-arm DYNAMIC
+    /// subset). The partition is pinned by the truth-table test
+    /// `optional_param_malformed_reason_static_dynamic_projections_partition_closed_set`.
+    ///
+    /// The `const fn` posture matches [`Self::label_static`],
+    /// [`TemplateInvariantKind::descriptor_dynamic`], and every peer
+    /// closed-set projection method on the substrate — the projection
+    /// evaluates at rustc const-eval time when the variant is a const,
+    /// so a future const-context consumer (an `#[allow(dead_code)] const
+    /// _: Option<&'static str> = ...` static assertion, a `tatara-check`
+    /// predicate binding at module-init time) picks up the DYNAMIC-
+    /// subset selector without runtime dispatch.
+    ///
+    /// Sibling posture to
+    /// [`TemplateInvariantKind::descriptor_dynamic`] on the peer
+    /// bytecode-runtime algebra's DYNAMIC 2-of-4 subset carving — both
+    /// project the DYNAMIC subset of a mixed-payload closed set (STATIC-
+    /// only arms project to `None`) into a typed `Option<&'static str>`
+    /// — the same idiom applied at two peer boundaries of the
+    /// substrate's bytecode-runtime and macro-authoring surfaces at
+    /// asymmetric widths (peer is 2-arm DYNAMIC; this is 1-arm DYNAMIC).
+    ///
+    /// Future consumers that compose against this projection: an LSP
+    /// quick-fix keyed on the DYNAMIC-subset descriptor slot (surfaces
+    /// `"drop the {descriptor} after the default form"` with
+    /// `{descriptor}` bound to whatever this projection returns); a
+    /// `tatara-check` predicate that filters a corpus's
+    /// `OptionalParamMalformed` rejections into static-arm vs dynamic-
+    /// arm buckets in ONE typed subset selector rather than
+    /// `matches!(reason, Self::ExtraElements { .. })` gates threaded
+    /// through per-consumer allocation.
+    #[must_use]
+    pub const fn descriptor_dynamic(self) -> Option<&'static str> {
+        match self {
+            Self::ExtraElements { .. } => Some(Self::EXTRA_ELEMENTS_DESCRIPTOR),
+            Self::EmptyList | Self::MissingDefault | Self::NonSymbolName => None,
+        }
+    }
+
+    /// Typed `Option<String>` projection over the DYNAMIC 1-of-4 subset
+    /// carving of [`OptionalParamMalformedReason`]'s four-arm closed set
+    /// — returns `Some(label)` for the one arm whose diagnostic bytes
+    /// format their `usize` payload through the SHARED `"{length}
+    /// {descriptor} (need {})"` template, and `None` for the three
+    /// STATIC arms whose full bytes bind on the [`Self::label_static`]
+    /// axis.
+    ///
+    /// Composes [`Self::descriptor_dynamic`] into the shared format
+    /// template — the `{descriptor}` slot binds to the per-role
+    /// [`Self::EXTRA_ELEMENTS_DESCRIPTOR`] constant the DYNAMIC arm
+    /// projects through, the `{length}` slot binds the `usize` payload
+    /// the enum's dynamic variant carries, and the `(need {})` suffix
+    /// binds [`Self::OPTIONAL_PARAM_SPEC_ARITY`]. Pre-lift
+    /// [`Self::label`]'s body carried the inline `format!("{length}
+    /// elements (need {})", …)` arm hardcoding the `"elements"` noun —
+    /// post-lift the shared template binds at ONE `format!(...)` site
+    /// inside this method, the noun slot binds at the per-role
+    /// descriptor const, and [`Self::descriptor_dynamic`] carries the
+    /// arm→descriptor mapping.
+    ///
+    /// Peer projection to [`Self::label_static`] on the sibling STATIC
+    /// 3-of-4 subset carving — the two projections together partition
+    /// the four-arm closed set into its STATIC ⊕ DYNAMIC label-
+    /// projection halves. [`Self::label`]'s body reduces to
+    /// `label_static().map(str::to_string).or_else(||
+    /// label_dynamic()).expect(...)` — ONE compositional flow over TWO
+    /// typed subset projections rather than FOUR duplicated match arms
+    /// (three `.to_string()` sites on the STATIC subset + one
+    /// `format!(...)` site on the DYNAMIC subset in the pre-lift body).
+    ///
+    /// Sibling posture to [`TemplateInvariantKind::message_dynamic`] on
+    /// the peer bytecode-runtime algebra's DYNAMIC 2-of-4 subset carving
+    /// — both compose a per-role descriptor projection with a shared
+    /// `format!(...)` template + a `usize` payload into a typed
+    /// `Option<String>`. The peer's DYNAMIC subset is 2-arm wide (two
+    /// noun-slot values, one shared template); this algebra's DYNAMIC
+    /// subset is 1-arm wide (one noun-slot value, one shared template)
+    /// — the same STATIC ⊕ DYNAMIC composition idiom at asymmetric
+    /// widths.
+    ///
+    /// Future consumers that compose against this projection: a
+    /// `tatara-check` predicate that filters a corpus's
+    /// `OptionalParamMalformed` rejections into static-arm vs dynamic-
+    /// arm label buckets; a Sekiban audit-trail metric that samples
+    /// dynamic-arm labels without paying the allocation cost on the
+    /// STATIC subset (the `None` branch short-circuits); an LSP quick-
+    /// fix that suggests trimming the surplus elements based on the
+    /// `{length}` payload the caller extracts from the enum before
+    /// invoking this projection.
+    #[must_use]
+    pub fn label_dynamic(self) -> Option<String> {
+        let descriptor = self.descriptor_dynamic()?;
+        let length = match self {
+            Self::ExtraElements { length } => length,
+            Self::EmptyList | Self::MissingDefault | Self::NonSymbolName => {
+                // Unreachable: descriptor_dynamic() returned Some only
+                // for ExtraElements on the `?` above. Kept exhaustive
+                // rather than `_ =>` so a future refactor that adds a
+                // fifth dynamic arm without extending descriptor_dynamic
+                // fails compilation at THIS callsite rather than at
+                // runtime.
+                unreachable!(
+                    "descriptor_dynamic returned Some only for dynamic-arm variants; \
+                     the STATIC-arm match here is unreachable via the ? short-circuit"
+                )
+            }
+        };
+        Some(format!(
+            "{length} {descriptor} (need {})",
+            Self::OPTIONAL_PARAM_SPEC_ARITY
+        ))
+    }
+
     /// Short human-readable clause for the parenthetical suffix of
     /// `LispError::OptionalParamMalformed`'s Display. The variants
     /// project to:
@@ -3278,32 +3520,31 @@ impl OptionalParamMalformedReason {
     /// rendering via the variant's `#[error(...)]` annotation.
     ///
     /// Composes [`Self::label_static`] (the STATIC-subset zero-allocation
-    /// projection over the 3-of-4 carving) with an
-    /// `Option::unwrap_or_else` fallthrough onto the dynamic
-    /// [`Self::ExtraElements`] format arm. Pre-lift the three static
-    /// arms carried inline `.to_string()` literals routing through the
-    /// per-role `pub const`s — post-lift they bind at ONE typed subset
-    /// projection ([`Self::label_static`]) rather than at three
-    /// duplicated match arms. The dynamic arm stays specialized inline
-    /// because its bytes format a `usize` payload that cannot bind to
-    /// a `&'static str`.
+    /// projection over the 3-of-4 carving) with [`Self::label_dynamic`]
+    /// (the DYNAMIC-subset composition over the 1-of-4 carving). Pre-
+    /// lift the three static arms carried inline `.to_string()` literals
+    /// routing through the per-role `pub const`s AND the dynamic arm
+    /// carried an inline `format!(...)` — post-lift the STATIC subset
+    /// binds at ONE typed projection ([`Self::label_static`]) and the
+    /// DYNAMIC subset binds at ONE typed projection
+    /// ([`Self::label_dynamic`]), and this body reduces to
+    /// `label_static().map(str::to_string).or_else(|| label_dynamic())`
+    /// composing the two — exactly the shape
+    /// [`TemplateInvariantKind::message`] carries on the peer bytecode-
+    /// runtime algebra.
+    ///
+    /// The STATIC ⊕ DYNAMIC partition guarantees exactly ONE of the two
+    /// projections returns `Some` for every legal variant; the `expect`
+    /// arm is structurally unreachable by construction.
     #[must_use]
     pub fn label(self) -> String {
-        self.label_static().map_or_else(
-            || match self {
-                Self::ExtraElements { length } => format!(
-                    "{length} elements (need {})",
-                    Self::OPTIONAL_PARAM_SPEC_ARITY
-                ),
-                Self::EmptyList | Self::MissingDefault | Self::NonSymbolName => {
-                    unreachable!(
-                        "label_static returns Some(&'static str) for every non-ExtraElements arm; \
-                         the None branch is reachable iff the variant is ExtraElements"
-                    )
-                }
-            },
-            str::to_string,
-        )
+        self.label_static()
+            .map(str::to_string)
+            .or_else(|| self.label_dynamic())
+            .expect(
+                "label_static ⊕ label_dynamic partition the four-arm closed set; \
+                 exactly one projection returns Some for every legal variant",
+            )
     }
 }
 
@@ -9294,6 +9535,178 @@ mod tests {
             extra.label(),
             format!("5 elements (need {})", R::OPTIONAL_PARAM_SPEC_ARITY)
         );
+    }
+
+    #[test]
+    fn optional_param_malformed_reason_extra_elements_descriptor_pins_canonical_noun_bytes() {
+        // Pin the per-role `pub const EXTRA_ELEMENTS_DESCRIPTOR` bytes
+        // byte-for-byte. The `"elements"` noun IS the shared format
+        // template's `{descriptor}` slot binding for the ExtraElements
+        // arm — a regression that renames the noun (e.g. to `"items"`
+        // for a hypothetical general-list-shape evaluator) surfaces
+        // here rather than at silent operator-facing diagnostic drift.
+        assert_eq!(
+            OptionalParamMalformedReason::EXTRA_ELEMENTS_DESCRIPTOR,
+            "elements"
+        );
+    }
+
+    #[test]
+    fn optional_param_malformed_reason_dynamic_descriptors_forced_arity_pins_1_of_4_carving() {
+        // Pin `DYNAMIC_DESCRIPTORS.len() == 1` — the DYNAMIC subset of
+        // the four-arm closed set carves exactly ONE arm
+        // (`ExtraElements`). The peer STATIC subset carves THREE arms
+        // (`EmptyList`, `MissingDefault`, `NonSymbolName`). The
+        // partition sums to four: 3 + 1 == 4 == R::ALL analogue count.
+        assert_eq!(OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS.len(), 1);
+        // Element-wise: the single dynamic descriptor equals the per-
+        // role const byte-for-byte. Reordering the array against the
+        // per-role const fails here.
+        assert_eq!(
+            OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS,
+            [OptionalParamMalformedReason::EXTRA_ELEMENTS_DESCRIPTOR]
+        );
+    }
+
+    #[test]
+    fn descriptor_dynamic_projects_dynamic_subset_to_typed_option() {
+        // The typed DYNAMIC-subset projection carves the 4-arm closed
+        // set along the same 1-of-4 axis DYNAMIC_DESCRIPTORS
+        // enumerates — one arm whose diagnostic bytes format through
+        // the shared `"{length} {descriptor} (need {})"` template
+        // (`Some(descriptor)`) and three arms whose full bytes bind at
+        // a `&'static str` on the STATIC axis (`None`).
+        use OptionalParamMalformedReason as R;
+        assert_eq!(
+            R::ExtraElements { length: 3 }.descriptor_dynamic(),
+            Some(R::EXTRA_ELEMENTS_DESCRIPTOR)
+        );
+        // ExtraElements descriptor is payload-invariant — same
+        // descriptor regardless of the `length` payload.
+        assert_eq!(
+            R::ExtraElements { length: 0 }.descriptor_dynamic(),
+            Some(R::EXTRA_ELEMENTS_DESCRIPTOR)
+        );
+        assert_eq!(
+            R::ExtraElements { length: 42 }.descriptor_dynamic(),
+            Some(R::EXTRA_ELEMENTS_DESCRIPTOR)
+        );
+        // STATIC arms return None on the descriptor axis.
+        assert_eq!(R::EmptyList.descriptor_dynamic(), None);
+        assert_eq!(R::MissingDefault.descriptor_dynamic(), None);
+        assert_eq!(R::NonSymbolName.descriptor_dynamic(), None);
+    }
+
+    #[test]
+    fn descriptor_dynamic_matches_dynamic_descriptors_array_in_declaration_order() {
+        // The single `Some(&'static str)` result, taken in the closed
+        // set's DYNAMIC declaration order (ExtraElements — same order
+        // as DYNAMIC_DESCRIPTORS), equals DYNAMIC_DESCRIPTORS byte-for-
+        // byte. Pins the carving axis: the `descriptor_dynamic`
+        // projection and the `DYNAMIC_DESCRIPTORS` array carve the
+        // same 1-of-4 subset in the same order.
+        use OptionalParamMalformedReason as R;
+        let projected = [R::ExtraElements { length: 5 }.descriptor_dynamic().unwrap()];
+        assert_eq!(projected, R::DYNAMIC_DESCRIPTORS);
+    }
+
+    #[test]
+    fn label_static_and_descriptor_dynamic_partition_the_closed_set() {
+        // Truth-table pin of the STATIC ⊕ DYNAMIC partition contract:
+        // for every legal variant, EXACTLY ONE of `label_static(self)`
+        // and `descriptor_dynamic(self)` returns `Some`. The two
+        // projections carve the four-arm closed set into disjoint
+        // covering halves without overlap.
+        use OptionalParamMalformedReason as R;
+        for reason in [
+            R::EmptyList,
+            R::MissingDefault,
+            R::NonSymbolName,
+            R::ExtraElements { length: 3 },
+            R::ExtraElements { length: 0 },
+            R::ExtraElements { length: 99 },
+        ] {
+            let static_hit = reason.label_static().is_some();
+            let dynamic_hit = reason.descriptor_dynamic().is_some();
+            assert!(
+                static_hit ^ dynamic_hit,
+                "STATIC ⊕ DYNAMIC partition violated for {reason:?}: \
+                 label_static={static_hit}, descriptor_dynamic={dynamic_hit}",
+            );
+        }
+    }
+
+    #[test]
+    fn label_dynamic_composes_descriptor_arity_and_payload_through_shared_template() {
+        // `label_dynamic()` returns `Some(String)` for the DYNAMIC arm
+        // formatted through the shared `"{length} {descriptor} (need
+        // {})"` template — the descriptor binds to
+        // EXTRA_ELEMENTS_DESCRIPTOR, the arity suffix binds to
+        // OPTIONAL_PARAM_SPEC_ARITY, and the length binds to the
+        // enum's dynamic payload. The three STATIC arms return None.
+        use OptionalParamMalformedReason as R;
+        assert_eq!(R::EmptyList.label_dynamic(), None);
+        assert_eq!(R::MissingDefault.label_dynamic(), None);
+        assert_eq!(R::NonSymbolName.label_dynamic(), None);
+        // Payload-varying: the `length` slot binds each variant's
+        // payload verbatim.
+        assert_eq!(
+            R::ExtraElements { length: 3 }.label_dynamic(),
+            Some("3 elements (need 2)".to_string())
+        );
+        assert_eq!(
+            R::ExtraElements { length: 7 }.label_dynamic(),
+            Some("7 elements (need 2)".to_string())
+        );
+        assert_eq!(
+            R::ExtraElements { length: 0 }.label_dynamic(),
+            Some("0 elements (need 2)".to_string())
+        );
+        // Cross-check: the composition threads OPTIONAL_PARAM_SPEC_ARITY
+        // rather than a bare `2` literal — a rename of the arity const
+        // propagates through this projection in lockstep.
+        assert_eq!(
+            R::ExtraElements { length: 4 }.label_dynamic().unwrap(),
+            format!(
+                "4 {} (need {})",
+                R::EXTRA_ELEMENTS_DESCRIPTOR,
+                R::OPTIONAL_PARAM_SPEC_ARITY
+            )
+        );
+    }
+
+    #[test]
+    fn label_composes_static_and_dynamic_projections_over_the_full_partition() {
+        // Post-lift `label()` composes `label_static().map(str::to_string)
+        // .or_else(|| label_dynamic()).expect(...)` — the STATIC ⊕
+        // DYNAMIC partition contract guarantees exactly ONE projection
+        // returns `Some` per variant, so the expect arm is
+        // structurally unreachable. Pin that every variant's `label()`
+        // bytes equal exactly what the composed projection yields.
+        use OptionalParamMalformedReason as R;
+        for (reason, expected) in [
+            (R::EmptyList, R::EMPTY_LIST_LABEL.to_string()),
+            (R::MissingDefault, R::MISSING_DEFAULT_LABEL.to_string()),
+            (R::NonSymbolName, R::NON_SYMBOL_NAME_LABEL.to_string()),
+            (
+                R::ExtraElements { length: 3 },
+                "3 elements (need 2)".to_string(),
+            ),
+            (
+                R::ExtraElements { length: 42 },
+                "42 elements (need 2)".to_string(),
+            ),
+        ] {
+            assert_eq!(reason.label(), expected);
+            // Composition pin: `label()` bytes equal whichever
+            // projection returned Some.
+            let composed = reason
+                .label_static()
+                .map(str::to_string)
+                .or_else(|| reason.label_dynamic())
+                .unwrap();
+            assert_eq!(reason.label(), composed);
+        }
     }
 
     #[test]

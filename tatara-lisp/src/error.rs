@@ -7161,10 +7161,151 @@ impl StructuralKind {
     #[must_use]
     pub fn sexp_shape(self) -> SexpShape {
         match self {
-            Self::Nil => SexpShape::Nil,
-            Self::List => SexpShape::List,
+            Self::Nil => Self::NIL_SHAPE,
+            Self::List => Self::LIST_SHAPE,
         }
     }
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::Nil`]
+    /// structural-residual arm on the StructuralKind ⊂ SexpShape
+    /// 2-of-12 carving — [`SexpShape::Nil`]. Per-role peer of
+    /// `Self::Nil` on the closed-set structural-residual → outer-shape
+    /// embed axis; consumers with a `StructuralKind` variant in hand
+    /// at compile time bind the canonical embed target through ONE
+    /// typed `pub const` per role rather than through runtime dispatch
+    /// via [`Self::sexp_shape`] or by re-deriving the StructuralKind ⊂
+    /// SexpShape variant pairing inline.
+    ///
+    /// Sibling posture to [`Self::NIL_LABEL`] (the per-role diagnostic
+    /// label alias) and [`Self::NIL_HASH_DISCRIMINATOR`] (the per-role
+    /// outer-Sexp cache-key byte) on the closed-set StructuralKind
+    /// algebra — each closes a distinct per-role sub-vocabulary axis
+    /// on the StructuralKind carving. This constant closes the THIRD
+    /// per-role axis on [`StructuralKind`] (the `SexpShape`-embed
+    /// axis, paired with the pre-existing `&'static str`
+    /// diagnostic-label axis + the `u8` cache-key axis) at ONE typed
+    /// alias through the peer superset variant on the [`SexpShape`]
+    /// closed set.
+    ///
+    /// Sibling posture to the peer 6-of-12 atomic-payload carving's
+    /// per-role SHAPE aliases
+    /// ([`crate::ast::AtomKind::SYMBOL_SHAPE`] …
+    /// [`crate::ast::AtomKind::BOOL_SHAPE`]) and the peer 4-of-12
+    /// quote-family carving's per-role SHAPE aliases
+    /// ([`crate::ast::QuoteForm::QUOTE_SHAPE`] …
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_SHAPE`]). Post-lift the
+    /// SexpShape's per-carving embed-target axis is uniformly surfaced
+    /// through per-role `pub const *_SHAPE` aliases on every
+    /// sub-carving that carries a bidirectional (embed, project)
+    /// `Iso(_, _ ⊂ SexpShape)` — `AtomKind` (6), `QuoteForm` (4), and
+    /// now `StructuralKind` (2) — closing the third and final peer of
+    /// the twelve-arm superset.
+    pub const NIL_SHAPE: SexpShape = SexpShape::Nil;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::List`]
+    /// structural-residual arm on the StructuralKind ⊂ SexpShape
+    /// 2-of-12 carving — [`SexpShape::List`]. Per-role peer of
+    /// `Self::List`. See [`Self::NIL_SHAPE`] for the alias-chain shape
+    /// every sibling shares.
+    pub const LIST_SHAPE: SexpShape = SexpShape::List;
+
+    /// Closed-set forced-arity ALL array over the canonical
+    /// [`SexpShape`] embed targets on the StructuralKind ⊂ SexpShape
+    /// 2-of-12 carving, in declaration order matching [`Self::ALL`]
+    /// element-wise (pinned by
+    /// `structural_kind_shapes_align_with_all_by_index`). Sibling
+    /// posture to [`Self::LABELS`] (`[&'static str; 2]` — per-role
+    /// diagnostic bytes) and [`Self::HASH_DISCRIMINATORS`] (`[u8; 2]`
+    /// — per-role outer-Sexp cache-key bytes) on the SAME closed-set
+    /// StructuralKind algebra; where those two arrays lift per-role
+    /// `&'static str` and `u8` sub-vocabularies onto the substrate,
+    /// this array lifts the per-role [`SexpShape`] embed-target
+    /// sub-vocabulary at the same `[_; 2]` forced arity.
+    ///
+    /// Sibling posture to [`crate::ast::AtomKind::SHAPES`]
+    /// (`[SexpShape; 6]`) and [`crate::ast::QuoteForm::SHAPES`]
+    /// (`[SexpShape; 4]`) — the two peer carvings' family-wide
+    /// embed-target arrays on the AtomKind ⊂ SexpShape 6-of-12 and
+    /// QuoteForm ⊂ SexpShape 4-of-12 carvings. Together the THREE
+    /// `SHAPES` arrays (6 + 4 + 2 = 12) cover EVERY sub-carving of
+    /// [`SexpShape`] that carries a bidirectional `Iso(_, _ ⊂
+    /// SexpShape)` at the same `[SexpShape; N]` forced-arity shape —
+    /// a family-wide sweep zipping every carving's `ALL` + `SHAPES` in
+    /// lockstep now closes over the FULL 12-arm outer-shape algebra at
+    /// ONE typed pair-of-arrays per carving. This lift closes the
+    /// THIRD and FINAL peer array — post-lift the substrate's every
+    /// closed-set carving of [`SexpShape`] has its embed-target
+    /// sub-vocabulary surfaced through a per-role `pub const` + ALL
+    /// array uniformly.
+    ///
+    /// Pre-lift the two [`SexpShape`] embed targets had NO per-role
+    /// primitive on this closed-set algebra — a consumer with a
+    /// [`StructuralKind`] variant in hand at compile time reaching for
+    /// the canonical embed target had to spell
+    /// `StructuralKind::Nil.sexp_shape()` (runtime dispatch through
+    /// the two-arm match body) OR re-derive the StructuralKind ⊂
+    /// SexpShape variant pairing at the call site by importing both
+    /// enums and spelling `SexpShape::Nil` inline. Post-lift the TWO
+    /// canonical embed targets bind at ONE `pub const` per role on the
+    /// typed [`StructuralKind`] algebra AND at [`Self::SHAPES`] as a
+    /// family-wide forced-arity array — a future LSP / REPL completion
+    /// bar keyed on `StructuralKind::SHAPES` for the "which SexpShape
+    /// does this StructuralKind embed into?" outer-shape column, a
+    /// `tatara-check` coverage sweep zipping `StructuralKind::ALL` /
+    /// `LABELS` / `HASH_DISCRIMINATORS` / `SHAPES` in lockstep for a
+    /// family-wide (variant, label, byte, embed-target) quadruple
+    /// render, or a Sekiban audit-trail metric jointly labeled by the
+    /// embed-target's SexpShape identity reads through the typed
+    /// constants on this subset algebra without re-deriving the 2-of-12
+    /// carving inline.
+    ///
+    /// Round-trip identity with the inverse projection
+    /// [`SexpShape::as_structural_kind`]: for every index `i`,
+    /// `Self::SHAPES[i].as_structural_kind() == Some(Self::ALL[i])`
+    /// (pinned by
+    /// `structural_kind_shapes_align_with_all_by_index_through_as_structural_kind`)
+    /// — the embed / project section closes as a family-wide array-
+    /// indexed law rather than as a per-variant assertion sweep.
+    /// Adding a hypothetical third structural-residual variant (e.g.
+    /// `Vector` for `#(...)` reader syntax, `Map` for `{...}`, or
+    /// `Char` for `#\x` — each of which extends [`SexpShape::ALL`]
+    /// AND joins THIS carving iff it lies outside BOTH the
+    /// atomic-payload and quote-family carvings) extends [`Self::ALL`]
+    /// AND [`Self::SHAPES`] AND [`SexpShape::ALL`] AND adds ONE
+    /// per-role `pub const *_SHAPE` in lockstep — rustc's forced-arity
+    /// check on the two `[_; N]` arrays fails compilation if EITHER
+    /// ALL array grows without the other, AND the peer
+    /// [`SexpShape::as_structural_kind`] arm must grow in lockstep to
+    /// preserve the round-trip identity.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// canonical [`SexpShape`] embed targets bind at ONE typed
+    /// `[SexpShape; 2]` array on the closed-set StructuralKind algebra
+    /// rather than at zero-primitive-on-this-subset-plus-two-inline-
+    /// lookups scattered across the substrate. Closes the THIRD
+    /// per-role `pub const` axis on the StructuralKind carving
+    /// alongside the pre-existing LABELS + HASH_DISCRIMINATORS axes.
+    /// THEORY.md §V.1 — knowable platform; the family's cardinality
+    /// becomes a TYPE-level constant on the substrate algebra rather
+    /// than a per-consumer runtime dispatch through the composition. A
+    /// regression that drifts the (StructuralKind variant, SexpShape
+    /// variant) pairing at ONE of the three typed sites (per-role
+    /// alias, family-wide array, projection method) fails-loudly at
+    /// the array-indexed sweep rather than as a silent operator-facing
+    /// diagnostic drift. THEORY.md §II.1 invariant 2 — free middle;
+    /// the (embed, project) pair binds at THREE typed sites now — the
+    /// projection method [`Self::sexp_shape`], this family-wide array,
+    /// AND the peer inverse [`SexpShape::as_structural_kind`] — with
+    /// rustc-enforced consistency across all three. THEORY.md §VI.1
+    /// — generation over composition; the family-wide contract sweeps
+    /// (alignment with `ALL`, round-trip through
+    /// `as_structural_kind`, membership through `sexp_shape`, pairwise
+    /// injectivity across the two embed targets) emerge from the
+    /// composition of TWO substrate primitives (this `pub const`
+    /// array + the two per-role `pub const *_SHAPE` aliases) rather
+    /// than as per-variant inline assertions duplicated at each call
+    /// site.
+    pub const SHAPES: [SexpShape; 2] = [Self::NIL_SHAPE, Self::LIST_SHAPE];
 
     /// Stable, per-variant byte discriminator that paired with the
     /// residual outer-shape hash body builds the substrate's
@@ -18483,6 +18624,156 @@ mod tests {
                  LABELS array must project through the sexp_shape + \
                  SexpShape::label composition byte-for-byte",
             );
+        }
+    }
+
+    #[test]
+    fn structural_kind_per_role_shapes_pin_canonical_sexp_shape_variants() {
+        // PER-ROLE ALIAS CONTRACT: each `StructuralKind::*_SHAPE` per-
+        // role `pub const` binds byte-for-byte to its canonical
+        // `SexpShape` variant on the StructuralKind ⊂ SexpShape 2-of-12
+        // carving. Pin so a regression that swaps ONE alias (e.g.
+        // re-aims `LIST_SHAPE` at `SexpShape::Nil`) surfaces at rustc
+        // / test time rather than as a silent operator-facing
+        // diagnostic drift at every consumer keyed on the typed embed
+        // target. Sibling posture to
+        // `structural_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+        // on the diagnostic label axis of the SAME closed set — this
+        // pin is the peer on the `SexpShape` embed-target axis.
+        assert_eq!(StructuralKind::NIL_SHAPE, SexpShape::Nil);
+        assert_eq!(StructuralKind::LIST_SHAPE, SexpShape::List);
+    }
+
+    #[test]
+    fn structural_kind_shapes_has_expected_cardinality() {
+        // CLOSED-SET CARDINALITY CONTRACT: `StructuralKind::SHAPES`
+        // carries exactly TWO entries — one per variant in the
+        // closed-set structural-residual carving. Runtime companion to
+        // the `[SexpShape; 2]` type annotation's compile-time forced
+        // arity. A regression that widens the array without adding a
+        // matching per-role `*_SHAPE` alias would fail the
+        // `[SexpShape; 2]` type check at rustc time; this runtime pin
+        // catches a silent shrink or duplicate-arm coalesce. Sibling
+        // posture to `structural_kind_labels_has_expected_cardinality`
+        // and `structural_kind_hash_discriminators_has_expected_cardinality`
+        // on the other two per-role axes of the SAME closed set.
+        assert_eq!(StructuralKind::SHAPES.len(), 2);
+        assert_eq!(StructuralKind::SHAPES.len(), StructuralKind::ALL.len());
+    }
+
+    #[test]
+    fn structural_kind_shapes_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::SHAPES[i] ==
+        // Self::ALL[i].sexp_shape()` element-wise. Pins that the typed
+        // variant ALL and the `SexpShape` SHAPES ALL stay in lockstep
+        // under any reorder — a regression that reorders ONE array
+        // without reordering the other silently misaligns every
+        // `zip(ALL, SHAPES)` consumer that wants to project each
+        // structural-residual variant to its canonical outer-shape
+        // identity (LSP completion, `tatara-check` predicate over the
+        // structural ⊂ outer partition, Sekiban audit-trail metric
+        // jointly labeled by the embed target). Sibling posture to
+        // `structural_kind_labels_align_with_all_by_index` and
+        // `structural_kind_hash_discriminators_align_with_all_by_index`
+        // on the other two per-role axes of the SAME closed set.
+        for (i, kind) in StructuralKind::ALL.iter().enumerate() {
+            assert_eq!(
+                StructuralKind::SHAPES[i],
+                kind.sexp_shape(),
+                "StructuralKind::SHAPES[{i}] `{shape:?}` drifted from \
+                 StructuralKind::ALL[{i}] ({kind:?}).sexp_shape() \
+                 `{via_variant:?}` — the canonical declaration order \
+                 of the ALL array and the sexp_shape projection must \
+                 match element-wise",
+                shape = StructuralKind::SHAPES[i],
+                via_variant = kind.sexp_shape(),
+            );
+        }
+    }
+
+    #[test]
+    fn structural_kind_shapes_align_with_all_by_index_through_as_structural_kind() {
+        // ROUND-TRIP CONTRACT: `Self::SHAPES[i].as_structural_kind() ==
+        // Some(Self::ALL[i])` element-wise. Pins the embed / project
+        // section of the (`StructuralKind::sexp_shape`,
+        // `SexpShape::as_structural_kind`) `Iso(StructuralKind,
+        // StructuralShape ⊂ SexpShape)` as a family-wide array-indexed
+        // law rather than as a per-variant assertion sweep. A
+        // regression that drifts EITHER the `SHAPES` array entries OR
+        // the peer inverse `as_structural_kind` arms silently breaks
+        // the (embed, project) section — this pin catches both
+        // directions at ONCE. Sibling posture to
+        // `atom_kind_shapes_align_with_all_by_index_through_as_atom_kind`
+        // on the peer 6-of-12 atomic-payload carving and
+        // `quote_form_shapes_align_with_all_by_index_through_as_quote_form`
+        // on the peer 4-of-12 quote-family carving — this pin closes
+        // the third and final peer round-trip.
+        for (i, kind) in StructuralKind::ALL.iter().enumerate() {
+            assert_eq!(
+                StructuralKind::SHAPES[i].as_structural_kind(),
+                Some(*kind),
+                "StructuralKind::SHAPES[{i}] `{shape:?}`.as_structural_kind() = \
+                 {actual:?} drifted from Some(StructuralKind::ALL[{i}]) = \
+                 Some({expected:?}) — the (SHAPES entry, ALL variant) \
+                 round-trip through the peer inverse \
+                 SexpShape::as_structural_kind must hold element-wise",
+                shape = StructuralKind::SHAPES[i],
+                actual = StructuralKind::SHAPES[i].as_structural_kind(),
+                expected = kind,
+            );
+        }
+    }
+
+    #[test]
+    fn structural_kind_sexp_shape_routes_through_typed_per_role_constants() {
+        // ROUTING CONTRACT: `StructuralKind::sexp_shape()`'s two arms
+        // bind through the per-role `pub const *_SHAPE` aliases rather
+        // than through inline `SexpShape::X` literals. Pin so a
+        // regression that re-inlines the two literals here (and gains
+        // its own drift surface separate from the canonical per-role
+        // alias site) surfaces immediately at variant equality.
+        // Sibling posture to
+        // `structural_kind_label_arms_route_through_per_role_labels_for_every_variant`
+        // (which pins label routing through the per-role LABEL aliases)
+        // and `atom_kind_sexp_shape_routes_through_typed_per_role_constants`
+        // / `quote_form_sexp_shape_routes_through_typed_per_role_constants`
+        // on the peer 6-of-12 atomic-payload and 4-of-12 quote-family
+        // carvings.
+        assert_eq!(StructuralKind::Nil.sexp_shape(), StructuralKind::NIL_SHAPE);
+        assert_eq!(
+            StructuralKind::List.sexp_shape(),
+            StructuralKind::LIST_SHAPE
+        );
+    }
+
+    #[test]
+    fn structural_kind_shapes_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: every entry of the `SHAPES` array
+        // must differ so the (StructuralKind variant, SexpShape embed
+        // target) mapping stays injective — a collision would silently
+        // route two distinct StructuralKind variants through the SAME
+        // outer-shape identity, breaking the StructuralKind ⊂
+        // SexpShape 2-of-12 carving. Family-wide sweep over `SHAPES ×
+        // SHAPES` — supersedes any per-pair pin and picks up new embed
+        // targets mechanically. Sibling posture to
+        // `atom_kind_shapes_pairwise_distinct` and
+        // `quote_form_shapes_pairwise_distinct` on the peer 6-of-12
+        // atomic-payload and 4-of-12 quote-family carvings — this pin
+        // closes the third and final peer pairwise-distinct sweep.
+        for (i, a) in StructuralKind::SHAPES.iter().enumerate() {
+            for (j, b) in StructuralKind::SHAPES.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "StructuralKind::SHAPES[{i}] `{a:?}` collides with \
+                     StructuralKind::SHAPES[{j}] `{b:?}` — the \
+                     StructuralKind ⊂ SexpShape 2-of-12 carving would \
+                     route two structural-residual variants through the \
+                     same outer-shape identity"
+                );
+            }
         }
     }
 

@@ -3160,6 +3160,164 @@ impl UnquoteForm {
         Self::SPLICE_HASH_DISCRIMINATOR,
     ];
 
+    /// Closed-set forced-arity ALL array over the reader's promotion
+    /// triples on the two-variant substitution-subset lattice —
+    /// `(Self::Unquote, '@', Self::Splice)` for the ONE `,` → `,@`
+    /// promotion the substrate's reader `promote_via_next_char` arm
+    /// depends on at the parent superset level. Its forced-arity `1`
+    /// is INTENTIONAL and load-bearing on the subset carving: only
+    /// [`Self::Splice`] carries a two-char rendered marker on the
+    /// substitution subset (its `,@` prefix decomposes into `,` +
+    /// [`crate::ast::QuoteForm::SPLICE_DISCRIMINATOR`]), so the
+    /// promotion table's Some-arm is the singleton `{(Unquote, '@') →
+    /// Splice}` on the `Self × char → Option<Self>` product — the
+    /// two-of-four substitution-subset peer of the closed set
+    /// [`crate::ast::QuoteForm::PROMOTIONS`] `[(head, char, promoted);
+    /// 1]` carries on the four-arm quote-family superset.
+    ///
+    /// Cross-algebra composition law (pinned by
+    /// `unquote_form_promotions_align_with_quote_form_promotions_by_projection`):
+    /// for the ONE entry `(head, disc, promoted)` in
+    /// [`Self::PROMOTIONS`],
+    /// `(head.to_quote_form(), disc, promoted.to_quote_form())` equals
+    /// [`crate::ast::QuoteForm::PROMOTIONS`]`[0]` byte-for-byte. The
+    /// subset's promotion triple embeds into the parent superset's
+    /// promotion triple through the pre-existing 2-of-4 subset →
+    /// superset projection [`Self::to_quote_form`] composed with the
+    /// identity on the middle discriminator `char` (which is a
+    /// [`crate::ast::QuoteForm::SPLICE_DISCRIMINATOR`] alias direct at
+    /// the constant site). A regression that drifts the subset's
+    /// triple silently promotes a phantom pairing (e.g. re-inlines
+    /// `Self::Splice` at the head column) AND fails the composition
+    /// pin at rustc / test time rather than at silent tokenizer drift
+    /// where the reader's `,@xs` sequence tokenizes to a phantom
+    /// substitution-subset marker.
+    ///
+    /// Sibling posture to the closed-set forced-arity ALL arrays
+    /// across the substrate's [`UnquoteForm`] subset algebra:
+    /// [`Self::ALL`] (`[Self; 2]` — the closed set of variants),
+    /// [`Self::MARKERS`] (`[&'static str; 2]` — the reader-marker
+    /// axis, aliased through
+    /// [`crate::ast::QuoteForm::UNQUOTE_PREFIX`] /
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_PREFIX`]),
+    /// [`Self::IAC_FORGE_TAGS`] (`[&'static str; 2]` — the iac-forge
+    /// canonical-form tag axis, aliased through
+    /// [`crate::ast::QuoteForm::UNQUOTE_IAC_FORGE_TAG`] /
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG`]),
+    /// [`Self::LABELS`] (`[&'static str; 2]` — the diagnostic-label
+    /// axis, aliased through
+    /// [`crate::ast::QuoteForm::UNQUOTE_LABEL`] /
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_LABEL`]), and
+    /// [`Self::HASH_DISCRIMINATORS`] (`[u8; 2]` — the outer-`Sexp`
+    /// cache-key byte axis, aliased through
+    /// [`crate::ast::QuoteForm::UNQUOTE_HASH_DISCRIMINATOR`] /
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR`]).
+    /// This lift adds the FIFTH per-family axis on the substitution-
+    /// subset algebra — the (head, disc, promoted) triple axis on
+    /// the closed-set promotion product. Each of the five axes now
+    /// pins its per-role canonical data at ONE `pub const` per role
+    /// (or ONE `pub const` triple on the promotion-asymmetric single-
+    /// arm collapse) PLUS an ALL array for family-wide consumers.
+    ///
+    /// The middle discriminator column aliases
+    /// [`crate::ast::QuoteForm::SPLICE_DISCRIMINATOR`] direct at the
+    /// constant site — the substitution subset does NOT introduce a
+    /// separate `SPLICE_DISCRIMINATOR` const because the discriminator
+    /// byte is shape-uniform across the parent superset (it is the
+    /// SAME `'@'` byte that promotes at every quote-family arm on the
+    /// parent) and lives at ONE canonical site in `ast.rs`. Alias
+    /// direction runs from the [`UnquoteForm`] subset INTO the parent
+    /// [`crate::ast::QuoteForm`] superset — the SAME direction the
+    /// four prior per-family axes take on this subset (MARKERS,
+    /// IAC_FORGE_TAGS, LABELS, HASH_DISCRIMINATORS).
+    ///
+    /// `pub(crate)` because the promotion algebra is an implementation
+    /// detail of the substrate's reader — exposing it publicly would
+    /// leak the promotion-table shape through the API without
+    /// enabling any external consumer the parent superset's public
+    /// [`crate::ast::QuoteForm::promote_via_next_char`] projection
+    /// doesn't already serve on the four-arm surface. Same visibility
+    /// rationale as [`Self::HASH_DISCRIMINATORS`] on the sibling
+    /// cache-key axis.
+    ///
+    /// The `#[allow(dead_code)]` posture matches
+    /// [`Self::HASH_DISCRIMINATORS`] AND
+    /// [`crate::ast::QuoteForm::PROMOTIONS`]: the substrate's current
+    /// reader dispatches through the parent superset's
+    /// [`crate::ast::QuoteForm::promote_via_next_char`] arm rather
+    /// than a UnquoteForm-subset promotion body (which does not
+    /// exist on this subset — the two-of-four carving does not carry
+    /// a `promote_via_next_char` method because the reader boundary
+    /// is the four-arm parent), so no non-test caller currently
+    /// reaches this substitution-subset promotion array directly.
+    /// The lift lands the substrate primitive so future consumers
+    /// keyed on the substitution-subset carving specifically (a
+    /// future `TypedRewriter<UnquoteFormOp>` sweep zipping ALL /
+    /// MARKERS / IAC_FORGE_TAGS / LABELS / HASH_DISCRIMINATORS /
+    /// PROMOTIONS in lockstep for a family-wide render, a future
+    /// `tatara-check` predicate
+    /// `(check-substitution-subset-promotion-algebra-injective …)`
+    /// that verifies the substitution subset's promotion triples
+    /// embed injectively into the parent superset's, a Sekiban
+    /// audit-trail metric jointly labeled by the substitution-subset
+    /// promotion partition) bind to ONE `[(Self, char, Self); N]`
+    /// primitive rather than re-deriving the promotion triples
+    /// inline per callsite. Matches the preemptive-primitive posture
+    /// the prior-run [`Self::HASH_DISCRIMINATORS`] +
+    /// [`crate::ast::QuoteForm::PROMOTIONS`] +
+    /// [`crate::ast::QuoteForm::HASH_DISCRIMINATORS`] lifts carried
+    /// before their downstream consumers materialized.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// reader's two-char quote-family classification IS the typed-
+    /// entry gate on the `,@` boundary, and lifting the substitution-
+    /// subset's promotion triple to ONE typed `[(Self, char, Self);
+    /// 1]` primitive on the closed-set subset algebra closes the
+    /// gate's two-char entry surface onto the subset algebra rather
+    /// than at zero-primitive-on-this-subset dispatch through the
+    /// parent superset. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the (subset promotion triple, superset
+    /// promotion triple) pairing binds at rustc time by identity
+    /// composition through [`Self::to_quote_form`] on the head +
+    /// promoted columns AND by direct alias on the middle
+    /// discriminator column. THEORY.md §III — the typescape; the
+    /// singleton promotion triple binds at ONE typed `pub const` on
+    /// the closed-set [`UnquoteForm`] algebra rather than at zero-
+    /// primitive-on-this-subset. Closes the FIFTH per-role
+    /// `pub const` axis on the UnquoteForm subset carving in lockstep
+    /// with the same-axis lift on [`crate::ast::QuoteForm`].
+    /// THEORY.md §V.1 — knowable platform; the family's cardinality
+    /// becomes a TYPE-level constant on the substrate algebra rather
+    /// than a per-consumer runtime dispatch through the parent
+    /// superset's method surface. THEORY.md §VI.1 — generation over
+    /// composition; the family-wide contract sweeps (alignment with
+    /// [`Self::ALL`], cardinality, cross-algebra composition against
+    /// [`crate::ast::QuoteForm::PROMOTIONS`]) emerge from the
+    /// composition of ONE substrate primitive (this `pub(crate) const`
+    /// array) rather than as per-arm inline assertions duplicated at
+    /// each call site.
+    ///
+    /// Frontier inspiration: MLIR's typed rewriter registry
+    /// (`mlir::PatternApplicator`) carries per-op-family static
+    /// rewrite tables at the closed-set boundary; a sub-op-family
+    /// (a distinguished carving of the parent op-family) inherits
+    /// the rewrite table through direct alias from the parent's
+    /// canonical site, so the subset's rewrite table binds at ONE
+    /// typed constant on the subset algebra with the alignment
+    /// composition through the subset → superset projection at
+    /// const-fn evaluation time. [`Self::PROMOTIONS`] is the Rust-
+    /// typed peer of MLIR's per-subset rewrite-table projection at
+    /// the two-variant substitution-subset level — its single entry
+    /// composes from [`crate::ast::QuoteForm::PROMOTIONS`]`[0]`
+    /// through subset → superset projection on the endpoints and
+    /// direct alias on the middle discriminator.
+    #[allow(dead_code)]
+    pub(crate) const PROMOTIONS: [(Self, char, Self); 1] = [(
+        Self::Unquote,
+        crate::ast::QuoteForm::SPLICE_DISCRIMINATOR,
+        Self::Splice,
+    )];
+
     /// Project the typed `UnquoteForm` to the canonical `&'static str`
     /// literal — feeds the `LispError::UnboundTemplateVar` /
     /// `LispError::NonSymbolUnquoteTarget` Display rendering via the
@@ -15315,6 +15473,149 @@ mod tests {
             UnquoteForm::HASH_DISCRIMINATORS[1],
             QuoteForm::HASH_DISCRIMINATORS[3]
         );
+    }
+
+    #[test]
+    fn unquote_form_promotions_has_expected_cardinality() {
+        // CARDINALITY CONTRACT: `UnquoteForm::PROMOTIONS.len() == 1` —
+        // pin the single-arm collapse structurally so a future
+        // refactor that switches the array type to `&[(Self, char,
+        // Self)]` or extends the triple set doesn't silently loosen
+        // the closed-set discipline. Sibling posture to
+        // `quote_form_promotions_has_expected_cardinality` on the
+        // parent four-arm superset — that pin binds the parent's
+        // singleton collapse; this pin binds the same collapse at the
+        // substitution-subset level.
+        assert_eq!(UnquoteForm::PROMOTIONS.len(), 1);
+    }
+
+    #[test]
+    fn unquote_form_promotions_pin_legacy_substitution_subset_splice_promotion_triple() {
+        // TRIPLE-IDENTITY CONTRACT: pin the singleton entry of
+        // `UnquoteForm::PROMOTIONS` at its exact canonical triple
+        // `(Self::Unquote, '@', Self::Splice)` — the reader's ONE
+        // `,` + `@` → `,@` promotion at the substitution-subset
+        // level. A regression that drifts the triple (e.g. flips the
+        // head column to `Self::Splice`, drifts the discriminator to
+        // a different byte, or promotes to a phantom variant) fails
+        // loudly here at rustc-time equality rather than silently at
+        // reader tokenizer drift where `,@xs` sequences degrade to
+        // the wrong substitution-subset marker. Sibling posture to
+        // `quote_form_promotions_pin_legacy_splice_promotion_triple`
+        // on the parent four-arm superset — the triple's shape is
+        // byte-identical up to the substitution-subset variant
+        // renaming (`QuoteForm::Unquote` ↔ `UnquoteForm::Unquote`,
+        // `QuoteForm::UnquoteSplice` ↔ `UnquoteForm::Splice`, with
+        // the middle discriminator column aliased directly at the
+        // constant site).
+        let (head, disc, promoted) = UnquoteForm::PROMOTIONS[0];
+        assert_eq!(head, UnquoteForm::Unquote);
+        assert_eq!(disc, crate::ast::QuoteForm::SPLICE_DISCRIMINATOR);
+        assert_eq!(disc, '@');
+        assert_eq!(promoted, UnquoteForm::Splice);
+    }
+
+    #[test]
+    fn unquote_form_promotions_align_with_quote_form_promotions_by_projection() {
+        // CROSS-ALGEBRA COMPOSITION contract: for every `i in 0..1`,
+        // `(UnquoteForm::PROMOTIONS[i].0.to_quote_form(),
+        //   UnquoteForm::PROMOTIONS[i].1,
+        //   UnquoteForm::PROMOTIONS[i].2.to_quote_form())`
+        // equals `QuoteForm::PROMOTIONS[0]` byte-for-byte — the
+        // substitution-subset promotion triple embeds into the parent
+        // superset's promotion triple through the pre-existing 2-of-4
+        // subset → superset projection `Self::to_quote_form` on the
+        // head + promoted endpoints AND identity on the middle
+        // discriminator `char` column. Sibling posture to
+        // `unquote_form_hash_discriminators_align_with_superset_by_projection`
+        // (2-arm subset × 4-arm superset composition on the outer-
+        // `Sexp` cache-key axis) — this pin closes the same
+        // composition contract on the (head, disc, promoted) triple
+        // axis at the substitution-subset carving level.
+        use crate::ast::QuoteForm;
+        for i in 0..UnquoteForm::PROMOTIONS.len() {
+            let (subset_head, subset_disc, subset_promoted) = UnquoteForm::PROMOTIONS[i];
+            let projected_head = subset_head.to_quote_form();
+            let projected_promoted = subset_promoted.to_quote_form();
+            let superset_triple = QuoteForm::PROMOTIONS[i];
+            assert_eq!(
+                (projected_head, subset_disc, projected_promoted),
+                superset_triple,
+                "UnquoteForm::PROMOTIONS[{i}] projection through \
+                 `to_quote_form()` drifted from \
+                 QuoteForm::PROMOTIONS[{i}]",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_promotions_head_column_is_unquote_and_promoted_column_is_splice() {
+        // CARVING PARTITION CONTRACT (substitution-subset level): on
+        // the two-variant substitution-subset lattice, the promotion
+        // triple's head column is the ONLY variant with a single-
+        // char rendered marker (`Self::Unquote`, marker `,`) and the
+        // promoted column is the ONLY variant with a two-char
+        // rendered marker (`Self::Splice`, marker `,@`). Pin the
+        // (head, promoted) endpoint identity across the closed
+        // `UnquoteForm::ALL` set so a regression that flips the
+        // endpoints or promotes to a phantom variant fails-loudly
+        // here. The two variants of `UnquoteForm` split cleanly along
+        // the promotion axis: single-char-marker `Unquote` is the
+        // head, two-char-marker `Splice` is the promoted target.
+        for (head, _, promoted) in UnquoteForm::PROMOTIONS {
+            assert_eq!(
+                head,
+                UnquoteForm::Unquote,
+                "the substitution-subset promotion head must be the \
+                 single-char-marker variant `UnquoteForm::Unquote`",
+            );
+            assert_eq!(
+                promoted,
+                UnquoteForm::Splice,
+                "the substitution-subset promotion target must be \
+                 the two-char-marker variant `UnquoteForm::Splice`",
+            );
+            assert_eq!(
+                head.marker(),
+                crate::ast::QuoteForm::UNQUOTE_PREFIX,
+                "the substitution-subset promotion head's marker \
+                 must alias `QuoteForm::UNQUOTE_PREFIX`",
+            );
+            assert_eq!(
+                promoted.marker(),
+                crate::ast::QuoteForm::UNQUOTE_SPLICE_PREFIX,
+                "the substitution-subset promotion target's marker \
+                 must alias `QuoteForm::UNQUOTE_SPLICE_PREFIX`",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_promotions_compose_marker_from_head_marker_and_discriminator() {
+        // RENDERED-MARKER COMPOSITION LAW (subset-level): for every
+        // `(head, disc, promoted)` in `UnquoteForm::PROMOTIONS`,
+        // `format!("{}{}", head.marker(), disc) == promoted.marker()`.
+        // The subset's rendered-marker composition (head-marker byte
+        // + discriminator byte = promoted-marker two-byte string)
+        // agrees byte-for-byte with the promoted variant's rendered
+        // marker — the reader's peek-then-consume arm's rendered
+        // marker identity closes the read↔write duality across the
+        // substitution-subset promotion algebra. Sibling posture to
+        // `quote_form_promotions_compose_prefix_from_source_prefix_and_discriminator_for_every_entry`
+        // on the parent four-arm superset — that pin binds the
+        // parent superset's rendered-prefix composition; this pin
+        // binds the substitution-subset's rendered-marker
+        // composition on the SAME single promotion triple.
+        for (head, disc, promoted) in UnquoteForm::PROMOTIONS {
+            let composed = format!("{}{}", head.marker(), disc);
+            assert_eq!(
+                composed,
+                promoted.marker(),
+                "UnquoteForm::PROMOTIONS `({head:?}, {disc:?}, {promoted:?})` \
+                 marker composition drifted — expected \
+                 `head.marker() + disc` to equal `promoted.marker()`",
+            );
+        }
     }
 
     #[test]

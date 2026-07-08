@@ -2293,6 +2293,127 @@ impl TemplateInvariantKind {
         Self::FINAL_NO_VALUE_MESSAGE,
     ];
 
+    /// Canonical `&'static str` descriptor bytes for the
+    /// [`Self::SubstBadIndex`] rejection — the noun-slot bytes `"param"`
+    /// naming the required-param slot the compiled bytecode indexed
+    /// out-of-bounds. Per-role peer of [`Self::SubstBadIndex`] on the
+    /// DYNAMIC 2-of-4 subset carving of the four-arm closed set — the
+    /// two arms whose diagnostic bytes format their `usize` payload
+    /// into the shared message template rather than binding to a fixed
+    /// `&'static str` on the STATIC axis.
+    ///
+    /// Pre-lift the same `"param"` bytes lived inline at
+    /// [`Self::message`]'s `SubstBadIndex(idx)` match arm as the
+    /// literal noun slot of `format!("compiled template referenced bad
+    /// param index {idx}")` plus at the truth-table tests
+    /// `template_invariant_kind_message_for_subst_bad_idx` and
+    /// `template_invariant_display_renders_legacy_compile_shape_for_subst_bad_idx`
+    /// — the ≥2 PRIME-DIRECTIVE trigger. Post-lift the (`SubstBadIndex`
+    /// variant, canonical `&'static str` descriptor) pairing binds at
+    /// ONE `pub const` on the typed [`TemplateInvariantKind`] algebra:
+    /// [`Self::message_dynamic`] routes through this constant plus the
+    /// [`Self::SPLICE_BAD_INDEX_DESCRIPTOR`] peer via
+    /// [`Self::descriptor_dynamic`], the peer [`Self::DYNAMIC_DESCRIPTORS`]
+    /// array composes it into a forced-arity `[&'static str; 2]` at ONE
+    /// site, and the shared `format!("compiled template referenced bad
+    /// {descriptor} index {idx}")` template binds at ONE site inside
+    /// [`Self::message_dynamic`] rather than at TWO byte-for-byte
+    /// duplicated `format!(...)` arms (the pre-lift `SubstBadIndex(idx)`
+    /// arm's `"…bad param index {idx}"` AND the `SpliceBadIndex(idx)`
+    /// arm's `"…bad splice index {idx}"`).
+    ///
+    /// Sibling posture to the closed-set per-role canonical `pub const`
+    /// bytes on peer STATIC-subset carvings: this axis is the DYNAMIC
+    /// 2-of-4 peer to [`Self::END_LIST_EMPTY_STACK_MESSAGE`] +
+    /// [`Self::FINAL_NO_VALUE_MESSAGE`]'s STATIC 2-of-4 carving —
+    /// together the four per-role `pub const`s partition the four-arm
+    /// closed set into its STATIC ⊕ DYNAMIC halves, each with its own
+    /// typed subset projection ([`Self::message_static`],
+    /// [`Self::descriptor_dynamic`]). Cross-axis peer to
+    /// [`OptionalParamMalformedReason::OPTIONAL_PARAM_SPEC_ARITY`] on
+    /// the sibling algebra's `ExtraElements` dynamic arm — both name
+    /// the load-bearing typed slot that the pre-lift `format!(...)`
+    /// arm embedded as a bare literal.
+    ///
+    /// Future consumers keyed on the descriptor: LSP quick-fix for the
+    /// out-of-bounds Subst rejection (surface `"the compiled template
+    /// referenced a bad {descriptor} index"` where `{descriptor}`
+    /// binds to this const); a Sekiban audit-trail metric jointly
+    /// labeled by the DYNAMIC-subset descriptor
+    /// (`tatara_lisp_template_invariant_total{descriptor="param"}` —
+    /// the metric label set on the DYNAMIC subset IS
+    /// [`Self::DYNAMIC_DESCRIPTORS`]).
+    pub const SUBST_BAD_INDEX_DESCRIPTOR: &'static str = "param";
+
+    /// Canonical `&'static str` descriptor bytes for the
+    /// [`Self::SpliceBadIndex`] rejection — the noun-slot bytes
+    /// `"splice"` naming the splice-target param slot the compiled
+    /// bytecode indexed out-of-bounds. Per-role peer of
+    /// [`Self::SpliceBadIndex`] on the DYNAMIC 2-of-4 subset carving of
+    /// the four-arm closed set.
+    ///
+    /// Sibling of [`Self::SUBST_BAD_INDEX_DESCRIPTOR`] on the same
+    /// DYNAMIC 2-of-4 carving — see that constant's doc for the
+    /// algebra-level pre-lift/post-lift contract every DYNAMIC-subset
+    /// per-role descriptor shares. Post-lift the shared
+    /// `format!("compiled template referenced bad {descriptor} index
+    /// {idx}")` template inside [`Self::message_dynamic`] binds
+    /// `{descriptor}` to whichever per-role const the DYNAMIC arm
+    /// projects through [`Self::descriptor_dynamic`].
+    pub const SPLICE_BAD_INDEX_DESCRIPTOR: &'static str = "splice";
+
+    /// The closed set of two canonical `&'static str` descriptor bytes
+    /// on the DYNAMIC 2-of-4 subset carving of
+    /// [`TemplateInvariantKind`]'s four-arm closed set — the
+    /// [`Self::SUBST_BAD_INDEX_DESCRIPTOR`] (`"param"`) noun for the
+    /// required-param slot followed by the
+    /// [`Self::SPLICE_BAD_INDEX_DESCRIPTOR`] (`"splice"`) noun for the
+    /// splice-target param slot. Canonical declaration order matches
+    /// [`Self::descriptor_dynamic`]'s arm order so
+    /// `Self::DYNAMIC_DESCRIPTORS[0] == Self::descriptor_dynamic(Self::SubstBadIndex(_)).unwrap()`
+    /// and `Self::DYNAMIC_DESCRIPTORS[1] == Self::descriptor_dynamic(Self::SpliceBadIndex(_)).unwrap()`
+    /// element-wise — pinned by
+    /// `template_invariant_kind_dynamic_descriptors_align_with_descriptor_dynamic_by_index`.
+    ///
+    /// Peer 2-of-4 carving to [`Self::STATIC_MESSAGES`] — together the
+    /// STATIC + DYNAMIC 2-of-4 arrays partition the four-arm closed
+    /// set into its `&'static str`-projectable halves: the STATIC array
+    /// carries the two arms whose FULL message is `&'static str`, the
+    /// DYNAMIC array carries the two arms whose NOUN slot is
+    /// `&'static str` and whose full message is a
+    /// `format!("compiled template referenced bad {descriptor} index
+    /// {idx}")` composition. Adding a hypothetical fifth static
+    /// invariant lands only on the STATIC array; adding a hypothetical
+    /// fifth dynamic invariant (e.g. a `KwargBadIndex(usize)` gate
+    /// naming a keyword-param slot the compiled bytecode indexed
+    /// out-of-bounds) lands only on this array — rustc's forced-arity
+    /// check on the `[&'static str; N]` shape fails compilation if the
+    /// array grows without the corresponding per-role descriptor +
+    /// [`Self::descriptor_dynamic`] arm being extended in lockstep.
+    ///
+    /// Sibling posture to [`OptionalParamMalformedReason::STATIC_LABELS`]
+    /// (peer algebra's STATIC 3-of-4 carving) — every closed-set outer
+    /// algebra the substrate carries now pins BOTH its STATIC-subset
+    /// canonical-bytes array AND its DYNAMIC-subset per-role-slot array
+    /// at ONE `pub const` per axis rather than at N inline literals
+    /// scattered across projections and tests. The DYNAMIC axis is
+    /// what this array lands for `TemplateInvariantKind`.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::DYNAMIC_DESCRIPTORS`]: a `tatara-check` coverage
+    /// assertion over the workspace corpus (every rendered
+    /// `TemplateInvariant` diagnostic with a DYNAMIC-arm shape must
+    /// substring-match one of the two descriptor bytes —
+    /// `Self::DYNAMIC_DESCRIPTORS.iter()` is the ONE typed sweep over
+    /// every legal dynamic-arm noun); a Sekiban audit-trail metric
+    /// keyed on the descriptor slot; an LSP quick-fix that pluralizes
+    /// the descriptor into a suggestion.
+    #[allow(dead_code)]
+    pub const DYNAMIC_DESCRIPTORS: [&'static str; 2] = [
+        Self::SUBST_BAD_INDEX_DESCRIPTOR,
+        Self::SPLICE_BAD_INDEX_DESCRIPTOR,
+    ];
+
     /// Typed `Option<&'static str>` zero-allocation projection over the
     /// STATIC 2-of-4 subset carving of [`TemplateInvariantKind`]'s
     /// four-arm closed set. Returns `Some(bytes)` for the two arms
@@ -2343,49 +2464,158 @@ impl TemplateInvariantKind {
         }
     }
 
+    /// Typed `Option<&'static str>` zero-allocation projection over the
+    /// DYNAMIC 2-of-4 subset carving of [`TemplateInvariantKind`]'s
+    /// four-arm closed set — returns `Some(descriptor)` for the two
+    /// arms whose diagnostic bytes carry a `usize` payload and format
+    /// through the shared `"compiled template referenced bad
+    /// {descriptor} index {idx}"` template ([`Self::SubstBadIndex`] →
+    /// [`Self::SUBST_BAD_INDEX_DESCRIPTOR`] (`"param"`),
+    /// [`Self::SpliceBadIndex`] → [`Self::SPLICE_BAD_INDEX_DESCRIPTOR`]
+    /// (`"splice"`)), and `None` for the two arms whose full diagnostic
+    /// bytes bind at a `&'static str` on the STATIC axis
+    /// ([`Self::EndListEmptyStack`], [`Self::FinalNoValue`]) and carry
+    /// no per-role descriptor slot.
+    ///
+    /// Peer projection to [`Self::message_static`] on the sibling
+    /// STATIC 2-of-4 subset carving — the two projections together
+    /// partition the four-arm closed set into its STATIC ⊕ DYNAMIC
+    /// halves at zero allocation cost. Callers holding a variant of
+    /// unknown identity thread it through BOTH projections; exactly ONE
+    /// of `message_static(self)` and `descriptor_dynamic(self)` returns
+    /// `Some` for every legal variant (`message_static` on the
+    /// two-arm STATIC subset, `descriptor_dynamic` on the two-arm
+    /// DYNAMIC subset). The partition is pinned by the truth-table
+    /// test `template_invariant_kind_static_dynamic_projections_partition_closed_set`.
+    ///
+    /// The `const fn` posture matches [`Self::message_static`],
+    /// [`OptionalParamMalformedReason::label_static`], and every peer
+    /// closed-set projection method on the substrate — evaluates at
+    /// rustc const-eval time when the variant is a const.
+    ///
+    /// Sibling posture to a hypothetical
+    /// `OptionalParamMalformedReason::descriptor_dynamic` projecting
+    /// `Self::ExtraElements` into its "elements" descriptor bytes on
+    /// the peer algebra's 1-of-4 dynamic carving — the same idiom
+    /// applied at two peer boundaries of the substrate's bytecode-
+    /// runtime and macro-authoring surfaces.
+    ///
+    /// Future consumers that compose against this projection: an LSP
+    /// quick-fix keyed on the DYNAMIC-subset descriptor slot (surfaces
+    /// `"the compiled template referenced a bad {descriptor} index"`
+    /// with `{descriptor}` bound to whatever this projection returns);
+    /// a `tatara-check` predicate that filters a corpus's
+    /// `TemplateInvariant` rejections into static-arm vs dynamic-arm
+    /// buckets in ONE typed subset selector rather than three inline
+    /// `matches!(kind, Self::SubstBadIndex(_) | Self::SpliceBadIndex(_))`
+    /// gates threaded through per-consumer allocation.
+    #[must_use]
+    pub const fn descriptor_dynamic(self) -> Option<&'static str> {
+        match self {
+            Self::SubstBadIndex(_) => Some(Self::SUBST_BAD_INDEX_DESCRIPTOR),
+            Self::SpliceBadIndex(_) => Some(Self::SPLICE_BAD_INDEX_DESCRIPTOR),
+            Self::EndListEmptyStack | Self::FinalNoValue => None,
+        }
+    }
+
+    /// Typed `Option<String>` projection over the DYNAMIC 2-of-4 subset
+    /// carving of [`TemplateInvariantKind`]'s four-arm closed set —
+    /// returns `Some(message)` for the two arms whose diagnostic bytes
+    /// format their `usize` payload through the SHARED
+    /// `"compiled template referenced bad {descriptor} index {idx}"`
+    /// template, and `None` for the two STATIC arms whose full bytes
+    /// bind on the [`Self::message_static`] axis.
+    ///
+    /// Composes [`Self::descriptor_dynamic`] into the shared format
+    /// template — the `{descriptor}` slot binds to whichever per-role
+    /// [`Self::SUBST_BAD_INDEX_DESCRIPTOR`] /
+    /// [`Self::SPLICE_BAD_INDEX_DESCRIPTOR`] constant the DYNAMIC arm
+    /// projects through, and the `{idx}` slot binds the `usize`
+    /// payload the enum's dynamic variant carries. Pre-lift
+    /// [`Self::message`]'s body carried TWO byte-for-byte duplicated
+    /// `format!(...)` arms whose only variance was the noun slot
+    /// (`"param"` vs `"splice"`) — post-lift the shared template binds
+    /// at ONE `format!(...)` site inside this method, the noun slot
+    /// binds at the per-role descriptor const, and
+    /// [`Self::descriptor_dynamic`] carries the arm→descriptor
+    /// mapping.
+    ///
+    /// Peer projection to [`Self::message_static`] on the sibling
+    /// STATIC 2-of-4 subset carving — the two projections together
+    /// partition the four-arm closed set into its STATIC ⊕ DYNAMIC
+    /// message-projection halves. [`Self::message`]'s body reduces to
+    /// `message_static().map(str::to_string).or_else(||
+    /// message_dynamic()).expect(...)` — ONE compositional flow over
+    /// TWO typed subset projections rather than FOUR duplicated match
+    /// arms (two `.into()` sites + two `format!(...)` sites in the
+    /// pre-lift body).
+    ///
+    /// Sibling posture to a hypothetical
+    /// `OptionalParamMalformedReason::label_dynamic` composing
+    /// `Self::ExtraElements`'s `{length}` payload through
+    /// [`OptionalParamMalformedReason::OPTIONAL_PARAM_SPEC_ARITY`] on
+    /// the peer algebra's 1-of-4 dynamic carving.
+    ///
+    /// Future consumers that compose against this projection: a
+    /// `tatara-check` predicate that filters a corpus's
+    /// `TemplateInvariant` rejections into static-arm vs dynamic-arm
+    /// message buckets; a Sekiban audit-trail metric that samples
+    /// dynamic-arm messages without paying the allocation cost on the
+    /// STATIC subset (the `None` branch short-circuits).
+    #[must_use]
+    pub fn message_dynamic(self) -> Option<String> {
+        let descriptor = self.descriptor_dynamic()?;
+        let idx = match self {
+            Self::SubstBadIndex(idx) | Self::SpliceBadIndex(idx) => idx,
+            Self::EndListEmptyStack | Self::FinalNoValue => {
+                // Unreachable: descriptor_dynamic() returned Some only
+                // for SubstBadIndex / SpliceBadIndex on the `?` above.
+                // Kept exhaustive rather than `_ =>` so a future refactor
+                // that adds a fifth dynamic arm without extending
+                // descriptor_dynamic fails compilation at THIS callsite
+                // rather than at runtime.
+                unreachable!(
+                    "descriptor_dynamic returned Some only for dynamic-arm variants; \
+                     the STATIC-arm match here is unreachable via the ? short-circuit"
+                )
+            }
+        };
+        Some(format!(
+            "compiled template referenced bad {descriptor} index {idx}"
+        ))
+    }
+
     /// The `{message}` slot of the legacy `LispError::Compile { form:
     /// macro_name, message: <invariant> }` shape. Each variant projects
     /// to the canonical message string the pre-lift inline triples
     /// emitted — byte-for-byte equivalent so authoring-tool substring
     /// greps (`tatara-check`, REPL) see no drift across the lift.
     ///
-    /// Body composes through [`Self::message_static`] — the two
-    /// STATIC arms project into their per-role `&'static str` bytes
-    /// (`Some(EndListEmptyStack) => END_LIST_EMPTY_STACK_MESSAGE`,
-    /// `Some(FinalNoValue) => FINAL_NO_VALUE_MESSAGE`), and the two
-    /// dynamic arms format their `usize` payload in the fallthrough
-    /// closure. The two duplicated `.into()` sites in the pre-lift
-    /// `message` body collapse into ONE `map_or_else` composition:
-    /// the STATIC arms bind through the typed subset projection, the
-    /// dynamic arms format specialized. Sibling posture to a
-    /// hypothetical `OptionalParamMalformedReason::label` composing
-    /// through `label_static` on the peer 3-of-4 static carving.
+    /// Body composes through BOTH typed subset projections — the
+    /// STATIC 2-of-4 [`Self::message_static`] and the DYNAMIC 2-of-4
+    /// [`Self::message_dynamic`]. The partition contract (exactly ONE
+    /// projection returns `Some` for every legal variant) collapses
+    /// the pre-lift's FOUR duplicated match arms (two `.into()` sites
+    /// on the STATIC subset AND two byte-for-byte `format!(...)` sites
+    /// on the DYNAMIC subset) into ONE `.or_else(...)` composition:
+    /// `message_static().map(str::to_string).or_else(||
+    /// message_dynamic()).expect(...)`. The `.expect(...)` is
+    /// structurally unreachable — the partition test
+    /// `template_invariant_kind_static_dynamic_projections_partition_closed_set`
+    /// pins that at least ONE of the two projections returns `Some` for
+    /// every variant. Sibling posture to
+    /// `OptionalParamMalformedReason::label` composing through
+    /// `label_static` on the peer 3-of-4 static carving.
     #[must_use]
     pub fn message(self) -> String {
-        self.message_static().map_or_else(
-            || match self {
-                Self::SubstBadIndex(idx) => {
-                    format!("compiled template referenced bad param index {idx}")
-                }
-                Self::SpliceBadIndex(idx) => {
-                    format!("compiled template referenced bad splice index {idx}")
-                }
-                Self::EndListEmptyStack | Self::FinalNoValue => {
-                    // Unreachable: message_static() returned Some(_)
-                    // for these arms above. Kept as an exhaustive
-                    // match arm rather than an `unreachable!()` so a
-                    // future refactor that adds a fifth static arm
-                    // without extending `message_static` fails
-                    // compilation at THIS callsite rather than at
-                    // runtime.
-                    unreachable!(
-                        "message_static returned Some for static variant {self:?} — \
-                         the outer map_or_else's None branch is unreachable"
-                    )
-                }
-            },
-            str::to_string,
-        )
+        self.message_static()
+            .map(str::to_string)
+            .or_else(|| self.message_dynamic())
+            .expect(
+                "message_static/message_dynamic partition covers the four-arm closed set — \
+                 exactly one projection returns Some for every legal variant, so the None \
+                 branch here is unreachable",
+            )
     }
 }
 
@@ -12254,6 +12484,213 @@ mod tests {
             super::TemplateInvariantKind::SpliceBadIndex(11).message(),
             "compiled template referenced bad splice index 11",
         );
+    }
+
+    #[test]
+    fn template_invariant_kind_dynamic_descriptor_constants_pin_canonical_bytes() {
+        // Per-role `pub const &'static str` truth pins on the DYNAMIC
+        // 2-of-4 subset carving of the four-arm closed set. Pins the
+        // canonical descriptor bytes byte-for-byte so a regression on
+        // any per-role const (a typo like `"parms"` for
+        // `SUBST_BAD_INDEX_DESCRIPTOR`, a widening drift like
+        // `"splice-target"` for `SPLICE_BAD_INDEX_DESCRIPTOR`) fails
+        // loudly here rather than silently drifting the rendered
+        // diagnostic bytes downstream (through `message()` /
+        // `LispError::Display`). Peer to the STATIC 2-of-4 subset's
+        // `template_invariant_kind_static_message_constants_pin_canonical_bytes`.
+        assert_eq!(
+            super::TemplateInvariantKind::SUBST_BAD_INDEX_DESCRIPTOR,
+            "param",
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::SPLICE_BAD_INDEX_DESCRIPTOR,
+            "splice",
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_dynamic_descriptors_pin_two_arm_forced_arity_array() {
+        // Pin the ARITY + COMPOSITION contract of the DYNAMIC 2-of-4
+        // subset ALL array. A regression that grows the array
+        // without adding a per-role const + `descriptor_dynamic` arm
+        // fails compilation (forced-arity `[&'static str; 2]`); a
+        // regression that reorders the array against the projection
+        // method's arm order fails
+        // `template_invariant_kind_dynamic_descriptors_align_with_descriptor_dynamic_by_index`
+        // in lockstep. Cardinality pin here is a fail-loud belt-and-
+        // braces peer to the compile-time `[_; 2]` check.
+        assert_eq!(
+            super::TemplateInvariantKind::DYNAMIC_DESCRIPTORS.len(),
+            2,
+            "DYNAMIC_DESCRIPTORS must have exactly two entries — the 2-of-4 dynamic subset carving",
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::DYNAMIC_DESCRIPTORS,
+            [
+                super::TemplateInvariantKind::SUBST_BAD_INDEX_DESCRIPTOR,
+                super::TemplateInvariantKind::SPLICE_BAD_INDEX_DESCRIPTOR,
+            ],
+            "DYNAMIC_DESCRIPTORS must compose from the two per-role descriptor constants in declaration order",
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_descriptor_dynamic_projects_dynamic_subset_to_typed_option() {
+        // Pin `descriptor_dynamic(self) -> Option<&'static str>`'s
+        // per-arm truth table: the two DYNAMIC arms project to
+        // `Some(descriptor)` routed through the per-role `pub const`s
+        // regardless of `usize` payload value; the two STATIC arms
+        // project to `None`. Payload invariance on the DYNAMIC arms is
+        // load-bearing: a regression that surfaces the payload's
+        // `usize` bytes on the descriptor axis (say, by folding the
+        // idx into a Format-typed descriptor slot) would silently
+        // widen the DYNAMIC descriptor from a per-arm noun to a
+        // per-callsite string — this test pins the current per-arm
+        // per-noun carving. Sibling posture to
+        // `template_invariant_kind_message_static_projects_static_subset_to_typed_option`.
+        for idx in [0_usize, 1, 42, 99, usize::MAX] {
+            assert_eq!(
+                super::TemplateInvariantKind::SubstBadIndex(idx).descriptor_dynamic(),
+                Some(super::TemplateInvariantKind::SUBST_BAD_INDEX_DESCRIPTOR),
+                "SubstBadIndex({idx}) must project to Some(SUBST_BAD_INDEX_DESCRIPTOR) — descriptor is per-arm, not per-idx",
+            );
+            assert_eq!(
+                super::TemplateInvariantKind::SpliceBadIndex(idx).descriptor_dynamic(),
+                Some(super::TemplateInvariantKind::SPLICE_BAD_INDEX_DESCRIPTOR),
+                "SpliceBadIndex({idx}) must project to Some(SPLICE_BAD_INDEX_DESCRIPTOR) — descriptor is per-arm, not per-idx",
+            );
+        }
+        // STATIC arms project to None on the descriptor axis — their
+        // full bytes bind on the message_static() axis, and they carry
+        // no per-role descriptor slot to project.
+        assert_eq!(
+            super::TemplateInvariantKind::EndListEmptyStack.descriptor_dynamic(),
+            None,
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::FinalNoValue.descriptor_dynamic(),
+            None,
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_dynamic_descriptors_align_with_descriptor_dynamic_by_index() {
+        // Pin the ALIGNMENT contract:
+        // `Self::DYNAMIC_DESCRIPTORS[0] == Self::SubstBadIndex(_).descriptor_dynamic().unwrap()`
+        // and
+        // `Self::DYNAMIC_DESCRIPTORS[1] == Self::SpliceBadIndex(_).descriptor_dynamic().unwrap()`
+        // element-wise. A regression that swaps the array's ordering
+        // against the projection method's arm order fails loudly
+        // here. Sibling posture to
+        // `template_invariant_kind_static_messages_align_with_message_static_by_index`.
+        assert_eq!(
+            super::TemplateInvariantKind::DYNAMIC_DESCRIPTORS[0],
+            super::TemplateInvariantKind::SubstBadIndex(0)
+                .descriptor_dynamic()
+                .unwrap(),
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::DYNAMIC_DESCRIPTORS[1],
+            super::TemplateInvariantKind::SpliceBadIndex(0)
+                .descriptor_dynamic()
+                .unwrap(),
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_message_dynamic_projects_dynamic_subset_to_typed_option() {
+        // Pin `message_dynamic(self) -> Option<String>`'s per-arm
+        // truth table: the two DYNAMIC arms project to
+        // `Some(rendered)` composing the shared
+        // `"compiled template referenced bad {descriptor} index {idx}"`
+        // template with their per-arm descriptor const + payload; the
+        // two STATIC arms project to `None`. The DYNAMIC-subset bytes
+        // are byte-for-byte equivalent to the pre-lift inline
+        // `format!(...)` arms — authoring-tool substring greps see no
+        // drift across the lift.
+        for idx in [0_usize, 1, 42, 99] {
+            assert_eq!(
+                super::TemplateInvariantKind::SubstBadIndex(idx).message_dynamic(),
+                Some(format!("compiled template referenced bad param index {idx}")),
+                "SubstBadIndex({idx}).message_dynamic() must render the shared template with the `param` descriptor and idx payload",
+            );
+            assert_eq!(
+                super::TemplateInvariantKind::SpliceBadIndex(idx).message_dynamic(),
+                Some(format!("compiled template referenced bad splice index {idx}")),
+                "SpliceBadIndex({idx}).message_dynamic() must render the shared template with the `splice` descriptor and idx payload",
+            );
+        }
+        // STATIC arms project to None on the message_dynamic axis —
+        // their full bytes bind on the message_static() axis and carry
+        // no `usize` payload to format into the shared template.
+        assert_eq!(
+            super::TemplateInvariantKind::EndListEmptyStack.message_dynamic(),
+            None,
+        );
+        assert_eq!(
+            super::TemplateInvariantKind::FinalNoValue.message_dynamic(),
+            None,
+        );
+    }
+
+    #[test]
+    fn template_invariant_kind_static_dynamic_projections_partition_closed_set() {
+        // Pin the PARTITION contract: for every legal variant, EXACTLY
+        // ONE of `message_static(self)` and `descriptor_dynamic(self)`
+        // returns `Some`. Together the two typed subset projections
+        // partition the four-arm closed set into its STATIC ⊕ DYNAMIC
+        // halves at zero allocation cost. The partition is what makes
+        // `message()`'s `.expect(...)` structurally unreachable —
+        // rustc's exhaustive-match checks on both projections keep the
+        // partition sound; this test pins the runtime witness. A
+        // regression that widens EITHER subset (say, a lift that
+        // projects `SubstBadIndex` into a per-role STATIC message)
+        // fails loudly here because both projections would return
+        // `Some` for the same variant.
+        for variant in [
+            super::TemplateInvariantKind::EndListEmptyStack,
+            super::TemplateInvariantKind::FinalNoValue,
+            super::TemplateInvariantKind::SubstBadIndex(0),
+            super::TemplateInvariantKind::SubstBadIndex(usize::MAX),
+            super::TemplateInvariantKind::SpliceBadIndex(0),
+            super::TemplateInvariantKind::SpliceBadIndex(usize::MAX),
+        ] {
+            let static_hit = variant.message_static().is_some();
+            let dynamic_hit = variant.descriptor_dynamic().is_some();
+            assert!(
+                static_hit ^ dynamic_hit,
+                "message_static/descriptor_dynamic must partition the closed set — \
+                 exactly one projection returns Some for {variant:?}, got static_hit={static_hit} dynamic_hit={dynamic_hit}",
+            );
+        }
+    }
+
+    #[test]
+    fn template_invariant_kind_message_delegates_dynamic_arms_through_message_dynamic() {
+        // Pin the `message()` composition contract on the DYNAMIC side:
+        // for every arm on the DYNAMIC 2-of-4 subset,
+        // `variant.message() == variant.message_dynamic().unwrap()`
+        // — the projection method routes the DYNAMIC arms through
+        // `message_dynamic()` (which itself routes through
+        // `descriptor_dynamic()`), and any regression that re-inlines
+        // the per-arm `format!(...)` at `message()` (undoing the
+        // composition) still passes the per-variant byte pins but
+        // fails THIS composition assertion. Peer to
+        // `template_invariant_kind_message_delegates_static_arms_through_message_static`.
+        for variant in [
+            super::TemplateInvariantKind::SubstBadIndex(0),
+            super::TemplateInvariantKind::SubstBadIndex(99),
+            super::TemplateInvariantKind::SubstBadIndex(usize::MAX),
+            super::TemplateInvariantKind::SpliceBadIndex(0),
+            super::TemplateInvariantKind::SpliceBadIndex(42),
+            super::TemplateInvariantKind::SpliceBadIndex(usize::MAX),
+        ] {
+            assert_eq!(
+                variant.message(),
+                variant.message_dynamic().unwrap(),
+                "message() for {variant:?} must equal its message_dynamic() bytes — routed through the typed subset projection",
+            );
+        }
     }
 
     #[test]

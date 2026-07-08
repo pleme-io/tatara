@@ -8642,6 +8642,207 @@ impl QuoteForm {
     /// composition law's other direction + disjointness with the
     /// atomic-payload sibling `SexpShape::as_atom_kind`.
     ///
+    /// Canonical [`SexpShape`] embed target for the [`Self::Quote`]
+    /// quote-family arm on the QuoteForm ⊂ SexpShape carving —
+    /// [`SexpShape::Quote`]. Per-role peer of `Self::Quote` on the
+    /// closed-set outer-shape embed axis; consumers with a `QuoteForm`
+    /// variant in hand at compile time bind the canonical embed target
+    /// through ONE typed `pub const` per role rather than through
+    /// runtime dispatch via [`Self::sexp_shape`] or by re-deriving the
+    /// QuoteForm ⊂ SexpShape variant pairing inline.
+    ///
+    /// Sibling posture to [`Self::QUOTE_LABEL`] (the per-role
+    /// diagnostic label alias) and [`Self::QUOTE_HASH_DISCRIMINATOR`]
+    /// (the per-role outer-Sexp cache-key byte) on the closed-set
+    /// QuoteForm algebra — each closes a distinct per-role
+    /// sub-vocabulary axis on the QuoteForm carving. This constant
+    /// closes the FOURTH per-role axis on [`QuoteForm`] (the
+    /// `SexpShape`-embed axis, paired with the pre-existing
+    /// `&'static str` reader-prefix + diagnostic-label +
+    /// cross-crate iac-forge-tag axes AND the `u8` cache-key axis) at
+    /// ONE typed alias through the peer superset variant on the
+    /// [`SexpShape`] closed set.
+    ///
+    /// Sibling posture to the peer 6-of-12 atomic-payload carving's
+    /// per-role SHAPE aliases ([`AtomKind::SYMBOL_SHAPE`] …
+    /// [`AtomKind::BOOL_SHAPE`] — every one an alias of its
+    /// [`SexpShape`] peer on the AtomKind ⊂ SexpShape 6-of-12
+    /// carving). Post-lift the SexpShape's per-carving embed-target
+    /// axis is uniformly surfaced through per-role `pub const *_SHAPE`
+    /// aliases on every sub-carving that carries a bidirectional
+    /// (embed, project) `Iso(_, _ ⊂ SexpShape)` — first `AtomKind` (6),
+    /// now `QuoteForm` (4).
+    pub const QUOTE_SHAPE: SexpShape = SexpShape::Quote;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::Quasiquote`]
+    /// quote-family arm on the QuoteForm ⊂ SexpShape carving —
+    /// [`SexpShape::Quasiquote`]. Per-role peer of `Self::Quasiquote`.
+    /// See [`Self::QUOTE_SHAPE`] for the alias-chain shape every
+    /// sibling shares.
+    pub const QUASIQUOTE_SHAPE: SexpShape = SexpShape::Quasiquote;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::Unquote`]
+    /// quote-family arm on the QuoteForm ⊂ SexpShape carving —
+    /// [`SexpShape::Unquote`]. Per-role peer of `Self::Unquote`.
+    pub const UNQUOTE_SHAPE: SexpShape = SexpShape::Unquote;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::UnquoteSplice`]
+    /// quote-family arm on the QuoteForm ⊂ SexpShape carving —
+    /// [`SexpShape::UnquoteSplice`]. Per-role peer of
+    /// `Self::UnquoteSplice`.
+    pub const UNQUOTE_SPLICE_SHAPE: SexpShape = SexpShape::UnquoteSplice;
+
+    /// Closed-set forced-arity ALL array over the canonical
+    /// [`SexpShape`] embed targets on the QuoteForm ⊂ SexpShape
+    /// 4-of-12 carving, in declaration order matching [`Self::ALL`]
+    /// element-wise (pinned by
+    /// `quote_form_shapes_align_with_all_by_index`). Sibling posture
+    /// to [`Self::LABELS`] (`[&'static str; 4]` — per-role diagnostic
+    /// bytes), [`Self::PREFIXES`] (`[&'static str; 4]` — per-role
+    /// reader-punctuation bytes), [`Self::IAC_FORGE_TAGS`] (`[&'static
+    /// str; 4]` — cross-crate iac-forge canonical-form tag bytes), and
+    /// [`Self::HASH_DISCRIMINATORS`] (`[u8; 4]` — per-role outer-Sexp
+    /// cache-key bytes) on the SAME closed-set QuoteForm algebra;
+    /// where those four arrays lift per-role `&'static str` and `u8`
+    /// sub-vocabularies onto the substrate, this array lifts the
+    /// per-role [`SexpShape`] embed-target sub-vocabulary at the same
+    /// `[_; 4]` forced arity.
+    ///
+    /// Sibling posture to [`AtomKind::SHAPES`] (`[SexpShape; 6]`) —
+    /// the peer atomic-payload carving's family-wide embed-target
+    /// array on the AtomKind ⊂ SexpShape 6-of-12 carving. Together the
+    /// two `SHAPES` arrays cover the TWO bidirectional sub-carvings of
+    /// [`SexpShape`] (`Iso(AtomKind, AtomShape ⊂ SexpShape)` + `Iso(QuoteForm,
+    /// QuoteShape ⊂ SexpShape)`) — a family-wide sweep zipping every
+    /// carving's `ALL` + `SHAPES` in lockstep now closes over TWO
+    /// carvings' 10-of-12 embed targets at ONE typed pair-of-arrays
+    /// each.
+    ///
+    /// Pre-lift the four [`SexpShape`] embed targets had NO per-role
+    /// primitive on this closed-set algebra — a consumer with a
+    /// `QuoteForm` variant in hand at compile time reaching for the
+    /// canonical embed target had to spell
+    /// `QuoteForm::Quote.sexp_shape()` (runtime dispatch through the
+    /// four-arm match body) OR re-derive the QuoteForm ⊂ SexpShape
+    /// variant pairing at the call site by importing both enums and
+    /// spelling `SexpShape::Quote` inline. Post-lift the FOUR canonical
+    /// embed targets bind at ONE `pub const` per role on the typed
+    /// [`QuoteForm`] algebra AND at [`Self::SHAPES`] as a family-wide
+    /// forced-arity array — a future LSP / REPL completion bar keyed
+    /// on `QuoteForm::SHAPES` for the "which SexpShape does this
+    /// QuoteForm embed into?" outer-shape column, a `tatara-check`
+    /// coverage sweep zipping `QuoteForm::ALL` / `LABELS` / `PREFIXES`
+    /// / `IAC_FORGE_TAGS` / `HASH_DISCRIMINATORS` / `SHAPES` in
+    /// lockstep for a family-wide (variant, label, prefix, iac-forge
+    /// tag, byte, embed-target) sextuple render, or a Sekiban
+    /// audit-trail metric jointly labeled by the embed-target's
+    /// SexpShape identity reads through the typed constants on this
+    /// subset algebra without re-deriving the 4-of-12 carving inline.
+    ///
+    /// Round-trip identity with the inverse projection
+    /// [`crate::error::SexpShape::as_quote_form`]: for every index `i`,
+    /// `Self::SHAPES[i].as_quote_form() == Some(Self::ALL[i])`
+    /// (pinned by
+    /// `quote_form_shapes_align_with_all_by_index_through_as_quote_form`) —
+    /// the embed / project section closes as a family-wide array-
+    /// indexed law rather than as a per-variant assertion sweep.
+    /// Adding a hypothetical fifth quote-family wrapper (e.g. `,~`
+    /// reverse-unquote, `,?` conditional-unquote, `#'` Common-Lisp
+    /// function-quote) extends [`Self::ALL`] AND [`Self::SHAPES`] AND
+    /// [`SexpShape::ALL`] AND adds ONE per-role `pub const *_SHAPE` in
+    /// lockstep — rustc's forced-arity check on the two `[_; N]`
+    /// arrays fails compilation if EITHER ALL array grows without the
+    /// other, AND the peer [`SexpShape::as_quote_form`] arm must grow
+    /// in lockstep to preserve the round-trip identity.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the four
+    /// canonical [`SexpShape`] embed targets bind at ONE typed
+    /// `[SexpShape; 4]` array on the closed-set QuoteForm algebra
+    /// rather than at zero-primitive-on-this-subset-plus-four-inline-
+    /// lookups scattered across the substrate. Closes the FOURTH
+    /// per-role `pub const` axis on the QuoteForm carving alongside
+    /// the pre-existing LABELS + PREFIXES + IAC_FORGE_TAGS +
+    /// HASH_DISCRIMINATORS axes. THEORY.md §V.1 — knowable platform;
+    /// the family's cardinality becomes a TYPE-level constant on the
+    /// substrate algebra rather than a per-consumer runtime dispatch
+    /// through the composition. THEORY.md §II.1 invariant 2 — free
+    /// middle; the (embed, project) pair binds at THREE typed sites
+    /// now — the projection method [`Self::sexp_shape`], this family-
+    /// wide array, AND the peer inverse
+    /// [`crate::error::SexpShape::as_quote_form`] — with rustc-enforced
+    /// consistency across all three. THEORY.md §VI.1 — generation
+    /// over composition; the family-wide contract sweeps (alignment
+    /// with `ALL`, round-trip through `as_quote_form`, membership
+    /// through `sexp_shape`, pairwise injectivity across the four
+    /// embed targets) emerge from the composition of TWO substrate
+    /// primitives (this `pub const` array + the four per-role
+    /// `pub const *_SHAPE` aliases) rather than as per-variant inline
+    /// assertions duplicated at each call site.
+    pub const SHAPES: [SexpShape; 4] = [
+        Self::QUOTE_SHAPE,
+        Self::QUASIQUOTE_SHAPE,
+        Self::UNQUOTE_SHAPE,
+        Self::UNQUOTE_SPLICE_SHAPE,
+    ];
+
+    /// Project the typed marker into its matching [`crate::error::SexpShape`]
+    /// variant — `Quote → SexpShape::Quote`, `Quasiquote → SexpShape::Quasiquote`,
+    /// `Unquote → SexpShape::Unquote`, `UnquoteSplice → SexpShape::UnquoteSplice`.
+    /// ONE projection on the closed-set quote-family algebra the substrate's
+    /// outer-shape projection ([`crate::domain::sexp_shape`]) routes through
+    /// for the four quote-family arms — so the (Sexp variant, SexpShape
+    /// variant) pairing binds at ONE site on the typed algebra rather than
+    /// at four byte-identical inline arms in [`crate::domain::sexp_shape`].
+    ///
+    /// The SIXTH consumer of the closed-set [`QuoteForm`] algebra, sibling
+    /// of [`Self::prefix`] (Display / reader prefix-string surface),
+    /// [`Self::hash_discriminator`] (Hash cache-key bytes surface),
+    /// [`Self::as_unquote_form`] (2-of-4 template-substitution subset gate),
+    /// [`Self::iac_forge_tag`] (cross-crate canonical-form tag surface), and
+    /// [`Self::wrap`] (reader's marker → `Sexp::*` constructor surface).
+    /// Composes with [`SexpShape::label`] to yield the short diagnostic
+    /// label string the substrate's `LispError::TypeMismatch.got` slot
+    /// renders — the (QuoteForm variant, SexpShape variant, short label)
+    /// triple binds end-to-end through the typed algebra so a regression
+    /// that drifts the short label silently between the typed marker and
+    /// the diagnostic surface is structurally impossible.
+    ///
+    /// Each arm routes through the per-role `pub const` on `impl Self`
+    /// ([`Self::QUOTE_SHAPE`], [`Self::QUASIQUOTE_SHAPE`],
+    /// [`Self::UNQUOTE_SHAPE`], [`Self::UNQUOTE_SPLICE_SHAPE`]) so the
+    /// four canonical embed targets bind at ONE typed source of truth
+    /// per role rather than as inline `SexpShape::X` literals scattered
+    /// across the `match` body. Sibling posture to
+    /// [`AtomKind::sexp_shape`]'s post-lift routing through
+    /// [`AtomKind::SYMBOL_SHAPE`] … [`AtomKind::BOOL_SHAPE`] on the peer
+    /// 6-of-12 atomic-payload carving — the per-role `pub const *_SHAPE`
+    /// routing is now uniform across every sub-carving of [`SexpShape`]
+    /// that has a bidirectional (embed, project) isomorphism, closing
+    /// the (embed-target constant, embed-target array, projection
+    /// method) trio on each sub-carving in lockstep.
+    ///
+    /// Post-lift routing pin
+    /// `quote_form_sexp_shape_routes_through_typed_per_role_constants`
+    /// catches a regression that re-inlines the four `SexpShape::X` arm
+    /// literals here and silently drifts ONE arm from the per-role
+    /// `pub const` alias — the routing agreement is a TYPED CONSEQUENCE
+    /// of the composition rather than literal discipline at two sites.
+    ///
+    /// Bidirectional dual: the inverse projection
+    /// [`crate::error::SexpShape::as_quote_form`] (12→4, partial)
+    /// covers the 4-of-12 carving of [`SexpShape`] this embed reaches.
+    /// The pair `(QuoteForm::sexp_shape,
+    /// SexpShape::as_quote_form)` forms an `Iso(QuoteForm, QuoteShape ⊂
+    /// SexpShape)`: every typed marker round-trips through the embed
+    /// (`QuoteForm::sexp_shape(qf).as_quote_form() == Some(qf)` for
+    /// every `qf: QuoteForm`), every quote-shape pre-image recovers
+    /// the typed marker. The non-quote-family shapes (`Nil`, `List`,
+    /// every atomic-payload variant) form the kernel of the inverse —
+    /// `as_quote_form` returns `None` for them. See
+    /// [`crate::error::SexpShape::as_quote_form`]'s docstring for the
+    /// composition law's other direction + disjointness with the
+    /// atomic-payload sibling `SexpShape::as_atom_kind`.
+    ///
     /// Theory anchor: THEORY.md §V.1 — knowable platform; the (QuoteForm
     /// variant, SexpShape variant) pairing becomes a TYPE projection on
     /// the substrate algebra rather than four inline arms in
@@ -8658,10 +8859,10 @@ impl QuoteForm {
     #[must_use]
     pub fn sexp_shape(self) -> SexpShape {
         match self {
-            Self::Quote => SexpShape::Quote,
-            Self::Quasiquote => SexpShape::Quasiquote,
-            Self::Unquote => SexpShape::Unquote,
-            Self::UnquoteSplice => SexpShape::UnquoteSplice,
+            Self::Quote => Self::QUOTE_SHAPE,
+            Self::Quasiquote => Self::QUASIQUOTE_SHAPE,
+            Self::Unquote => Self::UNQUOTE_SHAPE,
+            Self::UnquoteSplice => Self::UNQUOTE_SPLICE_SHAPE,
         }
     }
 
@@ -16006,6 +16207,157 @@ mod tests {
                      AtomKind::SHAPES[{j}] `{b:?}` — the AtomKind ⊂ \
                      SexpShape 6-of-12 carving would route two atomic \
                      variants through the same outer-shape identity"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quote_form_per_role_shapes_pin_canonical_sexp_shape_variants() {
+        // PER-ROLE ALIAS CONTRACT: each `QuoteForm::*_SHAPE` per-role
+        // `pub const` binds byte-for-byte to its canonical `SexpShape`
+        // variant on the QuoteForm ⊂ SexpShape 4-of-12 carving. Pin
+        // so a regression that swaps ONE alias (e.g. re-aims
+        // `UNQUOTE_SPLICE_SHAPE` at `SexpShape::Unquote`) surfaces at
+        // rustc / test time rather than as a silent operator-facing
+        // diagnostic drift at every consumer keyed on the typed embed
+        // target. Sibling posture to
+        // `quote_form_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+        // on the diagnostic label axis of the SAME closed set — this
+        // pin is the peer on the `SexpShape` embed-target axis.
+        assert_eq!(QuoteForm::QUOTE_SHAPE, SexpShape::Quote);
+        assert_eq!(QuoteForm::QUASIQUOTE_SHAPE, SexpShape::Quasiquote);
+        assert_eq!(QuoteForm::UNQUOTE_SHAPE, SexpShape::Unquote);
+        assert_eq!(QuoteForm::UNQUOTE_SPLICE_SHAPE, SexpShape::UnquoteSplice);
+    }
+
+    #[test]
+    fn quote_form_shapes_has_expected_cardinality() {
+        // CLOSED-SET CARDINALITY CONTRACT: `QuoteForm::SHAPES` carries
+        // exactly FOUR entries — one per variant in the closed-set
+        // quote-family carving. Runtime companion to the `[SexpShape;
+        // 4]` type annotation's compile-time forced arity. A regression
+        // that widens the array without adding a matching per-role
+        // `*_SHAPE` alias would fail the `[SexpShape; 4]` type check
+        // at rustc time; this runtime pin catches a silent shrink or
+        // duplicate-arm coalesce. Sibling posture to
+        // `quote_form_labels_has_expected_cardinality` /
+        // `quote_form_prefixes_has_expected_cardinality` /
+        // `quote_form_iac_forge_tags_has_expected_cardinality` /
+        // `quote_form_hash_discriminators_has_expected_cardinality` on
+        // the other four per-role axes of the SAME closed set.
+        assert_eq!(QuoteForm::SHAPES.len(), 4);
+        assert_eq!(QuoteForm::SHAPES.len(), QuoteForm::ALL.len());
+    }
+
+    #[test]
+    fn quote_form_shapes_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::SHAPES[i] ==
+        // Self::ALL[i].sexp_shape()` element-wise. Pins that the typed
+        // variant ALL and the `SexpShape` SHAPES ALL stay in lockstep
+        // under any reorder — a regression that reorders ONE array
+        // without reordering the other silently misaligns every
+        // `zip(ALL, SHAPES)` consumer that wants to project each
+        // quote-family variant to its canonical outer-shape identity
+        // (LSP completion, `tatara-check` predicate over the quote-
+        // family ⊂ outer partition, Sekiban audit-trail metric jointly
+        // labeled by the embed target). Sibling posture to
+        // `quote_form_labels_align_with_all_by_index` /
+        // `quote_form_prefixes_align_with_all_by_index` on the other
+        // per-role axes of the SAME closed set.
+        for (i, form) in QuoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                QuoteForm::SHAPES[i],
+                form.sexp_shape(),
+                "QuoteForm::SHAPES[{i}] `{shape:?}` drifted from \
+                 QuoteForm::ALL[{i}] ({form:?}).sexp_shape() \
+                 `{via_variant:?}` — the canonical declaration order \
+                 of the ALL array and the sexp_shape projection must \
+                 match element-wise",
+                shape = QuoteForm::SHAPES[i],
+                via_variant = form.sexp_shape(),
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_shapes_align_with_all_by_index_through_as_quote_form() {
+        // ROUND-TRIP CONTRACT: `Self::SHAPES[i].as_quote_form() ==
+        // Some(Self::ALL[i])` element-wise. Pins the embed / project
+        // section of the (`QuoteForm::sexp_shape`,
+        // `SexpShape::as_quote_form`) `Iso(QuoteForm, QuoteShape ⊂
+        // SexpShape)` as a family-wide array-indexed law rather than
+        // as a per-variant assertion sweep. A regression that drifts
+        // EITHER the `SHAPES` array entries OR the peer inverse
+        // `as_quote_form` arms silently breaks the (embed, project)
+        // section — this pin catches both directions at ONCE. Sibling
+        // posture to
+        // `atom_kind_shapes_align_with_all_by_index_through_as_atom_kind`
+        // on the peer 6-of-12 atomic-payload carving.
+        for (i, form) in QuoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                QuoteForm::SHAPES[i].as_quote_form(),
+                Some(*form),
+                "QuoteForm::SHAPES[{i}] `{shape:?}`.as_quote_form() = \
+                 {actual:?} drifted from Some(QuoteForm::ALL[{i}]) = \
+                 Some({expected:?}) — the (SHAPES entry, ALL variant) \
+                 round-trip through the peer inverse SexpShape::as_quote_form \
+                 must hold element-wise",
+                shape = QuoteForm::SHAPES[i],
+                actual = QuoteForm::SHAPES[i].as_quote_form(),
+                expected = form,
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_sexp_shape_routes_through_typed_per_role_constants() {
+        // ROUTING CONTRACT: `QuoteForm::sexp_shape()`'s four arms bind
+        // through the per-role `pub const *_SHAPE` aliases rather than
+        // through inline `SexpShape::X` literals. Pin so a regression
+        // that re-inlines the four literals here (and gains its own
+        // drift surface separate from the canonical per-role alias
+        // site) surfaces immediately at variant equality. Sibling
+        // posture to
+        // `quote_form_label_composes_through_sexp_shape_label_for_every_variant`
+        // (which pins label routing through sexp_shape().label()) and
+        // `atom_kind_sexp_shape_routes_through_typed_per_role_constants`
+        // on the peer 6-of-12 atomic-payload carving.
+        assert_eq!(QuoteForm::Quote.sexp_shape(), QuoteForm::QUOTE_SHAPE);
+        assert_eq!(
+            QuoteForm::Quasiquote.sexp_shape(),
+            QuoteForm::QUASIQUOTE_SHAPE
+        );
+        assert_eq!(QuoteForm::Unquote.sexp_shape(), QuoteForm::UNQUOTE_SHAPE);
+        assert_eq!(
+            QuoteForm::UnquoteSplice.sexp_shape(),
+            QuoteForm::UNQUOTE_SPLICE_SHAPE
+        );
+    }
+
+    #[test]
+    fn quote_form_shapes_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: every entry of the `SHAPES` array
+        // must differ so the (QuoteForm variant, SexpShape embed
+        // target) mapping stays injective — a collision would silently
+        // route two distinct QuoteForm variants through the SAME
+        // outer-shape identity, breaking the QuoteForm ⊂ SexpShape
+        // 4-of-12 carving. Family-wide sweep over `SHAPES × SHAPES` —
+        // supersedes any per-pair pin and picks up new embed targets
+        // mechanically. Sibling posture to
+        // `atom_kind_shapes_pairwise_distinct` on the peer 6-of-12
+        // atomic-payload carving.
+        for (i, a) in QuoteForm::SHAPES.iter().enumerate() {
+            for (j, b) in QuoteForm::SHAPES.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "QuoteForm::SHAPES[{i}] `{a:?}` collides with \
+                     QuoteForm::SHAPES[{j}] `{b:?}` — the QuoteForm ⊂ \
+                     SexpShape 4-of-12 carving would route two quote-\
+                     family variants through the same outer-shape identity"
                 );
             }
         }

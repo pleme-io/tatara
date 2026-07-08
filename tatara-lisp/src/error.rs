@@ -4449,6 +4449,138 @@ impl UnquoteForm {
         self.to_quote_form().wrap(inner)
     }
 
+    /// Canonical [`SexpShape`] embed target for the [`Self::Unquote`]
+    /// template-substitution arm on the UnquoteForm ⊂ QuoteForm ⊂
+    /// SexpShape composed carving — aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_SHAPE`] on the parent's 4-of-12
+    /// quote-family carving byte-for-byte (which in turn aliases
+    /// [`SexpShape::Unquote`]). Per-role peer of `Self::Unquote` on the
+    /// closed-set UnquoteForm ⊂ SexpShape 2-of-12 composed embed axis;
+    /// consumers with an `UnquoteForm` variant in hand at compile time
+    /// bind the canonical embed target through ONE typed `pub const` on
+    /// the subset algebra rather than through runtime dispatch via
+    /// `Self::sexp_shape` OR by reaching across the two-hop
+    /// `Self::to_quote_form().sexp_shape()` composition OR by re-deriving
+    /// the UnquoteForm ⊂ QuoteForm ⊂ SexpShape variant pairing inline.
+    /// Sibling posture to [`Self::UNQUOTE_MARKER`] on the reader-prefix
+    /// axis, [`Self::UNQUOTE_LEAD`] on the reader-lead axis,
+    /// [`Self::UNQUOTE_IAC_FORGE_TAG`] on the iac-forge canonical-form tag
+    /// axis, [`Self::UNQUOTE_LABEL`] on the diagnostic-label axis, and
+    /// [`Self::UNQUOTE_HASH_DISCRIMINATOR`] on the outer-Sexp cache-key
+    /// byte axis — every one of the pre-existing per-role sub-vocabulary
+    /// aliases on this subset algebra now has a peer per-role
+    /// `SexpShape` embed-target alias on the SAME closed-set
+    /// UnquoteForm ⊂ QuoteForm 2-of-4 subset carving.
+    pub const UNQUOTE_SHAPE: SexpShape = crate::ast::QuoteForm::UNQUOTE_SHAPE;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::Splice`]
+    /// template-substitution arm on the UnquoteForm ⊂ QuoteForm ⊂
+    /// SexpShape composed carving — aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_SHAPE`] on the parent's
+    /// 4-of-12 quote-family carving byte-for-byte (which in turn aliases
+    /// [`SexpShape::UnquoteSplice`]). Per-role peer of `Self::Splice` on
+    /// the closed-set UnquoteForm ⊂ SexpShape 2-of-12 composed embed
+    /// axis. See [`Self::UNQUOTE_SHAPE`] for the alias-chain shape every
+    /// sibling shares.
+    pub const SPLICE_SHAPE: SexpShape = crate::ast::QuoteForm::UNQUOTE_SPLICE_SHAPE;
+
+    /// Closed-set forced-arity ALL array over the canonical
+    /// [`SexpShape`] embed targets on the UnquoteForm ⊂ SexpShape
+    /// 2-of-12 composed carving, in declaration order matching
+    /// [`Self::ALL`] element-wise (pinned by
+    /// `unquote_form_shapes_align_with_all_by_index`). Sibling posture
+    /// to [`Self::MARKERS`] (`[&'static str; 2]` — reader-prefix bytes),
+    /// [`Self::LEADS`] (`[char; 1]` — SHAPE-ASYMMETRIC-COLLAPSE distinct-
+    /// lead byte), [`Self::IAC_FORGE_TAGS`] (`[&'static str; 2]` — iac-
+    /// forge canonical-form tags), [`Self::LABELS`] (`[&'static str; 2]`
+    /// — diagnostic labels), [`Self::HASH_DISCRIMINATORS`] (`[u8; 2]` —
+    /// outer-Sexp cache-key bytes), and [`Self::PROMOTIONS`]
+    /// (`[(Self, char, Self); 1]` — SHAPE-ASYMMETRIC-COLLAPSE promotion
+    /// triples) on the SAME closed-set UnquoteForm algebra; where those
+    /// six arrays lift per-role sub-vocabularies on the substitution
+    /// subset algebra, this array lifts the per-role [`SexpShape`]
+    /// embed-target sub-vocabulary at the same `[_; 2]` forced arity.
+    ///
+    /// Aliased through [`crate::ast::QuoteForm::UNQUOTE_SHAPE`] +
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_SHAPE`] via the per-role
+    /// [`Self::UNQUOTE_SHAPE`] + [`Self::SPLICE_SHAPE`] constants — the
+    /// UnquoteForm ⊂ QuoteForm 2-of-4 subset carving of the parent's
+    /// 4-of-12 quote-family SHAPES. Sibling posture to
+    /// [`crate::ast::QuoteForm::SHAPES`] (`[SexpShape; 4]`) —
+    /// the parent superset's peer array on the QuoteForm ⊂ SexpShape
+    /// 4-of-12 carving; together with the three closed-set carvings'
+    /// arrays ([`crate::ast::AtomKind::SHAPES`] 6-of-12,
+    /// [`crate::ast::QuoteForm::SHAPES`] 4-of-12,
+    /// [`StructuralKind::SHAPES`] 2-of-12) the four `SHAPES` arrays now
+    /// close the FULL twelve-arm outer-shape algebra uniformly PLUS the
+    /// UnquoteForm 2-of-4 subset carving of the quote-family sub-
+    /// algebra.
+    ///
+    /// Pre-lift the two [`SexpShape`] embed targets had NO per-role
+    /// primitive on this subset algebra — a consumer with an
+    /// `UnquoteForm` variant in hand at compile time reaching for the
+    /// canonical embed target had to spell
+    /// `UnquoteForm::Unquote.sexp_shape()` (runtime dispatch through
+    /// [`Self::sexp_shape`]'s two-hop `.to_quote_form().sexp_shape()`
+    /// composition) OR reach across into
+    /// [`crate::ast::QuoteForm::UNQUOTE_SHAPE`] and re-derive the
+    /// UnquoteForm ⊂ QuoteForm 2-of-4 subset pairing at the call site.
+    /// Post-lift the TWO canonical embed targets bind at ONE `pub const`
+    /// per role on the typed [`UnquoteForm`] subset algebra AND at
+    /// [`Self::SHAPES`] as a family-wide forced-arity array — a future
+    /// LSP / REPL completion bar keyed on `UnquoteForm::SHAPES` for the
+    /// "which SexpShape does this UnquoteForm embed into?" outer-shape
+    /// column, a `tatara-check` coverage sweep zipping
+    /// `UnquoteForm::ALL` / `LABELS` / `MARKERS` / `LEADS` /
+    /// `IAC_FORGE_TAGS` / `HASH_DISCRIMINATORS` / `PROMOTIONS` /
+    /// `SHAPES` in lockstep for a family-wide (variant, label, marker,
+    /// lead, iac-forge tag, cache-key byte, promotion triple, embed-
+    /// target) octuple render, or a Sekiban audit-trail metric jointly
+    /// labeled by the embed target's SexpShape identity reads through
+    /// the typed constants on this subset algebra without re-deriving
+    /// the 2-of-12 composed carving inline.
+    ///
+    /// Round-trip identity with the inverse projection
+    /// [`SexpShape::as_unquote_form`]: for every index `i`,
+    /// `Self::SHAPES[i].as_unquote_form() == Some(Self::ALL[i])` (pinned
+    /// by `unquote_form_shapes_align_with_all_by_index_through_as_unquote_form`)
+    /// — the embed / project section closes as a family-wide array-
+    /// indexed law on the composed 2-of-12 carving rather than as a
+    /// per-variant assertion sweep. Adding a hypothetical third
+    /// template-substitution marker (e.g. `,~` reverse-unquote for
+    /// destructuring-bind hygiene, `,?` conditional-unquote) extends
+    /// [`Self::ALL`] AND [`Self::SHAPES`] AND
+    /// [`crate::ast::QuoteForm::ALL`] AND
+    /// [`crate::ast::QuoteForm::SHAPES`] AND [`SexpShape::ALL`] AND adds
+    /// ONE per-role `pub const *_SHAPE` in lockstep — rustc's forced-
+    /// arity check on the two `[_; N]` arrays fails compilation if
+    /// EITHER ALL array grows without the other, AND the peer
+    /// [`SexpShape::as_unquote_form`] arm must grow in lockstep to
+    /// preserve the round-trip identity.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the two canonical
+    /// [`SexpShape`] embed targets bind at ONE typed `[SexpShape; 2]`
+    /// array on the closed-set UnquoteForm subset algebra rather than at
+    /// zero-primitive-on-this-subset-plus-two-inline-lookups-through-
+    /// two-hop-composition scattered across the substrate. THEORY.md
+    /// §II.1 invariant 2 — free middle; the (embed, project) pair binds
+    /// at THREE typed sites now — the projection method
+    /// [`Self::sexp_shape`], this family-wide array, AND the peer inverse
+    /// [`SexpShape::as_unquote_form`] — with rustc-enforced consistency
+    /// across all three via the array-indexed round-trip law. THEORY.md
+    /// §V.1 — knowable platform; the family's cardinality becomes a
+    /// TYPE-level constant on the substrate algebra rather than a per-
+    /// consumer runtime dispatch through the two-hop composition.
+    /// THEORY.md §VI.1 — generation over composition; the family-wide
+    /// contract sweeps (alignment with `ALL`, round-trip through
+    /// `as_unquote_form`, membership through `sexp_shape`, pairwise
+    /// injectivity across the two embed targets, alias byte-equality
+    /// with QuoteForm's per-role SHAPE constants) emerge from the
+    /// composition of TWO substrate primitives (this `pub const` array +
+    /// the two per-role `pub const *_SHAPE` aliases) rather than as
+    /// per-variant inline assertions duplicated at each call site.
+    pub const SHAPES: [SexpShape; 2] = [Self::UNQUOTE_SHAPE, Self::SPLICE_SHAPE];
+
     /// Project the 2-of-4 template-substitution subset marker into its
     /// matching [`SexpShape`] variant on the outer [`crate::ast::Sexp`]
     /// algebra's twelve-variant shape lattice — [`Self::Unquote`] →
@@ -17542,6 +17674,162 @@ mod tests {
                 recovered,
                 Some(uf),
                 "UnquoteForm::{uf:?} did NOT round-trip — sexp_shape().as_unquote_form() must recover the typed marker",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_per_role_shapes_alias_quote_form_per_role_shapes_byte_for_byte() {
+        // ALIAS-CHAIN CONTRACT: each per-role `pub const *_SHAPE` on
+        // `UnquoteForm` MUST bind byte-for-byte to the corresponding
+        // per-role SHAPE on the parent [`crate::ast::QuoteForm`]
+        // superset — the substitution-subset per-role embed targets
+        // live at ONE substrate primitive per arm (aliased through
+        // QuoteForm's canonical per-role SHAPE constants) rather than
+        // at inline `SexpShape::X` literals OR a parallel two-arm
+        // match table on this subset. Sibling posture to
+        // `unquote_form_per_role_labels_alias_quote_form_per_role_labels_byte_for_byte`
+        // on the diagnostic-label axis of the SAME closed set and to
+        // `unquote_form_per_role_hash_discriminators_alias_quote_form_per_role_hash_discriminators_byte_for_byte`
+        // on the outer-Sexp cache-key byte axis — every per-role
+        // sub-vocabulary axis on this substitution subset now closes
+        // through the parent's per-role canonical site.
+        assert_eq!(
+            UnquoteForm::UNQUOTE_SHAPE,
+            crate::ast::QuoteForm::UNQUOTE_SHAPE,
+        );
+        assert_eq!(
+            UnquoteForm::SPLICE_SHAPE,
+            crate::ast::QuoteForm::UNQUOTE_SPLICE_SHAPE,
+        );
+    }
+
+    #[test]
+    fn unquote_form_per_role_shapes_pin_canonical_sexp_shape_variants() {
+        // CANONICAL-SEXP-SHAPE CONTRACT: each per-role `pub const
+        // *_SHAPE` on `UnquoteForm` MUST project to the canonical
+        // [`SexpShape`] variant — `UNQUOTE_SHAPE = SexpShape::Unquote`,
+        // `SPLICE_SHAPE = SexpShape::UnquoteSplice`. A regression that
+        // silently renumbers QuoteForm's per-role SHAPE at the parent
+        // superset (which this subset aliases) fails-loudly here at
+        // the byte-equality level — sibling posture to
+        // `quote_form_per_role_shapes_pin_canonical_sexp_shape_variants`
+        // on the parent's 4-of-4 quote-family sweep.
+        assert_eq!(UnquoteForm::UNQUOTE_SHAPE, SexpShape::Unquote);
+        assert_eq!(UnquoteForm::SPLICE_SHAPE, SexpShape::UnquoteSplice);
+    }
+
+    #[test]
+    fn unquote_form_shapes_has_expected_cardinality() {
+        // CARDINALITY CONTRACT: `UnquoteForm::SHAPES.len() == 2 ==
+        // UnquoteForm::ALL.len()`. Arity is forced at the declaration
+        // site by rustc's `[SexpShape; 2]` check; this runtime pin
+        // fails-loud so a future refactor that switches the array
+        // type to `&[SexpShape]` doesn't silently loosen the closed-
+        // set discipline. Sibling posture to
+        // `unquote_form_hash_discriminators_has_expected_cardinality`
+        // on the cache-key byte axis of the SAME closed set.
+        assert_eq!(
+            UnquoteForm::SHAPES.len(),
+            2,
+            "UnquoteForm::SHAPES cardinality drifted from the two-arm substitution-subset algebra",
+        );
+        assert_eq!(
+            UnquoteForm::SHAPES.len(),
+            UnquoteForm::ALL.len(),
+            "UnquoteForm::SHAPES cardinality drifted from UnquoteForm::ALL — every family-wide array on this algebra must stay ALL-length in lockstep",
+        );
+    }
+
+    #[test]
+    fn unquote_form_shapes_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: for every `i` in `0..UnquoteForm::ALL.len()`,
+        // `UnquoteForm::SHAPES[i] == UnquoteForm::ALL[i].sexp_shape()`
+        // — the family-wide array is a projection of the two-arm
+        // `sexp_shape` method sweep in declaration order. A regression
+        // that reorders ONE array without reordering the other fails-
+        // loudly here. Sibling posture to
+        // `unquote_form_hash_discriminators_align_with_all_by_index`
+        // on the cache-key byte axis of the SAME closed set.
+        for (i, uf) in UnquoteForm::ALL.iter().enumerate() {
+            let via_variant = uf.sexp_shape();
+            let via_array = UnquoteForm::SHAPES[i];
+            assert_eq!(
+                via_variant, via_array,
+                "UnquoteForm::SHAPES[{i}] `{via_array:?}` diverged from UnquoteForm::ALL[{i}].sexp_shape() `{via_variant:?}`",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_shapes_align_with_all_by_index_through_as_unquote_form() {
+        // ROUND-TRIP CONTRACT: for every `i` in `0..UnquoteForm::ALL.len()`,
+        // `UnquoteForm::SHAPES[i].as_unquote_form() ==
+        // Some(UnquoteForm::ALL[i])` — closes the (embed, project)
+        // section of the `Iso(UnquoteForm, UnquoteShape ⊂ SexpShape)`
+        // as a family-wide array-indexed law rather than as a per-
+        // variant assertion sweep (which the pre-existing
+        // `unquote_form_sexp_shape_round_trips_through_as_unquote_form`
+        // pins per-variant). Post-lift the round-trip identity closes
+        // at BOTH the per-variant projection and the family-wide array
+        // indexing. Sibling posture to
+        // `quote_form_shapes_align_with_all_by_index_through_as_quote_form`
+        // on the parent's 4-of-4 sweep.
+        for (i, uf) in UnquoteForm::ALL.iter().enumerate() {
+            let shape = UnquoteForm::SHAPES[i];
+            assert_eq!(
+                shape.as_unquote_form(),
+                Some(*uf),
+                "UnquoteForm::SHAPES[{i}] `{shape:?}` did NOT round-trip through SexpShape::as_unquote_form — the (embed, project) family-wide law broke",
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_shapes_pairwise_distinct() {
+        // INJECTIVITY CONTRACT: the two entries of `UnquoteForm::SHAPES`
+        // MUST be pairwise distinct — the UnquoteForm ⊂ SexpShape
+        // 2-of-12 composed carving is injective (each subset variant
+        // embeds into a UNIQUE outer SexpShape variant). A regression
+        // that drifts one of the two aliases into the other (e.g. a
+        // typo that spells `SPLICE_SHAPE = QuoteForm::UNQUOTE_SHAPE`)
+        // fails-loudly here at the array level rather than as a silent
+        // round-trip collision at consumer sites. Sibling posture to
+        // `quote_form_shapes_pairwise_distinct` on the parent's 4-of-4
+        // sweep and to `unquote_form_hash_discriminators_pairwise_distinct`
+        // on the cache-key byte axis of the SAME closed set.
+        assert_ne!(
+            UnquoteForm::SHAPES[0],
+            UnquoteForm::SHAPES[1],
+            "UnquoteForm::SHAPES[0] `{a:?}` collides with UnquoteForm::SHAPES[1] `{b:?}` — the two-arm carving must be injective",
+            a = UnquoteForm::SHAPES[0],
+            b = UnquoteForm::SHAPES[1],
+        );
+    }
+
+    #[test]
+    fn unquote_form_shapes_align_with_superset_by_projection() {
+        // CROSS-ALGEBRA COMPOSITION CONTRACT: for every `i`,
+        // `UnquoteForm::SHAPES[i]` equals the byte the SUPERSET
+        // projection returns for the corresponding QuoteForm variant
+        // — the substitution-subset per-role embed target equals the
+        // parent quote-family superset's canonical SHAPE at rustc-time
+        // through the `const` alias AND at test time through the
+        // projection composition. Pin the composition-identity across
+        // the closed subset so a regression that drifts EITHER the
+        // subset alias OR the superset canonical site fails-loudly
+        // here. Sibling posture to
+        // `unquote_form_hash_discriminators_align_with_superset_by_projection`
+        // on the cache-key byte axis of the SAME closed set — that
+        // pin binds the subset cache-key byte to the parent's
+        // canonical byte; this pin binds the subset embed target to
+        // the parent's canonical SHAPE.
+        for (i, uf) in UnquoteForm::ALL.iter().enumerate() {
+            let via_subset = UnquoteForm::SHAPES[i];
+            let via_superset = uf.to_quote_form().sexp_shape();
+            assert_eq!(
+                via_subset, via_superset,
+                "UnquoteForm::SHAPES[{i}] `{via_subset:?}` diverged from UnquoteForm::ALL[{i}].to_quote_form().sexp_shape() `{via_superset:?}` — the composition law across the subset carving broke",
             );
         }
     }

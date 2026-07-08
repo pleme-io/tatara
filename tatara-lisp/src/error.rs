@@ -2976,6 +2976,190 @@ impl UnquoteForm {
     /// [`crate::ast::QuoteForm::label`] at rustc time.
     pub const LABELS: [&'static str; 2] = [Self::UNQUOTE_LABEL, Self::SPLICE_LABEL];
 
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the
+    /// [`Self::Unquote`] substitution — `5`. Aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_HASH_DISCRIMINATOR`] on the
+    /// UnquoteForm ⊂ QuoteForm 2-of-4 subset carving so the byte-
+    /// discriminator-level per-role bytes bind at ONE
+    /// `pub(crate) const` on the parent superset's Unquote arm rather
+    /// than at TWO sites (the per-role `pub(crate) const` AND a
+    /// parallel inline literal). Per-role peer of [`Self::Unquote`] on
+    /// the closed-set template-substitution algebra; consumers reach
+    /// for `UnquoteForm::UNQUOTE_HASH_DISCRIMINATOR` when the caller
+    /// has a variant in hand at compile time and wants the canonical
+    /// cache-key byte without runtime dispatch through
+    /// [`Self::hash_discriminator`] (which itself composes through
+    /// [`Self::to_quote_form`] +
+    /// [`crate::ast::QuoteForm::hash_discriminator`]).
+    ///
+    /// Sibling posture to [`Self::UNQUOTE_MARKER`] (commit 3640f76 —
+    /// aliases the reader-punctuation vocabulary `","`),
+    /// [`Self::UNQUOTE_IAC_FORGE_TAG`] (commit 6acab84 — aliases the
+    /// iac-forge canonical-form vocabulary `"unquote"`), and
+    /// [`Self::UNQUOTE_LABEL`] (commit da68af5 — aliases the substrate
+    /// diagnostic-label vocabulary `"unquote"`) — this FOURTH per-role
+    /// `pub const` axis closes the (reader punctuation, iac-forge
+    /// canonical-form, diagnostic label, outer-`Sexp` cache-key byte)
+    /// quadruple on the UnquoteForm subset algebra in lockstep with
+    /// the same quadruple on the parent [`crate::ast::QuoteForm`]
+    /// superset. The three prior axes span the three `&'static str`
+    /// production vocabularies the substrate carries at every quote-
+    /// family arm; this fourth axis spans the ONE `u8` outer-`Sexp`
+    /// cache-key vocabulary the substrate's
+    /// [`Hash for Sexp`](crate::ast::Sexp) body composes over — so
+    /// every substrate-surface byte the parent [`crate::ast::QuoteForm`]
+    /// superset carries per role now has a matching per-role
+    /// `pub const` on this substitution subset.
+    ///
+    /// `pub(crate)` because the byte-discriminator surface is an
+    /// implementation detail of the substrate's
+    /// [`Hash for Sexp`](crate::ast::Sexp) cache-key contract; exposing
+    /// it publicly would leak the cache-key shape through the API
+    /// without enabling any external consumer the three public
+    /// `pub const` axes ([`Self::UNQUOTE_MARKER`],
+    /// [`Self::UNQUOTE_IAC_FORGE_TAG`], [`Self::UNQUOTE_LABEL`]) don't
+    /// already serve. Same posture as
+    /// [`crate::ast::QuoteForm::UNQUOTE_HASH_DISCRIMINATOR`],
+    /// [`crate::ast::AtomKind::SYMBOL_HASH_DISCRIMINATOR`],
+    /// [`StructuralKind::NIL_HASH_DISCRIMINATOR`], and every other
+    /// per-role `*_HASH_DISCRIMINATOR` `pub const` on the substrate's
+    /// typed-shape family — every one is crate-private.
+    pub(crate) const UNQUOTE_HASH_DISCRIMINATOR: u8 =
+        crate::ast::QuoteForm::UNQUOTE_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the
+    /// [`Self::Splice`] list-substitution — `6`. Aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR`] on
+    /// the UnquoteForm ⊂ QuoteForm 2-of-4 subset carving. Per-role
+    /// peer of [`Self::Splice`]. The gap-free `{5, 6}` partition on
+    /// the substitution-subset carving is load-bearing: the substrate's
+    /// [`Hash for Sexp`](crate::ast::Sexp) body reserves `{0, 2}` for
+    /// [`StructuralKind`], `{1}` for the outer [`crate::ast::Sexp::Atom`]
+    /// carve, `{3, 4}` for the non-substitution quote-family arms
+    /// ([`crate::ast::QuoteForm::Quote`],
+    /// [`crate::ast::QuoteForm::Quasiquote`]), and `{5, 6}` for this
+    /// substitution subset — a cache-key collision would leak macro-
+    /// expansion cache hits across carvings. See
+    /// [`Self::UNQUOTE_HASH_DISCRIMINATOR`] for the alias-chain shape
+    /// both siblings share.
+    pub(crate) const SPLICE_HASH_DISCRIMINATOR: u8 =
+        crate::ast::QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR;
+
+    /// Closed-set forced-arity ALL array over the canonical outer-
+    /// `Sexp` cache-key `u8` bytes, in declaration order matching
+    /// [`Self::ALL`] element-wise (pinned by
+    /// `unquote_form_hash_discriminators_align_with_all_by_index`).
+    /// Sibling posture to [`Self::MARKERS`] (`[&'static str; 2]` —
+    /// reader-punctuation axis), [`Self::IAC_FORGE_TAGS`]
+    /// (`[&'static str; 2]` — iac-forge canonical-form axis), and
+    /// [`Self::LABELS`] (`[&'static str; 2]` — diagnostic-label axis)
+    /// on the SAME UnquoteForm closed set, and to
+    /// [`crate::ast::QuoteForm::HASH_DISCRIMINATORS`] (`[u8; 4]` —
+    /// the superset carving this UnquoteForm subset embeds into on
+    /// the SAME outer-`Sexp` cache-key axis). Every closed-set
+    /// carving of the substrate's outer-`Sexp` cache-key partition
+    /// now pins its per-role canonical cache-key bytes at ONE
+    /// `pub(crate) const` per role PLUS an ALL array for family-wide
+    /// consumers: [`Self::HASH_DISCRIMINATORS`] (`[u8; 2]` —
+    /// substitution-subset), [`StructuralKind::HASH_DISCRIMINATORS`]
+    /// (`[u8; 2]` — structural-residual),
+    /// [`crate::ast::AtomKind::HASH_DISCRIMINATORS`] (`[u8; 6]` —
+    /// atomic-payload nested inner carving),
+    /// [`crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR`] (scalar
+    /// `1u8` — atomic-payload outer marker),
+    /// [`crate::ast::QuoteForm::HASH_DISCRIMINATORS`] (`[u8; 4]` —
+    /// quote-family), and
+    /// [`SexpShape::HASH_DISCRIMINATORS`] (`[u8; 12]` — full outer
+    /// twelve-arm shape).
+    ///
+    /// Pre-lift the two cache-key bytes had NO per-role primitive on
+    /// this closed-set subset algebra — a consumer with an
+    /// [`UnquoteForm`] variant in hand at compile time reaching for
+    /// the canonical cache-key byte had to spell the two-step
+    /// composition `uf.to_quote_form().hash_discriminator()` OR reach
+    /// across the algebra boundary into
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR`]
+    /// and re-derive the UnquoteForm ⊂ QuoteForm variant pairing at
+    /// the call site. Post-lift the TWO canonical bytes bind at ONE
+    /// `pub(crate) const` per role on the typed [`UnquoteForm`]
+    /// algebra AND at [`Self::HASH_DISCRIMINATORS`] as a family-wide
+    /// forced-arity array — a future
+    /// [`crate::macro_expand::Expander`] cache-invalidation predicate
+    /// that decides on the 2-of-4 substitution-subset only, a future
+    /// `tatara-check` predicate `(check-substitution-subset-cache-
+    /// key-partition-injective …)` that verifies the substitution-
+    /// subset carving's cache-key partition sits inside `{5, 6}`, a
+    /// future `TypedRewriter<UnquoteFormOp>` sweep zipping ALL /
+    /// LABELS / MARKERS / IAC_FORGE_TAGS / HASH_DISCRIMINATORS in
+    /// lockstep for a family-wide (variant, label, marker, tag, byte)
+    /// quintuple render, or a Sekiban audit-trail metric jointly
+    /// labeled by the substitution-subset cache-key partition read
+    /// through the typed constants on this subset algebra without
+    /// re-deriving the 2-of-4 carving inline.
+    ///
+    /// Each entry is byte-for-byte identical to the corresponding
+    /// [`crate::ast::QuoteForm`] Unquote / UnquoteSplice arm — an
+    /// intentional cross-axis overlap pinned by
+    /// `unquote_form_per_role_hash_discriminators_alias_quote_form_per_role_hash_discriminators_byte_for_byte`
+    /// so a future cache-key byte reshuffling on EITHER side (a
+    /// [`crate::ast::QuoteForm`] `5u8` → `7u8` drift, or an
+    /// [`UnquoteForm`] rename that skips the alias) fails-loudly at
+    /// the alias test rather than as a silent macro-expansion cache
+    /// mis-hash. Adding a hypothetical third template-marker (e.g. a
+    /// `,~` reverse-unquote) extends [`Self::ALL`] AND
+    /// [`Self::HASH_DISCRIMINATORS`] AND adds ONE per-role
+    /// `pub(crate) const` alias in lockstep — rustc's forced-arity
+    /// check on the two `[_; N]` arrays fails compilation if EITHER
+    /// array grows without the other.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the two
+    /// canonical cache-key bytes bind at ONE typed `[u8; 2]` array
+    /// on the closed-set UnquoteForm algebra rather than at zero-
+    /// primitive-on-this-subset-plus-two-inline-lookups scattered
+    /// across the substrate. Closes the FOURTH per-role `pub const`
+    /// axis on the UnquoteForm subset carving in lockstep with the
+    /// same quadruple on [`crate::ast::QuoteForm`]. THEORY.md §V.1 —
+    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// level constant on the substrate algebra rather than a per-
+    /// consumer runtime dispatch through the composition. THEORY.md
+    /// §V.3 — three-pillar attestation; the cache-key partition is
+    /// the substrate's outer [`Sexp`](crate::ast::Sexp) `intent_hash`
+    /// composition axis for every substitution-subset arm — binding
+    /// the two bytes on the typed algebra makes attestation-key
+    /// drift a compile error rather than a silent BLAKE3 mis-hash.
+    /// THEORY.md §VI.1 — generation over composition; the family-
+    /// wide contract sweeps (alignment with `ALL`, pairwise
+    /// disjointness, membership through
+    /// [`Self::hash_discriminator`]) emerge from the composition of
+    /// TWO substrate primitives (this `pub(crate) const` array + the
+    /// two per-role `pub(crate) const *_HASH_DISCRIMINATOR` aliases)
+    /// rather than as per-variant inline assertions duplicated at
+    /// each call site. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the alias-chain composition law
+    /// `UnquoteForm::HASH_DISCRIMINATORS[i] ==
+    /// UnquoteForm::ALL[i].to_quote_form().hash_discriminator()`
+    /// binds the family-wide array to the composition through
+    /// [`Self::to_quote_form`] +
+    /// [`crate::ast::QuoteForm::hash_discriminator`] at rustc time.
+    ///
+    /// The `#[allow(dead_code)]` posture matches every sibling
+    /// `HASH_DISCRIMINATORS` array on the substrate's typed-shape
+    /// family: the substrate's current
+    /// [`Hash for Sexp`](crate::ast::Sexp) body composes through the
+    /// four-arm superset's [`crate::ast::QuoteForm::hash_discriminator`]
+    /// projection rather than splitting the dispatch into
+    /// (2 non-substitution + 2 substitution) arms — so no non-test
+    /// caller currently reaches THIS subset-algebra array. The lift
+    /// lands the substrate primitive so future consumers keyed on
+    /// the substitution-subset carving specifically bind to ONE
+    /// `[u8; 2]` primitive rather than re-deriving the array inline
+    /// per callsite.
+    #[allow(dead_code)]
+    pub(crate) const HASH_DISCRIMINATORS: [u8; 2] = [
+        Self::UNQUOTE_HASH_DISCRIMINATOR,
+        Self::SPLICE_HASH_DISCRIMINATOR,
+    ];
+
     /// Project the typed `UnquoteForm` to the canonical `&'static str`
     /// literal — feeds the `LispError::UnboundTemplateVar` /
     /// `LispError::NonSymbolUnquoteTarget` Display rendering via the
@@ -14885,6 +15069,251 @@ mod tests {
         assert!(
             subset_image.is_disjoint(&non_substitution_quote_image),
             "UnquoteForm hash_discriminator image {subset_image:?} MUST be disjoint from the non-substitution QuoteForm arms' image {non_substitution_quote_image:?} — a cache-key collision would leak macro-expansion hits across the substitution-subset and non-substitution quote-family carvings",
+        );
+    }
+
+    #[test]
+    fn unquote_form_per_role_hash_discriminators_alias_quote_form_per_role_hash_discriminators_byte_for_byte(
+    ) {
+        // ALIAS CONTRACT: pin both per-role
+        // `pub(crate) const UnquoteForm::*_HASH_DISCRIMINATOR`
+        // aliases equal the corresponding
+        // `pub(crate) const QuoteForm::*_HASH_DISCRIMINATOR`
+        // byte-for-byte — so the UnquoteForm ⊂ QuoteForm outer-`Sexp`
+        // cache-key-byte vocabulary containment routes through the
+        // typed `pub(crate) const UnquoteForm::V_HASH_DISCRIMINATOR:
+        // u8 = QuoteForm::V_HASH_DISCRIMINATOR` alias chain rather
+        // than through two independent literal-discipline sites. A
+        // regression that renames the QuoteForm side without updating
+        // the UnquoteForm alias pointing at it fails-loudly here with
+        // the exact axis identified (UNQUOTE / SPLICE); a regression
+        // that re-inlines the UnquoteForm constant to a fresh literal
+        // still passes this pin but loses the alias-chain typing
+        // (which is what
+        // `unquote_form_hash_discriminators_align_with_all_by_index`
+        // catches in combination).
+        //
+        // Sibling posture to
+        // `unquote_form_per_role_markers_alias_quote_form_per_role_prefixes_byte_for_byte`
+        // (commit 3640f76),
+        // `unquote_form_per_role_iac_forge_tags_alias_quote_form_per_role_iac_forge_tags_byte_for_byte`
+        // (commit 6acab84), and
+        // `unquote_form_per_role_labels_alias_quote_form_per_role_labels_byte_for_byte`
+        // (commit da68af5): all four pin the invariant that the
+        // UnquoteForm subset algebra's per-role bytes are structurally
+        // derived from the parent QuoteForm superset's per-role bytes
+        // via a `pub const = Parent::CONST` alias rather than through
+        // parallel literal tables — the axis there is the three
+        // `&'static str` production vocabularies (reader punctuation,
+        // iac-forge canonical-form, diagnostic label); the axis here
+        // is the `u8` outer-`Sexp` cache-key vocabulary. All four axes
+        // span the FOUR production byte-vocabularies the parent
+        // [`QuoteForm`] closed set carries per role, and all four
+        // bind through the same aliased typed source of truth on
+        // this UnquoteForm subset.
+        use crate::ast::QuoteForm;
+        assert_eq!(
+            UnquoteForm::UNQUOTE_HASH_DISCRIMINATOR,
+            QuoteForm::UNQUOTE_HASH_DISCRIMINATOR
+        );
+        assert_eq!(
+            UnquoteForm::SPLICE_HASH_DISCRIMINATOR,
+            QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR
+        );
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminator_arms_route_through_per_role_hash_discriminators_for_every_variant(
+    ) {
+        // PATH-UNIFORMITY: `UnquoteForm::V.hash_discriminator()` MUST
+        // equal the per-role `pub(crate) const
+        // UnquoteForm::V_HASH_DISCRIMINATOR` for every
+        // `v: UnquoteForm`. Pre-lift the two cache-key bytes were
+        // reachable through the two-step composition
+        // `uf.to_quote_form().hash_discriminator()` OR through direct
+        // `QuoteForm::UNQUOTE_HASH_DISCRIMINATOR` reach-across; post-
+        // lift each variant's canonical bytes are reachable through
+        // the per-role `UnquoteForm::*_HASH_DISCRIMINATOR` alias AND
+        // through the inherent `hash_discriminator()` method too. Pin
+        // the byte-equality between the runtime projection and the
+        // compile-time alias so a regression that renames the alias
+        // without updating the arm (or vice versa) fails-loudly at
+        // the exact axis.
+        //
+        // Sibling-shape pin to
+        // `unquote_form_marker_arms_route_through_per_role_markers_for_every_variant`,
+        // `unquote_form_iac_forge_tag_arms_route_through_per_role_iac_forge_tags_for_every_variant`,
+        // and
+        // `unquote_form_label_arms_route_through_per_role_labels_for_every_variant`
+        // one vocabulary over on the SAME subset algebra — together
+        // the four pins close the subset algebra's
+        // `pub const *_MARKER` + `pub const *_IAC_FORGE_TAG` +
+        // `pub const *_LABEL` + `pub(crate) const *_HASH_DISCRIMINATOR`
+        // surfaces against the runtime projections that feed the four
+        // production byte-vocabularies.
+        assert_eq!(
+            UnquoteForm::Unquote.hash_discriminator(),
+            UnquoteForm::UNQUOTE_HASH_DISCRIMINATOR
+        );
+        assert_eq!(
+            UnquoteForm::Splice.hash_discriminator(),
+            UnquoteForm::SPLICE_HASH_DISCRIMINATOR
+        );
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminators_has_expected_cardinality() {
+        // Cardinality pin: `HASH_DISCRIMINATORS.len() == 2` matches
+        // `ALL.len()` so a refactor that loosens the type to `&[u8]`
+        // fails HERE (the `[_; 2]` slot cannot be sliced silently),
+        // and a variant added to `ALL` without a matching
+        // `HASH_DISCRIMINATORS` row fails the pair-arity gate at the
+        // array literal itself before this test even runs. Sibling
+        // posture to `unquote_form_markers_has_expected_cardinality`,
+        // `unquote_form_iac_forge_tags_has_expected_cardinality`, and
+        // `unquote_form_labels_has_expected_cardinality` one
+        // vocabulary over on the SAME subset algebra.
+        assert_eq!(UnquoteForm::HASH_DISCRIMINATORS.len(), 2);
+        assert_eq!(
+            UnquoteForm::HASH_DISCRIMINATORS.len(),
+            UnquoteForm::ALL.len()
+        );
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminators_align_with_all_by_index() {
+        // ALIGNMENT PIN: sweep `HASH_DISCRIMINATORS[i] ==
+        // ALL[i].hash_discriminator()` so any `zip(ALL,
+        // HASH_DISCRIMINATORS)` consumer reads a coherent (variant,
+        // cache-key byte) pair off ONE forced-arity array pair. A
+        // regression that reorders HASH_DISCRIMINATORS without also
+        // reordering ALL (or vice versa) fails-loudly at the exact
+        // index that drifted. Sibling of
+        // `unquote_form_markers_align_with_all_by_index`,
+        // `unquote_form_iac_forge_tags_align_with_all_by_index`, and
+        // `unquote_form_labels_align_with_all_by_index` — same
+        // alignment contract on the fourth byte-vocabulary axis.
+        assert_eq!(
+            UnquoteForm::HASH_DISCRIMINATORS.len(),
+            UnquoteForm::ALL.len()
+        );
+        for (i, form) in UnquoteForm::ALL.iter().enumerate() {
+            assert_eq!(
+                UnquoteForm::HASH_DISCRIMINATORS[i],
+                form.hash_discriminator(),
+                "UnquoteForm::HASH_DISCRIMINATORS[{i}] `{byte}` drifted \
+                 from UnquoteForm::ALL[{i}].hash_discriminator() \
+                 `{via_variant}` — the canonical ALL ordering and the \
+                 HASH_DISCRIMINATORS ordering must match element-wise",
+                byte = UnquoteForm::HASH_DISCRIMINATORS[i],
+                via_variant = form.hash_discriminator(),
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminators_pairwise_distinct() {
+        // 2x2 pairwise sweep so a collision between the two cache-
+        // key bytes (which would silently degrade two distinct
+        // template-substitution markers to the SAME macro-expansion
+        // cache key) fails-loudly at the exact pair. Sibling-shape
+        // pin to `unquote_form_markers_pairwise_distinct`,
+        // `unquote_form_iac_forge_tags_pairwise_distinct`, and
+        // `unquote_form_labels_pairwise_distinct` one vocabulary
+        // over on the SAME subset algebra.
+        for (i, a) in UnquoteForm::HASH_DISCRIMINATORS.iter().enumerate() {
+            for (j, b) in UnquoteForm::HASH_DISCRIMINATORS.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "UnquoteForm::HASH_DISCRIMINATORS[{i}] ({a}) collides \
+                     with UnquoteForm::HASH_DISCRIMINATORS[{j}] ({b}) — \
+                     two distinct template markers cannot share cache-key \
+                     bytes",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminators_pin_legacy_cache_key_bytes() {
+        // Per-arm truth-table pin of each per-role
+        // `pub(crate) const UnquoteForm::*_HASH_DISCRIMINATOR` at
+        // its exact canonical `u8` byte: `UNQUOTE_HASH_DISCRIMINATOR
+        // == 5` and `SPLICE_HASH_DISCRIMINATOR == 6`. Pins each
+        // per-role `pub(crate) const` value itself (as opposed to
+        // pinning the `hash_discriminator()` projection method's
+        // returns, which is
+        // `unquote_form_hash_discriminator_pins_legacy_cache_key_bytes`'s
+        // job) so a regression that drifts the alias source on the
+        // parent [`QuoteForm`] side without updating this subset's
+        // aliases (which would require ALSO fixing this test) fails
+        // here BEFORE the composition-through-`to_quote_form()`
+        // routing masks the drift. Together the two pins close the
+        // (per-role const, projection method) pairing on the
+        // substitution-subset cache-key axis. Sibling posture to
+        // `structural_kind_hash_discriminators_pin_legacy_cache_key_bytes`
+        // (2-arm structural-residual),
+        // `quote_form_hash_discriminators_pin_legacy_cache_key_bytes`
+        // (4-arm quote-family),
+        // `atom_kind_hash_discriminators_pin_legacy_atom_cache_key_bytes`
+        // (6-arm atomic-payload nested inner), and
+        // `sexp_shape_hash_discriminators_pin_legacy_outer_cache_key_bytes`
+        // (12-arm outer shape) — this 2-arm subset pin joins the
+        // family the closed-set typed algebra composes on for outer-
+        // Sexp cache-key partition coherence.
+        assert_eq!(
+            UnquoteForm::UNQUOTE_HASH_DISCRIMINATOR,
+            5,
+            "UnquoteForm::UNQUOTE_HASH_DISCRIMINATOR drifted from legacy cache-key byte 5",
+        );
+        assert_eq!(
+            UnquoteForm::SPLICE_HASH_DISCRIMINATOR,
+            6,
+            "UnquoteForm::SPLICE_HASH_DISCRIMINATOR drifted from legacy cache-key byte 6",
+        );
+    }
+
+    #[test]
+    fn unquote_form_hash_discriminators_align_with_superset_by_projection() {
+        // CROSS-ALGEBRA COMPOSITION contract: for every `i in 0..2`,
+        // `UnquoteForm::HASH_DISCRIMINATORS[i]` equals the byte the
+        // parent superset's projection returns for
+        // `UnquoteForm::ALL[i].to_quote_form()` — the outer-subset
+        // peer alias equals the superset's canonical byte at rustc-
+        // time through the `const` initializer AND at test time
+        // through the projection composition. Sibling posture to
+        // `sexp_shape_hash_discriminators_align_with_sub_carvings_by_projection`
+        // (12-arm SexpShape × 3 sub-carvings composition) — this
+        // pin closes the same composition contract at the 2-of-4
+        // subset carving level.
+        use crate::ast::QuoteForm;
+        for (i, uf) in UnquoteForm::ALL.iter().enumerate() {
+            let subset_byte = UnquoteForm::HASH_DISCRIMINATORS[i];
+            let superset_byte = uf.to_quote_form().hash_discriminator();
+            assert_eq!(
+                subset_byte, superset_byte,
+                "UnquoteForm::HASH_DISCRIMINATORS[{i}] ({subset_byte}) \
+                 drifted from ALL[{i}].to_quote_form().hash_discriminator() \
+                 ({superset_byte}) — the subset-through-superset composition \
+                 no longer agrees with the aliased `pub(crate) const` array",
+            );
+        }
+        // Additionally pin that the subset array is exactly the
+        // Unquote/UnquoteSplice slice of the superset's
+        // HASH_DISCRIMINATORS. QuoteForm::ALL declaration order is
+        // `[Quote, Quasiquote, Unquote, UnquoteSplice]` (indices 2/3
+        // are the substitution subset) — the two subset bytes are
+        // exactly the `[2..4]` slice of QuoteForm::HASH_DISCRIMINATORS.
+        assert_eq!(
+            UnquoteForm::HASH_DISCRIMINATORS[0],
+            QuoteForm::HASH_DISCRIMINATORS[2]
+        );
+        assert_eq!(
+            UnquoteForm::HASH_DISCRIMINATORS[1],
+            QuoteForm::HASH_DISCRIMINATORS[3]
         );
     }
 

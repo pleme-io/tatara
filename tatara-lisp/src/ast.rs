@@ -8605,6 +8605,130 @@ impl QuoteForm {
         }
     }
 
+    /// Inverse of [`Self::iac_forge_tag`] on the four-arm canonical CL
+    /// tag closed set — `"quote"` decodes to `Some(Self::Quote)`,
+    /// `"quasiquote"` decodes to `Some(Self::Quasiquote)`, `"unquote"`
+    /// decodes to `Some(Self::Unquote)`, `"unquote-splicing"` decodes to
+    /// `Some(Self::UnquoteSplice)`. Every other `tag` (empty string,
+    /// PascalCase drift, the shorter substrate diagnostic label
+    /// `"unquote-splice"` — which is INTENTIONALLY distinct from the
+    /// CL canonical `"unquote-splicing"` per the substrate's
+    /// two-vocabulary axis pinned by
+    /// `quote_form_iac_forge_tag_diverges_from_sexp_shape_label_for_unquote_splice`,
+    /// every arbitrary word not in the four-arm image) yields `None`.
+    ///
+    /// Structural roundtrip law (pinned by
+    /// `quote_form_iac_forge_tag_round_trips_through_from_iac_forge_tag`):
+    /// for every `qf: QuoteForm`,
+    /// `Self::from_iac_forge_tag(qf.iac_forge_tag()) == Some(qf)`.
+    /// Sibling posture to [`Self::from_lead_char`]'s inverse-of-
+    /// [`Self::lead_char`] contract on the reader-lead-char axis —
+    /// both name the typed inverse decoder on a per-role projection
+    /// axis of the same closed set, with `Option<Self>` shape mirroring
+    /// the partial decode over an unbounded string codomain into the
+    /// four-arm typed closed set.
+    ///
+    /// Load-bearing use case: cross-crate iac-forge canonical-form
+    /// inbound decoding. Pre-lift a consumer parsing a canonical
+    /// `(<tag> <inner>)` list from an `iac_forge::sexpr::SExpr` (a
+    /// downstream deserialization codepath, an LSP quick-fix that
+    /// completes an iac-forge canonical-form skeleton, a
+    /// `tatara-check` predicate that reads back an attested
+    /// canonical form and re-typed-witnesses its shape) would have
+    /// to hand-roll `match tag { "quote" => QuoteForm::Quote,
+    /// "quasiquote" => …, "unquote-splicing" => …, _ => return None
+    /// }` at each callsite; post-lift the (tag, typed variant)
+    /// decode binds at ONE typed method on the substrate algebra
+    /// composed as a linear sweep over [`Self::ALL`] keyed on
+    /// [`Self::iac_forge_tag`]. The (tag literals, decode arms)
+    /// pairing lives at ONE canonical site (the four
+    /// [`Self::QUOTE_IAC_FORGE_TAG`] / [`Self::QUASIQUOTE_IAC_FORGE_TAG`]
+    /// / [`Self::UNQUOTE_IAC_FORGE_TAG`] /
+    /// [`Self::UNQUOTE_SPLICE_IAC_FORGE_TAG`] per-role constants
+    /// [`Self::iac_forge_tag`]'s outbound arms bind to) rather than
+    /// at TWO — the outbound projection (existing) plus a hand-rolled
+    /// inbound decoder duplicated per callsite.
+    ///
+    /// Boundary distinction with [`Self::from_str`] (the substrate's
+    /// [`FromStr`] impl derived via `#[closed_set(via = "prefix")]`):
+    /// [`Self::from_str`] decodes the reader-punctuation vocabulary
+    /// (`"'"`, `` "`" ``, `","`, `",@"`); THIS method decodes the
+    /// cross-crate iac-forge canonical-form vocabulary (`"quote"`,
+    /// `"quasiquote"`, `"unquote"`, `"unquote-splicing"`). The two
+    /// closed-set inverse decoders key the SAME four-arm outer set
+    /// through TWO orthogonal byte vocabularies — pinning them at
+    /// distinct methods documents the axis-orthogonality
+    /// [`Self::PREFIXES`] vs [`Self::IAC_FORGE_TAGS`] carries at the
+    /// per-role forced-arity ALL array level. A consumer with a
+    /// reader-punctuation byte in hand routes through [`FromStr`];
+    /// a consumer with an iac-forge canonical tag in hand routes
+    /// through THIS method — the vocabulary axis binds at the
+    /// decoder-method boundary rather than at per-consumer inline
+    /// dispatch.
+    ///
+    /// Case-sensitive by design — matches the case-sensitive
+    /// [`FromStr`] posture (which decodes reader punctuation) and
+    /// every other closed-set FromStr on the substrate. Non-const
+    /// because `&str` equality is not const-evaluable on stable at
+    /// substrate MSRV (parallel to how [`Self::FromStr`]'s decode
+    /// body is non-const while [`Self::from_lead_char`] is
+    /// `const fn` because `char` equality IS const-evaluable);
+    /// callers that need a decode-at-compile-time surface stay on
+    /// the reader-lead-char decoder.
+    ///
+    /// Post-lift the (iac-forge tag, typed variant) inverse decoder
+    /// closes the FIFTH inverse-projection axis on the outer-`QuoteForm`
+    /// algebra alongside [`Self::from_lead_char`] (the reader-lead-char
+    /// axis inverse), [`Self::FromStr`] (the reader-prefix axis
+    /// inverse, derived via `#[closed_set(via = "prefix")]`),
+    /// [`crate::error::SexpShape::as_quote_form`] (the outer-shape
+    /// carving inverse embedding), and
+    /// [`crate::error::UnquoteForm::to_quote_form`] (the
+    /// substitution-subset embedding inverse). The full outer
+    /// quote-family algebra now closes ALL FIVE inverse-projection
+    /// axes matched with their forward-projection siblings
+    /// ([`Self::lead_char`] / [`Self::prefix`] / [`Self::sexp_shape`]
+    /// / [`Self::as_unquote_form`] on the forward side).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// inbound iac-forge canonical-form decode surface becomes a
+    /// TYPE projection on the closed-set [`QuoteForm`] algebra
+    /// rather than an inline match at every downstream consumer.
+    /// THEORY.md §V.1 — knowable platform; the closed set of
+    /// canonical CL tags becomes a decoder codomain rather than
+    /// four inline `&'static str` literals scattered across future
+    /// consumers that could drift independently. THEORY.md §VI.1 —
+    /// generation over composition; the (tag, typed variant)
+    /// pairing decodes at ONE typed method on the algebra composed
+    /// from the pre-existing [`Self::ALL`] typed set and the
+    /// [`Self::iac_forge_tag`] outbound projection — no new
+    /// per-role primitive, the decode is a typed CONSEQUENCE of
+    /// the existing family-wide primitives. Sibling posture to
+    /// [`Self::from_lead_char`] which similarly composes as an
+    /// inverse over [`Self::lead_char`] without introducing a new
+    /// per-role primitive.
+    ///
+    /// Frontier inspiration: MLIR's typed-attribute
+    /// `parseType(str) -> Optional<Type>` factory on the closed-set
+    /// typed-attribute registry — the same inverse-decode shape on
+    /// a Rust closed-set enum, where the (tag, typed variant)
+    /// decode binds at ONE typed factory rather than at every
+    /// downstream operation's parseAttribute callback. Racket's
+    /// `(assq tag tag-alist)` typed lookup over a closed
+    /// association list — the inverse decode projects through the
+    /// ALL array without hand-rolling a per-tag match; `Self::ALL
+    /// .iter().find(qf.iac_forge_tag() == tag)` is the Rust-typed
+    /// peer on the closed-set outer-[`QuoteForm`] algebra with the
+    /// ALL array standing in for Racket's typed association-list
+    /// spine.
+    #[must_use]
+    pub fn from_iac_forge_tag(tag: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|qf| qf.iac_forge_tag() == tag)
+    }
+
     /// Project the typed marker into its matching [`crate::error::SexpShape`]
     /// variant — `Quote → SexpShape::Quote`, `Quasiquote → SexpShape::Quasiquote`,
     /// `Unquote → SexpShape::Unquote`, `UnquoteSplice → SexpShape::UnquoteSplice`.
@@ -13837,6 +13961,281 @@ mod tests {
              form requires '-splicing' while the substrate's diagnostic label uses \
              the shorter '-splice'; consolidating them would break either side",
         );
+    }
+
+    #[test]
+    fn quote_form_from_iac_forge_tag_decodes_each_canonical_tag_to_its_variant() {
+        // TYPED INVERSE CONTRACT: the four canonical CL tag literals
+        // `"quote"` / `"quasiquote"` / `"unquote"` / `"unquote-splicing"`
+        // decode through `QuoteForm::from_iac_forge_tag` to their exact
+        // `QuoteForm` variant — the inbound iac-forge canonical-form
+        // decode surface's per-arm truth table. Sibling posture to
+        // `quote_form_iac_forge_tag_pins_canonical_lisp_tag_strings_for_every_variant`
+        // on the OUTBOUND projection axis: that pin binds each variant to
+        // its canonical tag; THIS pin binds each canonical tag to its
+        // variant, closing the (outbound, inbound) roundtrip pair at ONE
+        // typed method on the algebra rather than at TWO surfaces the
+        // consumer would have to hand-roll independently.
+        //
+        // A regression that drifts ONE arm's inbound decode (a future
+        // refactor that inlines the four-arm sweep and drops the
+        // `"quasiquote"` arm, a byte-drifted rename that leaves the
+        // outbound `iac_forge_tag()` unchanged but breaks the inverse)
+        // fails-loudly here on the affected arm before any downstream
+        // iac-forge canonical-form consumer surfaces the drift.
+        assert_eq!(
+            QuoteForm::from_iac_forge_tag("quote"),
+            Some(QuoteForm::Quote),
+        );
+        assert_eq!(
+            QuoteForm::from_iac_forge_tag("quasiquote"),
+            Some(QuoteForm::Quasiquote),
+        );
+        assert_eq!(
+            QuoteForm::from_iac_forge_tag("unquote"),
+            Some(QuoteForm::Unquote),
+        );
+        assert_eq!(
+            QuoteForm::from_iac_forge_tag("unquote-splicing"),
+            Some(QuoteForm::UnquoteSplice),
+        );
+    }
+
+    #[test]
+    fn quote_form_from_iac_forge_tag_round_trips_through_iac_forge_tag_for_every_variant() {
+        // TYPED ROUNDTRIP CONTRACT: for every `qf` in `QuoteForm::ALL`,
+        // `QuoteForm::from_iac_forge_tag(qf.iac_forge_tag()) == Some(qf)`
+        // — the composition of the outbound projection with the inbound
+        // inverse decoder yields the identity on the closed four-arm
+        // domain. Sibling posture to
+        // `quote_form_lead_char_round_trips_through_from_lead_char_for_every_variant`
+        // one axis over on the reader-lead-char inverse decoder — both
+        // pin the (forward, inverse) composition-identity at the closed
+        // set's canonical carrier variants without relying on the
+        // per-arm inbound truth table above (which pins the arm-by-arm
+        // decoder mapping; this pin binds the closed-set-wide roundtrip
+        // property that emerges from the arm mapping).
+        //
+        // A regression that breaks ONE variant's roundtrip (a future
+        // refactor that drops `QuoteForm::Unquote` from `Self::ALL`
+        // silently while leaving the outbound `iac_forge_tag()` arm
+        // intact, an inbound decoder that returns `Some(Self::Quote)`
+        // for an unrelated variant's tag) fails-loudly here through the
+        // closed-set sweep, catching the drift on the affected variant.
+        for &qf in QuoteForm::ALL.iter() {
+            let outbound = qf.iac_forge_tag();
+            let inbound = QuoteForm::from_iac_forge_tag(outbound);
+            assert_eq!(
+                inbound,
+                Some(qf),
+                "QuoteForm::{qf:?} — outbound iac_forge_tag `{outbound}` \
+                 failed to round-trip through from_iac_forge_tag",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_from_iac_forge_tag_rejects_empty_input() {
+        // EMPTY-INPUT REJECTION: the empty string `""` is structurally
+        // outside the four-arm canonical CL tag closed set — no variant
+        // projects to `""` through `iac_forge_tag`, so the inverse
+        // decode rejects cleanly with `None`. Pins the empty-input
+        // boundary case operators hit when a canonical-form field is
+        // absent or blank but the decode is reached anyway (a
+        // deserialization codepath that reads an empty tag slot, an
+        // LSP quick-fix that surfaces an empty completion buffer).
+        // Sibling posture to `parse_label_rejects_empty_input` on the
+        // closed-set trait's parse-rejection axis one vocabulary over
+        // (reader-punctuation) — both pin the empty-input rejection so
+        // no future implementor can drift the decoder's empty-input
+        // behavior accidentally.
+        assert_eq!(QuoteForm::from_iac_forge_tag(""), None);
+    }
+
+    #[test]
+    fn quote_form_from_iac_forge_tag_is_case_sensitive() {
+        // CASE-SENSITIVE CONTRACT: the four canonical CL tag literals
+        // are the exact byte sequences the iac-forge canonical form
+        // renders; case drift between the caller's input and the
+        // canonical literal is a REJECTION, not a normalization. Pin
+        // the case-sensitive contract across (a) an all-uppercase
+        // drift (`"QUOTE"`), (b) a title-case drift (`"Quote"`), and
+        // (c) an internal-uppercase drift on the multi-word tag
+        // (`"Unquote-Splicing"`, `"unquote-Splicing"`) — the three
+        // representative case-drift shapes future operator input
+        // could reach.
+        //
+        // A regression that relaxes the decode to case-insensitive (an
+        // overzealous normalization pass, an `eq_ignore_ascii_case`
+        // introduction) silently subsumes the substrate-wide
+        // case-sensitive convention that binds the iac-forge
+        // canonical-form bytes to the SexpShape diagnostic-label bytes'
+        // path-uniformity (the two vocabularies share three of four
+        // arms byte-for-byte and disagree at UnquoteSplice — any
+        // future case-insensitive relaxation on ONE axis would silently
+        // bifurcate the two vocabularies' convention).
+        assert_eq!(QuoteForm::from_iac_forge_tag("QUOTE"), None);
+        assert_eq!(QuoteForm::from_iac_forge_tag("Quote"), None);
+        assert_eq!(QuoteForm::from_iac_forge_tag("Unquote-Splicing"), None);
+        assert_eq!(QuoteForm::from_iac_forge_tag("unquote-Splicing"), None);
+    }
+
+    #[test]
+    fn quote_form_from_iac_forge_tag_rejects_substrate_diagnostic_label_bytes() {
+        // AXIS-BOUNDARY CONTRACT: the SHORTER substrate diagnostic
+        // label `"unquote-splice"` (which `SexpShape::UnquoteSplice.label()`
+        // renders) MUST reject through the iac-forge canonical-form
+        // decoder — the CL canonical form requires the LONGER
+        // `"unquote-splicing"` per the intentional divergence pinned by
+        // `quote_form_iac_forge_tag_diverges_from_sexp_shape_label_for_unquote_splice`.
+        // The two vocabularies are ORTHOGONAL axes on the SAME closed
+        // four-arm outer set; a decoder keyed on the iac-forge axis
+        // MUST reject an input on the diagnostic-label axis, or the
+        // (canonical-form, diagnostic-label) axis-orthogonality
+        // collapses silently.
+        //
+        // A regression that accepts the shorter substrate diagnostic
+        // label at the iac-forge inbound decode (a hypothetical
+        // "consolidation" that merges the two vocabularies at the
+        // decoder boundary, a future decoder that walks BOTH
+        // `SexpShape::LABELS` AND `Self::IAC_FORGE_TAGS`) would
+        // silently bifurcate every iac-forge round-trip consumer:
+        // the outbound `iac_forge_tag()` still renders
+        // `"unquote-splicing"`, but the inbound decode accepts BOTH
+        // spellings — a canonical form emitted with the shorter
+        // substrate diagnostic label would re-decode as
+        // `QuoteForm::UnquoteSplice` even though it was never a valid
+        // iac-forge canonical form to begin with. Pin the rejection
+        // explicitly so the axis boundary stays enforced at the
+        // decoder itself, not just at the outbound projection.
+        assert_eq!(QuoteForm::from_iac_forge_tag("unquote-splice"), None);
+    }
+
+    #[test]
+    fn quote_form_from_iac_forge_tag_rejects_non_canonical_tag_strings() {
+        // GENERAL-REJECTION CONTRACT: inputs outside the four-arm
+        // canonical CL tag image reject cleanly with `None`. Pins a
+        // representative sweep across (a) arbitrary non-tag words that
+        // share no substring with the canonical vocabulary
+        // (`"hello"`, `"foo"`), (b) reader-punctuation bytes that
+        // belong to the ORTHOGONAL `Self::PREFIXES` axis and MUST
+        // route through `FromStr` (not this decoder) — the vocabulary
+        // boundary the axis-orthogonality contract carries, (c) the
+        // SexpShape diagnostic labels for non-quote-family arms
+        // (`"symbol"`, `"list"`) which project to `None` through
+        // `SexpShape::iac_forge_tag` and therefore MUST reject here
+        // too.
+        //
+        // A regression that accepts a reader-punctuation byte here (a
+        // future consolidated decoder that walks BOTH the prefix
+        // vocabulary AND the iac-forge-tag vocabulary) would silently
+        // subsume the [`FromStr`] surface's exclusive claim to the
+        // reader-punctuation axis, breaking every consumer that binds
+        // decoder identity to vocabulary axis. Pin the rejections
+        // explicitly so the vocabulary axis stays enforced at the
+        // decoder boundary itself, not just at the outbound projection.
+        for input in [
+            "hello", "foo",
+            // Reader-punctuation vocabulary — belongs to
+            // `Self::PREFIXES` / `Self::FromStr`, MUST reject here.
+            "'", "`", ",", ",@",
+            // SexpShape labels for non-quote-family shapes — no
+            // iac-forge tag projection at these variants, MUST reject.
+            "symbol", "list", "nil",
+        ] {
+            assert_eq!(
+                QuoteForm::from_iac_forge_tag(input),
+                None,
+                "QuoteForm::from_iac_forge_tag({input:?}) accepted a \
+                 non-canonical iac-forge tag input — the decoder must \
+                 reject every string outside the four-arm canonical CL \
+                 tag image",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_from_iac_forge_tag_composes_through_iac_forge_tags_array() {
+        // COMPOSITION-LAW CONTRACT: sweeping the family-wide
+        // `Self::IAC_FORGE_TAGS` array through `from_iac_forge_tag`
+        // yields the parallel `Self::ALL` array element-wise —
+        // `from_iac_forge_tag(Self::IAC_FORGE_TAGS[i]) ==
+        // Some(Self::ALL[i])` for every `i in 0..4`. The composition
+        // binds the two family-wide forced-arity arrays through the
+        // typed inverse decoder at ONE typed sweep on the algebra,
+        // matching the alignment law
+        // `quote_form_iac_forge_tags_align_with_all_by_index` on the
+        // outbound projection sibling.
+        //
+        // Enforces the (typed variant, canonical tag) forward-and-
+        // back closure at the array level: a regression that drifts
+        // ONE array's contents against the other (a future refactor
+        // that reorders `Self::IAC_FORGE_TAGS` without reordering
+        // `Self::ALL`, a rename that breaks the alignment) fails-
+        // loudly here through the composition sweep before any
+        // downstream `zip(ALL, IAC_FORGE_TAGS)` consumer with an
+        // inbound decoder in hand surfaces the misalignment.
+        for (i, &tag) in QuoteForm::IAC_FORGE_TAGS.iter().enumerate() {
+            let decoded = QuoteForm::from_iac_forge_tag(tag);
+            let expected = QuoteForm::ALL[i];
+            assert_eq!(
+                decoded,
+                Some(expected),
+                "QuoteForm::from_iac_forge_tag(IAC_FORGE_TAGS[{i}] = {tag:?}) \
+                 decoded to {decoded:?}, expected Some({expected:?}) \
+                 (the composition of IAC_FORGE_TAGS with from_iac_forge_tag \
+                 must yield ALL element-wise)",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_from_iac_forge_tag_is_injective_on_canonical_domain() {
+        // INJECTIVITY CONTRACT: distinct canonical CL tags in
+        // `Self::IAC_FORGE_TAGS` decode to distinct typed variants
+        // through `from_iac_forge_tag` — the inverse decoder is
+        // injective on the closed four-arm canonical-tag domain.
+        // Sibling posture to the outbound
+        // `quote_form_iac_forge_tags_pairwise_distinct` on the same
+        // closed set: that pin asserts the four canonical-tag literals
+        // are pairwise distinct; THIS pin asserts the DECODED variants
+        // are also pairwise distinct — the pair together enforces
+        // BOTH sides of the two-way injectivity contract that the
+        // (typed variant, canonical tag) bijection carries on the
+        // closed set.
+        //
+        // A regression that decodes two distinct canonical tags to
+        // the same typed variant (a future refactor that collapses
+        // `Quasiquote` and `Quote` decode arms silently, an off-by-
+        // one in the linear sweep that returns the wrong variant for
+        // ONE tag) fails-loudly here at the decoded-set cardinality
+        // check before any downstream consumer surfaces the decoded-
+        // side collapse.
+        let decoded: Vec<QuoteForm> = QuoteForm::IAC_FORGE_TAGS
+            .iter()
+            .filter_map(|tag| QuoteForm::from_iac_forge_tag(tag))
+            .collect();
+        assert_eq!(
+            decoded.len(),
+            QuoteForm::ALL.len(),
+            "QuoteForm::from_iac_forge_tag failed to decode one or more \
+             canonical tags — the composition of IAC_FORGE_TAGS with \
+             from_iac_forge_tag lost {} arms (expected {} — the closed \
+             set's cardinality)",
+            QuoteForm::ALL.len() - decoded.len(),
+            QuoteForm::ALL.len(),
+        );
+        for i in 0..decoded.len() {
+            for j in (i + 1)..decoded.len() {
+                assert_ne!(
+                    decoded[i], decoded[j],
+                    "QuoteForm::from_iac_forge_tag is not injective on the \
+                     canonical-tag domain — decoded[{i}] ({:?}) and \
+                     decoded[{j}] ({:?}) collide",
+                    decoded[i], decoded[j],
+                );
+            }
+        }
     }
 
     #[test]

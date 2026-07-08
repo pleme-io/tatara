@@ -5407,6 +5407,207 @@ impl SexpShape {
             Self::UnquoteSplice => crate::ast::QuoteForm::UnquoteSplice.hash_discriminator(),
         }
     }
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::Nil`]
+    /// outer shape — aliases [`StructuralKind::NIL_HASH_DISCRIMINATOR`]
+    /// on the StructuralKind ⊂ SexpShape carving so the marker-level
+    /// byte binds at ONE `pub(crate) const` on the SUB-CARVING's
+    /// per-role primitive rather than at TWO sites (the sub-carving's
+    /// per-role byte AND a parallel outer-shape inline literal). The
+    /// canonical source of the byte lives on the sub-carving; this
+    /// outer-shape peer alias projects it into the twelve-arm
+    /// [`SexpShape`] algebra at zero-drift cost.
+    ///
+    /// Sibling posture to the twelve peer per-role `*_LABEL` aliases
+    /// on [`Self`] — the `Nil` outer-shape per-role LABEL is canonical
+    /// on [`Self`] and is aliased INTO [`StructuralKind::NIL_LABEL`];
+    /// this per-role HASH_DISCRIMINATOR alias runs in the OPPOSITE
+    /// direction because the outer-`Sexp` cache-key byte's canonical
+    /// source is the sub-carving (which the outer `Sexp` dispatch
+    /// composes through). The load-bearing invariant across the two
+    /// axes is byte-identity: the outer-shape peer alias equals the
+    /// sub-carving's canonical byte at rustc-time through the
+    /// `const` initializer.
+    pub(crate) const NIL_HASH_DISCRIMINATOR: u8 = StructuralKind::NIL_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::Symbol`]
+    /// outer shape — aliases [`crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR`]
+    /// on the AtomKind ⊂ SexpShape carving. Every atomic-payload outer
+    /// shape shares this outer marker byte because the per-atom-kind
+    /// specialisation lives at the NESTED INNER
+    /// [`crate::ast::AtomKind::HASH_DISCRIMINATORS`] `{0..=5}` carve
+    /// inside `Hash for Atom`, NOT surfaced through this outer shape-
+    /// level projection.
+    pub(crate) const SYMBOL_HASH_DISCRIMINATOR: u8 = crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::Keyword`]
+    /// outer shape — aliases [`crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR`]
+    /// on the AtomKind ⊂ SexpShape carving. Six-way collapse peer of
+    /// [`Self::SYMBOL_HASH_DISCRIMINATOR`].
+    pub(crate) const KEYWORD_HASH_DISCRIMINATOR: u8 =
+        crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::String`]
+    /// outer shape — aliases [`crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR`].
+    /// Six-way collapse peer.
+    pub(crate) const STRING_HASH_DISCRIMINATOR: u8 = crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::Int`]
+    /// outer shape — aliases [`crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR`].
+    /// Six-way collapse peer.
+    pub(crate) const INT_HASH_DISCRIMINATOR: u8 = crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::Float`]
+    /// outer shape — aliases [`crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR`].
+    /// Six-way collapse peer.
+    pub(crate) const FLOAT_HASH_DISCRIMINATOR: u8 = crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::Bool`]
+    /// outer shape — aliases [`crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR`].
+    /// Six-way collapse peer of the atomic-outer sextet.
+    pub(crate) const BOOL_HASH_DISCRIMINATOR: u8 = crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::List`]
+    /// outer shape — aliases [`StructuralKind::LIST_HASH_DISCRIMINATOR`]
+    /// on the StructuralKind ⊂ SexpShape carving. Structural-residual
+    /// peer of [`Self::NIL_HASH_DISCRIMINATOR`]; the gap at `1u8`
+    /// between the two structural-residual bytes reserves the outer
+    /// atomic-carve byte the six-way atomic-outer sextet collapses to.
+    pub(crate) const LIST_HASH_DISCRIMINATOR: u8 = StructuralKind::LIST_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::Quote`]
+    /// outer shape — aliases [`crate::ast::QuoteForm::QUOTE_HASH_DISCRIMINATOR`]
+    /// on the QuoteForm ⊂ SexpShape carving.
+    pub(crate) const QUOTE_HASH_DISCRIMINATOR: u8 = crate::ast::QuoteForm::QUOTE_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the
+    /// [`Self::Quasiquote`] outer shape — aliases
+    /// [`crate::ast::QuoteForm::QUASIQUOTE_HASH_DISCRIMINATOR`].
+    pub(crate) const QUASIQUOTE_HASH_DISCRIMINATOR: u8 =
+        crate::ast::QuoteForm::QUASIQUOTE_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the [`Self::Unquote`]
+    /// outer shape — aliases [`crate::ast::QuoteForm::UNQUOTE_HASH_DISCRIMINATOR`].
+    pub(crate) const UNQUOTE_HASH_DISCRIMINATOR: u8 =
+        crate::ast::QuoteForm::UNQUOTE_HASH_DISCRIMINATOR;
+
+    /// Canonical `u8` outer-`Sexp` cache-key byte for the
+    /// [`Self::UnquoteSplice`] outer shape — aliases
+    /// [`crate::ast::QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR`].
+    pub(crate) const UNQUOTE_SPLICE_HASH_DISCRIMINATOR: u8 =
+        crate::ast::QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR;
+
+    /// Closed-set forced-arity ALL array over the canonical outer-`Sexp`
+    /// cache-key `u8` bytes, in declaration order matching [`Self::ALL`]
+    /// element-wise (pinned by
+    /// `sexp_shape_hash_discriminators_align_with_all_by_index`).
+    /// Sibling posture to [`Self::LABELS`] (`[&'static str; 12]` — the
+    /// diagnostic-label axis on the same twelve-variant closed set) AND
+    /// to the sub-carvings' HASH_DISCRIMINATORS peers:
+    /// [`StructuralKind::HASH_DISCRIMINATORS`] (`[u8; 2]` — `{0, 2}`),
+    /// [`crate::ast::QuoteForm::HASH_DISCRIMINATORS`] (`[u8; 4]` — `{3..=6}`),
+    /// [`crate::ast::AtomKind::HASH_DISCRIMINATORS`] (`[u8; 6]` — the
+    /// NESTED INNER `{0..=5}` bytes inside `Hash for Atom` under the
+    /// outer `1u8` marker), and [`crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR`]
+    /// (scalar `1u8` — the six-way outer-collapse byte). This lift joins
+    /// the outer-shape closed set to the family-wide ALL-array posture
+    /// every sibling closed set already carries, closing the SIXTH
+    /// per-family axis on the [`SexpShape`] algebra (ALL, LABELS,
+    /// as_atom_kind, as_quote_form, as_structural_kind, plus this).
+    ///
+    /// Pre-lift the twelve outer-shape cache-key bytes had NO family-wide
+    /// forced-arity primitive on the outer-shape algebra — a consumer
+    /// wanting to sweep the outer partition through a `zip(SexpShape::ALL,
+    /// bytes)` had to compose the twelve bytes inline by dispatching
+    /// through [`Self::hash_discriminator`] at runtime OR by re-deriving
+    /// the twelve-arm collapse against the three sub-carvings'
+    /// HASH_DISCRIMINATORS arrays + the atomic outer-marker byte at every
+    /// call site. Post-lift the twelve bytes bind at ONE typed `[u8; 12]`
+    /// primitive on the outer-shape algebra composed from the sub-
+    /// carvings' canonical bytes — a future LSP / REPL completion bar
+    /// keyed on the shape's cache-key byte, a `tatara-check` coverage
+    /// sweep over the outer partition, or a Sekiban audit-trail metric
+    /// jointly labeled by the outer-shape byte picks up the same
+    /// canonical bytes from ONE source of truth.
+    ///
+    /// Composition law (pinned by
+    /// `sexp_shape_hash_discriminators_align_with_hash_discriminator_by_index`):
+    /// for every `i in 0..12`, `Self::HASH_DISCRIMINATORS[i] ==
+    /// Self::ALL[i].hash_discriminator()`. Sibling to the peer alignment
+    /// pins on the three sub-carvings' HASH_DISCRIMINATORS arrays — this
+    /// pin closes the family-wide alignment at the OUTER twelve-arm
+    /// algebra so a regression that reorders ONE array without reordering
+    /// the other silently misaligns every `zip(ALL, HASH_DISCRIMINATORS)`
+    /// consumer.
+    ///
+    /// Partition closure (pinned by
+    /// `sexp_shape_hash_discriminators_cover_outer_partition_zero_through_six`):
+    /// the twelve bytes collect to exactly `{0..=6}` as a set — the
+    /// same outer-partition space [`Self::hash_discriminator`] surjects
+    /// onto. Sibling to the pre-existing
+    /// `sexp_shape_hash_discriminator_covers_outer_partition_zero_through_six`
+    /// projection-driven pin — that pin closes the partition through
+    /// the projection method; this pin closes it at the array level so
+    /// a regression that drifts the array's contents without changing
+    /// the method surfaces here.
+    ///
+    /// The `#[allow(dead_code)]` posture matches
+    /// [`StructuralKind::HASH_DISCRIMINATORS`] /
+    /// [`crate::ast::QuoteForm::HASH_DISCRIMINATORS`] /
+    /// [`crate::ast::AtomKind::HASH_DISCRIMINATORS`]: the substrate's
+    /// current [`Self::hash_discriminator`] body dispatches through the
+    /// twelve-arm per-role per-variant match rather than through an
+    /// [`Self::HASH_DISCRIMINATORS`] index lookup (patterns cannot be
+    /// array-indexing expressions in the current const-fn grammar); the
+    /// lift lands the substrate primitive so future consumers keyed on
+    /// the whole outer-shape cache-key algebra (a future `tatara-check`
+    /// predicate `(check-outer-shape-partition-injective …)`; a future
+    /// `TypedRewriter<ShapeOp>` sweep zipping ALL / LABELS /
+    /// HASH_DISCRIMINATORS in lockstep) pick it up through ONE typed
+    /// primitive.
+    ///
+    /// A hypothetical thirteenth [`SexpShape`] variant (`Vector` for
+    /// `#(...)`, `Map` for `{...}`, `Char` for `#\x`) extends [`Self::ALL`]
+    /// AND [`Self::LABELS`] AND [`Self::HASH_DISCRIMINATORS`] AND adds
+    /// ONE new per-role `pub(crate) const *_HASH_DISCRIMINATOR` alias in
+    /// lockstep — rustc's forced-arity check on the three `[_; N]`
+    /// arrays fails compilation if ONE array grows without the others,
+    /// closing the extensibility gap the pre-lift outer-shape algebra
+    /// silently allowed at the [`Self::hash_discriminator`] match body.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the twelve
+    /// canonical outer-shape cache-key bytes bind at ONE typed
+    /// `[u8; 12]` array on the closed-set outer [`SexpShape`] algebra
+    /// rather than at zero-primitive-plus-runtime-dispatch through the
+    /// three sub-carvings' twelve-arm collapse. THEORY.md §V.1 —
+    /// knowable platform; the family's cardinality becomes a
+    /// TYPE-level constant on the substrate algebra rather than a
+    /// per-consumer runtime dispatch through the match table. THEORY.md
+    /// §V.3 — three-pillar attestation; the outer-shape cache-key
+    /// partition is the substrate's outer `Sexp` `intent_hash`
+    /// composition axis — binding the twelve-arm ALL array on the typed
+    /// algebra makes attestation-key drift a compile error rather than
+    /// a silent BLAKE3 mis-hash. THEORY.md §VI.1 — generation over
+    /// composition; the family-wide contract sweeps (alignment with
+    /// `ALL`, membership through [`Self::hash_discriminator`], partition
+    /// closure onto `{0..=6}`) emerge from the composition of ONE
+    /// substrate primitive (this `pub(crate) const` array) rather than
+    /// as per-variant inline assertions at each call site.
+    #[allow(dead_code)]
+    pub(crate) const HASH_DISCRIMINATORS: [u8; 12] = [
+        Self::NIL_HASH_DISCRIMINATOR,
+        Self::SYMBOL_HASH_DISCRIMINATOR,
+        Self::KEYWORD_HASH_DISCRIMINATOR,
+        Self::STRING_HASH_DISCRIMINATOR,
+        Self::INT_HASH_DISCRIMINATOR,
+        Self::FLOAT_HASH_DISCRIMINATOR,
+        Self::BOOL_HASH_DISCRIMINATOR,
+        Self::LIST_HASH_DISCRIMINATOR,
+        Self::QUOTE_HASH_DISCRIMINATOR,
+        Self::QUASIQUOTE_HASH_DISCRIMINATOR,
+        Self::UNQUOTE_HASH_DISCRIMINATOR,
+        Self::UNQUOTE_SPLICE_HASH_DISCRIMINATOR,
+    ];
 }
 
 // `impl std::fmt::Display for SexpShape` + `impl std::str::FromStr for
@@ -16160,6 +16361,177 @@ mod tests {
             union, full_outer,
             "the three-carving `hash_discriminator` image union must exactly cover {{0..=6}}",
         );
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminators_pin_legacy_outer_cache_key_bytes() {
+        // Pin each per-role `pub(crate) const *_HASH_DISCRIMINATOR` on
+        // `SexpShape` at its exact canonical outer-`Sexp` cache-key byte
+        // — sibling of the pre-existing
+        // `sexp_shape_hash_discriminator_pins_legacy_outer_cache_key_bytes`
+        // (which pins the projection method's returns). Together the two
+        // pins close the (per-role const, projection method) pairing on
+        // the outer-shape algebra. Post-lift the twelve per-role bytes
+        // live at ONE `pub(crate) const` per role on the `SexpShape`
+        // algebra rather than at twelve inline `u8` literals scattered
+        // across the projection method's match arms.
+        assert_eq!(SexpShape::NIL_HASH_DISCRIMINATOR, 0);
+        assert_eq!(SexpShape::SYMBOL_HASH_DISCRIMINATOR, 1);
+        assert_eq!(SexpShape::KEYWORD_HASH_DISCRIMINATOR, 1);
+        assert_eq!(SexpShape::STRING_HASH_DISCRIMINATOR, 1);
+        assert_eq!(SexpShape::INT_HASH_DISCRIMINATOR, 1);
+        assert_eq!(SexpShape::FLOAT_HASH_DISCRIMINATOR, 1);
+        assert_eq!(SexpShape::BOOL_HASH_DISCRIMINATOR, 1);
+        assert_eq!(SexpShape::LIST_HASH_DISCRIMINATOR, 2);
+        assert_eq!(SexpShape::QUOTE_HASH_DISCRIMINATOR, 3);
+        assert_eq!(SexpShape::QUASIQUOTE_HASH_DISCRIMINATOR, 4);
+        assert_eq!(SexpShape::UNQUOTE_HASH_DISCRIMINATOR, 5);
+        assert_eq!(SexpShape::UNQUOTE_SPLICE_HASH_DISCRIMINATOR, 6);
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminator_routes_through_typed_per_role_constants() {
+        // PATH-UNIFORMITY (shape-level per-role): each of the twelve arms
+        // of `SexpShape::hash_discriminator` MUST return the corresponding
+        // `SexpShape::*_HASH_DISCRIMINATOR` byte-for-byte — catches a
+        // regression that reverts ONE arm to an inline `u8` literal OR
+        // to a `.hash_discriminator()` runtime dispatch through a sub-
+        // carving variant (both of which type-check but bypass the typed
+        // per-role primitive). Sibling posture to
+        // `atom_kind_hash_discriminator_routes_through_typed_per_role_constants`,
+        // `quote_form_hash_discriminator_routes_through_typed_per_role_constants`,
+        // and `structural_kind_hash_discriminator_routes_through_typed_per_role_constants`
+        // on the three sub-carvings — this pin closes the same routing
+        // contract at the outer twelve-arm shape level.
+        let pairs = [
+            (SexpShape::Nil, SexpShape::NIL_HASH_DISCRIMINATOR),
+            (SexpShape::Symbol, SexpShape::SYMBOL_HASH_DISCRIMINATOR),
+            (SexpShape::Keyword, SexpShape::KEYWORD_HASH_DISCRIMINATOR),
+            (SexpShape::String, SexpShape::STRING_HASH_DISCRIMINATOR),
+            (SexpShape::Int, SexpShape::INT_HASH_DISCRIMINATOR),
+            (SexpShape::Float, SexpShape::FLOAT_HASH_DISCRIMINATOR),
+            (SexpShape::Bool, SexpShape::BOOL_HASH_DISCRIMINATOR),
+            (SexpShape::List, SexpShape::LIST_HASH_DISCRIMINATOR),
+            (SexpShape::Quote, SexpShape::QUOTE_HASH_DISCRIMINATOR),
+            (
+                SexpShape::Quasiquote,
+                SexpShape::QUASIQUOTE_HASH_DISCRIMINATOR,
+            ),
+            (SexpShape::Unquote, SexpShape::UNQUOTE_HASH_DISCRIMINATOR),
+            (
+                SexpShape::UnquoteSplice,
+                SexpShape::UNQUOTE_SPLICE_HASH_DISCRIMINATOR,
+            ),
+        ];
+        for (shape, expected) in pairs {
+            assert_eq!(
+                shape.hash_discriminator(),
+                expected,
+                "SexpShape::hash_discriminator arm for {shape:?} must route through the typed \
+                 `pub(crate) const` per-role byte",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminators_has_expected_cardinality() {
+        // Cardinality contract: `Self::HASH_DISCRIMINATORS.len() == 12`
+        // matching `Self::ALL.len() == 12`. Arity is forced at the
+        // declaration site by rustc's `[u8; 12]` check; this runtime pin
+        // fails-loud so a future refactor that switches the array type
+        // to `&[u8]` doesn't silently loosen the closed-set discipline.
+        // Sibling posture to `sexp_shape_labels_has_expected_cardinality`
+        // on the diagnostic-label axis of the same twelve-variant closed
+        // set.
+        assert_eq!(SexpShape::HASH_DISCRIMINATORS.len(), 12);
+        assert_eq!(
+            SexpShape::HASH_DISCRIMINATORS.len(),
+            SexpShape::ALL.len(),
+            "SexpShape::HASH_DISCRIMINATORS cardinality drifted from SexpShape::ALL",
+        );
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminators_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::HASH_DISCRIMINATORS[i] ==
+        // Self::ALL[i].hash_discriminator()` element-wise — the ALL
+        // array's variant order MUST align with the HASH_DISCRIMINATORS
+        // array's byte order. A regression that reorders ONE array
+        // without reordering the other silently misaligns every
+        // `zip(ALL, HASH_DISCRIMINATORS)` consumer. Sibling posture to
+        // `structural_kind_hash_discriminators_align_with_all_by_index`,
+        // `quote_form_hash_discriminators_align_with_all_by_index`, and
+        // `atom_kind_hash_discriminators_align_with_all_by_index` on the
+        // three sub-carvings — this pin closes the same alignment
+        // contract at the outer twelve-arm shape level.
+        for (i, shape) in SexpShape::ALL.iter().copied().enumerate() {
+            let disc = shape.hash_discriminator();
+            assert_eq!(
+                SexpShape::HASH_DISCRIMINATORS[i],
+                disc,
+                "SexpShape::HASH_DISCRIMINATORS[{i}] `{disc}` != \
+                 SexpShape::ALL[{i}].hash_discriminator() `{disc}` — array-vs-projection drift",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminators_cover_outer_partition_zero_through_six() {
+        // PARTITION-COMPLETENESS CONTRACT (array level): the twelve-byte
+        // set of `Self::HASH_DISCRIMINATORS` MUST cover exactly the
+        // outer cache-key partition `{0..=6}` — no byte outside, no byte
+        // inside missing. Sibling to
+        // `sexp_shape_hash_discriminator_covers_outer_partition_zero_through_six`
+        // (which closes the same partition through the projection method)
+        // — this pin closes it at the ARRAY level so a regression that
+        // drifts the array's contents without changing the method
+        // surfaces here rather than only through the projection sweep.
+        let bytes: std::collections::BTreeSet<u8> =
+            SexpShape::HASH_DISCRIMINATORS.iter().copied().collect();
+        let expected: std::collections::BTreeSet<u8> = (0u8..=6u8).collect();
+        assert_eq!(
+            bytes, expected,
+            "SexpShape::HASH_DISCRIMINATORS must cover exactly the outer discriminator space {{0..=6}}",
+        );
+    }
+
+    #[test]
+    fn sexp_shape_hash_discriminators_align_with_sub_carvings_by_projection() {
+        // CROSS-ALGEBRA COMPOSITION CONTRACT: for every `i in 0..12`,
+        // `Self::HASH_DISCRIMINATORS[i]` MUST equal the byte the SUB-
+        // CARVING projection returns for `Self::ALL[i]` — i.e. the
+        // outer-shape ALL-array byte at every position is byte-identical
+        // to (a) `AtomKind::OUTER_HASH_DISCRIMINATOR` on the atomic-
+        // payload variants, (b) `StructuralKind::HASH_DISCRIMINATORS`'s
+        // byte on structural-residual variants (routed via
+        // `as_structural_kind`), and (c)
+        // `QuoteForm::HASH_DISCRIMINATORS`'s byte on quote-family
+        // variants (routed via `as_quote_form`). Closes the load-
+        // bearing invariant that the outer-shape peer alias equals the
+        // sub-carving's canonical byte at rustc-time through the `const`
+        // initializer. A regression that drifts ONE sub-carving's byte
+        // without updating the outer-shape peer alias fails to compile
+        // (the `const` initializer references the same primitive); a
+        // regression that drifts the OUTER alias byte-order in the
+        // array fails-loudly here.
+        for (i, shape) in SexpShape::ALL.iter().copied().enumerate() {
+            let expected = if shape.as_atom_kind().is_some() {
+                crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR
+            } else if let Some(sk) = shape.as_structural_kind() {
+                sk.hash_discriminator()
+            } else if let Some(qf) = shape.as_quote_form() {
+                qf.hash_discriminator()
+            } else {
+                unreachable!(
+                    "SexpShape::{shape:?} lies outside all three sub-carvings — \
+                     the three-carving partition (Atom + Structural + Quote) is not exhaustive",
+                );
+            };
+            assert_eq!(
+                SexpShape::HASH_DISCRIMINATORS[i], expected,
+                "SexpShape::HASH_DISCRIMINATORS[{i}] must equal the sub-carving projection for {shape:?}",
+            );
+        }
     }
 
     #[test]

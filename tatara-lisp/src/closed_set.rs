@@ -267,19 +267,137 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// extends only `Self::ALL` + `Self::label`, NOT a third
     /// per-variant literal site.
     ///
-    /// Default body is the substrate-wide pattern lifted into ONE
-    /// place; implementors override only when the parse surface
-    /// shape diverges (e.g. [`crate::error::CompilerSpecIoStage`]'s
-    /// compound `"{operation}: {label}"` key, which keys on a
-    /// projection PAIR rather than a single label, and keeps its
-    /// bespoke `FromStr` body).
+    /// Default body composes [`Self::find_by_label`] with
+    /// [`Option::ok_or_else`] into [`Self::make_unknown`] — the sweep
+    /// itself lives at ONE substrate primitive
+    /// ([`Self::find_by_label`]), and the parse arm threads the
+    /// carrier materialization onto its `None` result. Implementors
+    /// override only when the parse surface shape diverges (e.g.
+    /// [`crate::error::CompilerSpecIoStage`]'s compound
+    /// `"{operation}: {label}"` key, which keys on a projection PAIR
+    /// rather than a single label, and keeps its bespoke `FromStr`
+    /// body). An implementor that overrides [`Self::find_by_label`]
+    /// propagates the override through this default body to the
+    /// parse-decode arm automatically; the (allocating carrier
+    /// decode, non-allocating typed decode, non-allocating
+    /// predicate) triad of the closed-set surface funnels every
+    /// sweep through ONE typed primitive.
     fn parse_label(s: &str) -> Result<Self, Self::Unknown> {
-        for &kind in Self::ALL {
-            if s == kind.label() {
-                return Ok(kind);
-            }
-        }
-        Err(Self::make_unknown(s))
+        Self::find_by_label(s).ok_or_else(|| Self::make_unknown(s))
+    }
+
+    /// Zero-allocation typed decode — `Some(v)` when `s` matches some
+    /// variant's [`Self::label`] exactly, `None` for every other
+    /// string.
+    ///
+    /// Peer of [`Self::parse_label`] on the (allocating carrier
+    /// decode, non-allocating typed decode) axis of the closed-set
+    /// surface: [`Self::parse_label`] materializes the typed
+    /// [`Self::Unknown`] carrier (owning a [`String`] copy of `s`)
+    /// on the reject path even when the caller drops it immediately
+    /// with `.ok()`; this method answers the SAME structural
+    /// question — "which canonical variant does `s` decode to, if
+    /// any?" — with a bare [`Option::None`] on rejection, never
+    /// entering [`Self::make_unknown`]. Consumers that need the
+    /// typed variant BUT can supply a natural default (a config
+    /// field with a fallback, an LSP hover under a candidate label,
+    /// a `filter_map` over a candidate stream that projects each
+    /// element onto its typed variant) route through this method
+    /// rather than paying the carrier allocation for the throwaway
+    /// diagnostic.
+    ///
+    /// Sibling posture to [`Self::contains_label`] one axis over:
+    /// both walk [`Self::ALL`] keyed on [`Self::label`], but the
+    /// return-type axis partitions the consumer surface —
+    /// [`Self::contains_label`] returns a `bool` for the pure
+    /// predicate `if`-gates / `filter`-passes / lint checks route
+    /// through, this method returns the typed `Option<Self>` for
+    /// consumers that need the decoded variant. The two arms of the
+    /// axis compose: [`Self::contains_label`] is the default-body
+    /// projection of `Self::find_by_label(s).is_some()`, and
+    /// [`Self::parse_label`] is the default-body projection of
+    /// `Self::find_by_label(s).ok_or_else(|| Self::make_unknown(s))`
+    /// — every closed-set sweep threads through ONE primitive.
+    ///
+    /// The (return-type × side-effect) cross-product of the
+    /// closed-set membership surface partitions exhaustively:
+    ///
+    /// | Return                     | Allocating (materialize `Unknown`) | Non-Allocating              |
+    /// |----------------------------|------------------------------------|-----------------------------|
+    /// | `Result<Self, Unknown>`    | [`Self::parse_label`]              | —                           |
+    /// | `Option<Self>`             | —                                  | [`Self::find_by_label`]     |
+    /// | `bool`                     | —                                  | [`Self::contains_label`]    |
+    ///
+    /// Default body is `Self::ALL.iter().copied().find(|v| v.label()
+    /// == s)` — a linear sweep composed from the same TWO substrate
+    /// primitives ([`Self::ALL`], [`Self::label`])
+    /// [`Self::parse_label`] and [`Self::contains_label`] would walk
+    /// over pre-lift, now lifted onto ONE trait body every consumer
+    /// routes through. Implementors override only when the typed-
+    /// decode surface needs to diverge from the natural
+    /// `ALL`-projection (no production implementor reaches for this
+    /// today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` / `labels_joined` /
+    /// `sorted_labels` / `sorted_labels_joined` / `suggest_closest` /
+    /// `parse_label_with_hint` / `contains_label` overrides exist —
+    /// a typed escape hatch the trait surface exposes rather than
+    /// forcing the implementor to hand-roll the impl).
+    ///
+    /// Future consumers — a config-field decoder with a natural
+    /// fallback (`T::find_by_label(cfg).unwrap_or(T::default_kind())`)
+    /// that skips the throwaway Unknown allocation, a
+    /// `filter_map`-shaped stream projection over cluster-wide
+    /// `tatara.pleme.io/*` annotation keys, an LSP hover pass that
+    /// resolves the typed variant under the operator's cursor
+    /// WITHOUT allocating a carrier per non-matching hover, an
+    /// iac-forge tag decode-loop that partitions each incoming tag
+    /// stream into (typed_variant, bare_string) via
+    /// `find_by_label(tag).ok_or(tag)` — bind to ONE trait method
+    /// instead of hand-rolling either the `parse_label(s).ok()`
+    /// carrier-allocating shortcut (which pays the `String`
+    /// allocation on every reject) OR the inline
+    /// `Self::ALL.iter().copied().find(|v| v.label() == s)`
+    /// composition (which re-derives the sweep at every call site).
+    ///
+    /// THEORY.md §III — the typescape; the zero-allocation typed
+    /// decode becomes a TYPE projection on the closed-set algebra
+    /// rather than an inline `iter().find(|v| v.label() == s)`
+    /// composition at every downstream consumer.
+    /// THEORY.md §V.1 — knowable platform; the zero-allocation typed
+    /// decode was an unnamed compound of [`Self::ALL`] +
+    /// [`Self::label`] + `Iterator::find` pre-lift; naming it on
+    /// the trait makes the projection a TYPED CONSEQUENCE of the
+    /// two substrate primitives — generic consumers see ONE method,
+    /// not ONE typed-decode-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// zero-allocation typed decode emerges from the composition of
+    /// TWO substrate primitives ([`Self::ALL`], [`Self::label`])
+    /// rather than as a per-implementor inline `iter+find` pair. A
+    /// future tightening of either primitive (a future
+    /// `#[closed_set(via = "…")]`-driven projection rename, a future
+    /// canonicalization-aware label projection that folds case /
+    /// whitespace) propagates to every closed-set consumer through
+    /// ONE trait body — including [`Self::parse_label`],
+    /// [`Self::contains_label`], and [`Self::suggest_closest`],
+    /// which all default-body-delegate to this primitive.
+    ///
+    /// Frontier inspiration: Rust's `enum_iterator::first_matching`
+    /// / Racket's `assf` (`(assf pred lst)` — first association whose
+    /// predicate holds) over a closed association list stand as the
+    /// same shape one vocabulary over on the finite-type-decode
+    /// side. MLIR's `Operation::dyn_cast<T>` on the typed op registry
+    /// is the same "look up the typed instance by discriminator,
+    /// return `Option`, don't materialize a diagnostic on miss"
+    /// axis over its closed-set-of-op-kinds. Translation through
+    /// pleme-io primitives: a pure default method composing the
+    /// trait's existing [`Self::ALL`] + [`Self::label`] surfaces
+    /// with the standard-library `Iterator::find` primitive — no
+    /// new dep, no new IR layer, no new per-role primitive.
+    fn find_by_label(s: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|v| <Self as ClosedSet>::label(*v) == s)
     }
 
     /// Pure-membership predicate — `true` iff `s` matches some variant's
@@ -361,10 +479,7 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// standard-library `Iterator::any` primitive — no new dep, no
     /// new IR layer, no new per-role primitive.
     fn contains_label(s: &str) -> bool {
-        Self::ALL
-            .iter()
-            .copied()
-            .any(|v| <Self as ClosedSet>::label(v) == s)
+        Self::find_by_label(s).is_some()
     }
 
     /// Collect every variant's canonical [`Self::label`] into a
@@ -701,7 +816,7 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn suggest_closest(needle: &str) -> Option<Self> {
         let candidates = Self::labels();
         let target = crate::domain::suggest(needle, &candidates)?;
-        Self::ALL.iter().copied().find(|v| v.label() == target)
+        Self::find_by_label(target)
     }
 
     /// Decode `s` into the typed variant, threading a typed
@@ -930,6 +1045,33 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     implementor whose override drifts the composition loudly
 ///     rather than silently bifurcating the pure-membership surface
 ///     every lint / filter / gate consumer routes through.
+/// 12. [`ClosedSet::find_by_label`] composes [`ClosedSet::ALL`] +
+///     [`ClosedSet::label`] with [`Iterator::find`] verbatim — the
+///     zero-allocation typed decode every consumer that needs the
+///     variant (but can supply a natural fallback) routes through
+///     emits at ONE trait body without ever materializing the
+///     [`ClosedSet::Unknown`] carrier [`ClosedSet::parse_label`]
+///     threads on rejection. The sweep walks every variant's
+///     canonical label (expected `Some(v)` — the acceptance arm
+///     round-trips through the typed decode), the reserved 38-char
+///     probe (expected `None` — the same probe clauses (5) + (7) +
+///     (11) reserve as lexically distinct from every plausible
+///     canonical label), and the empty-string boundary (expected
+///     `None` matching clauses (4) + (11)) so a drift in any of the
+///     three natural typed-decode arms (a permissive override that
+///     accepts non-canonical strings, a strict override that
+///     rejects a canonical label, a subset-projection override that
+///     names fewer labels than `Self::ALL.iter().map(label)` covers)
+///     fails the testkit on every implementor. The default trait
+///     body satisfies the clause for free; the assertion catches a
+///     future implementor whose override drifts the composition
+///     loudly rather than silently bifurcating the zero-allocation
+///     typed-decode surface every consumer routes through. Sibling
+///     posture to clause (11) on the (bool, Option<Self>)
+///     return-type axis — both walk the SAME (`Self::ALL`,
+///     `Self::label`) primitive pair and MUST agree on the
+///     underlying (accept, reject) partition; the pin verifies the
+///     alignment across both arms of the axis.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -1174,6 +1316,47 @@ where
         !T::contains_label(""),
         "{type_name}: T::contains_label(\"\") returned true — the pure-membership predicate accepted the empty-string boundary that clause (4) reserves as structurally outside every closed set",
     );
+    // (12) — `T::find_by_label(s)` MUST agree with
+    // `T::parse_label(s).ok()` on every representative input: every
+    // canonical label decodes to `Some(v)` (the acceptance arm
+    // round-trips through the typed decode), the reserved probe
+    // rejects to `None` (the same probe clauses (5) + (7) + (11)
+    // reserve as lexically distinct from every plausible canonical
+    // label), and the empty-string boundary rejects to `None`
+    // matching clauses (4) + (11). The default trait body satisfies
+    // the clause for free; the assertion catches a future
+    // implementor whose override drifts the composition (a
+    // permissive override that returns `Some(_)` for inputs outside
+    // the closed set, a strict override that returns `None` for a
+    // canonical label, a subset-projection override that names fewer
+    // labels than `Self::ALL.iter().map(label)` covers) loudly
+    // rather than silently bifurcating the zero-allocation
+    // typed-decode surface every LSP / config-decoder / filter-map
+    // consumer routes through. Sibling posture to clause (11) on the
+    // (bool, Option<Self>) return-type axis — both walk the SAME
+    // (Self::ALL, Self::label) primitive pair and MUST agree on the
+    // underlying (accept, reject) partition; the pin verifies the
+    // alignment across both arms of the axis.
+    for &v in T::ALL {
+        let label = v.label();
+        match T::find_by_label(label) {
+            Some(decoded) => assert_eq!(
+                decoded, v,
+                "{type_name}: T::find_by_label({label:?}) decoded to a different variant — the zero-allocation typed decode drifted from the natural `ALL`-projection",
+            ),
+            None => panic!(
+                "{type_name}: T::find_by_label({label:?}) returned None for a canonical variant label — the zero-allocation typed decode drifted from the natural `ALL`-projection",
+            ),
+        }
+    }
+    assert!(
+        T::find_by_label(probe).is_none(),
+        "{type_name}: T::find_by_label(<reserved probe>) returned Some(_) for an input outside the closed set — the zero-allocation typed decode accepted a non-canonical string",
+    );
+    assert!(
+        T::find_by_label("").is_none(),
+        "{type_name}: T::find_by_label(\"\") returned Some(_) — the zero-allocation typed decode accepted the empty-string boundary that clause (4) reserves as structurally outside every closed set",
+    );
 }
 
 #[cfg(test)]
@@ -1399,6 +1582,204 @@ mod tests {
                 "contains_label({input:?}) disagreed with parse_label({input:?}).is_ok() — the (allocating decode, non-allocating membership) axis bifurcated",
             );
         }
+    }
+
+    #[test]
+    fn find_by_label_recovers_every_canonical_variant() {
+        // The zero-allocation typed-decode arm — for every variant
+        // `v` in `Self::ALL`, `find_by_label(v.label())` returns
+        // `Some(v)`. Sibling posture to
+        // `parse_label_round_trips_every_variant` (allocating decode
+        // arm) and `contains_label_recognizes_every_canonical_
+        // variant_label` (predicate arm) — this pin covers the
+        // typed-Option arm of the (return-type × side-effect)
+        // matrix. A regression that drops a variant from the sweep
+        // (an override that names a subset of `Self::ALL` in its
+        // typed-decode projection) would silently make
+        // `find_by_label` return `None` for a canonical variant,
+        // bifurcating the zero-allocation typed decode from
+        // `parse_label`'s decoding surface. Pinning the projection
+        // here catches the drift on the stub-level surface before
+        // any per-implementor test surfaces it downstream.
+        for &v in <StubKind as ClosedSet>::ALL {
+            assert_eq!(
+                <StubKind as ClosedSet>::find_by_label(v.label()),
+                Some(v),
+                "find_by_label({:?}) failed to recover the canonical variant",
+                v.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn find_by_label_rejects_unknown_input_without_allocating_carrier() {
+        // Zero-allocation typed-decode reject arm — an input outside
+        // the closed set returns `None` WITHOUT threading through
+        // `make_unknown` (i.e. without materializing an owned
+        // `String` copy of the input). The (allocating carrier
+        // decode, non-allocating typed decode, non-allocating
+        // predicate) triad of the closed-set surface partitions
+        // cleanly at the return-type boundary: `parse_label(s)` on
+        // the same reject path allocates
+        // `UnknownStubKind("delta".to_owned())`; this method returns
+        // a bare `None`. Pinning the reject result here means a
+        // generic filter-map consumer that walks over a candidate
+        // stream can lean on `find_by_label` for a zero-alloc typed
+        // projection — the three arms of the triad stay semantically
+        // aligned (all agree on membership) while the allocation
+        // cost partitions per consumer's needs.
+        assert_eq!(<StubKind as ClosedSet>::find_by_label("delta"), None);
+    }
+
+    #[test]
+    fn find_by_label_rejects_empty_input() {
+        // Empty input is structurally outside the closed set — no
+        // variant projects to "" through `label`, so the
+        // typed-decode arm rejects cleanly. Mirrors
+        // `parse_label_rejects_empty_input` and
+        // `contains_label_rejects_empty_input` one axis over on the
+        // (Result Err, bool false, Option None) triad. Pinning the
+        // empty-input rejection here means the zero-allocation
+        // typed-decode surface can't drift its empty-input behavior
+        // from the decode / predicate surfaces; the three arms of
+        // the triad stay aligned at the boundary case operators hit
+        // when a config field is unset but reached anyway.
+        assert_eq!(<StubKind as ClosedSet>::find_by_label(""), None);
+    }
+
+    #[test]
+    fn find_by_label_is_case_sensitive() {
+        // The zero-allocation typed decode inherits the
+        // case-sensitive contract from `label`'s byte-for-byte
+        // canonical rendering. A future implementor that wants
+        // case-insensitive typed decoding must override
+        // `find_by_label` (and document the divergence) alongside
+        // matching `parse_label` + `contains_label` overrides — the
+        // three arms of the (Result, bool, Option) triad must stay
+        // semantically aligned. Pinning the case-sensitive contract
+        // here means the three overrides can't drift independently;
+        // a regression that flips only ONE arm to case-insensitive
+        // silently bifurcates the surface (an operator could see
+        // `parse_label("Alpha") = Err`, `find_by_label("Alpha") =
+        // Some(_)` or vice versa). Sibling posture to
+        // `parse_label_is_case_sensitive` and
+        // `contains_label_is_case_sensitive` one axis over.
+        assert_eq!(<StubKind as ClosedSet>::find_by_label("Alpha"), None);
+    }
+
+    #[test]
+    fn find_by_label_agrees_with_parse_label_and_contains_label_on_every_probe() {
+        // The (Result<Self, Unknown>, Option<Self>, bool) triad on
+        // the return-type axis MUST stay semantically aligned on
+        // every input the sweep walks. This test pins the alignment
+        // against a representative probe set: (a) every canonical
+        // variant label — all three arms return the acceptance side
+        // (`Ok(v)` / `Some(v)` / `true`) AND all three project to
+        // the SAME typed variant on the acceptance side; (b) three
+        // non-canonical inputs (`"delta"`, `""`, `"Alpha"`) — all
+        // three arms return the rejection side (`Err(_)` / `None` /
+        // `false`). The alignment is the load-bearing contract that
+        // lets a generic consumer freely swap between the three
+        // arms of the triad based on its allocation / return-type
+        // needs without changing the program's membership semantics.
+        // A regression that drifts any arm (a permissive
+        // `find_by_label` override that accepts unknown strings, a
+        // strict `parse_label` override that rejects a canonical
+        // label, a `contains_label` override that names a subset)
+        // fails this pin stub-level before any per-implementor
+        // sweep depends on the alignment downstream. Sibling
+        // posture to
+        // `contains_label_agrees_with_parse_label_is_ok_on_every_probe`
+        // one axis over — this pin extends the (Result, bool) two-
+        // arm alignment to the full (Result, Option<Self>, bool)
+        // triad the substrate's closed-set surface exposes.
+        let inputs: [&str; 6] = ["alpha", "beta", "gamma", "delta", "", "Alpha"];
+        for input in inputs {
+            let parsed = <StubKind as ClosedSet>::parse_label(input);
+            let found = <StubKind as ClosedSet>::find_by_label(input);
+            let contains = <StubKind as ClosedSet>::contains_label(input);
+            match (parsed, found) {
+                (Ok(a), Some(b)) => {
+                    assert_eq!(
+                        a, b,
+                        "parse_label({input:?}) and find_by_label({input:?}) decoded to different variants — the typed-decode axis bifurcated",
+                    );
+                    assert!(
+                        contains,
+                        "contains_label({input:?}) returned false while parse_label / find_by_label accepted — the predicate arm bifurcated from the typed-decode arms",
+                    );
+                }
+                (Err(_), None) => {
+                    assert!(
+                        !contains,
+                        "contains_label({input:?}) returned true while parse_label / find_by_label rejected — the predicate arm bifurcated from the typed-decode arms",
+                    );
+                }
+                (Ok(_), None) | (Err(_), Some(_)) => panic!(
+                    "parse_label({input:?}) and find_by_label({input:?}) disagreed on the (accept, reject) partition — the (Result, Option<Self>) return-type axis bifurcated",
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_find_by_label_and_composition() {
+        // The well-formedness sweep's (12) clause —
+        // `T::find_by_label(s)` MUST agree with `T::parse_label(s)
+        // .ok()` on every representative input (every canonical
+        // variant label, the reserved probe, the empty-string
+        // boundary). A hand-impl'd implementor whose override drifts
+        // the composition — e.g. a permissive override that returns
+        // `Some(_)` for the reserved probe input that clauses (5) +
+        // (7) + (11) also reserve — fails the sweep loudly rather
+        // than silently bifurcating the zero-allocation typed-decode
+        // surface every LSP / config-decoder / filter-map consumer
+        // routes through. Pinning the failure path here keeps the
+        // testkit's (12) clause guaranteed-to-fire — a regression
+        // that makes the assertion permissive (e.g. a future "either
+        // acceptance" relaxation that only checks canonical labels
+        // without checking the probe / empty rejection paths)
+        // breaks this stub-level contract before any per-implementor
+        // sweep runs. Sibling posture to the eleven sibling
+        // `_catches_drift_between_*` pins above (clauses 5-11);
+        // together they close the structural-drift-catches sweep
+        // on every default composition the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedFindKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedFindKind(pub String);
+        impl core::fmt::Display for UnknownDriftedFindKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted find kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedFindKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted find kind";
+            type Unknown = UnknownDriftedFindKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedFindKind(s.to_owned())
+            }
+            fn find_by_label(_s: &str) -> Option<Self> {
+                // Drifted override — accepts every input, including
+                // the unrecognizable probe the testkit's clause (12)
+                // reserves as structurally outside the closed set.
+                // Fails the zero-allocation typed-decode alignment
+                // with `parse_label(s).ok()` and `contains_label(s)`.
+                Some(Self::Only)
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedFindKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a find_by_label override that accepted the reserved probe input",
+        );
     }
 
     #[test]

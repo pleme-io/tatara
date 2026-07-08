@@ -3323,6 +3323,133 @@ impl AtomKind {
         }
     }
 
+    /// Canonical [`SexpShape`] embed target for the [`Self::Symbol`]
+    /// atomic-payload arm on the AtomKind ⊂ SexpShape 6-of-12 carving —
+    /// [`SexpShape::Symbol`]. Per-role peer of `Self::Symbol` on the
+    /// closed-set atomic-payload → outer-shape embed axis; consumers
+    /// reach for `AtomKind::SYMBOL_SHAPE` when the caller has a variant
+    /// in hand at compile time and wants the canonical outer-shape
+    /// identity without runtime dispatch through [`Self::sexp_shape`].
+    ///
+    /// Sibling posture to the six pre-existing per-role LABEL /
+    /// HASH_DISCRIMINATOR aliases on this same closed-set algebra
+    /// ([`Self::SYMBOL_LABEL`], [`Self::SYMBOL_HASH_DISCRIMINATOR`]) —
+    /// each closes a distinct per-role sub-vocabulary axis on the
+    /// AtomKind carving. This constant closes the THIRD per-role
+    /// axis on [`AtomKind`] (the `SexpShape`-embed axis, paired with
+    /// the pre-existing `&'static str` diagnostic-label axis + the
+    /// `u8` cache-key axis) at ONE typed alias through the peer
+    /// superset variant on the [`SexpShape`] closed set.
+    pub const SYMBOL_SHAPE: SexpShape = SexpShape::Symbol;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::Keyword`]
+    /// atomic-payload arm on the AtomKind ⊂ SexpShape carving —
+    /// [`SexpShape::Keyword`]. Per-role peer of `Self::Keyword`.
+    pub const KEYWORD_SHAPE: SexpShape = SexpShape::Keyword;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::Str`]
+    /// atomic-payload arm on the AtomKind ⊂ SexpShape carving —
+    /// [`SexpShape::String`]. Per-role peer of `Self::Str`; the
+    /// `Str → String` wire-shape rename matches the peer
+    /// [`Self::STRING_LABEL`] alias (both bind the AtomKind subset's
+    /// `Str` variant to the SexpShape superset's `String` variant on
+    /// their respective per-role sub-vocabulary axes).
+    pub const STR_SHAPE: SexpShape = SexpShape::String;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::Int`]
+    /// atomic-payload arm on the AtomKind ⊂ SexpShape carving —
+    /// [`SexpShape::Int`]. Per-role peer of `Self::Int`.
+    pub const INT_SHAPE: SexpShape = SexpShape::Int;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::Float`]
+    /// atomic-payload arm on the AtomKind ⊂ SexpShape carving —
+    /// [`SexpShape::Float`]. Per-role peer of `Self::Float`.
+    pub const FLOAT_SHAPE: SexpShape = SexpShape::Float;
+
+    /// Canonical [`SexpShape`] embed target for the [`Self::Bool`]
+    /// atomic-payload arm on the AtomKind ⊂ SexpShape carving —
+    /// [`SexpShape::Bool`]. Per-role peer of `Self::Bool`.
+    pub const BOOL_SHAPE: SexpShape = SexpShape::Bool;
+
+    /// Closed-set forced-arity ALL array over the canonical
+    /// [`SexpShape`] embed targets on the AtomKind ⊂ SexpShape
+    /// 6-of-12 carving, in declaration order matching [`Self::ALL`]
+    /// element-wise (pinned by
+    /// `atom_kind_shapes_align_with_all_by_index`). Sibling posture
+    /// to [`Self::LABELS`] (`[&'static str; 6]` — per-role diagnostic
+    /// bytes) and [`Self::HASH_DISCRIMINATORS`] (`[u8; 6]` — per-role
+    /// nested-Atom cache-key bytes) on the SAME closed-set AtomKind
+    /// algebra; where those two arrays lift the per-role
+    /// `&'static str` and `u8` sub-vocabularies onto the substrate,
+    /// this array lifts the per-role [`SexpShape`] embed-target
+    /// sub-vocabulary at the same `[_; 6]` forced arity.
+    ///
+    /// Pre-lift the six [`SexpShape`] embed targets had NO per-role
+    /// primitive on this closed-set algebra — a consumer with an
+    /// `AtomKind` variant in hand at compile time reaching for the
+    /// canonical embed target had to spell
+    /// `AtomKind::Symbol.sexp_shape()` (runtime dispatch through the
+    /// six-arm match body) OR re-derive the AtomKind ⊂ SexpShape
+    /// variant pairing at the call site by importing both enums and
+    /// spelling `SexpShape::Symbol` inline. Post-lift the SIX
+    /// canonical embed targets bind at ONE `pub const` per role on
+    /// the typed [`AtomKind`] algebra AND at [`Self::SHAPES`] as a
+    /// family-wide forced-arity array — a future LSP / REPL
+    /// completion bar keyed on `AtomKind::SHAPES` for the "which
+    /// SexpShape does this AtomKind embed into?" outer-shape column,
+    /// a `tatara-check` coverage sweep zipping `AtomKind::ALL` /
+    /// `LABELS` / `HASH_DISCRIMINATORS` / `SHAPES` in lockstep for a
+    /// family-wide (variant, label, byte, embed-target) quadruple
+    /// render, or a Sekiban audit-trail metric jointly labeled by
+    /// the embed-target's SexpShape identity reads through the typed
+    /// constants on this subset algebra without re-deriving the
+    /// 6-of-12 carving inline.
+    ///
+    /// Round-trip identity with the inverse projection
+    /// [`crate::error::SexpShape::as_atom_kind`]: for every index `i`,
+    /// `Self::SHAPES[i].as_atom_kind() == Some(Self::ALL[i])`
+    /// (pinned by
+    /// `atom_kind_shapes_align_with_all_by_index_through_as_atom_kind`) —
+    /// the embed / project section closes as a family-wide array-
+    /// indexed law rather than as a per-variant assertion sweep.
+    /// Adding a hypothetical seventh atomic kind (e.g. `Char` for
+    /// `#\x` reader syntax, `Bigint` for arbitrary-precision
+    /// integers) extends [`Self::ALL`] AND [`Self::SHAPES`] AND
+    /// [`SexpShape::ALL`] AND adds ONE per-role `pub const *_SHAPE`
+    /// in lockstep — rustc's forced-arity check on the two `[_; N]`
+    /// arrays fails compilation if EITHER ALL array grows without
+    /// the other, AND the peer [`SexpShape::as_atom_kind`] arm must
+    /// grow in lockstep to preserve the round-trip identity.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the six
+    /// canonical [`SexpShape`] embed targets bind at ONE typed
+    /// `[SexpShape; 6]` array on the closed-set AtomKind algebra
+    /// rather than at zero-primitive-on-this-subset-plus-six-inline-
+    /// lookups scattered across the substrate. THEORY.md §V.1 —
+    /// knowable platform; the family's cardinality becomes a TYPE-
+    /// level constant on the substrate algebra rather than a per-
+    /// consumer runtime dispatch through the composition. THEORY.md
+    /// §II.1 invariant 2 — free middle; the (embed, project) pair
+    /// binds at THREE typed sites now — the projection method
+    /// [`Self::sexp_shape`], this family-wide array, AND the peer
+    /// inverse [`crate::error::SexpShape::as_atom_kind`] — with
+    /// rustc-enforced consistency across all three. THEORY.md §VI.1
+    /// — generation over composition; the family-wide contract
+    /// sweeps (alignment with `ALL`, round-trip through
+    /// `as_atom_kind`, membership through `sexp_shape`) emerge from
+    /// the composition of TWO substrate primitives (this `pub const`
+    /// array + the six per-role `pub const *_SHAPE` aliases) rather
+    /// than as per-variant inline assertions duplicated at each call
+    /// site.
+    pub const SHAPES: [SexpShape; 6] = [
+        Self::SYMBOL_SHAPE,
+        Self::KEYWORD_SHAPE,
+        Self::STR_SHAPE,
+        Self::INT_SHAPE,
+        Self::FLOAT_SHAPE,
+        Self::BOOL_SHAPE,
+    ];
+
     /// Project the typed marker into its matching [`SexpShape`]
     /// variant — `Symbol → SexpShape::Symbol`, `Keyword →
     /// SexpShape::Keyword`, `Str → SexpShape::String`, `Int →
@@ -3337,6 +3464,20 @@ impl AtomKind {
     /// quote-family arms of [`SexpShape`]'s twelve-variant closed set,
     /// while this enum carves the atomic-payload arms.
     ///
+    /// Each arm routes through the per-role `pub const` on `impl Self`
+    /// ([`Self::SYMBOL_SHAPE`], [`Self::KEYWORD_SHAPE`],
+    /// [`Self::STR_SHAPE`], [`Self::INT_SHAPE`], [`Self::FLOAT_SHAPE`],
+    /// [`Self::BOOL_SHAPE`]) so the six canonical embed targets bind
+    /// at ONE typed source of truth per role rather than as inline
+    /// `SexpShape::X` literals scattered across the `match` body.
+    /// Sibling posture to [`Self::label`]'s composition through
+    /// [`Self::sexp_shape().label()`] and [`Self::hash_discriminator`]'s
+    /// per-role routing through [`Self::SYMBOL_HASH_DISCRIMINATOR`] …
+    /// [`Self::BOOL_HASH_DISCRIMINATOR`] — the three per-role axes on
+    /// the AtomKind algebra (embed target, diagnostic label, cache-key
+    /// byte) each surface their per-role bytes through the SAME
+    /// per-role `pub const` shape.
+    ///
     /// Composition law: for every [`Atom`] `a`,
     /// `crate::domain::sexp_shape(&Sexp::Atom(a.clone())) ==
     /// a.kind().sexp_shape()`. Pinned by the cross-projection round-trip
@@ -3345,6 +3486,13 @@ impl AtomKind {
     /// [`Self::sexp_shape`] arm) surfaces immediately rather than as a
     /// silent operator-facing diagnostic drift at every
     /// `LispError::TypeMismatch.got` slot for an atomic witness.
+    ///
+    /// Post-lift routing pin
+    /// `atom_kind_sexp_shape_routes_through_typed_per_role_constants`
+    /// catches a regression that re-inlines the six `SexpShape::X`
+    /// arm literals here and silently drifts ONE arm from the per-role
+    /// `pub const` alias — the routing agreement is a TYPED CONSEQUENCE
+    /// of the composition rather than literal discipline at two sites.
     ///
     /// Bidirectional dual: the inverse projection
     /// [`crate::error::SexpShape::as_atom_kind`] (12→6, partial)
@@ -3376,12 +3524,12 @@ impl AtomKind {
     #[must_use]
     pub fn sexp_shape(self) -> SexpShape {
         match self {
-            Self::Symbol => SexpShape::Symbol,
-            Self::Keyword => SexpShape::Keyword,
-            Self::Str => SexpShape::String,
-            Self::Int => SexpShape::Int,
-            Self::Float => SexpShape::Float,
-            Self::Bool => SexpShape::Bool,
+            Self::Symbol => Self::SYMBOL_SHAPE,
+            Self::Keyword => Self::KEYWORD_SHAPE,
+            Self::Str => Self::STR_SHAPE,
+            Self::Int => Self::INT_SHAPE,
+            Self::Float => Self::FLOAT_SHAPE,
+            Self::Bool => Self::BOOL_SHAPE,
         }
     }
 }
@@ -15711,6 +15859,156 @@ mod tests {
         assert_eq!(AtomKind::Int.sexp_shape(), SexpShape::Int);
         assert_eq!(AtomKind::Float.sexp_shape(), SexpShape::Float);
         assert_eq!(AtomKind::Bool.sexp_shape(), SexpShape::Bool);
+    }
+
+    #[test]
+    fn atom_kind_per_role_shapes_pin_canonical_sexp_shape_variants() {
+        // PER-ROLE ALIAS CONTRACT: each `AtomKind::*_SHAPE` per-role
+        // `pub const` binds byte-for-byte to its canonical `SexpShape`
+        // variant on the AtomKind ⊂ SexpShape carving. Pin so a
+        // regression that swaps ONE alias (e.g. re-aims `STR_SHAPE`
+        // at `SexpShape::Symbol`) surfaces at rustc / test time
+        // rather than as a silent operator-facing diagnostic drift at
+        // every consumer keyed on the typed embed target. Sibling
+        // posture to `atom_kind_per_role_labels_alias_sexp_shape_per_role_labels_byte_for_byte`
+        // on the diagnostic label axis of the SAME closed set — this
+        // pin is the peer on the `SexpShape` embed-target axis.
+        assert_eq!(AtomKind::SYMBOL_SHAPE, SexpShape::Symbol);
+        assert_eq!(AtomKind::KEYWORD_SHAPE, SexpShape::Keyword);
+        assert_eq!(AtomKind::STR_SHAPE, SexpShape::String);
+        assert_eq!(AtomKind::INT_SHAPE, SexpShape::Int);
+        assert_eq!(AtomKind::FLOAT_SHAPE, SexpShape::Float);
+        assert_eq!(AtomKind::BOOL_SHAPE, SexpShape::Bool);
+    }
+
+    #[test]
+    fn atom_kind_shapes_has_expected_cardinality() {
+        // CLOSED-SET CARDINALITY CONTRACT: `AtomKind::SHAPES` carries
+        // exactly SIX entries — one per variant in the closed-set
+        // atomic-payload carving. Runtime companion to the `[SexpShape;
+        // 6]` type annotation's compile-time forced arity. A regression
+        // that widens the array without adding a matching per-role
+        // `*_SHAPE` alias would fail the `[SexpShape; 6]` type check
+        // at rustc time; this runtime pin catches a silent shrink or
+        // duplicate-arm coalesce. Sibling posture to
+        // `atom_kind_labels_has_expected_cardinality` and
+        // `atom_kind_hash_discriminators_has_expected_cardinality` on
+        // the other two per-role axes of the SAME closed set.
+        assert_eq!(AtomKind::SHAPES.len(), 6);
+        assert_eq!(AtomKind::SHAPES.len(), AtomKind::ALL.len());
+    }
+
+    #[test]
+    fn atom_kind_shapes_align_with_all_by_index() {
+        // ALIGNMENT CONTRACT: `Self::SHAPES[i] ==
+        // Self::ALL[i].sexp_shape()` element-wise. Pins that the typed
+        // variant ALL and the `SexpShape` SHAPES ALL stay in lockstep
+        // under any reorder — a regression that reorders ONE array
+        // without reordering the other silently misaligns every
+        // `zip(ALL, SHAPES)` consumer that wants to project each
+        // atomic variant to its canonical outer-shape identity
+        // (LSP completion, `tatara-check` predicate over the
+        // atomic ⊂ outer partition, Sekiban audit-trail metric
+        // jointly labeled by the embed target). Sibling posture to
+        // `atom_kind_labels_align_with_all_by_index` and
+        // `atom_kind_hash_discriminators_align_with_all_by_index` on
+        // the other two per-role axes of the SAME closed set.
+        for (i, kind) in AtomKind::ALL.iter().enumerate() {
+            assert_eq!(
+                AtomKind::SHAPES[i],
+                kind.sexp_shape(),
+                "AtomKind::SHAPES[{i}] `{shape:?}` drifted from \
+                 AtomKind::ALL[{i}] ({kind:?}).sexp_shape() \
+                 `{via_variant:?}` — the canonical declaration order \
+                 of the ALL array and the sexp_shape projection must \
+                 match element-wise",
+                shape = AtomKind::SHAPES[i],
+                via_variant = kind.sexp_shape(),
+            );
+        }
+    }
+
+    #[test]
+    fn atom_kind_shapes_align_with_all_by_index_through_as_atom_kind() {
+        // ROUND-TRIP CONTRACT: `Self::SHAPES[i].as_atom_kind() ==
+        // Some(Self::ALL[i])` element-wise. Pins the embed / project
+        // section of the (`AtomKind::sexp_shape`,
+        // `SexpShape::as_atom_kind`) `Iso(AtomKind, AtomShape ⊂
+        // SexpShape)` as a family-wide array-indexed law rather than
+        // as a per-variant assertion sweep. A regression that drifts
+        // EITHER the `SHAPES` array entries OR the peer inverse
+        // `as_atom_kind` arms silently breaks the (embed, project)
+        // section — this pin catches both directions at ONCE.
+        // Sibling posture to the pre-existing per-variant round-trip
+        // sweep `atom_kind_sexp_shape_round_trips_through_sexp_shape_as_atom_kind`
+        // (which sweeps through the projection method); this sweep
+        // pins the round-trip through the SHAPES array directly so a
+        // regression on ANY of the three surfaces (per-role alias,
+        // family-wide array, projection method) fails-loudly at the
+        // array-indexed sweep.
+        for (i, kind) in AtomKind::ALL.iter().enumerate() {
+            assert_eq!(
+                AtomKind::SHAPES[i].as_atom_kind(),
+                Some(*kind),
+                "AtomKind::SHAPES[{i}] `{shape:?}`.as_atom_kind() = \
+                 {actual:?} drifted from Some(AtomKind::ALL[{i}]) = \
+                 Some({expected:?}) — the (SHAPES entry, ALL variant) \
+                 round-trip through the peer inverse SexpShape::as_atom_kind \
+                 must hold element-wise",
+                shape = AtomKind::SHAPES[i],
+                actual = AtomKind::SHAPES[i].as_atom_kind(),
+                expected = kind,
+            );
+        }
+    }
+
+    #[test]
+    fn atom_kind_sexp_shape_routes_through_typed_per_role_constants() {
+        // ROUTING CONTRACT: `AtomKind::sexp_shape()`'s six arms bind
+        // through the per-role `pub const *_SHAPE` aliases rather
+        // than through inline `SexpShape::X` literals. Pin so a
+        // regression that re-inlines the six literals here (and
+        // gains its own drift surface separate from the canonical
+        // per-role alias site) surfaces immediately at variant
+        // equality. Sibling posture to
+        // `atom_kind_label_arms_route_through_per_role_labels_for_every_variant`
+        // and `atom_kind_hash_discriminator_routes_through_typed_per_role_constants`
+        // on the other two per-role axes of the SAME closed set.
+        assert_eq!(AtomKind::Symbol.sexp_shape(), AtomKind::SYMBOL_SHAPE);
+        assert_eq!(AtomKind::Keyword.sexp_shape(), AtomKind::KEYWORD_SHAPE);
+        assert_eq!(AtomKind::Str.sexp_shape(), AtomKind::STR_SHAPE);
+        assert_eq!(AtomKind::Int.sexp_shape(), AtomKind::INT_SHAPE);
+        assert_eq!(AtomKind::Float.sexp_shape(), AtomKind::FLOAT_SHAPE);
+        assert_eq!(AtomKind::Bool.sexp_shape(), AtomKind::BOOL_SHAPE);
+    }
+
+    #[test]
+    fn atom_kind_shapes_pairwise_distinct() {
+        // PAIRWISE DISJOINTNESS: every entry of the `SHAPES` array
+        // must differ so the (AtomKind variant, SexpShape embed
+        // target) mapping stays injective — a collision would silently
+        // route two distinct AtomKind variants through the SAME
+        // outer-shape identity, breaking the AtomKind ⊂ SexpShape
+        // 6-of-12 carving. Family-wide sweep over `SHAPES × SHAPES` —
+        // supersedes any per-pair pin and picks up new embed targets
+        // mechanically. Sibling posture to
+        // `atom_kind_labels_pairwise_distinct` and
+        // `atom_kind_hash_discriminators_pairwise_distinct` on the
+        // other two per-role axes of the SAME closed set.
+        for (i, a) in AtomKind::SHAPES.iter().enumerate() {
+            for (j, b) in AtomKind::SHAPES.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                assert_ne!(
+                    a, b,
+                    "AtomKind::SHAPES[{i}] `{a:?}` collides with \
+                     AtomKind::SHAPES[{j}] `{b:?}` — the AtomKind ⊂ \
+                     SexpShape 6-of-12 carving would route two atomic \
+                     variants through the same outer-shape identity"
+                );
+            }
+        }
     }
 
     #[test]

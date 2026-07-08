@@ -7684,6 +7684,177 @@ impl QuoteForm {
     /// forms silently degrade to `,` + `@xs` two-token sequences.
     pub const SPLICE_DISCRIMINATOR: char = '@';
 
+    /// Closed-set forced-arity ALL array over the canonical promotion
+    /// triples on the substrate's quote-family algebra —
+    /// `(head_variant, next_char_discriminator, promoted_variant)` for
+    /// every `(head, next)` pair whose [`Self::promote_via_next_char`]
+    /// projection yields `Some(promoted)`. Post-lift the promotion
+    /// algebra's canonical triples bind at ONE typed
+    /// `[(Self, char, Self); N]` array on the closed-set [`QuoteForm`]
+    /// algebra rather than at zero-primitive-plus-inline-arm-literals
+    /// inside [`Self::promote_via_next_char`]'s match body.
+    ///
+    /// The substrate's current promotion algebra is the singleton
+    /// `[(Self::Unquote, Self::SPLICE_DISCRIMINATOR, Self::UnquoteSplice)]`
+    /// — the ONLY (variant, next-char) → longer-variant mapping the
+    /// reader's peek-then-consume `@` promotion arm depends on. Its
+    /// forced-arity `1` is INTENTIONAL and load-bearing: [`Self::UnquoteSplice`]
+    /// is the ONLY variant with a two-char [`Self::prefix`], so the
+    /// promotion table has exactly ONE `Some` arm and every other
+    /// pairing rejects — the closed set of promotions is the singleton
+    /// `{(Unquote, '@') → UnquoteSplice}` on the `Self × char →
+    /// Option<Self>` product. Pinned bit-for-bit by
+    /// `quote_form_promotions_has_expected_cardinality` (forced-arity)
+    /// AND `quote_form_promotions_pin_legacy_splice_promotion_triple`
+    /// (identity of the singleton entry). A future fifth homoiconic
+    /// prefix with its own two-char extension (a hypothetical `,~`
+    /// reverse-unquote via a `~` discriminator, a `#'` function-quote
+    /// via a `'` discriminator, a `,?` conditional-unquote via a `?`
+    /// discriminator) extends [`Self::ALL`] AND appends ONE new
+    /// promotion triple to [`Self::PROMOTIONS`] AND extends
+    /// [`Self::promote_via_next_char`]'s match body in lockstep —
+    /// rustc's forced-arity check on the `[(Self, char, Self); N]`
+    /// array fails compilation if the array's cardinality grows
+    /// without a matching arm on the projection method.
+    ///
+    /// Sibling posture to the closed-set forced-arity ALL arrays across
+    /// the substrate's [`QuoteForm`] algebra — [`Self::ALL`]
+    /// (`[Self; 4]` — the closed set of variants),
+    /// [`Self::PREFIXES`] (`[&'static str; 4]` — the reader-prefix
+    /// `&'static str` axis), [`Self::LABELS`] (`[&'static str; 4]` —
+    /// the diagnostic-label `&'static str` axis),
+    /// [`Self::IAC_FORGE_TAGS`] (`[&'static str; 4]` — the iac-forge
+    /// canonical-form tag `&'static str` axis),
+    /// [`Self::LEADS`] (`[char; 3]` — the reader-lead `char` axis with
+    /// shape-asymmetric cardinality reflecting the shared-lead-byte
+    /// collapse of the `,` prefix across [`Self::Unquote`] AND
+    /// [`Self::UnquoteSplice`]), and [`Self::HASH_DISCRIMINATORS`]
+    /// (`[u8; 4]` — the outer-Sexp cache-key byte axis). This lift adds
+    /// the SEVENTH per-family axis on the algebra — the (head, disc,
+    /// promoted) triple axis on the closed-set promotion product.
+    /// Each of the seven axes now pins its per-role canonical data at
+    /// ONE `pub const` per role PLUS an ALL array for family-wide
+    /// consumers, across the same closed set of four variants (or
+    /// three-of-four for the shape-asymmetric [`Self::LEADS`] axis's
+    /// shared-lead-char collapse, or one-of-four for the promotion-
+    /// asymmetric [`Self::PROMOTIONS`] axis's single-arm collapse).
+    ///
+    /// Composition identity (pinned by
+    /// `quote_form_promotions_align_with_promote_via_next_char_for_every_entry`):
+    /// for every `(head, disc, promoted)` in [`Self::PROMOTIONS`],
+    /// `head.promote_via_next_char(disc) == Some(promoted)`. The
+    /// projection's Some-arm binds through [`Self::PROMOTIONS`]`[i].2`
+    /// (the promoted-variant column of the ONE promotion triple) — a
+    /// regression that drifts the triple's promoted-variant column
+    /// silently redirects every reader `,@` sequence to a phantom
+    /// variant AND fails the alignment pin at rustc / test time
+    /// rather than at silent tokenizer drift where every `,@xs` form
+    /// tokenizes to the wrong closed-set marker.
+    ///
+    /// Rejection contract (pinned by
+    /// `quote_form_promotions_close_promote_via_next_char_against_every_non_promotion_pair`):
+    /// for every `(head, next)` pair NOT in [`Self::PROMOTIONS`]'s
+    /// projection to `(Self × char)`, `head.promote_via_next_char(next)
+    /// == None`. Sweeps the [`Self::ALL`] × (rejection-char sweep)
+    /// product against the promotion set's complement — a regression
+    /// that widened the promotion algebra (e.g. phantom-promoted
+    /// [`Self::Quote`] on `'@'` after a copy-paste drift on the match
+    /// arm) surfaces at test time rather than at silent tokenizer
+    /// drift where bare `'@xs` forms silently degrade to a phantom
+    /// [`Self::UnquoteSplice`]-shaped sequence.
+    ///
+    /// Composition law (rendered-prefix identity, pinned by
+    /// `quote_form_promotions_compose_prefix_from_source_prefix_and_discriminator_for_every_entry`):
+    /// for every `(head, disc, promoted)` in [`Self::PROMOTIONS`],
+    /// `format!("{}{}", head.prefix(), disc) == promoted.prefix()`.
+    /// The (head prefix + discriminator) source-text composition
+    /// agrees byte-for-byte with the promoted variant's rendered
+    /// prefix — the reader's peek-then-consume arm's rendered
+    /// prefix identity closes the read↔write duality across the
+    /// promotion algebra. Sibling to the pre-existing
+    /// `quote_form_promote_via_next_char_composes_prefix_from_source_prefix_and_next_char`
+    /// which pins the same law through the projection method rather
+    /// than through the triple's data directly — this pin closes the
+    /// law at the constant, that pin closes it at the projection.
+    ///
+    /// `pub(crate)` because the promotion algebra is an implementation
+    /// detail of the substrate's reader — exposing it publicly would
+    /// leak the promotion-table shape through the API without enabling
+    /// any external consumer the public projections
+    /// ([`Self::promote_via_next_char`], [`Self::prefix`],
+    /// [`Self::from_lead_char`]) don't already serve — same visibility
+    /// rationale as [`Self::HASH_DISCRIMINATORS`] on the sibling
+    /// cache-key axis.
+    ///
+    /// The `#[allow(dead_code)]` posture matches
+    /// [`Self::HASH_DISCRIMINATORS`] / [`AtomKind::HASH_DISCRIMINATORS`]:
+    /// the substrate's current [`Self::promote_via_next_char`] body
+    /// dispatches through ONE match arm bound to the ONE promotion
+    /// triple's promoted-variant column ([`Self::PROMOTIONS`]`[0].2`),
+    /// with the head-pattern + discriminator-pattern arm literals
+    /// preserved for the const-fn match's pattern surface (patterns
+    /// cannot be array-indexing expressions in the current const-fn
+    /// grammar). The lift lands the substrate primitive so future
+    /// consumers keyed on the whole promotion algebra (a future
+    /// `tatara-check` predicate `(check-promotion-algebra-injective …)`
+    /// that verifies each `(head, disc)` pair projects to a unique
+    /// promoted variant, a future LSP structural-navigation filter
+    /// that keys on the promotion algebra's cardinality, a future
+    /// `TypedRewriter<PromotionOp>` sweep zipping ALL / PREFIXES /
+    /// LABELS / IAC_FORGE_TAGS / HASH_DISCRIMINATORS / PROMOTIONS in
+    /// lockstep for a family-wide render) bind to ONE `[(Self, char,
+    /// Self); N]` primitive rather than re-deriving the promotion
+    /// triples inline per callsite. Matches the preemptive-primitive
+    /// posture the prior-run [`Self::HASH_DISCRIMINATORS`] +
+    /// [`AtomKind::HASH_DISCRIMINATORS`] +
+    /// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`] lifts
+    /// carried before their downstream consumers materialized.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    /// reader's two-char quote-family classification IS the typed-
+    /// entry gate on the `,@` boundary, and lifting the promotion
+    /// algebra's canonical triples to ONE typed `[(Self, char, Self);
+    /// N]` primitive on the closed-set algebra closes the gate's
+    /// two-char entry surface onto the algebra rather than at inline
+    /// arm literals scattered across the const-fn match body.
+    /// THEORY.md §III — the typescape; the singleton promotion triple
+    /// binds at ONE typed `pub const` on the closed-set [`QuoteForm`]
+    /// algebra rather than at zero-primitive-plus-inline-arm-literals
+    /// at [`Self::promote_via_next_char`]'s match arm. THEORY.md §V.1
+    /// — knowable platform; the family's cardinality becomes a
+    /// TYPE-level constant on the substrate algebra rather than a
+    /// per-consumer runtime dispatch through the match table.
+    /// THEORY.md §VI.1 — generation over composition; the family-wide
+    /// contract sweeps (alignment with
+    /// [`Self::promote_via_next_char`], pairwise disjointness across
+    /// the head-discriminator product, rendered-prefix composition
+    /// identity) emerge from the composition of ONE substrate
+    /// primitive (this `pub(crate) const` array) rather than as
+    /// per-arm inline assertions duplicated at each call site.
+    ///
+    /// Frontier inspiration: MLIR's typed rewriter registry
+    /// (`mlir::PatternApplicator`) carries a per-op-family
+    /// `[(source_pattern, matcher, rewritten_op)]` static rewrite
+    /// table at the closed-set boundary — the (source, matcher,
+    /// target) triple axis becomes typed data on the IR algebra
+    /// rather than dispatch tables scattered across per-pattern
+    /// callsites. Translated through the substrate's [`QuoteForm`]
+    /// closed-set marker, the reader's promotion rewrite table
+    /// becomes ONE typed `[(head_variant, next_char, promoted_variant);
+    /// N]` array on the algebra. Where MLIR's registry carries the
+    /// rewrite table dynamically on the pattern applicator's runtime
+    /// state, this substrate carries it statically as `pub const` on
+    /// the closed-set marker — the pattern-matching evaluation lands
+    /// at rustc-time through const-fn match arm binding to
+    /// [`Self::PROMOTIONS`]`[i].2` rather than at runtime through a
+    /// dynamic registry lookup.
+    #[allow(dead_code)]
+    pub(crate) const PROMOTIONS: [(Self, char, Self); 1] = [(
+        Self::Unquote,
+        Self::SPLICE_DISCRIMINATOR,
+        Self::UnquoteSplice,
+    )];
+
     /// Promotion table on the closed-set quote-family algebra —
     /// `Some(Self::UnquoteSplice)` iff `self == Self::Unquote &&
     /// next == Self::SPLICE_DISCRIMINATOR`, else `None`. Encodes the
@@ -7783,8 +7954,21 @@ impl QuoteForm {
     /// closed-set marker.
     #[must_use]
     pub const fn promote_via_next_char(self, next: char) -> Option<Self> {
+        // The Some-arm's promoted-variant column routes through
+        // `Self::PROMOTIONS[0].2` — the ONE promotion triple on the
+        // closed-set algebra — so a regression that drifts the
+        // promoted-variant column of the singleton triple silently
+        // redirects every reader `,@` sequence to a phantom variant AND
+        // fails the alignment pin
+        // `quote_form_promotions_align_with_promote_via_next_char_for_every_entry`
+        // at rustc / test time rather than at silent tokenizer drift.
+        // The head-pattern (`Self::Unquote`) + discriminator-pattern
+        // (`Self::SPLICE_DISCRIMINATOR`) arm literals stay inline
+        // because patterns cannot be array-indexing expressions in the
+        // current const-fn grammar; the alignment pin catches head /
+        // discriminator column drift by construction.
         match (self, next) {
-            (Self::Unquote, Self::SPLICE_DISCRIMINATOR) => Some(Self::UnquoteSplice),
+            (Self::Unquote, Self::SPLICE_DISCRIMINATOR) => Some(Self::PROMOTIONS[0].2),
             _ => None,
         }
     }
@@ -12577,6 +12761,272 @@ mod tests {
             "UnquoteSplice.prefix() drifted from Unquote.prefix() + \
              SPLICE_DISCRIMINATOR — the reader's two-char splice \
              promotion identity is broken",
+        );
+    }
+
+    // ── `QuoteForm::PROMOTIONS` — the closed-set forced-arity array of
+    // promotion triples on the substrate's quote-family algebra. Pins
+    // the singleton `(Unquote, SPLICE_DISCRIMINATOR, UnquoteSplice)`
+    // entry AND its alignment with `promote_via_next_char`'s Some-arm
+    // AND the family-wide contract sweeps below. Sibling-shape tests to
+    // the `quote_form_hash_discriminators_*` block on the outer-Sexp
+    // cache-key axis — that block anchors the `[u8; 4]` byte algebra;
+    // this block anchors the `[(Self, char, Self); 1]` promotion
+    // algebra one axis over on the same closed set.
+
+    #[test]
+    fn quote_form_promotions_has_expected_cardinality() {
+        // FORCED-ARITY CONTRACT: [`QuoteForm::PROMOTIONS`]'s
+        // cardinality is `1` at the type level — the substrate's
+        // current promotion algebra has EXACTLY ONE promotion arm
+        // (`(Unquote, SPLICE_DISCRIMINATOR, UnquoteSplice)`). A
+        // regression that widened the array without extending
+        // [`QuoteForm::promote_via_next_char`]'s match body (or vice
+        // versa) fails compilation because the array literal's arity
+        // is forced by the `[_; 1]` type annotation. This runtime
+        // pin closes the same law at a runtime cardinality check
+        // so a callsite that expects the singleton shape without
+        // static-arity inference (a dynamic iteration site, an
+        // audit-log emitter that reports the promotion-algebra size
+        // for observability) reads through ONE substrate primitive
+        // rather than through a hand-rolled `1usize` literal.
+        assert_eq!(
+            QuoteForm::PROMOTIONS.len(),
+            1,
+            "QuoteForm::PROMOTIONS cardinality drifted from the \
+             substrate's singleton promotion algebra — the closed-set \
+             array's forced arity is load-bearing on the `(Unquote, \
+             SPLICE_DISCRIMINATOR) → UnquoteSplice` singleton identity",
+        );
+    }
+
+    #[test]
+    fn quote_form_promotions_pin_legacy_splice_promotion_triple() {
+        // LEGACY-TRIPLE CONTRACT: [`QuoteForm::PROMOTIONS`]'s
+        // singleton entry is byte-for-byte `(Self::Unquote,
+        // Self::SPLICE_DISCRIMINATOR, Self::UnquoteSplice)`. Pin each
+        // column of the triple against its typed source:
+        //   * head    == QuoteForm::Unquote           (the `,` variant)
+        //   * disc    == QuoteForm::SPLICE_DISCRIMINATOR (`'@'`)
+        //   * promoted == QuoteForm::UnquoteSplice     (the `,@` variant)
+        // A regression that drifts ONE column of the triple silently
+        // redirects the reader's promotion arm to a phantom variant
+        // AND fails HERE at the per-column identity check rather
+        // than at silent tokenizer drift where every `,@xs` source
+        // tokenizes to the wrong closed-set marker.
+        assert_eq!(
+            QuoteForm::PROMOTIONS[0].0,
+            QuoteForm::Unquote,
+            "QuoteForm::PROMOTIONS[0].0 (head) drifted from Unquote — \
+             the substrate's singleton promotion arm's head variant \
+             MUST be Unquote (the only variant whose prefix is the \
+             lead byte of a longer variant's prefix)",
+        );
+        assert_eq!(
+            QuoteForm::PROMOTIONS[0].1,
+            QuoteForm::SPLICE_DISCRIMINATOR,
+            "QuoteForm::PROMOTIONS[0].1 (discriminator) drifted from \
+             SPLICE_DISCRIMINATOR — the substrate's singleton \
+             promotion arm's discriminator MUST be the byte the \
+             reader's peek arm consumes to promote the head variant \
+             (the ONE `'@'` byte on the closed-set algebra)",
+        );
+        assert_eq!(
+            QuoteForm::PROMOTIONS[0].2,
+            QuoteForm::UnquoteSplice,
+            "QuoteForm::PROMOTIONS[0].2 (promoted) drifted from \
+             UnquoteSplice — the substrate's singleton promotion \
+             arm's promoted variant MUST be UnquoteSplice (the only \
+             two-char-prefix variant on the closed-set algebra)",
+        );
+    }
+
+    #[test]
+    fn quote_form_promotions_align_with_promote_via_next_char_for_every_entry() {
+        // ALIGNMENT CONTRACT: sweep [`QuoteForm::PROMOTIONS`] and
+        // assert that for every `(head, disc, promoted)` entry,
+        // `head.promote_via_next_char(disc) == Some(promoted)`. This
+        // is the projection method's forward composition law at the
+        // closed set — a regression that drifts the promoted-variant
+        // column of the constant (or the projection method's Some-arm
+        // return literal) surfaces here rather than as a silent
+        // tokenizer redirect. Sibling-shape pin to
+        // `quote_form_hash_discriminators_align_with_all_by_index`
+        // one axis over on the cache-key byte algebra — that pin
+        // aligns the `[u8; 4]` array with the projection method's
+        // per-variant arm; this pin aligns the `[(Self, char, Self);
+        // 1]` array with the projection method's per-triple arm.
+        for (head, disc, promoted) in QuoteForm::PROMOTIONS {
+            let projected = head.promote_via_next_char(disc);
+            assert_eq!(
+                projected,
+                Some(promoted),
+                "QuoteForm::PROMOTIONS[({head:?}, {disc:?}, \
+                 {promoted:?})] — `promote_via_next_char` drifted \
+                 from the constant's promoted-variant column (got \
+                 {projected:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_promotions_compose_prefix_from_source_prefix_and_discriminator_for_every_entry() {
+        // COMPOSITION LAW (rendered-prefix identity): sweep
+        // [`QuoteForm::PROMOTIONS`] and assert that for every
+        // `(head, disc, promoted)` entry, `format!("{}{}",
+        // head.prefix(), disc) == promoted.prefix()`. The
+        // (head prefix + discriminator) source-text composition
+        // agrees byte-for-byte with the promoted variant's rendered
+        // prefix — the reader's peek-then-consume arm's rendered
+        // prefix identity closes the read↔write duality across
+        // every entry in the promotion algebra.
+        //
+        // Sibling to the pre-existing
+        // `quote_form_promote_via_next_char_composes_prefix_from_source_prefix_and_next_char`
+        // which pins the same law through
+        // [`QuoteForm::promote_via_next_char`]'s Some-arm rather
+        // than through the constant's triple directly — this pin
+        // closes the law at the constant, that pin closes it at the
+        // projection method. Together the two pins bind the
+        // rendered-prefix identity to BOTH the substrate primitive
+        // AND the projection method so a regression that drifts
+        // ONE side of the identity fails at BOTH pins rather than at
+        // silent read/write drift where a reader-tokenized `,@xs`
+        // form's rendered prefix disagrees with its typed marker's
+        // rendered prefix.
+        for (head, disc, promoted) in QuoteForm::PROMOTIONS {
+            let composed = format!("{}{}", head.prefix(), disc);
+            assert_eq!(
+                composed,
+                promoted.prefix(),
+                "QuoteForm::PROMOTIONS[({head:?}, {disc:?}, \
+                 {promoted:?})] — head.prefix() + disc drifted from \
+                 promoted.prefix() ({:?})",
+                promoted.prefix(),
+            );
+        }
+    }
+
+    #[test]
+    fn quote_form_promotions_close_promote_via_next_char_against_every_non_promotion_pair() {
+        // REJECTION CONTRACT: sweep [`QuoteForm::ALL`] × (every
+        // (head, disc) pair from [`QuoteForm::PROMOTIONS`] plus every
+        // rejection discriminator distinct from the promotion set's
+        // discriminator column) and assert that every pair NOT in
+        // [`QuoteForm::PROMOTIONS`]'s `(head, disc)` projection
+        // rejects with `None`. A regression that widened the
+        // promotion algebra (e.g. phantom-promoted [`QuoteForm::Quote`]
+        // on `'@'` after a copy-paste drift on the match arm's head
+        // pattern, OR silently promoted `Unquote` on a non-`@`
+        // discriminator after a drift on the match arm's char
+        // pattern) fails HERE at the sweep-time rejection assertion
+        // rather than at silent tokenizer drift where bare `'@xs`
+        // forms degrade to a phantom `UnquoteSplice`-shaped sequence
+        // OR bare `,'xs` forms silently promote through the reader.
+        //
+        // Sibling-shape pin to the pre-existing
+        // `quote_form_promote_via_next_char_only_promotes_unquote_on_splice_discriminator`
+        // which sweeps every variant against SPLICE_DISCRIMINATOR
+        // AND a hand-rolled rejection char set; this pin extends the
+        // rejection sweep to compose the rejection set STRUCTURALLY
+        // from [`QuoteForm::PROMOTIONS`]'s complement rather than
+        // hand-rolling a rejection char literal list at a callsite
+        // that would silently drift as the algebra grows.
+        //
+        // The rejection char set is composed as: every
+        // [`QuoteForm::ALL`] variant's [`QuoteForm::lead_char`] (the
+        // three quote-family lead bytes `{'\'', '`', ','}`), every
+        // char in [`QuoteForm::PROMOTIONS`]'s discriminator column
+        // (the ONE `'@'` byte — used to verify that variants NOT in
+        // the promotion set's head column reject on the same
+        // discriminator), and a hand-rolled sweep of non-quote-family
+        // rejection chars (whitespace, structural, reader-punctuation)
+        // to cover the closed-set-complement rejection surface.
+        let mut discriminators: Vec<char> =
+            QuoteForm::ALL.iter().map(|qf| qf.lead_char()).collect();
+        for (_, disc, _) in QuoteForm::PROMOTIONS {
+            if !discriminators.contains(&disc) {
+                discriminators.push(disc);
+            }
+        }
+        for extra in [
+            ' ',
+            '\n',
+            '\t',
+            Sexp::LIST_OPEN,
+            Sexp::LIST_CLOSE,
+            Sexp::COMMENT_LEAD,
+            Atom::STR_DELIMITER,
+            'a',
+            '#',
+            ':',
+            '!',
+            '?',
+            '~',
+        ] {
+            if !discriminators.contains(&extra) {
+                discriminators.push(extra);
+            }
+        }
+
+        let promotion_pairs: Vec<(QuoteForm, char)> = QuoteForm::PROMOTIONS
+            .iter()
+            .map(|(head, disc, _)| (*head, *disc))
+            .collect();
+
+        for head in QuoteForm::ALL {
+            for disc in &discriminators {
+                let in_promotion_set = promotion_pairs.contains(&(head, *disc));
+                let projected = head.promote_via_next_char(*disc);
+                if in_promotion_set {
+                    // Positive arms are covered by
+                    // `quote_form_promotions_align_with_promote_via_next_char_for_every_entry`;
+                    // skip here to keep this pin's focus on the
+                    // rejection surface exclusively.
+                    continue;
+                }
+                assert_eq!(
+                    projected, None,
+                    "QuoteForm::{head:?}.promote_via_next_char({disc:?}) \
+                     — promotion algebra leaked on a pair NOT in \
+                     QuoteForm::PROMOTIONS (got {projected:?}, \
+                     expected None)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quote_form_promote_via_next_char_routes_promoted_variant_through_promotions_constant() {
+        // ROUTING CONTRACT: pin that
+        // [`QuoteForm::promote_via_next_char`]'s Some-arm return
+        // BINDS through [`QuoteForm::PROMOTIONS`]`[0].2` rather than
+        // through an inline [`QuoteForm::UnquoteSplice`] literal.
+        // Post-lift the projection method's Some-arm reads:
+        //   `Some(Self::PROMOTIONS[0].2)`
+        // — so a regression that reverts the arm to an inline
+        // `Some(Self::UnquoteSplice)` fails HERE at the byte-identity
+        // sweep, WHERE the projected value is compared against
+        // [`QuoteForm::PROMOTIONS`]`[0].2` directly rather than
+        // against an inline literal.
+        //
+        // Sibling-shape pin to
+        // `sexp_shape_hash_discriminator_atomic_arms_route_through_atom_kind_outer_hash_discriminator`
+        // (prior-run 39537b2) one axis over on the cache-key byte
+        // algebra — that pin binds the shape-level projection's
+        // atomic-arm collapse to the typed constant; this pin binds
+        // the promotion projection's Some-arm to the typed triple's
+        // promoted-variant column. Together the two pins close the
+        // "projection routes through the substrate primitive" pattern
+        // across the cache-key axis AND the promotion axis on the
+        // closed-set algebra.
+        let projected = QuoteForm::Unquote.promote_via_next_char(QuoteForm::SPLICE_DISCRIMINATOR);
+        assert_eq!(
+            projected,
+            Some(QuoteForm::PROMOTIONS[0].2),
+            "QuoteForm::Unquote.promote_via_next_char(SPLICE_DISCRIMINATOR) \
+             — Some-arm return drifted from routing through \
+             QuoteForm::PROMOTIONS[0].2 (got {projected:?})",
         );
     }
 

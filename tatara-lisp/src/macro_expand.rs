@@ -2738,29 +2738,23 @@ fn parse_optional_list_spec(
     items: &[Sexp],
 ) -> Result<OptionalParam> {
     use crate::error::OptionalParamMalformedReason as R;
-    match items.len() {
-        0 => Err(optional_param_malformed(position, list_form, R::EmptyList)),
-        1 => Err(optional_param_malformed(
-            position,
-            list_form,
-            R::MissingDefault,
-        )),
-        2 => {
-            let Some(name) = items[0].as_symbol() else {
-                return Err(optional_param_malformed(
-                    position,
-                    list_form,
-                    R::NonSymbolName,
-                ));
-            };
-            Ok(OptionalParam::with_default(name, items[1].clone()))
-        }
-        length => Err(optional_param_malformed(
-            position,
-            list_form,
-            R::ExtraElements { length },
-        )),
+    // Arity dispatch — threads through the typed classifier on the
+    // closed-set algebra so the accept-arity binding (arity ==
+    // `R::OPTIONAL_PARAM_SPEC_ARITY`) is derived from ONE typed const
+    // rather than the bare literal `2`. Post-classification the arity
+    // is exactly the accept target; the head-symbol gate is the only
+    // remaining rejection axis.
+    if let Some(reason) = R::classify_arity(items.len()) {
+        return Err(optional_param_malformed(position, list_form, reason));
     }
+    let Some(name) = items[0].as_symbol() else {
+        return Err(optional_param_malformed(
+            position,
+            list_form,
+            R::NonSymbolName,
+        ));
+    };
+    Ok(OptionalParam::with_default(name, items[1].clone()))
 }
 
 fn bind_args(

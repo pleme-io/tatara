@@ -2654,13 +2654,122 @@ impl OptionalParamMalformedReason {
         Self::NON_SYMBOL_NAME_LABEL,
     ];
 
+    /// Canonical target arity of the `&optional (NAME DEFAULT)` list-spec
+    /// — exactly TWO elements (a symbol head naming the optional and a
+    /// default form). The accept-arity for `parse_optional_list_spec`'s
+    /// dispatch; every other arity is a rejection reason on this closed
+    /// set ([`Self::EmptyList`] at arity 0, [`Self::MissingDefault`] at
+    /// arity 1, [`Self::ExtraElements`] at arity ≥3).
+    ///
+    /// Pre-lift the target arity appeared as the bare literal `2` at
+    /// FOUR sites: the `match items.len()` accept arm in
+    /// `parse_optional_list_spec` (macro_expand.rs), the `"need 2"`
+    /// suffix bytes embedded in [`Self::label`]'s `ExtraElements` arm,
+    /// the doc-comment enumeration on this enum's Display projection,
+    /// and every truth-table test that asserts against the rendered
+    /// diagnostic bytes. A drift on any ONE site (e.g. an evaluator lands
+    /// and the accept-arity becomes 3 to admit CL's `(name default
+    /// supplied-p)` shape) had to ripple across all four in lockstep or
+    /// silently fracture the parser gate from its operator-facing
+    /// vocabulary. Post-lift the arity binds at ONE `pub const usize` on
+    /// the typed algebra: the parser reaches through
+    /// [`Self::classify_arity`] (which threads this constant into the
+    /// match arm via a local rebind), [`Self::label`] renders `"need
+    /// {}"` interpolated on this constant, and the doc + tests reach for
+    /// the const symbol rather than the literal `2`.
+    ///
+    /// Sibling posture to the prior-run per-role `&'static str` / `u8` /
+    /// `char` per-variant algebras ([`Self::EMPTY_LIST_LABEL`],
+    /// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`],
+    /// [`crate::ast::QuoteForm::UNQUOTE_PREFIX`], et al) — every prior
+    /// lift pinned a per-role marker at ONE `pub const` on the typed
+    /// algebra rather than at N inline literals across parsers,
+    /// projections, and tests. This lift extends the axis-set with the
+    /// first per-family-canonical `usize` on the closed-set optional-
+    /// spec-rejection algebra.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the canonical
+    /// accept-arity of the `&optional (NAME DEFAULT)` spec binds at ONE
+    /// typed `pub const usize` on the closed-set algebra rather than at
+    /// four literal-`2` sites scattered across parsers, projections, and
+    /// tests. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// a hypothetical bump to arity-3 (once an evaluator admits `(name
+    /// default supplied-p)`) lands at ONE constant AND rustc-enforces
+    /// that every downstream projection ([`Self::label`],
+    /// [`Self::classify_arity`], every truth-table test) recomputes
+    /// against the new arity. THEORY.md §V.1 — knowable platform; the
+    /// parser's accept-arity becomes a TYPE-level constant on the
+    /// substrate algebra rather than a per-callsite magic number.
+    pub const OPTIONAL_PARAM_SPEC_ARITY: usize = 2;
+
+    /// Classify a list-spec's element count against the canonical
+    /// accept-arity [`Self::OPTIONAL_PARAM_SPEC_ARITY`] — returns `None`
+    /// iff the arity is exactly the accept target (the parser continues
+    /// to the head-symbol gate); returns `Some(reason)` otherwise with
+    /// the arity-derivable rejection reason on the closed set.
+    ///
+    /// The three arity-derivable rejection arms are:
+    ///
+    ///   * arity 0 → [`Self::EmptyList`]
+    ///   * arity 1 → [`Self::MissingDefault`]
+    ///   * arity ≥3 → [`Self::ExtraElements { length }`]
+    ///
+    /// The fourth variant [`Self::NonSymbolName`] is NOT arity-derivable
+    /// — accept-arity with a non-symbol head still rejects — and stays
+    /// at the caller's head-symbol gate. The caller composes this
+    /// classifier with the head-symbol check to close the full four-way
+    /// dispatch. Pre-lift `parse_optional_list_spec` embedded the arity
+    /// match inline (`match items.len() { 0 => ..., 1 => ..., 2 => ...,
+    /// length => ... }`) with the accept-arity as a bare literal `2` in
+    /// the accept arm — a duplicate of the target arity that
+    /// [`Self::label`]'s `"need 2"` suffix ALSO embedded literally. Post-
+    /// lift the arity-to-reason projection binds at ONE typed function on
+    /// the algebra threading [`Self::OPTIONAL_PARAM_SPEC_ARITY`] through
+    /// a local `const ARITY` rebind (rustc's match-pattern rules require
+    /// a name binding rather than a `Self::` path pattern).
+    ///
+    /// Sibling posture to [`crate::ast::QuoteForm::as_unquote_form`]
+    /// (typed 2-of-4 subset projection between quote-family enums) and
+    /// [`crate::ast::AtomKind::from_atom`] (typed constructor from a
+    /// parent's payload) — every prior-run typed classifier factored an
+    /// inline dispatch into a `#[must_use]` typed function on the closed
+    /// set. This method extends the pattern to the arity-to-reason
+    /// projection.
+    ///
+    /// Future consumers that compose against this classifier: a
+    /// `tatara-check` static analyzer that predicts optional-spec
+    /// rejections without threading through the whole parser; an LSP
+    /// quick-fix that suggests wrapping a bare symbol as `(symbol
+    /// default)` iff `classify_arity(1) == Some(MissingDefault)`; a
+    /// `TypedRewriter<OptionalParamMalformedReasonOp>` sweep that keys
+    /// on this reason projection.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the arity→reason
+    /// projection binds at ONE typed function on the algebra rather than
+    /// at inline `match` bodies duplicated across parsers. THEORY.md
+    /// §II.1 invariant 1 (typed entry): every parser that accepts an
+    /// `&optional`-spec list threads its arity through this classifier
+    /// before touching the head-symbol gate, closing the arity
+    /// half of the rejection surface at a single typed site.
+    #[must_use]
+    pub fn classify_arity(length: usize) -> Option<Self> {
+        const ARITY: usize = OptionalParamMalformedReason::OPTIONAL_PARAM_SPEC_ARITY;
+        match length {
+            0 => Some(Self::EmptyList),
+            1 => Some(Self::MissingDefault),
+            ARITY => None,
+            length => Some(Self::ExtraElements { length }),
+        }
+    }
+
     /// Short human-readable clause for the parenthetical suffix of
     /// `LispError::OptionalParamMalformed`'s Display. The variants
     /// project to:
     ///
     ///   * `EmptyList`          → [`Self::EMPTY_LIST_LABEL`] (`"empty list"`)
     ///   * `MissingDefault`     → [`Self::MISSING_DEFAULT_LABEL`] (`"missing default"`)
-    ///   * `ExtraElements{N}`   → `"N elements (need 2)"` (dynamic)
+    ///   * `ExtraElements{N}`   → `"N elements (need 2)"` (dynamic; the `2`
+    ///     is [`Self::OPTIONAL_PARAM_SPEC_ARITY`])
     ///   * `NonSymbolName`      → [`Self::NON_SYMBOL_NAME_LABEL`] (`"name not a symbol"`)
     ///
     /// `label` returns `String` (rather than `&'static str`) because the
@@ -2676,7 +2785,12 @@ impl OptionalParamMalformedReason {
         match self {
             Self::EmptyList => Self::EMPTY_LIST_LABEL.to_string(),
             Self::MissingDefault => Self::MISSING_DEFAULT_LABEL.to_string(),
-            Self::ExtraElements { length } => format!("{length} elements (need 2)"),
+            Self::ExtraElements { length } => {
+                format!(
+                    "{length} elements (need {})",
+                    Self::OPTIONAL_PARAM_SPEC_ARITY
+                )
+            }
             Self::NonSymbolName => Self::NON_SYMBOL_NAME_LABEL.to_string(),
         }
     }
@@ -8073,6 +8187,74 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn optional_param_spec_arity_pins_canonical_accept_target() {
+        // The canonical accept-arity of the `&optional (NAME DEFAULT)`
+        // list-spec is exactly TWO elements — a symbol head naming the
+        // optional plus a default form. Pinning the const here means a
+        // regression that bumps the accept-arity (e.g. an evaluator
+        // lands and CL's `(name default supplied-p)` shape becomes
+        // admissible) MUST also update this pin — which forces the
+        // `ExtraElements` label's `"need N"` suffix + every truth-table
+        // test's rendered-diagnostic assertion to be re-derived in
+        // lockstep rather than silently drifting the accept target from
+        // its operator-facing wording.
+        assert_eq!(OptionalParamMalformedReason::OPTIONAL_PARAM_SPEC_ARITY, 2);
+    }
+
+    #[test]
+    fn classify_arity_projects_arity_to_typed_rejection_reason() {
+        // The typed classifier closes the arity-to-reason projection at
+        // ONE typed function on the algebra — arity 0 → EmptyList,
+        // arity 1 → MissingDefault, arity == accept-target → None,
+        // arity ≥3 → ExtraElements{length}. The fourth variant
+        // NonSymbolName is NOT arity-derivable and stays at the
+        // caller's head-symbol gate.
+        use OptionalParamMalformedReason as R;
+        assert_eq!(R::classify_arity(0), Some(R::EmptyList));
+        assert_eq!(R::classify_arity(1), Some(R::MissingDefault));
+        // Accept-arity: the classifier returns None because arity alone
+        // does not decide the head-symbol gate.
+        assert_eq!(R::classify_arity(R::OPTIONAL_PARAM_SPEC_ARITY), None);
+        assert_eq!(R::classify_arity(2), None);
+        // ExtraElements payload carries the offending arity verbatim so
+        // the operator-facing diagnostic can name "N elements (need 2)"
+        // exactly. Pin arity-3, arity-4, and arity-17 to close the
+        // range of the ≥3 arm.
+        assert_eq!(R::classify_arity(3), Some(R::ExtraElements { length: 3 }));
+        assert_eq!(R::classify_arity(4), Some(R::ExtraElements { length: 4 }));
+        assert_eq!(R::classify_arity(17), Some(R::ExtraElements { length: 17 }));
+    }
+
+    #[test]
+    fn extra_elements_label_derives_target_arity_from_typed_constant() {
+        // The `ExtraElements` arm's dynamic label suffix embeds
+        // [`OptionalParamMalformedReason::OPTIONAL_PARAM_SPEC_ARITY`]
+        // via `format!("{length} elements (need {})", …)` — pin that a
+        // future bump to the accept-arity propagates through the label
+        // in lockstep rather than leaving the suffix stuck at the pre-
+        // lift literal `2`. The bytes `"3 elements (need 2)"` /
+        // `"7 elements (need 2)"` are the current cross-product of
+        // (offending arity, accept-arity) values.
+        assert_eq!(
+            OptionalParamMalformedReason::ExtraElements { length: 3 }.label(),
+            "3 elements (need 2)"
+        );
+        assert_eq!(
+            OptionalParamMalformedReason::ExtraElements { length: 7 }.label(),
+            "7 elements (need 2)"
+        );
+        // Cross-check: the `2` in `"need 2"` IS the typed constant, not
+        // a bare literal — a rename of the const to a different value
+        // fails this assertion with a clear diff.
+        assert!(OptionalParamMalformedReason::ExtraElements { length: 3 }
+            .label()
+            .ends_with(&format!(
+                "(need {})",
+                OptionalParamMalformedReason::OPTIONAL_PARAM_SPEC_ARITY
+            )));
     }
 
     #[test]

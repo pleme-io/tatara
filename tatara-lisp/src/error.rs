@@ -3496,6 +3496,127 @@ impl UnquoteForm {
     /// assertions duplicated at each call site.
     pub const MARKERS: [&'static str; 2] = [Self::UNQUOTE_MARKER, Self::SPLICE_MARKER];
 
+    /// Canonical reader-lead `char` byte for BOTH [`Self::Unquote`] AND
+    /// [`Self::Splice`] — aliases [`crate::ast::QuoteForm::UNQUOTE_LEAD`]
+    /// (which is `','`) on the UnquoteForm ⊂ QuoteForm 2-of-4 subset
+    /// carving so the reader-lead-char per-role bytes bind at ONE
+    /// `pub const` on the parent superset's Unquote arm rather than at
+    /// TWO sites (the per-role `pub const` AND a parallel inline `','`
+    /// literal). Per-role peer of [`Self::Unquote`] on the closed-set
+    /// template-substitution algebra; consumers reach for
+    /// `UnquoteForm::UNQUOTE_LEAD` when the caller has a variant in
+    /// hand at compile time and wants the canonical reader-entry lead
+    /// char without runtime dispatch through
+    /// `self.to_quote_form().lead_char()`.
+    ///
+    /// The (2-of-2 collapse) shape-asymmetry is load-bearing: BOTH
+    /// UnquoteForm arms share the SAME lead char at
+    /// [`crate::ast::QuoteForm::lead_char`]'s `Self::Unquote |
+    /// Self::UnquoteSplice => Self::UNQUOTE_LEAD` merged arm — the
+    /// reader's outer tokenizer dispatch selects between quote-family
+    /// entry and every non-quote-family arm on lead char alone, with
+    /// the `,`-vs-`,@` disambiguation falling out of the reader's
+    /// second-char peek (`@` promotes to Splice) rather than at
+    /// [`crate::ast::QuoteForm::from_lead_char`]'s decode. This
+    /// UnquoteForm ⊂ QuoteForm subset's LEAD alias is
+    /// SHAPE-ASYMMETRIC-COLLAPSE to `[Self::UNQUOTE_LEAD]` (a
+    /// single-entry ALL — see [`Self::LEADS`]) because both subset
+    /// arms project to the same superset lead byte, mirroring the
+    /// parent's `[QUOTE_LEAD, QUASIQUOTE_LEAD, UNQUOTE_LEAD]` shape-
+    /// asymmetric collapse (3 distinct leads for 4 arms).
+    ///
+    /// Sibling posture to [`Self::UNQUOTE_MARKER`] (commit 3640f76 —
+    /// aliases the reader-punctuation prefix vocabulary `","`),
+    /// [`Self::UNQUOTE_LABEL`] (commit da68af5 — aliases the
+    /// substrate diagnostic-label vocabulary `"unquote"`),
+    /// [`Self::UNQUOTE_IAC_FORGE_TAG`] (commit 6acab84 — aliases the
+    /// iac-forge canonical-form vocabulary `"unquote"`), and
+    /// [`Self::UNQUOTE_HASH_DISCRIMINATOR`] (commit eca4730 —
+    /// aliases the outer-`Sexp` cache-key `u8` byte `5u8`) — this
+    /// FIFTH per-role `pub const` axis closes the (reader-lead char,
+    /// reader-prefix bytes, diagnostic label, iac-forge canonical-form
+    /// tag, outer-`Sexp` cache-key byte) QUINTUPLE on the UnquoteForm
+    /// subset algebra in lockstep with the same quintuple on the
+    /// parent [`crate::ast::QuoteForm`] superset.
+    pub const UNQUOTE_LEAD: char = crate::ast::QuoteForm::UNQUOTE_LEAD;
+
+    /// Closed-set forced-arity ALL array over the canonical
+    /// reader-lead `char` bytes on the UnquoteForm ⊂ QuoteForm 2-of-4
+    /// subset carving — SHAPE-ASYMMETRIC-COLLAPSE `[char; 1]` on this
+    /// subset carving (both arms share the same `','` lead byte), peer
+    /// to [`crate::ast::QuoteForm::LEADS`] (`[char; 3]` on the 4-arm
+    /// superset carving, itself shape-asymmetric-collapse from 4 arms
+    /// to 3 distinct leads because [`crate::ast::QuoteForm::Unquote`]
+    /// and [`crate::ast::QuoteForm::UnquoteSplice`] share the same
+    /// lead byte).
+    ///
+    /// Peer axis to [`Self::MARKERS`] on the SAME reader-vocabulary
+    /// production surface: [`Self::MARKERS`] holds the arm-per-arm
+    /// prefix bytes (`","`, `",@"` — cardinality matches [`Self::ALL`]
+    /// at `[_; 2]`), and [`Self::LEADS`] holds the DISTINCT lead-byte
+    /// sub-vocabulary the reader's outer tokenizer dispatch selects on
+    /// (`","` alone — cardinality collapses from 2 arms to 1 distinct
+    /// lead byte). The shape-asymmetric arities `[_; 2]` for MARKERS
+    /// vs `[_; 1]` for LEADS ARE the shared-lead-char structural
+    /// collapse invariant carried at the type-system level — a future
+    /// third UnquoteForm arm (e.g. a hypothetical `,~` reverse-unquote
+    /// binding a NEW lead char `~`) would extend BOTH [`Self::MARKERS`]
+    /// to `[_; 3]` AND [`Self::LEADS`] to `[_; 2]` in lockstep, adding
+    /// ONE per-role LEAD `pub const` alias.
+    ///
+    /// Sibling posture to [`crate::ast::QuoteForm::LEADS`] (the
+    /// superset carving's own DISTINCT-lead-byte ALL array on the
+    /// SAME reader-lead-vocabulary axis), [`Self::MARKERS`],
+    /// [`Self::LABELS`], [`Self::IAC_FORGE_TAGS`], and
+    /// [`Self::HASH_DISCRIMINATORS`] — every one a forced-arity ALL
+    /// array on the SAME UnquoteForm closed-set algebra spanning ONE
+    /// of the production byte-vocabularies the substrate carries per
+    /// role.
+    ///
+    /// Pre-lift the sole distinct lead byte had NO per-role primitive
+    /// on this closed-set subset algebra — a consumer wanting the
+    /// UnquoteForm-only reader-lead-byte set had to spell the two-
+    /// step composition `UnquoteForm::ALL.iter().map(|uf|
+    /// uf.to_quote_form().lead_char()).collect()` (with a manual dedup
+    /// downstream to project the 2-arm output onto its 1 distinct
+    /// byte) OR reach across into
+    /// [`crate::ast::QuoteForm::UNQUOTE_LEAD`] and re-derive the
+    /// UnquoteForm ⊂ QuoteForm variant-share pairing at the call site.
+    /// Post-lift the sole canonical byte binds at ONE `pub const` on
+    /// the typed [`UnquoteForm`] algebra AND at [`Self::LEADS`] as a
+    /// family-wide `[char; 1]` forced-arity array — a future
+    /// substrate-facing reader-classifier keyed on the substitution-
+    /// subset's lead-vocabulary specifically (a future LSP completion
+    /// bar filtering to template-substitution-only entries, a
+    /// syntax-highlighter's per-char classifier for the reader-entry
+    /// template-marker subset, a `tatara-check` predicate
+    /// `(check-substitution-subset-lead-partition …)` that verifies
+    /// the subset's sole lead byte sits inside the parent
+    /// [`crate::ast::QuoteForm::LEADS`] set) reads through the typed
+    /// constants without re-deriving the 2-of-4 → 1-of-3 collapse
+    /// inline.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the sole
+    /// canonical distinct-lead byte on the substitution-subset
+    /// carving binds at ONE typed `[char; 1]` array on the closed-set
+    /// UnquoteForm algebra rather than as a zero-primitive-on-this-
+    /// subset-plus-inline-lookup at each callsite. Closes the FIFTH
+    /// per-role `pub const` axis on the UnquoteForm subset carving in
+    /// lockstep with the same quintuple on [`crate::ast::QuoteForm`].
+    /// THEORY.md §V.1 — knowable platform; the SHAPE-ASYMMETRIC-
+    /// COLLAPSE distinct-lead-byte sub-vocabulary becomes load-bearing
+    /// typed data on the substrate's substitution-subset closed set —
+    /// the type-system carries the "both subset arms share ONE lead"
+    /// invariant at the `[char; 1]` arity rather than as a comment on
+    /// a lookup site. THEORY.md §VI.1 — generation over composition;
+    /// the family-wide contract sweeps (alignment with the parent
+    /// [`crate::ast::QuoteForm::LEADS`]'s subset image, cardinality
+    /// containment `Self::LEADS.len() <= Self::ALL.len()` — the
+    /// collapse witness) emerge from ONE substrate primitive plus the
+    /// per-role LEAD alias rather than from per-consumer runtime
+    /// dispatch through the two-step composition.
+    pub const LEADS: [char; 1] = [Self::UNQUOTE_LEAD];
+
     /// Canonical `&'static str` iac-forge canonical-form tag bytes for
     /// the [`Self::Unquote`] substitution — aliases
     /// [`crate::ast::QuoteForm::UNQUOTE_IAC_FORGE_TAG`] on the
@@ -15682,6 +15803,226 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn unquote_form_unquote_lead_aliases_quote_form_unquote_lead_byte_for_byte() {
+        // ALIAS CONTRACT: pin the sole per-role
+        // `pub const UnquoteForm::UNQUOTE_LEAD` alias equals
+        // `pub const QuoteForm::UNQUOTE_LEAD` byte-for-byte — so the
+        // UnquoteForm ⊂ QuoteForm reader-lead-char vocabulary
+        // containment routes through the typed
+        // `pub const UnquoteForm::UNQUOTE_LEAD: char =
+        // QuoteForm::UNQUOTE_LEAD` alias chain rather than through an
+        // independent literal-discipline site. A regression that
+        // renames the QuoteForm side (a hypothetical repartitioning
+        // that swaps the substitution-family lead byte from `,` to a
+        // different char) without updating the UnquoteForm alias
+        // pointing at it fails-loudly here; a regression that re-
+        // inlines the UnquoteForm constant to a fresh `','` literal
+        // still passes this pin but loses the alias-chain typing
+        // (which is what the routing pin below catches in
+        // combination).
+        //
+        // Sibling posture to
+        // `unquote_form_per_role_markers_alias_quote_form_per_role_prefixes_byte_for_byte`
+        // (commit 3640f76 — reader-punctuation-prefix axis),
+        // `unquote_form_per_role_iac_forge_tags_alias_quote_form_per_role_iac_forge_tags_byte_for_byte`
+        // (commit 6acab84 — iac-forge canonical-form axis),
+        // `unquote_form_per_role_labels_alias_quote_form_per_role_labels_byte_for_byte`
+        // (commit da68af5 — diagnostic-label axis), and
+        // `unquote_form_per_role_hash_discriminators_alias_quote_form_per_role_hash_discriminators_byte_for_byte`
+        // (commit eca4730 — outer-`Sexp` cache-key axis) — this
+        // FIFTH alias-contract pin closes the QUINTUPLE of per-role
+        // `pub const` axes on the UnquoteForm subset carving.
+        assert_eq!(
+            UnquoteForm::UNQUOTE_LEAD,
+            crate::ast::QuoteForm::UNQUOTE_LEAD,
+            "UnquoteForm::UNQUOTE_LEAD drifted from QuoteForm::UNQUOTE_LEAD — the alias chain broke",
+        );
+    }
+
+    #[test]
+    fn unquote_form_unquote_lead_pins_canonical_reader_lead_char() {
+        // Byte-for-byte pin of the canonical
+        // (UnquoteForm, reader-lead char) mapping at the per-role
+        // `pub const` axis: `UnquoteForm::UNQUOTE_LEAD == ','` — the
+        // exact char the reader's outer tokenizer dispatch selects
+        // template-substitution-family entry on. This char is
+        // load-bearing: the reader's outer tokenizer pre-check
+        // (`QuoteForm::from_lead_char(ch)`) routes into the
+        // substitution-family branch iff `ch == UNQUOTE_LEAD`, and
+        // the `,`-vs-`,@` disambiguation lives at the reader's
+        // peek-then-consume `@` second-char step (promoting the
+        // default `Unquote` return into a `Splice` on `@`). A
+        // regression that drifts this const from `,` silently
+        // fractures the reader's outer dispatch AND the
+        // `PROMOTIONS[0].1 == UNQUOTE_LEAD.next_char_promoter_source`
+        // structural pairing that the promotion table binds to.
+        // Sibling of
+        // `unquote_form_per_role_hash_discriminators_pin_legacy_cache_key_bytes`
+        // (which pins the outer-`Sexp` cache-key bytes at the
+        // per-role `pub const` axis) — this test pins the reader-
+        // lead char on the same axis one production vocabulary over.
+        assert_eq!(
+            UnquoteForm::UNQUOTE_LEAD,
+            ',',
+            "UnquoteForm::UNQUOTE_LEAD drifted from legacy reader-lead char ','",
+        );
+    }
+
+    #[test]
+    fn unquote_form_unquote_lead_routes_through_to_quote_form_lead_char_via_composition() {
+        // Post-lift composition pin: for every `uf: UnquoteForm`,
+        // `UnquoteForm::UNQUOTE_LEAD` and
+        // `uf.to_quote_form().lead_char()` agree byte-for-byte — the
+        // (subset marker, reader-lead char) pairing rides through the
+        // superset's canonical `QuoteForm::lead_char` closed-set
+        // match rather than through a parallel two-arm inline table
+        // on the subset. A regression that re-inlines the two arms
+        // as a parallel match-table (e.g. a future edit that spells
+        // `Self::Unquote => ',' / Self::Splice => ','` directly at
+        // `UnquoteForm::lead_char` instead of routing through
+        // `self.to_quote_form().lead_char()`) is caught here — both
+        // subset variants project to the SAME parent-superset lead
+        // byte at
+        // [`crate::ast::QuoteForm::lead_char`]'s
+        // `Self::Unquote | Self::UnquoteSplice => Self::UNQUOTE_LEAD`
+        // MERGED arm, and this composition pin binds that merge on
+        // the subset carving. Sibling-shape pin to the four prior-
+        // lift composition pins on `UnquoteForm`:
+        // `unquote_form_marker_routes_through_to_quote_form_prefix_via_composition`,
+        // `unquote_form_iac_forge_tag_routes_through_to_quote_form_iac_forge_tag_via_composition`,
+        // `unquote_form_label_routes_through_to_quote_form_label_via_composition`,
+        // and
+        // `unquote_form_hash_discriminator_routes_through_to_quote_form_hash_discriminator_via_composition`
+        // — all five pin the subset's projection through the
+        // superset's canonical site via the same typed composition
+        // posture. The FIFTH composition-through-`to_quote_form`
+        // axis on the substitution-subset closed set is now load-
+        // bearing on the type system.
+        for uf in UnquoteForm::ALL {
+            let via_composition = uf.to_quote_form().lead_char();
+            assert_eq!(
+                UnquoteForm::UNQUOTE_LEAD, via_composition,
+                "UnquoteForm::{uf:?} projects through .to_quote_form().lead_char() = `{via_composition}` — but UnquoteForm::UNQUOTE_LEAD = `{}` — the SHAPE-ASYMMETRIC-COLLAPSE identity (both subset arms → one lead byte) broke",
+                UnquoteForm::UNQUOTE_LEAD,
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_leads_has_expected_shape_asymmetric_cardinality() {
+        // Cardinality pin: `LEADS.len() == 1` — the SHAPE-ASYMMETRIC-
+        // COLLAPSE cardinality that IS the collapse witness on the
+        // 2-of-4 subset carving. UnquoteForm has 2 arms
+        // (`Self::ALL.len() == 2`), but both arms share the same
+        // reader-lead byte `,`, so the distinct-lead-byte closed-set
+        // ALL array collapses to `[char; 1]`. The cardinality gap
+        // `Self::ALL.len() (== 2) - Self::LEADS.len() (== 1) == 1`
+        // IS the shared-lead-char invariant carried at the type-
+        // system level.
+        //
+        // Peer to `unquote_form_markers_has_expected_cardinality`
+        // (which pins `MARKERS.len() == 2 == ALL.len()` — the
+        // arm-per-arm axis has NO collapse), this test pins the
+        // OPPOSITE `LEADS.len() == 1 < ALL.len()` invariant — the
+        // distinct-lead-set axis DOES collapse. The two axes together
+        // fully characterize the reader-vocabulary shape on the
+        // UnquoteForm closed set.
+        //
+        // Peer to `quote_form_leads_has_expected_shape_asymmetric_cardinality`
+        // (parent 4-of-4 carving pins `QuoteForm::LEADS.len() == 3`
+        // for 4 arms — the same shared-lead-byte collapse identity
+        // one algebra level up).
+        assert_eq!(
+            UnquoteForm::LEADS.len(),
+            1,
+            "UnquoteForm::LEADS cardinality drifted from 1 — the shared-lead-char collapse invariant on the 2-of-4 substitution-subset carving is broken",
+        );
+        assert!(
+            UnquoteForm::LEADS.len() < UnquoteForm::ALL.len(),
+            "UnquoteForm::LEADS.len() ({leads}) MUST be strictly less than UnquoteForm::ALL.len() ({all}) — the SHAPE-ASYMMETRIC-COLLAPSE identity requires a strict cardinality gap",
+            leads = UnquoteForm::LEADS.len(),
+            all = UnquoteForm::ALL.len(),
+        );
+    }
+
+    #[test]
+    fn unquote_form_leads_covers_all_variants_via_to_quote_form_lead_char() {
+        // COVERAGE pin: every UnquoteForm variant's reader-lead byte
+        // (projected through the superset composition
+        // `self.to_quote_form().lead_char()`) MUST appear in
+        // `UnquoteForm::LEADS`. Combined with the cardinality pin
+        // above (`LEADS.len() == 1`), this pins that `LEADS` is
+        // EXACTLY the image of `ALL` under the composition — no
+        // superfluous entries, no missing coverage. A regression
+        // that adds a spurious char to `LEADS` (e.g. a future edit
+        // that includes both `,` and `@` in the array under the
+        // mistaken belief that `,@` is a separate lead byte) fails
+        // the cardinality pin above; a regression that DROPS the
+        // sole entry from `LEADS` fails this coverage pin at every
+        // variant.
+        for uf in UnquoteForm::ALL {
+            let lead = uf.to_quote_form().lead_char();
+            assert!(
+                UnquoteForm::LEADS.contains(&lead),
+                "UnquoteForm::{uf:?} projects through .to_quote_form().lead_char() = `{lead}` — but UnquoteForm::LEADS ({leads:?}) does NOT contain `{lead}`; the distinct-lead-byte ALL array must cover every variant's lead byte",
+                leads = UnquoteForm::LEADS,
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_leads_is_subset_of_quote_form_leads() {
+        // CONTAINMENT pin: `UnquoteForm::LEADS` is a subset of
+        // `QuoteForm::LEADS` — the substitution-subset carving's
+        // reader-lead-byte set sits inside the parent QuoteForm
+        // superset's reader-lead-byte set by the UnquoteForm ⊂
+        // QuoteForm inclusion. The sole entry `UnquoteForm::LEADS[0]
+        // == ','` must equal `QuoteForm::UNQUOTE_LEAD`, which IS the
+        // third entry `QuoteForm::LEADS[2]` (Quote/Quasiquote/Unquote
+        // in declaration order per `QuoteForm::LEADS`). A regression
+        // that drifts `UnquoteForm::UNQUOTE_LEAD` out of alignment
+        // with the parent (e.g. a future edit that inlines a fresh
+        // `';'` literal into the UnquoteForm alias but leaves
+        // QuoteForm's canonical byte at `','`) fails-loudly here.
+        // Sibling of
+        // `unquote_form_hash_discriminator_partitions_disjointly_from_non_substitution_carvings`
+        // (which pins the cache-key axis's partition-membership on
+        // the same subset carving) — this test pins the reader-lead-
+        // byte axis's subset-membership one production vocabulary
+        // over.
+        use crate::ast::QuoteForm;
+        for lead in UnquoteForm::LEADS {
+            assert!(
+                QuoteForm::LEADS.contains(&lead),
+                "UnquoteForm::LEADS entry `{lead}` MUST appear in QuoteForm::LEADS ({parent:?}) — the UnquoteForm ⊂ QuoteForm subset-inclusion breaks otherwise",
+                parent = QuoteForm::LEADS,
+            );
+        }
+    }
+
+    #[test]
+    fn unquote_form_leads_matches_to_quote_form_lead_char_image_exactly() {
+        // EXACT-IMAGE pin: `UnquoteForm::LEADS` as an unordered set
+        // equals the image of `UnquoteForm::ALL` under
+        // `.to_quote_form().lead_char()`. Combined with the
+        // cardinality pin (`LEADS.len() == 1`) and the coverage pin
+        // (every variant's lead appears in LEADS), this ties LEADS
+        // to the composition's image at the SET level — a regression
+        // that reorders entries, adds duplicates, or drops entries
+        // fails at exactly one of the three pins.
+        use std::collections::HashSet;
+        let leads_set: HashSet<char> = UnquoteForm::LEADS.iter().copied().collect();
+        let image_set: HashSet<char> = UnquoteForm::ALL
+            .iter()
+            .map(|uf| uf.to_quote_form().lead_char())
+            .collect();
+        assert_eq!(
+            leads_set, image_set,
+            "UnquoteForm::LEADS ({leads_set:?}) as a set MUST equal the image of UnquoteForm::ALL under .to_quote_form().lead_char() ({image_set:?}) — the distinct-lead-byte closed-set ALL array drifted from its composition source",
+        );
     }
 
     #[test]

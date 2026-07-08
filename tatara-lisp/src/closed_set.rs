@@ -181,6 +181,87 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// literal pins the cardinality at the declaration site.
     const ALL: &'static [Self];
 
+    /// The closed set's cardinality — the count of variants in
+    /// [`Self::ALL`], surfaced as a compile-time-known [`usize`] on
+    /// the trait so downstream generic code can bind to it in const
+    /// contexts ([`[T; N]`](array) dimensions,
+    /// [`Vec::with_capacity`](::std::vec::Vec::with_capacity) sizing,
+    /// bitset widths, per-variant lookup-table shapes) without
+    /// re-deriving `Self::ALL.len()` at every call site.
+    ///
+    /// Default body is `Self::ALL.len()` — the count is a typed
+    /// CONSEQUENCE of the [`Self::ALL`] slice, not a second per-
+    /// implementor site the operator must keep in sync with the
+    /// variant listing. The `<[T]>::len` primitive is const-stable
+    /// (Rust 1.39+) so the projection evaluates at compile time on
+    /// every implementor whose inherent `pub const ALL: [Self; N]`
+    /// is itself a const array literal — the substrate-wide default
+    /// shape. Implementors override only when the cardinality surface
+    /// needs to diverge from [`Self::ALL`]'s natural length (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason `via` / `set_label` / `labels` overrides
+    /// exist — a typed escape hatch the trait surface exposes rather
+    /// than forcing the implementor to hand-roll the impl).
+    ///
+    /// Sibling posture to [`Self::ALL`] on the (variant listing,
+    /// variant count) axis: [`Self::ALL`] is the [`&'static [Self]`](slice)
+    /// slice generic consumers iterate over, this const is the
+    /// [`usize`] count the same consumers reach for when they need a
+    /// compile-time-known dimension. The pair partitions the
+    /// (variant enumeration, cardinality) surface exhaustively — one
+    /// for iteration, one for const-generic bindings — with the
+    /// count derived from the listing at ONE substrate primitive
+    /// rather than at TWO independent per-implementor sites.
+    ///
+    /// Future consumers — a compact-encoding wire format that
+    /// packs each variant into `ceil(log2(T::CARDINALITY))` bits, a
+    /// per-variant lookup table typed as `[Payload; T::CARDINALITY]`
+    /// whose length is verified at compile time against `T::ALL`, a
+    /// metrics tagger that pre-sizes a `Vec` for `T::CARDINALITY`
+    /// samples, a bitset over the closed-set indexed at
+    /// `T::CARDINALITY`-many positions — bind to ONE trait const
+    /// instead of hand-rolling the `Self::ALL.len()` composition at
+    /// each call site, and the closed-set projection's cardinality
+    /// surface evolves at ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the closed-set cardinality
+    /// becomes a TYPE-level projection on the trait rather than a
+    /// per-consumer inline `Self::ALL.len()` composition at every
+    /// downstream generic site. The (variant enumeration, cardinality)
+    /// pair partitions the closed-set surface exhaustively into TWO
+    /// typed projections, each with a distinct load-bearing consumer
+    /// surface — iteration for [`Self::ALL`], const-generic bindings
+    /// for this const.
+    /// THEORY.md §V.1 — knowable platform; the cardinality was an
+    /// unnamed inline projection (`T::ALL.len()`) recurring at 20+
+    /// test sites and every prospective const-generic consumer site
+    /// pre-lift. Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of [`Self::ALL`] — generic consumers see ONE const,
+    /// not ONE inline-length-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the cardinality
+    /// emerges from the composition of ONE substrate primitive
+    /// ([`Self::ALL`]) with the standard-library const `<[T]>::len`
+    /// projection rather than as a per-implementor `const N: usize =
+    /// _` declaration. A future tightening of [`Self::ALL`] (a future
+    /// declaration-time cardinality assertion, a future
+    /// `#[closed_set(cardinality = N)]` derive attribute that pins
+    /// N at the source) propagates to every closed-set const-generic
+    /// consumer through ONE trait const.
+    ///
+    /// Frontier inspiration: Idris's `Fin n` finite-cardinality type
+    /// exposes `n` at the type level so every downstream indexer /
+    /// enumerator binds to a compile-time count; Rust's
+    /// `std::mem::variant_count::<T>()` intrinsic (unstable, nightly-
+    /// only) exposes the same shape from the language side. MLIR's
+    /// `mlir::TypeAttrOfBase<TypeParam>::getMaxEnumValInternal` and
+    /// LLVM's `EnumAttrParams` similarly surface the enum's cardinality
+    /// as a first-class typed integer on the registry. Translation
+    /// through pleme-io primitives: a pure default associated const
+    /// initializer composing the trait's existing [`Self::ALL`] with
+    /// the const-stable `<[T]>::len` slice projection — no new dep,
+    /// no unstable intrinsic, no per-implementor override.
+    const CARDINALITY: usize = Self::ALL.len();
+
     /// The substrate-wide spaced-lowercase NAME of the closed set —
     /// the noun phrase the parse-rejection diagnostic threads into
     /// `"unknown {SET_LABEL}: {input}"` and the typed companion the
@@ -1224,6 +1305,21 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     on their respective (allocating, non-allocating) columns of
 ///     the (side-effect × hint) 2×2 matrix; the pin verifies the
 ///     alignment across both arms of the axis.
+/// 14. [`ClosedSet::CARDINALITY`] equals [`ClosedSet::ALL`]`.len()` — the
+///     const-visible variant count matches the runtime slice length.
+///     The default trait const initializer `Self::ALL.len()`
+///     satisfies the clause for free; the assertion catches a future
+///     implementor whose override drifts the count (a hand-rolled
+///     const that reports a different cardinality than `Self::ALL`
+///     actually carries) loudly rather than silently bifurcating the
+///     const-generic surface every downstream `[Payload;
+///     T::CARDINALITY]` array / bitset-width consumer routes through.
+///     Sibling posture to clause (1) — clause (1) pins `T::ALL` non-
+///     empty, this clause pins the const-visible count against the
+///     slice length so a generic const-generic consumer that binds
+///     `[Payload; T::CARDINALITY]` and iterates `T::ALL` in lockstep
+///     stays sound at both the type-level dimension AND the runtime
+///     iteration boundary.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -1547,6 +1643,28 @@ where
             );
         }
     }
+    // (14) — `T::CARDINALITY` MUST equal `T::ALL.len()`. The default
+    // trait const initializer `Self::ALL.len()` satisfies the clause
+    // for free; the assertion catches a future implementor whose
+    // override drifts from the natural `ALL`-length projection (a
+    // degenerate axis the trait surface exposes for the same reason
+    // `via` / `set_label` / `labels` overrides exist — a typed escape
+    // hatch rather than forcing the implementor to hand-roll the
+    // impl). A drifted override that reports a different count than
+    // `Self::ALL` actually carries silently bifurcates every
+    // downstream const-generic consumer's `[T; T::CARDINALITY]`
+    // array from `Self::ALL`'s runtime iteration; pinning the
+    // equality here catches the drift on every implementor before
+    // any consumer sizes a const array against the drifted count.
+    // Sibling posture to clause (1) — clause (1) pins `T::ALL` non-
+    // empty, this clause pins the const-visible count against the
+    // slice length so a generic const-generic consumer that takes
+    // `T::CARDINALITY - 1` as a top-rank index stays sound.
+    assert_eq!(
+        T::CARDINALITY,
+        T::ALL.len(),
+        "{type_name}: T::CARDINALITY drifted from T::ALL.len() — the const-visible cardinality no longer matches the runtime variant count. A generic const-generic consumer that binds `[Payload; T::CARDINALITY]` against `T::ALL`-length iteration would silently size the wrong dimension",
+    );
 }
 
 #[cfg(test)]
@@ -2968,6 +3086,127 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a find_by_label_with_hint override that fabricated a hint for the unrecognizable probe",
+        );
+    }
+
+    #[test]
+    fn cardinality_matches_all_len() {
+        // The const-visible variant count MUST equal `Self::ALL`'s
+        // runtime slice length — the default trait const initializer
+        // `Self::ALL.len()` satisfies the invariant for free. Pinning
+        // the equality here on `StubKind` (3 variants) means a
+        // regression that drifts the trait const from the natural
+        // `ALL`-length projection (a hand-rolled `const CARDINALITY:
+        // usize = 4` on a 3-variant enum) fails this stub-level
+        // contract before any per-implementor const-generic surface
+        // depends on the count downstream.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        assert_eq!(
+            <StubKind as ClosedSet>::CARDINALITY,
+            <StubKind as ClosedSet>::ALL.len(),
+        );
+    }
+
+    #[test]
+    fn cardinality_is_const_evaluable_at_compile_time() {
+        // The load-bearing property `CARDINALITY` names — the count
+        // is compile-time-known through `<[T]>::len`'s const stability
+        // (Rust 1.39+), so downstream const-generic consumers can
+        // bind `[Payload; T::CARDINALITY]` at their type signature
+        // without threading `T::ALL.len()` through a `const fn`
+        // wrapper. Pinning the const-evaluability with a `const N:
+        // usize` binding here means a regression that makes the const
+        // non-const (a future override that reaches into a `fn` body,
+        // a future defaulted-const that references a non-const
+        // primitive) fails compilation on this test rather than
+        // silently degrading the const-generic surface at every
+        // downstream consumer's build. The array binding demonstrates
+        // the primary consumer pattern — `[Payload; T::CARDINALITY]`
+        // with `Payload = StubKind` here — and asserts the resulting
+        // dimension against `T::ALL`'s runtime layout, so the const
+        // path AND the runtime path stay aligned at the primitive.
+        const N: usize = <StubKind as ClosedSet>::CARDINALITY;
+        assert_eq!(N, 3);
+        let per_variant_slots: [Option<StubKind>; N] = [None; N];
+        assert_eq!(per_variant_slots.len(), <StubKind as ClosedSet>::ALL.len());
+    }
+
+    #[test]
+    fn cardinality_agrees_with_labels_and_sorted_labels_lengths() {
+        // Alignment across the closed set's derived surfaces —
+        // `T::CARDINALITY`, `T::ALL.len()`, `T::labels().len()`, and
+        // `T::sorted_labels().len()` all name the SAME count through
+        // different projections. `T::labels()` projects `T::ALL` +
+        // `T::label`; `T::sorted_labels()` projects `T::labels()` +
+        // `slice::sort_unstable`; neither shrinks nor grows the
+        // cardinality. Pinning the four-way alignment here catches
+        // a drift in ANY of the intermediate projections (a
+        // duplicate-label bug that silently folds two variants into
+        // one at the labels surface, a subset-override on
+        // `sorted_labels` that names fewer labels than `ALL` carries)
+        // before any generic consumer routes through the drifted
+        // projection.
+        let expected = <StubKind as ClosedSet>::CARDINALITY;
+        assert_eq!(<StubKind as ClosedSet>::ALL.len(), expected);
+        assert_eq!(<StubKind as ClosedSet>::labels().len(), expected);
+        assert_eq!(<StubKind as ClosedSet>::sorted_labels().len(), expected);
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_cardinality_and_all_len() {
+        // The well-formedness sweep's (14) clause — `T::CARDINALITY`
+        // MUST equal `T::ALL.len()`. A hand-impl'd implementor whose
+        // override drifts the count (a future `const CARDINALITY:
+        // usize = N` on an enum whose `ALL` slice carries a different
+        // count) fails the sweep loudly rather than silently
+        // bifurcating the const-generic surface every downstream
+        // `[Payload; T::CARDINALITY]` consumer routes through.
+        // Pinning the failure path here keeps the testkit's (14)
+        // clause guaranteed-to-fire — a regression that makes the
+        // assertion permissive (e.g. a future "either agrees or
+        // exceeds" relaxation) breaks this stub-level contract
+        // before any per-implementor sweep runs. Sibling posture to
+        // the thirteen sibling `_catches_drift_between_*` pins above
+        // (clauses 5-13); together they close the structural-drift-
+        // catches sweep on every default composition the trait
+        // exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedCardinalityKind {
+            First,
+            Second,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedCardinalityKind(pub String);
+        impl core::fmt::Display for UnknownDriftedCardinalityKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted cardinality kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedCardinalityKind {
+            const ALL: &'static [Self] = &[Self::First, Self::Second];
+            // Drifted override — reports 5 when `ALL` carries 2.
+            // A downstream const-generic consumer that binds
+            // `[Payload; T::CARDINALITY]` against `T::ALL`-length
+            // iteration would silently size the wrong dimension.
+            const CARDINALITY: usize = 5;
+            const SET_LABEL: &'static str = "drifted cardinality kind";
+            type Unknown = UnknownDriftedCardinalityKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::First => "first",
+                    Self::Second => "second",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedCardinalityKind(s.to_owned())
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedCardinalityKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a CARDINALITY override drifted from the natural `T::ALL.len()` projection",
         );
     }
 }

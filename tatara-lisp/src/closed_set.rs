@@ -282,6 +282,91 @@ pub trait ClosedSet: Sized + Copy + 'static {
         Err(Self::make_unknown(s))
     }
 
+    /// Pure-membership predicate — `true` iff `s` matches some variant's
+    /// [`Self::label`] exactly, `false` for every other string.
+    ///
+    /// Zero-allocation peer of [`Self::parse_label`]: `parse_label(s)`
+    /// materializes the typed [`Self::Unknown`] carrier (owning a
+    /// [`String`] copy of `s`) on the reject path even when the caller
+    /// drops it immediately with `.is_ok()`; this method answers the
+    /// SAME structural question — "is `s` a canonical label of this
+    /// closed set" — without ever entering [`Self::make_unknown`]. The
+    /// (allocating decode, non-allocating membership) axis of the
+    /// closed-set surface partitions cleanly: [`Self::parse_label`]
+    /// stays the load-bearing carrier-emitting path structured
+    /// diagnostics route through, [`Self::contains_label`] stays the
+    /// pure predicate `if`-gates / `filter`-passes / lint checks route
+    /// through.
+    ///
+    /// Default body is `Self::ALL.iter().copied().any(|v| v.label() ==
+    /// s)` — a linear sweep composed from the same TWO substrate
+    /// primitives ([`Self::ALL`], [`Self::label`]) [`Self::parse_label`]
+    /// walks over, without the [`Self::make_unknown`] carrier
+    /// materialization the parse path threads on rejection.
+    /// Implementors override only when the membership surface needs to
+    /// diverge from the natural `ALL`-projection (no production
+    /// implementor reaches for this today; the axis exists for the same
+    /// reason `via` / `set_label` / `labels` / `labels_joined` /
+    /// `sorted_labels` / `sorted_labels_joined` / `suggest_closest` /
+    /// `parse_label_with_hint` overrides exist — a typed escape hatch
+    /// the trait surface exposes rather than forcing the implementor to
+    /// hand-roll the impl).
+    ///
+    /// Future consumers — a lint that flags unknown kinds without
+    /// emitting a full structured diagnostic, an LSP hover pass that
+    /// highlights known canonical labels without decoding them, an
+    /// annotation-filter gate over cluster-wide `tatara.pleme.io/*`
+    /// signal keys, an iac-forge tag pre-check that partitions valid
+    /// canonical tags from unknown ones before committing to the typed
+    /// decode — bind to ONE trait method instead of hand-rolling the
+    /// `parse_label(s).is_ok()` shortcut (which pays the carrier
+    /// allocation on every reject) or the inline
+    /// `Self::ALL.iter().any(|v| v.label() == s)` composition (which
+    /// re-derives the sweep at every call site) at each callsite, and
+    /// the closed-set projection's pure-membership surface evolves at
+    /// ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §V.1 — knowable platform; the pure-membership
+    /// predicate was an unnamed compound of [`Self::ALL`] +
+    /// [`Self::label`] + `Iterator::any` pre-lift; naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of the two
+    /// substrate primitives — generic consumers see ONE method, not
+    /// ONE membership-shape-per-crate. Sibling posture to
+    /// [`Self::parse_label`] on the (allocating decode, non-allocating
+    /// membership) axis: both walk `Self::ALL` keyed on
+    /// [`Self::label`], but the return-type axis partitions the
+    /// consumer surface — carrier-emitting decoders take
+    /// [`Self::parse_label`], predicate-gated filters take
+    /// [`Self::contains_label`].
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// pure-membership predicate emerges from the composition of TWO
+    /// substrate primitives ([`Self::ALL`], [`Self::label`]) rather
+    /// than as a per-implementor inline `iter+any` pair. A future
+    /// tightening of either primitive (a future
+    /// `#[closed_set(via = "…")]`-driven projection rename, a future
+    /// canonicalization-aware label projection that folds case /
+    /// whitespace) propagates to every closed-set consumer through
+    /// ONE trait body.
+    ///
+    /// Frontier inspiration: MLIR's `Type::isa<T>()` and
+    /// `Attribute::isa<T>()` typed predicates over the closed-set
+    /// registry — the "is this thing of this closed-set-member kind"
+    /// question emits at ONE typed method on the registry rather than
+    /// at every downstream operation's inline `dyn_cast` sweep.
+    /// Racket's `(member sym closed-list)` predicate over a closed
+    /// association list stands as the same shape one vocabulary over
+    /// on the homoiconic-Lisp side. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::ALL`] + [`Self::label`] surfaces with the
+    /// standard-library `Iterator::any` primitive — no new dep, no
+    /// new IR layer, no new per-role primitive.
+    fn contains_label(s: &str) -> bool {
+        Self::ALL
+            .iter()
+            .copied()
+            .any(|v| <Self as ClosedSet>::label(v) == s)
+    }
+
     /// Collect every variant's canonical [`Self::label`] into a
     /// freshly-allocated `Vec<&'static str>` — `Self::ALL`'s elements
     /// projected through [`Self::label`], in declaration order.
@@ -825,6 +910,26 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     silently bifurcating the alphabetized-candidate-list-as-string
 ///     rendering every LSP / `tatara-check` / metrics consumer routes
 ///     through.
+/// 11. [`ClosedSet::contains_label`] composes [`ClosedSet::ALL`] +
+///     [`ClosedSet::label`] with [`Iterator::any`] verbatim — the
+///     pure-membership predicate every zero-allocation lint / filter /
+///     gate consumer routes through emits at ONE trait body without
+///     ever materializing the [`ClosedSet::Unknown`] carrier
+///     [`ClosedSet::parse_label`] threads on rejection. The sweep
+///     walks every variant's canonical label (expected `true`), the
+///     reserved 38-char probe (expected `false` — the same probe
+///     clauses (5) + (7) reserve as lexically distinct from every
+///     plausible canonical label), and the empty-string boundary
+///     (expected `false` matching clause (4)) so a drift in any of
+///     the three natural predicate arms (a permissive override that
+///     accepts non-canonical strings, a strict override that rejects
+///     a canonical label, a subset-projection override that names
+///     fewer labels than `Self::ALL.iter().map(label)` covers) fails
+///     the testkit on every implementor. The default trait body
+///     satisfies the clause for free; the assertion catches a future
+///     implementor whose override drifts the composition loudly
+///     rather than silently bifurcating the pure-membership surface
+///     every lint / filter / gate consumer routes through.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -1041,6 +1146,34 @@ where
             "{type_name}: T::sorted_labels_joined({sep:?}) drifted from T::sorted_labels().join({sep:?}) — the alphabetized joined-candidate-list rendering every diagnostic / metrics consumer routes through no longer matches the natural sorted-labels-then-join projection",
         );
     }
+    // (11) — `T::contains_label(s)` MUST agree with
+    // `T::parse_label(s).is_ok()` on every representative input:
+    // every canonical label matches (`true`), the reserved probe
+    // rejects (`false`), and the empty-string boundary rejects
+    // (`false`) matching clause (4). The default trait body
+    // satisfies the clause for free; the assertion catches a future
+    // implementor whose override drifts the composition (a
+    // permissive override that returns `true` for inputs outside
+    // the closed set, a strict override that returns `false` for a
+    // canonical label, a subset-projection override that names
+    // fewer labels than `Self::ALL.iter().map(label)` covers) loudly
+    // rather than silently bifurcating the pure-membership surface
+    // every lint / filter / gate consumer routes through.
+    for &v in T::ALL {
+        let label = v.label();
+        assert!(
+            T::contains_label(label),
+            "{type_name}: T::contains_label({label:?}) returned false for a canonical variant label — the pure-membership predicate drifted from the natural `ALL`-projection",
+        );
+    }
+    assert!(
+        !T::contains_label(probe),
+        "{type_name}: T::contains_label(<reserved probe>) returned true for an input outside the closed set — the pure-membership predicate accepted a non-canonical string",
+    );
+    assert!(
+        !T::contains_label(""),
+        "{type_name}: T::contains_label(\"\") returned true — the pure-membership predicate accepted the empty-string boundary that clause (4) reserves as structurally outside every closed set",
+    );
 }
 
 #[cfg(test)]
@@ -1161,6 +1294,111 @@ mod tests {
         // convention.
         let rejection = <StubKind as ClosedSet>::parse_label("Alpha");
         assert_eq!(rejection, Err(UnknownStubKind("Alpha".to_owned())));
+    }
+
+    #[test]
+    fn contains_label_recognizes_every_canonical_variant_label() {
+        // The pure-membership sweep — for every variant `v` in
+        // `Self::ALL`, `contains_label(v.label())` returns `true`.
+        // Sibling posture to `parse_label_round_trips_every_variant`
+        // (decode arm) — this pin covers the predicate arm on the
+        // (allocating decode, non-allocating membership) axis. A
+        // regression that drops a label from the sweep (an override
+        // that names a subset of `Self::ALL` in its membership
+        // projection) would silently make `contains_label` return
+        // `false` for a canonical variant, bifurcating the
+        // pure-membership surface from `parse_label`'s decode surface.
+        // Pinning the projection here catches the drift on the
+        // stub-level surface before any per-implementor test surfaces
+        // it downstream.
+        for &v in <StubKind as ClosedSet>::ALL {
+            assert!(
+                <StubKind as ClosedSet>::contains_label(v.label()),
+                "contains_label({:?}) returned false for a canonical variant",
+                v.label(),
+            );
+        }
+    }
+
+    #[test]
+    fn contains_label_rejects_unknown_input_without_allocating_carrier() {
+        // Zero-allocation predicate arm — an input outside the closed
+        // set returns `false` WITHOUT threading through
+        // `make_unknown` (i.e. without materializing an owned `String`
+        // copy of the input). The (allocating decode, non-allocating
+        // membership) axis partitions cleanly at the return-type
+        // boundary: `parse_label(s)` on the same reject path allocates
+        // `UnknownStubKind("delta".to_owned())`; this method does not.
+        // Pinning the predicate result here means a generic filter
+        // consumer that walks over a candidate stream can lean on
+        // `contains_label` for zero-alloc pre-check, then commit to
+        // `parse_label` for the typed decode on the surviving
+        // subset — the two arms of the axis stay semantically aligned
+        // (both agree on membership) while the allocation cost
+        // partitions per consumer's needs.
+        assert!(!<StubKind as ClosedSet>::contains_label("delta"));
+    }
+
+    #[test]
+    fn contains_label_rejects_empty_input() {
+        // Empty input is structurally outside the closed set — no
+        // variant projects to "" through `label`, so the predicate
+        // rejects cleanly. Mirrors `parse_label_rejects_empty_input`
+        // on the (decode Err, predicate false) axis one arm over.
+        // Pinning the empty-input rejection here means the
+        // pure-membership surface can't drift its empty-input
+        // behavior from the decode surface; the two arms of the
+        // (allocating decode, non-allocating membership) axis stay
+        // aligned at the boundary case operators hit when a config
+        // field is unset but reached anyway.
+        assert!(!<StubKind as ClosedSet>::contains_label(""));
+    }
+
+    #[test]
+    fn contains_label_is_case_sensitive() {
+        // The pure-membership predicate inherits the case-sensitive
+        // contract from `label`'s byte-for-byte canonical rendering.
+        // A future implementor that wants case-insensitive membership
+        // must override `contains_label` (and document the divergence)
+        // alongside a matching `parse_label` override — the two arms of
+        // the (allocating decode, non-allocating membership) axis must
+        // stay semantically aligned. Pinning the case-sensitive
+        // contract here means the two overrides can't drift
+        // independently; a regression that flips only ONE arm to
+        // case-insensitive silently bifurcates the surface (an operator
+        // could see `parse_label("Alpha") = Err`, `contains_label("Alpha")
+        // = true` or vice versa). Sibling posture to
+        // `parse_label_is_case_sensitive` one axis over.
+        assert!(!<StubKind as ClosedSet>::contains_label("Alpha"));
+    }
+
+    #[test]
+    fn contains_label_agrees_with_parse_label_is_ok_on_every_probe() {
+        // The (allocating decode, non-allocating membership) axis
+        // MUST stay semantically aligned on every input the sweep
+        // walks. This test pins the alignment against a representative
+        // probe set: (a) every canonical variant label — both arms
+        // return the acceptance side (`Ok(_)` / `true`); (b) three
+        // non-canonical inputs (`"delta"`, `""`, `"Alpha"`) —
+        // both arms return the rejection side (`Err(_)` / `false`).
+        // The alignment is the load-bearing contract that lets a
+        // generic consumer swap `parse_label(s).is_ok()` for the
+        // zero-alloc `contains_label(s)` without changing the
+        // program's membership semantics. A regression that drifts
+        // either arm (a permissive `contains_label` override that
+        // accepts unknown strings, a strict `parse_label` override
+        // that rejects a canonical label) fails this pin
+        // stub-level before any per-implementor sweep depends on the
+        // alignment downstream.
+        let inputs: [&str; 6] = ["alpha", "beta", "gamma", "delta", "", "Alpha"];
+        for input in inputs {
+            let decode_ok = <StubKind as ClosedSet>::parse_label(input).is_ok();
+            let contains = <StubKind as ClosedSet>::contains_label(input);
+            assert_eq!(
+                decode_ok, contains,
+                "contains_label({input:?}) disagreed with parse_label({input:?}).is_ok() — the (allocating decode, non-allocating membership) axis bifurcated",
+            );
+        }
     }
 
     #[test]
@@ -1915,6 +2153,66 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a labels() override drifted from the natural ALL-projection",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_contains_label_and_composition() {
+        // The well-formedness sweep's (11) clause —
+        // `T::contains_label(s)` MUST agree with
+        // `T::parse_label(s).is_ok()` on every representative input
+        // (every canonical variant label, the reserved probe, the
+        // empty-string boundary). A hand-impl'd implementor whose
+        // override drifts the composition — e.g. a permissive
+        // override that returns `true` for the reserved probe input
+        // that clauses (5) + (7) also reserve — fails the sweep
+        // loudly rather than silently bifurcating the pure-membership
+        // surface every lint / filter / gate consumer routes
+        // through. Pinning the failure path here keeps the testkit's
+        // (11) clause guaranteed-to-fire — a regression that makes
+        // the assertion permissive (e.g. a future "either
+        // acceptance" relaxation that only checks canonical labels
+        // without checking the probe / empty rejection paths) breaks
+        // this stub-level contract before any per-implementor sweep
+        // runs. Sibling posture to the ten sibling
+        // `_catches_drift_between_*` pins above (clauses 5-10);
+        // together they close the structural-drift-catches sweep on
+        // every default composition the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedContainsKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedContainsKind(pub String);
+        impl core::fmt::Display for UnknownDriftedContainsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted contains kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedContainsKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted contains kind";
+            type Unknown = UnknownDriftedContainsKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedContainsKind(s.to_owned())
+            }
+            fn contains_label(_s: &str) -> bool {
+                // Drifted override — accepts every input, including
+                // the unrecognizable probe the testkit's clause (11)
+                // reserves as structurally outside the closed set.
+                // Fails the pure-membership alignment with
+                // `parse_label(s).is_ok()`.
+                true
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedContainsKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a contains_label override that accepted the reserved probe input",
         );
     }
 }

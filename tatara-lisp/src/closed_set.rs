@@ -843,6 +843,134 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_labels().join(sep)
     }
 
+    /// Collect every typed variant into a freshly-allocated `Vec<Self>`
+    /// ordered by ASCII lexicographic [`Self::label`] — the typed-variant
+    /// sibling of [`Self::sorted_labels`] on the (typed variant,
+    /// canonical label) axis of the closed-set candidate-listing surface.
+    ///
+    /// Peer of [`Self::sorted_labels`] one axis over on the (typed
+    /// variant, `&'static str` label) return-type axis: both walk
+    /// [`Self::ALL`] and project through [`Self::label`] to key the
+    /// ordering, but the return-type axis partitions the consumer
+    /// surface — LSP completion / `tatara-check` / metrics consumers
+    /// that render the label alone (`expected one of: alpha, beta, gamma`)
+    /// take [`Self::sorted_labels`], consumers that need the typed
+    /// variant next to the rendered label (an LSP completion API whose
+    /// selected item is a typed variant the caller reads back, a
+    /// `<variant.label()>: <count>` diagnostic that iterates
+    /// per-variant payloads in a machine-independent canonical order,
+    /// a metrics tagger that walks typed variants deterministically
+    /// across binaries) take this method. The two arms of the axis
+    /// compose element-wise: `Self::sorted_variants()[i].label()` equals
+    /// `Self::sorted_labels()[i]` for every `i in 0..Self::CARDINALITY`
+    /// — the load-bearing invariant the well-formedness sweep's clause
+    /// (17) pins.
+    ///
+    /// The (return-type × ordering) 2×2 matrix on the closed-set
+    /// candidate-listing surface partitions post-lift:
+    ///
+    /// | Ordering       | `Vec<&'static str>`   | `Vec<Self>`                    |
+    /// |----------------|-----------------------|--------------------------------|
+    /// | Declaration    | [`Self::labels`]      | `Self::ALL.iter().copied()`    |
+    /// | Lexicographic  | [`Self::sorted_labels`] | [`Self::sorted_variants`]   |
+    ///
+    /// The declaration + `Vec<Self>` corner stays at the direct
+    /// [`Self::ALL`] slice iterator — no primitive lifts, no default
+    /// body, no override axis, since `Self::ALL.iter().copied()` is the
+    /// natural zero-primitive projection. The lexicographic +
+    /// `Vec<Self>` corner — this method — is the missing lift: sorting
+    /// a `Vec<Self>` by label is a non-trivial composition of
+    /// [`Self::ALL`] + [`Self::label`] + `slice::sort_unstable_by_key`
+    /// that recurs at every prospective consumer site (an LSP
+    /// completion pass, a `tatara-check` per-variant diagnostic, a
+    /// deterministic-across-machines metric tagger) as the same
+    /// `T::ALL.to_vec().sort_unstable_by_key(|v| v.label())` triple.
+    ///
+    /// Default body composes [`Self::ALL`] with `Vec::from` +
+    /// `slice::sort_unstable_by_key` keyed on [`Self::label`] — the
+    /// sorted-variant rendering is a typed CONSEQUENCE of `Self::ALL` +
+    /// `Self::label` + ASCII lexicographic ordering on the label
+    /// projection. Distinctness of the labels is already a substrate-
+    /// wide invariant pinned by [`assert_closed_set_well_formed`]
+    /// (clause 3 — labels are pairwise distinct), so unstable sorting
+    /// is deterministic on every implementor by construction —
+    /// `sort_unstable_by_key` never observes two equal keys to
+    /// reorder. Implementors override only when the ordering surface
+    /// needs to diverge from the natural label-keyed lexicographic
+    /// projection (no production implementor reaches for this today;
+    /// the axis exists for the same reason `via` / `set_label` /
+    /// `labels` / `sorted_labels` overrides exist — a typed escape
+    /// hatch the trait surface exposes rather than forcing the
+    /// implementor to hand-roll the impl).
+    ///
+    /// Future consumers — an LSP completion pass that returns typed
+    /// variants (not just labels) so the selected completion item
+    /// short-circuits back into `T` without a re-decode through
+    /// [`Self::find_by_label`], a `tatara-check` diagnostic that
+    /// renders per-variant projections (`<variant.label()>:
+    /// <variant.short_label()>` diagnostics on the double-label
+    /// surface `ProcessSignal` / `ConditionKind` carry) in a
+    /// machine-independent canonical order, a metrics tagger that
+    /// walks typed variants deterministically across binaries so
+    /// per-variant counter payloads emit in the same order on every
+    /// build, a per-variant lookup table `[Payload; T::CARDINALITY]`
+    /// exhaustively rendered as `(label, payload)` pairs in
+    /// alphabetical order — bind to ONE trait method instead of
+    /// hand-rolling the `let mut v: Vec<Self> = T::ALL.to_vec(); v
+    /// .sort_unstable_by_key(|x| x.label()); v` triple at each call
+    /// site, and the closed-set typed-variant canonical-ordering
+    /// surface evolves at ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the (typed variant,
+    /// lexicographic ordering) projection becomes a TYPE projection on
+    /// the trait rather than a per-consumer hand-rolled
+    /// `T::ALL.to_vec().sort_unstable_by_key(|v| v.label())` triple at
+    /// every downstream stable-ordering site. The (return-type ×
+    /// ordering) 2×2 matrix partitions the closed-set
+    /// candidate-listing surface exhaustively into FOUR corners
+    /// (declaration + `Vec<&str>`, declaration + `Vec<Self>`,
+    /// lexicographic + `Vec<&str>`, lexicographic + `Vec<Self>`),
+    /// each with a distinct load-bearing consumer surface.
+    /// THEORY.md §V.1 — knowable platform; the sorted-typed-variants
+    /// shape was an unnamed compound of [`Self::ALL`] +
+    /// [`Self::label`] + `slice::sort_unstable_by_key` pre-lift.
+    /// Naming it on the trait makes the projection a TYPED CONSEQUENCE
+    /// of the two substrate primitives + the label-keyed lexicographic
+    /// ordering — generic consumers see ONE method, not ONE
+    /// sort-by-label shape per crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// sorted-typed-variants rendering emerges from the composition of
+    /// THREE substrate primitives ([`Self::ALL`], [`Self::label`],
+    /// `slice::sort_unstable_by_key`) rather than as a per-implementor
+    /// inline `to_vec+sort_unstable_by_key` triple. A future tightening
+    /// of any primitive (a Unicode-collation-aware sort, a
+    /// `#[closed_set(via = "…")]`-driven projection rename, a
+    /// canonicalization-aware label projection that folds case /
+    /// whitespace) propagates to every closed-set typed-variant
+    /// canonical-ordering consumer through ONE trait body — including
+    /// [`Self::sorted_labels`], which stays element-wise aligned
+    /// through the well-formedness contract.
+    ///
+    /// Frontier inspiration: Idris's `sortBy` over a finite-type
+    /// universe keyed on a canonical `show` projection — the
+    /// canonical-ordered typed listing emits as a single projection on
+    /// the finite-type layer rather than per-instance inline compound.
+    /// MLIR's `OperationName::getSortedRegisteredOps` on the Op
+    /// registry returns typed op-names in a canonical order the
+    /// DiagnosticEngine renders per-kind diagnostics against; Racket's
+    /// `(sort (enum->list T) #:key T-label)` composes the enum's
+    /// canonical listing with a key-projected sort in the same
+    /// vocabulary one dispatch axis over. Translation through
+    /// pleme-io primitives: a pure default method composing the
+    /// trait's existing [`Self::ALL`] surface with `Vec::from` and
+    /// `slice::sort_unstable_by_key` keyed on [`Self::label`] — no
+    /// new dep, no new IR layer, no supertrait bound.
+    fn sorted_variants() -> ::std::vec::Vec<Self> {
+        let mut variants: ::std::vec::Vec<Self> = Self::ALL.to_vec();
+        variants.sort_unstable_by_key(|v| <Self as ClosedSet>::label(*v));
+        variants
+    }
+
     /// Project `needle` onto the closest variant whose
     /// [`Self::label`] sits within the substrate-wide bounded edit
     /// distance — the typed bridge between an unrecognized input and
@@ -1608,6 +1736,34 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     `usize` carrier; the pin verifies the alignment across both
 ///     carriers on the (in-range accept, out-of-range reject)
 ///     partition.
+/// 17. [`ClosedSet::sorted_variants`] composes [`ClosedSet::ALL`] with
+///     `Vec::from` + `slice::sort_unstable_by_key` keyed on
+///     [`ClosedSet::label`] verbatim, AND stays element-wise aligned
+///     with [`ClosedSet::sorted_labels`] on the (typed variant,
+///     canonical label) axis of the closed-set candidate-listing
+///     surface. For every `i in 0..T::CARDINALITY`,
+///     `T::sorted_variants()[i].label()` equals
+///     `T::sorted_labels()[i]`, AND the sorted-variant slice length
+///     equals [`ClosedSet::CARDINALITY`]. The default trait body
+///     satisfies the clause for free; the assertion catches a future
+///     implementor whose override drifts the composition (a subset of
+///     variants, a different ordering, a swapped variant, an
+///     off-by-one length) loudly rather than silently bifurcating the
+///     sorted-typed-variant candidate-list surface every LSP /
+///     `tatara-check` / metrics consumer routes through. Sibling
+///     posture to clauses (9) + (16) — clause (9) pins the
+///     lexicographic `Vec<&'static str>` corner of the (return-type ×
+///     ordering) 2×2 matrix, this clause pins the lexicographic
+///     `Vec<Self>` corner AND the element-wise alignment across the
+///     two lexicographic corners so a downstream consumer that walks
+///     `zip(sorted_variants(), sorted_labels())` per-slot sees the
+///     same (typed variant, canonical label) pair on both projections.
+///     Clause (16) covered the `usize` inverse-projection alignment
+///     with `T::ALL` slice indexing; this clause covers the label-
+///     keyed inverse-ordering alignment with `T::sorted_labels`, so
+///     the closed set's two structural projections (index-keyed and
+///     label-keyed) both stay sound at the runtime element-wise
+///     boundary.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -2010,6 +2166,43 @@ where
     assert!(
         T::from_index(T::CARDINALITY).is_none(),
         "{type_name}: T::from_index(T::CARDINALITY) returned Some — the out-of-range guard drifted, so a per-variant lookup-table `[Payload; T::CARDINALITY]` consumer that decodes an out-of-range serialized index would silently fold onto an in-range variant rather than surfacing the corruption at the decode boundary",
+    );
+    // (17) — `T::sorted_variants()` MUST compose `T::ALL` +
+    // `Vec::from` + `slice::sort_unstable_by_key` keyed on `label`
+    // verbatim, AND stay element-wise aligned with
+    // `T::sorted_labels()` on the (typed variant, canonical label)
+    // axis. Sweep both the length equality (against `T::CARDINALITY`)
+    // AND the per-slot alignment (`sorted_variants()[i].label() ==
+    // sorted_labels()[i]` for every `i in 0..T::CARDINALITY`). The
+    // default trait body's `to_vec().sort_unstable_by_key(|v| v.label())`
+    // composition satisfies the clause for free; the assertion catches
+    // a future implementor whose override drifts the composition (a
+    // subset of variants, a swapped variant, a different ordering, an
+    // off-by-one length) loudly rather than silently bifurcating the
+    // sorted-typed-variant candidate-list surface every LSP /
+    // `tatara-check` / metrics consumer routes through. Sibling
+    // posture to clause (9) — clause (9) pins the lexicographic
+    // `Vec<&'static str>` corner of the (return-type × ordering) 2×2
+    // matrix, this clause pins the lexicographic `Vec<Self>` corner
+    // AND the element-wise alignment across the two lexicographic
+    // corners so a downstream consumer that walks `zip(sorted_variants(),
+    // sorted_labels())` per-slot sees the same (typed variant,
+    // canonical label) pair on both projections.
+    let sorted_variants = T::sorted_variants();
+    assert_eq!(
+        sorted_variants.len(),
+        T::CARDINALITY,
+        "{type_name}: T::sorted_variants().len() drifted from T::CARDINALITY — the sorted-typed-variant candidate-list surface lost or gained a variant, so a downstream consumer that walks `zip(sorted_variants(), sorted_labels())` per-slot would run off the end or short-cut before covering every variant",
+    );
+    let sorted_variant_labels: Vec<&'static str> = sorted_variants
+        .iter()
+        .copied()
+        .map(<T as ClosedSet>::label)
+        .collect();
+    let sorted_labels_reference = T::sorted_labels();
+    assert_eq!(
+        sorted_variant_labels, sorted_labels_reference,
+        "{type_name}: T::sorted_variants() projected element-wise through label() drifted from T::sorted_labels() — the (typed variant, canonical label) alignment on the lexicographic-ordering axis broke, so a downstream consumer that walks `zip(sorted_variants(), sorted_labels())` would see two different renderings on the same slot",
     );
 }
 
@@ -3950,6 +4143,200 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a from_index override drifted from the natural Self::ALL.get(i).copied() projection",
+        );
+    }
+
+    #[test]
+    fn sorted_variants_returns_typed_variants_in_lexicographic_label_order() {
+        // The sorted-typed-variants surface — `T::sorted_variants()`
+        // returns typed variants ordered by ASCII lexicographic
+        // `label()`. The `StubKind` labels (`alpha`/`beta`/`gamma`)
+        // are already in lexicographic declaration order, so the sort
+        // step is the identity permutation on the (Alpha, Beta, Gamma)
+        // typed variants; the `ReverseStubKind` pin below exercises
+        // the actual sort discipline against an out-of-order
+        // declaration. Sibling posture to
+        // `sorted_labels_renders_labels_in_lexicographic_order` one
+        // axis over on the (typed variant, canonical label)
+        // return-type axis — this pin covers the `Vec<Self>` corner
+        // of the (return-type × ordering) 2×2 matrix.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_variants(),
+            vec![StubKind::Alpha, StubKind::Beta, StubKind::Gamma],
+        );
+    }
+
+    #[test]
+    fn sorted_variants_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the typed-variant surface —
+        // `T::sorted_variants()` MUST normalize an arbitrary
+        // declaration order into ASCII lexicographic `label()`
+        // order, regardless of the implementor's `ALL`-array
+        // layout. A regression that returns `T::ALL.to_vec()`
+        // verbatim (without the sort step) would pass
+        // `sorted_variants_returns_typed_variants_in_lexicographic_label_order`
+        // on `StubKind` (because its labels already sit in order)
+        // but silently bifurcate the canonical-ordering surface for
+        // any implementor whose declaration order differs from
+        // byte-wise sort order. Pinning the sort discipline here
+        // with a deliberately-out-of-order stub catches that drift
+        // directly. Sibling posture to
+        // `sorted_labels_normalizes_arbitrary_declaration_order`
+        // one axis over on the `Vec<Self>` return-type — this pin
+        // covers the typed-variant surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseVariantStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseVariantStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseVariantStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse variant stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseVariantStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse variant stub kind";
+            type Unknown = UnknownReverseVariantStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseVariantStubKind(s.to_owned())
+            }
+        }
+        // `T::ALL` preserves declaration order — Gamma, Beta, Alpha.
+        assert_eq!(
+            <ReverseVariantStubKind as ClosedSet>::ALL,
+            &[
+                ReverseVariantStubKind::Gamma,
+                ReverseVariantStubKind::Beta,
+                ReverseVariantStubKind::Alpha,
+            ],
+        );
+        // `sorted_variants()` normalizes to lexicographic-label order
+        // — Alpha, Beta, Gamma. The composition with
+        // `sort_unstable_by_key(|v| v.label())` is the load-bearing
+        // step the lift names.
+        assert_eq!(
+            <ReverseVariantStubKind as ClosedSet>::sorted_variants(),
+            vec![
+                ReverseVariantStubKind::Alpha,
+                ReverseVariantStubKind::Beta,
+                ReverseVariantStubKind::Gamma,
+            ],
+        );
+    }
+
+    #[test]
+    fn sorted_variants_stays_element_wise_aligned_with_sorted_labels() {
+        // The load-bearing invariant — `sorted_variants()[i].label()`
+        // equals `sorted_labels()[i]` for every `i in
+        // 0..T::CARDINALITY`. Pinning the element-wise alignment
+        // here means a downstream LSP / `tatara-check` / metrics
+        // consumer that walks `zip(sorted_variants(),
+        // sorted_labels())` per-slot sees the SAME (typed variant,
+        // canonical label) pair on both projections — a regression
+        // that permutes ONE arm without the other would silently
+        // bifurcate the pairing at the per-slot boundary. Sibling
+        // posture to `sorted_labels_renders_labels_in_lexicographic_order`
+        // one axis over — this pin covers the alignment across the
+        // two lexicographic corners of the (return-type × ordering)
+        // 2×2 matrix.
+        let variants = <StubKind as ClosedSet>::sorted_variants();
+        let labels = <StubKind as ClosedSet>::sorted_labels();
+        assert_eq!(variants.len(), labels.len());
+        for (i, (v, l)) in variants
+            .iter()
+            .copied()
+            .zip(labels.iter().copied())
+            .enumerate()
+        {
+            assert_eq!(
+                v.label(),
+                l,
+                "sorted_variants()[{i}].label() drifted from sorted_labels()[{i}] — the (typed variant, canonical label) alignment on the lexicographic-ordering axis broke",
+            );
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_variants_and_composition() {
+        // The well-formedness sweep's (17) clause —
+        // `T::sorted_variants()` MUST compose `T::ALL` +
+        // `Vec::from` + `slice::sort_unstable_by_key` keyed on
+        // `label` verbatim, AND stay element-wise aligned with
+        // `T::sorted_labels()` on the (typed variant, canonical
+        // label) axis. A hand-impl'd implementor whose override
+        // drifts the composition (a subset of variants, a swapped
+        // variant, a different ordering, an off-by-one length)
+        // fails the sweep loudly rather than silently bifurcating
+        // the sorted-typed-variant candidate-list surface every LSP
+        // / `tatara-check` / metrics consumer routes through.
+        // Pinning the failure path here keeps the testkit's (17)
+        // clause guaranteed-to-fire — a regression that makes the
+        // assertion permissive (e.g. a future "any permutation"
+        // relaxation) breaks this stub-level contract before any
+        // per-implementor sweep runs. Sibling posture to the
+        // sixteen sibling `_catches_drift_between_*` pins above
+        // (clauses 5-16); together they close the
+        // structural-drift-catches sweep on every default
+        // composition the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedVariantsKind {
+            First,
+            Second,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedVariantsKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedVariantsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted variants kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedVariantsKind {
+            const ALL: &'static [Self] = &[Self::First, Self::Second];
+            const SET_LABEL: &'static str = "drifted sorted variants kind";
+            type Unknown = UnknownDriftedSortedVariantsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    // Labels deliberately reorder under sort: "zeta"
+                    // precedes "alpha" in declaration but follows in
+                    // ASCII sort. The natural `sorted_variants()`
+                    // returns [Second, First] (label order alpha,
+                    // zeta); the drifted override returns [First,
+                    // Second] (declaration order) — the well-formedness
+                    // clause (17) catches the misalignment via
+                    // `sorted_variants()[i].label() ==
+                    // sorted_labels()[i]`.
+                    Self::First => "zeta",
+                    Self::Second => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedVariantsKind(s.to_owned())
+            }
+            fn sorted_variants() -> Vec<Self> {
+                // Drifted override — returns variants in declaration
+                // order rather than lexicographic-label order,
+                // bifurcating the (typed variant, canonical label)
+                // alignment with `sorted_labels()`.
+                vec![Self::First, Self::Second]
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedVariantsKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_variants override drifted from the natural ALL-then-sort-by-label composition",
         );
     }
 }

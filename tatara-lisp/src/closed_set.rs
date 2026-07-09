@@ -3224,6 +3224,290 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The declaration-order strict-interior label list — the
+    /// `Vec<&'static str>` label projection of [`Self::interior`] over
+    /// the closed-set declaration-axis boundary-partition surface.
+    /// Every label `s` in the returned vector is the canonical
+    /// [`Self::label`] rendering of some strictly-interior variant
+    /// (`<Self as ClosedSet>::is_interior(v) == true` for the sourcing
+    /// variant, so `s` is neither [`Self::first`]'s label nor
+    /// [`Self::last`]'s label); the declaration order of
+    /// [`Self::interior`] is preserved verbatim.
+    ///
+    /// Sibling posture to [`Self::interior`] one return-shape axis
+    /// over on the (`Vec<Self>` typed-variant collection,
+    /// `Vec<&'static str>` label collection) partition of the closed-
+    /// set declaration-axis interior-aggregation surface — the
+    /// typed-variant arm materializes each strictly-interior slot as
+    /// `Self`, this method labels each slot under [`Self::label`]. The
+    /// two projections share the (boundary, interior) partition on
+    /// the boundary-partition column and share the declaration-order
+    /// ordering on the ordering column; they differ only on the
+    /// return-shape column, where the typed-variant arm returns the
+    /// carrier and the label arm returns the rendering. Both share
+    /// the exact `CARDINALITY.saturating_sub(2)` length invariant on
+    /// every implementor.
+    ///
+    /// Sibling posture to [`Self::endpoint_labels`] one partition-
+    /// flavor axis over on the (boundary, interior) partition of the
+    /// closed-set declaration-axis label-aggregation surface —
+    /// [`Self::endpoint_labels`] aggregates the two structural
+    /// endpoint labels into a `(&'static str, &'static str)` tuple,
+    /// this method aggregates every strictly-interior label into a
+    /// `Vec<&'static str>` collection. Together the two label
+    /// projections cover every label in
+    /// [`Self::labels`](Self::sorted_labels)' declaration counterpart
+    /// exactly once: [`Self::endpoint_labels`] names the boundary
+    /// labels and this method names the interior labels, and their
+    /// union is the whole label sequence of [`Self::ALL`] (for
+    /// `T::CARDINALITY >= 2`; the singleton case collapses to
+    /// [`Self::endpoint_labels`] returning the diagonal tuple over
+    /// the sole label + this method returning `[]`).
+    ///
+    /// The (partition-flavor × ordering × return-shape) 2×2×2 cube
+    /// over the closed-set boundary + interior aggregation surface
+    /// CLOSES on the (interior, declaration, label) corner —
+    /// [`Self::endpoints`] on the (boundary, declaration, variant)
+    /// corner, [`Self::endpoint_labels`] on the (boundary,
+    /// declaration, label) corner, [`Self::sorted_endpoints`] on the
+    /// (boundary, lex, variant) corner, [`Self::sorted_endpoint_labels`]
+    /// on the (boundary, lex, label) corner, [`Self::interior`] on
+    /// the (interior, declaration, variant) corner, this method on
+    /// the (interior, declaration, label) corner, [`Self::sorted_interior`]
+    /// on the (interior, lex, variant) corner, and
+    /// [`Self::sorted_interior_labels`] on the (interior, lex, label)
+    /// corner. Together the eight methods cover every corner of the
+    /// (partition-flavor × ordering × return-shape) cube on the
+    /// closed-set variant-aggregation surface. A future range-walker
+    /// / interior-label-badge renderer / audit-event emitter /
+    /// per-implementor coherence probe consumer that binds any of the
+    /// eight sees the SAME tuple or collection shape at every crate
+    /// boundary regardless of which cube corner it walks.
+    ///
+    /// Future consumers — an alphabetized-completion pass that
+    /// renders every strictly-interior label WITHOUT a per-callsite
+    /// `T::interior().into_iter().map(T::label).collect()` two-primitive
+    /// composition (the substrate-wide `interior + label` sweep every
+    /// declaration-axis interior-label-badge renderer re-derives),
+    /// a `tatara-check` interior-label diagnostic that renders each
+    /// strictly-interior slot's label without materializing the
+    /// typed variant, an audit-event emitter that opens an
+    /// "interior-slot-label" side channel on every non-boundary
+    /// variant WITHOUT threading the caller through per-slot
+    /// `label()` calls, a metrics tagger that emits the interior
+    /// labels as a pre-declared histogram bucket-set — bind to ONE
+    /// trait method rather than hand-rolling the natural
+    /// `T::interior().into_iter().map(T::label).collect()` two-primitive
+    /// composition at every callsite. Any override of
+    /// [`Self::interior`] (or the [`Self::is_interior`] /
+    /// [`Self::is_endpoint`] / [`Self::is_first`] / [`Self::is_last`]
+    /// scalars it funnels through) OR of [`Self::label`] propagates
+    /// through this method's body to every interior-label-collection
+    /// consumer automatically; the (variant → interior-label
+    /// collection) projection funnels through ONE typed collection
+    /// primitive on the aggregation column AND the per-slot label
+    /// projection on the rendering column.
+    ///
+    /// Default body maps [`Self::interior`] under [`Self::label`] —
+    /// the strictly-interior-label collection is a typed CONSEQUENCE
+    /// of the composition of the declaration-axis interior-collection
+    /// primitive with the per-slot label projection, not a third
+    /// codepath through `ALL.iter().copied().filter(is_interior).map(label).collect()`
+    /// four-primitive composition. Implementors override only when
+    /// the label-collection needs to diverge from the natural
+    /// `interior().into_iter().map(label).collect()` shape (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason `via` / `set_label` / `labels` /
+    /// `sorted_variants` / `interior` overrides exist — a typed
+    /// escape hatch the trait surface exposes rather than forcing the
+    /// implementor to hand-roll the impl).
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::interior`] returns `[]`, so
+    /// this method returns `[]`. Two-variant degeneracy — for a
+    /// closed set with `T::CARDINALITY == 2`, [`Self::interior`]
+    /// returns `[]`, so this method returns `[]`. The interior-label
+    /// collection has strictly `CARDINALITY - 2` elements for
+    /// `CARDINALITY >= 2` and `0` elements at the singleton edge
+    /// (which coincides with `CARDINALITY.saturating_sub(2)` at every
+    /// cardinality).
+    ///
+    /// The interior-label-collection contract —
+    /// `T::interior_labels() == T::interior().into_iter().map(T::label).collect()`
+    /// on every implementor — is guaranteed by the default
+    /// composition through [`Self::interior`]'s declaration-axis
+    /// interior-collection primitive AND the per-slot label
+    /// projection; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (40) pins the
+    /// composition against the natural
+    /// `interior().into_iter().map(label).collect()` shape on every
+    /// implementor so a passing well-formedness sweep means every
+    /// generic consumer can call [`Self::interior_labels`] on any
+    /// typed carrier and expect the same `Vec<&'static str>` answer
+    /// at every crate boundary.
+    ///
+    /// THEORY.md §III — the typescape; the (declaration-axis strict-
+    /// interior label collection) projection becomes a TYPE projection
+    /// on the trait rather than a per-consumer inline
+    /// `T::interior().into_iter().map(T::label).collect()` composition
+    /// at every downstream interior-label-walk site. The
+    /// (partition-flavor × ordering × return-shape) 2×2×2 cube over
+    /// the closed-set variant-aggregation surface closes on the
+    /// (interior, declaration, label) corner —
+    /// [`Self::endpoint_labels`] on the (boundary, declaration,
+    /// label) corner, this method on the (interior, declaration,
+    /// label) corner, together covering every declaration-axis label
+    /// in [`Self::ALL`] exactly once.
+    /// THEORY.md §V.1 — knowable platform; the (declaration-axis
+    /// strict-interior label collection) projection was an unnamed
+    /// compound of [`Self::interior`] + [`Self::label`] + `map` +
+    /// `collect` pre-lift; naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of the substrate's declaration-
+    /// axis interior-collection primitive and the per-slot label
+    /// projection — generic consumers see ONE method, not one
+    /// interior-label-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// (declaration-axis interior-label collection) projection emerges
+    /// from the composition of TWO substrate primitives
+    /// ([`Self::interior`], [`Self::label`]) under `Iterator::map` +
+    /// `Iterator::collect` rather than as a per-implementor
+    /// `const INTERIOR_LABELS: &'static [&'static str] = &["middle"]`
+    /// declaration. A future tightening of either primitive (a future
+    /// const-fn `interior` axis, a future perfect-hash label
+    /// projection, a future `Iterator::filter_map` fused walk)
+    /// propagates to every closed-set interior-label-collection
+    /// consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-interior-labels` on
+    /// closed enumerations (the label projection over every strictly-
+    /// interior slot after excluding the head + tail anchors); Idris's
+    /// `Fin (S (S n)) -> Vect n String` non-empty-with-strictly-
+    /// interior label-vector projection via `showFin` composed with
+    /// the boundary-stripped `interior` primitive; Haskell's
+    /// `map show . init . tail` on the `Bounded + Enum + Show`
+    /// type-class trio — the boundary-stripped interior-label
+    /// collection composed from three prelude primitives on the
+    /// ordered enumeration chain; MLIR's
+    /// `RegisteredOperationName::interior_op_names()` on the
+    /// registered-op enumeration (the boundary-stripped operation-
+    /// name collection). Translation through pleme-io primitives: a
+    /// pure default method mapping the trait's existing
+    /// [`Self::interior`] collection under per-slot [`Self::label`]
+    /// projection — no new dep, no new IR layer, no supertrait bound,
+    /// no per-implementor allocation beyond the natural
+    /// `Vec<&'static str>` collection the sibling
+    /// [`Self::sorted_labels`] surface already routes.
+    fn interior_labels() -> ::std::vec::Vec<&'static str> {
+        <Self as ClosedSet>::interior()
+            .into_iter()
+            .map(<Self as ClosedSet>::label)
+            .collect()
+    }
+
+    /// The lexicographic-order strict-interior label list — the
+    /// `Vec<&'static str>` label projection of [`Self::sorted_interior`]
+    /// over the closed-set lex-axis boundary-partition surface. Every
+    /// label `s` in the returned vector is the canonical
+    /// [`Self::label`] rendering of some strictly-lex-interior variant
+    /// (`<Self as ClosedSet>::is_sorted_interior(v) == true` for the
+    /// sourcing variant, so `s` is neither [`Self::sorted_first`]'s
+    /// label nor [`Self::sorted_last`]'s label); the lex order of
+    /// [`Self::sorted_interior`] is preserved verbatim.
+    ///
+    /// Sibling posture to [`Self::interior_labels`] one ordering axis
+    /// over on the (declaration, lex) partition of the closed-set
+    /// interior-label-collection surface — [`Self::interior_labels`]
+    /// fires on the declaration-order strictly-interior label slice,
+    /// this method fires on the lex-order strictly-interior label
+    /// slice. See [`Self::interior_labels`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the lex-ordering-axis arm of the same
+    /// return-shape axis and inherits every property from the
+    /// declaration-axis arm's documentation, differing only in the
+    /// composition through [`Self::sorted_interior`] instead of
+    /// [`Self::interior`] and the alphabetized consumer surface (an
+    /// alphabetized interior-label loop that emits every strictly-
+    /// lex-interior label in lex order without a per-callsite
+    /// `sorted_interior + label + map + collect` composition, an
+    /// alphabetized-phase-fold reducer whose interior arm labels each
+    /// strictly-lex-interior slot for structured logging, an
+    /// alphabetized-completion pass that hides the alphabetically-
+    /// first + alphabetically-last labels from a strictly-lex-interior
+    /// candidate-label list).
+    ///
+    /// Default body maps [`Self::sorted_interior`] under
+    /// [`Self::label`] — the strictly-lex-interior-label collection is
+    /// a typed CONSEQUENCE of the composition of the lex-axis interior-
+    /// collection primitive with the per-slot label projection, not a
+    /// fourth codepath through
+    /// `sorted_variants().into_iter().filter(is_sorted_interior).map(label).collect()`
+    /// four-primitive composition. Implementors override only when the
+    /// lex-interior-label collection needs to diverge from the natural
+    /// `sorted_interior().into_iter().map(label).collect()` shape (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason `via` / `set_label` / `labels` /
+    /// `sorted_variants` / `sorted_interior` overrides exist — a typed
+    /// escape hatch the trait surface exposes rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::sorted_interior`] (or the
+    /// [`Self::is_sorted_interior`] / [`Self::is_sorted_endpoint`] /
+    /// [`Self::is_sorted_first`] / [`Self::is_sorted_last`] scalars it
+    /// funnels through) OR overrides [`Self::label`] propagates the
+    /// override through this default body to the lex-interior-label-
+    /// collection projection automatically; the (variant → lex-
+    /// interior-label collection) projection funnels through ONE typed
+    /// collection primitive on the aggregation column AND the per-slot
+    /// label projection on the rendering column.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::sorted_interior`] returns `[]`,
+    /// so this method returns `[]`. Two-variant degeneracy — for a
+    /// closed set with `T::CARDINALITY == 2`, [`Self::sorted_interior`]
+    /// returns `[]`, so this method returns `[]`. The lex-interior-
+    /// label collection has strictly `CARDINALITY - 2` elements for
+    /// `CARDINALITY >= 2` and `0` elements at the singleton edge,
+    /// matching [`Self::interior_labels`]'s cardinality profile one
+    /// ordering axis over.
+    ///
+    /// The lex-interior-label-collection contract —
+    /// `T::sorted_interior_labels() == T::sorted_interior().into_iter().map(T::label).collect()`
+    /// on every implementor — is guaranteed by the default
+    /// composition through [`Self::sorted_interior`]'s lex-axis
+    /// interior-collection primitive AND the per-slot label
+    /// projection; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (41) pins the
+    /// composition against the natural
+    /// `sorted_interior().into_iter().map(label).collect()` shape on
+    /// every implementor so a passing well-formedness sweep means
+    /// every generic consumer can call [`Self::sorted_interior_labels`]
+    /// on any typed carrier and expect the same
+    /// `Vec<&'static str>` answer at every crate boundary.
+    ///
+    /// The (partition-flavor × ordering × return-shape) 2×2×2 cube
+    /// over the closed-set boundary + interior aggregation surface
+    /// is now closed at ALL EIGHT corners — [`Self::endpoints`] and
+    /// [`Self::sorted_endpoints`] on the (boundary, ordering,
+    /// variant) pair, [`Self::endpoint_labels`] and
+    /// [`Self::sorted_endpoint_labels`] on the (boundary, ordering,
+    /// label) pair, [`Self::interior`] and [`Self::sorted_interior`]
+    /// on the (interior, ordering, variant) pair,
+    /// [`Self::interior_labels`] and this method on the (interior,
+    /// ordering, label) pair. Together the eight methods cover every
+    /// corner of the (partition-flavor × ordering × return-shape)
+    /// 2×2×2 = 8-corner cube on the closed-set variant-aggregation
+    /// surface. A future consumer that binds any of the eight sees
+    /// the same tuple or collection shape at every crate boundary
+    /// regardless of which cube corner it walks (one of
+    /// `(Self, Self)`, `(&'static str, &'static str)`, `Vec<Self>`,
+    /// `Vec<&'static str>`).
+    fn sorted_interior_labels() -> ::std::vec::Vec<&'static str> {
+        <Self as ClosedSet>::sorted_interior()
+            .into_iter()
+            .map(<Self as ClosedSet>::label)
+            .collect()
+    }
+
     /// Recover the canonical [`Self::label`] at declaration-order
     /// position `i` in [`Self::ALL`], or [`None`] if
     /// `i >= Self::CARDINALITY`.
@@ -7128,6 +7412,137 @@ where
         T::CARDINALITY.saturating_sub(2),
         "{type_name}: T::sorted_interior().len() ({}) drifted from T::CARDINALITY.saturating_sub(2) ({}) — the lex-interior collection MUST contain exactly `CARDINALITY - 2` slots for a closed set with `CARDINALITY >= 2` and 0 slots at the singleton edge",
         sorted_interior.len(),
+        T::CARDINALITY.saturating_sub(2),
+    );
+    // (40) — `T::interior_labels()` MUST equal
+    // `T::interior().into_iter().map(T::label).collect()` — the
+    // declaration-axis strictly-interior LABEL collection projects
+    // every label of every strictly-interior slot in `T::interior()`,
+    // preserving the underlying declaration order verbatim. The
+    // default trait body maps `T::interior()` under `T::label` and
+    // collects into `Vec<&'static str>` verbatim, satisfying the
+    // clause for free; the assertion catches a future implementor
+    // whose override drifts the interior-label collection (a
+    // permissive override that seeds an endpoint anchor's label into
+    // the interior-label slot — silently violating the (boundary,
+    // interior) label partition every downstream declaration-axis
+    // interior-label consumer relies on; a strict override that
+    // drops a strictly-interior slot's label from the collection —
+    // silently truncating the interior-label partition; a subset-
+    // projection override that reorders the interior-label slots out
+    // of declaration order — silently bifurcating the ordering
+    // contract every downstream declaration-axis interior-label
+    // consumer routes through; a fabricated override that returns a
+    // `Vec<&'static str>` built from `T::sorted_interior_labels()`
+    // instead of `T::interior_labels()` — silently folding the
+    // declaration-axis interior-label projection onto the lex-axis
+    // interior-label projection at the ordering-divergent implementor
+    // edge) loudly rather than silently bifurcating the declaration-
+    // axis interior-label-collection surface. Sibling posture to
+    // clauses (36) + (38) — clause (36) pins the (declaration-axis)
+    // label-pair aggregation on the boundary arm, clause (38) pins
+    // the (declaration-axis) variant collection on the interior arm,
+    // this clause pins the (declaration-axis) label collection on the
+    // interior arm against the composition of the declaration-axis
+    // interior-collection primitive and the per-slot label
+    // projection. Clauses (36) + (37) + (40) + (41) together CLOSE
+    // the (partition-flavor × ordering) 2×2 matrix over the closed-
+    // set LABEL aggregation surface — the boundary arm at
+    // `(&'static str, &'static str)` pair-aggregation ((36) + (37))
+    // + the interior arm at `Vec<&'static str>` collection-
+    // aggregation ((40) + (41)) now cover every (partition-flavor,
+    // ordering) corner of the closed-set label-aggregation matrix.
+    // Length corollary —
+    // `T::interior_labels().len() == T::CARDINALITY.saturating_sub(2)`
+    // on every implementor (0 for the singleton and 2-variant edges;
+    // `CARDINALITY - 2` otherwise) — is guaranteed by this clause's
+    // composition through the declaration-axis interior-collection
+    // primitive.
+    let interior_labels = T::interior_labels();
+    let natural_interior_labels: Vec<&'static str> =
+        T::interior().into_iter().map(T::label).collect();
+    assert_eq!(
+        interior_labels, natural_interior_labels,
+        "{type_name}: T::interior_labels() drifted from T::interior().into_iter().map(T::label).collect() — the direct (declaration-order strict-interior label collection) `Vec<&'static str>` projection no longer agrees with the natural composition of `T::interior` under the per-slot `T::label` projection, so a downstream interior-label-badge renderer / interior-label-audit-event emitter / per-implementor interior-label-coherence probe consumer that binds `T::interior_labels()` as its declaration-axis interior-label-aggregation query surface would render the wrong set of labels",
+    );
+    for label in &interior_labels {
+        assert!(
+            T::interior().into_iter().any(|v| T::label(v) == *label),
+            "{type_name}: T::interior_labels() carries {label:?} but no strictly-interior variant projects onto that label — the interior-label collection surface leaked a boundary anchor's label (or fabricated a non-canonical label) into the strictly-interior label collection, silently violating the (boundary, interior) label partition every downstream interior-label-only consumer relies on",
+        );
+    }
+    assert_eq!(
+        interior_labels.len(),
+        T::CARDINALITY.saturating_sub(2),
+        "{type_name}: T::interior_labels().len() ({}) drifted from T::CARDINALITY.saturating_sub(2) ({}) — the interior-label collection MUST contain exactly `CARDINALITY - 2` labels for a closed set with `CARDINALITY >= 2` and 0 labels at the singleton edge",
+        interior_labels.len(),
+        T::CARDINALITY.saturating_sub(2),
+    );
+    // (41) — `T::sorted_interior_labels()` MUST equal
+    // `T::sorted_interior().into_iter().map(T::label).collect()` —
+    // the lex-axis strictly-interior LABEL collection projects every
+    // label of every strictly-lex-interior slot in
+    // `T::sorted_interior()`, preserving the underlying lex order
+    // verbatim. The default trait body maps `T::sorted_interior()`
+    // under `T::label` and collects into `Vec<&'static str>` verbatim,
+    // satisfying the clause for free; the assertion catches a future
+    // implementor whose override drifts the lex-interior-label
+    // collection (a permissive override that seeds a lex-endpoint
+    // anchor's label into the lex-interior-label slot — silently
+    // violating the (lex-boundary, lex-interior) label partition
+    // every downstream alphabetized-interior-label consumer relies
+    // on; a strict override that drops a strictly-lex-interior slot's
+    // label from the collection — silently truncating the lex-
+    // interior-label partition; a subset-projection override that
+    // reorders the lex-interior-label slots out of lex order —
+    // silently bifurcating the alphabetized-ordering contract every
+    // downstream lex-axis interior-label consumer routes through; a
+    // declaration-axis fold override that returns
+    // `T::interior_labels()` instead of the lex-filtered label
+    // collection — silently bifurcating the two ordering axes'
+    // interior-label-aggregations onto the SAME `Vec<&'static str>`
+    // at the ordering-divergent implementor edge) loudly rather than
+    // silently bifurcating the lex-axis interior-label-collection
+    // surface. Sibling posture to clauses (37) + (39) + (40) —
+    // clause (37) pins the (lex-axis) label-pair aggregation on the
+    // lex-boundary arm, clause (39) pins the (lex-axis) variant
+    // collection on the lex-interior arm, clause (40) pins the
+    // (declaration-axis) label collection on the interior arm, this
+    // clause pins the (lex-axis) label collection on the lex-
+    // interior arm against the composition of the lex-axis interior-
+    // collection primitive and the per-slot label projection.
+    // Clauses (34) + (35) + (36) + (37) + (38) + (39) + (40) + (41)
+    // together CLOSE the (partition-flavor × ordering × return-shape)
+    // 2×2×2 cube over the closed-set boundary + interior
+    // aggregation surface — the declaration-axis boundary pair ((34)
+    // + (36)), the lex-axis boundary pair ((35) + (37)), the
+    // declaration-axis interior collection ((38) + (40)), and the
+    // lex-axis interior collection ((39) + (41)) now cover every
+    // (partition-flavor, ordering, return-shape) corner of the
+    // closed-set variant-aggregation cube at both the typed-variant
+    // return-shape column and the label return-shape column. Length
+    // corollary —
+    // `T::sorted_interior_labels().len() == T::CARDINALITY.saturating_sub(2)`
+    // on every implementor — matches [`T::interior_labels`]'s
+    // cardinality profile one ordering axis over.
+    let sorted_interior_labels = T::sorted_interior_labels();
+    let natural_sorted_interior_labels: Vec<&'static str> =
+        T::sorted_interior().into_iter().map(T::label).collect();
+    assert_eq!(
+        sorted_interior_labels, natural_sorted_interior_labels,
+        "{type_name}: T::sorted_interior_labels() drifted from T::sorted_interior().into_iter().map(T::label).collect() — the direct (lex-order strict-interior label collection) `Vec<&'static str>` projection no longer agrees with the natural composition of `T::sorted_interior` under the per-slot `T::label` projection, so a downstream alphabetized-interior-label-badge renderer / alphabetized-interior-label-audit-event emitter / per-implementor lex-interior-label-coherence probe consumer that binds `T::sorted_interior_labels()` as its lex-axis interior-label-aggregation query surface would render the wrong set of labels",
+    );
+    for label in &sorted_interior_labels {
+        assert!(
+            T::sorted_interior().into_iter().any(|v| T::label(v) == *label),
+            "{type_name}: T::sorted_interior_labels() carries {label:?} but no strictly-lex-interior variant projects onto that label — the lex-interior-label collection surface leaked a lex-boundary anchor's label (or fabricated a non-canonical label) into the strictly-lex-interior label collection, silently violating the (lex-boundary, lex-interior) label partition every downstream lex-interior-label-only consumer relies on",
+        );
+    }
+    assert_eq!(
+        sorted_interior_labels.len(),
+        T::CARDINALITY.saturating_sub(2),
+        "{type_name}: T::sorted_interior_labels().len() ({}) drifted from T::CARDINALITY.saturating_sub(2) ({}) — the lex-interior-label collection MUST contain exactly `CARDINALITY - 2` labels for a closed set with `CARDINALITY >= 2` and 0 labels at the singleton edge",
+        sorted_interior_labels.len(),
         T::CARDINALITY.saturating_sub(2),
     );
 }
@@ -14624,6 +15039,386 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_interior() override that drops the strictly-lex-interior slot rather than composing T::sorted_variants().into_iter().filter(T::is_sorted_interior).collect()",
+        );
+    }
+
+    #[test]
+    fn interior_labels_returns_declaration_order_strict_interior_label_slice() {
+        // The declaration-order interior-label-collection projection
+        // returns the label of every strictly-interior slot in
+        // `T::interior()` — the slot-0 endpoint anchor's label
+        // (`"alpha"`) and the slot-`(N - 1)` endpoint anchor's label
+        // (`"gamma"`) are both filtered out by the boundary-partition
+        // predicate on the `interior()` sourcing collection, leaving
+        // `["beta"]` on the 3-variant stub. Sibling posture to
+        // `interior_returns_declaration_order_strict_interior_slice`
+        // one return-shape axis over on the (`Vec<Self>` typed
+        // variant collection, `Vec<&'static str>` label collection)
+        // partition of the closed-set declaration-axis interior-
+        // aggregation surface — the typed-variant arm materializes
+        // each strictly-interior slot as `Self`, the label arm labels
+        // each slot under `T::label`.
+        assert_eq!(<StubKind as ClosedSet>::interior_labels(), vec!["beta"],);
+    }
+
+    #[test]
+    fn sorted_interior_labels_returns_lex_order_strict_interior_label_slice() {
+        // The lex-order interior-label-collection projection returns
+        // the label of every strictly-lex-interior slot in
+        // `T::sorted_interior()` — the lex-slot-0 endpoint anchor's
+        // label (`"alpha"`) and the lex-slot-`(N - 1)` endpoint
+        // anchor's label (`"gamma"`) are both filtered out by the
+        // lex-boundary-partition predicate on the `sorted_interior()`
+        // sourcing collection, leaving `["beta"]` on the 3-variant
+        // stub. `StubKind`'s canonical labels are `("alpha", "beta",
+        // "gamma")` — the declaration ordering matches the lex
+        // ordering here, so the lex-interior-label collection matches
+        // the declaration-interior-label collection. Sibling posture
+        // to `interior_labels_returns_declaration_order_strict_interior_label_slice`
+        // one ordering axis over on the (declaration, lex) partition
+        // of the closed-set interior-label-collection surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_interior_labels(),
+            vec!["beta"],
+        );
+    }
+
+    #[test]
+    fn interior_labels_and_sorted_interior_labels_diverge_on_declaration_order_that_diverges_from_lex_order(
+    ) {
+        // The (declaration-axis, lex-axis) interior-label-collection
+        // contract on a stub whose declaration order deliberately
+        // diverges from its lex order — the two interior-label
+        // collections agree on the SET of strictly-interior LABELS
+        // (both partition-flavor axes hold regardless of ordering)
+        // but disagree on the ORDER of the returned vectors. A
+        // regression that folded `sorted_interior_labels` onto
+        // `interior_labels`' declaration-order walk would pass on
+        // `StubKind` (where declaration ordering matches lex
+        // ordering) and silently bifurcate the two interior-label
+        // collections on any implementor whose declaration order
+        // diverges from its lex order. The deliberate 5-variant stub
+        // has declaration order `[Epsilon, Delta, Gamma, Beta,
+        // Alpha]` and labels `("epsilon", "delta", "gamma", "beta",
+        // "alpha")`. The lex ordering of the labels is `"alpha" <
+        // "beta" < "delta" < "epsilon" < "gamma"`, so the lex-
+        // endpoint labels are `"alpha"` (lex head) + `"gamma"` (lex
+        // tail) while the declaration-endpoint labels are `"epsilon"`
+        // (declaration head) + `"alpha"` (declaration tail). The
+        // interior labels of the declaration axis (dropping
+        // `"epsilon"` and `"alpha"`) are `["delta", "gamma",
+        // "beta"]`; the interior labels of the lex axis (dropping
+        // `"alpha"` and `"gamma"`) are `["beta", "delta",
+        // "epsilon"]`. The two collections share ONE label
+        // (`"delta"`) and diverge on the OTHER slots. Sibling
+        // posture to
+        // `interior_and_sorted_interior_diverge_on_declaration_order_that_diverges_from_lex_order`
+        // one return-shape axis over on the (`Vec<Self>` typed
+        // variant collection, `Vec<&'static str>` label collection)
+        // partition of the ordering-divergent stub surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum InteriorLabelsPartitionStubKind {
+            Epsilon,
+            Delta,
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownInteriorLabelsPartitionStubKind(pub String);
+        impl core::fmt::Display for UnknownInteriorLabelsPartitionStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown interior labels partition stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for InteriorLabelsPartitionStubKind {
+            const ALL: &'static [Self] = &[
+                Self::Epsilon,
+                Self::Delta,
+                Self::Gamma,
+                Self::Beta,
+                Self::Alpha,
+            ];
+            const SET_LABEL: &'static str = "interior labels partition stub kind";
+            type Unknown = UnknownInteriorLabelsPartitionStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Epsilon => "epsilon",
+                    Self::Delta => "delta",
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownInteriorLabelsPartitionStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <InteriorLabelsPartitionStubKind as ClosedSet>::interior_labels(),
+            vec!["delta", "gamma", "beta"],
+            "interior_labels() drifted from the declaration-order (\"delta\", \"gamma\", \"beta\") label slice after dropping the declaration endpoint labels (\"epsilon\", \"alpha\")",
+        );
+        assert_eq!(
+            <InteriorLabelsPartitionStubKind as ClosedSet>::sorted_interior_labels(),
+            vec!["beta", "delta", "epsilon"],
+            "sorted_interior_labels() drifted from the lex-order (\"beta\", \"delta\", \"epsilon\") label slice after dropping the lex endpoint labels (\"alpha\", \"gamma\")",
+        );
+        assert_ne!(
+            <InteriorLabelsPartitionStubKind as ClosedSet>::interior_labels(),
+            <InteriorLabelsPartitionStubKind as ClosedSet>::sorted_interior_labels(),
+            "interior_labels() and sorted_interior_labels() returned the SAME vector on a stub whose declaration order deliberately diverges from its lex order — the (declaration, lex) ordering partition MUST be structurally observed by the two interior-label-collection surfaces",
+        );
+        // The stub also satisfies the well-formedness sweep — clauses
+        // (40) + (41) both fire on a declaration-order that diverges
+        // from the lex order, pinning the declaration-axis interior-
+        // label collection AND the lex-axis interior-label collection
+        // at the ordering-divergent implementor edge.
+        super::assert_closed_set_well_formed::<InteriorLabelsPartitionStubKind>();
+    }
+
+    #[test]
+    fn interior_labels_and_sorted_interior_labels_collapse_to_empty_on_singleton_closed_set() {
+        // The interior-label-collection degenerate case — a singleton
+        // closed set has ONE variant that is BOTH `T::first()` and
+        // `T::last()` (and BOTH `T::sorted_first()` and
+        // `T::sorted_last()`), so both `T::interior()` and
+        // `T::sorted_interior()` return the empty vector `[]` and
+        // consequently `T::interior_labels()` and
+        // `T::sorted_interior_labels()` both return the empty vector
+        // `[]`. A singleton has ZERO interior LABEL slots by
+        // construction — the sole element is BOTH endpoints
+        // simultaneously, leaving no room for a strictly-interior
+        // label. Mirrors
+        // `interior_and_sorted_interior_collapse_to_empty_on_singleton_closed_set`
+        // one return-shape axis over on the (`Vec<Self>` typed
+        // variant collection, `Vec<&'static str>` label collection)
+        // partition of the singleton stub surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonInteriorLabelsStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonInteriorLabelsStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonInteriorLabelsStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton interior labels stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonInteriorLabelsStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton interior labels stub kind";
+            type Unknown = UnknownSingletonInteriorLabelsStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonInteriorLabelsStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonInteriorLabelsStubKind as ClosedSet>::interior_labels(),
+            Vec::<&'static str>::new(),
+        );
+        assert_eq!(
+            <SingletonInteriorLabelsStubKind as ClosedSet>::sorted_interior_labels(),
+            Vec::<&'static str>::new(),
+        );
+        // Singleton collapse — both interior-label collections fold
+        // onto the SAME empty vector at the boundary-cardinality
+        // edge.
+        assert_eq!(
+            <SingletonInteriorLabelsStubKind as ClosedSet>::interior_labels(),
+            <SingletonInteriorLabelsStubKind as ClosedSet>::sorted_interior_labels(),
+        );
+        super::assert_closed_set_well_formed::<SingletonInteriorLabelsStubKind>();
+    }
+
+    #[test]
+    fn interior_labels_and_sorted_interior_labels_are_empty_on_two_variant_closed_set() {
+        // The interior-label-collection two-variant degenerate case —
+        // a 2-variant closed set has `T::first() != T::last()` and
+        // both answer `true` to `T::is_endpoint`, so both
+        // `T::interior()` and `T::sorted_interior()` return the empty
+        // vector `[]` and consequently `T::interior_labels()` and
+        // `T::sorted_interior_labels()` both return the empty vector
+        // `[]`. Every variant is a boundary anchor; no strictly-
+        // interior label slot exists. The interior-label-collection
+        // cardinality drops from `CARDINALITY - 2 = 0` at the
+        // 2-variant edge to `CARDINALITY - 2 = 0` at the singleton
+        // edge to `CARDINALITY - 2 = 1` at the 3-variant edge — the
+        // cardinality corollary is
+        // `T::interior_labels().len() == CARDINALITY.saturating_sub(2)`
+        // uniformly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum TwoVariantInteriorLabelsStubKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownTwoVariantInteriorLabelsStubKind(pub String);
+        impl core::fmt::Display for UnknownTwoVariantInteriorLabelsStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown two variant interior labels stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for TwoVariantInteriorLabelsStubKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "two variant interior labels stub kind";
+            type Unknown = UnknownTwoVariantInteriorLabelsStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownTwoVariantInteriorLabelsStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <TwoVariantInteriorLabelsStubKind as ClosedSet>::interior_labels(),
+            Vec::<&'static str>::new(),
+        );
+        assert_eq!(
+            <TwoVariantInteriorLabelsStubKind as ClosedSet>::sorted_interior_labels(),
+            Vec::<&'static str>::new(),
+        );
+        super::assert_closed_set_well_formed::<TwoVariantInteriorLabelsStubKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_interior_labels_and_interior_label_composition(
+    ) {
+        // The well-formedness sweep's (40) clause —
+        // `T::interior_labels()` MUST equal
+        // `T::interior().into_iter().map(T::label).collect()`. A
+        // hand-impl'd implementor whose override drifts the interior-
+        // label collection (leaks an endpoint anchor's label into the
+        // interior-label slot, drops a strictly-interior slot's label
+        // from the collection, reorders the slots out of declaration
+        // order, fabricates a non-canonical label into either slot)
+        // fails the sweep loudly rather than silently bifurcating the
+        // declaration-axis interior-label-collection surface every
+        // downstream declaration-axis interior-label-badge renderer
+        // consumer routes through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_interior_and_all_is_interior_composition`
+        // one return-shape axis over on the (`Vec<Self>` typed
+        // variant collection, `Vec<&'static str>` label collection)
+        // partition of the closed-set declaration-axis interior-
+        // aggregation surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedInteriorLabelsKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedInteriorLabelsKind(pub String);
+        impl core::fmt::Display for UnknownDriftedInteriorLabelsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted interior labels kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedInteriorLabelsKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted interior labels kind";
+            type Unknown = UnknownDriftedInteriorLabelsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedInteriorLabelsKind(s.to_owned())
+            }
+            fn interior_labels() -> ::std::vec::Vec<&'static str> {
+                // Drifted override — leaks the declaration head
+                // anchor's label (`"head"`) into the interior-label
+                // slot, silently violating the (boundary, interior)
+                // label partition every downstream declaration-axis
+                // interior-label consumer relies on. The natural
+                // composition returns `vec!["middle"]`.
+                vec!["head", "middle"]
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedInteriorLabelsKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an interior_labels() override that leaks the declaration head anchor's label into the interior-label collection rather than composing T::interior().into_iter().map(T::label).collect()",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_interior_labels_and_sorted_interior_label_composition(
+    ) {
+        // The well-formedness sweep's (41) clause —
+        // `T::sorted_interior_labels()` MUST equal
+        // `T::sorted_interior().into_iter().map(T::label).collect()`.
+        // A hand-impl'd implementor whose override drifts the lex-
+        // interior-label collection (leaks a lex-endpoint anchor's
+        // label into the interior-label slot, drops a strictly-lex-
+        // interior slot's label, folds the declaration-axis interior-
+        // label collection onto the lex-axis interior-label collection
+        // at the ordering-divergent implementor edge) fails the sweep
+        // loudly rather than silently bifurcating the lex-axis
+        // interior-label-collection surface. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_interior_labels_and_interior_label_composition`
+        // one ordering axis over on the (declaration, lex) partition
+        // of clauses (40) + (41).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedInteriorLabelsKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedInteriorLabelsKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedInteriorLabelsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted interior labels kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedInteriorLabelsKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted sorted interior labels kind";
+            type Unknown = UnknownDriftedSortedInteriorLabelsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedInteriorLabelsKind(s.to_owned())
+            }
+            fn sorted_interior_labels() -> ::std::vec::Vec<&'static str> {
+                // Drifted override — drops the strictly-lex-interior
+                // slot's label (`"middle"`) from the lex-interior-
+                // label collection, silently truncating the lex-
+                // interior-label partition every downstream
+                // alphabetized-interior-label consumer relies on. The
+                // natural composition returns `vec!["middle"]`.
+                vec![]
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedInteriorLabelsKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_interior_labels() override that drops the strictly-lex-interior slot's label rather than composing T::sorted_interior().into_iter().map(T::label).collect()",
         );
     }
 }

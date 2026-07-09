@@ -2713,6 +2713,207 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn sorted_index_of_label(s: &str) -> Option<usize> {
         <Self as ClosedSet>::find_by_label(s).map(<Self as ClosedSet>::sorted_index_of)
     }
+
+    /// The declaration-order neighbor immediately AFTER `self` in
+    /// [`Self::ALL`] — `Some(Self::ALL[self.index_of() + 1])` when
+    /// `self` is not the tail, [`None`] otherwise.
+    ///
+    /// The forward-direction arm of the (forward, backward) neighbor
+    /// axis over the closed set's declaration-order chain. Together
+    /// with [`Self::prev`] the pair closes the (endpoint = 0,
+    /// endpoint = `CARDINALITY - 1`) partition of the neighbor
+    /// surface — every generic consumer that walks the closed set as
+    /// a bounded chain (a state-machine iterator that steps
+    /// [`Self::first`] → [`Self::last`] one variant at a time, a
+    /// wraparound-cursor renderer that highlights the "next choice"
+    /// in an LSP completion list, a truth-table property test that
+    /// exercises adjacent-variant transitions, a signal-fold reducer
+    /// that walks the chain accumulating state) binds to ONE typed
+    /// neighbor method rather than hand-rolling either
+    /// `Self::from_index(self.index_of() + 1)` (which re-derives the
+    /// same two-primitive composition at every callsite AND makes
+    /// every downstream site depend on the `+ 1` arithmetic) OR a
+    /// per-implementor inline `match self { A => Some(B), B =>
+    /// Some(C), C => None }` (which re-derives the per-variant
+    /// neighbor table at every callsite AND drifts silently when
+    /// [`Self::ALL`] gains a new variant).
+    ///
+    /// Sibling posture to [`Self::last`] on the (forward-neighbor,
+    /// tail-endpoint) axis of the closed-set traversal surface —
+    /// `T::last().next() == None` is the natural fixpoint the
+    /// forward-neighbor axis and the tail-endpoint anchor share.
+    /// Sibling posture to [`Self::prev`] one axis over on the
+    /// (forward, backward) direction partition of the neighbor
+    /// surface: this method returns the declaration-order successor,
+    /// [`Self::prev`] returns the declaration-order predecessor. The
+    /// (endpoint × direction) 2×2 matrix over the closed-set
+    /// traversal surface partitions post-lift:
+    ///
+    /// | Direction \\ Boundary     | Interior             | Boundary         |
+    /// |---------------------------|----------------------|------------------|
+    /// | Forward (declaration)     | [`Self::next`]       | [`Self::last`]   |
+    /// | Backward (declaration)    | [`Self::prev`]       | [`Self::first`]  |
+    ///
+    /// Default body composes [`Self::index_of`] with
+    /// [`Self::from_index`] verbatim — the neighbor projection is a
+    /// typed CONSEQUENCE of the pre-existing (variant ↔ `usize`
+    /// array index) bijection, not a third codepath. Implementors
+    /// override only when the neighbor surface needs to diverge from
+    /// the natural `from_index(index_of(self) + 1)` shape (no
+    /// production implementor reaches for this today; the axis
+    /// exists for the same reason `via` / `set_label` / `labels` /
+    /// `from_index` / `first` / `last` overrides exist — a typed
+    /// escape hatch the trait surface exposes rather than forcing
+    /// the implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::from_index`] propagates the override through
+    /// this default body automatically; the (variant → variant)
+    /// forward-neighbor projection funnels through ONE typed
+    /// primitive.
+    ///
+    /// The bounded-neighbor contract — the tail arm returns [`None`]
+    /// for [`Self::last`] — is guaranteed by the default composition
+    /// through [`Self::from_index`]'s `<[T]>::get` slice-bounded
+    /// projection; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (26) pins the
+    /// composition against the natural
+    /// `from_index(index_of(self) + 1)` shape AND the tail-endpoint
+    /// `None` guard on every implementor, so a passing well-
+    /// formedness sweep means every generic consumer can call
+    /// [`Self::next`] on any typed variant and expect the same
+    /// [`Option`]-typed answer at every crate boundary.
+    ///
+    /// Future consumers — a state-machine iterator that walks
+    /// [`Self::first`] → [`Self::last`] one variant at a time via
+    /// `let mut cur = T::first(); while let Some(v) = cur.next() { ...
+    /// cur = v; }` without threading either `T::ALL`'s slice-index
+    /// API OR a per-variant `match` block through the iterator body,
+    /// a wraparound-cursor renderer that highlights the "next choice"
+    /// in an LSP completion list by composing `self.next().unwrap_or(
+    /// T::first())` — the wraparound is a typed CONSEQUENCE of the
+    /// bounded-neighbor axis, an implementor's saga-step engine that
+    /// advances phase-by-phase through the workload lifecycle by
+    /// binding each phase's forward transition to [`Self::next`], a
+    /// truth-table property test that exercises adjacent-variant
+    /// transitions without re-deriving the (variant → next-variant)
+    /// mapping at each callsite, a signal-fold reducer that walks
+    /// the chain accumulating state per-neighbor — bind to ONE trait
+    /// method instead of hand-rolling either the
+    /// `T::from_index(self.index_of() + 1)` composition (which
+    /// re-derives the same two-primitive composition at every
+    /// callsite AND makes every downstream site depend on the
+    /// arithmetic) OR the inline `T::ALL.get(self.index_of() +
+    /// 1).copied()` (which re-derives the underlying three-primitive
+    /// composition at every callsite) at each callsite, and the
+    /// closed-set forward-neighbor projection surface evolves at ONE
+    /// site rather than per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → forward
+    /// neighbor) projection becomes a TYPE projection on the trait
+    /// rather than a per-consumer inline
+    /// `Self::from_index(self.index_of() + 1)` composition at every
+    /// downstream traversal site. The (forward, backward) direction
+    /// axis of the closed-set traversal surface partitions
+    /// exhaustively into TWO typed projections, each with a distinct
+    /// load-bearing consumer surface — forward walk for
+    /// [`Self::next`], backward walk for [`Self::prev`].
+    /// THEORY.md §V.1 — knowable platform; the (variant → forward
+    /// neighbor) projection was an unnamed compound of
+    /// [`Self::index_of`] + [`Self::from_index`] + `+ 1` arithmetic
+    /// pre-lift; naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two substrate primitives — generic
+    /// consumers see ONE method, not one forward-neighbor-shape-per-
+    /// crate. The well-formedness clause (26) pins the composition
+    /// against the natural `from_index(index_of(self) + 1)` shape AND
+    /// the tail-endpoint `None` guard on every implementor so a
+    /// passing sweep means every generic consumer can call
+    /// [`Self::next`] on any typed variant and expect the same
+    /// [`Option`]-typed answer at every crate boundary.
+    /// THEORY.md §VI.1 — generation over composition; the (variant
+    /// → forward neighbor) projection emerges from the composition
+    /// of TWO substrate primitives ([`Self::index_of`],
+    /// [`Self::from_index`]) via `usize` `+ 1` arithmetic rather
+    /// than as a per-implementor `match self { A => Some(B), B =>
+    /// Some(C), C => None }` block. A future tightening of either
+    /// primitive (a future perfect-hash `from_index`, a future
+    /// const-fn `index_of` axis that makes the projection callable
+    /// in const contexts) propagates to every closed-set forward-
+    /// neighbor consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-next` on closed
+    /// enumerations (the direct-neighbor projection on the
+    /// declaration-order chain); Idris's `Fin n` finite-cardinality
+    /// type's `weakenN` / `strengthenN` neighbor operators on the
+    /// non-empty finite-type universe; Haskell's `succ` on the
+    /// `Bounded + Enum` type-class pair (which panics at the tail
+    /// endpoint rather than returning an `Option`, one design
+    /// decision away — this method takes the `Option`-typed panic-
+    /// free arm); MLIR's `RegisteredOperationName::next()` on the
+    /// declaration-order Op registry; Rust's `strum::EnumIter` /
+    /// `strum::IntoEnumIterator::iter().skip_while(|v| *v != self)
+    /// .nth(1)` composed through the iterator API. Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's existing [`Self::index_of`] +
+    /// [`Self::from_index`] surfaces via `usize` `+ 1` arithmetic —
+    /// no new dep, no new IR layer, no supertrait bound, no panic on
+    /// the tail-endpoint boundary.
+    fn next(self) -> Option<Self> {
+        <Self as ClosedSet>::from_index(<Self as ClosedSet>::index_of(self) + 1)
+    }
+
+    /// The declaration-order neighbor immediately BEFORE `self` in
+    /// [`Self::ALL`] — `Some(Self::ALL[self.index_of() - 1])` when
+    /// `self` is not the head, [`None`] otherwise.
+    ///
+    /// Sibling posture to [`Self::next`] one axis over on the
+    /// (forward, backward) direction partition of the closed-set
+    /// neighbor surface: [`Self::next`] returns the declaration-order
+    /// successor, this method returns the declaration-order
+    /// predecessor. See [`Self::next`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the backward-direction arm of the same axis
+    /// and inherits every property from the forward arm's
+    /// documentation, differing only in the `- 1` arithmetic and the
+    /// head-endpoint underflow guard.
+    ///
+    /// Default body composes [`Self::index_of`] with
+    /// [`Self::from_index`] under a `usize` `- 1` subtraction guarded
+    /// on `index_of(self) > 0` — the head-endpoint arm returns
+    /// [`None`] BEFORE the subtraction is attempted, so the `usize`
+    /// arithmetic never underflows. Implementors override only when
+    /// the neighbor surface needs to diverge from the natural
+    /// `from_index(index_of(self) - 1)` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `via` / `set_label` / `labels` / `from_index` /
+    /// `first` / `last` / `next` overrides exist — a typed escape
+    /// hatch rather than forcing the implementor to hand-roll the
+    /// impl). An implementor that overrides [`Self::from_index`]
+    /// propagates the override through this default body
+    /// automatically; the (variant → variant) backward-neighbor
+    /// projection funnels through ONE typed primitive.
+    ///
+    /// The bounded-neighbor contract — the head arm returns [`None`]
+    /// for [`Self::first`] — is guaranteed by the explicit
+    /// `index_of(self) == 0` guard; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (26) pins the
+    /// composition against the natural
+    /// `from_index(index_of(self) - 1)` shape on interior variants
+    /// AND the head-endpoint `None` guard on every implementor, so a
+    /// passing well-formedness sweep means every generic consumer
+    /// can call [`Self::prev`] on any typed variant and expect the
+    /// same [`Option`]-typed answer at every crate boundary.
+    /// `T::first().prev() == None` is the natural fixpoint the
+    /// backward-neighbor axis and the head-endpoint anchor share,
+    /// mirroring the `T::last().next() == None` fixpoint on the
+    /// forward-neighbor / tail-endpoint pair.
+    fn prev(self) -> Option<Self> {
+        let i = <Self as ClosedSet>::index_of(self);
+        if i == 0 {
+            None
+        } else {
+            <Self as ClosedSet>::from_index(i - 1)
+        }
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -3183,6 +3384,48 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     (typed variant, `&'static str` label, `usize` position)
 ///     projection triangle stays direct-projection closed at EVERY
 ///     (input, output) pair on BOTH ordering axes.
+/// 26. For every variant `v` in `T::ALL`, `v.next()` equals
+///     `T::from_index(v.index_of() + 1)`, AND `v.prev()` equals
+///     `T::from_index(v.index_of() - 1)` when `v.index_of() > 0`,
+///     AND `T::first().prev()` equals [`None`], AND `T::last().next()`
+///     equals [`None`] — the declaration-order (variant → forward
+///     neighbor, variant → backward neighbor) direction pair agrees
+///     with the natural [`ClosedSet::index_of`] +
+///     [`ClosedSet::from_index`] composition on every interior slot
+///     AND rejects both endpoint boundaries. The default trait
+///     bodies (`from_index(index_of(self) + 1)` for the forward arm,
+///     `from_index(index_of(self) - 1)` guarded on
+///     `index_of(self) > 0` for the backward arm) satisfy both arms
+///     for free; the assertion catches a future implementor whose
+///     override drifts either neighbor arm (a permissive forward
+///     override that returns `Some(_)` at the tail — folding a
+///     tail-boundary walk onto a wraparound to the head at the
+///     forward-projection column while the composed `+ 1` arithmetic
+///     would return [`None`] through `from_index`'s `<[T]>::get`;
+///     a permissive backward override that returns `Some(_)` at the
+///     head — folding a head-boundary walk onto a wraparound to the
+///     tail through the `usize` underflow the guard prevents; a
+///     swapped override that returns the predecessor for
+///     [`Self::next`] AND the successor for [`Self::prev`], silently
+///     inverting the traversal direction every downstream state-
+///     machine iterator / phase-fold reducer / LSP wraparound-cursor
+///     consumer walks over; a stale override that returns the wrong
+///     neighbor after a variant-listing edit) loudly rather than
+///     silently bifurcating the neighbor-projection surface every
+///     downstream state-machine iterator / saga-step engine /
+///     truth-table property test / phase-fold reducer consumer
+///     routes through. Sibling posture to clauses (15) + (16) + (18)
+///     — clauses (15) + (16) pin the (typed variant ↔ `usize` array
+///     index) bijection at BOTH directions, clause (18) pins the
+///     (head, tail) endpoint anchors against `T::ALL[0]` /
+///     `T::ALL[T::ALL.len() - 1]`, this clause pins the (forward,
+///     backward) neighbor projections against the composition of
+///     both bijection arms AND pins the endpoint-boundary [`None`]
+///     guards on both direction arms — so the closed-set traversal
+///     surface stays sound at BOTH direction arms AND on the shared
+///     endpoint-anchor fixpoints (`T::last().next() == None`,
+///     `T::first().prev() == None`) that thread the neighbor axis
+///     back through the endpoint-anchor axis.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -3976,6 +4219,66 @@ where
     assert!(
         T::sorted_index_of_label("").is_none(),
         "{type_name}: T::sorted_index_of_label(\"\") returned Some(_) — the direct (&str label → usize lex-order index) projection accepted the empty-string boundary that clause (4) reserves as structurally outside every closed set, folding the reserved boundary onto an in-range lex slot at the direct-projection column",
+    );
+    // (26) — For every variant `v` in `T::ALL`, `v.next()` MUST equal
+    // `T::from_index(v.index_of() + 1)`, AND `v.prev()` MUST equal
+    // `T::from_index(v.index_of() - 1)` when `v.index_of() > 0`, AND
+    // `T::first().prev()` MUST equal `None`, AND `T::last().next()`
+    // MUST equal `None`. The default trait bodies compose
+    // `from_index(index_of(self) + 1)` (forward arm) and
+    // `from_index(index_of(self) - 1)` guarded on `index_of(self) > 0`
+    // (backward arm) verbatim and satisfy both arms for free; the
+    // assertion catches a future implementor whose override drifts
+    // either neighbor projection (a permissive forward override that
+    // returns `Some(_)` at the tail — folding a tail-boundary walk
+    // onto a wraparound to the head at the forward-projection column
+    // while the composed `+ 1` arithmetic would return `None`; a
+    // permissive backward override that returns `Some(_)` at the head
+    // — folding a head-boundary walk onto a wraparound to the tail
+    // through the `usize` underflow the guard prevents; a swapped
+    // override that returns the predecessor for `next` AND the
+    // successor for `prev`, silently inverting the traversal
+    // direction; a stale override that returns the wrong neighbor
+    // after a variant-listing edit) loudly rather than silently
+    // bifurcating the neighbor-projection surface every downstream
+    // state-machine iterator / saga-step engine / truth-table
+    // property test / phase-fold reducer consumer routes through.
+    // Sibling posture to clauses (15) + (16) + (18) — clauses (15) +
+    // (16) pin the (typed variant ↔ `usize` array index) bijection at
+    // BOTH directions, clause (18) pins the (head, tail) endpoint
+    // anchors against `T::ALL[0]` / `T::ALL[T::ALL.len() - 1]`, this
+    // clause pins the (forward, backward) neighbor projections against
+    // the composition of both bijection arms AND pins the endpoint-
+    // boundary `None` guards on both direction arms — so the closed-
+    // set traversal surface stays sound at BOTH direction arms AND on
+    // the shared endpoint-anchor fixpoints (`T::last().next() ==
+    // None`, `T::first().prev() == None`).
+    for &v in T::ALL {
+        let i = v.index_of();
+        let expected_next = T::from_index(i + 1);
+        assert_eq!(
+            v.next(),
+            expected_next,
+            "{type_name}: {v:?}.next() drifted from T::from_index({v:?}.index_of() + 1) — the direct (variant → forward neighbor) projection no longer agrees with the natural index_of+from_index composition, so a downstream state-machine iterator / saga-step engine / phase-fold reducer / LSP wraparound-cursor consumer that binds `v.next()` as its forward-traversal surface would land on the wrong neighbor for {v:?}",
+        );
+        if i > 0 {
+            let expected_prev = T::from_index(i - 1);
+            assert_eq!(
+                v.prev(),
+                expected_prev,
+                "{type_name}: {v:?}.prev() drifted from T::from_index({v:?}.index_of() - 1) — the direct (variant → backward neighbor) projection no longer agrees with the natural index_of+from_index composition on an interior slot, so a downstream state-machine iterator / saga-step engine / phase-fold reducer / LSP wraparound-cursor consumer that binds `v.prev()` as its backward-traversal surface would land on the wrong neighbor for {v:?}",
+            );
+        }
+    }
+    assert_eq!(
+        T::first().prev(),
+        None,
+        "{type_name}: T::first().prev() returned Some(_) — the (variant → backward neighbor) projection accepted the head-endpoint boundary, silently folding a head-boundary walk onto a wraparound to the tail while the natural `usize` underflow guard should return `None`. Clauses (18) + (26) together pin `T::first().prev() == None` as the structural fixpoint the head-endpoint anchor and the backward-neighbor axis share",
+    );
+    assert_eq!(
+        T::last().next(),
+        None,
+        "{type_name}: T::last().next() returned Some(_) — the (variant → forward neighbor) projection accepted the tail-endpoint boundary, silently folding a tail-boundary walk onto a wraparound to the head while the natural `<[T]>::get` bounded-index projection should return `None`. Clauses (18) + (26) together pin `T::last().next() == None` as the structural fixpoint the tail-endpoint anchor and the forward-neighbor axis share",
     );
 }
 
@@ -7559,6 +7862,342 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_index_of_label() override drifted from the natural find_by_label+sorted_index_of composition on the non-canonical reject arm",
+        );
+    }
+
+    #[test]
+    fn next_walks_declaration_order_forward_chain() {
+        // The forward-neighbor projection — `v.next()` walks
+        // `T::ALL` one slot forward from each variant, returning
+        // `Some` on every interior slot and `None` at the tail. The
+        // `StubKind` variant listing is `[Alpha, Beta, Gamma]`, so
+        // the forward chain is Alpha → Beta → Gamma → None. Sibling
+        // posture to `first_and_last_agree_with_from_index_at_the_endpoint_slots`
+        // on the (endpoint-anchor, neighbor) axis — both walk `T::ALL`
+        // through the same `index_of` + `from_index` composition,
+        // one at the endpoints and one at every step of the
+        // declaration-order chain.
+        assert_eq!(
+            <StubKind as ClosedSet>::next(StubKind::Alpha),
+            Some(StubKind::Beta),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::next(StubKind::Beta),
+            Some(StubKind::Gamma),
+        );
+        assert_eq!(<StubKind as ClosedSet>::next(StubKind::Gamma), None);
+    }
+
+    #[test]
+    fn prev_walks_declaration_order_backward_chain() {
+        // The backward-neighbor projection — `v.prev()` walks
+        // `T::ALL` one slot backward from each variant, returning
+        // `Some` on every interior slot and `None` at the head. The
+        // `StubKind` variant listing is `[Alpha, Beta, Gamma]`, so
+        // the backward chain is Gamma → Beta → Alpha → None. Sibling
+        // posture to `next_walks_declaration_order_forward_chain` one
+        // axis over on the (forward, backward) direction partition.
+        assert_eq!(<StubKind as ClosedSet>::prev(StubKind::Alpha), None);
+        assert_eq!(
+            <StubKind as ClosedSet>::prev(StubKind::Beta),
+            Some(StubKind::Alpha),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::prev(StubKind::Gamma),
+            Some(StubKind::Beta),
+        );
+    }
+
+    #[test]
+    fn next_and_prev_are_inverses_on_the_interior() {
+        // The (forward, backward) neighbor-inverse contract — for
+        // every interior variant `v` (not the head, not the tail),
+        // `v.next().unwrap().prev() == Some(v)` AND
+        // `v.prev().unwrap().next() == Some(v)`. The two projections
+        // compose the same `index_of` + `from_index` bijection under
+        // opposite `usize` arithmetic (`+ 1` vs `- 1`), so the
+        // interior neighbor edges MUST close as a round-trip. A
+        // regression that returns the wrong neighbor for either arm
+        // would silently break this round-trip, folding a two-step
+        // walk `v → v.next().unwrap() → w` onto some
+        // `w ≠ v` at the second step's inverse. Sibling posture to
+        // `first_and_last_agree_with_from_index_at_the_endpoint_slots`
+        // — both anchor the (index_of, from_index) bijection at
+        // different structural landmarks (endpoints vs interior
+        // neighbors) on the SAME primitive pair.
+        for &v in <StubKind as ClosedSet>::ALL {
+            if let Some(fwd) = <StubKind as ClosedSet>::next(v) {
+                assert_eq!(
+                    <StubKind as ClosedSet>::prev(fwd),
+                    Some(v),
+                    "{v:?}.next().unwrap().prev() did not round-trip",
+                );
+            }
+            if let Some(bwd) = <StubKind as ClosedSet>::prev(v) {
+                assert_eq!(
+                    <StubKind as ClosedSet>::next(bwd),
+                    Some(v),
+                    "{v:?}.prev().unwrap().next() did not round-trip",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn first_prev_and_last_next_pin_the_endpoint_boundary_fixpoints() {
+        // The endpoint-anchor / neighbor-axis fixpoints —
+        // `T::first().prev() == None` AND `T::last().next() == None`.
+        // The two fixpoints thread the head-endpoint anchor back
+        // through the backward-neighbor axis AND the tail-endpoint
+        // anchor back through the forward-neighbor axis at ONE
+        // structural landmark each. A regression that wraps around
+        // (returning `Some(T::last())` for `T::first().prev()`, or
+        // `Some(T::first())` for `T::last().next()`) would silently
+        // fold a bounded traversal onto an infinite loop every
+        // downstream state-machine iterator / phase-fold reducer
+        // consumer routes through. Pinning both fixpoints here
+        // catches that drift directly on the endpoint boundary.
+        assert_eq!(
+            <StubKind as ClosedSet>::prev(<StubKind as ClosedSet>::first()),
+            None,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::next(<StubKind as ClosedSet>::last()),
+            None,
+        );
+    }
+
+    #[test]
+    fn next_and_prev_on_singleton_closed_set_both_return_none() {
+        // The neighbor-axis degenerate case — a singleton closed set
+        // (one variant) has `T::ALL[0] == T::first() == T::last()`,
+        // so BOTH `T::first().prev() == None` AND `T::last().next()
+        // == None` collapse onto the same variant — every neighbor
+        // walk from the sole variant must return `None`. A regression
+        // that treats the two direction arms as structurally distinct
+        // (a hand-rolled `match` that returned `Some(_)` for one
+        // direction) would silently break the natural degenerate-
+        // case invariant. Pinning the collapse here catches that
+        // drift. Sibling posture to
+        // `first_collapses_with_last_on_singleton_closed_set` — same
+        // degenerate carve, extended to the neighbor axis.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum NeighborSingletonKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownNeighborSingletonKind(pub String);
+        impl core::fmt::Display for UnknownNeighborSingletonKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown neighbor singleton kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for NeighborSingletonKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "neighbor singleton kind";
+            type Unknown = UnknownNeighborSingletonKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownNeighborSingletonKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <NeighborSingletonKind as ClosedSet>::next(NeighborSingletonKind::Only),
+            None,
+        );
+        assert_eq!(
+            <NeighborSingletonKind as ClosedSet>::prev(NeighborSingletonKind::Only),
+            None,
+        );
+    }
+
+    #[test]
+    fn next_and_prev_walk_arbitrary_declaration_order() {
+        // The neighbor-projection contract on an arbitrary
+        // declaration order — `v.next()` MUST project the successor
+        // in `T::ALL`'s layout regardless of the label ordering, AND
+        // `v.prev()` MUST project the predecessor. A regression that
+        // keyed on `label()` order (rather than `T::ALL` position)
+        // would pass on `StubKind` (where declaration order aligns
+        // with alphabetic order) but silently bifurcate on any
+        // implementor whose `ALL`-array layout differs from its lex
+        // order. Reuses the deliberately-reverse `NeighborReverseKind`
+        // shape so the neighbor contract lands on the same
+        // declaration-order-inversion probe the sorted-variants /
+        // endpoint contracts bind against.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum NeighborReverseKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownNeighborReverseKind(pub String);
+        impl core::fmt::Display for UnknownNeighborReverseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown neighbor reverse kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for NeighborReverseKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "neighbor reverse kind";
+            type Unknown = UnknownNeighborReverseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownNeighborReverseKind(s.to_owned())
+            }
+        }
+        // Declaration order: Gamma → Beta → Alpha. Forward walk
+        // follows this layout, NOT the alphabetic order.
+        assert_eq!(
+            <NeighborReverseKind as ClosedSet>::next(NeighborReverseKind::Gamma),
+            Some(NeighborReverseKind::Beta),
+        );
+        assert_eq!(
+            <NeighborReverseKind as ClosedSet>::next(NeighborReverseKind::Beta),
+            Some(NeighborReverseKind::Alpha),
+        );
+        assert_eq!(
+            <NeighborReverseKind as ClosedSet>::next(NeighborReverseKind::Alpha),
+            None,
+        );
+        // Backward walk: Alpha → Beta → Gamma → None.
+        assert_eq!(
+            <NeighborReverseKind as ClosedSet>::prev(NeighborReverseKind::Alpha),
+            Some(NeighborReverseKind::Beta),
+        );
+        assert_eq!(
+            <NeighborReverseKind as ClosedSet>::prev(NeighborReverseKind::Beta),
+            Some(NeighborReverseKind::Gamma),
+        );
+        assert_eq!(
+            <NeighborReverseKind as ClosedSet>::prev(NeighborReverseKind::Gamma),
+            None,
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_next_and_composition() {
+        // The well-formedness sweep's (26) clause — `v.next()` MUST
+        // equal `T::from_index(v.index_of() + 1)` on every variant.
+        // A hand-impl'd implementor whose override drifts the
+        // forward-neighbor projection (accepts `Some(_)` at the tail
+        // where the natural composition would return `None`, folds a
+        // tail-boundary walk onto a wraparound to the head) fails
+        // the sweep loudly rather than silently bifurcating the
+        // forward-traversal surface every downstream state-machine
+        // iterator / saga-step engine / phase-fold reducer consumer
+        // routes through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_prev_and_composition`
+        // one direction over on the (forward, backward) partition of
+        // clause (26).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedNextKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedNextKind(pub String);
+        impl core::fmt::Display for UnknownDriftedNextKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted next kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedNextKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted next kind";
+            type Unknown = UnknownDriftedNextKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedNextKind(s.to_owned())
+            }
+            fn next(self) -> Option<Self> {
+                // Drifted override — wraps around at the tail rather
+                // than returning `None`, folding a bounded forward
+                // walk onto an infinite loop every state-machine
+                // iterator consumer routes through.
+                Some(match self {
+                    Self::Head => Self::Tail,
+                    Self::Tail => Self::Head,
+                })
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedNextKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a next() override that wraps around at the tail rather than returning None",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_prev_and_composition() {
+        // The well-formedness sweep's (26) clause — `v.prev()` MUST
+        // equal `T::from_index(v.index_of() - 1)` on every interior
+        // variant AND `T::first().prev()` MUST equal `None`. A
+        // hand-impl'd implementor whose override drifts the
+        // backward-neighbor projection (accepts `Some(_)` at the
+        // head where the natural composition would return `None`,
+        // folds a head-boundary walk onto a wraparound to the tail)
+        // fails the sweep loudly rather than silently bifurcating
+        // the backward-traversal surface. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_next_and_composition`
+        // one direction over on the (forward, backward) partition of
+        // clause (26).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedPrevKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedPrevKind(pub String);
+        impl core::fmt::Display for UnknownDriftedPrevKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted prev kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedPrevKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted prev kind";
+            type Unknown = UnknownDriftedPrevKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedPrevKind(s.to_owned())
+            }
+            fn prev(self) -> Option<Self> {
+                // Drifted override — wraps around at the head rather
+                // than returning `None`, folding a bounded backward
+                // walk onto an infinite loop every state-machine
+                // iterator consumer routes through.
+                Some(match self {
+                    Self::Head => Self::Tail,
+                    Self::Tail => Self::Head,
+                })
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedPrevKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a prev() override that wraps around at the head rather than returning None",
         );
     }
 }

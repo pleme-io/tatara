@@ -1620,6 +1620,158 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn last() -> Self {
         Self::ALL[Self::ALL.len() - 1]
     }
+
+    /// The lexicographically-least variant of the closed set — the
+    /// canonical minimum-by-[`Self::label`] under the standard-library
+    /// `str: Ord` ordering, projected onto the trait surface as a
+    /// panic-free typed anchor. Closes the (lexicographic-order, head)
+    /// corner of the (ordering-axis × endpoint-direction) 2×2
+    /// endpoint-anchor matrix — sibling posture to [`Self::first`]
+    /// (declaration-order, head), [`Self::last`] (declaration-order,
+    /// tail), and [`Self::sorted_last`] (lexicographic-order, tail).
+    ///
+    /// The (ordering-axis × endpoint-direction) 2×2 matrix over the
+    /// closed-set endpoint-anchor surface partitions post-lift:
+    ///
+    /// | Ordering axis \\ Endpoint  | Head                    | Tail                   |
+    /// |---------------------------|-------------------------|------------------------|
+    /// | Declaration order         | [`Self::first`]         | [`Self::last`]         |
+    /// | Lexicographic order       | [`Self::sorted_first`]  | [`Self::sorted_last`]  |
+    ///
+    /// Default body is a zero-alloc single-pass linear scan over
+    /// [`Self::ALL`] keyed on [`Self::label`] — the head anchor never
+    /// materializes the `Vec<Self>` [`Self::sorted_variants`] returns.
+    /// Implementors override only when the endpoint surface needs to
+    /// diverge from the natural label-keyed lex-min shape (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason `via` / `set_label` / `labels` /
+    /// `sorted_labels` / `sorted_variants` / `first` overrides exist —
+    /// a typed escape hatch rather than forcing the implementor to
+    /// hand-roll the impl).
+    ///
+    /// The non-empty contract [`assert_closed_set_well_formed`]'s
+    /// clause (1) guarantees `Self::ALL[0]` is sound; the label-pairwise-
+    /// distinctness contract clause (3) guarantees the lex-min is unique
+    /// (a strict `<` in the linear scan cannot reject a canonical
+    /// minimum in favor of a later equal-label variant, because no two
+    /// canonical labels can be equal). The well-formedness clause (19)
+    /// pins [`Self::sorted_first`] against
+    /// `T::sorted_variants()[0]` on every implementor so a passing
+    /// well-formedness sweep means every generic consumer can call
+    /// [`Self::sorted_first`] on any typed variant without threading an
+    /// [`Option`] through the return.
+    ///
+    /// Future consumers — a diagnostic renderer that anchors an
+    /// `"expected one of A..Z"` shape at the (lex-min, lex-max)
+    /// endpoints without materializing the full sorted-labels list, an
+    /// LSP completion default that highlights the alphabetically-first
+    /// choice as the pre-selected candidate, a serde deserializer
+    /// wrapper that folds a missing field onto the lex-least canonical
+    /// variant (rather than the declaration-order head [`Self::first`]
+    /// projects, when the closed set's canonical default is defined by
+    /// alphabetic order rather than declaration order), a property-test
+    /// generator that anchors at the (lex-min, lex-max) edges — bind to
+    /// ONE trait method instead of hand-rolling either the
+    /// `Self::sorted_variants()[0]` composition (which pays a Vec
+    /// allocation the linear scan doesn't need) OR the
+    /// `Self::labels().into_iter().min().and_then(Self::find_by_label)`
+    /// composition (which pays a Vec-of-labels allocation AND an
+    /// [`Option`]-typed dispatch the closed-set non-empty + distinct-
+    /// labels contract structurally forbids).
+    ///
+    /// THEORY.md §III — the typescape; the (lexicographic-order head
+    /// endpoint) projection becomes a TYPE projection on the trait
+    /// rather than a per-consumer composition of [`Self::sorted_variants`]
+    /// combined with `<[Self]>::first` at every downstream anchor site.
+    /// The (declaration, lex) × (head, tail) endpoint-anchor 2×2 matrix
+    /// partitions the closed-set endpoint-anchor surface exhaustively
+    /// into FOUR typed projections, each with a distinct load-bearing
+    /// consumer surface.
+    ///
+    /// THEORY.md §V.1 — knowable platform; the (lexicographic-order
+    /// head endpoint) projection was an unnamed compound of
+    /// [`Self::ALL`] combined with a label-keyed sort combined with a
+    /// slice-index-0 projection pre-lift; naming it on the trait makes
+    /// the projection a TYPED CONSEQUENCE of [`Self::ALL`] combined
+    /// with [`Self::label`] alone — generic consumers see ONE method,
+    /// not ONE lex-endpoint-shape-per-crate. Clause (19) pins it
+    /// against [`Self::sorted_variants`]'s head endpoint so the
+    /// label-keyed linear scan and the sorted-listing surface stay
+    /// aligned at ONE anchor site.
+    ///
+    /// THEORY.md §VI.1 — generation over composition; the (lex head
+    /// endpoint) projection emerges from the composition of TWO
+    /// substrate primitives ([`Self::ALL`] combined with
+    /// [`Self::label`]) via the standard-library `PartialOrd` on `str`
+    /// rather than as a per-implementor `const LEX_HEAD: Self = ...`
+    /// literal. A future tightening of the label comparator (a future
+    /// `#[closed_set(compare_labels_with = ...)]` derive attribute that
+    /// swaps the ordering, a future case-insensitive-label extension)
+    /// propagates to every closed-set lex-endpoint consumer through
+    /// this method's body.
+    ///
+    /// Frontier inspiration: Haskell's `Data.List.minimumBy` on a
+    /// closed-set candidate list keyed by a projection function; Idris's
+    /// `Data.List.min` over the `Fin n` finite-cardinality universe
+    /// composed with a labeling projection; MLIR's
+    /// `RegisteredOperationName::begin()` on a lexicographically-sorted
+    /// Op registry; Racket's `(argmin T-label (enum->list T))` on a
+    /// closed-enum candidate list. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's existing
+    /// [`Self::ALL`] + [`Self::label`] surfaces with a strict-`<` linear
+    /// scan — no new dep, no new IR layer, no supertrait bound, no
+    /// [`Option`]-typed dispatch, no Vec allocation.
+    fn sorted_first() -> Self {
+        let mut best = Self::ALL[0];
+        let mut best_label = <Self as ClosedSet>::label(best);
+        for &v in &Self::ALL[1..] {
+            let lbl = <Self as ClosedSet>::label(v);
+            if lbl < best_label {
+                best = v;
+                best_label = lbl;
+            }
+        }
+        best
+    }
+
+    /// The lexicographically-greatest variant of the closed set — the
+    /// canonical maximum-by-[`Self::label`] under the standard-library
+    /// `str: Ord` ordering, projected onto the trait surface as a
+    /// panic-free typed anchor. Closes the (lexicographic-order, tail)
+    /// corner of the (ordering-axis × endpoint-direction) 2×2
+    /// endpoint-anchor matrix.
+    ///
+    /// Sibling posture to [`Self::sorted_first`] one axis over on the
+    /// (head, tail) partition of the lexicographic-order endpoint-anchor
+    /// surface: [`Self::sorted_first`] returns the lex-min,
+    /// this method returns the lex-max. See [`Self::sorted_first`] for
+    /// the shared design rationale, sibling matrix, override axis,
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the tail arm of the same axis and
+    /// inherits every property from the head arm's documentation,
+    /// differing only in the strict-`>` comparator direction.
+    ///
+    /// Default body is a zero-alloc single-pass linear scan over
+    /// [`Self::ALL`] keyed on [`Self::label`] with the comparator
+    /// inverted — the tail anchor never materializes the `Vec<Self>`
+    /// [`Self::sorted_variants`] returns. The well-formedness clause
+    /// (19) pins [`Self::sorted_last`] against
+    /// `T::sorted_variants()[T::sorted_variants().len() - 1]` on every
+    /// implementor so a passing well-formedness sweep means every
+    /// generic consumer can call [`Self::sorted_last`] on any typed
+    /// variant without threading an [`Option`] through the return.
+    fn sorted_last() -> Self {
+        let mut best = Self::ALL[0];
+        let mut best_label = <Self as ClosedSet>::label(best);
+        for &v in &Self::ALL[1..] {
+            let lbl = <Self as ClosedSet>::label(v);
+            if lbl > best_label {
+                best = v;
+                best_label = lbl;
+            }
+        }
+        best
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -2409,6 +2561,44 @@ where
         T::last(),
         T::ALL[T::ALL.len() - 1],
         "{type_name}: T::last() drifted from T::ALL[T::ALL.len() - 1] — the declaration-order tail endpoint anchor no longer matches the natural slice-index-(N - 1) projection, so a downstream iterator-terminator / bounded-loop consumer that binds `T::last()` as its canonical anchor would land on the wrong variant",
+    );
+    // (19) — `T::sorted_first()` equals `T::sorted_variants()[0]` AND
+    // `T::sorted_last()` equals
+    // `T::sorted_variants()[T::sorted_variants().len() - 1]`. The
+    // default trait bodies satisfy the clause for free (both compose
+    // `T::ALL` + `T::label` via a zero-alloc linear scan whose result
+    // agrees with the sorted-listing endpoints by strict-`<` /
+    // strict-`>` uniqueness under the label-pairwise-distinctness
+    // contract clause (3)); the assertion catches a future implementor
+    // whose override drifts from the natural lex-endpoint projections
+    // (a permissive override that returns some interior variant, a
+    // swapped override that returns the lex-max for `sorted_first()`, a
+    // stale override that returns the wrong endpoint after a label
+    // edit) loudly rather than silently bifurcating the lex-endpoint
+    // anchor surface every downstream defaulter / diagnostic-boundary
+    // / property-test consumer routes through. Sibling posture to
+    // clauses (17) + (18) — clause (17) pins the sorted-typed-variant
+    // listing element-wise against the sorted-labels projection under
+    // the lex ordering, clause (18) pins the declaration-order (head,
+    // tail) endpoint anchors against `T::ALL[0]` / `T::ALL[T::ALL.len()
+    // - 1]`, this clause pins the lex-order (head, tail) endpoint
+    // anchors against `T::sorted_variants()[0]` /
+    // `T::sorted_variants()[T::sorted_variants().len() - 1]` so the
+    // (declaration × lexicographic) × (head, tail) endpoint-anchor 2×2
+    // matrix stays fully-pinned. The non-empty contract clause (1) +
+    // clause (17)'s length equality guarantee `sorted_variants` is
+    // non-empty; the subtraction `sorted_variants.len() - 1` never
+    // underflows. Reuses the `sorted_variants` Vec clause (17) already
+    // materialized so this clause pays no additional allocation.
+    assert_eq!(
+        T::sorted_first(),
+        sorted_variants[0],
+        "{type_name}: T::sorted_first() drifted from T::sorted_variants()[0] — the lexicographic-order head endpoint anchor no longer matches the natural label-keyed lex-min projection, so a downstream diagnostic-boundary / lex-defaulter consumer that binds `T::sorted_first()` as its canonical anchor would land on the wrong variant",
+    );
+    assert_eq!(
+        T::sorted_last(),
+        sorted_variants[sorted_variants.len() - 1],
+        "{type_name}: T::sorted_last() drifted from T::sorted_variants()[T::sorted_variants().len() - 1] — the lexicographic-order tail endpoint anchor no longer matches the natural label-keyed lex-max projection, so a downstream diagnostic-boundary / bounded-loop-lex consumer that binds `T::sorted_last()` as its canonical anchor would land on the wrong variant",
     );
 }
 
@@ -4812,6 +5002,287 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a last() override drifted from the natural Self::ALL[T::ALL.len() - 1] projection",
+        );
+    }
+
+    #[test]
+    fn sorted_first_returns_the_lexicographically_least_variant() {
+        // The lexicographic-order head endpoint anchor —
+        // `T::sorted_first()` returns the label-keyed minimum as a bare
+        // typed variant. `StubKind`'s labels are ("alpha", "beta",
+        // "gamma"), so the lex-min anchor is `Alpha`. On this stub the
+        // declaration order coincides with the lex order, so `first()`
+        // and `sorted_first()` agree — the deliberate probe that
+        // distinguishes the two ordering axes lives at
+        // `sorted_first_and_sorted_last_bracket_sorted_variants_on_arbitrary_declaration_order`.
+        assert_eq!(<StubKind as ClosedSet>::sorted_first(), StubKind::Alpha);
+    }
+
+    #[test]
+    fn sorted_last_returns_the_lexicographically_greatest_variant() {
+        // The lexicographic-order tail endpoint anchor —
+        // `T::sorted_last()` returns the label-keyed maximum as a bare
+        // typed variant. `StubKind`'s labels are ("alpha", "beta",
+        // "gamma"), so the lex-max anchor is `Gamma`. Sibling posture
+        // to `sorted_first_returns_the_lexicographically_least_variant`
+        // one axis over on the (head, tail) partition of the
+        // lexicographic-order endpoint-anchor surface.
+        assert_eq!(<StubKind as ClosedSet>::sorted_last(), StubKind::Gamma);
+    }
+
+    #[test]
+    fn sorted_first_and_sorted_last_bracket_sorted_variants_on_arbitrary_declaration_order() {
+        // The lex-endpoint contract on a declaration order that neither
+        // matches nor cleanly reverses the lex order — `T::sorted_first()`
+        // MUST project the label-keyed minimum regardless of where in
+        // `T::ALL` that variant sits, AND `T::sorted_last()` MUST
+        // project the label-keyed maximum. A regression that returned
+        // `T::ALL[0]` (the declaration head) rather than the lex-min
+        // would pass
+        // `sorted_first_returns_the_lexicographically_least_variant` on
+        // `StubKind` (because its declaration order coincides with its
+        // lex order) but silently bifurcate the lex-endpoint anchors on
+        // any implementor whose declaration order diverges from the
+        // canonical label ordering. Pinning the discipline here with a
+        // deliberately-mis-aligned stub whose declaration head
+        // (`Gamma`), declaration tail (`Beta`), lex head (`Alpha`), and
+        // lex tail (`Gamma`) sit at four distinct axis crossings
+        // catches that drift directly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum LexEndpointStubKind {
+            Gamma,
+            Alpha,
+            Beta,
+        }
+        #[derive(Debug)]
+        struct UnknownLexEndpointStubKind(pub String);
+        impl core::fmt::Display for UnknownLexEndpointStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown lex endpoint stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for LexEndpointStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Alpha, Self::Beta];
+            const SET_LABEL: &'static str = "lex endpoint stub kind";
+            type Unknown = UnknownLexEndpointStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownLexEndpointStubKind(s.to_owned())
+            }
+        }
+        // Lex-min is `Alpha` — the linear scan finds "alpha" as the
+        // canonical minimum-by-label even though it sits at
+        // `ALL[1]`, NOT the declaration head `Gamma` at `ALL[0]`.
+        assert_eq!(
+            <LexEndpointStubKind as ClosedSet>::sorted_first(),
+            LexEndpointStubKind::Alpha,
+        );
+        // Lex-max is `Gamma` — the linear scan finds "gamma" as the
+        // canonical maximum-by-label even though it sits at
+        // `ALL[0]`, NOT the declaration tail `Beta` at `ALL[2]`.
+        assert_eq!(
+            <LexEndpointStubKind as ClosedSet>::sorted_last(),
+            LexEndpointStubKind::Gamma,
+        );
+        // The (declaration, lex) × (head, tail) 2×2 matrix's four
+        // corners land on distinct-or-coincident variants precisely as
+        // the label projection dictates — `first` != `sorted_first`,
+        // `last` != `sorted_last`, `first == sorted_last`,
+        // `last != sorted_first` — pinning each corner catches a
+        // regression that swaps ANY endpoint arm.
+        assert_eq!(
+            <LexEndpointStubKind as ClosedSet>::first(),
+            LexEndpointStubKind::Gamma,
+        );
+        assert_eq!(
+            <LexEndpointStubKind as ClosedSet>::last(),
+            LexEndpointStubKind::Beta,
+        );
+    }
+
+    #[test]
+    fn sorted_first_collapses_with_sorted_last_on_singleton_closed_set() {
+        // The lex-endpoint degenerate case — a singleton closed set
+        // (one variant) has `T::sorted_variants()[0] ==
+        // T::sorted_variants()[T::sorted_variants().len() - 1]`, so
+        // `T::sorted_first() == T::sorted_last()`. Sibling posture to
+        // `first_collapses_with_last_on_singleton_closed_set` one axis
+        // over on the (declaration, lex) ordering partition — the
+        // singleton corner collapses on BOTH ordering axes for the same
+        // structural reason (a single variant is trivially its own min
+        // and max under any total order over labels).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum LexSingletonStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownLexSingletonStubKind(pub String);
+        impl core::fmt::Display for UnknownLexSingletonStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown lex singleton stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for LexSingletonStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "lex singleton stub kind";
+            type Unknown = UnknownLexSingletonStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownLexSingletonStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <LexSingletonStubKind as ClosedSet>::sorted_first(),
+            LexSingletonStubKind::Only,
+        );
+        assert_eq!(
+            <LexSingletonStubKind as ClosedSet>::sorted_last(),
+            LexSingletonStubKind::Only,
+        );
+        assert_eq!(
+            <LexSingletonStubKind as ClosedSet>::sorted_first(),
+            <LexSingletonStubKind as ClosedSet>::sorted_last(),
+        );
+    }
+
+    #[test]
+    fn sorted_first_and_sorted_last_agree_with_sorted_variants_at_the_endpoint_slots() {
+        // The lex-endpoint anchor / sorted-listing alignment —
+        // `T::sorted_first()` MUST equal `T::sorted_variants()[0]`, AND
+        // `T::sorted_last()` MUST equal
+        // `T::sorted_variants()[T::sorted_variants().len() - 1]`. The
+        // two primitives project the same `T::ALL` slice at the same
+        // label-keyed endpoint slots through different surfaces (zero-
+        // alloc bare typed anchor vs Vec-materializing sorted listing),
+        // and a downstream consumer freely swaps between the two
+        // depending on whether it wants the panic-free anchor or the
+        // full sorted listing. Pinning the agreement here catches a
+        // future regression that drifts either surface from the shared
+        // label-keyed lex-endpoint projection. Sibling posture to
+        // `first_and_last_agree_with_from_index_at_the_endpoint_slots`
+        // one axis over on the (declaration, lex) ordering partition.
+        let sorted = <StubKind as ClosedSet>::sorted_variants();
+        assert_eq!(<StubKind as ClosedSet>::sorted_first(), sorted[0]);
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_last(),
+            sorted[sorted.len() - 1],
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_first_and_sorted_variants_head() {
+        // The well-formedness sweep's (19) clause —
+        // `T::sorted_first()` MUST equal `T::sorted_variants()[0]`. A
+        // hand-impl'd implementor whose override drifts the lex-head
+        // anchor (returns an interior variant, returns the lex-tail,
+        // returns a stale variant after a label edit) fails the sweep
+        // loudly rather than silently bifurcating the lex-endpoint-
+        // anchor surface every downstream diagnostic-boundary / lex-
+        // defaulter consumer routes through. Pinning the failure path
+        // here keeps the testkit's (19) clause guaranteed-to-fire on
+        // the lex-head arm — a regression that makes the assertion
+        // permissive (e.g. a future "any variant that appears in ALL"
+        // relaxation) breaks this stub-level contract before any per-
+        // implementor sweep runs. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_sorted_last_and_sorted_variants_tail`
+        // one endpoint over on the (head, tail) partition of clause
+        // (19).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedFirstKind {
+            Alef,
+            Zayin,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedFirstKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted first kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedFirstKind {
+            const ALL: &'static [Self] = &[Self::Alef, Self::Zayin];
+            const SET_LABEL: &'static str = "drifted sorted first kind";
+            type Unknown = UnknownDriftedSortedFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alef => "alef",
+                    Self::Zayin => "zayin",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedFirstKind(s.to_owned())
+            }
+            fn sorted_first() -> Self {
+                // Drifted override — returns the lex-tail rather than
+                // the lex-head, swapping the (head, tail) endpoint
+                // anchor partition on the lex-head arm.
+                Self::Zayin
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedFirstKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_first() override drifted from the natural T::sorted_variants()[0] projection",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_last_and_sorted_variants_tail() {
+        // The well-formedness sweep's (19) clause — `T::sorted_last()`
+        // MUST equal `T::sorted_variants()[T::sorted_variants().len() -
+        // 1]`. Symmetric to the
+        // `_catches_drift_between_sorted_first_and_sorted_variants_head`
+        // sibling one endpoint over on the (head, tail) partition —
+        // this pin covers the lex-tail arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedLastKind {
+            Alef,
+            Zayin,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedLastKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedLastKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted last kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedLastKind {
+            const ALL: &'static [Self] = &[Self::Alef, Self::Zayin];
+            const SET_LABEL: &'static str = "drifted sorted last kind";
+            type Unknown = UnknownDriftedSortedLastKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alef => "alef",
+                    Self::Zayin => "zayin",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedLastKind(s.to_owned())
+            }
+            fn sorted_last() -> Self {
+                // Drifted override — returns the lex-head rather than
+                // the lex-tail, swapping the (head, tail) endpoint
+                // anchor partition on the lex-tail arm.
+                Self::Alef
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedSortedLastKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_last() override drifted from the natural T::sorted_variants()[T::sorted_variants().len() - 1] projection",
         );
     }
 }

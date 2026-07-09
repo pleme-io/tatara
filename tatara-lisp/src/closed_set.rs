@@ -3508,6 +3508,202 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// Render the declaration-order strict-interior label collection
+    /// as a `String` joined by `sep` — the substrate-wide alphabetized-
+    /// vs-declaration interior-label-as-string surface consumers thread
+    /// into structured diagnostics that want the boundary-stripped
+    /// candidate list in a caller-supplied separator style
+    /// (`interior: beta, gamma, delta`, `middle-only: beta/gamma`, an
+    /// interior-only `expected one of the middle kinds: … ` metrics
+    /// tag whose surface must NOT leak the two endpoint anchors).
+    ///
+    /// Default body composes [`Self::interior_labels`] with
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// — the interior-labels-as-string rendering is a typed
+    /// CONSEQUENCE of [`Self::ALL`] + [`Self::label`] +
+    /// [`Self::is_endpoint`] + the chosen separator. Implementors
+    /// override only when the join surface needs to diverge from the
+    /// natural `interior_labels().join(sep)` shape (no production
+    /// implementor reaches for this today — the axis exists for the
+    /// same reason `via`, `set_label`, `labels`, `labels_joined`,
+    /// `sorted_labels`, `sorted_labels_joined`, `interior_labels`,
+    /// `sorted_interior_labels`, `suggest_closest`,
+    /// `parse_label_with_hint` overrides exist: a typed escape hatch
+    /// the trait surface exposes rather than forcing the implementor
+    /// to hand-roll the impl).
+    ///
+    /// Sibling posture to [`Self::labels_joined`] on the (full-set,
+    /// interior) partition-flavor axis of the closed-set label-as-
+    /// string rendering surface — [`Self::labels_joined`] renders
+    /// EVERY declaration-order canonical label under the caller's
+    /// separator, this method renders the SAME declaration-order
+    /// slice with the two boundary-anchor labels stripped. The
+    /// (partition-flavor × ordering × return-shape) 2×2×2 cube over
+    /// the closed-set label-aggregation surface has [`Self::labels`]
+    /// / [`Self::sorted_labels`] on the (full-set × ordering × Vec)
+    /// arm, [`Self::labels_joined`] / [`Self::sorted_labels_joined`]
+    /// on the (full-set × ordering × String) arm,
+    /// [`Self::interior_labels`] / [`Self::sorted_interior_labels`]
+    /// on the (interior × ordering × Vec) arm, and this method +
+    /// [`Self::sorted_interior_labels_joined`] on the (interior ×
+    /// ordering × String) arm — every corner of the 8-corner cube
+    /// binds to ONE trait method rather than a per-callsite
+    /// `iter+filter+map+collect+join` five-primitive composition.
+    ///
+    /// Singleton + two-variant degeneracies —
+    /// [`Self::interior_labels`] returns the empty vector at both
+    /// edges, so `slice::join` on an empty slice yields the empty
+    /// string. Both boundary-cardinality edges collapse to `""`
+    /// regardless of the caller-supplied separator. The
+    /// interior-label-as-string projection's length collapses in
+    /// lockstep with [`Self::interior_labels`]'s length collapsing to
+    /// zero, matching the interior-label-Vec projection's
+    /// degeneracy profile one return-shape axis over.
+    ///
+    /// The interior-labels-as-string contract —
+    /// `T::interior_labels_joined(sep) == T::interior_labels().join(sep)`
+    /// on every implementor for every `sep` — is guaranteed by the
+    /// default composition through [`Self::interior_labels`]'s
+    /// declaration-axis interior-collection primitive AND the
+    /// standard-library `slice::join` primitive; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (42)
+    /// pins the composition against the natural
+    /// `interior_labels().join(sep)` shape across THREE representative
+    /// separators (`"/"`, `", "`, `"|"`) on every implementor so a
+    /// passing well-formedness sweep means every generic consumer can
+    /// call [`Self::interior_labels_joined`] on any typed carrier and
+    /// expect the same `String` answer at every crate boundary.
+    ///
+    /// Future consumers — an interior-only completion bar renderer
+    /// that wants `beta | gamma | delta` grammar-style, a
+    /// `tatara-check` diagnostic that wants
+    /// `middle kinds: beta, gamma, delta` in a caller-chosen
+    /// separator style, an interior-only Prometheus tag whose
+    /// separator convention must not leak the boundary anchors, a
+    /// structured-logging formatter that renders every strictly-
+    /// interior label under a per-formatter separator — bind to ONE
+    /// trait method instead of hand-rolling the
+    /// `interior_labels().join(sep)` compound at each call site, and
+    /// the closed-set projection's interior-only rendering surface
+    /// evolves at ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §V.1 — knowable platform; the interior-labels-as-
+    /// string shape sat as an unnamed compound of
+    /// [`Self::interior_labels`] + [`slice::join`] pre-lift; naming
+    /// it on the trait makes the projection a TYPED CONSEQUENCE of
+    /// [`Self::interior_labels`] + the chosen separator — generic
+    /// consumers see ONE method, not ONE interior-then-join compound
+    /// per crate.
+    /// THEORY.md §VI.1 — generation over composition; the interior-
+    /// labels-as-string rendering emerges from the composition of
+    /// FIVE substrate primitives ([`Self::ALL`], [`Self::label`],
+    /// [`Self::is_endpoint`], `slice::join`, the caller-supplied
+    /// separator) rather than as a per-consumer inline
+    /// `iter+filter+map+collect+join` quintuple. A future tightening
+    /// of either primitive (a Unicode-collation-aware sort, an
+    /// Oxford-comma-aware join, a locale-sensitive rendering)
+    /// propagates to every closed-set consumer through ONE trait body.
+    ///
+    /// Frontier inspiration: Racket's `enum-interior-labels`
+    /// composed with `string-join` on closed enumerations — the
+    /// boundary-stripped candidate-list-as-string emits as a single
+    /// typed projection on the finite-type layer rather than per-
+    /// instance inline compound. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::interior_labels`] surface with the
+    /// `slice::join` standard-library primitive — no new dep, no new
+    /// IR layer, no supertrait bound, no per-implementor allocation
+    /// beyond the natural `String` allocation
+    /// [`Self::labels_joined`]'s sibling surface already routes.
+    fn interior_labels_joined(sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::interior_labels().join(sep)
+    }
+
+    /// Render the lex-order strict-interior label collection as a
+    /// `String` joined by `sep` — the alphabetized interior-label-as-
+    /// string sibling of [`Self::interior_labels_joined`] one
+    /// ordering axis over on the (declaration, lex) partition of the
+    /// closed-set interior-label-as-string surface.
+    ///
+    /// Default body composes [`Self::sorted_interior_labels`] with
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// — the alphabetized interior-labels-as-string rendering is a
+    /// typed CONSEQUENCE of [`Self::ALL`] + [`Self::label`] +
+    /// [`Self::is_sorted_endpoint`] + ASCII lexicographic ordering +
+    /// the chosen separator. Implementors override only when the
+    /// alphabetized join surface needs to diverge from the natural
+    /// `sorted_interior_labels().join(sep)` shape (no production
+    /// implementor reaches for this today — the axis exists for the
+    /// same reason `via`, `set_label`, `labels`, `labels_joined`,
+    /// `sorted_labels`, `sorted_labels_joined`, `interior_labels`,
+    /// `sorted_interior_labels`, `interior_labels_joined`,
+    /// `suggest_closest`, `parse_label_with_hint` overrides exist: a
+    /// typed escape hatch the trait surface exposes rather than
+    /// forcing the implementor to hand-roll the impl).
+    ///
+    /// Sibling posture to [`Self::sorted_labels_joined`] on the
+    /// (full-set, interior) partition-flavor axis of the closed-set
+    /// alphabetized label-as-string rendering surface —
+    /// [`Self::sorted_labels_joined`] renders EVERY lex-ordered
+    /// canonical label under the caller's separator, this method
+    /// renders the SAME lex-ordered slice with the two
+    /// lex-boundary-anchor labels stripped. See
+    /// [`Self::interior_labels_joined`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the lex-ordering-axis arm of the same
+    /// return-shape axis and inherits every property from the
+    /// declaration-axis arm's documentation, differing only in the
+    /// composition through [`Self::sorted_interior_labels`] instead
+    /// of [`Self::interior_labels`] and the alphabetized consumer
+    /// surface (an alphabetized interior-only completion bar that
+    /// emits `beta | delta | epsilon`, a `tatara-check` diagnostic
+    /// rendering `middle kinds: beta, delta, epsilon` in
+    /// alphabetized natural-language surface, a deterministic-across-
+    /// machines interior-only Prometheus tag whose alphabetized
+    /// ordering must not depend on `Self::ALL`'s declaration order).
+    ///
+    /// Singleton + two-variant degeneracies —
+    /// [`Self::sorted_interior_labels`] returns the empty vector at
+    /// both edges, so `slice::join` on an empty slice yields the
+    /// empty string. Both boundary-cardinality edges collapse to
+    /// `""` regardless of the caller-supplied separator, matching
+    /// [`Self::interior_labels_joined`]'s degeneracy profile one
+    /// ordering axis over.
+    ///
+    /// The alphabetized interior-labels-as-string contract —
+    /// `T::sorted_interior_labels_joined(sep) == T::sorted_interior_labels().join(sep)`
+    /// on every implementor for every `sep` — is guaranteed by the
+    /// default composition through [`Self::sorted_interior_labels`]'s
+    /// lex-axis interior-collection primitive AND the standard-library
+    /// `slice::join` primitive; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (43) pins the
+    /// composition against the natural
+    /// `sorted_interior_labels().join(sep)` shape across THREE
+    /// representative separators (`"/"`, `", "`, `"|"`) on every
+    /// implementor so a passing well-formedness sweep means every
+    /// generic consumer can call
+    /// [`Self::sorted_interior_labels_joined`] on any typed carrier
+    /// and expect the same `String` answer at every crate boundary.
+    ///
+    /// The (partition-flavor × ordering × return-shape) 2×2×2 cube
+    /// over the closed-set label-aggregation surface is now closed
+    /// at ALL EIGHT corners — [`Self::labels`] on (full-set ×
+    /// declaration × Vec), [`Self::sorted_labels`] on (full-set ×
+    /// lex × Vec), [`Self::labels_joined`] on (full-set ×
+    /// declaration × String), [`Self::sorted_labels_joined`] on
+    /// (full-set × lex × String), [`Self::interior_labels`] on
+    /// (interior × declaration × Vec), [`Self::sorted_interior_labels`]
+    /// on (interior × lex × Vec), [`Self::interior_labels_joined`]
+    /// on (interior × declaration × String), and this method on
+    /// (interior × lex × String). A future consumer that binds any
+    /// of the eight sees the same `Vec<&'static str>` or `String`
+    /// shape at every crate boundary regardless of which cube corner
+    /// it walks.
+    fn sorted_interior_labels_joined(sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::sorted_interior_labels().join(sep)
+    }
+
     /// Recover the canonical [`Self::label`] at declaration-order
     /// position `i` in [`Self::ALL`], or [`None`] if
     /// `i >= Self::CARDINALITY`.
@@ -7545,6 +7741,86 @@ where
         sorted_interior_labels.len(),
         T::CARDINALITY.saturating_sub(2),
     );
+    // (42) — `T::interior_labels_joined(sep)` MUST compose
+    // `T::interior_labels()` with `slice::join` verbatim across every
+    // representative separator. The default trait body satisfies the
+    // clause for free; the assertion catches a future implementor
+    // whose override drifts the composition (a permissive override
+    // that leaks a boundary anchor's label into the joined output —
+    // silently violating the (boundary, interior) label partition
+    // every downstream declaration-axis interior-label-as-string
+    // consumer relies on; a strict override that drops a strictly-
+    // interior slot's label from the joined output — silently
+    // truncating the interior-label-as-string partition; a fabricated
+    // override that ignores the caller-supplied separator or threads
+    // a different separator; a fold override that returns
+    // `T::sorted_interior_labels_joined(sep)` instead of the
+    // declaration-axis rendering — silently bifurcating the two
+    // ordering axes' interior-label-as-string surfaces onto the SAME
+    // `String` at the ordering-divergent implementor edge) loudly
+    // rather than silently bifurcating the declaration-axis interior-
+    // label-as-string surface. Sweep three representative separators
+    // (slash for interior-only production constants, comma-space for
+    // natural-language `middle kinds: ...` shapes, pipe for grammar-
+    // style alternative lists) so an isolated drift on any of the
+    // three natural rendering surfaces fails the testkit on every
+    // implementor. Sibling posture to clauses (8) + (40) — clause
+    // (8) pins the (full-set × declaration × String) label-as-string
+    // shape, clause (40) pins the (interior × declaration × Vec)
+    // label collection, this clause pins the (interior × declaration
+    // × String) label-as-string shape against the composition of the
+    // declaration-axis interior-label-collection primitive and the
+    // caller-supplied separator through `slice::join`.
+    for sep in ["/", ", ", "|"] {
+        let lifted = T::interior_labels_joined(sep);
+        let natural = T::interior_labels().join(sep);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::interior_labels_joined({sep:?}) drifted from T::interior_labels().join({sep:?}) — the declaration-axis interior-labels-as-string rendering every diagnostic / metrics consumer routes through no longer matches the natural interior-labels-then-join composition",
+        );
+    }
+    // (43) — `T::sorted_interior_labels_joined(sep)` MUST compose
+    // `T::sorted_interior_labels()` with `slice::join` verbatim
+    // across every representative separator. The default trait body
+    // satisfies the clause for free; the assertion catches a future
+    // implementor whose override drifts the composition (a permissive
+    // override that leaks a lex-boundary anchor's label into the
+    // joined output; a strict override that drops a strictly-lex-
+    // interior slot's label; a fabricated override that ignores the
+    // caller-supplied separator; a declaration-axis fold override
+    // that returns `T::interior_labels_joined(sep)` instead of the
+    // lex-filtered rendering — silently bifurcating the two ordering
+    // axes' interior-label-as-string surfaces onto the SAME `String`
+    // at the ordering-divergent implementor edge) loudly rather than
+    // silently bifurcating the lex-axis interior-label-as-string
+    // surface. Sweep the same three representative separators clause
+    // (42) uses (`"/"`, `", "`, `"|"`) so an isolated drift on any of
+    // the three natural alphabetized rendering surfaces (slash for
+    // ordering-independent interior-only production constants,
+    // comma-space for natural-language alphabetized `middle kinds:
+    // ...` shapes, pipe for grammar-style alphabetized alternative
+    // lists) fails the testkit on every implementor. Sibling posture
+    // to clauses (10) + (41) — clause (10) pins the (full-set × lex ×
+    // String) alphabetized label-as-string shape, clause (41) pins
+    // the (interior × lex × Vec) lex-interior label collection, this
+    // clause pins the (interior × lex × String) alphabetized label-
+    // as-string shape against the composition of the lex-axis
+    // interior-label-collection primitive and the caller-supplied
+    // separator through `slice::join`. Clauses (8) + (10) + (40) +
+    // (41) + (42) + (43) together CLOSE the (partition-flavor ×
+    // ordering × return-shape) 2×2×2 cube over the closed-set
+    // label-aggregation surface at BOTH the `Vec<&'static str>`
+    // return-shape column ((40) + (41)) AND the `String` return-shape
+    // column ((42) + (43)) on the interior arm, mirroring clauses
+    // (8) + (10) on the full-set arm.
+    for sep in ["/", ", ", "|"] {
+        let lifted = T::sorted_interior_labels_joined(sep);
+        let natural = T::sorted_interior_labels().join(sep);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::sorted_interior_labels_joined({sep:?}) drifted from T::sorted_interior_labels().join({sep:?}) — the lex-axis alphabetized interior-labels-as-string rendering every diagnostic / metrics consumer routes through no longer matches the natural sorted-interior-labels-then-join composition",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -15419,6 +15695,388 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_interior_labels() override that drops the strictly-lex-interior slot's label rather than composing T::sorted_interior().into_iter().map(T::label).collect()",
+        );
+    }
+
+    #[test]
+    fn interior_labels_joined_renders_declaration_order_strict_interior_labels_through_chosen_separator(
+    ) {
+        // The declaration-order interior-label-as-string projection —
+        // `T::interior_labels_joined(sep)` composes
+        // `T::interior_labels()` with `slice::join` verbatim.
+        // `StubKind`'s interior is `[Beta]` (dropping the endpoint
+        // anchors `Alpha` + `Gamma`), so the joined output is a
+        // single label — the sole strictly-interior slot renders
+        // regardless of the separator threading. Sibling posture to
+        // `labels_joined_renders_labels_through_chosen_separator` one
+        // partition-flavor axis over on the (full-set, interior)
+        // arm of the (partition-flavor × ordering × return-shape)
+        // 2×2×2 cube.
+        assert_eq!(<StubKind as ClosedSet>::interior_labels_joined("/"), "beta",);
+        assert_eq!(
+            <StubKind as ClosedSet>::interior_labels_joined(", "),
+            "beta",
+        );
+        assert_eq!(<StubKind as ClosedSet>::interior_labels_joined("|"), "beta",);
+    }
+
+    #[test]
+    fn sorted_interior_labels_joined_renders_lex_order_strict_interior_labels_through_chosen_separator(
+    ) {
+        // The lex-order interior-label-as-string projection —
+        // `T::sorted_interior_labels_joined(sep)` composes
+        // `T::sorted_interior_labels()` with `slice::join` verbatim.
+        // `StubKind`'s labels sit in declaration order that matches
+        // lex order (`"alpha", "beta", "gamma"`), so the lex-
+        // interior-labels-as-string projection coincides with the
+        // declaration-axis rendering above; the ordering-divergent
+        // stub below exercises the actual lex-ordering discipline
+        // separately. Sibling posture to
+        // `interior_labels_joined_renders_declaration_order_strict_interior_labels_through_chosen_separator`
+        // one ordering axis over.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_interior_labels_joined("/"),
+            "beta",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_interior_labels_joined(", "),
+            "beta",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_interior_labels_joined("|"),
+            "beta",
+        );
+    }
+
+    #[test]
+    fn interior_labels_joined_and_sorted_interior_labels_joined_diverge_on_declaration_order_that_diverges_from_lex_order(
+    ) {
+        // The (declaration-axis, lex-axis) interior-labels-as-string
+        // partition — a 5-variant stub whose declaration order
+        // (`[Epsilon, Delta, Gamma, Beta, Alpha]`) diverges from the
+        // lex ordering of its labels (`"alpha" < "beta" < "delta" <
+        // "epsilon" < "gamma"`). Declaration-axis interior labels
+        // are `["delta", "gamma", "beta"]` after dropping the
+        // declaration endpoints (`"epsilon"`, `"alpha"`); lex-axis
+        // interior labels are `["beta", "delta", "epsilon"]` after
+        // dropping the lex endpoints (`"alpha"`, `"gamma"`). The
+        // two joined renderings must observe the underlying
+        // ordering-axis partition on ALL THREE representative
+        // separators. Sibling posture to
+        // `interior_labels_and_sorted_interior_labels_diverge_on_declaration_order_that_diverges_from_lex_order`
+        // one return-shape axis over on the (`Vec<&'static str>`,
+        // `String`) partition. Also exercises the well-formedness
+        // sweep's new (42) + (43) clauses on the ordering-divergent
+        // edge.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum InteriorJoinedPartitionStubKind {
+            Epsilon,
+            Delta,
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownInteriorJoinedPartitionStubKind(pub String);
+        impl core::fmt::Display for UnknownInteriorJoinedPartitionStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown interior joined partition stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for InteriorJoinedPartitionStubKind {
+            const ALL: &'static [Self] = &[
+                Self::Epsilon,
+                Self::Delta,
+                Self::Gamma,
+                Self::Beta,
+                Self::Alpha,
+            ];
+            const SET_LABEL: &'static str = "interior joined partition stub kind";
+            type Unknown = UnknownInteriorJoinedPartitionStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Epsilon => "epsilon",
+                    Self::Delta => "delta",
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownInteriorJoinedPartitionStubKind(s.to_owned())
+            }
+        }
+        // Slash — the substrate-wide `INTENT_KIND_LIST`-style
+        // interior-only production separator.
+        assert_eq!(
+            <InteriorJoinedPartitionStubKind as ClosedSet>::interior_labels_joined("/"),
+            "delta/gamma/beta",
+        );
+        assert_eq!(
+            <InteriorJoinedPartitionStubKind as ClosedSet>::sorted_interior_labels_joined("/"),
+            "beta/delta/epsilon",
+        );
+        // Comma-space — the natural-language `middle kinds: ...`
+        // diagnostic separator.
+        assert_eq!(
+            <InteriorJoinedPartitionStubKind as ClosedSet>::interior_labels_joined(", "),
+            "delta, gamma, beta",
+        );
+        assert_eq!(
+            <InteriorJoinedPartitionStubKind as ClosedSet>::sorted_interior_labels_joined(", "),
+            "beta, delta, epsilon",
+        );
+        // Pipe — the grammar-style alternative-list separator.
+        assert_eq!(
+            <InteriorJoinedPartitionStubKind as ClosedSet>::interior_labels_joined("|"),
+            "delta|gamma|beta",
+        );
+        assert_eq!(
+            <InteriorJoinedPartitionStubKind as ClosedSet>::sorted_interior_labels_joined("|"),
+            "beta|delta|epsilon",
+        );
+        // The two joined renderings share NO common substring at the
+        // ordering-divergent edge on any of the three separators —
+        // a regression that folded either projection onto the other
+        // would collide the outputs here rather than silently
+        // bifurcating the (declaration, lex) partition.
+        assert_ne!(
+            <InteriorJoinedPartitionStubKind as ClosedSet>::interior_labels_joined("/"),
+            <InteriorJoinedPartitionStubKind as ClosedSet>::sorted_interior_labels_joined("/"),
+        );
+        // Well-formedness sweep fires — clauses (42) + (43) pin
+        // both interior-labels-as-string projections at the
+        // ordering-divergent edge.
+        super::assert_closed_set_well_formed::<InteriorJoinedPartitionStubKind>();
+    }
+
+    #[test]
+    fn interior_labels_joined_and_sorted_interior_labels_joined_collapse_to_empty_string_on_singleton_closed_set(
+    ) {
+        // The interior-labels-as-string degenerate case at the
+        // singleton edge — `T::interior_labels()` and
+        // `T::sorted_interior_labels()` both return the empty
+        // vector, so `slice::join` on an empty slice yields the
+        // empty string regardless of separator. Both boundary-
+        // cardinality edges collapse to `""`. Mirrors
+        // `interior_labels_and_sorted_interior_labels_collapse_to_empty_on_singleton_closed_set`
+        // one return-shape axis over on the (Vec, String) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonInteriorJoinedStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonInteriorJoinedStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonInteriorJoinedStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton interior joined stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonInteriorJoinedStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton interior joined stub kind";
+            type Unknown = UnknownSingletonInteriorJoinedStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonInteriorJoinedStubKind(s.to_owned())
+            }
+        }
+        for sep in ["/", ", ", "|", "", " -> "] {
+            assert_eq!(
+                <SingletonInteriorJoinedStubKind as ClosedSet>::interior_labels_joined(sep),
+                "",
+            );
+            assert_eq!(
+                <SingletonInteriorJoinedStubKind as ClosedSet>::sorted_interior_labels_joined(sep),
+                "",
+            );
+        }
+        super::assert_closed_set_well_formed::<SingletonInteriorJoinedStubKind>();
+    }
+
+    #[test]
+    fn interior_labels_joined_and_sorted_interior_labels_joined_are_empty_string_on_two_variant_closed_set(
+    ) {
+        // The interior-labels-as-string degenerate case at the
+        // two-variant edge — both variants are boundary anchors, so
+        // the interior-label collections are empty and the joined
+        // renderings collapse to `""` regardless of separator.
+        // Mirrors
+        // `interior_labels_and_sorted_interior_labels_are_empty_on_two_variant_closed_set`
+        // one return-shape axis over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum TwoVariantInteriorJoinedStubKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownTwoVariantInteriorJoinedStubKind(pub String);
+        impl core::fmt::Display for UnknownTwoVariantInteriorJoinedStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown two variant interior joined stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for TwoVariantInteriorJoinedStubKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "two variant interior joined stub kind";
+            type Unknown = UnknownTwoVariantInteriorJoinedStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownTwoVariantInteriorJoinedStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <TwoVariantInteriorJoinedStubKind as ClosedSet>::interior_labels_joined("/"),
+            "",
+        );
+        assert_eq!(
+            <TwoVariantInteriorJoinedStubKind as ClosedSet>::sorted_interior_labels_joined("/"),
+            "",
+        );
+        super::assert_closed_set_well_formed::<TwoVariantInteriorJoinedStubKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_interior_labels_joined_and_composition()
+    {
+        // The well-formedness sweep's (42) clause —
+        // `T::interior_labels_joined(sep)` MUST equal
+        // `T::interior_labels().join(sep)` across every
+        // representative separator. A hand-impl'd implementor whose
+        // override ignores the caller-supplied separator (returns a
+        // hard-coded literal) fails the sweep loudly rather than
+        // silently bifurcating the declaration-axis interior-label-
+        // as-string surface every downstream diagnostic consumer
+        // routes through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_labels_joined_and_composition`
+        // one partition-flavor axis over on the (full-set,
+        // interior) arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedInteriorJoinKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedInteriorJoinKind(pub String);
+        impl core::fmt::Display for UnknownDriftedInteriorJoinKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted interior join kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedInteriorJoinKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted interior join kind";
+            type Unknown = UnknownDriftedInteriorJoinKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedInteriorJoinKind(s.to_owned())
+            }
+            fn interior_labels_joined(_sep: &str) -> String {
+                // Drifted override — returns a hard-coded literal
+                // that ignores the caller-supplied separator and the
+                // implementor's actual interior-labels surface. The
+                // natural composition returns `"middle"` for every
+                // caller-supplied separator (the interior is a single
+                // slot), so the WRONG literal fails clause (42) on
+                // every one of the three swept separators.
+                String::from("WRONG")
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedInteriorJoinKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an interior_labels_joined override drifted from the natural interior-labels-then-join composition",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_interior_labels_joined_and_composition(
+    ) {
+        // The well-formedness sweep's (43) clause —
+        // `T::sorted_interior_labels_joined(sep)` MUST equal
+        // `T::sorted_interior_labels().join(sep)` across every
+        // representative separator. A hand-impl'd implementor whose
+        // override folds onto the declaration-axis
+        // `interior_labels_joined` at an ordering-divergent edge
+        // fails the sweep loudly rather than silently bifurcating
+        // the lex-axis alphabetized interior-label-as-string surface
+        // every downstream diagnostic consumer routes through.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_sorted_labels_joined_and_composition`
+        // one partition-flavor axis over on the (full-set,
+        // interior) arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedInteriorJoinKind {
+            // Declaration order is `[Gamma, Beta, Alpha]` — reversed
+            // from lex order — so the sorted-interior collection
+            // (`[Beta]`) and the declaration-interior collection
+            // (`[Beta]`) coincide as vectors BUT the fold-drift
+            // simulated below on a hypothetical multi-slot
+            // implementor would still fire; here we simulate a
+            // fabricated join that swaps separator threading.
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedInteriorJoinKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedInteriorJoinKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted interior join kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedInteriorJoinKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "drifted sorted interior join kind";
+            type Unknown = UnknownDriftedSortedInteriorJoinKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedInteriorJoinKind(s.to_owned())
+            }
+            fn sorted_interior_labels_joined(_sep: &str) -> String {
+                // Drifted override — returns a hard-coded literal
+                // ignoring the caller-supplied separator. The
+                // natural composition returns `"beta"` (the sole
+                // strictly-lex-interior slot's label) for every
+                // separator; the WRONG literal fails clause (43) on
+                // every one of the three swept separators.
+                String::from("WRONG")
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedInteriorJoinKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_interior_labels_joined override drifted from the natural sorted-interior-labels-then-join composition",
         );
     }
 }

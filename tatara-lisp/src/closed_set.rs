@@ -2973,6 +2973,260 @@ pub trait ClosedSet: Sized + Copy + 'static {
         )
     }
 
+    /// Render the declaration-order endpoint-label pair as a `String`
+    /// joined by `sep` — the joined-`String` sibling of
+    /// [`Self::endpoint_labels`] one return-shape axis over on the
+    /// (tuple, `String`) partition of the closed-set declaration-axis
+    /// endpoint-label return-shape axis.
+    ///
+    /// Default body destructures [`Self::endpoint_labels`] and joins
+    /// the two-element `[head, tail]` slice under
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// — the (head-label, tail-label) rendering-as-string is a typed
+    /// CONSEQUENCE of the declaration-axis endpoint-label-pair
+    /// primitive AND the caller-supplied separator, not a fifth
+    /// codepath through `format!("{head}{sep}{tail}")` or a per-
+    /// implementor inline `[T::first().label(), T::last().label()].join(sep)`
+    /// two-primitive compound. Implementors override only when the
+    /// endpoint-label-as-string surface needs to diverge from the
+    /// natural `[endpoint_labels().0, endpoint_labels().1].join(sep)`
+    /// shape (no production implementor reaches for this today; the
+    /// axis exists for the same reason `via`, `set_label`, `labels`,
+    /// `labels_joined`, `endpoints`, `endpoint_labels`,
+    /// `interior_labels_joined` overrides exist — a typed escape hatch
+    /// the trait surface exposes rather than forcing the implementor
+    /// to hand-roll the impl). An implementor that overrides
+    /// [`Self::endpoint_labels`] (or the [`Self::endpoints`] /
+    /// [`Self::first`] / [`Self::last`] scalars it funnels through,
+    /// or [`Self::label`]) propagates the override through this
+    /// default body to the (head-label, tail-label) joined rendering
+    /// automatically; the endpoint-label-as-string surface funnels
+    /// through the declaration-axis endpoint-label-pair primitive on
+    /// the pair-materialization column AND the `slice::join`
+    /// primitive on the separator-threading column.
+    ///
+    /// Sibling posture to [`Self::labels_joined`] on the (full-set,
+    /// endpoint) partition-flavor axis of the closed-set declaration-
+    /// axis label-as-string rendering surface —
+    /// [`Self::labels_joined`] renders EVERY declaration-ordered
+    /// canonical label under the caller's separator, this method
+    /// renders ONLY the two declaration-boundary-anchor labels under
+    /// the same separator. Sibling posture to
+    /// [`Self::interior_labels_joined`] on the (endpoint, interior)
+    /// partition-flavor axis of the (declaration-axis × `String`)
+    /// column — [`Self::interior_labels_joined`] renders the
+    /// strictly-interior labels only, this method renders the
+    /// strictly-boundary labels only. Sibling posture to
+    /// [`Self::endpoint_labels`] one return-shape axis over on the
+    /// (`(&'static str, &'static str)` tuple, `String`) partition of
+    /// the declaration-axis endpoint-label return-shape column —
+    /// [`Self::endpoint_labels`] returns the raw two-slot tuple, this
+    /// method returns the caller-separator-joined `String`.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::first`] and [`Self::last`] both
+    /// return the sole variant, so [`Self::endpoint_labels`] returns
+    /// the diagonal tuple `(v.label(), v.label())` and this method
+    /// returns `[v.label(), v.label()].join(sep)` — for a singleton
+    /// stub with label `"only"` and separator `"/"`, the answer is
+    /// `"only/only"`. The tuple SHAPE is preserved even at the
+    /// boundary-cardinality edge where the two slots collapse onto
+    /// the same label. Two-variant degeneracy — [`Self::first`] and
+    /// [`Self::last`] name distinct variants, so this method renders
+    /// the caller-separator-joined string of the two variants' labels
+    /// (`[T::first().label(), T::last().label()].join(sep)`); for a
+    /// two-variant stub with labels `"head"`, `"tail"` and separator
+    /// `"/"`, the answer is `"head/tail"`.
+    ///
+    /// Consumer surface — a substrate-wide `INTENT_KIND_LIST`-style
+    /// boundary-only production separator rendering
+    /// `<head>/<tail>`, a natural-language diagnostic rendering
+    /// `boundary: <head>, <tail>` in a caller-chosen comma-space
+    /// separator style, a grammar-style boundary-pair renderer
+    /// emitting `<head> | <tail>` under a pipe separator, a
+    /// deterministic-across-machines boundary-only Prometheus tag
+    /// whose separator convention must not leak the strictly-
+    /// interior slots — bind to ONE trait method instead of hand-
+    /// rolling the two-primitive
+    /// `let (h, t) = T::endpoint_labels(); [h, t].join(sep)`
+    /// composition OR the three-primitive
+    /// `[T::first().label(), T::last().label()].join(sep)` expansion
+    /// at every callsite.
+    ///
+    /// The declaration-axis endpoint-label-as-string contract —
+    /// `T::endpoint_labels_joined(sep) == {let (h, t) = T::endpoint_labels(); [h, t].join(sep)}`
+    /// on every implementor for every `sep` — is guaranteed by the
+    /// default composition through [`Self::endpoint_labels`] and the
+    /// standard-library `slice::join` primitive; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (44)
+    /// pins the composition against the natural
+    /// `[endpoint_labels().0, endpoint_labels().1].join(sep)` shape
+    /// across THREE representative separators (`"/"`, `", "`, `"|"`)
+    /// matching clauses (8) + (42)'s sweep on every implementor so a
+    /// passing well-formedness sweep means every generic consumer can
+    /// call [`Self::endpoint_labels_joined`] on any typed carrier and
+    /// expect the same `String` answer at every crate boundary.
+    ///
+    /// The (partition-flavor × ordering × return-shape) 2×2×2 cube
+    /// over the closed-set label-aggregation surface CLOSES on the
+    /// endpoint arm at the (endpoint × declaration × `String`)
+    /// corner: [`Self::labels`] / [`Self::sorted_labels`] on the
+    /// (full-set × ordering × `Vec`) column,
+    /// [`Self::labels_joined`] / [`Self::sorted_labels_joined`] on
+    /// the (full-set × ordering × `String`) column,
+    /// [`Self::interior_labels`] / [`Self::sorted_interior_labels`]
+    /// on the (interior × ordering × `Vec`) column,
+    /// [`Self::interior_labels_joined`] /
+    /// [`Self::sorted_interior_labels_joined`] on the (interior ×
+    /// ordering × `String`) column, [`Self::endpoint_labels`] /
+    /// [`Self::sorted_endpoint_labels`] on the (endpoint × ordering ×
+    /// pair-tuple) column, and this method +
+    /// [`Self::sorted_endpoint_labels_joined`] on the (endpoint ×
+    /// ordering × `String`) column — every (partition-flavor,
+    /// ordering, return-shape) corner of the closed-set label-
+    /// aggregation cube now emits at ONE typed trait method.
+    ///
+    /// THEORY.md §III — the typescape; the (declaration-axis
+    /// endpoint-label-pair rendering-as-string) projection becomes a
+    /// TYPE projection on the trait rather than a per-consumer inline
+    /// `let (h, t) = T::endpoint_labels(); [h, t].join(sep)`
+    /// composition at every downstream endpoint-label-as-string site.
+    /// THEORY.md §V.1 — knowable platform; the endpoint-label-as-
+    /// string projection was an unnamed compound of the endpoint-
+    /// label-pair primitive + `slice::join` pre-lift; naming it on
+    /// the trait makes the projection a TYPED CONSEQUENCE of the
+    /// substrate's endpoint-label-pair primitive — generic consumers
+    /// see ONE method, not one endpoint-pair-then-join compound per
+    /// crate.
+    /// THEORY.md §VI.1 — generation over composition; the endpoint-
+    /// label-as-string rendering emerges from the composition of
+    /// FOUR substrate primitives ([`Self::first`], [`Self::last`],
+    /// [`Self::label`], `slice::join`) rather than as a per-
+    /// implementor inline `[T::first().label(), T::last().label()].join(sep)`
+    /// three-primitive compound.
+    ///
+    /// Frontier inspiration: Racket's `enum-endpoint-labels` composed
+    /// with `string-join` on closed enumerations (the boundary-only
+    /// candidate-pair-as-string emits as a single typed projection
+    /// on the finite-type layer rather than per-instance inline
+    /// compound); Idris's `showEndpoints` composed with
+    /// `Data.List.intercalate` on `Fin (S n) -> (String, String)` non-
+    /// empty finite-cardinality endpoint-pair projections; Haskell's
+    /// `intercalate sep [show minBound, show maxBound]` on the
+    /// `Bounded + Show` type-class pair — the endpoint-label rendering
+    /// composed from three prelude primitives on the bounded chain;
+    /// MLIR's `RegisteredOperationName::begin_end_names_joined()` on
+    /// the declaration-order Op registry (the endpoint-label-as-string
+    /// projection over the registered-op enumeration). Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's existing [`Self::endpoint_labels`] surface with the
+    /// `slice::join` standard-library primitive on a two-element
+    /// stack-allocated array — no new dep, no new IR layer, no
+    /// supertrait bound, no per-implementor allocation beyond the
+    /// natural `String` allocation
+    /// [`Self::labels_joined`]'s sibling surface already routes.
+    fn endpoint_labels_joined(sep: &str) -> ::std::string::String {
+        let (head, tail) = <Self as ClosedSet>::endpoint_labels();
+        [head, tail].join(sep)
+    }
+
+    /// Render the lex-order endpoint-label pair as a `String` joined
+    /// by `sep` — the alphabetized endpoint-label-as-string sibling
+    /// of [`Self::endpoint_labels_joined`] one ordering axis over on
+    /// the (declaration, lex) partition of the closed-set endpoint-
+    /// label-as-string surface.
+    ///
+    /// Default body destructures [`Self::sorted_endpoint_labels`] and
+    /// joins the two-element `[lex-head, lex-tail]` slice under
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// — the alphabetized endpoint-label rendering is a typed
+    /// CONSEQUENCE of [`Self::sorted_first`] + [`Self::sorted_last`] +
+    /// [`Self::label`] + ASCII lexicographic ordering + the chosen
+    /// separator. Implementors override only when the alphabetized
+    /// join surface needs to diverge from the natural
+    /// `[sorted_endpoint_labels().0, sorted_endpoint_labels().1].join(sep)`
+    /// shape (no production implementor reaches for this today — the
+    /// axis exists for the same reason `via`, `set_label`, `labels`,
+    /// `labels_joined`, `sorted_labels`, `sorted_labels_joined`,
+    /// `endpoint_labels`, `sorted_endpoint_labels`,
+    /// `endpoint_labels_joined` overrides exist: a typed escape hatch
+    /// the trait surface exposes rather than forcing the implementor
+    /// to hand-roll the impl).
+    ///
+    /// Sibling posture to [`Self::sorted_labels_joined`] on the
+    /// (full-set, endpoint) partition-flavor axis of the closed-set
+    /// alphabetized label-as-string rendering surface —
+    /// [`Self::sorted_labels_joined`] renders EVERY lex-ordered
+    /// canonical label under the caller's separator, this method
+    /// renders ONLY the two lex-boundary-anchor labels under the
+    /// same separator. Sibling posture to
+    /// [`Self::sorted_interior_labels_joined`] on the (endpoint,
+    /// interior) partition-flavor axis of the (lex-axis × `String`)
+    /// column — [`Self::sorted_interior_labels_joined`] renders the
+    /// strictly-lex-interior labels only, this method renders the
+    /// strictly-lex-boundary labels only. See
+    /// [`Self::endpoint_labels_joined`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the lex-ordering-axis arm of the same
+    /// return-shape axis and inherits every property from the
+    /// declaration-axis arm's documentation, differing only in the
+    /// composition through [`Self::sorted_endpoint_labels`] instead
+    /// of [`Self::endpoint_labels`] and the alphabetized consumer
+    /// surface (an alphabetized boundary badge that emits
+    /// `<lex-head-label>/<lex-tail-label>` in a diagnostic, a lex-
+    /// ordered saga-step audit event that emits both lex anchor
+    /// labels joined by a caller-supplied separator, an alphabetized-
+    /// completion UI that renders the lex boundary pair by joined
+    /// label under a chart-caption-style separator).
+    ///
+    /// Singleton + two-variant degeneracies — mirror
+    /// [`Self::endpoint_labels_joined`]'s degeneracy profile one
+    /// ordering axis over. Singleton: `[T::sorted_first().label(), T::sorted_last().label()].join(sep)`
+    /// collapses to `<only>/<only>` (the diagonal-tuple label repeats
+    /// under the caller-supplied separator); for a singleton stub
+    /// with label `"only"` and separator `"/"`, the answer is
+    /// `"only/only"`. Two-variant: renders the caller-separator-joined
+    /// string of the two lex-ordered variants' labels; for a two-
+    /// variant stub with lex-ordered labels `("head", "tail")` and
+    /// separator `"/"`, the answer is `"head/tail"`.
+    ///
+    /// The lex-axis endpoint-label-as-string contract —
+    /// `T::sorted_endpoint_labels_joined(sep) == {let (h, t) = T::sorted_endpoint_labels(); [h, t].join(sep)}`
+    /// on every implementor for every `sep` — is guaranteed by the
+    /// default composition through [`Self::sorted_endpoint_labels`]
+    /// and the standard-library `slice::join` primitive; the well-
+    /// formedness contract [`assert_closed_set_well_formed`]'s new
+    /// clause (45) pins the composition against the natural
+    /// `[sorted_endpoint_labels().0, sorted_endpoint_labels().1].join(sep)`
+    /// shape across THREE representative separators (`"/"`, `", "`,
+    /// `"|"`) matching clauses (10) + (43)'s sweep on every
+    /// implementor so a passing well-formedness sweep means every
+    /// generic consumer can call [`Self::sorted_endpoint_labels_joined`]
+    /// on any typed carrier and expect the same `String` answer at
+    /// every crate boundary.
+    ///
+    /// The (partition-flavor × ordering × return-shape) 2×2×3 cube
+    /// over the closed-set label-aggregation surface CLOSES at the
+    /// (endpoint × lex × `String`) corner: [`Self::labels`] /
+    /// [`Self::sorted_labels`] on (full-set × ordering × `Vec`),
+    /// [`Self::labels_joined`] / [`Self::sorted_labels_joined`] on
+    /// (full-set × ordering × `String`), [`Self::interior_labels`] /
+    /// [`Self::sorted_interior_labels`] on (interior × ordering ×
+    /// `Vec`), [`Self::interior_labels_joined`] /
+    /// [`Self::sorted_interior_labels_joined`] on (interior ×
+    /// ordering × `String`), [`Self::endpoint_labels`] /
+    /// [`Self::sorted_endpoint_labels`] on (endpoint × ordering ×
+    /// pair-tuple), [`Self::endpoint_labels_joined`] + this method
+    /// on (endpoint × ordering × `String`). A future consumer that
+    /// binds any of the twelve sees the same `Vec<&'static str>` /
+    /// `(&'static str, &'static str)` / `String` shape at every
+    /// crate boundary regardless of which cube corner it walks.
+    fn sorted_endpoint_labels_joined(sep: &str) -> ::std::string::String {
+        let (head, tail) = <Self as ClosedSet>::sorted_endpoint_labels();
+        [head, tail].join(sep)
+    }
+
     /// The declaration-order strict-interior variant list — the
     /// `Vec<Self>` complement of [`Self::endpoints`] over the closed-
     /// set boundary-partition axis. Every variant `v` in the returned
@@ -7819,6 +8073,102 @@ where
         assert_eq!(
             lifted, natural,
             "{type_name}: T::sorted_interior_labels_joined({sep:?}) drifted from T::sorted_interior_labels().join({sep:?}) — the lex-axis alphabetized interior-labels-as-string rendering every diagnostic / metrics consumer routes through no longer matches the natural sorted-interior-labels-then-join composition",
+        );
+    }
+    // (44) — `T::endpoint_labels_joined(sep)` MUST compose
+    // `T::endpoint_labels()` with `slice::join` verbatim across every
+    // representative separator. The default trait body destructures
+    // the declaration-axis endpoint-label pair and joins the two-
+    // element slice under the caller-supplied separator, satisfying
+    // the clause for free; the assertion catches a future implementor
+    // whose override drifts the composition (a permissive override
+    // that leaks a strictly-interior label into the joined output —
+    // silently violating the (boundary, interior) label partition
+    // every downstream declaration-axis endpoint-label-as-string
+    // consumer relies on; a swapped override that inverts the
+    // (head-label, tail-label) tuple-slot ordering in the joined
+    // rendering — silently bifurcating the declaration-axis
+    // endpoint-anchor semantics every downstream boundary-badge /
+    // boundary-diagnostic / boundary-audit-event consumer routes
+    // through; a fabricated override that ignores the caller-supplied
+    // separator or threads a different separator; a fold override
+    // that returns `T::sorted_endpoint_labels_joined(sep)` instead of
+    // the declaration-axis rendering — silently bifurcating the two
+    // ordering axes' endpoint-label-as-string surfaces onto the SAME
+    // `String` at the ordering-divergent implementor edge) loudly
+    // rather than silently bifurcating the declaration-axis endpoint-
+    // label-as-string surface. Sweep three representative separators
+    // (slash for boundary-only production constants, comma-space for
+    // natural-language `boundary: ...` shapes, pipe for grammar-style
+    // alternative lists) matching clauses (8) + (42)'s sweep so an
+    // isolated drift on any of the three natural rendering surfaces
+    // fails the testkit on every implementor. Sibling posture to
+    // clauses (8) + (36) + (42) — clause (8) pins the (full-set ×
+    // declaration × String) label-as-string shape, clause (36) pins
+    // the (endpoint × declaration × pair-tuple) label-pair shape,
+    // clause (42) pins the (interior × declaration × String) label-
+    // as-string shape, this clause pins the (endpoint × declaration ×
+    // String) label-as-string shape against the composition of the
+    // declaration-axis endpoint-label-pair primitive and the caller-
+    // supplied separator through `slice::join`.
+    for sep in ["/", ", ", "|"] {
+        let lifted = T::endpoint_labels_joined(sep);
+        let (head, tail) = T::endpoint_labels();
+        let natural = [head, tail].join(sep);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::endpoint_labels_joined({sep:?}) drifted from [T::endpoint_labels().0, T::endpoint_labels().1].join({sep:?}) — the declaration-axis endpoint-labels-as-string rendering every boundary-badge / boundary-diagnostic / boundary-audit-event consumer routes through no longer matches the natural endpoint-labels-then-join composition",
+        );
+    }
+    // (45) — `T::sorted_endpoint_labels_joined(sep)` MUST compose
+    // `T::sorted_endpoint_labels()` with `slice::join` verbatim
+    // across every representative separator. The default trait body
+    // satisfies the clause for free; the assertion catches a future
+    // implementor whose override drifts the composition (a permissive
+    // override that leaks a strictly-lex-interior label into the
+    // joined output; a swapped override that inverts the (lex-head-
+    // label, lex-tail-label) tuple-slot ordering; a fabricated
+    // override that ignores the caller-supplied separator; a
+    // declaration-axis fold override that returns
+    // `T::endpoint_labels_joined(sep)` instead of the lex-axis
+    // rendering — silently bifurcating the two ordering axes'
+    // endpoint-label-as-string surfaces onto the SAME `String` at the
+    // ordering-divergent implementor edge) loudly rather than
+    // silently bifurcating the lex-axis endpoint-label-as-string
+    // surface. Sweep the same three representative separators clause
+    // (44) uses (`"/"`, `", "`, `"|"`) so an isolated drift on any of
+    // the three natural alphabetized rendering surfaces (slash for
+    // ordering-independent boundary-only production constants,
+    // comma-space for natural-language alphabetized `boundary: ...`
+    // shapes, pipe for grammar-style alphabetized alternative lists)
+    // fails the testkit on every implementor. Sibling posture to
+    // clauses (10) + (37) + (43) + (44) — clause (10) pins the
+    // (full-set × lex × String) alphabetized label-as-string shape,
+    // clause (37) pins the (endpoint × lex × pair-tuple) lex-label-
+    // pair shape, clause (43) pins the (interior × lex × String)
+    // alphabetized label-as-string shape, clause (44) pins the
+    // (endpoint × declaration × String) declaration-endpoint-label-
+    // as-string shape, this clause pins the (endpoint × lex ×
+    // String) alphabetized-endpoint-label-as-string shape against
+    // the composition of the lex-axis endpoint-label-pair primitive
+    // and the caller-supplied separator through `slice::join`.
+    // Clauses (8) + (10) + (36) + (37) + (40) + (41) + (42) + (43) +
+    // (44) + (45) together CLOSE the (partition-flavor × ordering ×
+    // return-shape) cube over the closed-set LABEL-aggregation
+    // surface at EVERY (full-set/interior/endpoint × declaration/lex
+    // × Vec/String/pair-tuple) corner — the (endpoint × ordering ×
+    // String) corner (this clause + clause (44)) mirrors the
+    // (interior × ordering × String) corner (clauses (42) + (43))
+    // one partition-flavor axis over on the (interior, endpoint)
+    // partition of the boundary axis, closing the joined-`String`
+    // return-shape column on the endpoint arm.
+    for sep in ["/", ", ", "|"] {
+        let lifted = T::sorted_endpoint_labels_joined(sep);
+        let (head, tail) = T::sorted_endpoint_labels();
+        let natural = [head, tail].join(sep);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::sorted_endpoint_labels_joined({sep:?}) drifted from [T::sorted_endpoint_labels().0, T::sorted_endpoint_labels().1].join({sep:?}) — the lex-axis alphabetized endpoint-labels-as-string rendering every alphabetized-boundary-badge / alphabetized-boundary-diagnostic / alphabetized-boundary-audit-event consumer routes through no longer matches the natural sorted-endpoint-labels-then-join composition",
         );
     }
 }
@@ -16077,6 +16427,412 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_interior_labels_joined override drifted from the natural sorted-interior-labels-then-join composition",
+        );
+    }
+
+    #[test]
+    fn endpoint_labels_joined_renders_declaration_order_endpoint_labels_through_chosen_separator() {
+        // The declaration-order endpoint-label-as-string projection —
+        // `T::endpoint_labels_joined(sep)` composes
+        // `T::endpoint_labels()` with `slice::join` verbatim on a
+        // two-element stack-allocated array. `StubKind`'s endpoint-
+        // label pair is `("alpha", "gamma")` (dropping the strictly-
+        // interior label `"beta"`), so the joined output threads the
+        // caller-supplied separator between the two boundary labels.
+        // Sibling posture to
+        // `interior_labels_joined_renders_declaration_order_strict_interior_labels_through_chosen_separator`
+        // one partition-flavor axis over on the (endpoint, interior)
+        // arm of the (partition-flavor × ordering × return-shape)
+        // cube.
+        assert_eq!(
+            <StubKind as ClosedSet>::endpoint_labels_joined("/"),
+            "alpha/gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::endpoint_labels_joined(", "),
+            "alpha, gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::endpoint_labels_joined("|"),
+            "alpha|gamma",
+        );
+    }
+
+    #[test]
+    fn sorted_endpoint_labels_joined_renders_lex_order_endpoint_labels_through_chosen_separator() {
+        // The lex-order endpoint-label-as-string projection —
+        // `T::sorted_endpoint_labels_joined(sep)` composes
+        // `T::sorted_endpoint_labels()` with `slice::join` verbatim
+        // on a two-element stack-allocated array. `StubKind`'s labels
+        // sit in declaration order that matches lex order (`"alpha",
+        // "beta", "gamma"`), so the lex-endpoint-labels-as-string
+        // projection coincides with the declaration-axis rendering
+        // above; the ordering-divergent stub below exercises the
+        // actual lex-ordering discipline separately. Sibling posture
+        // to
+        // `endpoint_labels_joined_renders_declaration_order_endpoint_labels_through_chosen_separator`
+        // one ordering axis over.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_endpoint_labels_joined("/"),
+            "alpha/gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_endpoint_labels_joined(", "),
+            "alpha, gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_endpoint_labels_joined("|"),
+            "alpha|gamma",
+        );
+    }
+
+    #[test]
+    fn endpoint_labels_joined_and_sorted_endpoint_labels_joined_diverge_on_declaration_order_that_diverges_from_lex_order(
+    ) {
+        // The (declaration-axis, lex-axis) endpoint-labels-as-string
+        // partition — a 5-variant stub whose declaration order
+        // (`[Epsilon, Delta, Gamma, Beta, Alpha]`) diverges from the
+        // lex ordering of its labels (`"alpha" < "beta" < "delta" <
+        // "epsilon" < "gamma"`). Declaration-axis endpoint labels are
+        // `("epsilon", "alpha")` (the declaration-order first + last
+        // anchors); lex-axis endpoint labels are `("alpha", "gamma")`
+        // (the lex-order first + last anchors). The two joined
+        // renderings must observe the underlying ordering-axis
+        // partition on ALL THREE representative separators. Sibling
+        // posture to
+        // `endpoint_labels_and_sorted_endpoint_labels_diverge_on_declaration_order_that_diverges_from_lex_order`
+        // one return-shape axis over on the (`(&'static str,
+        // &'static str)` tuple, `String`) partition. Also exercises
+        // the well-formedness sweep's new (44) + (45) clauses on the
+        // ordering-divergent edge.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum EndpointJoinedPartitionStubKind {
+            Epsilon,
+            Delta,
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownEndpointJoinedPartitionStubKind(pub String);
+        impl core::fmt::Display for UnknownEndpointJoinedPartitionStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown endpoint joined partition stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for EndpointJoinedPartitionStubKind {
+            const ALL: &'static [Self] = &[
+                Self::Epsilon,
+                Self::Delta,
+                Self::Gamma,
+                Self::Beta,
+                Self::Alpha,
+            ];
+            const SET_LABEL: &'static str = "endpoint joined partition stub kind";
+            type Unknown = UnknownEndpointJoinedPartitionStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Epsilon => "epsilon",
+                    Self::Delta => "delta",
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownEndpointJoinedPartitionStubKind(s.to_owned())
+            }
+        }
+        // Slash — the substrate-wide `INTENT_KIND_LIST`-style
+        // boundary-only production separator.
+        assert_eq!(
+            <EndpointJoinedPartitionStubKind as ClosedSet>::endpoint_labels_joined("/"),
+            "epsilon/alpha",
+        );
+        assert_eq!(
+            <EndpointJoinedPartitionStubKind as ClosedSet>::sorted_endpoint_labels_joined("/"),
+            "alpha/gamma",
+        );
+        // Comma-space — the natural-language `boundary: ...`
+        // diagnostic separator.
+        assert_eq!(
+            <EndpointJoinedPartitionStubKind as ClosedSet>::endpoint_labels_joined(", "),
+            "epsilon, alpha",
+        );
+        assert_eq!(
+            <EndpointJoinedPartitionStubKind as ClosedSet>::sorted_endpoint_labels_joined(", "),
+            "alpha, gamma",
+        );
+        // Pipe — the grammar-style alternative-list separator.
+        assert_eq!(
+            <EndpointJoinedPartitionStubKind as ClosedSet>::endpoint_labels_joined("|"),
+            "epsilon|alpha",
+        );
+        assert_eq!(
+            <EndpointJoinedPartitionStubKind as ClosedSet>::sorted_endpoint_labels_joined("|"),
+            "alpha|gamma",
+        );
+        // The two joined renderings share NO overlap at the ordering-
+        // divergent edge on any of the three separators — a
+        // regression that folded either projection onto the other
+        // would collide the outputs here rather than silently
+        // bifurcating the (declaration, lex) partition.
+        assert_ne!(
+            <EndpointJoinedPartitionStubKind as ClosedSet>::endpoint_labels_joined("/"),
+            <EndpointJoinedPartitionStubKind as ClosedSet>::sorted_endpoint_labels_joined("/"),
+        );
+        // Well-formedness sweep fires — clauses (44) + (45) pin both
+        // endpoint-labels-as-string projections at the ordering-
+        // divergent edge.
+        super::assert_closed_set_well_formed::<EndpointJoinedPartitionStubKind>();
+    }
+
+    #[test]
+    fn endpoint_labels_joined_and_sorted_endpoint_labels_joined_collapse_to_diagonal_on_singleton_closed_set(
+    ) {
+        // The endpoint-labels-as-string degenerate case at the
+        // singleton edge — `T::endpoint_labels()` and
+        // `T::sorted_endpoint_labels()` both return the diagonal
+        // tuple `(only.label(), only.label())`, so `slice::join` on
+        // the two-element `[only, only]` slice yields
+        // `"only<sep>only"` for every separator. Unlike the interior
+        // case which collapses to the empty string (empty slice ×
+        // any separator), the endpoint case preserves the tuple
+        // SHAPE by emitting the sole variant's label TWICE joined by
+        // the caller-supplied separator. Mirrors
+        // `endpoint_labels_and_sorted_endpoint_labels_collapse_to_diagonal_tuple_on_singleton_closed_set`
+        // one return-shape axis over on the (pair-tuple, `String`)
+        // partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonEndpointJoinedStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonEndpointJoinedStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonEndpointJoinedStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton endpoint joined stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonEndpointJoinedStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton endpoint joined stub kind";
+            type Unknown = UnknownSingletonEndpointJoinedStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonEndpointJoinedStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonEndpointJoinedStubKind as ClosedSet>::endpoint_labels_joined("/"),
+            "only/only",
+        );
+        assert_eq!(
+            <SingletonEndpointJoinedStubKind as ClosedSet>::sorted_endpoint_labels_joined("/"),
+            "only/only",
+        );
+        assert_eq!(
+            <SingletonEndpointJoinedStubKind as ClosedSet>::endpoint_labels_joined(", "),
+            "only, only",
+        );
+        assert_eq!(
+            <SingletonEndpointJoinedStubKind as ClosedSet>::sorted_endpoint_labels_joined(", "),
+            "only, only",
+        );
+        // Empty separator — the diagonal collapse concatenates the
+        // sole label with itself: `"onlyonly"`, preserving the two-
+        // slot tuple SHAPE even with a zero-length separator.
+        assert_eq!(
+            <SingletonEndpointJoinedStubKind as ClosedSet>::endpoint_labels_joined(""),
+            "onlyonly",
+        );
+        assert_eq!(
+            <SingletonEndpointJoinedStubKind as ClosedSet>::sorted_endpoint_labels_joined(""),
+            "onlyonly",
+        );
+        super::assert_closed_set_well_formed::<SingletonEndpointJoinedStubKind>();
+    }
+
+    #[test]
+    fn endpoint_labels_joined_and_sorted_endpoint_labels_joined_render_two_variant_endpoint_labels_on_two_variant_closed_set(
+    ) {
+        // The endpoint-labels-as-string degenerate case at the two-
+        // variant edge — both variants ARE the boundary anchors, so
+        // the endpoint-label pair renders the two labels joined by
+        // the caller-supplied separator (`"head<sep>tail"` in
+        // declaration order for a two-variant `[Head, Tail]` stub).
+        // Unlike the interior case which collapses to the empty
+        // string at this edge, the endpoint case renders BOTH slots
+        // regardless of cardinality. Mirrors
+        // `endpoint_labels_and_sorted_endpoint_labels_render_two_variant_endpoint_labels_on_two_variant_closed_set`
+        // one return-shape axis over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum TwoVariantEndpointJoinedStubKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownTwoVariantEndpointJoinedStubKind(pub String);
+        impl core::fmt::Display for UnknownTwoVariantEndpointJoinedStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown two variant endpoint joined stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for TwoVariantEndpointJoinedStubKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "two variant endpoint joined stub kind";
+            type Unknown = UnknownTwoVariantEndpointJoinedStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownTwoVariantEndpointJoinedStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <TwoVariantEndpointJoinedStubKind as ClosedSet>::endpoint_labels_joined("/"),
+            "head/tail",
+        );
+        assert_eq!(
+            <TwoVariantEndpointJoinedStubKind as ClosedSet>::sorted_endpoint_labels_joined("/"),
+            "head/tail",
+        );
+        super::assert_closed_set_well_formed::<TwoVariantEndpointJoinedStubKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_endpoint_labels_joined_and_composition()
+    {
+        // The well-formedness sweep's (44) clause —
+        // `T::endpoint_labels_joined(sep)` MUST equal
+        // `[T::endpoint_labels().0, T::endpoint_labels().1].join(sep)`
+        // across every representative separator. A hand-impl'd
+        // implementor whose override ignores the caller-supplied
+        // separator (returns a hard-coded literal) fails the sweep
+        // loudly rather than silently bifurcating the declaration-
+        // axis endpoint-label-as-string surface every downstream
+        // boundary-badge / boundary-diagnostic / boundary-audit-event
+        // consumer routes through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_interior_labels_joined_and_composition`
+        // one partition-flavor axis over on the (endpoint, interior)
+        // arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedEndpointJoinKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedEndpointJoinKind(pub String);
+        impl core::fmt::Display for UnknownDriftedEndpointJoinKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted endpoint join kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedEndpointJoinKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted endpoint join kind";
+            type Unknown = UnknownDriftedEndpointJoinKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedEndpointJoinKind(s.to_owned())
+            }
+            fn endpoint_labels_joined(_sep: &str) -> String {
+                // Drifted override — returns a hard-coded literal
+                // that ignores the caller-supplied separator. The
+                // natural composition returns `"head<sep>tail"` for
+                // every caller-supplied separator; the WRONG literal
+                // fails clause (44) on every one of the three swept
+                // separators.
+                String::from("WRONG")
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedEndpointJoinKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an endpoint_labels_joined override drifted from the natural endpoint-labels-then-join composition",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_endpoint_labels_joined_and_composition(
+    ) {
+        // The well-formedness sweep's (45) clause —
+        // `T::sorted_endpoint_labels_joined(sep)` MUST equal
+        // `[T::sorted_endpoint_labels().0, T::sorted_endpoint_labels().1].join(sep)`
+        // across every representative separator. A hand-impl'd
+        // implementor whose override folds onto the declaration-axis
+        // `endpoint_labels_joined` at an ordering-divergent edge (or
+        // ignores the caller-supplied separator) fails the sweep
+        // loudly rather than silently bifurcating the lex-axis
+        // alphabetized endpoint-label-as-string surface every
+        // downstream alphabetized-boundary-badge / alphabetized-
+        // boundary-diagnostic / alphabetized-boundary-audit-event
+        // consumer routes through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_sorted_interior_labels_joined_and_composition`
+        // one partition-flavor axis over on the (endpoint, interior)
+        // arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedEndpointJoinKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedEndpointJoinKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedEndpointJoinKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted endpoint join kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedEndpointJoinKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "drifted sorted endpoint join kind";
+            type Unknown = UnknownDriftedSortedEndpointJoinKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedEndpointJoinKind(s.to_owned())
+            }
+            fn sorted_endpoint_labels_joined(_sep: &str) -> String {
+                // Drifted override — returns a hard-coded literal
+                // ignoring the caller-supplied separator. The natural
+                // composition returns `"alpha<sep>gamma"` for every
+                // separator; the WRONG literal fails clause (45) on
+                // every one of the three swept separators.
+                String::from("WRONG")
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedEndpointJoinKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_endpoint_labels_joined override drifted from the natural sorted-endpoint-labels-then-join composition",
         );
     }
 }

@@ -1465,6 +1465,161 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn from_index(i: usize) -> Option<Self> {
         Self::ALL.get(i).copied()
     }
+
+    /// The declaration-order first variant of the closed set —
+    /// `Self::ALL[0]` projected onto the trait surface as a
+    /// panic-free typed anchor. Closes the (endpoint = 0) corner of
+    /// the closed-set endpoint-anchor axis.
+    ///
+    /// Sibling posture to [`Self::last`] one axis over on the
+    /// (endpoint = 0, endpoint = `CARDINALITY - 1`) partition of the
+    /// closed-set endpoint surface: [`Self::first`] returns the
+    /// declaration-order head, [`Self::last`] returns the
+    /// declaration-order tail. Together the two anchors bracket
+    /// [`Self::ALL`] at its two structural endpoints without forcing
+    /// generic consumers to either (a) index into the slice directly
+    /// (`Self::ALL[0]` / `Self::ALL[Self::ALL.len() - 1]`) — which
+    /// makes the endpoint axis a per-consumer duplicated composition
+    /// of [`Self::ALL`] + `<[T]>::first` / `<[T]>::last` +
+    /// [`Option::copied`] + `Option::unwrap` — OR (b) route through
+    /// [`Self::from_index`] with a hand-rolled
+    /// `.unwrap_or_else(|| unreachable!())` at each callsite (which
+    /// re-derives the `0`-index / `CARDINALITY - 1`-index literal at
+    /// every downstream site AND pays an [`Option`]-typed dispatch
+    /// the closed-set non-empty contract structurally forbids). Both
+    /// endpoints are guaranteed to exist by the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s clause (1) — a
+    /// closed set with zero variants is a degenerate codomain the
+    /// substrate rejects at the well-formedness boundary — so the
+    /// endpoint anchors emit a bare typed variant with no [`Option`]
+    /// / [`Result`] indirection.
+    ///
+    /// The (endpoint × direction) 1×2 matrix over the closed-set
+    /// endpoint-anchor surface partitions post-lift:
+    ///
+    /// | Endpoint direction        | Anchor surface       |
+    /// |---------------------------|----------------------|
+    /// | Declaration-order head    | [`Self::first`]      |
+    /// | Declaration-order tail    | [`Self::last`]       |
+    ///
+    /// Default body composes ONE substrate primitive ([`Self::ALL`])
+    /// with the standard-library slice-index-0 projection — the head
+    /// anchor is a typed CONSEQUENCE of [`Self::ALL`] + the non-empty
+    /// contract, not a per-implementor `const HEAD: Self = ...`
+    /// declaration. Implementors override only when the endpoint
+    /// surface needs to diverge from the natural `ALL[0]` shape (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason `via` / `set_label` / `labels` /
+    /// `sorted_labels` / `sorted_variants` / `from_index` overrides
+    /// exist — a typed escape hatch the trait surface exposes rather
+    /// than forcing the implementor to hand-roll the impl).
+    ///
+    /// Future consumers — a config-field decoder that binds the
+    /// closed-set's canonical default without hand-rolling a per-
+    /// implementor `const DEFAULT: T = T::Alpha` declaration (a
+    /// `serde` deserializer wrapper that folds a missing field onto
+    /// [`Self::first`], a `Default` impl generator that emits
+    /// `impl Default for T { fn default() -> T { T::first() } }` at
+    /// derive time), a truth-table property test that anchors at
+    /// [`Self::first`] / [`Self::last`] as its declaration-order edges
+    /// (a quickcheck-shaped variant generator that iterates from the
+    /// head to the tail through `from_index` and pins the endpoints
+    /// through this pair), a wire-format decoder that emits an
+    /// out-of-band "reset to head" sentinel decoded through
+    /// [`Self::first`], a state-machine iterator that walks the
+    /// declaration-order chain from [`Self::first`] toward
+    /// [`Self::last`] via [`Self::from_index`] — bind to ONE trait
+    /// method instead of hand-rolling either the `Self::ALL[0]` slice
+    /// indexing (which re-derives the same one-primitive projection
+    /// at every callsite AND makes every downstream site depend on
+    /// `Self::ALL`'s slice-index API) OR the
+    /// `Self::from_index(0).unwrap()` composition (which pays an
+    /// [`Option`]-typed dispatch the closed-set non-empty contract
+    /// structurally forbids), and the closed-set endpoint-anchor
+    /// surface evolves at ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the (declaration-order head
+    /// endpoint) projection becomes a TYPE projection on the trait
+    /// rather than a per-consumer inline `Self::ALL[0]` composition
+    /// at every downstream anchor site. The (head, tail) endpoint-
+    /// direction axis partitions the closed-set endpoint-anchor
+    /// surface exhaustively into TWO typed projections, each with a
+    /// distinct load-bearing consumer surface — the head for
+    /// canonical defaulters / iterator-start anchors, the tail for
+    /// iterator-terminator / bounded-loop guards.
+    /// THEORY.md §V.1 — knowable platform; the (declaration-order
+    /// head endpoint) projection was an unnamed compound of
+    /// [`Self::ALL`] + slice-index-0 pre-lift; naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of
+    /// [`Self::ALL`] alone — generic consumers see ONE method, not
+    /// ONE endpoint-shape-per-crate. The well-formedness clause (18)
+    /// pins [`Self::first`] against `T::ALL[0]` on every implementor
+    /// so a passing well-formedness sweep means every generic
+    /// consumer can call [`Self::first`] on any typed variant without
+    /// threading an [`Option`] through the return.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// (declaration-order head endpoint) projection emerges from the
+    /// composition of ONE substrate primitive ([`Self::ALL`]) with
+    /// the standard-library slice-index-0 projection rather than as
+    /// a per-implementor `const HEAD: Self = ...` declaration. A
+    /// future tightening of [`Self::ALL`] (a future
+    /// `#[closed_set(cardinality = N)]` derive attribute that pins N
+    /// at the source, a future declaration-time endpoint-assertion)
+    /// propagates to every closed-set endpoint-anchor consumer
+    /// through ONE trait method.
+    ///
+    /// Frontier inspiration: Racket's `enum-first` / `enum-last` on
+    /// closed enumerations, Idris's `Fin n` finite-cardinality type's
+    /// `firstFin : Fin (S n)` / `lastFin : Fin (S n)` panic-free
+    /// endpoint constructors on the non-empty finite-type universe,
+    /// MLIR's `RegisteredOperationName::begin() / end()` on the Op
+    /// registry, Haskell's `bounded` type-class `minBound` /
+    /// `maxBound` axis over closed enumerations — bounded-type
+    /// endpoint anchors exposed as bare typed values rather than
+    /// [`Option`]-wrapped decodes. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::ALL`] surface with the standard-library
+    /// slice-index-0 projection — no new dep, no new IR layer, no
+    /// supertrait bound, no [`Option`]-typed dispatch.
+    fn first() -> Self {
+        Self::ALL[0]
+    }
+
+    /// The declaration-order last variant of the closed set —
+    /// `Self::ALL[Self::ALL.len() - 1]` projected onto the trait
+    /// surface as a panic-free typed anchor. Closes the
+    /// (endpoint = `CARDINALITY - 1`) corner of the closed-set
+    /// endpoint-anchor axis.
+    ///
+    /// Sibling posture to [`Self::first`] one axis over on the
+    /// (endpoint = 0, endpoint = `CARDINALITY - 1`) partition of the
+    /// closed-set endpoint surface: [`Self::first`] returns the
+    /// declaration-order head, this method returns the
+    /// declaration-order tail. See [`Self::first`] for the shared
+    /// design rationale, sibling matrix, override axis, future-
+    /// consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the (endpoint = `CARDINALITY - 1`)
+    /// arm of the same axis and inherits every property from the
+    /// (endpoint = 0) arm's documentation, differing only in the
+    /// concrete slice-index projection.
+    ///
+    /// Default body composes ONE substrate primitive ([`Self::ALL`])
+    /// with the standard-library slice-index-`(N - 1)` projection —
+    /// the tail anchor is a typed CONSEQUENCE of [`Self::ALL`] + the
+    /// non-empty contract, not a per-implementor `const TAIL: Self =
+    /// ...` declaration. Both the `Self::ALL.len() - 1` subtraction
+    /// AND the subsequent indexing are guaranteed sound by the
+    /// well-formedness contract [`assert_closed_set_well_formed`]'s
+    /// clause (1) — `Self::ALL` is non-empty, so `Self::ALL.len()`
+    /// is `>= 1`, and the subtraction never underflows. The
+    /// well-formedness clause (18) pins [`Self::last`] against
+    /// `T::ALL[T::ALL.len() - 1]` on every implementor so a passing
+    /// well-formedness sweep means every generic consumer can call
+    /// [`Self::last`] on any typed variant without threading an
+    /// [`Option`] through the return.
+    fn last() -> Self {
+        Self::ALL[Self::ALL.len() - 1]
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -1764,6 +1919,28 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     the closed set's two structural projections (index-keyed and
 ///     label-keyed) both stay sound at the runtime element-wise
 ///     boundary.
+/// 18. [`ClosedSet::first`] equals `T::ALL[0]` AND [`ClosedSet::last`]
+///     equals `T::ALL[T::ALL.len() - 1]` — the declaration-order
+///     endpoint anchors project the head and tail of the [`ClosedSet::ALL`]
+///     slice onto the trait surface as bare typed variants (no
+///     [`Option`] / [`Result`] indirection, because clause (1) pins
+///     [`ClosedSet::ALL`] non-empty so both endpoints are guaranteed
+///     to exist). The default trait bodies satisfy the clause for
+///     free; the assertion catches a future implementor whose
+///     override drifts from the natural slice-endpoint projections
+///     (a permissive override that returns some interior variant, a
+///     swapped override that returns [`ClosedSet::last`]'s tail for
+///     [`ClosedSet::first`], a stale override that returns the wrong
+///     endpoint after a variant-listing edit) loudly rather than
+///     silently bifurcating the endpoint-anchor surface every
+///     downstream defaulter / iterator-start / iterator-terminator
+///     consumer routes through. Sibling posture to clauses (15) +
+///     (16) — clauses (15) + (16) pin the (typed variant ↔ array
+///     index) bijection with `0..T::CARDINALITY` on every interior
+///     slot, this clause pins the (head, tail) endpoint anchors
+///     against `T::ALL[0]` / `T::ALL[T::ALL.len() - 1]` so the
+///     closed set's structural endpoints stay sound at the two
+///     canonical anchor sites.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -2203,6 +2380,35 @@ where
     assert_eq!(
         sorted_variant_labels, sorted_labels_reference,
         "{type_name}: T::sorted_variants() projected element-wise through label() drifted from T::sorted_labels() — the (typed variant, canonical label) alignment on the lexicographic-ordering axis broke, so a downstream consumer that walks `zip(sorted_variants(), sorted_labels())` would see two different renderings on the same slot",
+    );
+    // (18) — `T::first()` equals `T::ALL[0]` AND `T::last()` equals
+    // `T::ALL[T::ALL.len() - 1]`. The default trait bodies satisfy
+    // the clause for free; the assertion catches a future implementor
+    // whose override drifts from the natural slice-endpoint
+    // projections (a permissive override that returns some interior
+    // variant, a swapped override that returns the tail for
+    // `first()`, a stale override that returns the wrong endpoint
+    // after a variant-listing edit) loudly rather than silently
+    // bifurcating the endpoint-anchor surface every downstream
+    // defaulter / iterator-start / iterator-terminator consumer
+    // routes through. Sibling posture to clauses (15) + (16) —
+    // clauses (15) + (16) pin the (typed variant ↔ array index)
+    // bijection with `0..T::CARDINALITY` on every interior slot,
+    // this clause pins the (head, tail) endpoint anchors against
+    // `T::ALL[0]` / `T::ALL[T::ALL.len() - 1]` so the closed set's
+    // structural endpoints stay sound at the two canonical anchor
+    // sites. The non-empty contract clause (1) guarantees both
+    // endpoints exist; the subtraction `T::ALL.len() - 1` never
+    // underflows.
+    assert_eq!(
+        T::first(),
+        T::ALL[0],
+        "{type_name}: T::first() drifted from T::ALL[0] — the declaration-order head endpoint anchor no longer matches the natural slice-index-0 projection, so a downstream defaulter / iterator-start consumer that binds `T::first()` as its canonical anchor would land on the wrong variant",
+    );
+    assert_eq!(
+        T::last(),
+        T::ALL[T::ALL.len() - 1],
+        "{type_name}: T::last() drifted from T::ALL[T::ALL.len() - 1] — the declaration-order tail endpoint anchor no longer matches the natural slice-index-(N - 1) projection, so a downstream iterator-terminator / bounded-loop consumer that binds `T::last()` as its canonical anchor would land on the wrong variant",
     );
 }
 
@@ -4337,6 +4543,275 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_variants override drifted from the natural ALL-then-sort-by-label composition",
+        );
+    }
+
+    #[test]
+    fn first_returns_the_declaration_order_head_variant() {
+        // The declaration-order head endpoint anchor — `T::first()`
+        // returns `T::ALL[0]` as a bare typed variant with no
+        // `Option` / `Result` indirection. The `StubKind` variant
+        // listing is `[Alpha, Beta, Gamma]`, so the head anchor is
+        // `Alpha`. Sibling posture to
+        // `sorted_variants_returns_typed_variants_in_lexicographic_label_order`
+        // on the (endpoint-anchor, sorted-listing) axis — both walk
+        // `T::ALL` as their load-bearing primitive, one at the
+        // slice-index-0 endpoint, the other at every slot under a
+        // key-projected sort.
+        assert_eq!(<StubKind as ClosedSet>::first(), StubKind::Alpha);
+    }
+
+    #[test]
+    fn last_returns_the_declaration_order_tail_variant() {
+        // The declaration-order tail endpoint anchor — `T::last()`
+        // returns `T::ALL[T::ALL.len() - 1]` as a bare typed variant.
+        // The `StubKind` variant listing is `[Alpha, Beta, Gamma]`,
+        // so the tail anchor is `Gamma`. Sibling posture to
+        // `first_returns_the_declaration_order_head_variant` one axis
+        // over on the (head, tail) endpoint-direction partition.
+        assert_eq!(<StubKind as ClosedSet>::last(), StubKind::Gamma);
+    }
+
+    #[test]
+    fn first_and_last_bracket_all_slice_on_arbitrary_declaration_order() {
+        // The endpoint-anchor contract on an arbitrary declaration
+        // order — `T::first()` MUST project the head of `T::ALL`
+        // regardless of the implementor's `ALL`-array layout, AND
+        // `T::last()` MUST project the tail. A regression that
+        // returns a hard-coded variant literal (rather than
+        // slice-indexing `T::ALL`) would pass
+        // `first_returns_the_declaration_order_head_variant` /
+        // `last_returns_the_declaration_order_tail_variant` on
+        // `StubKind` (because its declaration order happens to align
+        // with any conceivable hard-coded literal) but silently
+        // bifurcate the endpoint anchors on any implementor whose
+        // `ALL`-array layout differs. Pinning the anchor discipline
+        // here with a deliberately-out-of-order stub catches that
+        // drift directly. Reuses the `ReverseVariantStubKind`-shaped
+        // stub the `sorted_variants_normalizes_arbitrary_declaration_order`
+        // sibling exercises so the endpoint contract lands on the
+        // SAME declaration-order-inversion probe the sorted-variants
+        // contract binds against.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum EndpointStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownEndpointStubKind(pub String);
+        impl core::fmt::Display for UnknownEndpointStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown endpoint stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for EndpointStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "endpoint stub kind";
+            type Unknown = UnknownEndpointStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownEndpointStubKind(s.to_owned())
+            }
+        }
+        // `T::first()` picks up the head of the declaration order
+        // (Gamma), NOT some hard-coded literal `Alpha` — the anchor
+        // reads `T::ALL[0]` at runtime.
+        assert_eq!(
+            <EndpointStubKind as ClosedSet>::first(),
+            EndpointStubKind::Gamma,
+        );
+        // `T::last()` picks up the tail of the declaration order
+        // (Alpha), NOT some hard-coded literal `Gamma`.
+        assert_eq!(
+            <EndpointStubKind as ClosedSet>::last(),
+            EndpointStubKind::Alpha,
+        );
+    }
+
+    #[test]
+    fn first_collapses_with_last_on_singleton_closed_set() {
+        // The endpoint-anchor degenerate case — a singleton closed
+        // set (one variant) has `T::ALL[0] == T::ALL[T::ALL.len() -
+        // 1]`, so `T::first() == T::last()`. This is a corner the
+        // (head, tail) partition of the endpoint surface REALLY does
+        // include, and a regression that treated the two anchors
+        // as structurally distinct (a hand-rolled `match` that
+        // returned different variants for `first()` vs `last()`)
+        // would silently break the natural degenerate-case invariant
+        // downstream consumers rely on. Pinning the collapse here
+        // catches that drift.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton stub kind";
+            type Unknown = UnknownSingletonStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonStubKind as ClosedSet>::first(),
+            SingletonStubKind::Only,
+        );
+        assert_eq!(
+            <SingletonStubKind as ClosedSet>::last(),
+            SingletonStubKind::Only,
+        );
+        assert_eq!(
+            <SingletonStubKind as ClosedSet>::first(),
+            <SingletonStubKind as ClosedSet>::last(),
+        );
+    }
+
+    #[test]
+    fn first_and_last_agree_with_from_index_at_the_endpoint_slots() {
+        // The endpoint-anchor / index-decode alignment — `T::first()`
+        // MUST equal `T::from_index(0).unwrap()`, AND `T::last()` MUST
+        // equal `T::from_index(T::CARDINALITY - 1).unwrap()`. The two
+        // primitives project the same `T::ALL` slice at the same
+        // endpoint slots through different surfaces (bare typed
+        // anchor vs `Option`-typed bounded-index decode), and a
+        // downstream consumer freely swaps between the two depending
+        // on whether it wants the panic-free anchor or the
+        // `Option`-typed decode. Pinning the agreement here catches a
+        // future regression that drifts either surface from the
+        // shared `Self::ALL[0]` / `Self::ALL[CARDINALITY - 1]`
+        // projection.
+        assert_eq!(
+            <StubKind as ClosedSet>::first(),
+            <StubKind as ClosedSet>::from_index(0)
+                .expect("first(): CARDINALITY >= 1 by clause (1)"),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::last(),
+            <StubKind as ClosedSet>::from_index(<StubKind as ClosedSet>::CARDINALITY - 1)
+                .expect("last(): CARDINALITY >= 1 by clause (1)"),
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_first_and_all_head() {
+        // The well-formedness sweep's (18) clause — `T::first()` MUST
+        // equal `T::ALL[0]`. A hand-impl'd implementor whose override
+        // drifts the head anchor (returns an interior variant, returns
+        // the tail, returns a stale variant after a variant-listing
+        // edit) fails the sweep loudly rather than silently
+        // bifurcating the endpoint-anchor surface every downstream
+        // defaulter / iterator-start consumer routes through. Pinning
+        // the failure path here keeps the testkit's (18) clause
+        // guaranteed-to-fire on the head-endpoint arm — a regression
+        // that makes the assertion permissive (e.g. a future "any
+        // variant that appears in `ALL`" relaxation) breaks this
+        // stub-level contract before any per-implementor sweep runs.
+        // Sibling posture to `assert_closed_set_well_formed_catches_drift_between_last_and_all_tail`
+        // one endpoint over on the (head, tail) partition of clause
+        // (18).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedFirstKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedFirstKind(pub String);
+        impl core::fmt::Display for UnknownDriftedFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted first kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedFirstKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted first kind";
+            type Unknown = UnknownDriftedFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedFirstKind(s.to_owned())
+            }
+            fn first() -> Self {
+                // Drifted override — returns the tail rather than the
+                // head, swapping the (head, tail) endpoint anchor
+                // partition on the head arm.
+                Self::Tail
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedFirstKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a first() override drifted from the natural Self::ALL[0] projection",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_last_and_all_tail() {
+        // The well-formedness sweep's (18) clause — `T::last()` MUST
+        // equal `T::ALL[T::ALL.len() - 1]`. Symmetric to the
+        // `_catches_drift_between_first_and_all_head` sibling one
+        // endpoint over on the (head, tail) partition — this pin
+        // covers the tail arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedLastKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedLastKind(pub String);
+        impl core::fmt::Display for UnknownDriftedLastKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted last kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedLastKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted last kind";
+            type Unknown = UnknownDriftedLastKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedLastKind(s.to_owned())
+            }
+            fn last() -> Self {
+                // Drifted override — returns the head rather than the
+                // tail, swapping the (head, tail) endpoint anchor
+                // partition on the tail arm.
+                Self::Head
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedLastKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a last() override drifted from the natural Self::ALL[T::ALL.len() - 1] projection",
         );
     }
 }

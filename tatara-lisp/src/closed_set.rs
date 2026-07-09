@@ -2509,6 +2509,238 @@ pub trait ClosedSet: Sized + Copy + 'static {
         !<Self as ClosedSet>::is_sorted_endpoint(self)
     }
 
+    /// The declaration-order endpoint anchor pair — the tuple
+    /// `(T::first(), T::last())` projected onto the trait surface as
+    /// ONE call. Closes the pair-aggregation corner of the closed-set
+    /// endpoint-anchor return-shape axis on the DECLARATION side —
+    /// the missing middle column between the two scalar endpoint
+    /// primitives ([`Self::first`], [`Self::last`]) and the collection
+    /// aggregation ([`Self::variants`]).
+    ///
+    /// The (return-shape × declaration-anchor) 3-of-3 return-shape
+    /// column over the declaration-order anchor surface partitions
+    /// post-lift:
+    ///
+    /// | Return shape                | Anchor surface           |
+    /// |-----------------------------|--------------------------|
+    /// | `Self` scalar (head)        | [`Self::first`]          |
+    /// | `Self` scalar (tail)        | [`Self::last`]           |
+    /// | `(Self, Self)` pair         | [`Self::endpoints`]      |
+    /// | `Vec<Self>` collection      | [`Self::variants`]       |
+    ///
+    /// Sibling posture to [`Self::first`] + [`Self::last`] one return-
+    /// shape axis over on the (scalar, pair) partition of the closed-
+    /// set declaration-order anchor surface — [`Self::first`] and
+    /// [`Self::last`] project the two anchors as separate scalar
+    /// values, this method aggregates the two anchors into ONE tuple
+    /// call. Every generic consumer that wants BOTH declaration-order
+    /// endpoints (a bracketing renderer that emits `<head> ↔ <tail>`
+    /// in a diagnostic, a saga-step engine that transitions through
+    /// the head-anchor and tail-anchor states, a truth-table property
+    /// test that anchors edge assertions at BOTH endpoints, a wire-
+    /// format decoder that emits a per-run boundary payload naming
+    /// both anchors, a `tatara-check` per-implementor coherence probe
+    /// that renders both anchors in ONE diagnostic) binds to ONE
+    /// typed call rather than hand-rolling the
+    /// `(T::first(), T::last())` two-primitive re-derivation at every
+    /// callsite (which pays TWO trait dispatches AND makes every
+    /// downstream site depend on the tuple-construction shape).
+    ///
+    /// Default body composes [`Self::first`] with [`Self::last`]
+    /// under the standard-library tuple constructor — the (head, tail)
+    /// pair aggregation is a typed CONSEQUENCE of the two pre-existing
+    /// endpoint-anchor primitives, not a third codepath through
+    /// [`Self::ALL`] with slice-index-0 / slice-index-(N - 1) projection.
+    /// Implementors override only when the pair
+    /// aggregation needs to diverge from the natural
+    /// `(first(), last())` shape (no production implementor reaches for
+    /// this today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` / `first` / `last` overrides
+    /// exist — a typed escape hatch the trait surface exposes rather
+    /// than forcing the implementor to hand-roll the impl). An
+    /// implementor that overrides [`Self::first`] or [`Self::last`]
+    /// propagates the override through this default body to the pair
+    /// aggregation automatically; the (declaration-order head,
+    /// declaration-order tail) pair-aggregation surface funnels
+    /// through the two scalar endpoint-anchor primitives on each of
+    /// its tuple slots.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::first`] and [`Self::last`] both
+    /// return the sole variant, so this method returns
+    /// `(Self::Only, Self::Only)` — the pair collapses to a diagonal
+    /// tuple over the sole variant. A singleton closed set has ONE
+    /// endpoint slot that IS both anchors simultaneously; the pair
+    /// aggregation preserves the tuple SHAPE even at the boundary-
+    /// cardinality edge where the two SLOTS collapse onto the same
+    /// value. Mirrors the singleton collapse [`Self::is_endpoint`]
+    /// observes on the (endpoint, interior) partition — both anchor
+    /// slots pin the same variant and every generic consumer that
+    /// destructures `let (head, tail) = T::endpoints();` reads the
+    /// SAME typed variant into `head` and `tail`.
+    ///
+    /// The endpoint-anchor pair contract —
+    /// `T::endpoints() == (T::first(), T::last())` on every
+    /// implementor — is guaranteed by the default composition through
+    /// the two scalar endpoint-anchor primitives; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (34)
+    /// pins the composition against the natural
+    /// `(first(), last())` shape on every implementor so a passing
+    /// well-formedness sweep means every generic consumer can call
+    /// [`Self::endpoints`] on any typed variant and expect the same
+    /// tuple answer at every crate boundary.
+    ///
+    /// Future consumers — a boundary badge renderer that emits
+    /// `<head> ↔ <tail>` in ONE call instead of a two-primitive
+    /// composition at each rendering site, a range walker that
+    /// destructures `let (head, tail) = T::endpoints();` and iterates
+    /// through the declaration-order chain from `head.index_of()` to
+    /// `tail.index_of()`, a saga-step audit event that logs both
+    /// anchors atomically without threading the two primitives
+    /// through the event constructor, a `tatara-check` per-
+    /// implementor coherence probe that renders both anchors as a
+    /// pair diagnostic, a truth-table property test that anchors edge
+    /// assertions at BOTH endpoints through ONE destructure — bind to
+    /// ONE trait method instead of hand-rolling the
+    /// `(T::first(), T::last())` two-primitive composition at each
+    /// callsite, and the closed-set declaration-order endpoint pair-
+    /// aggregation surface evolves at ONE site rather than per-
+    /// consumer.
+    ///
+    /// THEORY.md §III — the typescape; the (declaration-order head,
+    /// declaration-order tail) pair-aggregation becomes a TYPE
+    /// projection on the trait rather than a per-consumer inline
+    /// `(T::first(), T::last())` composition at every downstream
+    /// pair-endpoint site. The closed-set endpoint-anchor return-shape
+    /// axis gains its pair-aggregation corner — the (`Self` scalar,
+    /// `(Self, Self)` pair, `Vec<Self>` collection) return-shape
+    /// column on the declaration-order endpoint-anchor row is now
+    /// fully closed.
+    /// THEORY.md §V.1 — knowable platform; the (declaration-order
+    /// endpoint pair) aggregation was an unnamed compound of
+    /// [`Self::first`] + [`Self::last`] pre-lift; naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of the two
+    /// substrate primitives — generic consumers see ONE method, not
+    /// ONE endpoint-pair-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// (declaration-order endpoint pair) aggregation emerges from the
+    /// composition of TWO substrate primitives ([`Self::first`],
+    /// [`Self::last`]) under the standard-library tuple constructor
+    /// rather than as a per-implementor
+    /// `const ENDPOINTS: (Self, Self) = (Self::Head, Self::Tail)`
+    /// declaration. A future tightening of either primitive (a future
+    /// const-fn endpoint-anchor axis that makes the pair callable in
+    /// const contexts, a future perfect-hash anchor projection)
+    /// propagates to every closed-set endpoint-pair consumer through
+    /// this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-endpoints` on closed
+    /// enumerations (the pair-aggregation of the declaration-order
+    /// head + tail anchors on the enumeration chain); Idris's
+    /// `Fin (S n)` non-empty finite-cardinality types where
+    /// `endpoints : Fin (S n) -> (Fin (S n), Fin (S n))` folds the
+    /// (head, tail) endpoint pair through a shared tuple projection;
+    /// Haskell's `(minBound, maxBound)` on the `Bounded` type-class
+    /// pair — the endpoint-anchor pair exposed as a bare typed tuple
+    /// rather than two separate scalar calls; MLIR's
+    /// `RegisteredOperationName::begin_end()` on the declaration-
+    /// order Op registry (the pair projection over the registered-op
+    /// enumeration). Translation through pleme-io primitives: a pure
+    /// default method composing the trait's existing [`Self::first`]
+    /// and [`Self::last`] scalar endpoint-anchor primitives under the
+    /// standard-library tuple constructor — no new dep, no new IR
+    /// layer, no supertrait bound, no [`Option`]-typed dispatch.
+    fn endpoints() -> (Self, Self) {
+        (<Self as ClosedSet>::first(), <Self as ClosedSet>::last())
+    }
+
+    /// The lexicographic-order endpoint anchor pair — the tuple
+    /// `(T::sorted_first(), T::sorted_last())` projected onto the
+    /// trait surface as ONE call. Closes the pair-aggregation corner
+    /// of the closed-set endpoint-anchor return-shape axis on the LEX
+    /// side.
+    ///
+    /// Sibling posture to [`Self::endpoints`] one ordering axis over
+    /// on the (declaration, lex) partition of the closed-set
+    /// endpoint-anchor pair-aggregation surface — [`Self::endpoints`]
+    /// fires on the declaration-order (head, tail) pair, this method
+    /// fires on the lex-order (head, tail) pair. See
+    /// [`Self::endpoints`] for the shared design rationale, sibling
+    /// matrix, override axis, future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the lex-
+    /// ordering-axis arm of the same return-shape axis and inherits
+    /// every property from the declaration-axis arm's documentation,
+    /// differing only in the composition through
+    /// [`Self::sorted_first`] / [`Self::sorted_last`] instead of
+    /// [`Self::first`] / [`Self::last`] and the alphabetized consumer
+    /// surface (an alphabetized boundary badge that emits
+    /// `<lex-head> ↔ <lex-tail>` in a diagnostic, a lex-ordered saga-
+    /// step engine that transitions through the lex-head-anchor and
+    /// lex-tail-anchor states, an alphabetized truth-table property
+    /// test that anchors edge assertions at BOTH lex endpoints
+    /// through ONE destructure, an alphabetized-completion UI that
+    /// renders the alphabetized boundary pair atomically).
+    ///
+    /// Default body composes [`Self::sorted_first`] with
+    /// [`Self::sorted_last`] under the standard-library tuple
+    /// constructor — the (lex-head, lex-tail) pair aggregation is a
+    /// typed CONSEQUENCE of the two pre-existing lex-endpoint-anchor
+    /// primitives, not a third codepath through
+    /// [`Self::sorted_variants`] + `<[T]>::first` + `<[T]>::last` +
+    /// `Option::copied` + `Option::unwrap`. Implementors override
+    /// only when the lex-pair aggregation needs to diverge from the
+    /// natural `(sorted_first(), sorted_last())` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `via` / `set_label` / `labels` / `sorted_labels` /
+    /// `sorted_first` / `sorted_last` overrides exist — a typed
+    /// escape hatch the trait surface exposes rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::sorted_first`] or [`Self::sorted_last`]
+    /// propagates the override through this default body to the lex-
+    /// pair aggregation automatically; the (lex-head, lex-tail) pair-
+    /// aggregation surface funnels through the two scalar lex-
+    /// endpoint-anchor primitives on each of its tuple slots.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::sorted_first`] and
+    /// [`Self::sorted_last`] both return the sole variant, so this
+    /// method returns `(Self::Only, Self::Only)` — the lex-pair
+    /// collapses to a diagonal tuple over the sole variant. Mirrors
+    /// [`Self::endpoints`]'s singleton collapse one ordering axis
+    /// over and preserves the (lex-head, lex-tail) tuple SHAPE even
+    /// at the boundary-cardinality edge where the two SLOTS collapse
+    /// onto the same value.
+    ///
+    /// The lex-endpoint-anchor pair contract —
+    /// `T::sorted_endpoints() == (T::sorted_first(), T::sorted_last())`
+    /// on every implementor — is guaranteed by the default
+    /// composition through the two scalar lex-endpoint-anchor
+    /// primitives; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (35) pins the
+    /// composition against the natural
+    /// `(sorted_first(), sorted_last())` shape on every implementor
+    /// so a passing well-formedness sweep means every generic
+    /// consumer can call [`Self::sorted_endpoints`] on any typed
+    /// variant and expect the same tuple answer at every crate
+    /// boundary.
+    ///
+    /// The (ordering × pair-aggregation) 2×1 matrix over the closed-
+    /// set endpoint-anchor return-shape axis is now closed at BOTH
+    /// ordering corners — [`Self::endpoints`] on the declaration
+    /// axis, this method on the lex axis. Together the two methods
+    /// cover every ordering corner of the pair-return-shape column
+    /// of the closed-set endpoint-anchor matrix. A future range-
+    /// walker / boundary-badge / audit-event / per-implementor
+    /// coherence probe consumer that binds either method sees the
+    /// SAME `(Self, Self)` tuple shape at every crate boundary
+    /// regardless of whether it walks the declaration or lex axis.
+    fn sorted_endpoints() -> (Self, Self) {
+        (
+            <Self as ClosedSet>::sorted_first(),
+            <Self as ClosedSet>::sorted_last(),
+        )
+    }
+
     /// Recover the canonical [`Self::label`] at declaration-order
     /// position `i` in [`Self::ALL`], or [`None`] if
     /// `i >= Self::CARDINALITY`.
@@ -6101,6 +6333,93 @@ where
     assert!(
         !T::sorted_last().is_sorted_interior(),
         "{type_name}: T::sorted_last().is_sorted_interior() returned true — the (variant → lex-interior-membership bool) projection fired on the lex-order tail endpoint anchor while the natural `!is_sorted_endpoint` composition should return false. Clauses (19) + (31) + (33) together pin `T::sorted_last().is_sorted_interior() == false` as the structural anti-fixpoint the lex-tail-endpoint anchor and the lex-interior-membership predicate axis share, mirroring `T::sorted_last().is_sorted_endpoint() == true` one predicate-flavor axis over",
+    );
+    // (34) — `T::endpoints()` MUST equal `(T::first(), T::last())` —
+    // the pair-aggregation on the declaration-axis endpoint-anchor
+    // return-shape column projects the two scalar endpoint anchors
+    // into a single tuple call. The default trait body composes
+    // `(T::first(), T::last())` verbatim and satisfies the clause for
+    // free; the assertion catches a future implementor whose override
+    // drifts the tuple (a swapped override that returns
+    // `(T::last(), T::first())` — silently inverting the (head, tail)
+    // tuple-slot semantics every downstream pair-endpoint consumer
+    // relies on; a stale override that returns a `(T::Head, T::Head)`
+    // diagonal tuple — silently folding both tuple slots onto the
+    // head-endpoint anchor and dropping the tail-endpoint from every
+    // range-walker / boundary-badge / audit-event / per-implementor
+    // coherence probe consumer; a permissive override that fabricates
+    // a `(T::Head, T::Interior)` non-endpoint tuple — silently routing
+    // a strictly-interior slot into the tail-endpoint tuple slot;
+    // a subset-projection override that returns a `(T::Head, T::Head)`
+    // singleton-collapse tuple on a `T::CARDINALITY >= 2` closed set
+    // — silently collapsing the pair-aggregation onto a diagonal at a
+    // cardinality edge where the two slots should diverge) loudly
+    // rather than silently bifurcating the pair-aggregation surface
+    // every downstream boundary-badge renderer / range-walker
+    // destructure / saga-step audit-event emitter / per-implementor
+    // coherence probe consumer routes through. Sibling posture to
+    // clauses (18) + (30) + (32) — clause (18) pins the individual
+    // (head, tail) scalar endpoint-anchor projections against
+    // `T::ALL[0]` / `T::ALL[T::CARDINALITY - 1]`, clause (30) pins the
+    // per-anchor bool membership projections, clause (32) pins the
+    // boundary-partition boolean projections, this clause pins the
+    // pair-aggregation tuple projection against the composition of
+    // the two scalar endpoint-anchor primitives. Clauses (18) + (34)
+    // together open the (return-shape × declaration-anchor) 3-of-3
+    // return-shape column (Self scalar head / Self scalar tail /
+    // (Self, Self) pair) at ALL THREE direct projection surfaces on
+    // the declaration axis.
+    assert_eq!(
+        T::endpoints(),
+        (T::first(), T::last()),
+        "{type_name}: T::endpoints() drifted from (T::first(), T::last()) — the direct (declaration-order endpoint pair) tuple projection no longer agrees with the natural `(T::first(), T::last())` two-primitive composition, so a downstream boundary-badge renderer / range-walker destructure / saga-step audit-event emitter / per-implementor coherence probe consumer that binds `T::endpoints()` as its pair-aggregation query surface would answer the wrong tuple",
+    );
+    // (35) — `T::sorted_endpoints()` MUST equal
+    // `(T::sorted_first(), T::sorted_last())` — the pair-aggregation
+    // on the lex-axis endpoint-anchor return-shape column projects
+    // the two scalar lex-endpoint anchors into a single tuple call.
+    // The default trait body composes
+    // `(T::sorted_first(), T::sorted_last())` verbatim and satisfies
+    // the clause for free; the assertion catches a future implementor
+    // whose override drifts the tuple (a swapped override that
+    // returns `(T::sorted_last(), T::sorted_first())` — silently
+    // inverting the (lex-head, lex-tail) tuple-slot semantics; a
+    // stale override that returns a `(T::LexHead, T::LexHead)`
+    // diagonal tuple on a non-singleton closed set — silently folding
+    // both lex-tuple slots onto the lex-head-endpoint anchor; a
+    // permissive override that fabricates a `(T::LexHead, T::Interior)`
+    // non-lex-endpoint tuple — silently routing a strictly-lex-
+    // interior slot into the lex-tail-endpoint tuple slot; a
+    // declaration-axis fold override that returns `(T::first(),
+    // T::last())` instead of the lex-endpoint tuple — silently
+    // bifurcating the two ordering axes' pair-aggregations onto the
+    // SAME tuple, breaking the (declaration, lex) ordering partition
+    // every downstream lex-boundary-badge renderer / alphabetized-
+    // range-walker destructure / alphabetized-saga-step audit-event
+    // emitter / lex-order per-implementor coherence probe consumer
+    // relies on) loudly rather than silently bifurcating the lex-
+    // pair-aggregation surface every downstream alphabetized-boundary
+    // consumer routes through. Sibling posture to clauses (19) + (31)
+    // + (33) — clause (19) pins the individual (lex-head, lex-tail)
+    // scalar lex-endpoint-anchor projections against
+    // `T::sorted_variants()[0]` / `T::sorted_variants()[T::CARDINALITY
+    // - 1]`, clause (31) pins the per-anchor lex bool membership
+    // projections, clause (33) pins the lex-boundary-partition
+    // boolean projections, this clause pins the lex-pair-aggregation
+    // tuple projection against the composition of the two scalar
+    // lex-endpoint-anchor primitives. Clauses (34) + (35) together
+    // CLOSE the (ordering × pair-aggregation) 2×1 matrix over the
+    // closed-set endpoint-anchor return-shape axis — the declaration-
+    // axis arm ((34)) and the lex-axis arm ((35)) now cover every
+    // ordering corner of the pair-return-shape column of the closed-
+    // set endpoint-anchor matrix, so every generic consumer that
+    // binds either pair-aggregation surface sees the SAME `(Self,
+    // Self)` tuple shape at every crate boundary regardless of which
+    // ordering axis it walks.
+    assert_eq!(
+        T::sorted_endpoints(),
+        (T::sorted_first(), T::sorted_last()),
+        "{type_name}: T::sorted_endpoints() drifted from (T::sorted_first(), T::sorted_last()) — the direct (lex-order endpoint pair) tuple projection no longer agrees with the natural `(T::sorted_first(), T::sorted_last())` two-primitive composition, so a downstream lex-boundary-badge renderer / alphabetized-range-walker destructure / alphabetized-saga-step audit-event emitter / lex-order per-implementor coherence probe consumer that binds `T::sorted_endpoints()` as its lex-pair-aggregation query surface would answer the wrong tuple",
     );
 }
 
@@ -12578,6 +12897,336 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a cycle_sorted_prev() override that folds the lex head onto an interior variant rather than T::sorted_last()",
+        );
+    }
+
+    #[test]
+    fn endpoints_returns_declaration_order_head_and_tail_as_a_tuple() {
+        // The declaration-order pair-aggregation projection returns a
+        // tuple of the (head, tail) scalar endpoint anchors — the
+        // slot-0 index projects `T::first()` (the declaration head),
+        // the slot-1 index projects `T::last()` (the declaration
+        // tail). `StubKind`'s declaration order is `[Alpha, Beta,
+        // Gamma]`, so `T::endpoints()` returns `(Alpha, Gamma)`.
+        // Sibling posture to
+        // `first_returns_the_declaration_order_head_variant` +
+        // `last_returns_the_declaration_order_tail_variant` one
+        // return-shape axis over on the (scalar, pair) partition of
+        // the closed-set declaration-order anchor surface — the pair
+        // arm aggregates the two scalar arms into ONE tuple call.
+        assert_eq!(
+            <StubKind as ClosedSet>::endpoints(),
+            (StubKind::Alpha, StubKind::Gamma),
+        );
+    }
+
+    #[test]
+    fn sorted_endpoints_returns_lex_order_head_and_tail_as_a_tuple() {
+        // The lex-order pair-aggregation projection returns a tuple
+        // of the (lex-head, lex-tail) scalar lex-endpoint anchors.
+        // `StubKind`'s canonical labels are `("alpha", "beta",
+        // "gamma")` — the declaration ordering matches the lex
+        // ordering here, so `T::sorted_endpoints()` returns
+        // `(Alpha, Gamma)` (lex head = `Alpha`, lex tail = `Gamma`).
+        // Sibling posture to
+        // `endpoints_returns_declaration_order_head_and_tail_as_a_tuple`
+        // one ordering axis over on the (declaration, lex) partition
+        // of the closed-set endpoint-anchor pair-aggregation surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_endpoints(),
+            (StubKind::Alpha, StubKind::Gamma),
+        );
+    }
+
+    #[test]
+    fn endpoints_and_sorted_endpoints_diverge_on_declaration_order_that_diverges_from_lex_order() {
+        // The (declaration-axis, lex-axis) pair-aggregation contract
+        // on a stub whose declaration order deliberately diverges
+        // from the lex order — regardless of which variants happen to
+        // sit at declaration-slice-index-0 / declaration-slice-index-
+        // (N - 1), `T::endpoints()` folds the DECLARATION endpoints
+        // into its tuple and `T::sorted_endpoints()` folds the LEX
+        // endpoints into its tuple. A regression that hard-coded
+        // `sorted_endpoints` against declaration-slice indices rather
+        // than routing through the lex-endpoint-anchor primitives
+        // would pass `endpoints_and_sorted_endpoints` on `StubKind`
+        // (where declaration ordering matches lex ordering) and
+        // silently bifurcate the pair-aggregations on any implementor
+        // whose declaration order diverges from its lex order. The
+        // deliberate 5-variant stub has declaration order
+        // `[Epsilon, Delta, Gamma, Beta, Alpha]` and labels
+        // `("epsilon", "delta", "gamma", "beta", "alpha")`. The lex
+        // ordering of the labels is `"alpha" < "beta" < "delta" <
+        // "epsilon" < "gamma"`, so the lex-endpoints are `Alpha`
+        // (lex head) + `Gamma` (lex tail) while the declaration-
+        // endpoints are `Epsilon` (declaration head) + `Alpha`
+        // (declaration tail). `T::endpoints() == (Epsilon, Alpha)`
+        // and `T::sorted_endpoints() == (Alpha, Gamma)` — the two
+        // pair-aggregations share ONE variant (`Alpha`) but swap its
+        // role (declaration tail vs lex head) AND diverge on the
+        // OTHER tuple slot (`Epsilon` vs `Gamma`). Sibling posture to
+        // `is_sorted_endpoint_and_is_sorted_interior_partition_all_slice_on_arbitrary_declaration_and_lex_order`
+        // one return-shape axis over on the (bool boundary, pair
+        // aggregation) partition of the ordering-divergent stub
+        // surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum EndpointsPairAggregationStubKind {
+            Epsilon,
+            Delta,
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownEndpointsPairAggregationStubKind(pub String);
+        impl core::fmt::Display for UnknownEndpointsPairAggregationStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown endpoints pair aggregation stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for EndpointsPairAggregationStubKind {
+            const ALL: &'static [Self] = &[
+                Self::Epsilon,
+                Self::Delta,
+                Self::Gamma,
+                Self::Beta,
+                Self::Alpha,
+            ];
+            const SET_LABEL: &'static str = "endpoints pair aggregation stub kind";
+            type Unknown = UnknownEndpointsPairAggregationStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Epsilon => "epsilon",
+                    Self::Delta => "delta",
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownEndpointsPairAggregationStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <EndpointsPairAggregationStubKind as ClosedSet>::endpoints(),
+            (
+                EndpointsPairAggregationStubKind::Epsilon,
+                EndpointsPairAggregationStubKind::Alpha,
+            ),
+            "endpoints() drifted from (T::first(), T::last()) on a declaration-order-divergent stub — the declaration head is Epsilon and the declaration tail is Alpha",
+        );
+        assert_eq!(
+            <EndpointsPairAggregationStubKind as ClosedSet>::sorted_endpoints(),
+            (
+                EndpointsPairAggregationStubKind::Alpha,
+                EndpointsPairAggregationStubKind::Gamma,
+            ),
+            "sorted_endpoints() drifted from (T::sorted_first(), T::sorted_last()) on a lex-order-divergent stub — the lex head is Alpha and the lex tail is Gamma",
+        );
+        // The two pair-aggregations diverge on both tuple slots on
+        // this divergent stub — the (declaration, lex) partition is
+        // structurally observed.
+        assert_ne!(
+            <EndpointsPairAggregationStubKind as ClosedSet>::endpoints(),
+            <EndpointsPairAggregationStubKind as ClosedSet>::sorted_endpoints(),
+            "endpoints() and sorted_endpoints() returned the SAME tuple on a stub whose declaration order deliberately diverges from its lex order — the (declaration, lex) ordering partition MUST be structurally observed by the two pair-aggregation surfaces",
+        );
+        // The stub also satisfies the well-formedness sweep — clauses
+        // (34) + (35) both fire on a declaration-order that diverges
+        // from the lex order, pinning the (declaration-axis) pair
+        // aggregation on the declaration endpoints (Epsilon, Alpha)
+        // AND the (lex-axis) pair aggregation on the lex endpoints
+        // (Alpha, Gamma).
+        super::assert_closed_set_well_formed::<EndpointsPairAggregationStubKind>();
+    }
+
+    #[test]
+    fn endpoints_and_sorted_endpoints_collapse_on_singleton_closed_set() {
+        // The pair-aggregation degenerate case — a singleton closed
+        // set has ONE variant that is BOTH `T::first()` and
+        // `T::last()` (and BOTH `T::sorted_first()` and
+        // `T::sorted_last()`), so `T::endpoints()` and
+        // `T::sorted_endpoints()` both return
+        // `(Self::Only, Self::Only)`. The pair aggregation preserves
+        // the tuple SHAPE even at the boundary-cardinality edge
+        // where the two SLOTS collapse onto the same value. Mirrors
+        // `is_endpoint_and_is_interior_collapse_on_singleton_closed_set`
+        // + `is_sorted_endpoint_and_is_sorted_interior_collapse_on_singleton_closed_set`
+        // one return-shape axis over on the (bool boundary, pair
+        // aggregation) partition of the singleton stub surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonEndpointsStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonEndpointsStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonEndpointsStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton endpoints stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonEndpointsStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton endpoints stub kind";
+            type Unknown = UnknownSingletonEndpointsStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonEndpointsStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonEndpointsStubKind as ClosedSet>::endpoints(),
+            (
+                SingletonEndpointsStubKind::Only,
+                SingletonEndpointsStubKind::Only,
+            ),
+        );
+        assert_eq!(
+            <SingletonEndpointsStubKind as ClosedSet>::sorted_endpoints(),
+            (
+                SingletonEndpointsStubKind::Only,
+                SingletonEndpointsStubKind::Only,
+            ),
+        );
+        // Singleton collapse — the declaration-axis and lex-axis
+        // pair-aggregations fold onto the SAME diagonal tuple.
+        assert_eq!(
+            <SingletonEndpointsStubKind as ClosedSet>::endpoints(),
+            <SingletonEndpointsStubKind as ClosedSet>::sorted_endpoints(),
+        );
+        super::assert_closed_set_well_formed::<SingletonEndpointsStubKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_endpoints_and_first_last() {
+        // The well-formedness sweep's (34) clause —
+        // `T::endpoints()` MUST equal `(T::first(), T::last())`. A
+        // hand-impl'd implementor whose override drifts the pair
+        // aggregation (swaps the tuple slots, folds the tail onto the
+        // head, fabricates a strictly-interior slot into either
+        // tuple slot) fails the sweep loudly rather than silently
+        // bifurcating the declaration-axis pair-aggregation surface
+        // every downstream boundary-badge renderer / range-walker
+        // destructure / saga-step audit-event emitter / per-
+        // implementor coherence probe consumer routes through.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_labels_and_all_projection`
+        // one return-shape axis over on the (Vec<Self> collection,
+        // (Self, Self) pair) partition of the closed-set endpoint-
+        // anchor return-shape surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedEndpointsKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedEndpointsKind(pub String);
+        impl core::fmt::Display for UnknownDriftedEndpointsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted endpoints kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedEndpointsKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted endpoints kind";
+            type Unknown = UnknownDriftedEndpointsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedEndpointsKind(s.to_owned())
+            }
+            fn endpoints() -> (Self, Self) {
+                // Drifted override — swaps the (head, tail) tuple
+                // slots and silently inverts the pair-aggregation
+                // semantics every downstream boundary-badge renderer /
+                // range-walker destructure / saga-step audit-event
+                // emitter consumer routes through.
+                (Self::Tail, Self::Head)
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedEndpointsKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an endpoints() override that swaps the (head, tail) tuple slots rather than composing (T::first(), T::last())",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_endpoints_and_sorted_first_last()
+    {
+        // The well-formedness sweep's (35) clause —
+        // `T::sorted_endpoints()` MUST equal
+        // `(T::sorted_first(), T::sorted_last())`. A hand-impl'd
+        // implementor whose override drifts the lex-pair aggregation
+        // (folds both lex-tuple slots onto the lex-head-endpoint
+        // anchor, fabricates a strictly-lex-interior slot into
+        // either tuple slot, folds the declaration-axis pair onto
+        // the lex-pair-aggregation surface) fails the sweep loudly
+        // rather than silently bifurcating the lex-axis pair-
+        // aggregation surface. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_endpoints_and_first_last`
+        // one ordering axis over on the (declaration, lex) partition
+        // of clauses (34) + (35).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedEndpointsKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedEndpointsKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedEndpointsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted endpoints kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedEndpointsKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted sorted endpoints kind";
+            type Unknown = UnknownDriftedSortedEndpointsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedEndpointsKind(s.to_owned())
+            }
+            fn sorted_endpoints() -> (Self, Self) {
+                // Drifted override — folds the lex tail onto Middle
+                // rather than the lex-tail anchor Tail, silently
+                // bifurcating the lex-pair-aggregation surface every
+                // downstream alphabetized-boundary-badge renderer /
+                // alphabetized-range-walker destructure consumer
+                // routes through. Lex order on this stub is
+                // `head` < `middle` < `tail`, so the intended pair
+                // is `(Head, Tail)`.
+                (Self::Head, Self::Middle)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedEndpointsKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_endpoints() override that folds the lex tail onto an interior variant rather than composing (T::sorted_first(), T::sorted_last())",
         );
     }
 }

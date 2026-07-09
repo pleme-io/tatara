@@ -2078,6 +2078,215 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_index_of(self) + 1 == <Self as ClosedSet>::CARDINALITY
     }
 
+    /// The declaration-order endpoint-membership predicate — `true`
+    /// when `self` is either [`Self::first`] or [`Self::last`],
+    /// `false` on every strictly-interior slot. The endpoint-partition
+    /// arm of the (endpoint, interior) boolean-partition axis over the
+    /// declaration-axis endpoint surface — one predicate-flavor axis
+    /// over from the point-membership pair
+    /// ([`Self::is_first`], [`Self::is_last`]) and the natural
+    /// complement of [`Self::is_interior`].
+    ///
+    /// Opens the (predicate-flavor × ordering) 2×2 matrix over the
+    /// declaration-axis boolean-boundary surface — the endpoint-cube
+    /// closure of clauses (30) + (31) named the point-membership arm
+    /// per direction; this method + [`Self::is_interior`] name the
+    /// **compound partition arm** the point-membership pair induces
+    /// under `∨` and its negation:
+    ///
+    /// | Predicate flavor \\ Ordering    | Declaration            | Lex (future)                |
+    /// |---------------------------------|------------------------|-----------------------------|
+    /// | Point (head / tail)             | [`Self::is_first`] / [`Self::is_last`] | [`Self::is_sorted_first`] / [`Self::is_sorted_last`] |
+    /// | Boundary (endpoint / interior)  | [`Self::is_endpoint`] / [`Self::is_interior`] | future `is_sorted_endpoint` / `is_sorted_interior` |
+    ///
+    /// Every generic consumer that partitions the closed set into
+    /// (structural-boundary, strict-interior) slots without threading
+    /// the caller through a per-endpoint `is_first || is_last`
+    /// disjunction (a bounded-iteration guard that emits a
+    /// `first-or-last-slot` sentinel event on either terminus, a
+    /// wraparound-cursor renderer that renders a shared boundary badge
+    /// on both endpoints without duplicating the badge-emit fork,
+    /// a truth-table property test that anchors a shared
+    /// endpoint-parity assertion across both endpoint anchors, a
+    /// saga-step engine that opens a "structural-boundary" audit
+    /// event on either the head OR the tail, a per-tick UI carousel
+    /// that renders a persistent "at-boundary" glyph on both ends of
+    /// the chain, a phase-fold reducer whose interior arm short-
+    /// circuits ONLY when the current slot is strictly-interior) binds
+    /// to ONE typed compound predicate rather than hand-rolling either
+    /// the `self.is_first() || self.is_last()` disjunction (which
+    /// re-derives the same two-primitive composition at every callsite
+    /// AND makes every downstream site depend on the disjunction
+    /// shape) OR the `self.index_of() == 0 || self.index_of() + 1 ==
+    /// T::CARDINALITY` composition (which re-derives the same three-
+    /// primitive composition at every callsite AND makes every
+    /// downstream site depend on the `usize` boundary arithmetic) OR
+    /// a per-implementor inline `matches!(self, Self::Head | Self::
+    /// Tail)` block (which re-derives the per-variant endpoint table
+    /// at every callsite AND drifts silently when [`Self::ALL`] gains
+    /// a new variant that reorders the head/tail slots).
+    ///
+    /// Default body composes [`Self::is_first`] with [`Self::is_last`]
+    /// under `||` — the boundary-membership predicate is a typed
+    /// CONSEQUENCE of the two pre-existing point-membership primitives
+    /// on the declaration axis, not a third codepath through
+    /// [`Self::index_of`] arithmetic. Implementors override only when
+    /// the boundary-membership surface needs to diverge from the
+    /// natural `is_first(self) || is_last(self)` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `via` / `set_label` / `labels` / `first` / `last` /
+    /// `is_first` / `is_last` overrides exist — a typed escape hatch
+    /// the trait surface exposes rather than forcing the implementor
+    /// to hand-roll the impl). An implementor that overrides either
+    /// [`Self::is_first`] OR [`Self::is_last`] propagates the override
+    /// through this default body automatically; the (variant → bool
+    /// boundary-membership) projection funnels through the SAME pair of
+    /// point-membership primitives the endpoint cube already routes.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::first`] equals [`Self::last`],
+    /// so both point-membership predicates fire on the same variant
+    /// and this predicate returns `true` for the sole variant.
+    /// [`Self::is_interior`] correspondingly returns `false` — a
+    /// singleton has zero interior slots. Mirrors the singleton
+    /// collapse the point-membership axis observes at [`Self::first`]
+    /// / [`Self::last`] and preserves the (endpoint XOR interior)
+    /// partition semantics even at the boundary-cardinality edge.
+    ///
+    /// The boundary-membership contract —
+    /// `T::first().is_endpoint() == true` AND
+    /// `T::last().is_endpoint() == true` on every implementor — is
+    /// guaranteed by the composition through
+    /// [`Self::is_first`] / [`Self::is_last`]'s endpoint-fixpoint
+    /// clauses (30); the well-formedness clause (32) pins the
+    /// composition against the natural
+    /// `is_first(self) || is_last(self)` shape AND the boundary-
+    /// endpoint `true` fixpoints on every implementor, so a passing
+    /// well-formedness sweep means every generic consumer can call
+    /// [`Self::is_endpoint`] on any typed variant and expect the same
+    /// `bool` answer at every crate boundary. The (endpoint,
+    /// interior) partition is EXHAUSTIVE — every variant in
+    /// [`Self::ALL`] answers `true` to EXACTLY ONE of the two
+    /// predicates, pinned by clause (32)'s complementarity assertion
+    /// `is_endpoint(v) != is_interior(v)` on every representative
+    /// input.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → boundary-
+    /// membership bool) projection becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline
+    /// `self.is_first() || self.is_last()` composition at every
+    /// downstream structural-boundary query site. The (predicate-
+    /// flavor × ordering) 2×2 matrix over the declaration-axis
+    /// boolean-boundary surface opens a NEW axis alongside the
+    /// (return-type × direction) 2×2 endpoint-anchor / endpoint-
+    /// membership matrix clauses (18) + (30) already close on the
+    /// declaration axis.
+    /// THEORY.md §V.1 — knowable platform; the (variant → boundary-
+    /// membership) projection was an unnamed compound of
+    /// [`Self::is_first`] + [`Self::is_last`] + `||` pre-lift;
+    /// naming it on the trait makes the projection a TYPED CONSEQUENCE
+    /// of the two point-membership primitives — generic consumers see
+    /// ONE method, not one boundary-disjunction-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (variant →
+    /// boundary-membership) projection emerges from the composition of
+    /// TWO substrate primitives ([`Self::is_first`], [`Self::is_last`])
+    /// under the standard-library boolean `||` operator rather than as
+    /// a per-implementor `match self { ... }` block. A future
+    /// tightening of either primitive (a future const-fn axis that
+    /// makes the predicate callable in const contexts, a future
+    /// `#[closed_set(head = "…", tail = "…")]` derive attribute that
+    /// swaps the endpoint anchors) propagates to every closed-set
+    /// boundary-membership consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-boundary?` on closed
+    /// enumerations (the `∨`-composed endpoint membership predicate
+    /// over both anchors of the declaration-order chain); Idris's
+    /// `Fin (S n)` non-empty finite-cardinality types where the
+    /// (head, tail) endpoint partition folds through a shared
+    /// `isBoundary : Fin (S n) -> Bool` projection under boolean-or;
+    /// Haskell's `(\x -> x == minBound || x == maxBound)` on the
+    /// `Bounded + Enum` type-class pair; MLIR's
+    /// `RegisteredOperationName::isEndpoint()` on the declaration-
+    /// order Op registry; Idris's `Fin n` finite-cardinality type with
+    /// a boundary predicate composing the head + tail endpoint
+    /// checks; Racket's `(or (enum-first? e v) (enum-last? e v))`
+    /// composed at the callsite the substrate would rather bind at
+    /// the trait. Translation through pleme-io primitives: a pure
+    /// default method composing the trait's existing
+    /// [`Self::is_first`] and [`Self::is_last`] point-membership
+    /// primitives under the standard-library boolean `||` operator —
+    /// no new dep, no new IR layer, no supertrait bound, no `usize`
+    /// arithmetic discharge.
+    fn is_endpoint(self) -> bool {
+        <Self as ClosedSet>::is_first(self) || <Self as ClosedSet>::is_last(self)
+    }
+
+    /// The declaration-order interior-membership predicate — `true`
+    /// when `self` is neither [`Self::first`] nor [`Self::last`],
+    /// `false` on both endpoints. The natural complement of
+    /// [`Self::is_endpoint`] on the (endpoint, interior) boolean-
+    /// partition axis over the declaration-axis endpoint surface.
+    ///
+    /// Sibling posture to [`Self::is_endpoint`] one arm over on the
+    /// (endpoint, interior) partition — [`Self::is_endpoint`] fires
+    /// on both structural anchors, this method fires on every
+    /// strictly-interior slot. See [`Self::is_endpoint`] for the
+    /// shared design rationale, sibling matrix, override axis,
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the complement-direction arm of
+    /// the same predicate-flavor axis and inherits every property
+    /// from the endpoint arm's documentation, differing only in the
+    /// leading `!` negation and the strictly-interior consumer
+    /// surface (a bounded-loop that walks ONLY interior slots and
+    /// short-circuits on either endpoint, a phase-fold reducer whose
+    /// interior arm processes NON-boundary payloads and reserves the
+    /// endpoint arm for boundary-only side effects, an
+    /// alphabetized-completion pass that hides the first + last
+    /// entries from a strictly-interior candidate list).
+    ///
+    /// Default body composes [`Self::is_endpoint`] with the standard-
+    /// library `!` operator — the interior-membership predicate is a
+    /// typed CONSEQUENCE of the boundary-membership disjunction, not
+    /// a third codepath through `is_first ∧ is_last` inversion.
+    /// Implementors override only when the interior-membership
+    /// surface needs to diverge from the natural
+    /// `!is_endpoint(self)` shape (no production implementor reaches
+    /// for this today; the axis exists for the same reason
+    /// `is_endpoint` / `is_first` / `is_last` overrides exist — a
+    /// typed escape hatch rather than forcing the implementor to
+    /// hand-roll the impl). An implementor that overrides
+    /// [`Self::is_endpoint`] propagates the override through this
+    /// default body automatically; the (variant → bool interior-
+    /// membership) projection funnels through ONE typed primitive.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::is_endpoint`] fires on the sole
+    /// variant, so this method returns `false` for that variant. A
+    /// singleton closed set has ZERO interior slots by construction —
+    /// [`Self::ALL`] is `[Self::Only]` and the sole element is BOTH
+    /// endpoints simultaneously, leaving no room for a strictly-
+    /// interior slot. Mirrors the singleton collapse
+    /// [`Self::is_endpoint`] observes and preserves the (endpoint XOR
+    /// interior) partition semantics even at the boundary-cardinality
+    /// edge.
+    ///
+    /// The (endpoint, interior) partition contract —
+    /// `is_endpoint(v) != is_interior(v)` on every variant `v` in
+    /// [`Self::ALL`] — is guaranteed by the default composition
+    /// through [`Self::is_endpoint`]'s `!` negation; the well-
+    /// formedness clause (32) pins the complementarity assertion on
+    /// every implementor so a passing well-formedness sweep means
+    /// every generic consumer can call [`Self::is_interior`] on any
+    /// typed variant and expect the exact complement of
+    /// [`Self::is_endpoint`] on the same variant. The endpoint-fix-
+    /// point corollary `T::first().is_interior() == false` AND
+    /// `T::last().is_interior() == false` is guaranteed by clause
+    /// (32)'s endpoint-anchor pin composed with the complementarity
+    /// assertion.
+    fn is_interior(self) -> bool {
+        !<Self as ClosedSet>::is_endpoint(self)
+    }
+
     /// Recover the canonical [`Self::label`] at declaration-order
     /// position `i` in [`Self::ALL`], or [`None`] if
     /// `i >= Self::CARDINALITY`.
@@ -5492,6 +5701,89 @@ where
         T::sorted_last().is_sorted_last(),
         "{type_name}: T::sorted_last().is_sorted_last() returned false — the (variant → lex-tail-membership bool) projection failed to fire on the lex-order tail endpoint anchor while the natural `sorted_index_of + 1 == CARDINALITY` composition should return true. Clauses (19) + (31) together pin `T::sorted_last().is_sorted_last() == true` as the structural fixpoint the lex-tail-endpoint anchor and the lex-tail-membership predicate axis share, mirroring `T::last().is_last() == true` one ordering axis over and completing the 8-corner endpoint cube",
     );
+    // (32) — For every variant `v` in `T::ALL`, `v.is_endpoint()` MUST
+    // equal `v.is_first() || v.is_last()`, AND `v.is_interior()` MUST
+    // equal `!(v.is_first() || v.is_last())`, AND
+    // `is_endpoint(v) != is_interior(v)` (exhaustive complementarity),
+    // AND `T::first().is_endpoint()` MUST be `true`, AND
+    // `T::last().is_endpoint()` MUST be `true`, AND
+    // `T::first().is_interior()` MUST be `false`, AND
+    // `T::last().is_interior()` MUST be `false`. The default trait
+    // bodies compose `is_first(self) || is_last(self)` (boundary arm)
+    // and `!is_endpoint(self)` (interior arm) verbatim and satisfy
+    // both arms for free; the assertion catches a future implementor
+    // whose override drifts either boundary-membership projection (a
+    // permissive endpoint override that returns `true` on an interior
+    // slot — folding a boundary-glyph-emit / audit-event / bounded-
+    // iteration-guard consumer onto the wrong partition of `T::ALL`
+    // and silently short-circuiting the strict-interior arm; a
+    // permissive interior override that returns `true` on an endpoint
+    // slot — folding a strictly-interior renderer onto the wrong
+    // partition; a swapped override that returns `is_interior`'s
+    // answer for `is_endpoint` AND vice-versa, silently inverting the
+    // (endpoint, interior) partition — passing the exhaustive
+    // complementarity assertion but drifting from the point-
+    // membership composition on every variant; a stale override that
+    // fails the complementarity assertion — returns the SAME `bool`
+    // for both predicates on some variant, breaking the (endpoint XOR
+    // interior) partition contract every downstream boundary-vs-
+    // interior consumer relies on) loudly rather than silently
+    // bifurcating the boundary-membership projection surface every
+    // downstream shared-endpoint-badge renderer / boundary-audit-
+    // event emitter / strictly-interior phase-fold reducer / carousel-
+    // boundary-glyph consumer routes through. Sibling posture to
+    // clauses (18) + (30) — clause (18) pins the (head, tail)
+    // endpoint anchors against `T::ALL[0]` / `T::ALL[T::ALL.len() -
+    // 1]`, clause (30) pins the (bool head-membership, bool tail-
+    // membership) projections against the composition of the forward-
+    // position projection with the const-visible variant count, this
+    // clause pins the (bool boundary-membership, bool interior-
+    // membership) partition against the composition of the point-
+    // membership pair under `||` AND its negation AND pins the
+    // exhaustive complementarity `is_endpoint XOR is_interior` on
+    // every variant. Clauses (18) + (30) + (32) together open the
+    // (predicate-flavor × direction) 2×2 declaration-axis endpoint
+    // matrix at ALL FOUR direct projection surfaces (`Self`-typed
+    // anchor / `bool`-typed point membership / `bool`-typed boundary
+    // membership / `bool`-typed interior membership) AND at BOTH
+    // endpoint-anchor boundary-fixpoints (`T::first().is_endpoint()`,
+    // `T::last().is_endpoint()`) AND at BOTH endpoint-anchor
+    // interior-fixpoints (`T::first().is_interior() == false`,
+    // `T::last().is_interior() == false`).
+    for &v in T::ALL {
+        let expected_endpoint = v.is_first() || v.is_last();
+        assert_eq!(
+            v.is_endpoint(),
+            expected_endpoint,
+            "{type_name}: {v:?}.is_endpoint() drifted from {v:?}.is_first() || {v:?}.is_last() — the direct (variant → boundary-membership bool) projection no longer agrees with the natural `is_first || is_last` composition, so a downstream shared-endpoint-badge renderer / boundary-audit-event emitter / bounded-iteration guard consumer that binds `v.is_endpoint()` as its structural-boundary query surface would answer the wrong `bool` for {v:?}",
+        );
+        assert_eq!(
+            v.is_interior(),
+            !expected_endpoint,
+            "{type_name}: {v:?}.is_interior() drifted from !({v:?}.is_first() || {v:?}.is_last()) — the direct (variant → interior-membership bool) projection no longer agrees with the natural `!is_endpoint` composition, so a downstream strictly-interior phase-fold reducer / strictly-interior alphabetized-completion pass / boundary-hidden renderer consumer that binds `v.is_interior()` as its strict-interior query surface would answer the wrong `bool` for {v:?}",
+        );
+        assert_ne!(
+            v.is_endpoint(),
+            v.is_interior(),
+            "{type_name}: {v:?}.is_endpoint() and {v:?}.is_interior() returned the SAME bool — the (endpoint, interior) partition MUST be exhaustive: every variant answers `true` to EXACTLY ONE of the two predicates. A drift here means BOTH predicates fired (a permissive-permissive override pair) OR BOTH predicates rejected (a strict-strict override pair) on {v:?}, breaking the boundary-partition every downstream boundary-vs-interior consumer relies on",
+        );
+    }
+    assert!(
+        T::first().is_endpoint(),
+        "{type_name}: T::first().is_endpoint() returned false — the (variant → boundary-membership bool) projection failed to fire on the declaration-order head endpoint anchor while the natural `is_first || is_last` composition should return true. Clauses (18) + (30) + (32) together pin `T::first().is_endpoint() == true` as the structural fixpoint the head-endpoint anchor and the boundary-membership predicate axis share",
+    );
+    assert!(
+        T::last().is_endpoint(),
+        "{type_name}: T::last().is_endpoint() returned false — the (variant → boundary-membership bool) projection failed to fire on the declaration-order tail endpoint anchor while the natural `is_first || is_last` composition should return true. Clauses (18) + (30) + (32) together pin `T::last().is_endpoint() == true` as the structural fixpoint the tail-endpoint anchor and the boundary-membership predicate axis share, mirroring `T::first().is_endpoint() == true` one direction axis over",
+    );
+    assert!(
+        !T::first().is_interior(),
+        "{type_name}: T::first().is_interior() returned true — the (variant → interior-membership bool) projection fired on the declaration-order head endpoint anchor while the natural `!is_endpoint` composition should return false. Clauses (18) + (30) + (32) together pin `T::first().is_interior() == false` as the structural anti-fixpoint the head-endpoint anchor and the interior-membership predicate axis share, mirroring `T::first().is_endpoint() == true` one predicate-flavor axis over",
+    );
+    assert!(
+        !T::last().is_interior(),
+        "{type_name}: T::last().is_interior() returned true — the (variant → interior-membership bool) projection fired on the declaration-order tail endpoint anchor while the natural `!is_endpoint` composition should return false. Clauses (18) + (30) + (32) together pin `T::last().is_interior() == false` as the structural anti-fixpoint the tail-endpoint anchor and the interior-membership predicate axis share, mirroring `T::last().is_endpoint() == true` one predicate-flavor axis over",
+    );
 }
 
 #[cfg(test)]
@@ -8433,6 +8725,352 @@ mod tests {
         // (Alpha, Gamma) lex-endpoint anchors even though the
         // declaration order is reversed.
         super::assert_closed_set_well_formed::<ReverseLexMembershipStubKind>();
+    }
+
+    #[test]
+    fn is_endpoint_returns_true_only_on_declaration_order_endpoints() {
+        // The declaration-order boundary-membership predicate fires on
+        // both endpoint anchors and nowhere on the strict interior.
+        // `StubKind`'s variant listing is `[Alpha, Beta, Gamma]`, so
+        // `Alpha.is_endpoint()` and `Gamma.is_endpoint()` are `true`
+        // (declaration head + tail) and `Beta.is_endpoint()` is
+        // `false` (strict interior). Sibling posture to
+        // `is_first_returns_true_only_on_the_declaration_order_head_variant`
+        // + `is_last_returns_true_only_on_the_declaration_order_tail_variant`
+        // one predicate-flavor axis over on the (point, boundary)
+        // partition — the boundary-membership arm fires on the UNION
+        // of the two point-membership arms' fixpoint slots.
+        assert!(<StubKind as ClosedSet>::is_endpoint(StubKind::Alpha));
+        assert!(!<StubKind as ClosedSet>::is_endpoint(StubKind::Beta));
+        assert!(<StubKind as ClosedSet>::is_endpoint(StubKind::Gamma));
+    }
+
+    #[test]
+    fn is_interior_returns_true_only_on_declaration_order_interior_variants() {
+        // The declaration-order interior-membership predicate fires
+        // exclusively on the strict interior — the complement of
+        // `is_endpoint` under the (endpoint, interior) partition. On
+        // `StubKind` the interior is `{Beta}` — the two endpoints
+        // `Alpha` (head) and `Gamma` (tail) answer `false`, the sole
+        // strictly-interior variant `Beta` answers `true`. Sibling
+        // posture to
+        // `is_endpoint_returns_true_only_on_declaration_order_endpoints`
+        // one arm over on the (endpoint, interior) partition — the two
+        // arms partition `T::ALL` exhaustively AND disjointly.
+        assert!(!<StubKind as ClosedSet>::is_interior(StubKind::Alpha));
+        assert!(<StubKind as ClosedSet>::is_interior(StubKind::Beta));
+        assert!(!<StubKind as ClosedSet>::is_interior(StubKind::Gamma));
+    }
+
+    #[test]
+    fn is_endpoint_and_is_interior_partition_all_slice_on_arbitrary_declaration_order() {
+        // The boundary-partition contract on an arbitrary declaration
+        // order — regardless of which variant literal happens to sit
+        // at slice-index-0 / slice-index-(N - 1), `T::first()` +
+        // `T::last()` fire `is_endpoint` and every other slot fires
+        // `is_interior`. A regression that hard-coded the predicate
+        // against a variant literal rather than routing through the
+        // point-membership disjunction would pass
+        // `is_endpoint_returns_true_only_on_declaration_order_endpoints`
+        // / `is_interior_returns_true_only_on_declaration_order_interior_variants`
+        // on `StubKind` and silently bifurcate the predicates on any
+        // implementor whose `ALL`-array layout differs. Deliberate
+        // 5-variant stub with a strict interior wider than one slot so
+        // the (endpoint, interior) partition is directly observable —
+        // 2 endpoint slots (slice-index-0 + slice-index-4) + 3
+        // strictly-interior slots (slice-index-{1,2,3}). Sibling
+        // posture to
+        // `is_first_and_is_last_bracket_all_slice_on_arbitrary_declaration_order`
+        // one predicate-flavor axis over on the (point, boundary)
+        // partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum EndpointPartitionStubKind {
+            Epsilon,
+            Delta,
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownEndpointPartitionStubKind(pub String);
+        impl core::fmt::Display for UnknownEndpointPartitionStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown endpoint partition stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for EndpointPartitionStubKind {
+            const ALL: &'static [Self] = &[
+                Self::Epsilon,
+                Self::Delta,
+                Self::Gamma,
+                Self::Beta,
+                Self::Alpha,
+            ];
+            const SET_LABEL: &'static str = "endpoint partition stub kind";
+            type Unknown = UnknownEndpointPartitionStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Epsilon => "epsilon",
+                    Self::Delta => "delta",
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownEndpointPartitionStubKind(s.to_owned())
+            }
+        }
+        // The declaration head `Epsilon` (slice-index-0) — fires
+        // `is_endpoint`, does NOT fire `is_interior`.
+        assert!(<EndpointPartitionStubKind as ClosedSet>::is_endpoint(
+            EndpointPartitionStubKind::Epsilon,
+        ));
+        assert!(!<EndpointPartitionStubKind as ClosedSet>::is_interior(
+            EndpointPartitionStubKind::Epsilon,
+        ));
+        // The declaration tail `Alpha` (slice-index-4) — fires
+        // `is_endpoint`, does NOT fire `is_interior`.
+        assert!(<EndpointPartitionStubKind as ClosedSet>::is_endpoint(
+            EndpointPartitionStubKind::Alpha,
+        ));
+        assert!(!<EndpointPartitionStubKind as ClosedSet>::is_interior(
+            EndpointPartitionStubKind::Alpha,
+        ));
+        // The three strictly-interior slots (`Delta`, `Gamma`,
+        // `Beta`) — do NOT fire `is_endpoint`, DO fire `is_interior`.
+        for interior in [
+            EndpointPartitionStubKind::Delta,
+            EndpointPartitionStubKind::Gamma,
+            EndpointPartitionStubKind::Beta,
+        ] {
+            assert!(
+                !<EndpointPartitionStubKind as ClosedSet>::is_endpoint(interior),
+                "{interior:?}.is_endpoint() returned true on a strictly-interior slot",
+            );
+            assert!(
+                <EndpointPartitionStubKind as ClosedSet>::is_interior(interior),
+                "{interior:?}.is_interior() returned false on a strictly-interior slot",
+            );
+        }
+        // Sweep the exhaustive complementarity contract across every
+        // variant — `is_endpoint(v) != is_interior(v)` on every slot.
+        for &v in <EndpointPartitionStubKind as ClosedSet>::ALL {
+            assert_ne!(
+                <EndpointPartitionStubKind as ClosedSet>::is_endpoint(v),
+                <EndpointPartitionStubKind as ClosedSet>::is_interior(v),
+                "{v:?}.is_endpoint() and {v:?}.is_interior() returned the same bool — the (endpoint, interior) partition failed exhaustive complementarity",
+            );
+        }
+    }
+
+    #[test]
+    fn is_endpoint_and_is_interior_collapse_on_singleton_closed_set() {
+        // The boundary-partition degenerate case — a singleton closed
+        // set has ONE variant that is BOTH `T::first()` and
+        // `T::last()`, so `is_endpoint` fires (its default body is
+        // `is_first || is_last`, `true || true == true`) and
+        // `is_interior` does NOT fire (its default body is
+        // `!is_endpoint`, `!true == false`). A singleton closed set
+        // has ZERO strictly-interior slots by construction — the
+        // (endpoint, interior) partition collapses onto the sole
+        // variant as an endpoint. Mirrors
+        // `is_first_and_is_last_collapse_true_on_singleton_closed_set`
+        // one predicate-flavor axis over on the (point, boundary)
+        // partition — the two point-membership arms collapse-fire, the
+        // boundary arm collapse-fires, the interior arm collapse-does-
+        // NOT-fire, and the exhaustive complementarity contract holds
+        // trivially at the boundary-cardinality edge.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonEndpointStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonEndpointStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonEndpointStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton endpoint stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonEndpointStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton endpoint stub kind";
+            type Unknown = UnknownSingletonEndpointStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonEndpointStubKind(s.to_owned())
+            }
+        }
+        assert!(<SingletonEndpointStubKind as ClosedSet>::is_endpoint(
+            SingletonEndpointStubKind::Only,
+        ));
+        assert!(!<SingletonEndpointStubKind as ClosedSet>::is_interior(
+            SingletonEndpointStubKind::Only,
+        ));
+        // Exhaustive complementarity holds at the singleton edge —
+        // even on a 1-variant set the (endpoint, interior) partition
+        // preserves its XOR contract.
+        assert_ne!(
+            <SingletonEndpointStubKind as ClosedSet>::is_endpoint(SingletonEndpointStubKind::Only,),
+            <SingletonEndpointStubKind as ClosedSet>::is_interior(SingletonEndpointStubKind::Only,),
+        );
+        // The singleton stub also satisfies the well-formedness
+        // clause (32) sweep — the endpoint-anchor fixpoint contract
+        // `T::first().is_endpoint() == true` +
+        // `T::last().is_endpoint() == true` +
+        // `T::first().is_interior() == false` +
+        // `T::last().is_interior() == false` degenerates to a single
+        // variant answering `true` to `is_endpoint` and `false` to
+        // `is_interior`, and the exhaustive complementarity holds on
+        // that sole variant.
+        super::assert_closed_set_well_formed::<SingletonEndpointStubKind>();
+    }
+
+    #[test]
+    fn is_endpoint_and_is_interior_agree_with_first_last_endpoint_anchors() {
+        // The endpoint-anchor / boundary-membership alignment —
+        // `T::first().is_endpoint()` MUST be `true` AND
+        // `T::last().is_endpoint()` MUST be `true` AND
+        // `T::first().is_interior()` MUST be `false` AND
+        // `T::last().is_interior()` MUST be `false` on every
+        // implementor. Pinning the fixpoints here catches a
+        // regression that drifts either surface from the shared
+        // point-membership disjunction on either endpoint. Sibling
+        // posture to
+        // `is_first_and_is_last_agree_with_first_last_endpoint_anchors`
+        // one predicate-flavor axis over on the (point, boundary)
+        // partition.
+        assert!(<StubKind as ClosedSet>::first().is_endpoint());
+        assert!(<StubKind as ClosedSet>::last().is_endpoint());
+        assert!(!<StubKind as ClosedSet>::first().is_interior());
+        assert!(!<StubKind as ClosedSet>::last().is_interior());
+        // Interior slot answers `false` to `is_endpoint` and `true` to
+        // `is_interior` on the 3-variant stub.
+        assert!(!<StubKind as ClosedSet>::is_endpoint(StubKind::Beta));
+        assert!(<StubKind as ClosedSet>::is_interior(StubKind::Beta));
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_endpoint_and_is_first_or_is_last() {
+        // The well-formedness sweep's (32) clause — `v.is_endpoint()`
+        // MUST equal `v.is_first() || v.is_last()`. A hand-impl'd
+        // implementor whose override drifts the boundary-membership
+        // predicate (returns `true` on an interior slot, returns
+        // `false` on the head, a stale override that returns the
+        // wrong answer after a variant-listing edit) fails the sweep
+        // loudly rather than silently bifurcating the boundary-
+        // membership projection surface every downstream shared-
+        // endpoint-badge renderer / boundary-audit-event emitter /
+        // bounded-iteration-guard consumer routes through. Sibling
+        // posture to
+        // `assert_closed_set_well_formed_catches_drift_between_is_first_and_index_of_zero`
+        // one predicate-flavor axis over on the (point, boundary)
+        // partition. The stub's `Middle` slot is a strict-interior
+        // variant — a permissive override that returns `true` on
+        // `Middle` breaks clause (32)'s per-variant equality pin.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsEndpointKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsEndpointKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsEndpointKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is-endpoint kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsEndpointKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-endpoint kind";
+            type Unknown = UnknownDriftedIsEndpointKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsEndpointKind(s.to_owned())
+            }
+            fn is_endpoint(self) -> bool {
+                // Drifted override — returns `true` on every slot,
+                // folding the strict-interior partition onto the
+                // boundary partition and silently breaking clause
+                // (32)'s per-variant equality pin on the `Middle`
+                // interior slot.
+                let _ = self;
+                true
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedIsEndpointKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_endpoint() override drifted from the natural is_first || is_last composition",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_interior_and_not_is_endpoint() {
+        // The well-formedness sweep's (32) clause — `v.is_interior()`
+        // MUST equal `!(v.is_first() || v.is_last())`. Symmetric to
+        // `_catches_drift_between_is_endpoint_and_is_first_or_is_last`
+        // one arm over on the (endpoint, interior) partition — this
+        // pin covers the interior arm. A permissive override that
+        // returns `true` on every slot folds the boundary partition
+        // onto the interior partition on the endpoint slots and
+        // silently breaks clause (32)'s per-variant equality pin AND
+        // the exhaustive-complementarity pin AND the interior-anchor
+        // anti-fixpoint pins.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsInteriorKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsInteriorKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsInteriorKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is-interior kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsInteriorKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-interior kind";
+            type Unknown = UnknownDriftedIsInteriorKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsInteriorKind(s.to_owned())
+            }
+            fn is_interior(self) -> bool {
+                // Drifted override — returns `true` on every slot,
+                // folding the boundary partition onto the interior
+                // partition on the endpoint slots and silently
+                // breaking clause (32)'s per-variant equality pin.
+                let _ = self;
+                true
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedIsInteriorKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_interior() override drifted from the natural !is_endpoint composition",
+        );
     }
 
     #[test]

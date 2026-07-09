@@ -2094,10 +2094,10 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// **compound partition arm** the point-membership pair induces
     /// under `∨` and its negation:
     ///
-    /// | Predicate flavor \\ Ordering    | Declaration            | Lex (future)                |
+    /// | Predicate flavor \\ Ordering    | Declaration            | Lex                         |
     /// |---------------------------------|------------------------|-----------------------------|
     /// | Point (head / tail)             | [`Self::is_first`] / [`Self::is_last`] | [`Self::is_sorted_first`] / [`Self::is_sorted_last`] |
-    /// | Boundary (endpoint / interior)  | [`Self::is_endpoint`] / [`Self::is_interior`] | future `is_sorted_endpoint` / `is_sorted_interior` |
+    /// | Boundary (endpoint / interior)  | [`Self::is_endpoint`] / [`Self::is_interior`] | [`Self::is_sorted_endpoint`] / [`Self::is_sorted_interior`] |
     ///
     /// Every generic consumer that partitions the closed set into
     /// (structural-boundary, strict-interior) slots without threading
@@ -2285,6 +2285,228 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// assertion.
     fn is_interior(self) -> bool {
         !<Self as ClosedSet>::is_endpoint(self)
+    }
+
+    /// The lexicographic-order endpoint-membership predicate — `true`
+    /// when `self` is either [`Self::sorted_first`] or
+    /// [`Self::sorted_last`], `false` on every strictly-interior lex
+    /// slot. The endpoint-partition arm of the (endpoint, interior)
+    /// boolean-partition axis over the LEX-axis endpoint surface —
+    /// one predicate-flavor axis over from the lex point-membership
+    /// pair ([`Self::is_sorted_first`], [`Self::is_sorted_last`]) and
+    /// the natural complement of [`Self::is_sorted_interior`].
+    ///
+    /// Closes the (predicate-flavor × ordering) 2×2 matrix over the
+    /// boolean-boundary surface — the declaration-axis arm
+    /// ([`Self::is_endpoint`] / [`Self::is_interior`]) is one ordering
+    /// axis over; this method + [`Self::is_sorted_interior`] name the
+    /// **compound partition arm** the lex point-membership pair induces
+    /// under `∨` and its negation:
+    ///
+    /// | Predicate flavor \\ Ordering    | Declaration            | Lex                         |
+    /// |---------------------------------|------------------------|-----------------------------|
+    /// | Point (head / tail)             | [`Self::is_first`] / [`Self::is_last`] | [`Self::is_sorted_first`] / [`Self::is_sorted_last`] |
+    /// | Boundary (endpoint / interior)  | [`Self::is_endpoint`] / [`Self::is_interior`] | [`Self::is_sorted_endpoint`] / [`Self::is_sorted_interior`] |
+    ///
+    /// Every generic consumer that partitions the closed set into
+    /// (lex-structural-boundary, lex-strict-interior) slots without
+    /// threading the caller through a per-endpoint
+    /// `is_sorted_first || is_sorted_last` disjunction (a bounded
+    /// alphabetized-iteration guard that emits a `lex-first-or-last-
+    /// slot` sentinel event on either lex terminus, an alphabetized-
+    /// carousel renderer that draws a shared boundary badge on both
+    /// lex endpoints without duplicating the badge-emit fork, a
+    /// truth-table property test that anchors a shared lex-endpoint-
+    /// parity assertion across both lex-endpoint anchors, a saga-step
+    /// engine that opens a "lex-structural-boundary" audit event on
+    /// either the lex head OR the lex tail, an alphabetized-completion
+    /// UI that renders a persistent "at-lex-boundary" glyph on both
+    /// ends of the alphabetized chain, a lex-phase-fold reducer whose
+    /// interior arm short-circuits ONLY when the current slot is
+    /// strictly-lex-interior) binds to ONE typed compound predicate
+    /// rather than hand-rolling either the
+    /// `self.is_sorted_first() || self.is_sorted_last()` disjunction
+    /// (which re-derives the same two-primitive composition at every
+    /// callsite AND makes every downstream site depend on the
+    /// disjunction shape) OR the
+    /// `self.sorted_index_of() == 0
+    ///  || self.sorted_index_of() + 1 == T::CARDINALITY`
+    /// composition (which re-derives the same three-primitive
+    /// composition at every callsite AND makes every downstream site
+    /// depend on the `usize` boundary arithmetic on the lex axis) OR
+    /// a per-implementor inline
+    /// `matches!(self, Self::LexHead | Self::LexTail)` block (which
+    /// re-derives the per-variant lex-endpoint table at every callsite
+    /// AND drifts silently when [`Self::label`] gains a new variant
+    /// that reorders the lex-head / lex-tail slots).
+    ///
+    /// Default body composes [`Self::is_sorted_first`] with
+    /// [`Self::is_sorted_last`] under `||` — the lex boundary-
+    /// membership predicate is a typed CONSEQUENCE of the two pre-
+    /// existing lex point-membership primitives, not a third codepath
+    /// through [`Self::sorted_index_of`] arithmetic. Implementors
+    /// override only when the lex boundary-membership surface needs to
+    /// diverge from the natural
+    /// `is_sorted_first(self) || is_sorted_last(self)` shape (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason `is_sorted_first` / `is_sorted_last` /
+    /// `is_endpoint` / `is_interior` overrides exist — a typed escape
+    /// hatch the trait surface exposes rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that
+    /// overrides either [`Self::is_sorted_first`] OR
+    /// [`Self::is_sorted_last`] propagates the override through this
+    /// default body automatically; the (variant → bool lex-boundary-
+    /// membership) projection funnels through the SAME pair of lex
+    /// point-membership primitives the endpoint cube already routes.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::sorted_first`] equals
+    /// [`Self::sorted_last`], so both lex point-membership predicates
+    /// fire on the same variant and this predicate returns `true` for
+    /// the sole variant. [`Self::is_sorted_interior`] correspondingly
+    /// returns `false` — a singleton has zero lex-interior slots.
+    /// Mirrors the singleton collapse [`Self::is_endpoint`] observes
+    /// one ordering axis over and preserves the (lex-endpoint XOR
+    /// lex-interior) partition semantics even at the boundary-
+    /// cardinality edge.
+    ///
+    /// The lex boundary-membership contract —
+    /// `T::sorted_first().is_sorted_endpoint() == true` AND
+    /// `T::sorted_last().is_sorted_endpoint() == true` on every
+    /// implementor — is guaranteed by the composition through
+    /// [`Self::is_sorted_first`] / [`Self::is_sorted_last`]'s lex-
+    /// endpoint-fixpoint clause (31); the well-formedness clause (33)
+    /// pins the composition against the natural
+    /// `is_sorted_first(self) || is_sorted_last(self)` shape AND the
+    /// lex-boundary-endpoint `true` fixpoints on every implementor, so
+    /// a passing well-formedness sweep means every generic consumer
+    /// can call [`Self::is_sorted_endpoint`] on any typed variant and
+    /// expect the same `bool` answer at every crate boundary. The
+    /// (lex-endpoint, lex-interior) partition is EXHAUSTIVE — every
+    /// variant in [`Self::ALL`] answers `true` to EXACTLY ONE of the
+    /// two predicates, pinned by clause (33)'s complementarity
+    /// assertion
+    /// `is_sorted_endpoint(v) != is_sorted_interior(v)` on every
+    /// representative input.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → lex-boundary-
+    /// membership bool) projection becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline
+    /// `self.is_sorted_first() || self.is_sorted_last()` composition
+    /// at every downstream lex-structural-boundary query site. The
+    /// (predicate-flavor × ordering) 2×2 matrix over the boolean-
+    /// boundary surface CLOSES on the lex axis — the sibling
+    /// declaration-axis matrix opened with clause (32) is now paired
+    /// under a shared partition-flavor axis.
+    /// THEORY.md §V.1 — knowable platform; the (variant → lex-
+    /// boundary-membership) projection was an unnamed compound of
+    /// [`Self::is_sorted_first`] + [`Self::is_sorted_last`] + `||`
+    /// pre-lift; naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two lex point-membership primitives —
+    /// generic consumers see ONE method, not one lex-boundary-
+    /// disjunction-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (variant →
+    /// lex-boundary-membership) projection emerges from the
+    /// composition of TWO substrate primitives
+    /// ([`Self::is_sorted_first`], [`Self::is_sorted_last`]) under
+    /// the standard-library boolean `||` operator rather than as a
+    /// per-implementor `match self { ... }` block. A future tightening
+    /// of either primitive (a future const-fn lex axis, a future
+    /// case-insensitive-label extension that shifts which variant
+    /// lands at the lex-min slot, a future perfect-hash lex-order
+    /// projection) propagates to every closed-set lex-boundary-
+    /// membership consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-sorted-boundary?` on
+    /// closed enumerations under lex-ordering (the `∨`-composed lex-
+    /// endpoint-membership predicate over both anchors of the
+    /// alphabetized chain); Idris's `Fin (S n)` non-empty finite-
+    /// cardinality types where the (lex head, lex tail) endpoint
+    /// partition folds through a shared
+    /// `isSortedBoundary : Fin (S n) -> Bool` projection under
+    /// boolean-or; Haskell's `(\x -> x == minimumBy comparing label
+    /// [minBound..] || x == maximumBy comparing label [minBound..])`
+    /// on the `Bounded + Enum` type-class pair with a `sortBy label`
+    /// prelude; MLIR's `RegisteredOperationName::isLexEndpoint()` on
+    /// the lex-sorted Op registry. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::is_sorted_first`] and [`Self::is_sorted_last`]
+    /// lex point-membership primitives under the standard-library
+    /// boolean `||` operator — no new dep, no new IR layer, no
+    /// supertrait bound, no `usize` arithmetic discharge.
+    fn is_sorted_endpoint(self) -> bool {
+        <Self as ClosedSet>::is_sorted_first(self) || <Self as ClosedSet>::is_sorted_last(self)
+    }
+
+    /// The lexicographic-order interior-membership predicate — `true`
+    /// when `self` is neither [`Self::sorted_first`] nor
+    /// [`Self::sorted_last`], `false` on both lex endpoints. The
+    /// natural complement of [`Self::is_sorted_endpoint`] on the
+    /// (endpoint, interior) boolean-partition axis over the LEX-axis
+    /// endpoint surface.
+    ///
+    /// Sibling posture to [`Self::is_sorted_endpoint`] one arm over
+    /// on the (endpoint, interior) partition — [`Self::is_sorted_endpoint`]
+    /// fires on both lex-structural anchors, this method fires on
+    /// every strictly-lex-interior slot. See [`Self::is_sorted_endpoint`]
+    /// for the shared design rationale, sibling matrix, override axis,
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the complement-direction arm of
+    /// the same predicate-flavor axis and inherits every property from
+    /// the lex-endpoint arm's documentation, differing only in the
+    /// leading `!` negation and the strictly-lex-interior consumer
+    /// surface (a bounded lex-loop that walks ONLY interior alphabet
+    /// slots and short-circuits on either lex endpoint, a lex-phase-
+    /// fold reducer whose interior arm processes NON-boundary
+    /// alphabetized payloads and reserves the lex-endpoint arm for
+    /// lex-boundary-only side effects, an alphabetized-completion pass
+    /// that hides the alphabetically-first + alphabetically-last
+    /// entries from a strictly-interior candidate list).
+    ///
+    /// Default body composes [`Self::is_sorted_endpoint`] with the
+    /// standard-library `!` operator — the lex interior-membership
+    /// predicate is a typed CONSEQUENCE of the lex boundary-membership
+    /// disjunction, not a third codepath through
+    /// `is_sorted_first ∧ is_sorted_last` inversion. Implementors
+    /// override only when the lex interior-membership surface needs
+    /// to diverge from the natural `!is_sorted_endpoint(self)` shape
+    /// (no production implementor reaches for this today; the axis
+    /// exists for the same reason `is_sorted_endpoint` /
+    /// `is_sorted_first` / `is_sorted_last` overrides exist — a typed
+    /// escape hatch rather than forcing the implementor to hand-roll
+    /// the impl). An implementor that overrides
+    /// [`Self::is_sorted_endpoint`] propagates the override through
+    /// this default body automatically; the (variant → bool lex-
+    /// interior-membership) projection funnels through ONE typed
+    /// primitive.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::is_sorted_endpoint`] fires on
+    /// the sole variant, so this method returns `false` for that
+    /// variant. A singleton closed set has ZERO lex-interior slots by
+    /// construction — [`Self::ALL`] is `[Self::Only]` and the sole
+    /// element is BOTH lex endpoints simultaneously, leaving no room
+    /// for a strictly-lex-interior slot. Mirrors the singleton
+    /// collapse [`Self::is_sorted_endpoint`] observes and preserves
+    /// the (lex-endpoint XOR lex-interior) partition semantics even
+    /// at the boundary-cardinality edge.
+    ///
+    /// The (lex-endpoint, lex-interior) partition contract —
+    /// `is_sorted_endpoint(v) != is_sorted_interior(v)` on every
+    /// variant `v` in [`Self::ALL`] — is guaranteed by the default
+    /// composition through [`Self::is_sorted_endpoint`]'s `!`
+    /// negation; the well-formedness clause (33) pins the
+    /// complementarity assertion on every implementor so a passing
+    /// well-formedness sweep means every generic consumer can call
+    /// [`Self::is_sorted_interior`] on any typed variant and expect
+    /// the exact complement of [`Self::is_sorted_endpoint`] on the
+    /// same variant. The lex-endpoint-anti-fix-point corollary
+    /// `T::sorted_first().is_sorted_interior() == false` AND
+    /// `T::sorted_last().is_sorted_interior() == false` is guaranteed
+    /// by clause (33)'s lex-endpoint-anchor pin composed with the
+    /// complementarity assertion.
+    fn is_sorted_interior(self) -> bool {
+        !<Self as ClosedSet>::is_sorted_endpoint(self)
     }
 
     /// Recover the canonical [`Self::label`] at declaration-order
@@ -5784,6 +6006,102 @@ where
         !T::last().is_interior(),
         "{type_name}: T::last().is_interior() returned true — the (variant → interior-membership bool) projection fired on the declaration-order tail endpoint anchor while the natural `!is_endpoint` composition should return false. Clauses (18) + (30) + (32) together pin `T::last().is_interior() == false` as the structural anti-fixpoint the tail-endpoint anchor and the interior-membership predicate axis share, mirroring `T::last().is_endpoint() == true` one predicate-flavor axis over",
     );
+    // (33) — For every variant `v` in `T::ALL`, `v.is_sorted_endpoint()`
+    // MUST equal `v.is_sorted_first() || v.is_sorted_last()`, AND
+    // `v.is_sorted_interior()` MUST equal
+    // `!(v.is_sorted_first() || v.is_sorted_last())`, AND
+    // `is_sorted_endpoint(v) != is_sorted_interior(v)` (exhaustive
+    // complementarity), AND `T::sorted_first().is_sorted_endpoint()`
+    // MUST be `true`, AND `T::sorted_last().is_sorted_endpoint()` MUST
+    // be `true`, AND `T::sorted_first().is_sorted_interior()` MUST be
+    // `false`, AND `T::sorted_last().is_sorted_interior()` MUST be
+    // `false`. The default trait bodies compose
+    // `is_sorted_first(self) || is_sorted_last(self)` (lex-boundary
+    // arm) and `!is_sorted_endpoint(self)` (lex-interior arm) verbatim
+    // and satisfy both arms for free; the assertion catches a future
+    // implementor whose override drifts either lex-boundary-membership
+    // projection (a permissive lex-endpoint override that returns
+    // `true` on a strict-lex-interior slot — folding an alphabetized-
+    // boundary-glyph-emit / lex-audit-event / bounded-alphabetized-
+    // iteration-guard consumer onto the wrong partition of `T::ALL`
+    // and silently short-circuiting the strict-lex-interior arm; a
+    // permissive lex-interior override that returns `true` on a lex-
+    // endpoint slot — folding a strictly-lex-interior alphabetized
+    // renderer onto the wrong partition; a swapped override that
+    // returns `is_sorted_interior`'s answer for `is_sorted_endpoint`
+    // AND vice-versa, silently inverting the (lex-endpoint, lex-
+    // interior) partition — passing the exhaustive complementarity
+    // assertion but drifting from the lex point-membership composition
+    // on every variant; a stale override that fails the
+    // complementarity assertion — returns the SAME `bool` for both
+    // predicates on some variant, breaking the (lex-endpoint XOR lex-
+    // interior) partition contract every downstream lex-boundary-vs-
+    // interior consumer relies on) loudly rather than silently
+    // bifurcating the lex-boundary-membership projection surface every
+    // downstream shared-lex-endpoint-badge renderer / lex-boundary-
+    // audit-event emitter / strictly-lex-interior phase-fold reducer /
+    // alphabetized-carousel-boundary-glyph consumer routes through.
+    // Sibling posture to clauses (19) + (31) + (32) — clause (19) pins
+    // the (lex head, lex tail) endpoint anchors against
+    // `T::sorted_variants()[0]` / `T::sorted_variants()[T::CARDINALITY
+    // - 1]`, clause (31) pins the (bool lex-head-membership, bool lex-
+    // tail-membership) projections against the composition of the lex-
+    // position projection with the const-visible variant count, clause
+    // (32) pins the (bool boundary-membership, bool interior-
+    // membership) partition on the DECLARATION axis, this clause pins
+    // the (bool lex-boundary-membership, bool lex-interior-membership)
+    // partition on the LEX axis against the composition of the lex
+    // point-membership pair under `||` AND its negation AND pins the
+    // exhaustive complementarity `is_sorted_endpoint XOR
+    // is_sorted_interior` on every variant. Clauses (19) + (31) + (33)
+    // together open the (predicate-flavor × direction) 2×2 lex-axis
+    // endpoint matrix at ALL FOUR direct projection surfaces (`Self`-
+    // typed lex anchor / `bool`-typed lex point membership / `bool`-
+    // typed lex boundary membership / `bool`-typed lex interior
+    // membership) AND at BOTH lex-endpoint-anchor lex-boundary-
+    // fixpoints (`T::sorted_first().is_sorted_endpoint()`,
+    // `T::sorted_last().is_sorted_endpoint()`) AND at BOTH lex-
+    // endpoint-anchor lex-interior-anti-fixpoints
+    // (`T::sorted_first().is_sorted_interior() == false`,
+    // `T::sorted_last().is_sorted_interior() == false`). Clauses (32)
+    // + (33) together CLOSE the (predicate-flavor × ordering) 2×2
+    // matrix over the boolean-boundary surface — the declaration-axis
+    // arm ((32)) and the lex-axis arm ((33)) now cover every ordering
+    // × predicate-flavor corner of the boolean-boundary space.
+    for &v in T::ALL {
+        let expected_sorted_endpoint = v.is_sorted_first() || v.is_sorted_last();
+        assert_eq!(
+            v.is_sorted_endpoint(),
+            expected_sorted_endpoint,
+            "{type_name}: {v:?}.is_sorted_endpoint() drifted from {v:?}.is_sorted_first() || {v:?}.is_sorted_last() — the direct (variant → lex-boundary-membership bool) projection no longer agrees with the natural `is_sorted_first || is_sorted_last` composition, so a downstream shared-lex-endpoint-badge renderer / lex-boundary-audit-event emitter / bounded-alphabetized-iteration-guard consumer that binds `v.is_sorted_endpoint()` as its lex-structural-boundary query surface would answer the wrong `bool` for {v:?}",
+        );
+        assert_eq!(
+            v.is_sorted_interior(),
+            !expected_sorted_endpoint,
+            "{type_name}: {v:?}.is_sorted_interior() drifted from !({v:?}.is_sorted_first() || {v:?}.is_sorted_last()) — the direct (variant → lex-interior-membership bool) projection no longer agrees with the natural `!is_sorted_endpoint` composition, so a downstream strictly-lex-interior phase-fold reducer / strictly-lex-interior alphabetized-completion pass / lex-boundary-hidden renderer consumer that binds `v.is_sorted_interior()` as its strict-lex-interior query surface would answer the wrong `bool` for {v:?}",
+        );
+        assert_ne!(
+            v.is_sorted_endpoint(),
+            v.is_sorted_interior(),
+            "{type_name}: {v:?}.is_sorted_endpoint() and {v:?}.is_sorted_interior() returned the SAME bool — the (lex-endpoint, lex-interior) partition MUST be exhaustive: every variant answers `true` to EXACTLY ONE of the two predicates. A drift here means BOTH predicates fired (a permissive-permissive override pair) OR BOTH predicates rejected (a strict-strict override pair) on {v:?}, breaking the lex-boundary-partition every downstream lex-boundary-vs-lex-interior consumer relies on",
+        );
+    }
+    assert!(
+        T::sorted_first().is_sorted_endpoint(),
+        "{type_name}: T::sorted_first().is_sorted_endpoint() returned false — the (variant → lex-boundary-membership bool) projection failed to fire on the lex-order head endpoint anchor while the natural `is_sorted_first || is_sorted_last` composition should return true. Clauses (19) + (31) + (33) together pin `T::sorted_first().is_sorted_endpoint() == true` as the structural fixpoint the lex-head-endpoint anchor and the lex-boundary-membership predicate axis share, mirroring `T::first().is_endpoint() == true` one ordering axis over",
+    );
+    assert!(
+        T::sorted_last().is_sorted_endpoint(),
+        "{type_name}: T::sorted_last().is_sorted_endpoint() returned false — the (variant → lex-boundary-membership bool) projection failed to fire on the lex-order tail endpoint anchor while the natural `is_sorted_first || is_sorted_last` composition should return true. Clauses (19) + (31) + (33) together pin `T::sorted_last().is_sorted_endpoint() == true` as the structural fixpoint the lex-tail-endpoint anchor and the lex-boundary-membership predicate axis share, mirroring `T::last().is_endpoint() == true` one ordering axis over and closing the (predicate-flavor × ordering) 2×2 matrix over the boolean-boundary surface",
+    );
+    assert!(
+        !T::sorted_first().is_sorted_interior(),
+        "{type_name}: T::sorted_first().is_sorted_interior() returned true — the (variant → lex-interior-membership bool) projection fired on the lex-order head endpoint anchor while the natural `!is_sorted_endpoint` composition should return false. Clauses (19) + (31) + (33) together pin `T::sorted_first().is_sorted_interior() == false` as the structural anti-fixpoint the lex-head-endpoint anchor and the lex-interior-membership predicate axis share, mirroring `T::sorted_first().is_sorted_endpoint() == true` one predicate-flavor axis over",
+    );
+    assert!(
+        !T::sorted_last().is_sorted_interior(),
+        "{type_name}: T::sorted_last().is_sorted_interior() returned true — the (variant → lex-interior-membership bool) projection fired on the lex-order tail endpoint anchor while the natural `!is_sorted_endpoint` composition should return false. Clauses (19) + (31) + (33) together pin `T::sorted_last().is_sorted_interior() == false` as the structural anti-fixpoint the lex-tail-endpoint anchor and the lex-interior-membership predicate axis share, mirroring `T::sorted_last().is_sorted_endpoint() == true` one predicate-flavor axis over",
+    );
 }
 
 #[cfg(test)]
@@ -9070,6 +9388,431 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an is_interior() override drifted from the natural !is_endpoint composition",
+        );
+    }
+
+    #[test]
+    fn is_sorted_endpoint_returns_true_only_on_lex_order_endpoints() {
+        // The lex-order boundary-membership predicate fires on both
+        // lex-endpoint anchors and nowhere on the strict lex-interior.
+        // `StubKind`'s canonical labels are `("alpha", "beta",
+        // "gamma")` — the declaration ordering matches the lex
+        // ordering here, so the lex-head endpoint is `Alpha` and the
+        // lex-tail endpoint is `Gamma`; `Alpha.is_sorted_endpoint()`
+        // and `Gamma.is_sorted_endpoint()` are `true` (lex head + lex
+        // tail) and `Beta.is_sorted_endpoint()` is `false` (strict lex
+        // interior). Sibling posture to
+        // `is_sorted_first_returns_true_only_on_the_lex_order_head_variant`
+        // + `is_sorted_last_returns_true_only_on_the_lex_order_tail_variant`
+        // one predicate-flavor axis over on the (lex-point, lex-
+        // boundary) partition — the lex-boundary-membership arm fires
+        // on the UNION of the two lex-point-membership arms' fixpoint
+        // slots.
+        assert!(<StubKind as ClosedSet>::is_sorted_endpoint(StubKind::Alpha));
+        assert!(!<StubKind as ClosedSet>::is_sorted_endpoint(StubKind::Beta));
+        assert!(<StubKind as ClosedSet>::is_sorted_endpoint(StubKind::Gamma));
+    }
+
+    #[test]
+    fn is_sorted_interior_returns_true_only_on_lex_order_interior_variants() {
+        // The lex-order interior-membership predicate fires exclusively
+        // on the strict lex-interior — the complement of
+        // `is_sorted_endpoint` under the (lex-endpoint, lex-interior)
+        // partition. On `StubKind` the lex-interior is `{Beta}` — the
+        // two lex-endpoints `Alpha` (lex head) and `Gamma` (lex tail)
+        // answer `false`, the sole strictly-lex-interior variant `Beta`
+        // answers `true`. Sibling posture to
+        // `is_sorted_endpoint_returns_true_only_on_lex_order_endpoints`
+        // one arm over on the (lex-endpoint, lex-interior) partition —
+        // the two arms partition `T::ALL` exhaustively AND disjointly
+        // under the lex ordering.
+        assert!(!<StubKind as ClosedSet>::is_sorted_interior(
+            StubKind::Alpha
+        ));
+        assert!(<StubKind as ClosedSet>::is_sorted_interior(StubKind::Beta));
+        assert!(!<StubKind as ClosedSet>::is_sorted_interior(
+            StubKind::Gamma
+        ));
+    }
+
+    #[test]
+    fn is_sorted_endpoint_and_is_sorted_interior_partition_all_slice_on_arbitrary_declaration_and_lex_order(
+    ) {
+        // The lex-boundary-partition contract on a stub whose
+        // declaration order deliberately diverges from the lex order —
+        // regardless of which variant literal happens to sit at
+        // declaration-slice-index-0 / declaration-slice-index-(N - 1),
+        // `T::sorted_first()` + `T::sorted_first()` fire
+        // `is_sorted_endpoint` (the LEX head + LEX tail) and every
+        // other slot fires `is_sorted_interior`. A regression that
+        // hard-coded the predicate against a declaration-slice index
+        // rather than routing through the LEX-point-membership
+        // disjunction would pass
+        // `is_sorted_endpoint_returns_true_only_on_lex_order_endpoints`
+        // / `is_sorted_interior_returns_true_only_on_lex_order_interior_variants`
+        // on `StubKind` (where declaration ordering matches lex
+        // ordering) and silently bifurcate the predicates on any
+        // implementor whose declaration order diverges from its lex
+        // order. Deliberate 5-variant stub with declaration order
+        // `[Epsilon, Delta, Gamma, Beta, Alpha]` and labels
+        // `("epsilon", "delta", "gamma", "beta", "alpha")`. The lex
+        // ordering of the labels is `"alpha" < "beta" < "delta" <
+        // "epsilon" < "gamma"`, so the lex-endpoints are `Alpha`
+        // (lex head) + `Gamma` (lex tail) while the declaration-
+        // endpoints are `Epsilon` (declaration head) + `Alpha`
+        // (declaration tail). The (declaration-endpoint, lex-
+        // endpoint) crossings put:
+        //   * `Alpha` — declaration TAIL AND lex HEAD, so fires BOTH
+        //     `is_endpoint` (declaration) and `is_sorted_endpoint`
+        //     (lex).
+        //   * `Gamma` — declaration INTERIOR AND lex TAIL, so fires
+        //     `is_sorted_endpoint` (lex) but NOT `is_endpoint`
+        //     (declaration) — the axis-divergence witness that a
+        //     declaration-axis regression cannot silently satisfy.
+        //   * `Epsilon` — declaration HEAD AND lex INTERIOR, so
+        //     fires `is_endpoint` (declaration) but NOT
+        //     `is_sorted_endpoint` (lex) — the complementary axis-
+        //     divergence witness one direction over.
+        //   * `Beta` + `Delta` — strict-interior on BOTH axes.
+        // Every (declaration × lex) × (endpoint, interior) axis-
+        // crossing has at least one witness slot. A permissive
+        // declaration-axis override that folded the LEX partition
+        // onto the DECLARATION partition would pass `Alpha` (both
+        // axes fire) but fail the `Gamma` / `Epsilon` axis-
+        // divergence witnesses loudly. Sibling posture to
+        // `is_endpoint_and_is_interior_partition_all_slice_on_arbitrary_declaration_order`
+        // one ordering axis over on the (declaration, lex) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SortedEndpointPartitionStubKind {
+            Epsilon,
+            Delta,
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownSortedEndpointPartitionStubKind(pub String);
+        impl core::fmt::Display for UnknownSortedEndpointPartitionStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown sorted endpoint partition stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SortedEndpointPartitionStubKind {
+            const ALL: &'static [Self] = &[
+                Self::Epsilon,
+                Self::Delta,
+                Self::Gamma,
+                Self::Beta,
+                Self::Alpha,
+            ];
+            const SET_LABEL: &'static str = "sorted endpoint partition stub kind";
+            type Unknown = UnknownSortedEndpointPartitionStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Epsilon => "epsilon",
+                    Self::Delta => "delta",
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSortedEndpointPartitionStubKind(s.to_owned())
+            }
+        }
+        // The lex head `Alpha` (label "alpha") — fires
+        // `is_sorted_endpoint`, does NOT fire `is_sorted_interior`.
+        assert!(
+            <SortedEndpointPartitionStubKind as ClosedSet>::is_sorted_endpoint(
+                SortedEndpointPartitionStubKind::Alpha,
+            )
+        );
+        assert!(
+            !<SortedEndpointPartitionStubKind as ClosedSet>::is_sorted_interior(
+                SortedEndpointPartitionStubKind::Alpha,
+            )
+        );
+        // The lex tail `Gamma` (label "gamma") — fires
+        // `is_sorted_endpoint`, does NOT fire `is_sorted_interior`.
+        assert!(
+            <SortedEndpointPartitionStubKind as ClosedSet>::is_sorted_endpoint(
+                SortedEndpointPartitionStubKind::Gamma,
+            )
+        );
+        assert!(
+            !<SortedEndpointPartitionStubKind as ClosedSet>::is_sorted_interior(
+                SortedEndpointPartitionStubKind::Gamma,
+            )
+        );
+        // The three strictly-lex-interior slots (`Beta`, `Delta`,
+        // `Epsilon`) — do NOT fire `is_sorted_endpoint`, DO fire
+        // `is_sorted_interior`. Note `Epsilon` is the DECLARATION
+        // head but a strictly-LEX-interior slot — the axis-
+        // divergence witness a declaration-axis regression would
+        // fail to satisfy on this arm.
+        for interior in [
+            SortedEndpointPartitionStubKind::Beta,
+            SortedEndpointPartitionStubKind::Delta,
+            SortedEndpointPartitionStubKind::Epsilon,
+        ] {
+            assert!(
+                !<SortedEndpointPartitionStubKind as ClosedSet>::is_sorted_endpoint(interior),
+                "{interior:?}.is_sorted_endpoint() returned true on a strictly-lex-interior slot",
+            );
+            assert!(
+                <SortedEndpointPartitionStubKind as ClosedSet>::is_sorted_interior(interior),
+                "{interior:?}.is_sorted_interior() returned false on a strictly-lex-interior slot",
+            );
+        }
+        // Sweep the exhaustive complementarity contract across every
+        // variant — `is_sorted_endpoint(v) != is_sorted_interior(v)`
+        // on every slot.
+        for &v in <SortedEndpointPartitionStubKind as ClosedSet>::ALL {
+            assert_ne!(
+                <SortedEndpointPartitionStubKind as ClosedSet>::is_sorted_endpoint(v),
+                <SortedEndpointPartitionStubKind as ClosedSet>::is_sorted_interior(v),
+                "{v:?}.is_sorted_endpoint() and {v:?}.is_sorted_interior() returned the same bool — the (lex-endpoint, lex-interior) partition failed exhaustive complementarity",
+            );
+        }
+        // The stub also satisfies the well-formedness sweep — clauses
+        // (32) + (33) both fire on a declaration-order that diverges
+        // from the lex order, pinning the (declaration-axis) endpoint
+        // partition on the declaration endpoints (`Epsilon`, `Alpha`)
+        // AND the (lex-axis) endpoint partition on the lex endpoints
+        // (`Alpha`, `Epsilon`) — same variant pair, swapped anchor
+        // roles. A regression that folded either axis onto the other
+        // would fail this sweep loudly.
+        super::assert_closed_set_well_formed::<SortedEndpointPartitionStubKind>();
+    }
+
+    #[test]
+    fn is_sorted_endpoint_and_is_sorted_interior_collapse_on_singleton_closed_set() {
+        // The lex-boundary-partition degenerate case — a singleton
+        // closed set has ONE variant that is BOTH `T::sorted_first()`
+        // and `T::sorted_last()`, so `is_sorted_endpoint` fires (its
+        // default body is `is_sorted_first || is_sorted_last`, `true
+        // || true == true`) and `is_sorted_interior` does NOT fire
+        // (its default body is `!is_sorted_endpoint`, `!true ==
+        // false`). A singleton closed set has ZERO strictly-lex-
+        // interior slots by construction — the (lex-endpoint, lex-
+        // interior) partition collapses onto the sole variant as a
+        // lex-endpoint. Mirrors
+        // `is_endpoint_and_is_interior_collapse_on_singleton_closed_set`
+        // one ordering axis over on the (declaration, lex) partition
+        // — the two lex-point-membership arms collapse-fire, the lex-
+        // boundary arm collapse-fires, the lex-interior arm collapse-
+        // does-NOT-fire, and the exhaustive complementarity contract
+        // holds trivially at the boundary-cardinality edge.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonSortedEndpointStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonSortedEndpointStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonSortedEndpointStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton sorted endpoint stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonSortedEndpointStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton sorted endpoint stub kind";
+            type Unknown = UnknownSingletonSortedEndpointStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonSortedEndpointStubKind(s.to_owned())
+            }
+        }
+        assert!(
+            <SingletonSortedEndpointStubKind as ClosedSet>::is_sorted_endpoint(
+                SingletonSortedEndpointStubKind::Only,
+            )
+        );
+        assert!(
+            !<SingletonSortedEndpointStubKind as ClosedSet>::is_sorted_interior(
+                SingletonSortedEndpointStubKind::Only,
+            )
+        );
+        // Exhaustive complementarity holds at the singleton edge —
+        // even on a 1-variant set the (lex-endpoint, lex-interior)
+        // partition preserves its XOR contract.
+        assert_ne!(
+            <SingletonSortedEndpointStubKind as ClosedSet>::is_sorted_endpoint(
+                SingletonSortedEndpointStubKind::Only,
+            ),
+            <SingletonSortedEndpointStubKind as ClosedSet>::is_sorted_interior(
+                SingletonSortedEndpointStubKind::Only,
+            ),
+        );
+        // The singleton stub also satisfies the well-formedness clause
+        // (33) sweep — the lex-endpoint-anchor fixpoint contract
+        // `T::sorted_first().is_sorted_endpoint() == true` +
+        // `T::sorted_last().is_sorted_endpoint() == true` +
+        // `T::sorted_first().is_sorted_interior() == false` +
+        // `T::sorted_last().is_sorted_interior() == false` degenerates
+        // to a single variant answering `true` to `is_sorted_endpoint`
+        // and `false` to `is_sorted_interior`, and the exhaustive
+        // complementarity holds on that sole variant.
+        super::assert_closed_set_well_formed::<SingletonSortedEndpointStubKind>();
+    }
+
+    #[test]
+    fn is_sorted_endpoint_and_is_sorted_interior_agree_with_sorted_first_last_endpoint_anchors() {
+        // The lex-endpoint-anchor / lex-boundary-membership alignment —
+        // `T::sorted_first().is_sorted_endpoint()` MUST be `true` AND
+        // `T::sorted_last().is_sorted_endpoint()` MUST be `true` AND
+        // `T::sorted_first().is_sorted_interior()` MUST be `false` AND
+        // `T::sorted_last().is_sorted_interior()` MUST be `false` on
+        // every implementor. Pinning the fixpoints here catches a
+        // regression that drifts either surface from the shared lex-
+        // point-membership disjunction on either lex endpoint. Sibling
+        // posture to
+        // `is_endpoint_and_is_interior_agree_with_first_last_endpoint_anchors`
+        // one ordering axis over on the (declaration, lex) partition.
+        assert!(<StubKind as ClosedSet>::sorted_first().is_sorted_endpoint());
+        assert!(<StubKind as ClosedSet>::sorted_last().is_sorted_endpoint());
+        assert!(!<StubKind as ClosedSet>::sorted_first().is_sorted_interior());
+        assert!(!<StubKind as ClosedSet>::sorted_last().is_sorted_interior());
+        // Strict-lex-interior slot answers `false` to
+        // `is_sorted_endpoint` and `true` to `is_sorted_interior` on
+        // the 3-variant stub (lex head = "alpha", lex tail = "gamma",
+        // sole strict-lex-interior = Beta / "beta").
+        assert!(!<StubKind as ClosedSet>::is_sorted_endpoint(StubKind::Beta));
+        assert!(<StubKind as ClosedSet>::is_sorted_interior(StubKind::Beta));
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_sorted_endpoint_and_is_sorted_first_or_is_sorted_last(
+    ) {
+        // The well-formedness sweep's (33) clause —
+        // `v.is_sorted_endpoint()` MUST equal `v.is_sorted_first() ||
+        // v.is_sorted_last()`. A hand-impl'd implementor whose
+        // override drifts the lex-boundary-membership predicate
+        // (returns `true` on a strict-lex-interior slot, returns
+        // `false` on the lex head, a stale override that returns the
+        // wrong answer after a label edit shifts the lex slot
+        // alignment) fails the sweep loudly rather than silently
+        // bifurcating the lex-boundary-membership projection surface
+        // every downstream shared-lex-endpoint-badge renderer /
+        // lex-boundary-audit-event emitter / bounded-alphabetized-
+        // iteration-guard consumer routes through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_is_endpoint_and_is_first_or_is_last`
+        // one ordering axis over on the (declaration, lex) partition.
+        // The stub's `Middle` slot is a strict-lex-interior variant —
+        // a permissive override that returns `true` on `Middle`
+        // breaks clause (33)'s per-variant equality pin.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSortedEndpointKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsSortedEndpointKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsSortedEndpointKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is-sorted-endpoint kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsSortedEndpointKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-sorted-endpoint kind";
+            type Unknown = UnknownDriftedIsSortedEndpointKind;
+            fn label(self) -> &'static str {
+                match self {
+                    // Deliberate label choice: lex order matches
+                    // declaration order here ("head" < "middle" <
+                    // "tail"), so `Middle` is a strict-lex-interior
+                    // slot and a permissive override on it breaks the
+                    // per-variant equality pin.
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSortedEndpointKind(s.to_owned())
+            }
+            fn is_sorted_endpoint(self) -> bool {
+                // Drifted override — returns `true` on every slot,
+                // folding the strict-lex-interior partition onto the
+                // lex-boundary partition and silently breaking clause
+                // (33)'s per-variant equality pin on the `Middle`
+                // lex-interior slot.
+                let _ = self;
+                true
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsSortedEndpointKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_sorted_endpoint() override drifted from the natural is_sorted_first || is_sorted_last composition",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_sorted_interior_and_not_is_sorted_endpoint(
+    ) {
+        // The well-formedness sweep's (33) clause —
+        // `v.is_sorted_interior()` MUST equal
+        // `!(v.is_sorted_first() || v.is_sorted_last())`. Symmetric to
+        // `_catches_drift_between_is_sorted_endpoint_and_is_sorted_first_or_is_sorted_last`
+        // one arm over on the (lex-endpoint, lex-interior) partition —
+        // this pin covers the lex-interior arm. A permissive override
+        // that returns `true` on every slot folds the lex-boundary
+        // partition onto the lex-interior partition on the lex-
+        // endpoint slots and silently breaks clause (33)'s per-variant
+        // equality pin AND the exhaustive-complementarity pin AND the
+        // lex-interior-anti-fixpoint pins.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSortedInteriorKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsSortedInteriorKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsSortedInteriorKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is-sorted-interior kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsSortedInteriorKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-sorted-interior kind";
+            type Unknown = UnknownDriftedIsSortedInteriorKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSortedInteriorKind(s.to_owned())
+            }
+            fn is_sorted_interior(self) -> bool {
+                // Drifted override — returns `true` on every slot,
+                // folding the lex-boundary partition onto the lex-
+                // interior partition on the lex-endpoint slots and
+                // silently breaking clause (33)'s per-variant
+                // equality pin.
+                let _ = self;
+                true
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsSortedInteriorKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_sorted_interior() override drifted from the natural !is_sorted_endpoint composition",
         );
     }
 

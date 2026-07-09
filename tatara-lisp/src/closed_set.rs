@@ -3095,6 +3095,186 @@ pub trait ClosedSet: Sized + Copy + 'static {
             <Self as ClosedSet>::from_sorted_index(i - 1)
         }
     }
+
+    /// The declaration-order neighbor immediately AFTER `self` in
+    /// [`Self::ALL`], WRAPPING to [`Self::first`] at the tail —
+    /// `self.next().unwrap_or(Self::first())`. Returns [`Self`],
+    /// never [`Option<Self>`]: the wrapping arm folds the tail-
+    /// endpoint boundary onto the head-endpoint anchor rather than
+    /// leaving the [`None`] the bounded-neighbor axis returns.
+    ///
+    /// The wrapping-return arm of the (Option-typed, wrapping)
+    /// partition over the closed-set forward-neighbor surface — one
+    /// return-type axis over from [`Self::next`], which returns the
+    /// bounded [`Option<Self>`] variant. Together with
+    /// [`Self::cycle_prev`], the pair closes the (forward, backward)
+    /// direction axis of the WRAPPING arm on the declaration ordering
+    /// axis, and together with the pre-existing [`Self::next`] /
+    /// [`Self::prev`] pair opens the (Option-typed, wrapping) × (forward,
+    /// backward) 2×2 matrix on the declaration-axis neighbor surface:
+    ///
+    /// | Return type \\ Direction    | Forward            | Backward           |
+    /// |-----------------------------|--------------------|--------------------|
+    /// | Option-typed (bounded)      | [`Self::next`]     | [`Self::prev`]     |
+    /// | Wrapping (cyclic)           | [`Self::cycle_next`] | [`Self::cycle_prev`] |
+    ///
+    /// Every generic consumer that walks the closed set as an
+    /// INFINITE cyclic chain under declaration order (a wraparound-
+    /// cursor LSP completion renderer that steps through variants
+    /// unconditionally without threading an `Option`-branch through
+    /// the update path, a UI mode selector that "cycles to the next
+    /// mode on Tab", a round-robin scheduler that walks a fixed pool
+    /// of typed slots forever, a per-tick animation frame picker
+    /// that advances one variant per tick and wraps at the tail, a
+    /// declaration-order carousel widget) binds to ONE typed
+    /// wrapping-neighbor method rather than hand-rolling either
+    /// `self.next().unwrap_or(T::first())` (which re-derives the same
+    /// two-primitive composition at every callsite AND makes every
+    /// downstream site depend on the wrapping-fallback shape) OR
+    /// `T::from_index((self.index_of() + 1) % T::CARDINALITY)` (which
+    /// re-derives the modular-arithmetic composition at every callsite
+    /// AND makes every downstream site depend on the `%` operator on
+    /// `usize`) OR a per-implementor inline `match self { A => B, B
+    /// => C, C => A }` keyed on the declaration slot (which re-derives
+    /// the per-variant wraparound table at every callsite AND drifts
+    /// silently when [`Self::ALL`] gains a new variant that reorders
+    /// the wraparound edge).
+    ///
+    /// Sibling posture to [`Self::last`] on the (forward-neighbor,
+    /// tail-endpoint) axis of the declaration-order traversal surface —
+    /// `T::last().cycle_next() == T::first()` is the natural fixpoint
+    /// the forward-wrapping-neighbor axis and the tail-endpoint anchor
+    /// share, folding the tail-endpoint boundary onto the head-endpoint
+    /// anchor at the shared structural landmark. Mirrors the
+    /// `T::last().next() == None` fixpoint on the bounded arm one
+    /// return-type axis over.
+    ///
+    /// Default body composes [`Self::next`] with [`Self::first`]
+    /// through `Option::unwrap_or` — the wrapping-neighbor projection
+    /// is a typed CONSEQUENCE of the pre-existing (bounded neighbor,
+    /// head anchor) pair, not a third codepath. Implementors override
+    /// only when the wrapping-neighbor surface needs to diverge from
+    /// the natural `next().unwrap_or(first())` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `via` / `set_label` / `labels` / `from_index` /
+    /// `first` / `last` / `next` / `prev` / `sorted_next` /
+    /// `sorted_prev` overrides exist — a typed escape hatch the trait
+    /// surface exposes rather than forcing the implementor to hand-
+    /// roll the impl). An implementor that overrides [`Self::next`]
+    /// or [`Self::first`] propagates the override through this default
+    /// body automatically; the (variant → wrapping-forward-neighbor)
+    /// projection funnels through TWO typed primitives.
+    ///
+    /// The wrapping-neighbor contract — the tail arm returns
+    /// [`Self::first`] for [`Self::last`] — is guaranteed by the
+    /// default composition through [`Self::next`]'s `None` at the tail
+    /// AND [`Option::unwrap_or`]'s fallback semantics; the well-
+    /// formedness contract [`assert_closed_set_well_formed`]'s new
+    /// clause (28) pins the composition against the natural
+    /// `next().unwrap_or(first())` shape AND the tail-endpoint
+    /// `T::first()` fold on every implementor, so a passing well-
+    /// formedness sweep means every generic consumer can call
+    /// [`Self::cycle_next`] on any typed variant and expect the same
+    /// [`Self`]-typed answer at every crate boundary.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → wrapping-forward
+    /// neighbor) projection becomes a TYPE projection on the trait
+    /// rather than a per-consumer inline
+    /// `self.next().unwrap_or(T::first())` composition at every
+    /// downstream cyclic traversal site. The (Option-typed, wrapping)
+    /// × (forward, backward) 2×2 matrix on the declaration-axis
+    /// neighbor surface partitions exhaustively into FOUR typed
+    /// projections, each with a distinct load-bearing consumer surface.
+    /// THEORY.md §V.1 — knowable platform; the wrapping-neighbor
+    /// projections were unnamed compounds of [`Self::next`] +
+    /// [`Self::first`] + [`Option::unwrap_or`] pre-lift; naming them on
+    /// the trait makes the projections TYPED CONSEQUENCES of the two
+    /// bounded-arm primitives — generic consumers see ONE wrapping
+    /// method per direction, not one wrapping-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the wrapping-
+    /// neighbor projection emerges from the composition of TWO
+    /// substrate primitives ([`Self::next`], [`Self::first`]) via
+    /// [`Option::unwrap_or`] rather than as a per-implementor `match
+    /// self { A => B, B => C, C => A }` block or a modular-arithmetic
+    /// `T::from_index((self.index_of() + 1) % T::CARDINALITY)`
+    /// composition. A future tightening of either primitive (a future
+    /// perfect-hash `from_index` that speeds up `next`, a future
+    /// `const fn first`) propagates to every closed-set wrapping-
+    /// forward-neighbor consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `(enum-cycle-next enum sym)`
+    /// on closed enumerations under a cyclic ordering (which folds
+    /// the tail onto the head rather than returning `#f`); Idris's
+    /// `Fin n` finite-cardinality type composed with modular
+    /// arithmetic through `finToNat` / `natToFin` on the cyclic
+    /// projection; Haskell's `succ` on the `Bounded + Enum` type-class
+    /// pair wrapped in `catch` to fold `Prelude.succ: bad argument` at
+    /// the tail-endpoint onto `minBound` (which reifies the wrapping
+    /// arm as an exception-catching shim rather than a total function
+    /// — this method takes the total-function arm); Emacs's
+    /// `enum-next-cyclic`; UI toolkit "cycle-through-modes" bindings
+    /// (Vim's `<Tab>` in command mode, Ctrl+Tab in editor mode).
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::next`] + [`Self::first`]
+    /// surfaces via [`Option::unwrap_or`] — no new dep, no new IR
+    /// layer, no supertrait bound, no `%` operator on `usize`, no
+    /// exception-catching, no `strum` / `enum-iterator` crate
+    /// dependency.
+    fn cycle_next(self) -> Self {
+        <Self as ClosedSet>::next(self).unwrap_or_else(<Self as ClosedSet>::first)
+    }
+
+    /// The declaration-order neighbor immediately BEFORE `self` in
+    /// [`Self::ALL`], WRAPPING to [`Self::last`] at the head —
+    /// `self.prev().unwrap_or(Self::last())`. Returns [`Self`], never
+    /// [`Option<Self>`]: the wrapping arm folds the head-endpoint
+    /// boundary onto the tail-endpoint anchor rather than leaving the
+    /// [`None`] the bounded-neighbor axis returns.
+    ///
+    /// Sibling posture to [`Self::cycle_next`] one axis over on the
+    /// (forward, backward) direction partition of the closed-set
+    /// wrapping-neighbor surface: [`Self::cycle_next`] returns the
+    /// declaration-order successor with tail-wrap-to-head,
+    /// this method returns the declaration-order predecessor with
+    /// head-wrap-to-tail. See [`Self::cycle_next`] for the shared
+    /// design rationale, sibling 2×2 matrix, override axis, future-
+    /// consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the backward-direction arm of
+    /// the same axis and inherits every property from the forward
+    /// arm's documentation, differing only in the [`Self::prev`] /
+    /// [`Self::last`] substrate primitives it composes.
+    ///
+    /// Default body composes [`Self::prev`] with [`Self::last`]
+    /// through [`Option::unwrap_or`] — the wrapping-neighbor
+    /// projection is a typed CONSEQUENCE of the pre-existing (bounded
+    /// backward neighbor, tail anchor) pair, not a third codepath.
+    /// Implementors override only when the wrapping-neighbor surface
+    /// needs to diverge from the natural `prev().unwrap_or(last())`
+    /// shape. An implementor that overrides [`Self::prev`] or
+    /// [`Self::last`] propagates the override through this default
+    /// body automatically; the (variant → wrapping-backward-neighbor)
+    /// projection funnels through TWO typed primitives.
+    ///
+    /// The wrapping-neighbor contract — the head arm returns
+    /// [`Self::last`] for [`Self::first`] — is guaranteed by the
+    /// default composition through [`Self::prev`]'s `None` at the
+    /// head AND [`Option::unwrap_or`]'s fallback semantics; the
+    /// well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (28) pins the
+    /// composition against the natural `prev().unwrap_or(last())`
+    /// shape AND the head-endpoint `T::last()` fold on every
+    /// implementor, so a passing well-formedness sweep means every
+    /// generic consumer can call [`Self::cycle_prev`] on any typed
+    /// variant and expect the same [`Self`]-typed answer at every
+    /// crate boundary. `T::first().cycle_prev() == T::last()` is the
+    /// natural fixpoint the backward-wrapping-neighbor axis and the
+    /// head-endpoint anchor share, mirroring the
+    /// `T::last().cycle_next() == T::first()` fixpoint on the
+    /// forward-wrapping-neighbor / tail-endpoint pair AND the
+    /// `T::first().prev() == None` fixpoint one return-type axis over.
+    fn cycle_prev(self) -> Self {
+        <Self as ClosedSet>::prev(self).unwrap_or_else(<Self as ClosedSet>::last)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -4534,6 +4714,75 @@ where
         T::sorted_last().sorted_next(),
         None,
         "{type_name}: T::sorted_last().sorted_next() returned Some(_) — the (variant → forward lex-neighbor) projection accepted the lex-tail-endpoint boundary, silently folding a lex-tail-boundary walk onto a wraparound to the lex-head while the natural bounded-index projection should return `None`. Clauses (26) + (27) together pin `T::sorted_last().sorted_next() == None` as the structural fixpoint the lex-tail-endpoint anchor and the forward-lex-neighbor axis share, mirroring `T::last().next() == None` one ordering axis over",
+    );
+    // (28) — For every variant `v` in `T::ALL`, `v.cycle_next()` MUST
+    // equal `v.next().unwrap_or(T::first())`, AND `v.cycle_prev()`
+    // MUST equal `v.prev().unwrap_or(T::last())`, AND
+    // `T::last().cycle_next()` MUST equal `T::first()`, AND
+    // `T::first().cycle_prev()` MUST equal `T::last()`. The default
+    // trait bodies compose `next().unwrap_or(first())` (forward-
+    // wrapping arm) and `prev().unwrap_or(last())` (backward-
+    // wrapping arm) verbatim and satisfy both arms for free; the
+    // assertion catches a future implementor whose override drifts
+    // either wrapping-neighbor projection (a permissive forward-
+    // wrapping override that returns some interior variant at the
+    // tail rather than the head anchor — folding a cyclic walk onto
+    // an unbounded interior loop while the composed `next()
+    // .unwrap_or(first())` shape would fold the tail onto
+    // `T::first()`; a permissive backward-wrapping override that
+    // returns some interior variant at the head rather than the tail
+    // anchor — folding a cyclic backward walk onto an unbounded
+    // interior loop through the mismatched fallback; a swapped
+    // override that returns the wrapping-predecessor for `cycle_next`
+    // AND the wrapping-successor for `cycle_prev`, silently inverting
+    // the cyclic traversal direction; a stale override that returns
+    // the wrong wrapping-neighbor after a variant-listing edit
+    // reorders `T::ALL`) loudly rather than silently bifurcating the
+    // wrapping-neighbor-projection surface every downstream
+    // wraparound-cursor LSP completion renderer / UI mode selector /
+    // round-robin scheduler / declaration-order carousel widget /
+    // per-tick animation frame picker consumer routes through.
+    // Sibling posture to clauses (18) + (26) — clause (18) pins the
+    // (head, tail) endpoint anchors against `T::ALL[0]` /
+    // `T::ALL[T::ALL.len() - 1]`, clause (26) pins the (forward,
+    // backward) bounded-neighbor projections against the composition
+    // of both bijection arms AND pins the endpoint-boundary `None`
+    // guards on both direction arms, this clause pins the (forward,
+    // backward) WRAPPING-neighbor projections against the composition
+    // of the bounded-neighbor arm with the SIBLING-direction endpoint
+    // anchor AND pins the endpoint-boundary wraparound folds on both
+    // direction arms — so the closed-set declaration-axis neighbor
+    // surface stays sound on BOTH return-type arms (Option-typed /
+    // wrapping) AND on BOTH direction arms AND on the shared
+    // endpoint-anchor wraparound fixpoints (`T::last().cycle_next()
+    // == T::first()`, `T::first().cycle_prev() == T::last()`).
+    // Clauses (26) + (28) together close the (Option-typed, wrapping)
+    // × (forward, backward) 2×2 declaration-axis neighbor matrix at
+    // ALL FOUR direct projection surfaces AND at ALL FOUR endpoint-
+    // boundary fixpoints.
+    for &v in T::ALL {
+        let expected_cycle_next = v.next().unwrap_or_else(T::first);
+        assert_eq!(
+            v.cycle_next(),
+            expected_cycle_next,
+            "{type_name}: {v:?}.cycle_next() drifted from {v:?}.next().unwrap_or(T::first()) — the direct (variant → wrapping-forward neighbor) projection no longer agrees with the natural next+first composition, so a downstream wraparound-cursor LSP completion renderer / UI mode selector / round-robin scheduler / declaration-order carousel widget consumer that binds `v.cycle_next()` as its forward-wrapping-traversal surface would land on the wrong wrapping-neighbor for {v:?}",
+        );
+        let expected_cycle_prev = v.prev().unwrap_or_else(T::last);
+        assert_eq!(
+            v.cycle_prev(),
+            expected_cycle_prev,
+            "{type_name}: {v:?}.cycle_prev() drifted from {v:?}.prev().unwrap_or(T::last()) — the direct (variant → wrapping-backward neighbor) projection no longer agrees with the natural prev+last composition, so a downstream wraparound-cursor LSP completion renderer / UI mode selector / round-robin scheduler / declaration-order carousel widget consumer that binds `v.cycle_prev()` as its backward-wrapping-traversal surface would land on the wrong wrapping-neighbor for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::last().cycle_next(),
+        T::first(),
+        "{type_name}: T::last().cycle_next() returned a variant other than T::first() — the (variant → wrapping-forward neighbor) projection failed to fold the tail-endpoint boundary onto the head-endpoint anchor while the natural next+first composition should return T::first(). Clauses (18) + (28) together pin `T::last().cycle_next() == T::first()` as the structural wraparound fixpoint the tail-endpoint anchor and the forward-wrapping-neighbor axis share, mirroring `T::last().next() == None` one return-type axis over",
+    );
+    assert_eq!(
+        T::first().cycle_prev(),
+        T::last(),
+        "{type_name}: T::first().cycle_prev() returned a variant other than T::last() — the (variant → wrapping-backward neighbor) projection failed to fold the head-endpoint boundary onto the tail-endpoint anchor while the natural prev+last composition should return T::last(). Clauses (18) + (28) together pin `T::first().cycle_prev() == T::last()` as the structural wraparound fixpoint the head-endpoint anchor and the backward-wrapping-neighbor axis share, mirroring `T::first().prev() == None` one return-type axis over",
     );
 }
 
@@ -8821,6 +9070,374 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_prev() override that wraps around at the lex-head rather than returning None",
+        );
+    }
+
+    #[test]
+    fn cycle_next_walks_declaration_order_forward_chain_with_tail_wrap() {
+        // The forward-wrapping-neighbor projection — `v.cycle_next()`
+        // walks `T::ALL` one slot forward from each variant, folding
+        // the tail-endpoint boundary onto the head-endpoint anchor
+        // (`T::first()`) at the cyclic edge. Declaration order on
+        // `StubKind` is [Alpha, Beta, Gamma] so the forward-wrapping
+        // chain is Alpha → Beta → Gamma → Alpha → Beta → …, an
+        // infinite cyclic walk. Sibling posture to
+        // `next_walks_declaration_order_forward_chain` one return-
+        // type axis over on the (Option-typed, wrapping) partition.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next(StubKind::Alpha),
+            StubKind::Beta,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next(StubKind::Beta),
+            StubKind::Gamma,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next(StubKind::Gamma),
+            StubKind::Alpha,
+        );
+    }
+
+    #[test]
+    fn cycle_prev_walks_declaration_order_backward_chain_with_head_wrap() {
+        // The backward-wrapping-neighbor projection — `v.cycle_prev()`
+        // walks `T::ALL` one slot backward from each variant, folding
+        // the head-endpoint boundary onto the tail-endpoint anchor
+        // (`T::last()`) at the cyclic edge. Declaration order on
+        // `StubKind` is [Alpha, Beta, Gamma] so the backward-wrapping
+        // chain is Gamma → Beta → Alpha → Gamma → Beta → …, an
+        // infinite cyclic backward walk. Sibling posture to
+        // `prev_walks_declaration_order_backward_chain` one return-
+        // type axis over on the (Option-typed, wrapping) partition.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev(StubKind::Alpha),
+            StubKind::Gamma,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev(StubKind::Beta),
+            StubKind::Alpha,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev(StubKind::Gamma),
+            StubKind::Beta,
+        );
+    }
+
+    #[test]
+    fn cycle_next_and_cycle_prev_are_inverses_on_every_variant() {
+        // The (forward-wrap, backward-wrap) inverse contract — for
+        // EVERY variant `v` (not just the interior, since the wrapping
+        // arm has no bounded-neighbor `None` at the endpoint),
+        // `v.cycle_next().cycle_prev() == v` AND
+        // `v.cycle_prev().cycle_next() == v`. Every wrapping-neighbor
+        // edge closes as a round-trip through the shared bijection —
+        // a regression that returns the wrong wrapping-neighbor for
+        // either arm would silently break this round-trip, folding a
+        // two-step cyclic walk `v → v.cycle_next() → w` onto some
+        // `w ≠ v`. Stronger contract than the bounded
+        // `next_and_prev_are_inverses_on_the_interior` sibling — the
+        // wrapping arm covers the endpoints too, so the inverse
+        // contract holds on ALL of `T::ALL` not just the interior.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let fwd = <StubKind as ClosedSet>::cycle_next(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::cycle_prev(fwd),
+                v,
+                "{v:?}.cycle_next().cycle_prev() did not round-trip",
+            );
+            let bwd = <StubKind as ClosedSet>::cycle_prev(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::cycle_next(bwd),
+                v,
+                "{v:?}.cycle_prev().cycle_next() did not round-trip",
+            );
+        }
+    }
+
+    #[test]
+    fn last_cycle_next_and_first_cycle_prev_pin_the_endpoint_wraparound_fixpoints() {
+        // The endpoint-anchor / wrapping-neighbor-axis fixpoints —
+        // `T::last().cycle_next() == T::first()` AND
+        // `T::first().cycle_prev() == T::last()`. The two fixpoints
+        // thread the tail-endpoint anchor back through the forward-
+        // wrapping-neighbor axis AND the head-endpoint anchor back
+        // through the backward-wrapping-neighbor axis at ONE structural
+        // landmark each — the wraparound edges of the cyclic chain. A
+        // regression that returns some interior variant instead of the
+        // opposite endpoint anchor (returning `Beta` for
+        // `T::last().cycle_next()` on `StubKind`, or returning `Beta`
+        // for `T::first().cycle_prev()`) would silently fold a cyclic
+        // walk onto an unbounded interior loop every downstream
+        // wraparound-cursor / round-robin-scheduler consumer routes
+        // through. Sibling posture to
+        // `first_prev_and_last_next_pin_the_endpoint_boundary_fixpoints`
+        // one return-type axis over on the (Option-typed, wrapping)
+        // partition — the bounded arm folds the endpoint boundary onto
+        // `None`, the wrapping arm folds it onto the opposite anchor.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next(<StubKind as ClosedSet>::last()),
+            <StubKind as ClosedSet>::first(),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev(<StubKind as ClosedSet>::first()),
+            <StubKind as ClosedSet>::last(),
+        );
+    }
+
+    #[test]
+    fn cycle_next_and_cycle_prev_on_singleton_closed_set_both_return_self() {
+        // The wrapping-neighbor-axis degenerate case — a singleton
+        // closed set (one variant) has `T::ALL[0] == T::first() ==
+        // T::last()`, so BOTH `T::last().cycle_next() == T::first()`
+        // AND `T::first().cycle_prev() == T::last()` collapse onto
+        // `Only.cycle_next() == Only` AND `Only.cycle_prev() == Only`
+        // — every wrapping-neighbor walk from the sole variant must
+        // return the sole variant. A regression that panics on the
+        // degenerate case (unwrapping some other fallback that doesn't
+        // exist) would break the natural degenerate-case invariant.
+        // Sibling posture to
+        // `next_and_prev_on_singleton_closed_set_both_return_none`
+        // one return-type axis over on the (Option-typed, wrapping)
+        // partition — the bounded arm returns `None` on the singleton
+        // degenerate case, the wrapping arm returns the sole variant.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum CycleSingletonKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownCycleSingletonKind(pub String);
+        impl core::fmt::Display for UnknownCycleSingletonKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown cycle singleton kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for CycleSingletonKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "cycle singleton kind";
+            type Unknown = UnknownCycleSingletonKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownCycleSingletonKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <CycleSingletonKind as ClosedSet>::cycle_next(CycleSingletonKind::Only),
+            CycleSingletonKind::Only,
+        );
+        assert_eq!(
+            <CycleSingletonKind as ClosedSet>::cycle_prev(CycleSingletonKind::Only),
+            CycleSingletonKind::Only,
+        );
+        // And clause (28) holds — the well-formedness sweep passes on
+        // the singleton stub through the natural composition, since
+        // both `Only.next() == None` (bounded arm returns None at the
+        // sole slot) AND `T::first() == T::last() == Only` collapse
+        // the wraparound onto a self-fixpoint at both direction arms.
+        super::assert_closed_set_well_formed::<CycleSingletonKind>();
+    }
+
+    #[test]
+    fn cycle_next_and_cycle_prev_walk_declaration_order_not_lex_order() {
+        // Arbitrary-declaration-order sweep — the wrapping-neighbor
+        // pair keys on DECLARATION order (`T::ALL`'s layout), NOT
+        // lex order. On a deliberately-reverse stub whose `T::ALL`
+        // is `[Gamma, Beta, Alpha]` but whose lex order would be
+        // `[alpha, beta, gamma]`, the declaration-order cyclic walk
+        // is Gamma → Beta → Alpha → Gamma → …, not the alphabetic
+        // Alpha → Beta → Gamma → Alpha → …. A regression that keyed
+        // on lex slot (rather than `T::ALL` position) would pass on
+        // `StubKind` (where declaration order aligns with alphabetic
+        // order) but silently bifurcate on this reverse stub.
+        // Reserves the (declaration, lex) 2×1 direction axis on the
+        // wrapping partition for a future lex-axis wrapping pair.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum CycleReverseKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownCycleReverseKind(pub String);
+        impl core::fmt::Display for UnknownCycleReverseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown cycle reverse kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for CycleReverseKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "cycle reverse kind";
+            type Unknown = UnknownCycleReverseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownCycleReverseKind(s.to_owned())
+            }
+        }
+        // Declaration-order cyclic forward walk — [Gamma, Beta, Alpha]
+        // → tail-wrap back to Gamma at the Alpha edge.
+        assert_eq!(
+            <CycleReverseKind as ClosedSet>::cycle_next(CycleReverseKind::Gamma),
+            CycleReverseKind::Beta,
+        );
+        assert_eq!(
+            <CycleReverseKind as ClosedSet>::cycle_next(CycleReverseKind::Beta),
+            CycleReverseKind::Alpha,
+        );
+        assert_eq!(
+            <CycleReverseKind as ClosedSet>::cycle_next(CycleReverseKind::Alpha),
+            CycleReverseKind::Gamma,
+        );
+        // Declaration-order cyclic backward walk — mirror.
+        assert_eq!(
+            <CycleReverseKind as ClosedSet>::cycle_prev(CycleReverseKind::Gamma),
+            CycleReverseKind::Alpha,
+        );
+        assert_eq!(
+            <CycleReverseKind as ClosedSet>::cycle_prev(CycleReverseKind::Beta),
+            CycleReverseKind::Gamma,
+        );
+        assert_eq!(
+            <CycleReverseKind as ClosedSet>::cycle_prev(CycleReverseKind::Alpha),
+            CycleReverseKind::Beta,
+        );
+        // Clause (28) holds on the reverse stub — the well-formedness
+        // sweep validates the wrapping-neighbor pair composes through
+        // the natural `next().unwrap_or(first())` /
+        // `prev().unwrap_or(last())` shape on every variant even when
+        // declaration order and lex order diverge.
+        super::assert_closed_set_well_formed::<CycleReverseKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_cycle_next_and_composition() {
+        // The well-formedness sweep's (28) clause — `v.cycle_next()`
+        // MUST equal `v.next().unwrap_or(T::first())` on every
+        // variant. A hand-impl'd implementor whose override drifts
+        // the forward-wrapping-neighbor projection (returns some
+        // interior variant at the tail rather than the head anchor,
+        // folding a cyclic walk onto an unbounded interior loop
+        // rather than folding the tail-endpoint boundary onto
+        // `T::first()`) fails the sweep loudly rather than silently
+        // bifurcating the forward-wrapping-traversal surface every
+        // downstream wraparound-cursor LSP completion renderer /
+        // round-robin scheduler / carousel widget consumer routes
+        // through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_next_and_composition`
+        // one return-type axis over on the (Option-typed, wrapping)
+        // partition of clauses (26) + (28).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedCycleNextKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedCycleNextKind(pub String);
+        impl core::fmt::Display for UnknownDriftedCycleNextKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted cycle next kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedCycleNextKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted cycle next kind";
+            type Unknown = UnknownDriftedCycleNextKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedCycleNextKind(s.to_owned())
+            }
+            fn cycle_next(self) -> Self {
+                // Drifted override — folds the tail onto Middle
+                // rather than Head, silently bifurcating the
+                // wraparound edge every round-robin scheduler
+                // consumer routes through.
+                match self {
+                    Self::Head => Self::Middle,
+                    Self::Middle => Self::Tail,
+                    Self::Tail => Self::Middle,
+                }
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedCycleNextKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a cycle_next() override that folds the tail onto an interior variant rather than T::first()",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_cycle_prev_and_composition() {
+        // The well-formedness sweep's (28) clause — `v.cycle_prev()`
+        // MUST equal `v.prev().unwrap_or(T::last())` on every
+        // variant. A hand-impl'd implementor whose override drifts
+        // the backward-wrapping-neighbor projection (returns some
+        // interior variant at the head rather than the tail anchor,
+        // folding a cyclic backward walk onto an unbounded interior
+        // loop rather than folding the head-endpoint boundary onto
+        // `T::last()`) fails the sweep loudly rather than silently
+        // bifurcating the backward-wrapping-traversal surface.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_prev_and_composition`
+        // one return-type axis over on the (Option-typed, wrapping)
+        // partition of clauses (26) + (28).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedCyclePrevKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedCyclePrevKind(pub String);
+        impl core::fmt::Display for UnknownDriftedCyclePrevKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted cycle prev kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedCyclePrevKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted cycle prev kind";
+            type Unknown = UnknownDriftedCyclePrevKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedCyclePrevKind(s.to_owned())
+            }
+            fn cycle_prev(self) -> Self {
+                // Drifted override — folds the head onto Middle
+                // rather than Tail, silently bifurcating the
+                // wraparound edge every round-robin scheduler
+                // consumer routes through.
+                match self {
+                    Self::Head => Self::Middle,
+                    Self::Middle => Self::Head,
+                    Self::Tail => Self::Middle,
+                }
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedCyclePrevKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a cycle_prev() override that folds the head onto an interior variant rather than T::last()",
         );
     }
 }

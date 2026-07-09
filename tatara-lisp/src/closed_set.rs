@@ -2387,6 +2387,143 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn from_sorted_index(i: usize) -> Option<Self> {
         Self::sorted_variants().get(i).copied()
     }
+
+    /// Recover the canonical [`Self::label`] at lexicographic-order
+    /// position `i` in [`Self::sorted_labels`], or [`None`] if
+    /// `i >= Self::CARDINALITY`.
+    ///
+    /// The direct `(usize` lex-order position → `&'static str` canonical
+    /// label) projection through the closed set — the third direct edge
+    /// of the (typed variant, `&'static str` label, `usize` position)
+    /// projection triangle on the LEX ordering axis. Sibling posture to
+    /// [`Self::label_at`] one ordering-axis over on the (declaration,
+    /// lex) partition of the (`usize` position → `&'static str` label)
+    /// forward-projection surface: [`Self::label_at`] projects a
+    /// declaration-order `usize` position onto its canonical label
+    /// through [`Self::from_index`] + [`Self::label`], this method
+    /// projects the same `usize` position through
+    /// [`Self::from_sorted_index`] + [`Self::label`] under the
+    /// lexicographic ordering. Together the two direct projections
+    /// bracket both ordering axes at the (`usize` position →
+    /// `&'static str` label) forward edge — every generic consumer that
+    /// renders per-slot diagnostics against a `usize` slot binds to the
+    /// ordering-axis surface at ONE trait method rather than routing
+    /// through a `from_sorted_index(i).map(label)` composition or a
+    /// `sorted_labels().get(i).copied()` route at every callsite.
+    ///
+    /// The (ordering-axis × direct-projection) partition post-lift:
+    ///
+    /// | Ordering axis        | (`usize` → label) projection surface |
+    /// |----------------------|--------------------------------------|
+    /// | Declaration order    | [`Self::label_at`]                   |
+    /// | Lexicographic order  | [`Self::sorted_label_at`]            |
+    ///
+    /// Closes the third direct edge of the lex-axis projection triangle
+    /// — [`Self::sorted_index_of`] closed the first direct edge (variant
+    /// → lex position), [`Self::from_sorted_index`] closed the second
+    /// (lex position → variant), this method closes the third (lex
+    /// position → `&'static str` label). One downstream lift
+    /// (`sorted_index_of_label`) will close the fourth (and remaining
+    /// direct) edge to complete the lex-axis triangle.
+    ///
+    /// Default body composes [`Self::from_sorted_index`] with
+    /// [`Self::label`] verbatim — the `usize → &'static str` shape on
+    /// the lex axis is a typed CONSEQUENCE of the two pre-existing
+    /// primitives, not a third codepath. Implementors override only
+    /// when the composition needs to diverge from the natural
+    /// `from_sorted_index(i).map(label)` shape — a typed escape hatch
+    /// the trait surface exposes (same axis as `via` / `set_label` /
+    /// `labels` / `sorted_labels` / `sorted_variants` / `from_index` /
+    /// `index_of` / `label_at` / `from_sorted_index` overrides). An
+    /// implementor that overrides [`Self::from_sorted_index`] (a future
+    /// perfect-hash lex-slot decoder, a future canonicalization-aware
+    /// `label` projection that reorders the lex partition) propagates
+    /// the override through this default body to the direct-label
+    /// projection automatically; the lex-axis projection triangle
+    /// funnels every `usize`-carrier lex-decode through ONE typed
+    /// primitive on each of its (typed variant, `&'static str` label)
+    /// return-projection columns.
+    ///
+    /// The bounded-index contract — the out-of-range arm returns
+    /// [`None`] for every `i >= Self::CARDINALITY` — is guaranteed by
+    /// the default composition through [`Self::from_sorted_index`]'s
+    /// `<[T]>::get` slice-bounded projection; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (24)
+    /// pins the both-directions equality against the natural
+    /// composition on every implementor, so a passing well-formedness
+    /// sweep means every generic consumer can call `sorted_label_at` on
+    /// any `usize` payload and expect the same `Option`-typed answer at
+    /// every crate boundary.
+    ///
+    /// Future consumers — a lex-order compact wire-format decoder that
+    /// emits `variant.sorted_index_of() as u8` and later renders
+    /// `sorted_label_at(byte as usize)` for a diagnostic WITHOUT
+    /// materializing the typed variant at the rendering site (the
+    /// natural `Option`-typed rejection arm covers out-of-range
+    /// serialized lex indices), a lex-sorted metrics binner that stores
+    /// per-slot counter payloads under
+    /// `metrics[variant.sorted_index_of()]` and later renders per-slot
+    /// diagnostics `<sorted_label_at(slot)>: <count>` in lex order
+    /// without a re-decode through [`Self::from_sorted_index`] +
+    /// [`Self::label`] at each rendering site, a `tatara-check`
+    /// per-slot diagnostic that walks `0..T::CARDINALITY` and renders
+    /// each lex slot's canonical label without carrying the typed
+    /// variant, a bitset-observed-variant renderer that walks the set
+    /// bits under the lex-order rendering shape and renders each lex
+    /// slot's label directly without a
+    /// [`Self::from_sorted_index`]-then-[`Self::label`] two-step at
+    /// each set bit — bind to ONE trait method instead of hand-rolling
+    /// either `T::from_sorted_index(i).map(|v| v.label())` (which
+    /// re-derives the same two-primitive composition at every callsite
+    /// AND makes every downstream site depend on
+    /// [`Self::from_sorted_index`]'s `Option`-typed dispatch shape) OR
+    /// the inline `T::sorted_labels().get(i).copied()` (which pays a
+    /// `Vec<&'static str>` allocation the direct-projection surface
+    /// doesn't need AND re-derives the three-primitive composition at
+    /// every callsite) at each callsite, and the closed-set `(lex
+    /// position → label)` direct projection surface evolves at ONE site
+    /// rather than per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the (`usize` lex-order position
+    /// → `&'static str` canonical label) projection becomes a TYPE
+    /// projection on the trait rather than a per-consumer inline
+    /// `Self::from_sorted_index(i).map(|v| v.label())` composition at
+    /// every downstream lex-slot-decode site. The (declaration, lex) ×
+    /// (`usize` position → `&'static str` label) 1×2 forward-projection
+    /// partition completes at BOTH ordering axes.
+    /// THEORY.md §V.1 — knowable platform; the (`usize` lex position
+    /// → `&'static str` label) projection was an unnamed compound of
+    /// [`Self::from_sorted_index`] composed with [`Self::label`]
+    /// pre-lift; naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two substrate primitives — generic consumers
+    /// see ONE method, not ONE lex-slot-to-label-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the direct
+    /// (lex position → label) projection emerges from the composition
+    /// of TWO substrate primitives ([`Self::from_sorted_index`],
+    /// [`Self::label`]) rather than as a per-implementor inline
+    /// `from_sorted_index(i).map(label)` compound. A future tightening
+    /// of either primitive (a future perfect-hash `from_sorted_index`,
+    /// a future canonicalization-aware `label` projection that folds
+    /// case / whitespace, a future const-fn `label` axis that makes the
+    /// projection compile-time visible) propagates to every closed-set
+    /// direct-lex-label-projection consumer through ONE trait body.
+    ///
+    /// Frontier inspiration: Racket's `(enum-label enum i #:order 'lex)`
+    /// on a closed enum projects a lex-order position onto its rendered
+    /// canonical label directly under the chosen ordering; MLIR's
+    /// `RegisteredOperationName::getStableName(int)` on the lex-sorted
+    /// Op registry projects a stable lex slot onto its canonical name
+    /// the DiagnosticEngine renders per-slot diagnostics against.
+    /// Haskell's `Data.List.genericIndex (sortBy comparingLabel labels)
+    /// i` composes the sort with the bounded-index projection into the
+    /// same `(lex position → label)` shape one vocabulary over.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::from_sorted_index`] +
+    /// [`Self::label`] surfaces — no new dep, no new IR layer, no
+    /// supertrait bound, no allocation.
+    fn sorted_label_at(i: usize) -> Option<&'static str> {
+        <Self as ClosedSet>::from_sorted_index(i).map(<Self as ClosedSet>::label)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -2773,6 +2910,41 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     index → typed variant) inverse projection so the (declaration,
 ///     lex) × (position → variant) 1×2 inverse-projection partition
 ///     completes at BOTH ordering axes.
+/// 24. For every `i in 0..T::CARDINALITY`, `T::sorted_label_at(i)`
+///     equals `Some(T::sorted_labels()[i])`, AND
+///     `T::sorted_label_at(T::CARDINALITY)` equals [`None`] — the
+///     direct (`usize` lex-order position → `&'static str` canonical
+///     label) projection agrees with the natural
+///     [`ClosedSet::from_sorted_index`] + [`ClosedSet::label`]
+///     composition on the in-range domain (equivalently, with direct
+///     [`ClosedSet::sorted_labels`] slice indexing under lex ordering)
+///     AND rejects the first out-of-range lex slot. Clauses (20) + (24)
+///     together pin the (`usize` position → `&'static str` label)
+///     forward projection at BOTH ordering axes: clause (20) covers the
+///     declaration-ordering direct-label projection, this clause covers
+///     the lex-ordering direct-label projection. The default trait
+///     body's [`ClosedSet::from_sorted_index`] + [`ClosedSet::label`]
+///     composition satisfies the clause for free; the assertion catches
+///     a future implementor whose override drifts the direct-label
+///     projection arm (a permissive override that returns `Some(_)` for
+///     an out-of-range lex slot, folding an out-of-range serialized
+///     lex index onto an in-range label at the lex-order compact-decode
+///     boundary; a strict override that returns [`None`] for a valid
+///     in-range lex slot, silently dropping labels at the lex-order
+///     rendering boundary; a swapped override that recovers the wrong
+///     label for a valid lex slot, silently bifurcating the lex-axis
+///     projection triangle) loudly rather than silently bifurcating
+///     the direct-label projection surface every downstream lex-order
+///     compact-encoding / lex-sorted-metrics-binner / bitset-observed-
+///     slot-lex-renderer / `tatara-check` per-lex-slot diagnostic
+///     consumer routes through. Sibling posture to clauses (20) + (23)
+///     — clause (20) closes the (declaration-order index → `&'static
+///     str` label) direct projection, clause (23) closes the (lex-order
+///     index → typed variant) inverse projection, this clause closes
+///     the (lex-order index → `&'static str` label) direct projection
+///     so the lex-axis projection triangle stays sound at BOTH
+///     return-projection columns AND on both the in-range accept AND
+///     the out-of-range reject partitions.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -3463,6 +3635,55 @@ where
         T::from_sorted_index(T::CARDINALITY),
         None,
         "{type_name}: T::from_sorted_index(T::CARDINALITY) returned Some(_) — the (lex-order index → typed variant) inverse projection accepted the first out-of-range lex slot, folding an out-of-range serialized lex index onto an in-range variant at the lex-order compact-decode boundary. Clauses (14) + (23) together pin `T::CARDINALITY` as the first structurally-out-of-range lex slot — a permissive override that fails this pin bifurcates the lex-order compact-encoding surface every downstream consumer routes through.",
+    );
+    // (24) — For every `i in 0..T::CARDINALITY`,
+    // `T::sorted_label_at(i)` MUST equal `Some(T::sorted_labels()[i])`,
+    // AND `T::sorted_label_at(T::CARDINALITY)` MUST equal `None`. The
+    // direct (`usize` lex-order position → `&'static str` canonical
+    // label) projection agrees with the natural `from_sorted_index` +
+    // `label` composition on the in-range domain (equivalently, with
+    // direct `T::sorted_labels` slice indexing under lex ordering) AND
+    // rejects the first out-of-range lex slot. Clauses (20) + (24)
+    // together pin the (`usize` position → `&'static str` label) forward
+    // projection at BOTH ordering axes: clause (20) covers the
+    // declaration-ordering direct-label projection, this clause covers
+    // the lex-ordering direct-label projection. The default trait body's
+    // `from_sorted_index(i).map(label)` composition satisfies the clause
+    // for free; the assertion catches a future implementor whose
+    // override drifts the direct-label projection arm (a permissive
+    // override that returns `Some(_)` for an out-of-range lex slot,
+    // folding an out-of-range serialized lex index onto an in-range
+    // label at the lex-order compact-decode boundary; a strict override
+    // that returns `None` for a valid in-range lex slot, silently
+    // dropping labels at the lex-order rendering boundary; a swapped
+    // override that recovers the wrong label for a valid lex slot,
+    // silently bifurcating the lex-axis projection triangle) loudly
+    // rather than silently bifurcating the direct-label projection
+    // surface every downstream lex-order compact-encoding / lex-sorted-
+    // metrics-binner / bitset-observed-slot-lex-renderer / `tatara-check`
+    // per-lex-slot diagnostic consumer routes through. Sibling posture
+    // to clauses (20) + (23) — clause (20) closes the (declaration-order
+    // index → `&'static str` label) direct projection, clause (23)
+    // closes the (lex-order index → typed variant) inverse projection,
+    // this clause closes the (lex-order index → `&'static str` label)
+    // direct projection so the lex-axis projection triangle stays sound
+    // at BOTH return-projection columns AND on both the in-range accept
+    // AND the out-of-range reject partitions. Reuses the
+    // `sorted_labels_reference` Vec clause (17) already materialized so
+    // this clause pays no additional allocation on top of the existing
+    // sweep's traversal surface.
+    for (i, &expected_label) in sorted_labels_reference.iter().enumerate() {
+        let decoded = T::sorted_label_at(i);
+        assert_eq!(
+            decoded,
+            Some(expected_label),
+            "{type_name}: T::sorted_label_at({i}) drifted from Some(T::sorted_labels()[{i}]) — the direct (lex-order index → `&'static str` label) projection no longer agrees with direct T::sorted_labels slice indexing on the in-range domain, so a downstream lex-order compact-decoder / lex-sorted-metrics-binner / bitset-observed-slot-lex-renderer consumer that binds `T::sorted_label_at(i)` as its direct-label projection surface would render the wrong label for lex slot {i}",
+        );
+    }
+    assert_eq!(
+        T::sorted_label_at(T::CARDINALITY),
+        None,
+        "{type_name}: T::sorted_label_at(T::CARDINALITY) returned Some(_) — the (lex-order index → `&'static str` label) direct projection accepted the first out-of-range lex slot, folding an out-of-range serialized lex index onto an in-range label at the lex-order compact-decode boundary. Clauses (14) + (24) together pin `T::CARDINALITY` as the first structurally-out-of-range lex slot — a permissive override that fails this pin bifurcates the lex-order rendering surface every downstream consumer routes through.",
     );
 }
 
@@ -6745,6 +6966,154 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a from_sorted_index() override drifted from the natural sorted_variants.get().copied() bounded-decode arm",
+        );
+    }
+
+    #[test]
+    fn sorted_label_at_recovers_every_canonical_label_at_lex_order_slot() {
+        // The direct (lex-order index → `&'static str` label) projection
+        // accept arm — for every canonical lex slot `i`,
+        // `T::sorted_label_at(i)` recovers `Some(l)` where `l` is the
+        // label `T::sorted_labels()` places at slot `i`. On the
+        // `StubKind` fixture, the labels `"alpha"`, `"beta"`, `"gamma"`
+        // are already lex-ordered under `str::cmp`, so lex slots
+        // (0, 1, 2) recover ("alpha", "beta", "gamma") respectively.
+        // Sibling posture to `from_sorted_index_recovers_every_canonical_variant_at_lex_order_slot`
+        // one return-projection column over — this pin covers the
+        // (`usize` lex slot → `&'static str` label) direct projection,
+        // that pin covered the (`usize` lex slot → typed variant)
+        // inverse projection.
+        assert_eq!(<StubKind as ClosedSet>::sorted_label_at(0), Some("alpha"));
+        assert_eq!(<StubKind as ClosedSet>::sorted_label_at(1), Some("beta"));
+        assert_eq!(<StubKind as ClosedSet>::sorted_label_at(2), Some("gamma"));
+    }
+
+    #[test]
+    fn sorted_label_at_rejects_first_out_of_range_index_at_cardinality() {
+        // The (lex-order index → `&'static str` label) direct projection
+        // reject arm — `T::sorted_label_at(T::CARDINALITY)` MUST return
+        // `None`. The bounded-decode contract closes the first slot
+        // strictly outside the closed set at `T::CARDINALITY`, so a
+        // downstream lex-order compact-decoder that ingests a `u8` lex
+        // slot from a remote-authored payload fails-closed on any
+        // out-of-range byte rather than silently folding it onto an
+        // in-range label. Sibling posture to
+        // `from_sorted_index_rejects_first_out_of_range_index_at_cardinality`
+        // one return-projection column over on the lex-axis triangle.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_label_at(
+                <StubKind as ClosedSet>::CARDINALITY
+            ),
+            None,
+            "sorted_label_at(T::CARDINALITY) MUST return None — the bounded-decode arm accepted the first structurally-out-of-range lex slot",
+        );
+    }
+
+    #[test]
+    fn sorted_label_at_agrees_with_from_sorted_index_map_label_on_every_probe() {
+        // The direct (lex-order index → `&'static str` label) projection
+        // MUST agree with the two-step
+        // `from_sorted_index(i).map(label)` composition on every input
+        // the sweep walks. This test pins the alignment across every
+        // canonical lex slot AND the first out-of-range slot. The
+        // alignment is the load-bearing contract that lets a generic
+        // consumer freely swap between the direct-projection surface
+        // and the two-step composition based on its rendering needs
+        // without changing the program's lex-order rendering semantics.
+        // Sibling posture to `label_at`'s
+        // (declaration-axis) alignment-with-composition test one
+        // ordering-axis over.
+        for i in 0..=<StubKind as ClosedSet>::CARDINALITY {
+            let direct = <StubKind as ClosedSet>::sorted_label_at(i);
+            let composed =
+                <StubKind as ClosedSet>::from_sorted_index(i).map(<StubKind as ClosedSet>::label);
+            assert_eq!(
+                direct, composed,
+                "sorted_label_at({i}) disagreed with from_sorted_index({i}).map(label) — the direct (lex-order index → label) projection bifurcated from the natural two-step composition",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_label_at_agrees_with_sorted_labels_get_copied_on_every_probe() {
+        // The direct (lex-order index → `&'static str` label) projection
+        // MUST agree with the `sorted_labels().get(i).copied()` route on
+        // every input the sweep walks — the OTHER natural two-step
+        // composition through the trait's alternate lex-order candidate-
+        // list projection. This test pins the alignment across every
+        // canonical lex slot AND the first out-of-range slot, closing
+        // the direct-projection surface against BOTH natural two-step
+        // compositions (the `from_sorted_index`-then-`label` route AND
+        // the `sorted_labels`-then-`get`-`copied` route). A future
+        // implementor whose override drifts from EITHER two-step
+        // composition would show up on one of the two alignment sweeps
+        // but pass the other silently pre-lift; this pin catches the
+        // asymmetric drift on the `sorted_labels`-side composition
+        // specifically.
+        let sorted = <StubKind as ClosedSet>::sorted_labels();
+        for i in 0..=<StubKind as ClosedSet>::CARDINALITY {
+            let direct = <StubKind as ClosedSet>::sorted_label_at(i);
+            let composed = sorted.get(i).copied();
+            assert_eq!(
+                direct, composed,
+                "sorted_label_at({i}) disagreed with sorted_labels().get({i}).copied() — the direct (lex-order index → label) projection bifurcated from the natural Vec-slice composition",
+            );
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_label_at_and_composition() {
+        // The well-formedness sweep's (24) clause — for every `i in
+        // 0..T::CARDINALITY`, `T::sorted_label_at(i)` MUST equal
+        // `Some(T::sorted_labels()[i])`, AND
+        // `T::sorted_label_at(T::CARDINALITY)` MUST equal `None`. A
+        // hand-impl'd implementor whose override drifts the bounded-
+        // decode arm — e.g. a permissive override that returns
+        // `Some(_)` regardless of the input lex slot — fails the sweep
+        // loudly rather than silently bifurcating the lex-order
+        // direct-label projection surface every downstream lex-order
+        // compact-encoding / lex-sorted-metrics-binner / bitset-observed-
+        // slot-lex-renderer consumer routes through. Sibling posture to
+        // the sixteen sibling `_catches_drift_between_*` pins above
+        // (clauses 5-23); together they close the structural-drift-
+        // catches sweep on every default composition the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedLabelAtKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedLabelAtKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedLabelAtKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted label at kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedLabelAtKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted sorted label at kind";
+            type Unknown = UnknownDriftedSortedLabelAtKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedLabelAtKind(s.to_owned())
+            }
+            fn sorted_label_at(_i: usize) -> Option<&'static str> {
+                // Drifted override — always returns `Some("only")`
+                // regardless of the input lex slot. Fails the
+                // out-of-range guard at `T::CARDINALITY` — the
+                // permissive body silently folds an out-of-range
+                // serialized lex index onto the singleton's only
+                // label.
+                Some("only")
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedLabelAtKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_label_at() override drifted from the natural from_sorted_index().map(label) direct-label projection arm",
         );
     }
 }

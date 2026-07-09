@@ -2914,6 +2914,187 @@ pub trait ClosedSet: Sized + Copy + 'static {
             <Self as ClosedSet>::from_index(i - 1)
         }
     }
+
+    /// The lexicographic-order neighbor immediately AFTER `self` in
+    /// [`Self::sorted_variants`] — `Some(Self::sorted_variants()[
+    /// self.sorted_index_of() + 1])` when `self` is not the lex-tail,
+    /// [`None`] otherwise.
+    ///
+    /// The forward-direction arm of the (forward, backward) neighbor
+    /// axis over the closed set's LEX-order chain — one ordering-axis
+    /// over from [`Self::next`], which walks the DECLARATION-order chain.
+    /// Together with [`Self::sorted_prev`], the pair closes the
+    /// (lex-endpoint = 0, lex-endpoint = `CARDINALITY - 1`) partition of
+    /// the lex-order neighbor surface, and together with the pre-existing
+    /// [`Self::next`] / [`Self::prev`] pair on the declaration axis
+    /// completes the (declaration × lex) × (forward, backward) 2×2
+    /// closed-set neighbor matrix:
+    ///
+    /// | Direction \\ Ordering axis | Declaration order  | Lexicographic order  |
+    /// |----------------------------|--------------------|----------------------|
+    /// | Forward                    | [`Self::next`]     | [`Self::sorted_next`] |
+    /// | Backward                   | [`Self::prev`]     | [`Self::sorted_prev`] |
+    ///
+    /// Every generic consumer that walks the closed set as a bounded
+    /// chain under lexicographic order (an alphabetized-completion LSP
+    /// cursor that steps [`Self::sorted_first`] → [`Self::sorted_last`]
+    /// one lex slot at a time, a lex-sorted `tatara-check` per-slot
+    /// diagnostic renderer that binds `slot.sorted_next()` as its
+    /// forward-traversal surface, a lex-order compact-encoded wire
+    /// codec that walks slot-by-slot from the head, a Sekiban audit
+    /// binner that iterates observed-slot lex neighbors, an
+    /// alphabetized property-test sweep that exercises adjacent-
+    /// lex-slot transitions) binds to ONE typed lex-neighbor method
+    /// rather than hand-rolling either
+    /// `Self::from_sorted_index(self.sorted_index_of() + 1)` (which
+    /// re-derives the same two-primitive composition at every callsite
+    /// AND makes every downstream site depend on the `+ 1` arithmetic)
+    /// OR a per-implementor inline `match self { ... }` keyed on the
+    /// lex slot (which re-derives the per-variant lex-neighbor table
+    /// at every callsite AND drifts silently when [`Self::ALL`] gains
+    /// a new variant that reorders the lex partition).
+    ///
+    /// Sibling posture to [`Self::sorted_last`] on the (forward-neighbor,
+    /// lex-tail-endpoint) axis of the lex-order traversal surface —
+    /// `T::sorted_last().sorted_next() == None` is the natural fixpoint
+    /// the forward-lex-neighbor axis and the lex-tail-endpoint anchor
+    /// share, mirroring the `T::last().next() == None` fixpoint on the
+    /// declaration axis.
+    ///
+    /// Default body composes [`Self::sorted_index_of`] with
+    /// [`Self::from_sorted_index`] verbatim — the lex-neighbor
+    /// projection is a typed CONSEQUENCE of the pre-existing (variant
+    /// ↔ `usize` lex-order position) bijection, not a third codepath.
+    /// Implementors override only when the lex-neighbor surface needs
+    /// to diverge from the natural
+    /// `from_sorted_index(sorted_index_of(self) + 1)` shape (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason `via` / `set_label` / `labels` /
+    /// `sorted_index_of` / `from_sorted_index` / `sorted_first` /
+    /// `sorted_last` / `next` / `prev` overrides exist — a typed escape
+    /// hatch the trait surface exposes rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::from_sorted_index`] propagates the override
+    /// through this default body automatically; the (variant → variant)
+    /// forward-lex-neighbor projection funnels through ONE typed
+    /// primitive.
+    ///
+    /// The bounded-neighbor contract — the lex-tail arm returns
+    /// [`None`] for [`Self::sorted_last`] — is guaranteed by the
+    /// default composition through [`Self::from_sorted_index`]'s
+    /// bounded projection; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (27) pins the
+    /// composition against the natural
+    /// `from_sorted_index(sorted_index_of(self) + 1)` shape AND the
+    /// lex-tail-endpoint `None` guard on every implementor, so a
+    /// passing well-formedness sweep means every generic consumer can
+    /// call [`Self::sorted_next`] on any typed variant and expect the
+    /// same [`Option`]-typed answer at every crate boundary.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → forward
+    /// lex-neighbor) projection becomes a TYPE projection on the trait
+    /// rather than a per-consumer inline
+    /// `Self::from_sorted_index(self.sorted_index_of() + 1)` composition
+    /// at every downstream lex-order traversal site. The (declaration,
+    /// lex) × (forward, backward) 2×2 neighbor matrix over the
+    /// closed-set traversal surface partitions exhaustively into FOUR
+    /// typed projections, each with a distinct load-bearing consumer
+    /// surface.
+    /// THEORY.md §V.1 — knowable platform; the (variant → forward
+    /// lex-neighbor) projection was an unnamed compound of
+    /// [`Self::sorted_index_of`] + [`Self::from_sorted_index`] + `+ 1`
+    /// arithmetic pre-lift; naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of the two lex-axis substrate
+    /// primitives — generic consumers see ONE method, not one
+    /// lex-forward-neighbor-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (variant →
+    /// forward lex-neighbor) projection emerges from the composition
+    /// of TWO substrate primitives ([`Self::sorted_index_of`],
+    /// [`Self::from_sorted_index`]) via `usize` `+ 1` arithmetic rather
+    /// than as a per-implementor `match self { ... }` block. A future
+    /// tightening of either primitive (a future perfect-hash
+    /// `from_sorted_index`, a future
+    /// `#[closed_set(compare_labels_with = ...)]` derive attribute
+    /// that swaps the ordering) propagates to every closed-set
+    /// forward-lex-neighbor consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `(enum-next enum sym #:order
+    /// 'lex)` on a closed enumeration under the lexicographic ordering;
+    /// Idris's `Fin n` with a lex-sorted labeling projection composed
+    /// through `weakenN` / `strengthenN` on the lex partition; MLIR's
+    /// `RegisteredOperationName::nextByLexicalOrder()` on the
+    /// lex-sorted Op registry; Haskell's `succ` composed with a
+    /// `sortBy comparingLabel` prelude on a `Bounded + Enum` type-class
+    /// pair; Rust's `strum::EnumIter` composed through a sorted-by-label
+    /// prelude with `.skip_while(|v| *v != self).nth(1)`. Translation
+    /// through pleme-io primitives: a pure default method composing the
+    /// trait's existing [`Self::sorted_index_of`] +
+    /// [`Self::from_sorted_index`] surfaces via `usize` `+ 1`
+    /// arithmetic — no new dep, no new IR layer, no supertrait bound,
+    /// no panic on the lex-tail-endpoint boundary, no `strum` /
+    /// `enum-iterator` crate dependency.
+    fn sorted_next(self) -> Option<Self> {
+        <Self as ClosedSet>::from_sorted_index(<Self as ClosedSet>::sorted_index_of(self) + 1)
+    }
+
+    /// The lexicographic-order neighbor immediately BEFORE `self` in
+    /// [`Self::sorted_variants`] — `Some(Self::sorted_variants()[
+    /// self.sorted_index_of() - 1])` when `self` is not the lex-head,
+    /// [`None`] otherwise.
+    ///
+    /// Sibling posture to [`Self::sorted_next`] one axis over on the
+    /// (forward, backward) direction partition of the lex-order
+    /// neighbor surface: [`Self::sorted_next`] returns the lex-order
+    /// successor, this method returns the lex-order predecessor. See
+    /// [`Self::sorted_next`] for the shared design rationale, sibling
+    /// 2×2 matrix, override axis, future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the
+    /// backward-direction arm of the same lex-axis and inherits every
+    /// property from the forward arm's documentation, differing only
+    /// in the `- 1` arithmetic and the lex-head-endpoint underflow
+    /// guard.
+    ///
+    /// Default body composes [`Self::sorted_index_of`] with
+    /// [`Self::from_sorted_index`] under a `usize` `- 1` subtraction
+    /// guarded on `sorted_index_of(self) > 0` — the lex-head-endpoint
+    /// arm returns [`None`] BEFORE the subtraction is attempted, so
+    /// the `usize` arithmetic never underflows. Implementors override
+    /// only when the lex-neighbor surface needs to diverge from the
+    /// natural `from_sorted_index(sorted_index_of(self) - 1)` shape
+    /// (no production implementor reaches for this today; the axis
+    /// exists for the same reason `via` / `set_label` / `labels` /
+    /// `from_sorted_index` / `sorted_first` / `sorted_last` / `next` /
+    /// `prev` / `sorted_next` overrides exist — a typed escape hatch
+    /// rather than forcing the implementor to hand-roll the impl). An
+    /// implementor that overrides [`Self::from_sorted_index`]
+    /// propagates the override through this default body automatically;
+    /// the (variant → variant) backward-lex-neighbor projection funnels
+    /// through ONE typed primitive.
+    ///
+    /// The bounded-neighbor contract — the lex-head arm returns
+    /// [`None`] for [`Self::sorted_first`] — is guaranteed by the
+    /// explicit `sorted_index_of(self) == 0` guard; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (27)
+    /// pins the composition against the natural
+    /// `from_sorted_index(sorted_index_of(self) - 1)` shape on interior
+    /// lex slots AND the lex-head-endpoint `None` guard on every
+    /// implementor, so a passing well-formedness sweep means every
+    /// generic consumer can call [`Self::sorted_prev`] on any typed
+    /// variant and expect the same [`Option`]-typed answer at every
+    /// crate boundary. `T::sorted_first().sorted_prev() == None` is the
+    /// natural fixpoint the backward-lex-neighbor axis and the
+    /// lex-head-endpoint anchor share, mirroring the
+    /// `T::sorted_last().sorted_next() == None` fixpoint on the
+    /// forward-lex-neighbor / lex-tail-endpoint pair AND the
+    /// `T::first().prev() == None` fixpoint one ordering axis over.
+    fn sorted_prev(self) -> Option<Self> {
+        let i = <Self as ClosedSet>::sorted_index_of(self);
+        if i == 0 {
+            None
+        } else {
+            <Self as ClosedSet>::from_sorted_index(i - 1)
+        }
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -4279,6 +4460,80 @@ where
         T::last().next(),
         None,
         "{type_name}: T::last().next() returned Some(_) — the (variant → forward neighbor) projection accepted the tail-endpoint boundary, silently folding a tail-boundary walk onto a wraparound to the head while the natural `<[T]>::get` bounded-index projection should return `None`. Clauses (18) + (26) together pin `T::last().next() == None` as the structural fixpoint the tail-endpoint anchor and the forward-neighbor axis share",
+    );
+    // (27) — For every variant `v` in `T::ALL`, `v.sorted_next()` MUST
+    // equal `T::from_sorted_index(v.sorted_index_of() + 1)`, AND
+    // `v.sorted_prev()` MUST equal
+    // `T::from_sorted_index(v.sorted_index_of() - 1)` when
+    // `v.sorted_index_of() > 0`, AND `T::sorted_first().sorted_prev()`
+    // MUST equal `None`, AND `T::sorted_last().sorted_next()` MUST
+    // equal `None`. The default trait bodies compose
+    // `from_sorted_index(sorted_index_of(self) + 1)` (forward arm) and
+    // `from_sorted_index(sorted_index_of(self) - 1)` guarded on
+    // `sorted_index_of(self) > 0` (backward arm) verbatim and satisfy
+    // both arms for free; the assertion catches a future implementor
+    // whose override drifts either lex-neighbor projection (a
+    // permissive forward override that returns `Some(_)` at the
+    // lex-tail — folding a lex-tail-boundary walk onto a wraparound
+    // to the lex-head at the forward-lex-projection column while the
+    // composed `+ 1` arithmetic would return `None`; a permissive
+    // backward override that returns `Some(_)` at the lex-head —
+    // folding a lex-head-boundary walk onto a wraparound to the
+    // lex-tail through the `usize` underflow the guard prevents; a
+    // swapped override that returns the lex-predecessor for
+    // `sorted_next` AND the lex-successor for `sorted_prev`, silently
+    // inverting the lex-traversal direction; a stale override that
+    // returns the wrong lex-neighbor after a variant-listing edit
+    // reorders the lex partition) loudly rather than silently
+    // bifurcating the lex-neighbor-projection surface every
+    // downstream alphabetized-completion LSP cursor / lex-sorted
+    // `tatara-check` per-slot diagnostic renderer / lex-order
+    // compact-encoded wire codec / Sekiban audit binner /
+    // alphabetized property-test sweep consumer routes through.
+    // Sibling posture to clauses (22) + (23) + (26) — clauses (22) +
+    // (23) pin the (typed variant ↔ `usize` lex-order position)
+    // bijection at BOTH directions, clause (26) pins the (forward,
+    // backward) declaration-order neighbor projections against the
+    // composition of both declaration-axis bijection arms AND pins
+    // the endpoint-boundary `None` guards on both direction arms,
+    // this clause pins the (forward, backward) LEX-order neighbor
+    // projections against the composition of both lex-axis bijection
+    // arms AND pins the lex-endpoint-boundary `None` guards on both
+    // direction arms — so the closed-set neighbor surface stays sound
+    // at BOTH direction arms AND on BOTH ordering axes AND on the
+    // shared lex-endpoint-anchor fixpoints
+    // (`T::sorted_last().sorted_next() == None`,
+    // `T::sorted_first().sorted_prev() == None`). Clauses (26) + (27)
+    // together close the (declaration × lex) × (forward, backward)
+    // 2×2 closed-set neighbor matrix at ALL FOUR direct
+    // projection surfaces AND at ALL FOUR endpoint-boundary
+    // fixpoints.
+    for &v in T::ALL {
+        let i = v.sorted_index_of();
+        let expected_sorted_next = T::from_sorted_index(i + 1);
+        assert_eq!(
+            v.sorted_next(),
+            expected_sorted_next,
+            "{type_name}: {v:?}.sorted_next() drifted from T::from_sorted_index({v:?}.sorted_index_of() + 1) — the direct (variant → forward lex-neighbor) projection no longer agrees with the natural sorted_index_of+from_sorted_index composition, so a downstream alphabetized-completion LSP cursor / lex-sorted tatara-check per-slot diagnostic renderer / lex-order compact-encoded wire codec / Sekiban audit binner consumer that binds `v.sorted_next()` as its forward-lex-traversal surface would land on the wrong lex-neighbor for {v:?}",
+        );
+        if i > 0 {
+            let expected_sorted_prev = T::from_sorted_index(i - 1);
+            assert_eq!(
+                v.sorted_prev(),
+                expected_sorted_prev,
+                "{type_name}: {v:?}.sorted_prev() drifted from T::from_sorted_index({v:?}.sorted_index_of() - 1) — the direct (variant → backward lex-neighbor) projection no longer agrees with the natural sorted_index_of+from_sorted_index composition on an interior lex slot, so a downstream alphabetized-completion LSP cursor / lex-sorted tatara-check per-slot diagnostic renderer / lex-order compact-encoded wire codec / Sekiban audit binner consumer that binds `v.sorted_prev()` as its backward-lex-traversal surface would land on the wrong lex-neighbor for {v:?}",
+            );
+        }
+    }
+    assert_eq!(
+        T::sorted_first().sorted_prev(),
+        None,
+        "{type_name}: T::sorted_first().sorted_prev() returned Some(_) — the (variant → backward lex-neighbor) projection accepted the lex-head-endpoint boundary, silently folding a lex-head-boundary walk onto a wraparound to the lex-tail while the natural `usize` underflow guard should return `None`. Clauses (26) + (27) together pin `T::sorted_first().sorted_prev() == None` as the structural fixpoint the lex-head-endpoint anchor and the backward-lex-neighbor axis share, mirroring `T::first().prev() == None` one ordering axis over",
+    );
+    assert_eq!(
+        T::sorted_last().sorted_next(),
+        None,
+        "{type_name}: T::sorted_last().sorted_next() returned Some(_) — the (variant → forward lex-neighbor) projection accepted the lex-tail-endpoint boundary, silently folding a lex-tail-boundary walk onto a wraparound to the lex-head while the natural bounded-index projection should return `None`. Clauses (26) + (27) together pin `T::sorted_last().sorted_next() == None` as the structural fixpoint the lex-tail-endpoint anchor and the forward-lex-neighbor axis share, mirroring `T::last().next() == None` one ordering axis over",
     );
 }
 
@@ -8198,6 +8453,374 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a prev() override that wraps around at the head rather than returning None",
+        );
+    }
+
+    #[test]
+    fn sorted_next_walks_lex_order_forward_chain() {
+        // The forward-lex-neighbor projection — `v.sorted_next()` walks
+        // `T::sorted_variants()` one slot forward from each variant,
+        // returning `Some` on every interior lex slot and `None` at
+        // the lex-tail. `StubKind`'s labels are "alpha", "beta",
+        // "gamma" so lex order aligns with declaration order and the
+        // forward lex chain is Alpha → Beta → Gamma → None. Sibling
+        // posture to `next_walks_declaration_order_forward_chain` one
+        // ordering axis over on the (declaration, lex) partition.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_next(StubKind::Alpha),
+            Some(StubKind::Beta),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_next(StubKind::Beta),
+            Some(StubKind::Gamma),
+        );
+        assert_eq!(<StubKind as ClosedSet>::sorted_next(StubKind::Gamma), None);
+    }
+
+    #[test]
+    fn sorted_prev_walks_lex_order_backward_chain() {
+        // The backward-lex-neighbor projection — `v.sorted_prev()`
+        // walks `T::sorted_variants()` one slot backward from each
+        // variant, returning `Some` on every interior lex slot and
+        // `None` at the lex-head. On `StubKind` lex order aligns with
+        // declaration order so the backward lex chain is Gamma → Beta
+        // → Alpha → None. Sibling posture to
+        // `prev_walks_declaration_order_backward_chain` one ordering
+        // axis over on the (declaration, lex) partition.
+        assert_eq!(<StubKind as ClosedSet>::sorted_prev(StubKind::Alpha), None);
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_prev(StubKind::Beta),
+            Some(StubKind::Alpha),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_prev(StubKind::Gamma),
+            Some(StubKind::Beta),
+        );
+    }
+
+    #[test]
+    fn sorted_next_and_sorted_prev_are_inverses_on_the_interior() {
+        // The (forward, backward) lex-neighbor-inverse contract — for
+        // every interior variant `v` (not the lex-head, not the
+        // lex-tail), `v.sorted_next().unwrap().sorted_prev() ==
+        // Some(v)` AND `v.sorted_prev().unwrap().sorted_next() ==
+        // Some(v)`. The two projections compose the same
+        // `sorted_index_of` + `from_sorted_index` bijection under
+        // opposite `usize` arithmetic (`+ 1` vs `- 1`), so the
+        // interior lex-neighbor edges MUST close as a round-trip. A
+        // regression that returns the wrong lex-neighbor for either
+        // arm would silently break this round-trip, folding a two-step
+        // lex-walk `v → v.sorted_next().unwrap() → w` onto some
+        // `w ≠ v`. Sibling posture to
+        // `next_and_prev_are_inverses_on_the_interior` one ordering
+        // axis over on the (declaration, lex) partition.
+        for &v in <StubKind as ClosedSet>::ALL {
+            if let Some(fwd) = <StubKind as ClosedSet>::sorted_next(v) {
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_prev(fwd),
+                    Some(v),
+                    "{v:?}.sorted_next().unwrap().sorted_prev() did not round-trip",
+                );
+            }
+            if let Some(bwd) = <StubKind as ClosedSet>::sorted_prev(v) {
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_next(bwd),
+                    Some(v),
+                    "{v:?}.sorted_prev().unwrap().sorted_next() did not round-trip",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_first_sorted_prev_and_sorted_last_sorted_next_pin_the_lex_endpoint_boundary_fixpoints(
+    ) {
+        // The lex-endpoint-anchor / lex-neighbor-axis fixpoints —
+        // `T::sorted_first().sorted_prev() == None` AND
+        // `T::sorted_last().sorted_next() == None`. The two fixpoints
+        // thread the lex-head-endpoint anchor back through the
+        // backward-lex-neighbor axis AND the lex-tail-endpoint anchor
+        // back through the forward-lex-neighbor axis at ONE
+        // structural landmark each. A regression that wraps around
+        // (returning `Some(T::sorted_last())` for
+        // `T::sorted_first().sorted_prev()`, or `Some(T::sorted_first())`
+        // for `T::sorted_last().sorted_next()`) would silently fold a
+        // bounded lex-traversal onto an infinite loop every downstream
+        // alphabetized-completion LSP cursor / lex-order compact-encoded
+        // wire codec consumer routes through. Sibling posture to
+        // `first_prev_and_last_next_pin_the_endpoint_boundary_fixpoints`
+        // one ordering axis over on the (declaration, lex) partition.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_prev(<StubKind as ClosedSet>::sorted_first(),),
+            None,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_next(<StubKind as ClosedSet>::sorted_last(),),
+            None,
+        );
+    }
+
+    #[test]
+    fn sorted_next_and_sorted_prev_on_singleton_closed_set_both_return_none() {
+        // The lex-neighbor-axis degenerate case — a singleton closed
+        // set (one variant) has `T::ALL[0] == T::sorted_first() ==
+        // T::sorted_last()`, so BOTH `T::sorted_first().sorted_prev()
+        // == None` AND `T::sorted_last().sorted_next() == None`
+        // collapse onto the same variant — every lex-neighbor walk
+        // from the sole variant must return `None`. A regression that
+        // treats the two direction arms as structurally distinct
+        // would silently break the natural degenerate-case invariant.
+        // Sibling posture to
+        // `next_and_prev_on_singleton_closed_set_both_return_none`
+        // one ordering axis over on the (declaration, lex) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SortedNeighborSingletonKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSortedNeighborSingletonKind(pub String);
+        impl core::fmt::Display for UnknownSortedNeighborSingletonKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown sorted neighbor singleton kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SortedNeighborSingletonKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "sorted neighbor singleton kind";
+            type Unknown = UnknownSortedNeighborSingletonKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSortedNeighborSingletonKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SortedNeighborSingletonKind as ClosedSet>::sorted_next(
+                SortedNeighborSingletonKind::Only,
+            ),
+            None,
+        );
+        assert_eq!(
+            <SortedNeighborSingletonKind as ClosedSet>::sorted_prev(
+                SortedNeighborSingletonKind::Only,
+            ),
+            None,
+        );
+    }
+
+    #[test]
+    fn sorted_next_and_sorted_prev_walk_lex_order_not_declaration_order() {
+        // The lex-neighbor-projection contract on an arbitrary
+        // declaration order — `v.sorted_next()` MUST project the
+        // LEX successor regardless of the declaration order, AND
+        // `v.sorted_prev()` MUST project the LEX predecessor. A
+        // regression that keyed on `T::ALL` position (rather than
+        // lex-slot) would pass on `StubKind` (where declaration order
+        // aligns with alphabetic order) but silently bifurcate on any
+        // implementor whose `ALL`-array layout differs from its lex
+        // order. Reuses the deliberately-reverse shape so the
+        // lex-neighbor contract lands on the same declaration-order-
+        // inversion probe the sorted-variants / lex-endpoint contracts
+        // bind against. Declaration order is `[Gamma, Beta, Alpha]`
+        // but lex order is `[alpha, beta, gamma]` — a `next`-based
+        // (declaration-order) walk from Gamma yields Beta, but the
+        // sorted_next-based (lex-order) walk from Gamma yields None
+        // (Gamma is the lex-tail), and from Alpha yields Beta.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SortedNeighborReverseKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownSortedNeighborReverseKind(pub String);
+        impl core::fmt::Display for UnknownSortedNeighborReverseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown sorted neighbor reverse kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SortedNeighborReverseKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "sorted neighbor reverse kind";
+            type Unknown = UnknownSortedNeighborReverseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSortedNeighborReverseKind(s.to_owned())
+            }
+        }
+        // Lex order: [alpha, beta, gamma] — Alpha is lex-head, Gamma
+        // is lex-tail. Declaration order (Gamma → Beta → Alpha) is
+        // the REVERSE of the lex order, so the two neighbor pairs
+        // walk in opposite directions.
+        assert_eq!(
+            <SortedNeighborReverseKind as ClosedSet>::sorted_next(SortedNeighborReverseKind::Alpha,),
+            Some(SortedNeighborReverseKind::Beta),
+        );
+        assert_eq!(
+            <SortedNeighborReverseKind as ClosedSet>::sorted_next(SortedNeighborReverseKind::Beta,),
+            Some(SortedNeighborReverseKind::Gamma),
+        );
+        assert_eq!(
+            <SortedNeighborReverseKind as ClosedSet>::sorted_next(SortedNeighborReverseKind::Gamma,),
+            None,
+        );
+        assert_eq!(
+            <SortedNeighborReverseKind as ClosedSet>::sorted_prev(SortedNeighborReverseKind::Alpha,),
+            None,
+        );
+        assert_eq!(
+            <SortedNeighborReverseKind as ClosedSet>::sorted_prev(SortedNeighborReverseKind::Beta,),
+            Some(SortedNeighborReverseKind::Alpha),
+        );
+        assert_eq!(
+            <SortedNeighborReverseKind as ClosedSet>::sorted_prev(SortedNeighborReverseKind::Gamma,),
+            Some(SortedNeighborReverseKind::Beta),
+        );
+        // Cross-axis divergence pin — the declaration-axis `next`
+        // and the lex-axis `sorted_next` disagree on the same
+        // starting variant when `T::ALL` is not lex-sorted. Gamma is
+        // declaration-order-head (index 0) so
+        // `next(Gamma) == Some(Beta)`, but Gamma is lex-tail so
+        // `sorted_next(Gamma) == None`. Locks the two neighbor axes
+        // as structurally distinct — a regression that folded
+        // `sorted_next` back onto `next` would collapse the 2×2
+        // matrix onto a 1×2 partition.
+        assert_eq!(
+            <SortedNeighborReverseKind as ClosedSet>::next(SortedNeighborReverseKind::Gamma,),
+            Some(SortedNeighborReverseKind::Beta),
+        );
+        assert_eq!(
+            <SortedNeighborReverseKind as ClosedSet>::sorted_next(SortedNeighborReverseKind::Gamma,),
+            None,
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_next_and_composition() {
+        // The well-formedness sweep's (27) clause — `v.sorted_next()`
+        // MUST equal `T::from_sorted_index(v.sorted_index_of() + 1)`
+        // on every variant. A hand-impl'd implementor whose override
+        // drifts the forward-lex-neighbor projection (accepts
+        // `Some(_)` at the lex-tail where the natural composition
+        // would return `None`, folds a lex-tail-boundary walk onto a
+        // wraparound to the lex-head) fails the sweep loudly rather
+        // than silently bifurcating the forward-lex-traversal surface
+        // every downstream alphabetized-completion LSP cursor /
+        // lex-order compact-encoded wire codec consumer routes
+        // through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_next_and_composition`
+        // one ordering axis over on the (declaration, lex) partition
+        // of clauses (26) + (27).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedNextKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedNextKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedNextKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted next kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedNextKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted sorted next kind";
+            type Unknown = UnknownDriftedSortedNextKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedNextKind(s.to_owned())
+            }
+            fn sorted_next(self) -> Option<Self> {
+                // Drifted override — wraps around at the lex-tail
+                // rather than returning `None`, folding a bounded
+                // forward lex-walk onto an infinite loop every
+                // alphabetized-completion LSP cursor consumer routes
+                // through.
+                Some(match self {
+                    Self::Head => Self::Tail,
+                    Self::Tail => Self::Head,
+                })
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedSortedNextKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_next() override that wraps around at the lex-tail rather than returning None",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_prev_and_composition() {
+        // The well-formedness sweep's (27) clause — `v.sorted_prev()`
+        // MUST equal `T::from_sorted_index(v.sorted_index_of() - 1)`
+        // on every interior variant AND
+        // `T::sorted_first().sorted_prev()` MUST equal `None`. A
+        // hand-impl'd implementor whose override drifts the
+        // backward-lex-neighbor projection (accepts `Some(_)` at the
+        // lex-head where the natural composition would return `None`,
+        // folds a lex-head-boundary walk onto a wraparound to the
+        // lex-tail) fails the sweep loudly rather than silently
+        // bifurcating the backward-lex-traversal surface. Sibling
+        // posture to
+        // `assert_closed_set_well_formed_catches_drift_between_prev_and_composition`
+        // one ordering axis over on the (declaration, lex) partition
+        // of clauses (26) + (27).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedPrevKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedPrevKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedPrevKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted prev kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedPrevKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted sorted prev kind";
+            type Unknown = UnknownDriftedSortedPrevKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedPrevKind(s.to_owned())
+            }
+            fn sorted_prev(self) -> Option<Self> {
+                // Drifted override — wraps around at the lex-head
+                // rather than returning `None`, folding a bounded
+                // backward lex-walk onto an infinite loop every
+                // alphabetized-completion LSP cursor consumer routes
+                // through.
+                Some(match self {
+                    Self::Head => Self::Tail,
+                    Self::Tail => Self::Head,
+                })
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedSortedPrevKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_prev() override that wraps around at the lex-head rather than returning None",
         );
     }
 }

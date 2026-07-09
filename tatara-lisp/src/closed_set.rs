@@ -1918,6 +1918,175 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn label_at(i: usize) -> Option<&'static str> {
         <Self as ClosedSet>::from_index(i).map(<Self as ClosedSet>::label)
     }
+
+    /// Recover the declaration-order `usize` position in [`Self::ALL`]
+    /// of the variant labelled `s`, or [`None`] if `s` matches no
+    /// variant's [`Self::label`].
+    ///
+    /// The direct `(&str → usize)` projection through the closed set —
+    /// the missing corner of the (input carrier × return-projection)
+    /// 5-of-6 matrix that clause (20)'s `label_at` addition left open
+    /// on the projection triangle over the three closed-set carriers
+    /// (typed variant, `&'static str` canonical label, `usize`
+    /// declaration-order index):
+    ///
+    /// | Input carrier          | Output projection      | Projection surface           |
+    /// |------------------------|------------------------|------------------------------|
+    /// | typed variant          | `&'static str` label   | [`Self::label`]              |
+    /// | typed variant          | `usize` index          | [`Self::index_of`]           |
+    /// | `usize` index          | typed variant          | [`Self::from_index`]         |
+    /// | `usize` index          | `&'static str` label   | [`Self::label_at`]           |
+    /// | `&'static str` label   | typed variant          | [`Self::find_by_label`]      |
+    /// | `&'static str` label   | `usize` index          | [`Self::index_of_label`]     |
+    ///
+    /// Together with [`Self::label`], [`Self::index_of`],
+    /// [`Self::from_index`], [`Self::label_at`], and
+    /// [`Self::find_by_label`], this method closes the projection
+    /// triangle over the three closed-set carriers with a direct
+    /// surface at EVERY (input, output) pair — the six directed edges
+    /// spanning the three carriers each bind to ONE trait method
+    /// rather than routing through a two-step composition at the call
+    /// site. Every projection through the closed set — variant →
+    /// label, variant → index, index → variant, index → label, label →
+    /// variant, label → index — emits at ONE typed primitive.
+    ///
+    /// Sibling posture to [`Self::find_by_label`] one axis over on the
+    /// (return-projection) axis of the `&'static str`-carrier
+    /// partition: [`Self::find_by_label`] projects a `&str` label back
+    /// onto its typed variant through the [`Self::ALL`] ×
+    /// [`Self::label`] sweep, this method projects the same `&str`
+    /// label through to its declaration-order `usize` position — one
+    /// composition step further along the same axis. Both return an
+    /// [`Option`] because the input carrier is wider than the closed
+    /// set — every non-canonical `&str` decodes to [`None`] on both
+    /// projections, and both agree on the (in-range accept,
+    /// out-of-range reject) partition slot-for-slot by construction
+    /// (this method's default body is [`Self::find_by_label`] composed
+    /// with [`Self::index_of`], so any consumer that decodes through
+    /// this method sees the SAME `Option`-typed rejection arm every
+    /// other `&str`-carrier decoder sees).
+    ///
+    /// Sibling posture to [`Self::label_at`] one axis over on the
+    /// (input-carrier) axis of the projection triangle: [`Self::label_at`]
+    /// closes the `usize`-carrier direct-label projection, this method
+    /// closes the `&str`-carrier direct-index projection — both are
+    /// the "one composition step further" corner past the immediate
+    /// carrier decode ([`Self::from_index`] / [`Self::find_by_label`]),
+    /// projecting through to the OTHER return-projection column that
+    /// the same carrier partition exposes. Together the two direct
+    /// projections close the (carrier × further-column) 2×2 matrix
+    /// past the two immediate decoders on both carrier partitions.
+    ///
+    /// Default body composes [`Self::find_by_label`] with
+    /// [`Self::index_of`] verbatim — the `&str → usize` shape is a
+    /// typed CONSEQUENCE of the two pre-existing primitives, not a
+    /// third codepath. Implementors override only when the composition
+    /// needs to diverge from the natural `find_by_label(s).map(index_of)`
+    /// shape (no production implementor reaches for this today; the
+    /// axis exists for the same reason `via` / `set_label` / `labels` /
+    /// `sorted_labels` / `sorted_variants` / `from_index` / `index_of` /
+    /// `label_at` overrides exist — a typed escape hatch the trait
+    /// surface exposes rather than forcing the implementor to
+    /// hand-roll the impl). An implementor that overrides
+    /// [`Self::find_by_label`] (a future perfect-hash label-decoder, a
+    /// future canonicalization-aware label projection that folds case
+    /// or whitespace) propagates the override through this default
+    /// body to the direct-index projection automatically; the
+    /// projection triangle funnels every `&str`-carrier decode through
+    /// ONE typed primitive on each of its (variant, `usize` index)
+    /// return-projection columns.
+    ///
+    /// The rejection contract — a non-canonical `&str` returns
+    /// [`None`], the empty-string boundary that clause (4) reserves as
+    /// structurally outside the closed set returns [`None`] — is
+    /// guaranteed by the default composition through
+    /// [`Self::find_by_label`]'s `Option`-typed sweep; the
+    /// well-formedness contract [`assert_closed_set_well_formed`]'s
+    /// new clause (21) pins the both-directions equality against the
+    /// natural composition on every implementor, so a passing
+    /// well-formedness sweep means every generic consumer can call
+    /// `index_of_label` on any `&str` payload and expect the same
+    /// `Option`-typed answer at every crate boundary.
+    ///
+    /// Future consumers — a compact wire-format encoder that reads a
+    /// `&str` config value (a Kubernetes annotation, a YAML enum
+    /// field, a diagnostic input string) and emits its declaration-
+    /// order position directly as a `u8` without materializing the
+    /// typed variant at the encoder site, a metrics binner that reads
+    /// a diagnostic label from an incoming trace event and increments
+    /// `counters[T::index_of_label(label)?]` under the per-slot
+    /// aggregation shape without a two-step (`find_by_label` →
+    /// `index_of`) composition at each rendering site, a `tatara-check`
+    /// per-slot per-label diagnostic that partitions a batch of
+    /// incoming labels by declaration-order slot for reporting under
+    /// the natural `[per_slot; T::CARDINALITY]` aggregation shape, an
+    /// LSP-hover / config-decoder rendering that maps parsed labels
+    /// back to their canonical slot ordering for stable rendering —
+    /// bind to ONE trait method instead of hand-rolling either
+    /// `T::find_by_label(s).map(T::index_of)` (which re-derives the
+    /// same two-primitive composition at every callsite AND makes
+    /// every downstream site depend on [`Self::find_by_label`]'s
+    /// `Option`-typed dispatch shape) OR the inline
+    /// `T::ALL.iter().position(|v| v.label() == s)` (which re-derives
+    /// the underlying three-primitive composition at every callsite,
+    /// AND drops the [`Self::find_by_label`] override propagation that
+    /// keeps every carrier-decode consumer aligned on a single typed
+    /// dispatch) at each callsite, and the closed-set `(&str → index)`
+    /// direct projection surface evolves at ONE site rather than
+    /// per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the (`&'static str` label →
+    /// `usize` array index) projection becomes a TYPE projection on
+    /// the trait rather than a per-consumer inline
+    /// `Self::find_by_label(s).map(Self::index_of)` composition at
+    /// every downstream label-to-slot site. The projection triangle
+    /// over the closed-set carriers gains its sixth (and final)
+    /// direct edge — every (input, output) pair across the (typed
+    /// variant, `&'static str` label, `usize` index) carriers binds
+    /// to ONE typed projection surface with no two-step composition
+    /// at the call site.
+    /// THEORY.md §V.1 — knowable platform; the (`&str` → `usize`)
+    /// direct projection was an unnamed compound of
+    /// [`Self::find_by_label`] composed with [`Self::index_of`]
+    /// pre-lift; naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two substrate primitives — generic
+    /// consumers see ONE method, not ONE label-to-index-shape-per-crate.
+    /// The well-formedness clause (21) pins the composition against
+    /// the natural `find_by_label(s).map(index_of)` shape on every
+    /// implementor so a passing well-formedness sweep means every
+    /// generic consumer can call `index_of_label` on any `&str`
+    /// payload and expect the same `Option`-typed answer at every
+    /// crate boundary.
+    /// THEORY.md §VI.1 — generation over composition; the direct
+    /// (`&str → index`) projection emerges from the composition of
+    /// TWO substrate primitives ([`Self::find_by_label`],
+    /// [`Self::index_of`]) rather than as a per-implementor inline
+    /// `find_by_label(s).map(index_of)` compound. A future tightening
+    /// of either primitive (a future perfect-hash `find_by_label`, a
+    /// future canonicalization-aware label projection that folds
+    /// case / whitespace, a future const-fn `index_of` axis that
+    /// makes the projection compile-time visible) propagates to
+    /// every closed-set direct-index-projection consumer through ONE
+    /// trait body.
+    ///
+    /// Frontier inspiration: Racket's `(enum-index enum sym)` on a
+    /// closed enum projects a symbol directly onto its
+    /// declaration-order position, without an intermediate typed-
+    /// variant materialization the caller must round-trip through.
+    /// MLIR's `mlir::TypeID::getIndex(StringRef name)` on the typed
+    /// registry composes the (name → op) lookup with the (op →
+    /// stable index) projection into ONE direct `(name → index)`
+    /// surface the DiagnosticEngine's per-op counters key off.
+    /// Clojure's `(.indexOf enum-values kw)` idiom over a keyword-
+    /// enum's canonical value set stands as the same shape one
+    /// vocabulary over on the JVM-Lisp side. Translation through
+    /// pleme-io primitives: a pure default method composing the
+    /// trait's existing [`Self::find_by_label`] + [`Self::index_of`]
+    /// surfaces — no new dep, no new IR layer, no supertrait bound,
+    /// no allocation.
+    fn index_of_label(s: &str) -> Option<usize> {
+        <Self as ClosedSet>::find_by_label(s).map(<Self as ClosedSet>::index_of)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -2821,6 +2990,53 @@ where
         T::label_at(T::CARDINALITY),
         None,
         "{type_name}: T::label_at(T::CARDINALITY) drifted from None — the direct (usize → &'static str label) projection accepted the first out-of-range index (T::CARDINALITY), so an out-of-range serialized index would fold onto an in-range canonical label on the direct-projection column while `from_index` still rejects it, silently bifurcating the usize-carrier decode axis of the projection triangle",
+    );
+    // (21) — For every variant `v` in `T::ALL`, `T::index_of_label(
+    // v.label())` MUST equal `Some(v.index_of())`, AND
+    // `T::index_of_label(<reserved probe>)` MUST equal `None`, AND
+    // `T::index_of_label("")` MUST equal `None`. The default trait body
+    // composes `T::find_by_label(s).map(T::index_of)` verbatim and
+    // satisfies both arms for free; the assertion catches a future
+    // implementor whose override drifts the direct-index projection arm
+    // (a permissive override that returns `Some(_)` for a non-canonical
+    // `&str` — folding an off-set string onto an in-range slot at the
+    // direct-projection column while `find_by_label` still rejects it,
+    // silently bifurcating the `&str`-carrier decode axis; a strict
+    // override that returns `None` for a canonical variant's label,
+    // silently dropping slots at the label-decode boundary; a swapped
+    // override that recovers the wrong slot for a valid canonical
+    // label, silently bifurcating the (variant, `&'static str` label,
+    // `usize` index) projection triangle at its sixth direct edge)
+    // loudly rather than silently bifurcating the direct-index
+    // projection surface every downstream compact-encoder / metrics-
+    // binner / `tatara-check` per-slot per-label diagnostic / LSP-hover
+    // consumer routes through. Sibling posture to clauses (12) + (15)
+    // — clause (12) closes the (`&str` → typed variant) `Option`-typed
+    // direct projection, clause (15) closes the (typed variant →
+    // `usize`) forward projection, this clause closes the (`&str` →
+    // `usize`) direct projection composed from BOTH primitives AND
+    // pins the alignment with the natural two-step composition on
+    // every implementor. Together clauses (12) + (15) + (21) close
+    // the `&str`-carrier partition of the projection triangle at both
+    // the immediate (variant) decode column AND the further (index)
+    // decode column, mirroring the way clauses (16) + (20) close the
+    // `usize`-carrier partition at both its immediate (variant) decode
+    // column AND its further (label) decode column.
+    for &v in T::ALL {
+        let label = v.label();
+        assert_eq!(
+            T::index_of_label(label),
+            Some(v.index_of()),
+            "{type_name}: T::index_of_label({label:?}) drifted from Some(v.index_of()) — the direct (&str label → usize index) projection no longer agrees with the natural find_by_label+index_of composition on the canonical accept arm, so a downstream compact-encoder / metrics-binner / tatara-check per-slot per-label diagnostic / LSP-hover consumer that binds `T::index_of_label(s)` as its direct-projection surface would render the wrong slot for the canonical label {label:?}",
+        );
+    }
+    assert!(
+        T::index_of_label(probe).is_none(),
+        "{type_name}: T::index_of_label(<reserved probe>) returned Some(_) for an input outside the closed set — the direct (&str label → usize index) projection accepted a non-canonical string, silently folding an off-set string onto an in-range slot at the direct-projection column while `find_by_label` still rejects it, bifurcating the &str-carrier decode axis of the projection triangle",
+    );
+    assert!(
+        T::index_of_label("").is_none(),
+        "{type_name}: T::index_of_label(\"\") returned Some(_) — the direct (&str label → usize index) projection accepted the empty-string boundary that clause (4) reserves as structurally outside every closed set, folding the reserved boundary onto an in-range slot at the direct-projection column",
     );
 }
 
@@ -5657,6 +5873,161 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a label_at() override drifted from the natural from_index+label composition on the out-of-range reject arm",
+        );
+    }
+
+    #[test]
+    fn index_of_label_recovers_declaration_order_index_for_every_canonical_label() {
+        // The direct (`&str` → `usize`) projection accept arm — for
+        // every canonical label `v.label()`, `T::index_of_label(label)`
+        // returns `Some(v.index_of())`. Sibling posture to
+        // `label_at_recovers_every_canonical_label_at_declaration_order_index`
+        // one axis over on the (input-carrier) axis of the projection
+        // triangle — this pin covers the `&str`-carrier direct-index
+        // return-projection column, that pin covered the `usize`-carrier
+        // direct-label return-projection column. Both walk `Self::ALL`
+        // at their respective canonical inputs (the label side, the
+        // index side) and MUST agree slot-for-slot on the underlying
+        // (variant, canonical label, declaration-order index) triple.
+        // A regression that drifts either arm (a permissive
+        // `index_of_label` override that accepts non-canonical strings,
+        // a swapped override that returns adjacent-slot indices)
+        // bifurcates the direct-projection surface from the natural
+        // `find_by_label+index_of` composition every `&str`-carrier
+        // decode consumer routes through. Pinning the projection here
+        // catches the drift on the stub-level surface before any
+        // per-implementor sweep depends on the alignment downstream.
+        for (i, &v) in <StubKind as ClosedSet>::ALL.iter().enumerate() {
+            let label = v.label();
+            assert_eq!(
+                <StubKind as ClosedSet>::index_of_label(label),
+                Some(i),
+                "index_of_label({label:?}) failed to recover the declaration-order index at slot {i}",
+            );
+        }
+    }
+
+    #[test]
+    fn index_of_label_rejects_non_canonical_string_without_allocating_carrier() {
+        // The direct (`&str` → `usize`) projection reject arm — a
+        // non-canonical `&str` returns `None` WITHOUT ever entering
+        // `Self::make_unknown` (unlike the allocating `parse_label`
+        // path that always materializes the typed carrier on
+        // rejection). The reserved 38-char probe sits outside every
+        // plausible canonical label by construction, so
+        // `T::index_of_label(<probe>)` MUST reject to `None`. Sibling
+        // posture to
+        // `find_by_label_rejects_unknown_input_without_allocating_carrier`
+        // one axis over on the (return-projection) axis of the
+        // `&str`-carrier partition — this pin extends the
+        // zero-allocation reject contract to the direct-index
+        // return-projection column that clause (12)'s pin doesn't
+        // reach.
+        assert_eq!(
+            <StubKind as ClosedSet>::index_of_label("__assert_closed_set_well_formed_probe__",),
+            None,
+        );
+    }
+
+    #[test]
+    fn index_of_label_agrees_with_find_by_label_composed_with_index_of_on_every_probe() {
+        // The direct (`&str` → `usize`) projection MUST agree with the
+        // two-step `find_by_label(s).map(index_of)` composition on
+        // every input the sweep walks. This test pins the alignment
+        // against a representative probe set: (a) every canonical
+        // variant label — both arms return the acceptance side
+        // `Some(index)` AND project to the SAME declaration-order
+        // slot; (b) the reserved 38-char probe — both arms return the
+        // rejection side `None`; (c) the empty-string boundary — both
+        // arms return the rejection side `None` matching clause (4)'s
+        // structural reservation. The alignment is the load-bearing
+        // contract that lets a generic consumer freely swap between
+        // the direct-projection surface and the two-step composition
+        // based on its rendering / storage needs without changing the
+        // program's decoded-slot semantics. A regression that drifts
+        // either arm (a permissive `index_of_label` override that
+        // accepts non-canonical strings, a strict override that
+        // rejects a valid canonical label, a swapped override that
+        // recovers the wrong slot for a valid label) fails this pin
+        // stub-level before any per-implementor sweep depends on the
+        // alignment downstream. Sibling posture to
+        // `label_at_agrees_with_from_index_composed_with_label_on_every_probe`
+        // one axis over on the (input-carrier) axis — this pin
+        // extends the (canonical accept, non-canonical reject)
+        // alignment to the `&str`-carrier direct-index projection
+        // column.
+        let canonical_labels: [&str; 3] = ["alpha", "beta", "gamma"];
+        let non_canonical: [&str; 2] = ["__assert_closed_set_well_formed_probe__", ""];
+        for s in canonical_labels.iter().chain(non_canonical.iter()).copied() {
+            let direct = <StubKind as ClosedSet>::index_of_label(s);
+            let composed =
+                <StubKind as ClosedSet>::find_by_label(s).map(<StubKind as ClosedSet>::index_of);
+            assert_eq!(
+                direct, composed,
+                "index_of_label({s:?}) disagreed with find_by_label({s:?}).map(index_of) — the direct (&str → usize index) projection bifurcated from the natural two-step composition",
+            );
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_index_of_label_and_find_by_label_composition(
+    ) {
+        // The well-formedness sweep's (21) clause — `T::index_of_label(
+        // v.label())` MUST equal `Some(v.index_of())` for every variant
+        // `v` in `T::ALL`, AND `T::index_of_label(<reserved probe>)`
+        // MUST equal `None`, AND `T::index_of_label("")` MUST equal
+        // `None`. A hand-impl'd implementor whose override drifts the
+        // direct-index projection — e.g. a permissive override that
+        // returns `Some(_)` for a non-canonical `&str` — fails the
+        // sweep loudly rather than silently bifurcating the
+        // direct-index projection surface every downstream
+        // compact-encoder / metrics-binner / `tatara-check` per-slot
+        // per-label diagnostic / LSP-hover consumer routes through.
+        // Pinning the failure path here keeps the testkit's (21)
+        // clause guaranteed-to-fire — a regression that makes the
+        // assertion permissive (e.g. a future "either the accept OR
+        // the reject arm" relaxation that only checks one arm) breaks
+        // this stub-level contract before any per-implementor sweep
+        // runs. Sibling posture to the thirteen sibling
+        // `_catches_drift_between_*` pins above (clauses 5-20);
+        // together they close the structural-drift-catches sweep on
+        // every default composition the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIndexOfLabelKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIndexOfLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIndexOfLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted index of label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIndexOfLabelKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted index of label kind";
+            type Unknown = UnknownDriftedIndexOfLabelKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIndexOfLabelKind(s.to_owned())
+            }
+            fn index_of_label(_s: &str) -> Option<usize> {
+                // Drifted override — accepts every `&str` payload,
+                // including the reserved probe the testkit's clause
+                // (21) demands rejects. Fails the direct-projection
+                // alignment with `find_by_label(s).map(index_of)` on
+                // the non-canonical reject arm.
+                Some(0)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIndexOfLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an index_of_label() override drifted from the natural find_by_label+index_of composition on the non-canonical reject arm",
         );
     }
 }

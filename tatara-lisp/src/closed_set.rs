@@ -1621,6 +1621,152 @@ pub trait ClosedSet: Sized + Copy + 'static {
         Self::ALL[Self::ALL.len() - 1]
     }
 
+    /// The declaration-order head-endpoint membership predicate —
+    /// `true` when `self` is [`Self::first`], `false` otherwise.
+    /// Closes the (endpoint-anchor `Self`-returning, endpoint-membership
+    /// `bool`-returning) return-type axis over the (head, tail) partition
+    /// of the declaration-axis endpoint surface.
+    ///
+    /// The (return-type × endpoint-direction) 2×2 matrix over the
+    /// declaration-axis endpoint-anchor surface partitions post-lift:
+    ///
+    /// | Return type \\ Endpoint    | Head                | Tail               |
+    /// |----------------------------|---------------------|--------------------|
+    /// | `Self` (anchor)            | [`Self::first`]     | [`Self::last`]     |
+    /// | `bool` (membership)        | [`Self::is_first`]  | [`Self::is_last`]  |
+    ///
+    /// Sibling posture to [`Self::first`] one return-type axis over —
+    /// [`Self::first`] projects the head-endpoint variant, this method
+    /// answers "am I at the head endpoint?" without threading the caller
+    /// through a supertrait [`PartialEq`] bound the [`ClosedSet`] trait
+    /// deliberately does not require. Every generic consumer that
+    /// wants an O(1) head-boundary query (a bounded-loop guard that
+    /// short-circuits before `Self::prev` returns [`None`], a saga-step
+    /// engine that emits a "reset" event on the head-endpoint slot, a
+    /// truth-table property test that anchors an edge assertion at the
+    /// head-endpoint slot, a wraparound-cursor renderer that highlights
+    /// the head anchor before wrapping) binds to ONE typed predicate
+    /// rather than hand-rolling either the `self.index_of() == 0`
+    /// composition (which re-derives the same one-primitive projection
+    /// at every callsite) OR the `Self::PartialEq`-bounded
+    /// `self == Self::first()` comparison (which the trait's minimal
+    /// supertrait pair `Sized + Copy` structurally forbids).
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::index_of`]) with an `usize` equality check against `0`
+    /// — the head-membership predicate is a typed CONSEQUENCE of the
+    /// (variant → declaration-order position) forward projection, not a
+    /// per-implementor `match self { Self::Head => true, _ => false }`
+    /// block. Implementors override only when the head-membership
+    /// surface needs to diverge from the natural
+    /// `index_of(self) == 0` shape (no production implementor reaches
+    /// for this today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` / `first` overrides exist — a
+    /// typed escape hatch the trait surface exposes rather than
+    /// forcing the implementor to hand-roll the impl). An implementor
+    /// that overrides [`Self::index_of`] propagates the override
+    /// through this default body automatically; the (variant → bool
+    /// head-membership) projection funnels through ONE typed primitive.
+    ///
+    /// The head-membership contract — `T::first().is_first() == true`
+    /// on every implementor — is guaranteed by the composition through
+    /// [`Self::index_of`]'s `0`-slot projection clause (15) pins on
+    /// every declaration-order head; the well-formedness clause (30)
+    /// pins the composition against the natural
+    /// `index_of(self) == 0` shape AND the head-endpoint `true` fixpoint
+    /// on every implementor so a passing well-formedness sweep means
+    /// every generic consumer can call [`Self::is_first`] on any typed
+    /// variant and expect the same `bool` answer at every crate boundary.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → head-membership
+    /// bool) projection becomes a TYPE projection on the trait rather
+    /// than a per-consumer inline `self.index_of() == 0` composition at
+    /// every downstream head-boundary query site.
+    /// THEORY.md §V.1 — knowable platform; the (variant → head-
+    /// membership) projection was an unnamed compound of
+    /// [`Self::index_of`] + `usize` `==` `0` pre-lift; naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of ONE substrate
+    /// primitive — generic consumers see ONE method, not one
+    /// head-boundary-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (variant →
+    /// head-membership) projection emerges from the composition of
+    /// [`Self::index_of`] with the standard-library `usize` equality
+    /// operator rather than as a per-implementor
+    /// `match self { ... }` block. A future tightening of
+    /// [`Self::index_of`] (a future perfect-hash forward projection, a
+    /// future const-fn axis that makes the predicate callable in const
+    /// contexts) propagates to every closed-set head-boundary consumer
+    /// through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-first?` on closed
+    /// enumerations (the head-endpoint membership predicate on the
+    /// declaration-order chain); Idris's `Fin (S n)` finite-cardinality
+    /// type's `isFZ : Fin (S n) -> Bool` predicate on the head slot of
+    /// the non-empty finite-type universe; Haskell's `(== minBound)`
+    /// on the `Bounded + Enum` type-class pair; MLIR's
+    /// `RegisteredOperationName::isBegin()` on the declaration-order
+    /// Op registry; Rust's `strum::EnumIter::next().map(|v| v == self)`
+    /// composed through the iterator API. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's existing
+    /// [`Self::index_of`] surface with the standard-library `usize`
+    /// equality operator — no new dep, no new IR layer, no supertrait
+    /// [`PartialEq`] bound, no [`Option`]-typed dispatch.
+    fn is_first(self) -> bool {
+        <Self as ClosedSet>::index_of(self) == 0
+    }
+
+    /// The declaration-order tail-endpoint membership predicate —
+    /// `true` when `self` is [`Self::last`], `false` otherwise.
+    /// Closes the (bool, tail) corner of the (return-type ×
+    /// endpoint-direction) 2×2 declaration-axis endpoint matrix
+    /// alongside [`Self::is_first`].
+    ///
+    /// Sibling posture to [`Self::is_first`] one axis over on the
+    /// (head, tail) partition of the declaration-axis endpoint-
+    /// membership surface: [`Self::is_first`] answers "am I at the
+    /// head endpoint?", this method answers "am I at the tail
+    /// endpoint?". See [`Self::is_first`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the tail-direction arm of the same axis and
+    /// inherits every property from the head arm's documentation,
+    /// differing only in the `+ 1 == Self::CARDINALITY` boundary
+    /// check.
+    ///
+    /// Default body composes [`Self::index_of`] with an `usize`
+    /// equality check against [`Self::CARDINALITY`] under the natural
+    /// `+ 1` shift — the tail-membership predicate is a typed
+    /// CONSEQUENCE of the composition of the (variant → declaration-
+    /// order position) forward projection with the const-visible
+    /// variant count, not a per-implementor
+    /// `match self { Self::Tail => true, _ => false }` block. The
+    /// `+ 1 == Self::CARDINALITY` shape (rather than
+    /// `== Self::CARDINALITY - 1`) avoids the `usize` underflow
+    /// question on the well-formedness contract clause (1)'s
+    /// non-empty guarantee already forbids — clause (1) pins
+    /// `Self::CARDINALITY >= 1`, so `Self::CARDINALITY - 1` never
+    /// underflows in practice, but the `+ 1 ==` form composes without
+    /// ever performing the subtraction, keeping the projection callable
+    /// in a future const-fn context without the underflow discharge.
+    ///
+    /// The tail-membership contract — `T::last().is_last() == true`
+    /// on every implementor — is guaranteed by the composition
+    /// through [`Self::index_of`]'s `Self::CARDINALITY - 1`-slot
+    /// projection clause (15) pins on every declaration-order tail;
+    /// the well-formedness clause (30) pins the composition against
+    /// the natural `index_of(self) + 1 == Self::CARDINALITY` shape AND
+    /// the tail-endpoint `true` fixpoint on every implementor so a
+    /// passing well-formedness sweep means every generic consumer can
+    /// call [`Self::is_last`] on any typed variant and expect the same
+    /// `bool` answer at every crate boundary.
+    /// `T::last().is_last() == true` is the natural fixpoint the tail-
+    /// endpoint anchor and the tail-membership axis share, mirroring
+    /// the `T::first().is_first() == true` fixpoint on the head-
+    /// endpoint anchor / head-membership pair.
+    fn is_last(self) -> bool {
+        <Self as ClosedSet>::index_of(self) + 1 == <Self as ClosedSet>::CARDINALITY
+    }
+
     /// The lexicographically-least variant of the closed set — the
     /// canonical minimum-by-[`Self::label`] under the standard-library
     /// `str: Ord` ordering, projected onto the trait surface as a
@@ -5064,6 +5210,69 @@ where
         T::sorted_last(),
         "{type_name}: T::sorted_first().cycle_sorted_prev() returned a variant other than T::sorted_last() — the (variant → wrapping-backward lex-neighbor) projection failed to fold the lex-head-endpoint boundary onto the lex-tail-endpoint anchor while the natural sorted_prev+sorted_last composition should return T::sorted_last(). Clauses (18) + (29) together pin `T::sorted_first().cycle_sorted_prev() == T::sorted_last()` as the structural lex-wraparound fixpoint the lex-head-endpoint anchor and the backward-wrapping-lex-neighbor axis share, mirroring `T::sorted_first().sorted_prev() == None` one return-type axis over AND `T::first().cycle_prev() == T::last()` one ordering axis over",
     );
+    // (30) — For every variant `v` in `T::ALL`, `v.is_first()` MUST
+    // equal `v.index_of() == 0`, AND `v.is_last()` MUST equal
+    // `v.index_of() + 1 == T::CARDINALITY`, AND
+    // `T::first().is_first()` MUST be `true`, AND
+    // `T::last().is_last()` MUST be `true`. The default trait bodies
+    // compose `index_of(self) == 0` (head-arm) and
+    // `index_of(self) + 1 == Self::CARDINALITY` (tail-arm) verbatim
+    // and satisfy both arms for free; the assertion catches a future
+    // implementor whose override drifts either endpoint-membership
+    // projection (a permissive head override that returns `true` on
+    // an interior slot — folding a bounded-loop guard onto the wrong
+    // partition of `T::ALL` and silently short-circuiting an iterator
+    // before it reaches the head-endpoint; a permissive tail override
+    // that returns `true` on an interior slot — folding a
+    // termination-detection consumer onto the wrong partition of
+    // `T::ALL` and silently short-circuiting the iterator before it
+    // reaches the tail-endpoint; a swapped override that returns
+    // `is_last`'s answer for `is_first` AND vice-versa, silently
+    // inverting the (head, tail) membership partition; a stale
+    // override that returns the wrong endpoint membership after a
+    // variant-listing edit shifts the slot alignment) loudly rather
+    // than silently bifurcating the endpoint-membership projection
+    // surface every downstream bounded-loop guard / saga-step
+    // engine / truth-table property test / wraparound-cursor
+    // renderer / termination-detection consumer routes through.
+    // Sibling posture to clauses (15) + (18) — clause (15) pins the
+    // (variant → declaration-order position) forward projection
+    // against `T::ALL`'s position of `self`, clause (18) pins the
+    // (head, tail) endpoint anchors against `T::ALL[0]` /
+    // `T::ALL[T::ALL.len() - 1]`, this clause pins the (bool head-
+    // membership, bool tail-membership) projections against the
+    // composition of the forward-position projection with the const-
+    // visible variant count AND pins the endpoint-anchor `true`
+    // fixpoints on both direction arms — so the closed-set
+    // declaration-axis endpoint surface stays sound on BOTH return-
+    // type arms (`Self`-typed anchor / `bool`-typed membership) AND
+    // on BOTH direction arms AND on the shared endpoint-anchor
+    // membership fixpoints (`T::first().is_first() == true`,
+    // `T::last().is_last() == true`). Clauses (18) + (30) together
+    // close the (return-type × direction) 2×2 declaration-axis
+    // endpoint matrix at ALL FOUR direct projection surfaces AND at
+    // BOTH endpoint-anchor membership fixpoints.
+    for &v in T::ALL {
+        let i = v.index_of();
+        assert_eq!(
+            v.is_first(),
+            i == 0,
+            "{type_name}: {v:?}.is_first() drifted from {v:?}.index_of() == 0 — the direct (variant → head-membership bool) projection no longer agrees with the natural `index_of == 0` composition, so a downstream bounded-loop guard / saga-step engine / truth-table property test / wraparound-cursor renderer consumer that binds `v.is_first()` as its head-boundary query surface would answer the wrong `bool` for {v:?}",
+        );
+        assert_eq!(
+            v.is_last(),
+            i + 1 == T::CARDINALITY,
+            "{type_name}: {v:?}.is_last() drifted from {v:?}.index_of() + 1 == T::CARDINALITY — the direct (variant → tail-membership bool) projection no longer agrees with the natural `index_of + 1 == CARDINALITY` composition, so a downstream termination-detection / bounded-loop-terminator / saga-step engine / wraparound-cursor renderer consumer that binds `v.is_last()` as its tail-boundary query surface would answer the wrong `bool` for {v:?}",
+        );
+    }
+    assert!(
+        T::first().is_first(),
+        "{type_name}: T::first().is_first() returned false — the (variant → head-membership bool) projection failed to fire on the declaration-order head endpoint anchor while the natural `index_of == 0` composition should return true. Clauses (18) + (30) together pin `T::first().is_first() == true` as the structural fixpoint the head-endpoint anchor and the head-membership predicate axis share",
+    );
+    assert!(
+        T::last().is_last(),
+        "{type_name}: T::last().is_last() returned false — the (variant → tail-membership bool) projection failed to fire on the declaration-order tail endpoint anchor while the natural `index_of + 1 == CARDINALITY` composition should return true. Clauses (18) + (30) together pin `T::last().is_last() == true` as the structural fixpoint the tail-endpoint anchor and the tail-membership predicate axis share, mirroring `T::first().is_first() == true` one direction axis over",
+    );
 }
 
 #[cfg(test)]
@@ -7362,6 +7571,254 @@ mod tests {
             <StubKind as ClosedSet>::last(),
             <StubKind as ClosedSet>::from_index(<StubKind as ClosedSet>::CARDINALITY - 1)
                 .expect("last(): CARDINALITY >= 1 by clause (1)"),
+        );
+    }
+
+    #[test]
+    fn is_first_returns_true_only_on_the_declaration_order_head_variant() {
+        // The declaration-order head-endpoint membership predicate
+        // fires exactly on the head anchor and nowhere else.
+        // `StubKind`'s variant listing is `[Alpha, Beta, Gamma]`, so
+        // `Alpha.is_first()` is `true` and both `Beta.is_first()` and
+        // `Gamma.is_first()` are `false`. Sibling posture to
+        // `first_returns_the_declaration_order_head_variant` on the
+        // (`Self`-anchor, `bool`-membership) return-type axis.
+        assert!(<StubKind as ClosedSet>::is_first(StubKind::Alpha));
+        assert!(!<StubKind as ClosedSet>::is_first(StubKind::Beta));
+        assert!(!<StubKind as ClosedSet>::is_first(StubKind::Gamma));
+    }
+
+    #[test]
+    fn is_last_returns_true_only_on_the_declaration_order_tail_variant() {
+        // The declaration-order tail-endpoint membership predicate
+        // fires exactly on the tail anchor and nowhere else. Sibling
+        // posture to `is_first_returns_true_only_on_the_declaration_order_head_variant`
+        // one direction over on the (head, tail) partition — the
+        // stub's tail is `Gamma`.
+        assert!(!<StubKind as ClosedSet>::is_last(StubKind::Alpha));
+        assert!(!<StubKind as ClosedSet>::is_last(StubKind::Beta));
+        assert!(<StubKind as ClosedSet>::is_last(StubKind::Gamma));
+    }
+
+    #[test]
+    fn is_first_and_is_last_bracket_all_slice_on_arbitrary_declaration_order() {
+        // The endpoint-membership contract on an arbitrary declaration
+        // order — `T::first().is_first()` MUST be `true` regardless of
+        // which variant literal happens to sit at slice-index-0, AND
+        // `T::last().is_last()` MUST be `true` regardless of which
+        // variant literal happens to sit at slice-index-(N - 1). A
+        // regression that hard-coded the predicate against a variant
+        // literal rather than routing through `index_of` would pass
+        // `is_first_returns_true_only_on_the_declaration_order_head_variant`
+        // / `is_last_returns_true_only_on_the_declaration_order_tail_variant`
+        // on `StubKind` and silently bifurcate the predicates on any
+        // implementor whose `ALL`-array layout differs.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum EndpointMembershipStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownEndpointMembershipStubKind(pub String);
+        impl core::fmt::Display for UnknownEndpointMembershipStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown endpoint membership stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for EndpointMembershipStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "endpoint membership stub kind";
+            type Unknown = UnknownEndpointMembershipStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownEndpointMembershipStubKind(s.to_owned())
+            }
+        }
+        assert!(<EndpointMembershipStubKind as ClosedSet>::is_first(
+            EndpointMembershipStubKind::Gamma,
+        ));
+        assert!(!<EndpointMembershipStubKind as ClosedSet>::is_first(
+            EndpointMembershipStubKind::Beta,
+        ));
+        assert!(!<EndpointMembershipStubKind as ClosedSet>::is_first(
+            EndpointMembershipStubKind::Alpha,
+        ));
+        assert!(!<EndpointMembershipStubKind as ClosedSet>::is_last(
+            EndpointMembershipStubKind::Gamma,
+        ));
+        assert!(!<EndpointMembershipStubKind as ClosedSet>::is_last(
+            EndpointMembershipStubKind::Beta,
+        ));
+        assert!(<EndpointMembershipStubKind as ClosedSet>::is_last(
+            EndpointMembershipStubKind::Alpha,
+        ));
+    }
+
+    #[test]
+    fn is_first_and_is_last_collapse_true_on_singleton_closed_set() {
+        // The endpoint-membership degenerate case — a singleton closed
+        // set has ONE variant with `index_of == 0` AND
+        // `index_of + 1 == 1 == CARDINALITY`, so both predicates fire
+        // on the same variant. Mirrors `first_collapses_with_last_on_singleton_closed_set`
+        // one return-type axis over — the two anchor arms collapse on
+        // the same variant, the two membership arms both fire on the
+        // same variant.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonMembershipStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonMembershipStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonMembershipStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton membership stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonMembershipStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton membership stub kind";
+            type Unknown = UnknownSingletonMembershipStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonMembershipStubKind(s.to_owned())
+            }
+        }
+        assert!(<SingletonMembershipStubKind as ClosedSet>::is_first(
+            SingletonMembershipStubKind::Only,
+        ));
+        assert!(<SingletonMembershipStubKind as ClosedSet>::is_last(
+            SingletonMembershipStubKind::Only,
+        ));
+    }
+
+    #[test]
+    fn is_first_and_is_last_agree_with_first_last_endpoint_anchors() {
+        // The endpoint-anchor / endpoint-membership alignment —
+        // `T::first().is_first()` MUST be `true` AND
+        // `T::last().is_last()` MUST be `true` on every implementor.
+        // Complementary agreement — every non-endpoint variant MUST
+        // answer `false` to both predicates. Pinning the fixpoints
+        // here catches a regression that drifts either surface from
+        // the shared `index_of == 0` / `index_of + 1 == CARDINALITY`
+        // projection.
+        assert!(<StubKind as ClosedSet>::first().is_first());
+        assert!(<StubKind as ClosedSet>::last().is_last());
+        // Interior slot answers `false` to BOTH predicates on the
+        // 3-variant stub.
+        assert!(!<StubKind as ClosedSet>::is_first(StubKind::Beta));
+        assert!(!<StubKind as ClosedSet>::is_last(StubKind::Beta));
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_first_and_index_of_zero() {
+        // The well-formedness sweep's (30) clause — `v.is_first()` MUST
+        // equal `v.index_of() == 0`. A hand-impl'd implementor whose
+        // override drifts the head-membership predicate (returns
+        // `true` on an interior slot, returns `false` on the head, a
+        // stale override that returns the wrong answer after a
+        // variant-listing edit) fails the sweep loudly rather than
+        // silently bifurcating the head-membership projection surface
+        // every downstream bounded-loop guard / saga-step engine /
+        // truth-table property test consumer routes through. Sibling
+        // posture to `assert_closed_set_well_formed_catches_drift_between_is_last_and_index_of_plus_one_equals_cardinality`
+        // one direction over on the (head, tail) partition of clause
+        // (30).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsFirstKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsFirstKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is-first kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsFirstKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-first kind";
+            type Unknown = UnknownDriftedIsFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsFirstKind(s.to_owned())
+            }
+            fn is_first(self) -> bool {
+                // Drifted override — returns `true` on the tail slot
+                // rather than the head, swapping the (head, tail)
+                // endpoint-membership partition on the head arm.
+                matches!(self, Self::Tail)
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedIsFirstKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_first() override drifted from the natural index_of == 0 composition",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_last_and_index_of_plus_one_equals_cardinality(
+    ) {
+        // The well-formedness sweep's (30) clause — `v.is_last()` MUST
+        // equal `v.index_of() + 1 == T::CARDINALITY`. Symmetric to the
+        // `_catches_drift_between_is_first_and_index_of_zero` sibling
+        // one endpoint over on the (head, tail) partition — this pin
+        // covers the tail arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsLastKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsLastKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsLastKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is-last kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsLastKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-last kind";
+            type Unknown = UnknownDriftedIsLastKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsLastKind(s.to_owned())
+            }
+            fn is_last(self) -> bool {
+                // Drifted override — returns `true` on the head slot
+                // rather than the tail, swapping the (head, tail)
+                // endpoint-membership partition on the tail arm.
+                matches!(self, Self::Head)
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedIsLastKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_last() override drifted from the natural index_of + 1 == T::CARDINALITY composition",
         );
     }
 

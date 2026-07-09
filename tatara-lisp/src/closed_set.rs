@@ -2233,6 +2233,160 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
         count
     }
+
+    /// Recover the typed variant at lexicographic-order position `i` in
+    /// [`Self::sorted_variants`], or [`None`] if `i >= Self::CARDINALITY`.
+    ///
+    /// The typed inverse of [`Self::sorted_index_of`] on the (typed
+    /// variant ↔ `usize` lexicographic-order position) bijection:
+    /// [`Self::sorted_index_of`] projects a variant onto its `usize`
+    /// lex-order position through the strict-`<` label sweep over
+    /// [`Self::ALL`]; this method projects a `usize` lex-order position
+    /// back onto its typed variant. Together the two projections close
+    /// the (variant ↔ lex-order position) bijection with
+    /// `0..T::CARDINALITY` at BOTH directions — every generic consumer
+    /// that stores a `variant.sorted_index_of()` for later lex-order
+    /// decode (a compact wire encoding whose bytes sit in lex order and
+    /// later recovers the variant, a lex-sorted slotted lookup table
+    /// scanned back to `(variant, payload)` pairs for exhaustive lex-
+    /// order iteration, a lex-order bitset walked back to the set of
+    /// observed variants in canonical alphabetic order, a Sekiban audit-
+    /// trail metric that stores per-lex-slot counters and later renders
+    /// `<variant>: <count>` diagnostics in lex order) binds to ONE
+    /// typed inverse method rather than hand-rolling either
+    /// `Self::sorted_variants().get(i).copied()` (which pays a
+    /// `Vec<Self>` allocation the direct-projection surface doesn't
+    /// need AND re-derives the same three-primitive composition at
+    /// every callsite) OR a per-implementor inline `match i { 0 =>
+    /// Some(v0), 1 => Some(v1), _ => None }` keyed on the lex slot
+    /// (which re-derives the per-variant lex-slot → variant table at
+    /// every callsite AND drifts silently when [`Self::ALL`] gains a
+    /// new variant that reorders the lex partition).
+    ///
+    /// Sibling posture to [`Self::from_index`] one ordering-axis over on
+    /// the (declaration, lex) partition of the (`usize` position →
+    /// variant) inverse-projection surface: [`Self::from_index`]
+    /// projects a `usize` position back onto its typed variant through
+    /// direct [`Self::ALL`] slice indexing under declaration order, this
+    /// method projects a `usize` position back onto its typed variant
+    /// through [`Self::sorted_variants`] slice indexing under
+    /// lexicographic order. Both return an [`Option<Self>`] because the
+    /// input carrier is wider than the closed set — every out-of-range
+    /// `usize` decodes to [`None`] on both axes. Both share the SAME
+    /// zero-`PartialEq`-bound shape and the SAME `Option`-typed
+    /// rejection arm; a generic consumer freely swaps between the two
+    /// inverse-decode surfaces based on its ordering-axis carrier
+    /// without changing the program's structured-decode semantics.
+    ///
+    /// The (ordering-axis × inverse-projection) partition post-lift:
+    ///
+    /// | Ordering axis        | Inverse projection surface       |
+    /// |----------------------|----------------------------------|
+    /// | Declaration order    | [`Self::from_index`]             |
+    /// | Lexicographic order  | [`Self::from_sorted_index`]      |
+    ///
+    /// Closes the second direct edge of the (variant, `&'static str`
+    /// label, `usize` position) projection triangle on the LEX ordering
+    /// axis — [`Self::sorted_index_of`] closed the first direct edge
+    /// (variant → lex position), this method closes the second direct
+    /// edge (lex position → variant). Downstream lifts
+    /// (`sorted_label_at`, `sorted_index_of_label`) will close the
+    /// remaining lex-axis edges on the same natural composition base.
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::sorted_variants`]) with the standard-library
+    /// `<[T]>::get` bounded-index projection and [`Option::copied`] —
+    /// no discriminant sweep, no `PartialEq` bound, no per-variant
+    /// `match`. Sibling posture to [`Self::from_index`]'s
+    /// `Self::ALL.get(i).copied()` shape one ordering-axis over: both
+    /// bind the natural bounded-decode arm through the same
+    /// `<[T]>::get` composition on the corresponding sibling ALL-array
+    /// surface. Implementors override with a per-index `match` when
+    /// the O(1) slice lookup shows up on a hot-path profile (the
+    /// substrate-wide typed-emission bind: no production site today
+    /// calls `from_sorted_index` on a per-message hot path, so the
+    /// default slice lookup costs nothing measurable, and the override
+    /// axis exists for the same reason `via` / `set_label` / `labels` /
+    /// `index_of` / `from_index` overrides exist — a typed escape hatch
+    /// the trait surface exposes rather than forcing the implementor to
+    /// hand-roll the impl).
+    ///
+    /// The bounded-index contract — the out-of-range arm returns
+    /// [`None`] for every `i >= Self::CARDINALITY` — is guaranteed by
+    /// the default `<[T]>::get` composition; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (23)
+    /// pins the both-directions equality on every implementor, so a
+    /// passing well-formedness sweep means every generic consumer can
+    /// call `from_sorted_index` on any `usize` payload and expect the
+    /// same `Option`-typed answer at every crate boundary.
+    ///
+    /// Future consumers — a lex-order compact wire decoder that maps a
+    /// `u8` lex slot back to its variant (a legal / regulatory contract
+    /// that pins the byte-order semantics on the CANONICAL alphabetic
+    /// order rather than declaration order — the two are structurally
+    /// distinct when the closed set's canonical ordering is defined by
+    /// alphabetic order), a lex-order slotted lookup table
+    /// `[Payload; T::CARDINALITY]` scanned back to `(variant, payload)`
+    /// pairs by walking `for i in 0..T::CARDINALITY {
+    /// let v = T::from_sorted_index(i).unwrap(); ... }` for exhaustive
+    /// lex-order iteration, a lex-order bitset over the closed set
+    /// walked back to the set of observed variants in canonical
+    /// alphabetic order by mapping each observed bit back through this
+    /// method, a `tatara-check` per-slot diagnostic that renders
+    /// `<label>: <count>` in lex order and later recovers the typed
+    /// variant per slot for cross-checks — bind to ONE trait method
+    /// instead of composing three primitives
+    /// (`sorted_variants()` + `<[T]>::get` + `Option::copied`) with a
+    /// `Vec<Self>` allocation at every call site.
+    ///
+    /// THEORY.md §III — the typescape; the (`usize` lex position →
+    /// typed variant) projection becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline
+    /// `Self::sorted_variants().get(i).copied()` composition at every
+    /// downstream lex-order inverse-decode site. The (declaration, lex)
+    /// × (position → variant) 1×2 inverse-projection partition
+    /// completes at BOTH ordering axes.
+    /// THEORY.md §V.1 — knowable platform; the (lex position → typed
+    /// variant) projection was an unnamed compound of
+    /// [`Self::sorted_variants`] + `<[T]>::get` + `Option::copied`
+    /// pre-lift; naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of [`Self::sorted_variants`] — generic consumers
+    /// see ONE method, not ONE lex-inverse-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (lex
+    /// position → typed variant) projection emerges from the
+    /// composition of ONE substrate primitive
+    /// ([`Self::sorted_variants`]) with the standard-library
+    /// `<[T]>::get` bounded-index projection and the standard-library
+    /// `Option::copied` primitive rather than as a per-implementor
+    /// inline `match` block. A future tightening of
+    /// [`Self::sorted_variants`] (a future
+    /// `#[closed_set(compare_labels_with = ...)]` derive attribute that
+    /// swaps the ordering, a future canonicalization-aware `label`
+    /// projection that reorders the lex partition) propagates to every
+    /// closed-set lex-order inverse-decode consumer through ONE trait
+    /// method.
+    ///
+    /// Frontier inspiration: Idris's `Fin n` finite-cardinality type
+    /// with `natToFin : Nat -> (n : Nat) -> Maybe (Fin n)` composed
+    /// with a lex-sorted labeling projection over the finite-type
+    /// universe — the finite-type surface exposes a canonical (natural
+    /// → element) bounded-decode projection that a downstream compact-
+    /// encoding binds to, in either declaration-order OR lex-order
+    /// through the composition. Racket's `(enum-index->object enum n
+    /// #:order 'lex)` on a closed enum decodes an index back to its
+    /// variant under the chosen ordering; MLIR's
+    /// `RegisteredOperationName::get(int)` on the lex-sorted Op registry
+    /// decodes a stable lex index back to its Op kind; Haskell's
+    /// `Data.List.genericIndex` composed with a `sortBy comparingLabel`
+    /// prelude on a closed enumeration projects the same (lex position
+    /// → variant) shape via the same two-primitive composition.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::sorted_variants`]
+    /// surface with `<[T]>::get` and `Option::copied` — no new dep, no
+    /// new IR layer, no supertrait bound.
+    fn from_sorted_index(i: usize) -> Option<Self> {
+        Self::sorted_variants().get(i).copied()
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -2590,6 +2744,35 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     `usize`-carrier partition of the projection triangle stays
 ///     sound at both return-projection columns AND on both the
 ///     in-range accept AND the out-of-range reject partitions.
+/// 23. For every `i in 0..T::CARDINALITY`, `T::from_sorted_index(i)`
+///     equals `Some(T::sorted_variants()[i])`, AND
+///     `T::from_sorted_index(T::CARDINALITY)` equals [`None`] — the
+///     (`usize` lex-order position → typed variant) inverse projection
+///     agrees with direct [`ClosedSet::sorted_variants`] slice indexing
+///     on the in-range domain AND rejects the first out-of-range
+///     index. Clauses (22) + (23) together pin the (typed variant ↔
+///     `usize` lex-order position) bijection at BOTH directions:
+///     clause (22) covers the forward `variant.sorted_index_of() == i`
+///     projection, this clause covers the inverse
+///     `T::from_sorted_index(i) == Some(v)` projection AND the
+///     out-of-range guard. The default trait body's
+///     `Self::sorted_variants().get(i).copied()` composition satisfies
+///     the clause for free; the assertion catches a future implementor
+///     whose override drifts the bounded-decode arm (a permissive
+///     override that returns `Some(_)` for an out-of-range index, a
+///     strict override that returns [`None`] for a valid in-range lex
+///     slot, a swapped override that recovers the wrong variant for a
+///     valid lex slot) loudly rather than silently bifurcating the
+///     lex-order inverse-decode surface every downstream lex-order
+///     compact-encoding / lex-order-bitset-observed-variant / lex-
+///     order-lookup-table-iteration consumer routes through. Sibling
+///     posture to clauses (16) + (22) — clause (16) closes the
+///     (declaration-order index → typed variant) inverse projection on
+///     the (declaration, lex) partition of the (position → variant)
+///     inverse-projection surface; this clause closes the (lex-order
+///     index → typed variant) inverse projection so the (declaration,
+///     lex) × (position → variant) 1×2 inverse-projection partition
+///     completes at BOTH ordering axes.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -3226,6 +3409,61 @@ where
             "{type_name}: T::sorted_index_of({v:?}) drifted from T::sorted_variants()'s position of the variant — the direct (variant → lex-order position) projection no longer agrees with the natural sorted_variants.position projection, so a downstream lex-sorted-metrics-binner / lex-order-stable-wire-encoder / bitset-observed-slot-lex-renderer consumer that binds `v.sorted_index_of()` as its direct-projection surface would render the wrong lex slot for {v:?}",
         );
     }
+    // (23) — For every `i in 0..T::CARDINALITY`,
+    // `T::from_sorted_index(i)` MUST equal `Some(T::sorted_variants()
+    // [i])`, AND `T::from_sorted_index(T::CARDINALITY)` MUST equal
+    // `None`. The (`usize` lex-order position → typed variant) inverse
+    // projection agrees with direct `T::sorted_variants` slice indexing
+    // on the in-range domain AND rejects the first out-of-range index.
+    // Clauses (22) + (23) together pin the (typed variant ↔ `usize`
+    // lex-order position) bijection at BOTH directions: clause (22)
+    // covers the forward `variant.sorted_index_of() == i` projection,
+    // this clause covers the inverse `T::from_sorted_index(i) ==
+    // Some(v)` projection AND the out-of-range guard. The default
+    // trait body's `Self::sorted_variants().get(i).copied()`
+    // composition satisfies the clause for free; the assertion catches
+    // a future implementor whose override drifts the bounded-decode
+    // arm (a permissive override that returns `Some(_)` for an out-of-
+    // range index, folding an out-of-range serialized lex slot onto an
+    // in-range variant at the lex-order compact-decode boundary; a
+    // strict override that returns `None` for a valid in-range lex
+    // slot, silently dropping variants at the lex-order compact-decode
+    // boundary; a swapped override that recovers the wrong variant for
+    // a valid lex slot, silently bifurcating the (variant ↔ lex-order
+    // position) round-trip — a `variant.sorted_index_of()` round-
+    // tripped through `T::from_sorted_index(_)` would land at a
+    // different variant, breaking every lex-order compact-encoder /
+    // lex-order bitset consumer that expects the round-trip to close)
+    // loudly rather than silently bifurcating the lex-order inverse-
+    // decode surface every downstream lex-order compact-encoding /
+    // lex-order-bitset-observed-variant / lex-order-lookup-table-
+    // iteration consumer routes through. Sibling posture to clauses
+    // (16) + (22) — clause (16) closes the (declaration-order index →
+    // typed variant) inverse projection AND pins it against `T::ALL`
+    // slice indexing, clause (22) closes the (variant → lex-order
+    // position) forward projection AND pins it against
+    // `T::sorted_variants()`'s position of `self`, this clause closes
+    // the (lex-order index → typed variant) inverse projection AND
+    // pins it against `T::sorted_variants()` slice indexing so the
+    // (declaration, lex) × (position → variant) 1×2 inverse-projection
+    // partition stays sound at BOTH ordering axes AND on every
+    // canonical lex slot AND on the first out-of-range boundary.
+    // Reuses the `sorted_variants` Vec clauses (17) + (19) + (22)
+    // already materialized so this clause pays no additional
+    // allocation on top of the existing sweep's traversal surface.
+    for (i, &sorted_variant) in sorted_variants.iter().enumerate() {
+        let decoded = T::from_sorted_index(i);
+        assert_eq!(
+            decoded,
+            Some(sorted_variant),
+            "{type_name}: T::from_sorted_index({i}) drifted from Some(T::sorted_variants()[{i}]) — the direct (lex-order index → typed variant) inverse projection no longer agrees with direct T::sorted_variants slice indexing on the in-range domain, so a downstream lex-order compact-decoder / lex-order-bitset-observed-variant / lex-order-lookup-table consumer that binds `T::from_sorted_index(i)` as its inverse-decode surface would recover the wrong variant for lex slot {i}",
+        );
+    }
+    assert_eq!(
+        T::from_sorted_index(T::CARDINALITY),
+        None,
+        "{type_name}: T::from_sorted_index(T::CARDINALITY) returned Some(_) — the (lex-order index → typed variant) inverse projection accepted the first out-of-range lex slot, folding an out-of-range serialized lex index onto an in-range variant at the lex-order compact-decode boundary. Clauses (14) + (23) together pin `T::CARDINALITY` as the first structurally-out-of-range lex slot — a permissive override that fails this pin bifurcates the lex-order compact-encoding surface every downstream consumer routes through.",
+    );
 }
 
 #[cfg(test)]
@@ -6346,6 +6584,167 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_index_of() override drifted from the natural sorted_variants.position projection",
+        );
+    }
+
+    #[test]
+    fn from_sorted_index_recovers_every_canonical_variant_at_lex_order_slot() {
+        // The direct (lex-order index → variant) inverse projection
+        // accept arm — for every canonical lex slot `i`,
+        // `T::from_sorted_index(i)` recovers `Some(v)` where `v` is
+        // the variant `T::sorted_variants()` places at slot `i`. On
+        // the `StubKind` fixture, the labels `"alpha"`, `"beta"`,
+        // `"gamma"` are already lex-ordered under `str::cmp`, so lex
+        // slots (0, 1, 2) recover (Alpha, Beta, Gamma) respectively.
+        // Sibling posture to `from_index_recovers_every_canonical_variant`
+        // one axis over on the (declaration, lex) ordering-axis
+        // partition of the (position → variant) inverse-projection
+        // surface — this pin covers the lex-ordering inverse
+        // projection, that pin covered the declaration-ordering
+        // inverse projection.
+        assert_eq!(
+            <StubKind as ClosedSet>::from_sorted_index(0),
+            Some(StubKind::Alpha)
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::from_sorted_index(1),
+            Some(StubKind::Beta)
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::from_sorted_index(2),
+            Some(StubKind::Gamma)
+        );
+    }
+
+    #[test]
+    fn from_sorted_index_rejects_first_out_of_range_index_at_cardinality() {
+        // The (lex-order index → variant) inverse projection reject
+        // arm — `T::from_sorted_index(T::CARDINALITY)` MUST return
+        // `None`. The bounded-decode contract closes the first slot
+        // strictly outside the closed set at `T::CARDINALITY`, so a
+        // downstream lex-order compact-decoder that ingests a `u8`
+        // lex slot from a remote-authored payload fails-closed on any
+        // out-of-range byte rather than silently folding it onto an
+        // in-range variant. Sibling posture to
+        // `from_index_rejects_first_out_of_range_index_at_cardinality`
+        // one axis over on the (declaration, lex) ordering-axis
+        // partition of the (position → variant) inverse-projection
+        // surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::from_sorted_index(<StubKind as ClosedSet>::CARDINALITY),
+            None,
+            "from_sorted_index(T::CARDINALITY) MUST return None — the bounded-decode arm accepted the first structurally-out-of-range lex slot",
+        );
+    }
+
+    #[test]
+    fn from_sorted_index_agrees_with_sorted_variants_get_copied_on_every_probe() {
+        // The direct (lex-order index → variant) inverse projection
+        // MUST agree with the two-step
+        // `sorted_variants().get(i).copied()` composition on every
+        // input the sweep walks. This test pins the alignment across
+        // every canonical lex slot AND the first out-of-range slot.
+        // The alignment is the load-bearing contract that lets a
+        // generic consumer freely swap between the direct-projection
+        // surface (a `Self::sorted_variants().get(i).copied()` route)
+        // and the two-step composition (`sorted_variants` Vec
+        // allocation plus a `<[T]>::get` bounded-index projection)
+        // based on its rendering / storage needs without changing the
+        // program's lex-order inverse-decode semantics. Sibling
+        // posture to `from_index_agrees_with_all_get_copied_on_every_probe`
+        // one axis over on the (declaration, lex) ordering-axis
+        // partition of the (position → variant) inverse-projection
+        // surface.
+        let sorted = <StubKind as ClosedSet>::sorted_variants();
+        for i in 0..=<StubKind as ClosedSet>::CARDINALITY {
+            let direct = <StubKind as ClosedSet>::from_sorted_index(i);
+            let composed = sorted.get(i).copied();
+            assert_eq!(
+                direct, composed,
+                "from_sorted_index({i}) disagreed with sorted_variants().get({i}).copied() — the direct (lex-order index → variant) inverse projection bifurcated from the natural two-step composition",
+            );
+        }
+    }
+
+    #[test]
+    fn from_sorted_index_round_trips_through_sorted_index_of_on_every_variant() {
+        // BIJECTION ROUND-TRIP (lex-order axis): for every canonical
+        // variant `v`, `T::from_sorted_index(v.sorted_index_of())` MUST
+        // recover `Some(v)` — the (variant → lex position) forward
+        // projection composed with the (lex position → variant)
+        // inverse projection is the identity on `T::ALL`. This closes
+        // the round-trip contract on the lex ordering axis, sibling
+        // posture to `from_index_round_trips_through_index_of_on_every_variant`
+        // on the declaration ordering axis. Together the two round-
+        // trip pins close the (variant ↔ position) bijection at BOTH
+        // ordering axes as a runtime-verified TYPED THEOREM rather
+        // than a construction-only implication.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let slot = <StubKind as ClosedSet>::sorted_index_of(v);
+            let recovered = <StubKind as ClosedSet>::from_sorted_index(slot);
+            assert_eq!(
+                recovered,
+                Some(v),
+                "from_sorted_index(sorted_index_of({v:?})) = from_sorted_index({slot}) failed the round-trip — the (variant → lex position → variant) bijection bifurcated at the round-trip boundary",
+            );
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_from_sorted_index_and_sorted_variants_get(
+    ) {
+        // The well-formedness sweep's (23) clause — for every `i in
+        // 0..T::CARDINALITY`, `T::from_sorted_index(i)` MUST equal
+        // `Some(T::sorted_variants()[i])`, AND
+        // `T::from_sorted_index(T::CARDINALITY)` MUST equal `None`. A
+        // hand-impl'd implementor whose override drifts the bounded-
+        // decode arm — e.g. a permissive override that returns
+        // `Some(_)` regardless of the input lex slot — fails the
+        // sweep loudly rather than silently bifurcating the lex-order
+        // inverse-decode surface every downstream lex-order compact-
+        // encoding / lex-order-bitset-observed-variant / lex-order-
+        // lookup-table-iteration consumer routes through. Sibling
+        // posture to the fifteen sibling `_catches_drift_between_*`
+        // pins above (clauses 5-22); together they close the
+        // structural-drift-catches sweep on every default composition
+        // the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedFromSortedIndexKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedFromSortedIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedFromSortedIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted from sorted index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedFromSortedIndexKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted from sorted index kind";
+            type Unknown = UnknownDriftedFromSortedIndexKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedFromSortedIndexKind(s.to_owned())
+            }
+            fn from_sorted_index(_i: usize) -> Option<Self> {
+                // Drifted override — always returns `Some(Only)`
+                // regardless of the input lex slot. Fails the
+                // out-of-range guard at `T::CARDINALITY` — the
+                // permissive body silently folds an out-of-range
+                // serialized lex index onto the singleton's only
+                // variant.
+                Some(Self::Only)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedFromSortedIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a from_sorted_index() override drifted from the natural sorted_variants.get().copied() bounded-decode arm",
         );
     }
 }

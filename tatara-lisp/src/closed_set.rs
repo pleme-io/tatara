@@ -1772,6 +1772,152 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
         best
     }
+
+    /// Recover the canonical [`Self::label`] at declaration-order
+    /// position `i` in [`Self::ALL`], or [`None`] if
+    /// `i >= Self::CARDINALITY`.
+    ///
+    /// The direct `(usize → &'static str)` projection through the
+    /// closed set — the missing corner of the (input carrier ×
+    /// return-projection) 3-of-4 matrix formed by the three
+    /// pre-existing (variant, `&str` label, `usize` index) inbound-
+    /// projection surfaces on the trait:
+    ///
+    /// | Input carrier    | Output projection      | Projection surface        |
+    /// |------------------|------------------------|---------------------------|
+    /// | typed variant    | `&'static str` label   | [`Self::label`]           |
+    /// | typed variant    | `usize` index          | [`Self::index_of`]        |
+    /// | `usize` index    | typed variant          | [`Self::from_index`]      |
+    /// | `usize` index    | `&'static str` label   | [`Self::label_at`]        |
+    ///
+    /// Together with [`Self::label`], [`Self::index_of`], and
+    /// [`Self::from_index`], this method closes the projection
+    /// triangle over the three closed-set carriers (typed variant,
+    /// `&'static str` canonical label, `usize` declaration-order
+    /// index) with a direct surface at every (input, output) pair.
+    /// Every projection through the closed set — variant → label,
+    /// variant → index, index → variant, and index → label — binds
+    /// to ONE trait method rather than routing through a two-step
+    /// composition at the call site.
+    ///
+    /// Sibling posture to [`Self::from_index`] one axis over on the
+    /// (return-projection) axis of the `usize`-carrier partition:
+    /// [`Self::from_index`] projects a `usize` position onto its
+    /// typed variant through direct [`Self::ALL`] slice indexing,
+    /// this method projects the same `usize` position through to the
+    /// typed variant's canonical [`Self::label`] rendering — one
+    /// composition step further along the same axis. Both return an
+    /// [`Option`] because the input carrier is wider than the closed
+    /// set — every out-of-range `usize` decodes to [`None`] on both
+    /// projections, and both agree on the (in-range accept,
+    /// out-of-range reject) partition slot-for-slot by construction
+    /// (this method's default body is [`Self::from_index`] composed
+    /// with [`Self::label`], so any consumer that decodes through
+    /// this method sees the SAME `Option`-typed rejection arm every
+    /// other index-carrier decoder sees).
+    ///
+    /// Default body composes [`Self::from_index`] with
+    /// [`Self::label`] verbatim — the `usize → &'static str` shape
+    /// is a typed CONSEQUENCE of the two pre-existing primitives, not
+    /// a third codepath. Implementors override only when the
+    /// composition needs to diverge from the natural
+    /// `from_index(i).map(label)` shape (no production implementor
+    /// reaches for this today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` / `sorted_labels` /
+    /// `sorted_variants` / `from_index` / `index_of` overrides exist —
+    /// a typed escape hatch the trait surface exposes rather than
+    /// forcing the implementor to hand-roll the impl). An implementor
+    /// that overrides [`Self::from_index`] propagates the override
+    /// through this default body to the direct-label projection
+    /// automatically; the (typed variant, `&'static str` label,
+    /// `usize` index) projection triangle funnels every `usize`-
+    /// carrier decode through ONE typed primitive on each of its
+    /// (variant, label) return-projection columns.
+    ///
+    /// The bounded-index contract — the out-of-range arm returns
+    /// [`None`] for every `i >= Self::CARDINALITY` — is guaranteed by
+    /// the default composition through [`Self::from_index`]'s
+    /// `<[T]>::get` slice-bounded projection; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (20)
+    /// pins the both-directions equality against the natural
+    /// composition on every implementor, so a passing well-formedness
+    /// sweep means every generic consumer can call `label_at` on any
+    /// `usize` payload and expect the same `Option`-typed answer at
+    /// every crate boundary.
+    ///
+    /// Future consumers — a compact wire-format decoder that emits
+    /// `variant.index_of() as u8` and later renders
+    /// `label_at(byte as usize)` for a diagnostic without materializing
+    /// the typed variant AT ALL (the natural `Option`-typed rejection
+    /// arm covers out-of-range serialized indices), a metrics tagger
+    /// that stores per-slot counter payloads under
+    /// `metrics[variant.index_of()]` and later renders per-slot
+    /// diagnostics `<label_at(slot)>: <count>` in declaration order
+    /// without a re-decode through [`Self::from_index`] +
+    /// [`Self::label`] at each rendering site, a `tatara-check`
+    /// per-slot diagnostic that walks `0..T::CARDINALITY` and renders
+    /// each slot's canonical label without carrying the typed
+    /// variant, a bitset-observed-variant renderer that walks the set
+    /// bits and renders each slot's label directly without a
+    /// [`Self::from_index`]-then-[`Self::label`] two-step at each set
+    /// bit — bind to ONE trait method instead of hand-rolling either
+    /// `T::from_index(i).map(|v| v.label())` (which re-derives the
+    /// same two-primitive composition at every callsite AND makes
+    /// every downstream site depend on [`Self::from_index`]'s
+    /// `Option`-typed dispatch shape) OR the inline
+    /// `T::ALL.get(i).copied().map(|v| v.label())` (which re-derives
+    /// the underlying three-primitive composition at every callsite)
+    /// at each callsite, and the closed-set `(usize → label)` direct
+    /// projection surface evolves at ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the (`usize` array index →
+    /// `&'static str` label) projection becomes a TYPE projection on
+    /// the trait rather than a per-consumer inline
+    /// `Self::from_index(i).map(|v| v.label())` composition at every
+    /// downstream index-decode site. The (typed variant, `&'static str`
+    /// label, `usize` index) projection triangle over the closed-set
+    /// carriers gains its fourth direct edge — every (input, output)
+    /// pair over the three carriers binds to ONE typed projection
+    /// surface with no two-step composition at the call site.
+    /// THEORY.md §V.1 — knowable platform; the (`usize` → `&'static str`)
+    /// direct projection was an unnamed compound of [`Self::from_index`]
+    /// composed with [`Self::label`] pre-lift; naming it on the trait
+    /// makes the projection a TYPED CONSEQUENCE of the two substrate
+    /// primitives — generic consumers see ONE method, not ONE
+    /// index-to-label-shape-per-crate. The well-formedness clause (20) pins the composition
+    /// against the natural `from_index(i).map(label)` shape on every
+    /// implementor so a passing well-formedness sweep means every
+    /// generic consumer can call `label_at` on any `usize` payload and
+    /// expect the same `Option`-typed answer at every crate boundary.
+    /// THEORY.md §VI.1 — generation over composition; the direct
+    /// (`usize → label`) projection emerges from the composition of
+    /// TWO substrate primitives ([`Self::from_index`], [`Self::label`])
+    /// rather than as a per-implementor inline
+    /// `from_index(i).map(label)` compound. A future tightening of
+    /// either primitive (a future perfect-hash `from_index`, a future
+    /// canonicalization-aware `label` projection that folds case /
+    /// whitespace, a future const-fn `label` axis that makes the
+    /// projection compile-time visible) propagates to every closed-set
+    /// direct-label-projection consumer through ONE trait body.
+    ///
+    /// Frontier inspiration: Idris's `Fin n` finite-cardinality type
+    /// with a canonical `showFin : Fin n -> String` projection — the
+    /// direct (position → rendered label) surface emits as a single
+    /// typed method on the finite-type universe rather than per-
+    /// instance inline `showFin (fromNat i)` composition. MLIR's
+    /// `mlir::OpBuilder::getOperationName(index)` on the Op registry
+    /// composes the (index → op) lookup with the (op → name)
+    /// projection into ONE direct `(index → name)` surface the
+    /// DiagnosticEngine renders per-slot diagnostics against. Racket's
+    /// `(enum-label enum i)` on a closed enum projects a declaration-
+    /// order position onto its rendered canonical label directly.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::from_index`] +
+    /// [`Self::label`] surfaces — no new dep, no new IR layer, no
+    /// supertrait bound, no allocation.
+    fn label_at(i: usize) -> Option<&'static str> {
+        <Self as ClosedSet>::from_index(i).map(<Self as ClosedSet>::label)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -2093,6 +2239,42 @@ pub trait ClosedSet: Sized + Copy + 'static {
 ///     against `T::ALL[0]` / `T::ALL[T::ALL.len() - 1]` so the
 ///     closed set's structural endpoints stay sound at the two
 ///     canonical anchor sites.
+/// 20. For every `i in 0..T::CARDINALITY`, `T::label_at(i)` equals
+///     `Some(T::ALL[i].label())`, AND `T::label_at(T::CARDINALITY)`
+///     equals [`None`] — the direct (`usize` array index →
+///     `&'static str` canonical label) projection agrees with the
+///     natural [`ClosedSet::from_index`] + [`ClosedSet::label`]
+///     composition on the in-range domain AND rejects the first
+///     out-of-range index. Clauses (16) + (20) together pin the
+///     `usize`-carrier decode axis of the (typed variant, `&'static
+///     str` label, `usize` index) projection triangle at BOTH
+///     return-projection columns: clause (16) covers the (index →
+///     typed variant) return-projection, this clause covers the
+///     (index → `&'static str` label) return-projection. The
+///     default trait body's [`ClosedSet::from_index`] +
+///     [`ClosedSet::label`] composition satisfies the clause for
+///     free; the assertion catches a future implementor whose
+///     override drifts the direct-label projection arm (a permissive
+///     override that returns `Some(_)` for an out-of-range index,
+///     folding an out-of-range serialized index onto an in-range
+///     label — silently bifurcating the direct-label projection from
+///     [`ClosedSet::from_index`]'s bounded-decode arm; a strict
+///     override that returns [`None`] for a valid in-range index,
+///     silently dropping labels at the compact-decode boundary; a
+///     swapped override that recovers the wrong label for a valid
+///     index, silently bifurcating the (variant, `&'static str`
+///     label, `usize` index) projection triangle) loudly rather than
+///     silently bifurcating the direct-label projection surface every
+///     downstream compact-encoding / metrics-per-slot / bitset-
+///     observed-slot / `tatara-check` per-slot diagnostic consumer
+///     routes through. Sibling posture to clause (16) on the
+///     (typed variant, `&'static str` label) return-projection axis
+///     of the `usize`-carrier partition — clause (16) closes the
+///     (index → typed variant) direct projection, this clause closes
+///     the (index → `&'static str` label) direct projection, so the
+///     `usize`-carrier partition of the projection triangle stays
+///     sound at both return-projection columns AND on both the
+///     in-range accept AND the out-of-range reject partitions.
 ///
 /// Per-implementor domain-specific tests STAY in the implementor's
 /// test module — the `gates_phase` truth tables, the
@@ -2599,6 +2781,46 @@ where
         T::sorted_last(),
         sorted_variants[sorted_variants.len() - 1],
         "{type_name}: T::sorted_last() drifted from T::sorted_variants()[T::sorted_variants().len() - 1] — the lexicographic-order tail endpoint anchor no longer matches the natural label-keyed lex-max projection, so a downstream diagnostic-boundary / bounded-loop-lex consumer that binds `T::sorted_last()` as its canonical anchor would land on the wrong variant",
+    );
+    // (20) — For every `i in 0..T::CARDINALITY`, `T::label_at(i)`
+    // MUST equal `Some(T::ALL[i].label())`, AND
+    // `T::label_at(T::CARDINALITY)` MUST equal `None`. The default
+    // trait body composes `T::from_index(i).map(T::label)` verbatim
+    // and satisfies both arms for free; the assertion catches a
+    // future implementor whose override drifts the direct-label
+    // projection arm (a permissive override that returns `Some(_)`
+    // for an out-of-range index — folding an out-of-range serialized
+    // index onto an in-range label at the direct-projection column
+    // while `from_index` still rejects it, silently bifurcating the
+    // `usize`-carrier decode axis; a strict override that returns
+    // `None` for a valid in-range index, silently dropping labels at
+    // the compact-decode boundary; a swapped override that recovers
+    // the wrong label for a valid index, silently bifurcating the
+    // (variant, `&'static str` label, `usize` index) projection
+    // triangle at its fourth direct edge) loudly rather than silently
+    // bifurcating the direct-label projection surface every downstream
+    // compact-encoding / metrics-per-slot / bitset-observed-slot /
+    // `tatara-check` per-slot diagnostic consumer routes through.
+    // Sibling posture to clause (16) on the (typed variant, `&'static
+    // str` label) return-projection axis of the `usize`-carrier
+    // partition — clause (16) closes the (index → typed variant)
+    // direct projection AND the out-of-range guard, this clause
+    // closes the (index → `&'static str` label) direct projection AND
+    // the SAME out-of-range guard on the second return-projection
+    // column so the `usize`-carrier partition of the projection
+    // triangle stays sound at both return-projection columns AND on
+    // both the in-range accept AND the out-of-range reject partitions.
+    for (i, &v) in T::ALL.iter().enumerate() {
+        assert_eq!(
+            T::label_at(i),
+            Some(v.label()),
+            "{type_name}: T::label_at({i}) drifted from Some(T::ALL[{i}].label()) — the direct (usize → &'static str label) projection no longer agrees with the natural from_index+label composition on the in-range accept arm, so a downstream compact-encoding / metrics-per-slot / bitset-observed-slot / tatara-check per-slot diagnostic consumer that binds `T::label_at(i)` as its direct-projection surface would render the wrong canonical label at index {i}",
+        );
+    }
+    assert_eq!(
+        T::label_at(T::CARDINALITY),
+        None,
+        "{type_name}: T::label_at(T::CARDINALITY) drifted from None — the direct (usize → &'static str label) projection accepted the first out-of-range index (T::CARDINALITY), so an out-of-range serialized index would fold onto an in-range canonical label on the direct-projection column while `from_index` still rejects it, silently bifurcating the usize-carrier decode axis of the projection triangle",
     );
 }
 
@@ -5283,6 +5505,158 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_last() override drifted from the natural T::sorted_variants()[T::sorted_variants().len() - 1] projection",
+        );
+    }
+
+    #[test]
+    fn label_at_recovers_every_canonical_label_at_declaration_order_index() {
+        // The direct (`usize` → `&'static str`) projection arm — for
+        // every `i in 0..T::CARDINALITY`, `T::label_at(i)` returns
+        // `Some(T::ALL[i].label())`. Sibling posture to
+        // `from_index_recovers_every_variant_at_declaration_order_index`
+        // one axis over on the (return-projection) axis of the
+        // `usize`-carrier partition — this pin covers the direct-label
+        // return-projection column, that pin covered the typed-variant
+        // return-projection column. Both walk `Self::ALL` in
+        // declaration order at the same in-range domain, keyed on the
+        // typed variant's `label()` projection — the two arms of the
+        // return-projection axis MUST agree slot-for-slot on the
+        // (variant, `&'static str` label) content the underlying
+        // `Self::ALL` entry carries. A regression that drifts either
+        // arm (a permissive `label_at` override that recovers a
+        // stale label after a variant-listing edit, a swapped override
+        // that returns adjacent-slot labels) bifurcates the direct-
+        // projection surface from the natural `from_index+label`
+        // composition every `usize`-carrier decode consumer routes
+        // through. Pinning the projection here catches the drift on
+        // the stub-level surface before any per-implementor sweep
+        // depends on the alignment downstream.
+        for (i, &v) in <StubKind as ClosedSet>::ALL.iter().enumerate() {
+            assert_eq!(
+                <StubKind as ClosedSet>::label_at(i),
+                Some(v.label()),
+                "label_at({i}) failed to recover the canonical label at declaration-order index {i}",
+            );
+        }
+    }
+
+    #[test]
+    fn label_at_rejects_first_out_of_range_index_at_cardinality() {
+        // The out-of-range reject arm — `T::label_at(T::CARDINALITY)`
+        // returns `None`. Sibling posture to
+        // `from_index_rejects_first_out_of_range_index_at_cardinality`
+        // one axis over on the (return-projection) axis of the
+        // `usize`-carrier partition — both arms MUST reject the first
+        // out-of-range index at the SAME boundary
+        // (`T::CARDINALITY`). Pinning the reject result here means a
+        // generic compact-encoding consumer that stores `variant
+        // .index_of() as u8` and later decodes serialized bytes AT
+        // MOST as `T::CARDINALITY - 1` can rely on the direct-label
+        // projection to reject any byte at OR beyond
+        // `T::CARDINALITY` — the (variant, label) return-projection
+        // axis of the `usize`-carrier partition stays semantically
+        // aligned on the (in-range accept, out-of-range reject)
+        // partition.
+        assert_eq!(
+            <StubKind as ClosedSet>::label_at(<StubKind as ClosedSet>::CARDINALITY),
+            None,
+        );
+    }
+
+    #[test]
+    fn label_at_agrees_with_from_index_composed_with_label_on_every_probe() {
+        // The direct (`usize` → `&'static str`) projection MUST agree
+        // with the two-step `from_index(i).map(label)` composition on
+        // every input the sweep walks. This test pins the alignment
+        // against a representative probe set: (a) every in-range
+        // declaration-order index (`0..T::CARDINALITY`) — both arms
+        // return the acceptance side `Some(label)` AND project to the
+        // SAME canonical label; (b) the out-of-range boundary probes
+        // (`T::CARDINALITY`, `T::CARDINALITY + 1`, `usize::MAX`) —
+        // both arms return the rejection side `None`. The alignment is
+        // the load-bearing contract that lets a generic consumer freely
+        // swap between the direct-projection surface and the two-step
+        // composition based on its rendering / storage needs without
+        // changing the program's decoded-label semantics. A regression
+        // that drifts either arm (a permissive `label_at` override
+        // that accepts out-of-range indices, a strict override that
+        // rejects a valid in-range index, a swapped override that
+        // recovers the wrong label for a valid index) fails this pin
+        // stub-level before any per-implementor sweep depends on the
+        // alignment downstream. Sibling posture to
+        // `from_index_agrees_with_all_indexing_on_every_probe` one
+        // axis over on the (return-projection) axis — this pin
+        // extends the (in-range accept, out-of-range reject) alignment
+        // to the direct-label return-projection column.
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        let probes: [usize; 6] = [0, 1, 2, cardinality, cardinality + 1, usize::MAX];
+        for i in probes {
+            let direct = <StubKind as ClosedSet>::label_at(i);
+            let composed =
+                <StubKind as ClosedSet>::from_index(i).map(<StubKind as ClosedSet>::label);
+            assert_eq!(
+                direct, composed,
+                "label_at({i}) disagreed with from_index({i}).map(label) — the direct (usize → &'static str label) projection bifurcated from the natural two-step composition",
+            );
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_label_at_and_from_index_composition() {
+        // The well-formedness sweep's (20) clause — `T::label_at(i)`
+        // MUST equal `Some(T::ALL[i].label())` for every `i in
+        // 0..T::CARDINALITY`, AND `T::label_at(T::CARDINALITY)` MUST
+        // equal `None`. A hand-impl'd implementor whose override
+        // drifts the direct-label projection — e.g. a permissive
+        // override that returns `Some(_)` for an out-of-range index —
+        // fails the sweep loudly rather than silently bifurcating the
+        // direct-label projection surface every downstream compact-
+        // encoding / metrics-per-slot / `tatara-check` per-slot
+        // diagnostic consumer routes through. Pinning the failure
+        // path here keeps the testkit's (20) clause guaranteed-to-fire
+        // — a regression that makes the assertion permissive (e.g. a
+        // future "either the in-range accept OR the out-of-range
+        // reject" relaxation that only checks one arm) breaks this
+        // stub-level contract before any per-implementor sweep runs.
+        // Sibling posture to the twelve sibling `_catches_drift_between_*`
+        // pins above (clauses 5-19); together they close the
+        // structural-drift-catches sweep on every default composition
+        // the trait exposes.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedLabelAtKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedLabelAtKind(pub String);
+        impl core::fmt::Display for UnknownDriftedLabelAtKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted label at kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedLabelAtKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted label at kind";
+            type Unknown = UnknownDriftedLabelAtKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedLabelAtKind(s.to_owned())
+            }
+            fn label_at(_i: usize) -> Option<&'static str> {
+                // Drifted override — accepts every `usize` payload,
+                // including the reserved out-of-range probe the
+                // testkit's clause (20) demands rejects. Fails the
+                // direct-projection alignment with `from_index(i)
+                // .map(label)` on the out-of-range reject arm.
+                Some("only")
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedLabelAtKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a label_at() override drifted from the natural from_index+label composition on the out-of-range reject arm",
         );
     }
 }

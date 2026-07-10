@@ -9708,6 +9708,189 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_precedes(lo, self)
             && <Self as ClosedSet>::sorted_precedes(self, hi)
     }
+
+    /// The declaration-order RIGHT-HALF-OPEN closed-range containment
+    /// predicate — `true` iff `self` sits in the half-open range
+    /// `[lo, hi)` of the declaration-order [`Self::ALL`], `false` when
+    /// `self` coincides with the upper endpoint `hi`, sits strictly
+    /// before `lo`, OR sits strictly after `hi`. The "canonical
+    /// half-open" arm on the (endpoint-inclusivity-flavor) axis of the
+    /// ternary closed-range containment surface — mirroring
+    /// `std::ops::Range::contains`, Python `range()`, and the standard
+    /// mathematical `[lo, hi)` interval notation where the RIGHT
+    /// endpoint is the OPEN one.
+    ///
+    /// Sibling posture to [`Self::is_between`] (both-inclusive, `[lo,
+    /// hi]`) and [`Self::is_strictly_between`] (both-exclusive, `(lo,
+    /// hi)`) one arm over on the (endpoint-inclusivity-flavor) axis of
+    /// the ternary closed-range containment surface: [`Self::is_between`]
+    /// composes [`Self::precedes_or_equal`] at BOTH bound-to-self edges;
+    /// [`Self::is_strictly_between`] composes [`Self::precedes`] at
+    /// BOTH edges; this method composes [`Self::precedes_or_equal`] at
+    /// the LOWER edge and [`Self::precedes`] at the UPPER edge — the
+    /// asymmetric mix that defines the right-half-open interval. The
+    /// declaration-axis composition binds through
+    /// `lo.precedes_or_equal(self) ∧ self.precedes(hi)`, so the
+    /// right-half-open containment predicate is a typed CONSEQUENCE of
+    /// the two pre-existing pairwise-precedence predicates (non-strict
+    /// at the lower edge, strict at the upper edge) applied at the two
+    /// range endpoints. Not a fresh substrate primitive on the index
+    /// axis — the composition emerges from the just-closed 8-corner
+    /// pairwise-comparison hypercube through conjunction of one
+    /// non-strict-forward arm and one strict-forward arm.
+    ///
+    /// Endpoint-inclusivity contract: the LOWER endpoint `lo` sits
+    /// INSIDE the half-open range — `lo.is_right_half_open_between(lo,
+    /// hi)` is `true` when `lo.precedes(hi)` (the range is non-empty);
+    /// the UPPER endpoint `hi` sits OUTSIDE — `hi.is_right_half_open_between(lo,
+    /// hi)` is ALWAYS `false` (irreflexivity of [`Self::precedes`] at
+    /// the upper edge). Reflexivity on the diagonal:
+    /// `v.is_right_half_open_between(v, v)` is `false` for every `v`
+    /// because the singleton half-open range `[v, v)` is EMPTY (no
+    /// variant simultaneously non-strictly-succeeds `v` AND strictly-
+    /// precedes `v`). Empty-range degeneracy: `v.is_right_half_open_between(hi,
+    /// lo)` is `false` when `hi` strictly succeeds `lo` — the reversed
+    /// half-open range is empty because no variant can simultaneously
+    /// non-strictly succeed `hi` AND strictly precede `lo` when `hi`
+    /// sits later than `lo`. The empty-range arm is a typed
+    /// CONSEQUENCE of the pairwise-precedence predicates' totality.
+    ///
+    /// Range-partition contract: for every ordered pair `(lo, hi)`
+    /// with `lo.precedes_or_equal(hi)`, the set of variants `v` for
+    /// which `v.is_right_half_open_between(lo, hi)` is `true` equals
+    /// the RIGHT-HALF-OPEN declaration-order slice
+    /// `Self::ALL[index_of(lo)..index_of(hi)]` — the half-open interval,
+    /// distinct from the inclusive-both peer's closed interval
+    /// `Self::ALL[index_of(lo)..=index_of(hi)]` and from the
+    /// exclusive-both peer's open interval
+    /// `Self::ALL[index_of(lo)+1..index_of(hi)]`. Pinned by
+    /// `is_right_half_open_between_partitions_all_across_every_bound_pair`.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::is_right_half_open_between`]: an LSP diagnostic that
+    /// ranges over the RIGHT-HALF-OPEN interior of a closed-set
+    /// interval via `T::ALL.iter().filter(|v|
+    /// v.is_right_half_open_between(lo, hi))` — bind to ONE typed
+    /// ternary right-half-open-range containment predicate rather than
+    /// re-deriving `lo.precedes_or_equal(v) && v.precedes(hi)` inline
+    /// per callsite; a `tatara-check` predicate `(check-phase-in-window-
+    /// exclusive-upper …)` verifying a workspace-wide phase-transition
+    /// constraint where a phase must sit at or after a lower watermark
+    /// AND strictly before an upper watermark (e.g. `Executing
+    /// .is_right_half_open_between(Warming, Contracting)` on the
+    /// substrate's `WorkloadPhase` lifecycle — the "actively serving
+    /// OR just warming, not yet draining" window); a Sekiban audit-
+    /// trail metric labeled by right-half-open membership in a phase-
+    /// transition window; the substrate's own iteration idiom
+    /// `for v in T::ALL { if v.is_right_half_open_between(lo, hi) {
+    /// … } }` mirroring `for v in lo..hi` on integer ranges but on
+    /// the typed closed-set surface directly — the canonical
+    /// half-open iteration pattern lifted to the typed algebra without
+    /// leaking a foreign `std::ops::Range` value carrier.
+    ///
+    /// (86) + (87) together OPEN the (right-half-open) corner of the
+    /// (ordering × endpoint-inclusivity-flavor) 2×4 = 8-corner
+    /// hypercube past the four already-closed corners at
+    /// (inclusive-both) (82)+(83) and (exclusive-both) (84)+(85). The
+    /// (86)+(87) pair is the ASYMMETRIC-COMPOSITION corner where the
+    /// two pairwise-precedence predicates ([`Self::precedes_or_equal`]
+    /// and [`Self::precedes`]) BOTH participate at the range's two
+    /// endpoints — a typed peer of the mathematically canonical
+    /// half-open interval `[lo, hi)`. Adding
+    /// [`Self::is_left_half_open_between`] / [`Self::is_sorted_left_half_open_between`]
+    /// at (88)+(89) closes the FINAL corner of the (endpoint-
+    /// inclusivity-flavor) axis EXHAUSTIVELY on the ternary-
+    /// containment surface — the four flavors span the full closure
+    /// `{inclusive-both, exclusive-both, right-half-open, left-half-
+    /// open}` and there is no further sub-corner to open past the
+    /// eight-way exhaustive closure.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the ternary
+    /// right-half-open-range containment predicate becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline mixed conjunction of one non-strict-precedence call and
+    /// one strict-precedence call at every downstream generic site.
+    /// THEORY.md §V.1 — knowable platform; the right-half-open
+    /// endpoint-inclusivity axis was an unnamed asymmetric inline
+    /// composition (`lo.precedes_or_equal(v) && v.precedes(hi)`)
+    /// recurring at every prospective downstream half-open-range-
+    /// membership site pre-lift. Naming it on the trait makes the
+    /// predicate a TYPED CONSEQUENCE of BOTH pairwise-precedence
+    /// predicates applied at the two range endpoints, ONE per edge.
+    /// THEORY.md §VI.1 — generation over composition; the ternary
+    /// right-half-open containment predicate emerges from the
+    /// composition of THREE substrate primitives
+    /// ([`Self::precedes_or_equal`] at the lower edge +
+    /// [`Self::precedes`] at the upper edge + the standard-library `&&`
+    /// on `bool`) rather than as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Rust's `std::ops::Range::contains(&v)` on
+    /// the value carrier `lo..hi` exposes the right-half-open
+    /// containment predicate as a first-class method on the
+    /// standard-library range type; Python's `lo <= v < hi` chained-
+    /// comparison idiom composes non-strict-below AND strict-above
+    /// into ONE bounded-range membership check syntactically; Kotlin's
+    /// `v in lo..<hi` right-exclusive-range operator exposes the same
+    /// half-open interval on ordered types. Translation through pleme-io
+    /// primitives: the ternary right-half-open containment predicate
+    /// on the closed-set trait binds through [`Self::precedes_or_equal`]
+    /// at the lower edge and [`Self::precedes`] at the upper edge —
+    /// the asymmetric mixed composition that defines `[lo, hi)`
+    /// mathematically. The closed-set trait carries the containment
+    /// predicate as a typed projection on the variant, not on a
+    /// foreign `Range` value carrier or a chained-comparison n-ary
+    /// macro; the mixed composition emerges from the substrate's typed
+    /// pairwise-comparison surface rather than as a fresh substrate
+    /// primitive on the index axis.
+    fn is_right_half_open_between(self, lo: Self, hi: Self) -> bool {
+        <Self as ClosedSet>::precedes_or_equal(lo, self) && <Self as ClosedSet>::precedes(self, hi)
+    }
+
+    /// The lex-order RIGHT-HALF-OPEN closed-range containment
+    /// predicate — `true` iff `self` sits in the half-open range
+    /// `[lo, hi)` of the lex-order [`Self::sorted_labels`], `false`
+    /// when `self` coincides with the upper endpoint `hi`, sits
+    /// strictly before `lo` OR strictly after `hi` in lex order. The
+    /// lex-ordering peer of [`Self::is_right_half_open_between`] on
+    /// the (declaration, lex) ordering axis of the ternary right-
+    /// half-open-range containment surface.
+    ///
+    /// Sibling posture to [`Self::is_right_half_open_between`] one arm
+    /// over on the (declaration, lex) ordering axis —
+    /// [`Self::is_right_half_open_between`] uses
+    /// [`Self::precedes_or_equal`] at the lower edge and
+    /// [`Self::precedes`] at the upper edge (declaration order), this
+    /// method uses [`Self::sorted_precedes_or_equal`] at the lower
+    /// edge and [`Self::sorted_precedes`] at the upper edge (lex
+    /// order). See [`Self::is_right_half_open_between`] for the shared
+    /// right-half-open-range-containment laws (lower-endpoint-
+    /// inclusivity, upper-endpoint-exclusivity, empty-range
+    /// degeneracy), the range-partition contract, the future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the lex-axis arm of the same ternary right-
+    /// half-open-range containment surface and inherits every property
+    /// from the declaration arm's documentation, differing only in the
+    /// projection methods the mixed composition routes through.
+    ///
+    /// Default body composes [`Self::sorted_precedes_or_equal`] at the
+    /// lower edge with [`Self::sorted_precedes`] at the upper edge:
+    /// `lo.sorted_precedes_or_equal(self) &&
+    /// self.sorted_precedes(hi)`. Implementors override only when the
+    /// lex-axis ternary right-half-open-range containment surface
+    /// needs to diverge from the natural asymmetric mixed composition
+    /// of the pre-existing pairwise-precedence predicates applied at
+    /// the two range endpoints.
+    ///
+    /// (86) + (87) together OPEN the (right-half-open) corner of the
+    /// (ordering × endpoint-inclusivity-flavor) 2×4 = 8-corner
+    /// hypercube past the four already-closed corners at
+    /// (inclusive-both) (82)+(83) and (exclusive-both) (84)+(85). See
+    /// [`Self::is_right_half_open_between`] for the shared (endpoint-
+    /// inclusivity-flavor) hypercube-closure narrative.
+    fn is_sorted_right_half_open_between(self, lo: Self, hi: Self) -> bool {
+        <Self as ClosedSet>::sorted_precedes_or_equal(lo, self)
+            && <Self as ClosedSet>::sorted_precedes(self, hi)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -28104,6 +28287,292 @@ mod tests {
             "The filter `T::ALL.filter(is_sorted_strictly_between(sorted_first, sorted_last))` \
              must equal T::sorted_interior() — the lex-order strict interior of the full lex \
              range is exactly the lex-order interior partition",
+        );
+    }
+
+    #[test]
+    fn is_right_half_open_between_agrees_with_mixed_conjunction_on_every_triple() {
+        // PATH-UNIFORMITY CONTRACT: the right-half-open-range
+        // containment predicate is the ASYMMETRIC-MIXED conjunction of
+        // the non-strict-precedence predicate at the LOWER edge and
+        // the strict-precedence predicate at the UPPER edge —
+        // `self.is_right_half_open_between(lo, hi)` is exactly
+        // `lo.precedes_or_equal(self) && self.precedes(hi)` on every
+        // (variant, lo, hi) triple. Sibling posture to
+        // `is_between_agrees_with_precedes_or_equal_conjunction_on_every_triple`
+        // (inclusive-both, non-strict at BOTH edges) and
+        // `is_strictly_between_agrees_with_precedes_conjunction_on_every_triple`
+        // (exclusive-both, strict at BOTH edges) — this pin is the
+        // ASYMMETRIC third arm on the (endpoint-inclusivity-flavor)
+        // axis where the two pairwise-precedence predicates BOTH
+        // participate at the two range endpoints, one per edge.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_right_half_open_between(v, lo, hi),
+                        <StubKind as ClosedSet>::precedes_or_equal(lo, v)
+                            && <StubKind as ClosedSet>::precedes(v, hi),
+                        "StubKind::{v:?}.is_right_half_open_between(StubKind::{lo:?}, StubKind::{hi:?}) \
+                         must agree with the natural asymmetric mixed conjunction (non-strict at lower, \
+                         strict at upper)",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_right_half_open_between_admits_lower_endpoint_and_excludes_upper_endpoint() {
+        // ENDPOINT-INCLUSIVITY CONTRACT: on every ordered pair
+        // `(lo, hi)` with `lo.precedes(hi)` (the non-empty half-open
+        // case), `lo.is_right_half_open_between(lo, hi)` is `true`
+        // (lower endpoint sits INSIDE the half-open range) AND
+        // `hi.is_right_half_open_between(lo, hi)` is `false` (upper
+        // endpoint sits OUTSIDE the half-open range). The asymmetric
+        // endpoint contract distinguishes the right-half-open flavor
+        // from BOTH the inclusive-both peer (both endpoints inside)
+        // AND the exclusive-both peer (both endpoints outside).
+        // Sibling posture to
+        // `is_between_holds_at_both_range_endpoints_for_every_ordered_pair`
+        // (both endpoints INSIDE) and
+        // `is_strictly_between_excludes_both_range_endpoints_for_every_ordered_pair`
+        // (both endpoints OUTSIDE) one arm over on the (endpoint-
+        // inclusivity-flavor) axis of the ternary closed-range
+        // containment surface.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::precedes(lo, hi) {
+                    assert!(
+                        <StubKind as ClosedSet>::is_right_half_open_between(lo, lo, hi),
+                        "StubKind::{lo:?}.is_right_half_open_between(StubKind::{lo:?}, StubKind::{hi:?}) \
+                         must be true — the LOWER endpoint sits INSIDE the right-half-open range [lo, hi)",
+                    );
+                }
+                assert!(
+                    !<StubKind as ClosedSet>::is_right_half_open_between(hi, lo, hi),
+                    "StubKind::{hi:?}.is_right_half_open_between(StubKind::{lo:?}, StubKind::{hi:?}) \
+                     must be false — the UPPER endpoint sits OUTSIDE the right-half-open range [lo, hi)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_right_half_open_between_singleton_range_is_empty() {
+        // EMPTY SINGLETON CONTRACT: `v.is_right_half_open_between(v,
+        // v)` is `false` for every `v` because the singleton half-open
+        // range `[v, v)` is EMPTY — no variant simultaneously non-
+        // strictly succeeds `v` AND strictly precedes `v` (the strict
+        // upper edge is irreflexive). Sibling posture to
+        // `is_between_is_reflexive_across_every_variant`
+        // (inclusive-both singleton is REFLEXIVE at `v`) and
+        // `is_strictly_between_is_irreflexive_across_every_variant`
+        // (exclusive-both singleton is IRREFLEXIVE at `v`) — the
+        // right-half-open singleton coincides with the EXCLUSIVE-both
+        // singleton on emptiness because emptiness only requires ONE
+        // strict edge, not both.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                !<StubKind as ClosedSet>::is_right_half_open_between(v, v, v),
+                "StubKind::{v:?}.is_right_half_open_between(StubKind::{v:?}, StubKind::{v:?}) must be \
+                 false — the right-half-open singleton range [v, v) is empty because precedes is \
+                 irreflexive at the strict upper edge",
+            );
+        }
+    }
+
+    #[test]
+    fn is_right_half_open_between_is_false_on_reversed_range_endpoints() {
+        // EMPTY-RANGE DEGENERACY (reversed endpoints): when `hi`
+        // strictly succeeds `lo`, the reversed half-open range
+        // `[hi, lo)` is empty — no variant simultaneously non-strictly
+        // succeeds `hi` AND strictly precedes `lo`. Inherited verbatim
+        // from `is_between_is_false_on_reversed_range_endpoints` and
+        // `is_strictly_between_is_false_on_reversed_range_endpoints`
+        // one arm over on the (endpoint-inclusivity-flavor) axis — the
+        // empty-range arm on reversed endpoints holds for the same
+        // total-order reason on every endpoint-inclusivity flavor.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::precedes(hi, lo) {
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        assert!(
+                            !<StubKind as ClosedSet>::is_right_half_open_between(v, lo, hi),
+                            "StubKind::{v:?}.is_right_half_open_between(StubKind::{lo:?}, \
+                             StubKind::{hi:?}) must be false — the reversed right-half-open range \
+                             [lo, hi) is empty when hi strictly precedes lo",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_right_half_open_between_partitions_all_across_every_bound_pair() {
+        // RANGE-PARTITION CONTRACT: for every ordered pair `(lo, hi)`
+        // with `lo.precedes_or_equal(hi)`, the filter
+        // `T::ALL.iter().filter(|v| v.is_right_half_open_between(lo,
+        // hi))` equals the RIGHT-HALF-OPEN declaration-order slice
+        // `Self::ALL[index_of(lo)..index_of(hi)]` — the half-open
+        // interval, distinct from the inclusive-both peer's closed
+        // interval `Self::ALL[index_of(lo)..=index_of(hi)]` and from
+        // the exclusive-both peer's open interval
+        // `Self::ALL[index_of(lo)+1..index_of(hi)]`. Sibling posture
+        // to `is_between_partitions_all_across_every_bound_pair`
+        // (inclusive-both, closed slice) and
+        // `is_strictly_between_partitions_all_across_every_bound_pair`
+        // (exclusive-both, strict-open slice) on the (endpoint-
+        // inclusivity-flavor) axis of the ternary closed-range
+        // containment surface.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                    let lo_idx = <StubKind as ClosedSet>::index_of(lo);
+                    let hi_idx = <StubKind as ClosedSet>::index_of(hi);
+                    let filtered: Vec<_> = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .filter(|v| <StubKind as ClosedSet>::is_right_half_open_between(*v, lo, hi))
+                        .collect();
+                    let expected: Vec<_> = <StubKind as ClosedSet>::ALL[lo_idx..hi_idx].to_vec();
+                    assert_eq!(
+                        filtered, expected,
+                        "The filter `T::ALL.filter(is_right_half_open_between({lo:?}, {hi:?}))` \
+                         must equal the right-half-open declaration-order slice \
+                         `ALL[index_of(lo)..index_of(hi)]`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_sorted_right_half_open_between_agrees_with_mixed_sorted_conjunction_on_every_triple() {
+        // PATH-UNIFORMITY CONTRACT (lex peer): the lex-order right-
+        // half-open-range containment predicate is the asymmetric-
+        // mixed conjunction of the lex-order non-strict-precedence
+        // predicate at the LOWER edge and the lex-order strict-
+        // precedence predicate at the UPPER edge —
+        // `self.is_sorted_right_half_open_between(lo, hi)` is exactly
+        // `lo.sorted_precedes_or_equal(self) &&
+        // self.sorted_precedes(hi)` on every (variant, lo, hi) triple.
+        // Sibling posture to
+        // `is_right_half_open_between_agrees_with_mixed_conjunction_on_every_triple`
+        // on the (declaration, lex) ordering axis.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_right_half_open_between(v, lo, hi),
+                        <StubKind as ClosedSet>::sorted_precedes_or_equal(lo, v)
+                            && <StubKind as ClosedSet>::sorted_precedes(v, hi),
+                        "StubKind::{v:?}.is_sorted_right_half_open_between(StubKind::{lo:?}, \
+                         StubKind::{hi:?}) must agree with the natural lex-order asymmetric mixed \
+                         conjunction (non-strict at lower, strict at upper)",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_sorted_right_half_open_between_coincides_with_declaration_peer_when_orders_agree() {
+        // CROSS-AXIS COINCIDENCE: when the declaration order coincides
+        // with the lex order (as it does for `StubKind`, whose labels
+        // `"alpha"`/`"beta"`/`"gamma"` are already in ASCII lex order
+        // in declaration), the declaration-axis right-half-open-range
+        // containment predicate coincides with the lex-axis peer on
+        // every (variant, lo, hi) triple. Sibling posture to
+        // `is_sorted_between_coincides_with_is_between_when_declaration_and_lex_orders_agree`
+        // and `is_sorted_strictly_between_coincides_with_is_strictly_between_when_orders_agree`
+        // on the (endpoint-inclusivity-flavor) axis of the ternary
+        // closed-range containment surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_right_half_open_between(v, lo, hi),
+                        <StubKind as ClosedSet>::is_sorted_right_half_open_between(v, lo, hi),
+                        "StubKind::{v:?}.is_right_half_open_between(StubKind::{lo:?}, \
+                         StubKind::{hi:?}) must coincide with StubKind::{v:?}\
+                         .is_sorted_right_half_open_between(StubKind::{lo:?}, StubKind::{hi:?}) \
+                         when declaration and lex orders agree",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_right_half_open_between_full_range_admits_all_but_the_last_variant() {
+        // FULL-RANGE CONTRACT (right-half-open peer): the right-half-
+        // open range `[first, last)` — the widest right-half-open
+        // range on the closed-set surface — contains EVERY variant
+        // EXCEPT the last (the excluded upper endpoint). Sibling
+        // posture to `is_between_full_range_admits_every_variant`
+        // (inclusive-both, admits EVERY variant) and
+        // `is_strictly_between_full_range_admits_only_the_interior`
+        // (exclusive-both, admits ONLY the strict interior) — the
+        // right-half-open peer sits between the two: admits the first
+        // (interior + lower endpoint) but excludes the last.
+        let first = <StubKind as ClosedSet>::first();
+        let last = <StubKind as ClosedSet>::last();
+        let filtered: Vec<_> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|v| <StubKind as ClosedSet>::is_right_half_open_between(*v, first, last))
+            .collect();
+        let last_idx = <StubKind as ClosedSet>::index_of(last);
+        let expected: Vec<_> = <StubKind as ClosedSet>::ALL[..last_idx].to_vec();
+        assert_eq!(
+            filtered, expected,
+            "The filter `T::ALL.filter(is_right_half_open_between(first, last))` must equal \
+             `ALL[..index_of(last)]` — the right-half-open range [first, last) admits every \
+             variant except the last",
+        );
+    }
+
+    #[test]
+    fn is_sorted_right_half_open_between_full_sorted_range_admits_all_but_the_sorted_last_variant()
+    {
+        // FULL-RANGE CONTRACT (lex right-half-open peer): the lex-
+        // order right-half-open range `[sorted_first, sorted_last)`
+        // contains EVERY variant EXCEPT the lex-order last (the
+        // excluded upper endpoint). Sibling posture to
+        // `is_right_half_open_between_full_range_admits_all_but_the_last_variant`
+        // on the (declaration, lex) ordering axis.
+        let sorted_first = <StubKind as ClosedSet>::sorted_first();
+        let sorted_last = <StubKind as ClosedSet>::sorted_last();
+        let filtered: Vec<_> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|v| {
+                <StubKind as ClosedSet>::is_sorted_right_half_open_between(
+                    *v,
+                    sorted_first,
+                    sorted_last,
+                )
+            })
+            .collect();
+        let sorted_last_idx = <StubKind as ClosedSet>::sorted_index_of(sorted_last);
+        let expected: Vec<_> =
+            <StubKind as ClosedSet>::sorted_variants()[..sorted_last_idx].to_vec();
+        // Filtering `ALL` yields the declaration-order matches; the
+        // expected slice is the lex-order prefix up to (but excluding)
+        // `sorted_last`. The two coincide as SETS when declaration and
+        // lex orders agree (as they do for `StubKind`); compare via
+        // sorted vectors so the pin binds the set-equality directly
+        // without requiring the two orderings to coincide.
+        let mut filtered_sorted = filtered.clone();
+        filtered_sorted.sort_by_key(|v| <StubKind as ClosedSet>::sorted_index_of(*v));
+        assert_eq!(
+            filtered_sorted, expected,
+            "The lex-order filter `T::ALL.filter(is_sorted_right_half_open_between(sorted_first, \
+             sorted_last))` must equal `sorted_variants()[..sorted_index_of(sorted_last)]` — the \
+             lex-order right-half-open range [sorted_first, sorted_last) admits every variant \
+             except the lex-order last",
         );
     }
 }

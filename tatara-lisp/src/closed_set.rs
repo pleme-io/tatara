@@ -10085,6 +10085,226 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_precedes(lo, self)
             && <Self as ClosedSet>::sorted_precedes_or_equal(self, hi)
     }
+
+    /// The declaration-order ternary CLAMP projection — the
+    /// value-projection sibling of [`Self::is_between`] on the
+    /// (return-shape) axis of the ternary closed-range surface.
+    /// Given a well-formed range `[lo, hi]` with
+    /// `lo.precedes_or_equal(hi)`, projects `self` INTO the range by
+    /// (a) returning `lo` when `self` strictly precedes `lo`, (b)
+    /// returning `hi` when `hi` strictly precedes `self`, and (c)
+    /// returning `self` unchanged otherwise. The typed
+    /// value-projection dual of the eight-corner
+    /// (ordering × endpoint-inclusivity-flavor) bool-return ternary
+    /// containment hypercube (`is_between` (82)+(83),
+    /// `is_strictly_between` (84)+(85), `is_right_half_open_between`
+    /// (86)+(87), `is_left_half_open_between` (88)+(89)) — where the
+    /// eight bool-return corners answer "does `self` sit in the
+    /// range?", this projection answers "what variant IN the range
+    /// does `self` project to?".
+    ///
+    /// Sibling posture to [`Self::is_between`] one arm over on the
+    /// (return-shape) axis: [`Self::is_between`] returns `bool`
+    /// (containment predicate), this method returns `Self` (containment
+    /// projection). The two together partition the (return-shape) axis
+    /// on ternary arity into TWO typed projections — one for
+    /// membership answers, one for saturation answers — with the
+    /// projection derived from the same substrate primitives
+    /// ([`Self::precedes`] at both bound-to-self edges) at ONE call
+    /// site rather than per-consumer.
+    ///
+    /// Fixed-point + saturation contract: for every well-formed range
+    /// `[lo, hi]` with `lo.precedes_or_equal(hi)` and every variant
+    /// `v`:
+    ///
+    /// - IN-RANGE FIXED POINT: `v.is_between(lo, hi) →
+    ///   v.clamp(lo, hi) == v`. Every variant that sits INSIDE the
+    ///   closed range is a fixed point of the projection — the
+    ///   projection is the IDENTITY on the (inclusive-both)
+    ///   containment set. Pinned by
+    ///   `clamp_fixes_variants_that_sit_in_range_across_every_well_formed_triple`.
+    /// - BELOW-RANGE SATURATION: `v.precedes(lo) →
+    ///   v.clamp(lo, hi) == lo`. Variants strictly below the range
+    ///   saturate to the LOWER endpoint. Pinned by
+    ///   `clamp_projects_below_range_variants_to_the_lower_endpoint`.
+    /// - ABOVE-RANGE SATURATION: `hi.precedes(v) →
+    ///   v.clamp(lo, hi) == hi`. Variants strictly above the range
+    ///   saturate to the UPPER endpoint. Pinned by
+    ///   `clamp_projects_above_range_variants_to_the_upper_endpoint`.
+    /// - IDEMPOTENCE: `v.clamp(lo, hi).clamp(lo, hi) ==
+    ///   v.clamp(lo, hi)` for every `v` — the projection is
+    ///   IDEMPOTENT on every well-formed range because one hop lands
+    ///   inside `[lo, hi]` and the second hop is the identity on the
+    ///   containment set. Pinned by
+    ///   `clamp_is_idempotent_on_every_well_formed_triple`.
+    /// - ENDPOINT FIXED POINTS: `lo.clamp(lo, hi) == lo` AND
+    ///   `hi.clamp(lo, hi) == hi` for every well-formed pair — the
+    ///   two range endpoints are ALWAYS fixed points. Pinned by
+    ///   `clamp_fixes_range_endpoints_across_every_well_formed_triple`.
+    /// - PATH-UNIFORMITY: `v.clamp(lo, hi)` agrees with the
+    ///   min-of-max composition `max(lo, min(v, hi))` routed through
+    ///   the pairwise-precedence primitives — the projection is a
+    ///   typed CONSEQUENCE of [`Self::precedes`] applied at the two
+    ///   bound-to-self edges, not a fresh substrate primitive on the
+    ///   index axis. Pinned by
+    ///   `clamp_agrees_with_min_max_composition_on_every_well_formed_triple`.
+    ///
+    /// Well-formedness precondition: implementors + consumers assume
+    /// `lo.precedes_or_equal(hi)` at every call site — the
+    /// reversed-range case (`hi.precedes(lo)`) is DEGENERATE (the
+    /// closed range `[lo, hi]` is empty when reversed) and the
+    /// projection's output on the reversed range is UNSPECIFIED past
+    /// "one of `{lo, hi, self}`". The tests pin the well-formed-range
+    /// contract only; downstream consumers should compose
+    /// [`Self::precedes_or_equal`] as a well-formedness guard when
+    /// the range endpoints originate from untrusted input.
+    ///
+    /// Range-partition contract on the well-formed range: for every
+    /// ordered pair `(lo, hi)` with `lo.precedes_or_equal(hi)`, the
+    /// mapping `v → v.clamp(lo, hi)` projects
+    /// `Self::ALL[..index_of(lo)]` to the constant `lo`, projects
+    /// `Self::ALL[index_of(lo)..=index_of(hi)]` to the identity, and
+    /// projects `Self::ALL[index_of(hi)+1..]` to the constant `hi` —
+    /// the substrate-typed saturation semantics native to closed-set
+    /// projections on a finite total order. The IMAGE of the
+    /// projection under any well-formed range is exactly the closed
+    /// containment set of the range — the projection maps every
+    /// input variant to some variant that sits IN the range.
+    ///
+    /// Future consumers that compose against [`Self::clamp`]: a
+    /// `tatara-check` predicate `(clamp-phase-into-window …)` that
+    /// projects a phase transition into a bounded lifecycle window
+    /// (e.g. `phase.clamp(Warming, Contracting)` on the substrate's
+    /// `WorkloadPhase` lifecycle — the "project stray phase into the
+    /// executing window" saturation); an LSP quickfix that saturates
+    /// an out-of-range user-supplied variant into the closed
+    /// containment set of a `#[clamp(lo, hi)]`-annotated field via
+    /// `T::ALL.iter().map(|v| v.clamp(lo, hi))` — bind to ONE typed
+    /// ternary clamp projection rather than re-deriving the
+    /// `min(max(v, lo), hi)` composition inline per callsite; a
+    /// Sekiban audit-trail projector that clamps an observed
+    /// lifecycle phase into the operator's authorized window before
+    /// emitting the audit event; the substrate's own saturation
+    /// idiom `for v in T::ALL { emit(v.clamp(lo, hi)) }` — the
+    /// canonical clamp iteration pattern lifted to the typed algebra
+    /// without leaking a foreign `Ord::clamp` panicking value carrier.
+    ///
+    /// Default body composes [`Self::precedes`] at both bound-to-self
+    /// edges: `if self.precedes(lo) { lo } else if hi.precedes(self)
+    /// { hi } else { self }`. Implementors override only when the
+    /// declaration-axis ternary clamp projection needs to diverge from
+    /// the natural strict-precedence-guarded saturation.
+    ///
+    /// (90) + (91) together OPEN the (return-shape) column on the
+    /// ternary-arity face of the closed-set surface past the
+    /// exhaustively-closed 8-corner (ordering ×
+    /// endpoint-inclusivity-flavor) bool-return hypercube — the two
+    /// arms cover the declaration and lex axes at
+    /// (Self-return, inclusive-both-endpoint) ternary arity. Future
+    /// extensions along the (endpoint-inclusivity-flavor) axis on the
+    /// Self-return corner can further carve the projection surface
+    /// into per-flavor clamps (a strictly-below/above form that
+    /// saturates to `lo.succeeds`/`hi.precedes` instead of `lo`/`hi`,
+    /// though `lo`/`hi` remain the natural inclusive saturation points
+    /// on a finite closed set).
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the ternary
+    /// clamp projection becomes a TYPE-level primitive on the
+    /// closed-set trait rather than a per-consumer inline
+    /// `if v < lo { lo } else if v > hi { hi } else { v }` shape at
+    /// every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the clamp projection was an unnamed inline
+    /// composition recurring at every prospective downstream
+    /// closed-range-saturation site pre-lift. Naming it on the trait
+    /// makes the projection a TYPED CONSEQUENCE of the strict
+    /// pairwise-precedence predicate applied at both range endpoints,
+    /// symmetric to how [`Self::is_between`] emerges as a typed
+    /// consequence of the non-strict pairwise-precedence predicate
+    /// applied at both range endpoints one column over on the
+    /// (return-shape) axis.
+    /// THEORY.md §VI.1 — generation over composition; the ternary
+    /// clamp projection emerges from the composition of THREE
+    /// substrate primitives ([`Self::precedes`] at both bound-to-self
+    /// edges + the standard-library `if`/`else` on `bool`) rather
+    /// than as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Rust's [`Ord::clamp`](core::cmp::Ord::clamp)
+    /// exposes the same saturation projection on any totally-ordered
+    /// type but PANICS via `assert!(min <= max)` on reversed
+    /// endpoints — a runtime-error escape hatch the substrate rejects
+    /// (a substrate primitive that panics on structurally-degenerate
+    /// input silently forces every consumer into pre-guard
+    /// boilerplate). Kotlin's `Comparable.coerceIn(lo, hi)` surfaces
+    /// the same projection with well-formedness-precondition-checked
+    /// behavior; Julia's `Base.clamp(x, lo, hi)` returns
+    /// `min(max(x, lo), hi)` unconditionally (defined on reversed
+    /// endpoints but degenerate). Translation through pleme-io
+    /// primitives: the substrate's ternary clamp projection binds
+    /// through [`Self::precedes`] at both bound-to-self edges — a
+    /// TOTAL projection on well-formed ranges, UNSPECIFIED but
+    /// non-panicking on reversed ranges (the substrate rejects the
+    /// std-clamp panic-on-precondition-violation shape). The typed
+    /// well-formedness precondition is documented, not asserted; the
+    /// closed-set trait carries the projection as a typed value
+    /// projection on the variant, not on a foreign `Range` value
+    /// carrier or a chained-comparison n-ary macro.
+    fn clamp(self, lo: Self, hi: Self) -> Self {
+        if <Self as ClosedSet>::precedes(self, lo) {
+            lo
+        } else if <Self as ClosedSet>::precedes(hi, self) {
+            hi
+        } else {
+            self
+        }
+    }
+
+    /// The lex-order ternary CLAMP projection — the value-projection
+    /// sibling of [`Self::is_sorted_between`] on the (return-shape)
+    /// axis of the ternary closed-range surface. Given a well-formed
+    /// lex-range `[lo, hi]` with `lo.sorted_precedes_or_equal(hi)`,
+    /// projects `self` INTO the lex-range by returning `lo` when
+    /// `self` strictly lex-precedes `lo`, returning `hi` when `hi`
+    /// strictly lex-precedes `self`, and returning `self` unchanged
+    /// otherwise. The lex-ordering peer of [`Self::clamp`] on the
+    /// (declaration, lex) ordering axis of the ternary Self-return
+    /// closed-range surface.
+    ///
+    /// Sibling posture to [`Self::clamp`] one arm over on the
+    /// (declaration, lex) ordering axis — [`Self::clamp`] uses
+    /// [`Self::precedes`] at both bound-to-self edges (declaration
+    /// order), this method uses [`Self::sorted_precedes`] at both
+    /// bound-to-self edges (lex order). See [`Self::clamp`] for the
+    /// shared clamp-projection laws (in-range fixed-point,
+    /// below/above-range saturation, idempotence, endpoint fixed-
+    /// points, path-uniformity), the range-partition contract, the
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the lex-axis arm of the same
+    /// ternary Self-return closed-range surface and inherits every
+    /// property from the declaration arm's documentation, differing
+    /// only in the projection method the strict-precedence-guarded
+    /// saturation routes through.
+    ///
+    /// Default body composes [`Self::sorted_precedes`] at both bound-
+    /// to-self edges: `if self.sorted_precedes(lo) { lo } else if
+    /// hi.sorted_precedes(self) { hi } else { self }`. Implementors
+    /// override only when the lex-axis ternary clamp projection needs
+    /// to diverge from the natural lex-order strict-precedence-
+    /// guarded saturation.
+    ///
+    /// (90) + (91) together OPEN the (return-shape) column on the
+    /// ternary-arity face of the closed-set surface past the
+    /// exhaustively-closed 8-corner (ordering ×
+    /// endpoint-inclusivity-flavor) bool-return hypercube. See
+    /// [`Self::clamp`] for the shared (return-shape) axis narrative.
+    fn sorted_clamp(self, lo: Self, hi: Self) -> Self {
+        if <Self as ClosedSet>::sorted_precedes(self, lo) {
+            lo
+        } else if <Self as ClosedSet>::sorted_precedes(hi, self) {
+            hi
+        } else {
+            self
+        }
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -29088,5 +29308,328 @@ mod tests {
              the lex-order left-half-open range (sorted_first, sorted_last] admits every variant \
              except the lex-order first",
         );
+    }
+
+    #[test]
+    fn clamp_agrees_with_min_max_composition_on_every_well_formed_triple() {
+        // PATH-UNIFORMITY CONTRACT: the ternary clamp projection is
+        // the min-of-max composition routed through the declaration-
+        // order pairwise-precedence primitives —
+        // `v.clamp(lo, hi)` equals the projection that returns `lo`
+        // when `v.precedes(lo)`, `hi` when `hi.precedes(v)`, and `v`
+        // otherwise, on every well-formed (variant, lo, hi) triple
+        // with `lo.precedes_or_equal(hi)`. Sibling posture to
+        // `is_between_agrees_with_precedes_or_equal_conjunction_on_every_triple`
+        // one column over on the (return-shape) axis of the ternary-
+        // arity face — where the bool-return contract binds through
+        // NON-STRICT precedence at both edges, the Self-return
+        // projection binds through STRICT precedence at both edges
+        // (the strict guards produce the fixed-point interval as the
+        // saturation-free set). The pin binds the projection to the
+        // ONE substrate primitive (`precedes`) applied at both
+        // bound-to-self edges, forbidding a divergent implementor
+        // body that would silently drift from the natural strict-
+        // guarded saturation.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    let expected = if <StubKind as ClosedSet>::precedes(v, lo) {
+                        lo
+                    } else if <StubKind as ClosedSet>::precedes(hi, v) {
+                        hi
+                    } else {
+                        v
+                    };
+                    assert_eq!(
+                        <StubKind as ClosedSet>::clamp(v, lo, hi),
+                        expected,
+                        "StubKind::{v:?}.clamp(StubKind::{lo:?}, StubKind::{hi:?}) must agree \
+                         with the natural strict-guarded saturation via the pairwise-precedence \
+                         primitives",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn clamp_fixes_variants_that_sit_in_range_across_every_well_formed_triple() {
+        // IN-RANGE FIXED-POINT CONTRACT: on every well-formed range
+        // `[lo, hi]` with `lo.precedes_or_equal(hi)`, every variant
+        // `v` that satisfies `v.is_between(lo, hi)` is a fixed point
+        // of the clamp projection — `v.clamp(lo, hi) == v`. Ties the
+        // Self-return projection to the bool-return containment
+        // predicate on the (return-shape) axis: the projection is
+        // the IDENTITY on the containment set of `is_between`.
+        // Sibling posture to
+        // `is_between_holds_at_both_range_endpoints_for_every_ordered_pair`
+        // one column over on the (return-shape) axis — the endpoint
+        // fixed-point pin is a specialization of THIS in-range
+        // fixed-point pin at the two endpoint variants; the
+        // in-range pin generalizes to EVERY containment-set member.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                    continue;
+                }
+                for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if <StubKind as ClosedSet>::is_between(v, lo, hi) {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::clamp(v, lo, hi),
+                            v,
+                            "StubKind::{v:?}.clamp(StubKind::{lo:?}, StubKind::{hi:?}) must be \
+                             the identity when v sits in the closed range [lo, hi]",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn clamp_projects_below_range_variants_to_the_lower_endpoint() {
+        // BELOW-RANGE SATURATION: variants strictly below the range
+        // (`v.precedes(lo)`) saturate to the LOWER endpoint. Pinned
+        // independently from the above-range peer so a regression
+        // that swaps the two guards (or projects to `hi` instead of
+        // `lo` on the below-range arm) fails the below-range pin
+        // without needing the above-range assertion. Sibling posture
+        // to `clamp_projects_above_range_variants_to_the_upper_endpoint`
+        // one arm over on the (below/above-range) axis of the
+        // saturation contract.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                    continue;
+                }
+                for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if <StubKind as ClosedSet>::precedes(v, lo) {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::clamp(v, lo, hi),
+                            lo,
+                            "StubKind::{v:?}.clamp(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                             saturate to the LOWER endpoint {lo:?} when v strictly precedes lo",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn clamp_projects_above_range_variants_to_the_upper_endpoint() {
+        // ABOVE-RANGE SATURATION: variants strictly above the range
+        // (`hi.precedes(v)`) saturate to the UPPER endpoint. Sibling
+        // posture to `clamp_projects_below_range_variants_to_the_lower_endpoint`
+        // one arm over on the (below/above-range) axis — together
+        // the two pins CLOSE the (below, above)-saturation axis of
+        // the clamp projection.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                    continue;
+                }
+                for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if <StubKind as ClosedSet>::precedes(hi, v) {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::clamp(v, lo, hi),
+                            hi,
+                            "StubKind::{v:?}.clamp(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                             saturate to the UPPER endpoint {hi:?} when hi strictly precedes v",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn clamp_is_idempotent_on_every_well_formed_triple() {
+        // IDEMPOTENCE CONTRACT: `v.clamp(lo, hi).clamp(lo, hi) ==
+        // v.clamp(lo, hi)` for every well-formed range `[lo, hi]`
+        // and every variant `v`. A typed CONSEQUENCE of the
+        // in-range fixed-point contract composed with the total
+        // partition of `T::ALL` into (below, in-range, above) via
+        // the pairwise-precedence trichotomy: one clamp hop lands
+        // inside the closed range, and the in-range fixed-point pin
+        // then makes the second hop the identity. Pinned
+        // independently from the fixed-point pin so a regression
+        // that violates idempotence (e.g. a divergent implementor
+        // that returns something OUTSIDE the range on the first
+        // hop) fails without needing the fixed-point pin to catch
+        // it downstream.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                    continue;
+                }
+                for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let once = <StubKind as ClosedSet>::clamp(v, lo, hi);
+                    let twice = <StubKind as ClosedSet>::clamp(once, lo, hi);
+                    assert_eq!(
+                        twice, once,
+                        "StubKind::{v:?}.clamp(StubKind::{lo:?}, StubKind::{hi:?}) must be \
+                         IDEMPOTENT — the second clamp hop must land at the same variant as \
+                         the first",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn clamp_fixes_range_endpoints_across_every_well_formed_triple() {
+        // ENDPOINT FIXED-POINT CONTRACT: `lo.clamp(lo, hi) == lo`
+        // AND `hi.clamp(lo, hi) == hi` on every well-formed range
+        // — a specialization of the in-range fixed-point pin at
+        // the two endpoint variants. Pinned as its OWN assertion so
+        // a regression that projects the endpoint values to an
+        // interior variant (or to the other endpoint) fails without
+        // needing the in-range pin to catch it via the endpoint
+        // sub-case downstream.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                    continue;
+                }
+                assert_eq!(
+                    <StubKind as ClosedSet>::clamp(lo, lo, hi),
+                    lo,
+                    "StubKind::{lo:?}.clamp(StubKind::{lo:?}, StubKind::{hi:?}) must be the \
+                     identity — the LOWER endpoint is a fixed point of the projection",
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::clamp(hi, lo, hi),
+                    hi,
+                    "StubKind::{hi:?}.clamp(StubKind::{lo:?}, StubKind::{hi:?}) must be the \
+                     identity — the UPPER endpoint is a fixed point of the projection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn clamp_full_range_projection_is_the_identity_across_every_variant() {
+        // FULL-RANGE IDENTITY CONTRACT: the full closed range
+        // `[first, last]` — the widest well-formed range on the
+        // closed-set surface — makes the clamp projection the
+        // IDENTITY on EVERY variant, because every variant sits in
+        // the containment set of the full range. Sibling posture to
+        // `is_between_full_range_admits_every_variant` one column
+        // over on the (return-shape) axis — the bool-return
+        // predicate ADMITS every variant on the full range, and the
+        // Self-return projection PROJECTS every variant to itself
+        // on the full range; the two together partition the
+        // (return-shape) axis on the full-range sub-surface into
+        // TWO typed projections, both of which coincide with the
+        // trivial identity behavior at the widest well-formed range.
+        let first = <StubKind as ClosedSet>::first();
+        let last = <StubKind as ClosedSet>::last();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::clamp(v, first, last),
+                v,
+                "StubKind::{v:?}.clamp(first, last) must be the identity — every variant sits \
+                 in the full closed range [first, last]",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_clamp_agrees_with_sorted_min_max_composition_on_every_well_formed_triple() {
+        // PATH-UNIFORMITY CONTRACT (lex peer): the lex-order clamp
+        // projection is the min-of-max composition routed through
+        // the LEX-order pairwise-precedence primitives —
+        // `v.sorted_clamp(lo, hi)` equals the projection that
+        // returns `lo` when `v.sorted_precedes(lo)`, `hi` when
+        // `hi.sorted_precedes(v)`, and `v` otherwise, on every
+        // well-formed (variant, lo, hi) triple with
+        // `lo.sorted_precedes_or_equal(hi)`. Sibling posture to
+        // `clamp_agrees_with_min_max_composition_on_every_well_formed_triple`
+        // on the (declaration, lex) ordering axis.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::sorted_precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    let expected = if <StubKind as ClosedSet>::sorted_precedes(v, lo) {
+                        lo
+                    } else if <StubKind as ClosedSet>::sorted_precedes(hi, v) {
+                        hi
+                    } else {
+                        v
+                    };
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_clamp(v, lo, hi),
+                        expected,
+                        "StubKind::{v:?}.sorted_clamp(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         agree with the natural lex-order strict-guarded saturation via the \
+                         lex-order pairwise-precedence primitives",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_clamp_coincides_with_clamp_when_declaration_and_lex_orders_agree() {
+        // CROSS-AXIS COINCIDENCE (Self-return): when the declaration
+        // order coincides with the lex order (as it does for
+        // `StubKind`, whose labels `"alpha"`/`"beta"`/`"gamma"` are
+        // already in ASCII lex order in declaration), the
+        // declaration-axis clamp projection coincides with the lex-
+        // axis peer on every well-formed (variant, lo, hi) triple.
+        // Sibling posture to
+        // `is_sorted_between_coincides_with_is_between_when_declaration_and_lex_orders_agree`
+        // one column over on the (return-shape) axis of the ternary-
+        // arity face — CLOSING the (cross-axis coincidence ×
+        // return-shape) 2×2 matrix on the ternary-arity face at the
+        // (Self-return) corner past the (bool-return) corner closed
+        // by the sibling.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    assert_eq!(
+                        <StubKind as ClosedSet>::clamp(v, lo, hi),
+                        <StubKind as ClosedSet>::sorted_clamp(v, lo, hi),
+                        "StubKind::{v:?}.clamp(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         coincide with StubKind::{v:?}.sorted_clamp(StubKind::{lo:?}, \
+                         StubKind::{hi:?}) when declaration and lex orders agree",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_clamp_full_sorted_range_projection_is_the_identity_across_every_variant() {
+        // FULL-RANGE IDENTITY CONTRACT (lex peer): the lex-order
+        // full closed range `[sorted_first, sorted_last]` makes the
+        // sorted_clamp projection the IDENTITY on EVERY variant.
+        // Sibling posture to
+        // `clamp_full_range_projection_is_the_identity_across_every_variant`
+        // on the (declaration, lex) ordering axis. Together with
+        // the declaration peer this pin CLOSES the (ordering) 2×1
+        // strip on the full-range Self-return sub-surface — the
+        // terminal move on the (return-shape × ordering) 2×2 face
+        // of the ternary-arity full-range projection surface.
+        let sorted_first = <StubKind as ClosedSet>::sorted_first();
+        let sorted_last = <StubKind as ClosedSet>::sorted_last();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_clamp(v, sorted_first, sorted_last),
+                v,
+                "StubKind::{v:?}.sorted_clamp(sorted_first, sorted_last) must be the identity \
+                 — every variant sits in the full lex-order closed range [sorted_first, \
+                 sorted_last]",
+            );
+        }
     }
 }

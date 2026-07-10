@@ -10305,6 +10305,252 @@ pub trait ClosedSet: Sized + Copy + 'static {
             self
         }
     }
+
+    /// The declaration-order neighbor immediately AFTER `self` in
+    /// [`Self::ALL`], SATURATING at `self` at the tail — the third arm
+    /// of the (boundary-behavior) axis on the closed-set forward-
+    /// declaration-neighbor surface past the pre-existing
+    /// (Option-typed-bounded, [`Self`]-typed-wrapping) partition:
+    /// [`Self::next`] returns [`None`] at the tail, [`Self::cycle_next`]
+    /// FOLDS the tail-endpoint boundary onto [`Self::first`], and THIS
+    /// method PINS `self` at the tail-endpoint boundary — the
+    /// "stay-at-boundary" arm of the three-way boundary-behavior
+    /// partition. Returns [`Self`], never [`Option<Self>`]: the
+    /// saturating arm folds the tail-endpoint boundary onto `self`
+    /// itself rather than wrapping to the head ([`Self::cycle_next`])
+    /// or leaving the [`None`] the bounded arm ([`Self::next`]) returns.
+    ///
+    /// The saturating-return arm of the (boundary-behavior) axis
+    /// closes a THIRD projection on the closed-set forward-neighbor
+    /// surface — one row beyond the (Option-typed-bounded,
+    /// [`Self`]-typed-wrapping) 2-row partition on the return-shape ×
+    /// boundary-behavior sub-face. Together with
+    /// [`Self::saturating_prev`], the pair closes the (forward,
+    /// backward) direction axis of the SATURATING arm on the
+    /// declaration ordering axis, and together with
+    /// [`Self::sorted_saturating_next`] / [`Self::sorted_saturating_prev`]
+    /// completes the (declaration × lex) × (forward, backward) 2×2
+    /// matrix on the SATURATING partition:
+    ///
+    /// | Ordering \\ Direction | Forward saturate                | Backward saturate                |
+    /// |-----------------------|---------------------------------|----------------------------------|
+    /// | Declaration           | [`Self::saturating_next`]       | [`Self::saturating_prev`]        |
+    /// | Lex                   | [`Self::sorted_saturating_next`] | [`Self::sorted_saturating_prev`] |
+    ///
+    /// Every generic consumer that walks the closed set as a
+    /// STOP-AT-BOUNDARY chain under declaration order (an LSP
+    /// completion cursor that steps forward through variants
+    /// unconditionally without threading an `Option`-branch through
+    /// the update path AND without wrapping the tail-endpoint onto
+    /// the head at the boundary — a common UI shape where the
+    /// carousel arrow disables at the tail rather than cycling; a
+    /// keybinding-driven per-tick advance that stops at the last
+    /// variant rather than looping; a paginated selector that
+    /// disables the "next" affordance at the tail without rolling
+    /// over) binds to ONE typed saturating-forward-neighbor method
+    /// rather than hand-rolling either `self.next().unwrap_or(self)`
+    /// (which re-derives the same two-primitive composition at
+    /// every callsite AND makes every downstream site depend on
+    /// the saturating-fallback shape) OR a per-implementor inline
+    /// `match self { A => B, B => C, C => C }` block keyed on the
+    /// declaration slot (which re-derives the per-variant
+    /// saturating table at every callsite AND drifts silently when
+    /// [`Self::ALL`] gains a new variant whose slot reorders the
+    /// tail-saturating edge).
+    ///
+    /// Sibling posture to [`Self::last`] on the (forward-neighbor,
+    /// tail-endpoint) axis of the declaration-order traversal
+    /// surface — `T::last().saturating_next() == T::last()` is the
+    /// natural fixpoint the forward-saturating-neighbor axis and the
+    /// tail-endpoint anchor share, PINNING the tail-endpoint variant
+    /// as the saturating-forward fixed point at the boundary.
+    /// Mirrors the `T::last().next() == None` fixpoint on the
+    /// bounded arm one boundary-behavior column over AND the
+    /// `T::last().cycle_next() == T::first()` fixpoint on the
+    /// wrapping arm one boundary-behavior column over — the three
+    /// arms differ ONLY at the tail-endpoint variant, agreeing on
+    /// EVERY interior variant.
+    ///
+    /// Default body composes [`Self::next`] with the identity
+    /// fallback through [`Option::unwrap_or`] — the saturating-
+    /// neighbor projection is a typed CONSEQUENCE of the pre-
+    /// existing bounded-neighbor primitive folded through the
+    /// stay-at-`self` fallback, not a third codepath. Implementors
+    /// override only when the saturating-neighbor surface needs to
+    /// diverge from the natural `next().unwrap_or(self)` shape. An
+    /// implementor that overrides [`Self::next`] propagates the
+    /// override through this default body automatically; the
+    /// (variant → saturating-forward-neighbor) projection funnels
+    /// through ONE typed primitive.
+    ///
+    /// The saturating-neighbor contract — the tail arm returns
+    /// `self` for [`Self::last`] — is guaranteed by the default
+    /// composition through [`Self::next`]'s `None` at the tail AND
+    /// [`Option::unwrap_or`]'s fallback semantics. Every generic
+    /// consumer can call [`Self::saturating_next`] on any typed
+    /// variant and expect the same [`Self`]-typed answer at every
+    /// crate boundary.
+    ///
+    /// THEORY.md §III — the typescape; the (variant →
+    /// saturating-forward declaration-neighbor) projection becomes
+    /// a TYPE projection on the trait rather than a per-consumer
+    /// inline `self.next().unwrap_or(self)` composition at every
+    /// downstream saturating-traversal site. The (boundary-behavior)
+    /// axis on the closed-set forward-neighbor surface partitions
+    /// EXHAUSTIVELY into THREE typed projections — Option-typed
+    /// bounded ([`Self::next`]), [`Self`]-typed wrapping
+    /// ([`Self::cycle_next`]), [`Self`]-typed saturating (this
+    /// method) — each with a distinct load-bearing consumer surface.
+    /// THEORY.md §V.1 — knowable platform; the saturating-neighbor
+    /// projection was an unnamed compound of [`Self::next`] +
+    /// [`Option::unwrap_or`] pre-lift; naming it on the trait makes
+    /// the projection a TYPED CONSEQUENCE of the bounded-neighbor
+    /// primitive folded through the stay-at-`self` fallback —
+    /// generic consumers see ONE saturating-forward method, not one
+    /// saturating-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// saturating-forward-neighbor projection emerges from
+    /// composition of ONE substrate primitive ([`Self::next`])
+    /// through [`Option::unwrap_or`] rather than as a per-implementor
+    /// `match self { A => B, B => C, C => C }` block keyed on the
+    /// declaration slot with an identity fallthrough at the tail.
+    ///
+    /// Frontier inspiration: Rust's `usize::saturating_add(1)` on
+    /// the totally-ordered `usize` universe (the arithmetic
+    /// saturating primitive that pins the operand at `usize::MAX`
+    /// on overflow, mirrored HERE as the variant saturating primitive
+    /// that pins the operand at [`Self::last`] on tail); Kotlin's
+    /// `Iterator.nextOrNull()` composed with `?: this` (the manual
+    /// stay-at-self fallback); Racket's `enum-next-clamped` on
+    /// closed enumerations under the clamp-at-boundary variant of
+    /// the cyclic ordering; UI toolkit carousel bindings that
+    /// disable the "next" affordance at the boundary (React
+    /// Aria's `useCarousel` clamped variant, Radix's `Carousel.Next`
+    /// with `disabled` at the tail). Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::next`] surface via [`Option::unwrap_or`] —
+    /// no new dep, no new IR layer, no supertrait bound, no
+    /// arithmetic on `usize`, no wrapping to the head, no `None` on
+    /// the tail-endpoint boundary.
+    fn saturating_next(self) -> Self {
+        <Self as ClosedSet>::next(self).unwrap_or(self)
+    }
+
+    /// The declaration-order neighbor immediately BEFORE `self` in
+    /// [`Self::ALL`], SATURATING at `self` at the head —
+    /// `self.prev().unwrap_or(self)`. Returns [`Self`], never
+    /// [`Option<Self>`]: the saturating arm folds the head-endpoint
+    /// boundary onto `self` itself rather than wrapping to the tail
+    /// ([`Self::cycle_prev`]) or leaving the [`None`] the bounded
+    /// arm ([`Self::prev`]) returns.
+    ///
+    /// Sibling posture to [`Self::saturating_next`] one arm over on
+    /// the (forward, backward) direction partition of the closed-set
+    /// saturating-neighbor surface: [`Self::saturating_next`] returns
+    /// the declaration-order successor pinned at the tail-endpoint,
+    /// this method returns the declaration-order predecessor pinned
+    /// at the head-endpoint. See [`Self::saturating_next`] for the
+    /// shared design rationale, sibling matrix, override axis,
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the backward-direction arm of
+    /// the same axis and inherits every property from the forward
+    /// arm's documentation, differing only in the [`Self::prev`]
+    /// substrate primitive it composes and the head-endpoint anchor
+    /// it pins at the boundary.
+    ///
+    /// Default body composes [`Self::prev`] with the identity
+    /// fallback through [`Option::unwrap_or`] — the saturating-
+    /// neighbor projection is a typed CONSEQUENCE of the pre-
+    /// existing bounded-neighbor primitive folded through the
+    /// stay-at-`self` fallback, not a third codepath. Implementors
+    /// override only when the saturating-neighbor surface needs to
+    /// diverge from the natural `prev().unwrap_or(self)` shape.
+    ///
+    /// The saturating-neighbor contract — the head arm returns
+    /// `self` for [`Self::first`] — is guaranteed by the default
+    /// composition through [`Self::prev`]'s `None` at the head AND
+    /// [`Option::unwrap_or`]'s fallback semantics.
+    /// `T::first().saturating_prev() == T::first()` is the natural
+    /// fixpoint the backward-saturating-neighbor axis and the
+    /// head-endpoint anchor share, mirroring the
+    /// `T::last().saturating_next() == T::last()` fixpoint on the
+    /// forward-saturating arm one direction column over AND the
+    /// `T::first().prev() == None` fixpoint on the bounded arm one
+    /// boundary-behavior column over AND the
+    /// `T::first().cycle_prev() == T::last()` fixpoint on the
+    /// wrapping arm one boundary-behavior column over.
+    fn saturating_prev(self) -> Self {
+        <Self as ClosedSet>::prev(self).unwrap_or(self)
+    }
+
+    /// The lex-order neighbor immediately AFTER `self` in
+    /// [`Self::sorted_variants`], SATURATING at `self` at the lex
+    /// tail — `self.sorted_next().unwrap_or(self)`. Returns
+    /// [`Self`], never [`Option<Self>`]: the saturating arm folds
+    /// the lex-tail-endpoint boundary onto `self` itself rather
+    /// than wrapping to the lex head ([`Self::cycle_sorted_next`])
+    /// or leaving the [`None`] the bounded lex arm
+    /// ([`Self::sorted_next`]) returns.
+    ///
+    /// The lex-ordering peer of [`Self::saturating_next`] on the
+    /// (declaration, lex) ordering axis of the closed-set
+    /// saturating-forward-neighbor surface. See
+    /// [`Self::saturating_next`] for the shared design rationale,
+    /// sibling matrix, override axis, future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method
+    /// is the lex-axis arm of the same saturating-forward-neighbor
+    /// surface and inherits every property from the declaration
+    /// arm's documentation, differing only in the substrate
+    /// primitive the saturating-fallback routes through
+    /// ([`Self::sorted_next`] rather than [`Self::next`]) and the
+    /// lex-tail-endpoint anchor it pins at the boundary
+    /// ([`Self::sorted_last`] rather than [`Self::last`]).
+    ///
+    /// `T::sorted_last().sorted_saturating_next() == T::sorted_last()`
+    /// is the natural fixpoint the forward-saturating-lex-neighbor
+    /// axis and the lex-tail-endpoint anchor share, mirroring the
+    /// `T::last().saturating_next() == T::last()` fixpoint on the
+    /// declaration arm one ordering column over.
+    fn sorted_saturating_next(self) -> Self {
+        <Self as ClosedSet>::sorted_next(self).unwrap_or(self)
+    }
+
+    /// The lex-order neighbor immediately BEFORE `self` in
+    /// [`Self::sorted_variants`], SATURATING at `self` at the lex
+    /// head — `self.sorted_prev().unwrap_or(self)`. Returns
+    /// [`Self`], never [`Option<Self>`]: the saturating arm folds
+    /// the lex-head-endpoint boundary onto `self` itself rather
+    /// than wrapping to the lex tail ([`Self::cycle_sorted_prev`])
+    /// or leaving the [`None`] the bounded lex arm
+    /// ([`Self::sorted_prev`]) returns.
+    ///
+    /// The lex-ordering peer of [`Self::saturating_prev`] on the
+    /// (declaration, lex) ordering axis of the closed-set
+    /// saturating-backward-neighbor surface. See
+    /// [`Self::saturating_next`] for the shared design rationale
+    /// on the (boundary-behavior) axis and the three-arm partition
+    /// (bounded / wrapping / saturating), and [`Self::saturating_prev`]
+    /// for the backward-direction sibling posture. Together with
+    /// [`Self::saturating_next`], [`Self::saturating_prev`], and
+    /// [`Self::sorted_saturating_next`] this method CLOSES the
+    /// (declaration × lex) × (forward, backward) 2×2 = 4-corner
+    /// matrix on the SATURATING arm of the (boundary-behavior)
+    /// axis of the closed-set variant-return neighbor surface —
+    /// the (boundary-behavior) axis now carries THREE arms
+    /// (Option-typed bounded, [`Self`]-typed wrapping, [`Self`]-typed
+    /// saturating) across the full (ordering × direction) 4-corner
+    /// matrix, for a 3×2×2 = 12-corner (boundary-behavior × ordering
+    /// × direction) hypercube on the variant-return neighbor
+    /// surface.
+    ///
+    /// `T::sorted_first().sorted_saturating_prev() == T::sorted_first()`
+    /// is the natural fixpoint the backward-saturating-lex-neighbor
+    /// axis and the lex-head-endpoint anchor share, completing the
+    /// four saturating-neighbor fixpoints at every arm of the 2×2
+    /// (ordering × direction) matrix.
+    fn sorted_saturating_prev(self) -> Self {
+        <Self as ClosedSet>::sorted_prev(self).unwrap_or(self)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -29605,6 +29851,342 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn saturating_next_agrees_with_next_unwrap_or_self_across_every_variant() {
+        // PATH-UNIFORMITY CONTRACT: the declaration-order
+        // saturating-forward-neighbor projection is the natural
+        // `next().unwrap_or(self)` composition — the bounded
+        // forward-neighbor primitive folded through the stay-at-
+        // `self` fallback at the tail-endpoint boundary. Pins the
+        // saturating arm to the ONE substrate primitive
+        // (`Self::next`) at every callsite, forbidding a divergent
+        // implementor body that would silently drift from the
+        // natural saturating-fallback shape.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = <StubKind as ClosedSet>::next(v).unwrap_or(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_next(v),
+                expected,
+                "StubKind::{v:?}.saturating_next() must equal next().unwrap_or(self) — the \
+                 saturating-forward-neighbor projection is a typed CONSEQUENCE of the bounded \
+                 forward-neighbor primitive folded through the stay-at-self fallback",
+            );
+        }
+    }
+
+    #[test]
+    fn saturating_prev_agrees_with_prev_unwrap_or_self_across_every_variant() {
+        // PATH-UNIFORMITY CONTRACT (backward peer): the declaration-
+        // order saturating-backward-neighbor projection is the
+        // natural `prev().unwrap_or(self)` composition. Sibling
+        // posture to `saturating_next_agrees_with_next_unwrap_or_self_across_every_variant`
+        // one arm over on the (forward, backward) direction axis.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = <StubKind as ClosedSet>::prev(v).unwrap_or(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_prev(v),
+                expected,
+                "StubKind::{v:?}.saturating_prev() must equal prev().unwrap_or(self) — the \
+                 saturating-backward-neighbor projection is a typed CONSEQUENCE of the bounded \
+                 backward-neighbor primitive folded through the stay-at-self fallback",
+            );
+        }
+    }
+
+    #[test]
+    fn saturating_next_fixes_the_declaration_tail_variant() {
+        // TAIL FIXED-POINT CONTRACT: the declaration-order
+        // tail-endpoint variant is a FIXED POINT of the
+        // saturating-forward-neighbor projection —
+        // `T::last().saturating_next() == T::last()`. Pinned as its
+        // OWN assertion so a regression that returns
+        // `Self::first()` (the wrapping arm) or panics on the
+        // `None` (a hand-rolled `.unwrap()` shape) fails the tail
+        // pin without needing the path-uniformity pin to catch it
+        // via the tail sub-case downstream. The distinguishing
+        // fixpoint of the saturating arm across the three-way
+        // (boundary-behavior) partition — the bounded arm returns
+        // `None` at the tail, the wrapping arm folds to
+        // `Self::first`, and this arm PINS `self` at the tail.
+        let last = <StubKind as ClosedSet>::last();
+        assert_eq!(
+            <StubKind as ClosedSet>::saturating_next(last),
+            last,
+            "StubKind::last().saturating_next() must equal last — the declaration-order \
+             tail-endpoint variant is a FIXED POINT of the saturating-forward-neighbor \
+             projection",
+        );
+    }
+
+    #[test]
+    fn saturating_prev_fixes_the_declaration_head_variant() {
+        // HEAD FIXED-POINT CONTRACT: the declaration-order
+        // head-endpoint variant is a FIXED POINT of the
+        // saturating-backward-neighbor projection —
+        // `T::first().saturating_prev() == T::first()`. Mirrors
+        // `saturating_next_fixes_the_declaration_tail_variant` one
+        // arm over on the (forward, backward) direction axis.
+        let first = <StubKind as ClosedSet>::first();
+        assert_eq!(
+            <StubKind as ClosedSet>::saturating_prev(first),
+            first,
+            "StubKind::first().saturating_prev() must equal first — the declaration-order \
+             head-endpoint variant is a FIXED POINT of the saturating-backward-neighbor \
+             projection",
+        );
+    }
+
+    #[test]
+    fn saturating_next_agrees_with_cycle_next_on_every_variant_except_the_tail() {
+        // INTERIOR COINCIDENCE CONTRACT (forward): the
+        // saturating-forward-neighbor projection and the
+        // wrapping-forward-neighbor projection agree on EVERY
+        // variant EXCEPT the tail-endpoint. The three arms of the
+        // (boundary-behavior) axis — bounded (Option-typed),
+        // wrapping ([`Self`]-typed), saturating ([`Self`]-typed) —
+        // differ ONLY at the tail-endpoint variant, agreeing on
+        // EVERY interior variant. Pinned as a joint sweep against
+        // BOTH the wrapping arm on the interior AND the divergence
+        // at the tail — a regression that homogenizes the
+        // saturating and wrapping arms at the tail-endpoint fails
+        // the divergence check; a regression that diverges them on
+        // ANY interior variant fails the coincidence check.
+        let last = <StubKind as ClosedSet>::last();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            if v == last {
+                assert_ne!(
+                    <StubKind as ClosedSet>::saturating_next(v),
+                    <StubKind as ClosedSet>::cycle_next(v),
+                    "StubKind::{v:?}.saturating_next() must DIVERGE from cycle_next() at the \
+                     declaration-order tail-endpoint — saturating pins at self, wrapping folds to \
+                     first",
+                );
+            } else {
+                assert_eq!(
+                    <StubKind as ClosedSet>::saturating_next(v),
+                    <StubKind as ClosedSet>::cycle_next(v),
+                    "StubKind::{v:?}.saturating_next() must AGREE with cycle_next() on every \
+                     interior variant — the three boundary-behavior arms differ only at the \
+                     tail-endpoint",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn saturating_prev_agrees_with_cycle_prev_on_every_variant_except_the_head() {
+        // INTERIOR COINCIDENCE CONTRACT (backward): mirrors
+        // `saturating_next_agrees_with_cycle_next_on_every_variant_except_the_tail`
+        // one arm over on the (forward, backward) direction axis.
+        // The saturating-backward and wrapping-backward arms agree
+        // on EVERY variant EXCEPT the head-endpoint, where the
+        // saturating arm pins at `self` and the wrapping arm folds
+        // to `Self::last`.
+        let first = <StubKind as ClosedSet>::first();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            if v == first {
+                assert_ne!(
+                    <StubKind as ClosedSet>::saturating_prev(v),
+                    <StubKind as ClosedSet>::cycle_prev(v),
+                    "StubKind::{v:?}.saturating_prev() must DIVERGE from cycle_prev() at the \
+                     declaration-order head-endpoint — saturating pins at self, wrapping folds to \
+                     last",
+                );
+            } else {
+                assert_eq!(
+                    <StubKind as ClosedSet>::saturating_prev(v),
+                    <StubKind as ClosedSet>::cycle_prev(v),
+                    "StubKind::{v:?}.saturating_prev() must AGREE with cycle_prev() on every \
+                     interior variant — the three boundary-behavior arms differ only at the \
+                     head-endpoint",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn saturating_next_is_idempotent_at_the_declaration_tail() {
+        // IDEMPOTENCE CONTRACT: the saturating-forward-neighbor
+        // projection is IDEMPOTENT at the tail-endpoint —
+        // `T::last().saturating_next().saturating_next() ==
+        // T::last().saturating_next()`. A typed CONSEQUENCE of the
+        // tail fixed-point pin — one hop lands at
+        // `Self::last`, and the tail fixed-point pin then makes the
+        // second hop the identity at the tail-endpoint. Pinned
+        // independently from the tail fixed-point pin so a
+        // regression that violates idempotence at the tail (e.g. a
+        // divergent implementor that returns something OTHER than
+        // `self` on the tail-endpoint arm) fails without needing the
+        // fixed-point pin to catch it via the direct assertion
+        // downstream.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let once = <StubKind as ClosedSet>::saturating_next(v);
+            let twice = <StubKind as ClosedSet>::saturating_next(once);
+            // Global idempotence would require the FIRST hop to
+            // land at the tail; that only holds when `v` is the
+            // tail OR when the first hop lands at the tail. Pin
+            // the tail case directly.
+            if v == <StubKind as ClosedSet>::last() {
+                assert_eq!(
+                    twice, once,
+                    "StubKind::{v:?}.saturating_next().saturating_next() must be IDEMPOTENT at \
+                     the declaration-order tail-endpoint — the second saturating hop lands at \
+                     the same variant as the first",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn saturating_prev_is_idempotent_at_the_declaration_head() {
+        // IDEMPOTENCE CONTRACT (backward peer): mirrors
+        // `saturating_next_is_idempotent_at_the_declaration_tail`
+        // one arm over on the (forward, backward) direction axis.
+        // The head fixed-point pin makes the second saturating hop
+        // the identity at the head-endpoint.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let once = <StubKind as ClosedSet>::saturating_prev(v);
+            let twice = <StubKind as ClosedSet>::saturating_prev(once);
+            if v == <StubKind as ClosedSet>::first() {
+                assert_eq!(
+                    twice, once,
+                    "StubKind::{v:?}.saturating_prev().saturating_prev() must be IDEMPOTENT at \
+                     the declaration-order head-endpoint — the second saturating hop lands at \
+                     the same variant as the first",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_next_agrees_with_sorted_next_unwrap_or_self_across_every_variant() {
+        // PATH-UNIFORMITY CONTRACT (lex peer, forward): the lex-
+        // order saturating-forward-neighbor projection is the
+        // natural `sorted_next().unwrap_or(self)` composition.
+        // Sibling posture to
+        // `saturating_next_agrees_with_next_unwrap_or_self_across_every_variant`
+        // on the (declaration, lex) ordering axis.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = <StubKind as ClosedSet>::sorted_next(v).unwrap_or(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_saturating_next(v),
+                expected,
+                "StubKind::{v:?}.sorted_saturating_next() must equal \
+                 sorted_next().unwrap_or(self) — the lex-order saturating-forward-neighbor \
+                 projection is a typed CONSEQUENCE of the bounded lex-forward-neighbor primitive \
+                 folded through the stay-at-self fallback",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_prev_agrees_with_sorted_prev_unwrap_or_self_across_every_variant() {
+        // PATH-UNIFORMITY CONTRACT (lex peer, backward): the lex-
+        // order saturating-backward-neighbor projection is the
+        // natural `sorted_prev().unwrap_or(self)` composition.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = <StubKind as ClosedSet>::sorted_prev(v).unwrap_or(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_saturating_prev(v),
+                expected,
+                "StubKind::{v:?}.sorted_saturating_prev() must equal \
+                 sorted_prev().unwrap_or(self) — the lex-order saturating-backward-neighbor \
+                 projection is a typed CONSEQUENCE of the bounded lex-backward-neighbor primitive \
+                 folded through the stay-at-self fallback",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_next_fixes_the_lex_tail_variant() {
+        // LEX-TAIL FIXED-POINT CONTRACT: the lex-order
+        // tail-endpoint variant is a FIXED POINT of the lex-order
+        // saturating-forward-neighbor projection —
+        // `T::sorted_last().sorted_saturating_next() == T::sorted_last()`.
+        // Sibling posture to
+        // `saturating_next_fixes_the_declaration_tail_variant` one
+        // ordering axis over on the (declaration, lex) axis.
+        let sorted_last = <StubKind as ClosedSet>::sorted_last();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_saturating_next(sorted_last),
+            sorted_last,
+            "StubKind::sorted_last().sorted_saturating_next() must equal sorted_last — the \
+             lex-order tail-endpoint variant is a FIXED POINT of the lex-order \
+             saturating-forward-neighbor projection",
+        );
+    }
+
+    #[test]
+    fn sorted_saturating_prev_fixes_the_lex_head_variant() {
+        // LEX-HEAD FIXED-POINT CONTRACT: the lex-order
+        // head-endpoint variant is a FIXED POINT of the lex-order
+        // saturating-backward-neighbor projection —
+        // `T::sorted_first().sorted_saturating_prev() == T::sorted_first()`.
+        // Together with the three sibling fixed-point pins
+        // (`saturating_next`, `saturating_prev`, `sorted_saturating_next`)
+        // this CLOSES the four saturating-neighbor fixpoints at
+        // every arm of the (declaration × lex) × (forward, backward)
+        // 2×2 = 4-corner matrix on the SATURATING arm of the
+        // (boundary-behavior) axis.
+        let sorted_first = <StubKind as ClosedSet>::sorted_first();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_saturating_prev(sorted_first),
+            sorted_first,
+            "StubKind::sorted_first().sorted_saturating_prev() must equal sorted_first — the \
+             lex-order head-endpoint variant is a FIXED POINT of the lex-order \
+             saturating-backward-neighbor projection",
+        );
+    }
+
+    #[test]
+    fn sorted_saturating_next_coincides_with_saturating_next_when_declaration_and_lex_orders_agree()
+    {
+        // CROSS-AXIS COINCIDENCE (saturating-forward): when the
+        // declaration order coincides with the lex order (as it
+        // does for `StubKind`), the declaration-axis
+        // saturating-forward projection coincides with the lex-
+        // axis peer on every variant. Sibling posture to
+        // `sorted_clamp_coincides_with_clamp_when_declaration_and_lex_orders_agree`
+        // one axis over on the (variant-return projection family)
+        // axis — the ternary saturation-into-range and the binary
+        // saturation-at-boundary projections both fold through the
+        // cross-axis coincidence pattern when the two orderings
+        // agree.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_next(v),
+                <StubKind as ClosedSet>::sorted_saturating_next(v),
+                "StubKind::{v:?}.saturating_next() must coincide with \
+                 StubKind::{v:?}.sorted_saturating_next() when declaration and lex orders agree",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_prev_coincides_with_saturating_prev_when_declaration_and_lex_orders_agree()
+    {
+        // CROSS-AXIS COINCIDENCE (saturating-backward): mirrors
+        // `sorted_saturating_next_coincides_with_saturating_next_when_declaration_and_lex_orders_agree`
+        // one arm over on the (forward, backward) direction axis.
+        // Together with the forward peer, this CLOSES the (cross-
+        // axis coincidence × direction) 2×2 sub-face at the two
+        // saturating-neighbor corners past the two clamp-into-range
+        // corners closed by the sibling pair on the ternary-arity
+        // face — the (variant-return projection family) axis now
+        // carries THREE typed sub-surfaces (ternary clamp, binary
+        // saturating-forward, binary saturating-backward) each of
+        // which coincides across the (declaration, lex) ordering
+        // axis when the two orderings agree.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_prev(v),
+                <StubKind as ClosedSet>::sorted_saturating_prev(v),
+                "StubKind::{v:?}.saturating_prev() must coincide with \
+                 StubKind::{v:?}.sorted_saturating_prev() when declaration and lex orders agree",
+            );
         }
     }
 

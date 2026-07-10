@@ -9541,6 +9541,173 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_precedes_or_equal(lo, self)
             && <Self as ClosedSet>::sorted_precedes_or_equal(self, hi)
     }
+
+    /// The declaration-order EXCLUSIVE-both closed-range containment
+    /// predicate — `true` iff `self` sits STRICTLY inside the open
+    /// range `(lo, hi)` of the declaration-order [`Self::ALL`],
+    /// `false` when `self` coincides with EITHER endpoint OR sits
+    /// outside. The strict-precedence peer of [`Self::is_between`] on
+    /// the (endpoint-inclusivity) axis of the ternary closed-range
+    /// containment surface — opens the (exclusive-both) corner of the
+    /// 4-corner (ordering × endpoint-inclusivity-flavor) matrix past
+    /// the (inclusive-both) corner (82)+(83) [`Self::is_between`] /
+    /// [`Self::is_sorted_between`] closed.
+    ///
+    /// Sibling posture to [`Self::is_between`] one arm over on the
+    /// (inclusive-exclusive) endpoint-inclusivity axis of the ternary
+    /// closed-range containment surface: [`Self::is_between`] composes
+    /// through [`Self::precedes_or_equal`] (non-strict) at both range
+    /// endpoints; this method composes through [`Self::precedes`]
+    /// (strict) at both range endpoints. The strict-precedence
+    /// predicate at the two endpoints EXCLUDES both `lo` and `hi` from
+    /// the containment set — the "strict interior" of the closed
+    /// range, distinct from [`Self::is_between`]'s inclusive-both
+    /// closed range. Mirrors the strict-vs-non-strict axis one arity
+    /// level down: [`Self::precedes`] / [`Self::precedes_or_equal`]
+    /// stand in the same relationship on binary arity as this method
+    /// stands to [`Self::is_between`] on ternary arity.
+    ///
+    /// Endpoint-exclusivity contract: NEITHER `lo` NOR `hi` sit inside
+    /// the strict interior — `lo.is_strictly_between(lo, hi) == false`
+    /// AND `hi.is_strictly_between(lo, hi) == false` for every ordered
+    /// pair `(lo, hi)`, including the trivially-empty case
+    /// `lo == hi`. Irreflexivity on the diagonal:
+    /// `v.is_strictly_between(v, v) == false` for every `v` (the
+    /// exclusive-both singleton range `(v, v)` is empty because
+    /// [`Self::precedes`] is irreflexive at both bound-to-self edges).
+    /// The endpoint-exclusivity arm is a typed CONSEQUENCE of the
+    /// strict-precedence predicate's irreflexivity — pinned by
+    /// `is_strictly_between_excludes_both_range_endpoints_for_every_ordered_pair`
+    /// and
+    /// `is_strictly_between_is_irreflexive_across_every_variant`.
+    /// Empty-range degeneracy on reversed endpoints:
+    /// `v.is_strictly_between(hi, lo) == false` when `hi` strictly
+    /// succeeds `lo` — inherited verbatim from [`Self::is_between`]'s
+    /// empty-range arm, because a reversed strict range is empty for
+    /// the same total-order reason a reversed non-strict range is.
+    ///
+    /// Range-partition contract: for every ordered pair `(lo, hi)`
+    /// with `lo.precedes_or_equal(hi)`, the set of variants `v` for
+    /// which `v.is_strictly_between(lo, hi) == true` equals the
+    /// contiguous declaration-order OPEN range
+    /// `[Self::index_of(lo)+1, Self::index_of(hi))` — the strict-
+    /// interior variant set, distinct from [`Self::is_between`]'s
+    /// inclusive-both closed range which spans
+    /// `[Self::index_of(lo), Self::index_of(hi)]`. Pinned by
+    /// `is_strictly_between_partitions_all_across_every_bound_pair`.
+    /// The strict interior on the full range `(first, last)` equals
+    /// the declaration-order interior partition — the same variant
+    /// set [`Self::interior`] renders — pinned by
+    /// `is_strictly_between_full_range_admits_only_the_interior`.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::is_strictly_between`]: an LSP diagnostic that ranges
+    /// over the STRICT interior of a closed interval of variants via
+    /// `T::ALL.iter().filter(|v| v.is_strictly_between(lo, hi))` —
+    /// bind to ONE typed ternary strict-open-range containment
+    /// predicate rather than re-deriving `lo.precedes(v) &&
+    /// v.precedes(hi)` inline per callsite; a `tatara-check`
+    /// predicate `(check-phase-strictly-in-window …)` verifying a
+    /// workspace-wide phase-transition constraint where a phase must
+    /// sit STRICTLY between a lower and upper watermark (e.g.
+    /// `Executing.is_strictly_between(Warming, Contracting)` on the
+    /// substrate's `WorkloadPhase` lifecycle, excluding the watermark
+    /// phases themselves from the "actively executing" window); a
+    /// Sekiban audit-trail metric labeled by strict-interior
+    /// membership in a phase-transition window; the substrate's own
+    /// `WorkloadPhase` lifecycle projected via
+    /// `phase.is_strictly_between(Pending, Terminal)` to gate the
+    /// "actively converging" set — the strict interior of the
+    /// lifecycle, excluding the head and tail markers themselves.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the ternary
+    /// strict-open-range containment predicate becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline conjunction of two strict-precedence calls at every
+    /// downstream generic site. THEORY.md §V.1 — knowable platform;
+    /// the strict-interior ternary-arity axis was an unnamed inline
+    /// composition (`lo.precedes(v) && v.precedes(hi)`) that would
+    /// recur at every prospective downstream strict-open-range-
+    /// membership site pre-lift. Naming it on the trait makes the
+    /// predicate a TYPED CONSEQUENCE of the strict pairwise-
+    /// precedence predicate applied at both range endpoints.
+    /// THEORY.md §VI.1 — generation over composition; the ternary
+    /// strict-open-range containment predicate emerges from the
+    /// composition of TWO substrate primitives ([`Self::precedes`] at
+    /// both bound-to-self edges + the standard-library `&&` on
+    /// `bool`) rather than as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: mathematics' standard open-interval
+    /// notation `(lo, hi)` denotes the strict interior of a real
+    /// interval — the same predicate at the ternary-arity level of
+    /// the closed-set surface. Racket's `<` composes with itself on a
+    /// pair `(<? lo v)`/`(<? v hi)` for the same open-interval
+    /// membership check; Common Lisp's `(< lo v hi)` chained-comparison
+    /// idiom exposes the strict-open-range membership as a first-class
+    /// n-ary predicate on numeric types. Translation through pleme-io
+    /// primitives: the ternary strict-open-range containment predicate
+    /// on the closed-set trait binds through [`Self::precedes`]'s
+    /// strict pairwise-precedence composition applied at both range
+    /// endpoints, so the strict interior emerges from the substrate's
+    /// typed strict pairwise-comparison surface rather than as a
+    /// fresh substrate primitive on the index axis. The closed-set
+    /// trait carries the strict-interior predicate as a typed
+    /// projection on the variant, not on a chained-comparison
+    /// n-ary macro or a foreign `Range` value carrier.
+    fn is_strictly_between(self, lo: Self, hi: Self) -> bool {
+        <Self as ClosedSet>::precedes(lo, self) && <Self as ClosedSet>::precedes(self, hi)
+    }
+
+    /// The lex-order EXCLUSIVE-both closed-range containment predicate
+    /// — `true` iff `self` sits STRICTLY inside the open range
+    /// `(lo, hi)` of the lex-order [`Self::sorted_labels`], `false`
+    /// when `self` coincides with EITHER endpoint OR sits outside in
+    /// lex order. The lex-ordering peer of [`Self::is_strictly_between`]
+    /// on the (declaration, lex) ordering axis of the ternary strict-
+    /// open-range containment surface.
+    ///
+    /// Sibling posture to [`Self::is_strictly_between`] one arm over
+    /// on the (declaration, lex) ordering axis —
+    /// [`Self::is_strictly_between`] uses [`Self::precedes`]
+    /// (declaration order, strict), this method uses
+    /// [`Self::sorted_precedes`] (lex order, strict). See
+    /// [`Self::is_strictly_between`] for the shared strict-open-range-
+    /// containment laws (irreflexivity, endpoint-exclusivity, empty-
+    /// range degeneracy), the range-partition contract, the future-
+    /// consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the lex-axis arm of the same
+    /// ternary strict-open-range containment surface and inherits
+    /// every property from the declaration arm's documentation,
+    /// differing only in the projection method the composition
+    /// routes through.
+    ///
+    /// Default body composes [`Self::sorted_precedes`] at both range
+    /// endpoints: `lo.sorted_precedes(self) &&
+    /// self.sorted_precedes(hi)`. Implementors override only when the
+    /// lex-axis ternary strict-open-range containment surface needs to
+    /// diverge from the natural composition of the pre-existing strict
+    /// pairwise-precedence predicate applied at both range endpoints.
+    ///
+    /// (84) + (85) together OPEN the (exclusive-both) corner of the
+    /// (ordering × endpoint-inclusivity-flavor) 4-corner matrix past
+    /// the (inclusive-both) corner (82)+(83) closed. Together with
+    /// (82)+(83), four of the eight sub-corners
+    /// (ordering × endpoint-inclusivity-flavor) 2×2 = 4-corner matrix
+    /// are now closed: (declaration, inclusive-both) at (82) —
+    /// [`Self::is_between`], (lex, inclusive-both) at (83) —
+    /// [`Self::is_sorted_between`], (declaration, exclusive-both) at
+    /// (84) — [`Self::is_strictly_between`], and now (lex, exclusive-
+    /// both) at (85) — this method. Future extensions along the
+    /// half-open endpoint-inclusivity axes (`[lo, hi)` /
+    /// `(lo, hi]`) close the remaining four corners of the ternary-
+    /// containment surface — the (82)+(83)+(84)+(85) quartet sits at
+    /// the two closed-form corners (both-closed and both-open) and
+    /// stays the canonical entry point for a future
+    /// (half-open) axis.
+    fn is_sorted_strictly_between(self, lo: Self, hi: Self) -> bool {
+        <Self as ClosedSet>::sorted_precedes(lo, self)
+            && <Self as ClosedSet>::sorted_precedes(self, hi)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -27678,5 +27845,265 @@ mod tests {
                  lex-order closed range [sorted_first, sorted_last]",
             );
         }
+    }
+
+    #[test]
+    fn is_strictly_between_is_irreflexive_across_every_variant() {
+        // `T::is_strictly_between` is IRREFLEXIVE at the singleton
+        // range: every variant sits OUTSIDE its own strict-open range
+        // `(v, v)`. Sibling posture to
+        // `is_between_is_reflexive_across_every_variant` one arm over
+        // on the (inclusive-exclusive) endpoint-inclusivity axis —
+        // where the inclusive-both peer is reflexive at the diagonal,
+        // the exclusive-both arm is IRREFLEXIVE at the diagonal
+        // (empty singleton range). The exclusive-both singleton range
+        // is empty as a typed CONSEQUENCE of [`ClosedSet::precedes`]'s
+        // irreflexivity at both bound-to-self edges.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                !<StubKind as ClosedSet>::is_strictly_between(v, v, v),
+                "StubKind::{v:?}.is_strictly_between(StubKind::{v:?}, StubKind::{v:?}) must be \
+                 false — the exclusive-both singleton range (v, v) is empty because precedes \
+                 is irreflexive at both bound-to-self edges",
+            );
+        }
+    }
+
+    #[test]
+    fn is_strictly_between_agrees_with_precedes_conjunction_on_every_triple() {
+        // PATH-UNIFORMITY CONTRACT: the strict-open-range containment
+        // predicate is the conjunction of the strict-precedence
+        // predicate applied at both range endpoints —
+        // `self.is_strictly_between(lo, hi)` is exactly
+        // `lo.precedes(self) && self.precedes(hi)` on every
+        // (variant, lo, hi) triple. Sibling posture to
+        // `is_between_agrees_with_precedes_or_equal_conjunction_on_every_triple`
+        // on the (inclusive-exclusive) endpoint-inclusivity axis of
+        // the ternary closed-range containment surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_strictly_between(v, lo, hi),
+                        <StubKind as ClosedSet>::precedes(lo, v)
+                            && <StubKind as ClosedSet>::precedes(v, hi),
+                        "StubKind::{v:?}.is_strictly_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         agree with the natural strict-precedence conjunction on both bound-to-self edges",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_between_excludes_both_range_endpoints_for_every_ordered_pair() {
+        // ENDPOINT-EXCLUSIVITY CONTRACT: on every ordered pair
+        // `(lo, hi)` — including the trivially-empty case `lo == hi`
+        // — `lo.is_strictly_between(lo, hi)` and
+        // `hi.is_strictly_between(lo, hi)` are BOTH `false`. The
+        // strict-precedence predicate is irreflexive at both bound-to-
+        // self edges, so no endpoint sits inside its own strict-open
+        // range. Sibling posture to
+        // `is_between_holds_at_both_range_endpoints_for_every_ordered_pair`
+        // one arm over on the (inclusive-exclusive) endpoint-
+        // inclusivity axis — where the inclusive-both peer ADMITS the
+        // endpoints, the exclusive-both arm EXCLUDES them.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert!(
+                    !<StubKind as ClosedSet>::is_strictly_between(lo, lo, hi),
+                    "StubKind::{lo:?}.is_strictly_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                     be false — the lower endpoint sits OUTSIDE its own strict-open range",
+                );
+                assert!(
+                    !<StubKind as ClosedSet>::is_strictly_between(hi, lo, hi),
+                    "StubKind::{hi:?}.is_strictly_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                     be false — the upper endpoint sits OUTSIDE its own strict-open range",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_between_is_false_on_reversed_range_endpoints() {
+        // EMPTY-RANGE DEGENERACY (reversed endpoints): when `hi`
+        // strictly succeeds `lo`, the reversed strict-open range
+        // `(hi, lo)` is empty — no variant simultaneously strictly
+        // succeeds `hi` AND strictly precedes `lo` in declaration
+        // order. Inherited verbatim from
+        // `is_between_is_false_on_reversed_range_endpoints` one arm
+        // over on the (inclusive-exclusive) endpoint-inclusivity axis
+        // — the empty-range arm on reversed endpoints holds for the
+        // same total-order reason on both endpoint-inclusivity
+        // flavors.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::precedes(hi, lo) {
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        assert!(
+                            !<StubKind as ClosedSet>::is_strictly_between(v, lo, hi),
+                            "StubKind::{v:?}.is_strictly_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                             be false — the reversed strict-open range (lo, hi) is empty when hi \
+                             strictly precedes lo",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_between_partitions_all_across_every_bound_pair() {
+        // RANGE-PARTITION CONTRACT: for every ordered pair `(lo, hi)`
+        // with `lo.precedes_or_equal(hi)`, the filter
+        // `T::ALL.iter().filter(|v| v.is_strictly_between(lo, hi))`
+        // equals the STRICT-INTERIOR declaration-order slice
+        // `Self::ALL[index_of(lo)+1..index_of(hi)]` — the open
+        // interval, distinct from the inclusive-both peer's closed
+        // interval `Self::ALL[index_of(lo)..=index_of(hi)]`. Sibling
+        // posture to `is_between_partitions_all_across_every_bound_pair`
+        // on the (inclusive-exclusive) endpoint-inclusivity axis.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                    let lo_idx = <StubKind as ClosedSet>::index_of(lo);
+                    let hi_idx = <StubKind as ClosedSet>::index_of(hi);
+                    let filtered: Vec<_> = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .filter(|v| <StubKind as ClosedSet>::is_strictly_between(*v, lo, hi))
+                        .collect();
+                    // The strict-open range `(lo, hi)` is empty when
+                    // `lo == hi` (endpoints coincide) — no interior
+                    // slots exist between two equal endpoints. Guard
+                    // the slice construction so `ALL[lo_idx+1..hi_idx]`
+                    // isn't computed with `start > end`, which would
+                    // panic at slice-indexing time before the assertion
+                    // could fire.
+                    let expected: Vec<_> = if lo_idx < hi_idx {
+                        <StubKind as ClosedSet>::ALL[lo_idx + 1..hi_idx].to_vec()
+                    } else {
+                        Vec::new()
+                    };
+                    assert_eq!(
+                        filtered, expected,
+                        "The filter `T::ALL.filter(is_strictly_between({lo:?}, {hi:?}))` must equal \
+                         the strict-open declaration-order slice `ALL[index_of(lo)+1..index_of(hi)]`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_sorted_strictly_between_agrees_with_sorted_precedes_conjunction_on_every_triple() {
+        // PATH-UNIFORMITY CONTRACT (lex peer): the lex-order strict-
+        // open-range containment predicate is the conjunction of the
+        // lex-order strict-precedence predicate applied at both range
+        // endpoints — `self.is_sorted_strictly_between(lo, hi)` is
+        // exactly `lo.sorted_precedes(self) && self.sorted_precedes(hi)`
+        // on every (variant, lo, hi) triple. Sibling posture to
+        // `is_strictly_between_agrees_with_precedes_conjunction_on_every_triple`
+        // on the (declaration, lex) ordering axis of the ternary
+        // strict-open-range containment surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_strictly_between(v, lo, hi),
+                        <StubKind as ClosedSet>::sorted_precedes(lo, v)
+                            && <StubKind as ClosedSet>::sorted_precedes(v, hi),
+                        "StubKind::{v:?}.is_sorted_strictly_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         agree with the natural lex-order strict-precedence conjunction on both bound-to-self edges",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_sorted_strictly_between_coincides_with_is_strictly_between_when_orders_agree() {
+        // CROSS-AXIS COINCIDENCE: when the declaration order coincides
+        // with the lex order (as it does for `StubKind`, whose labels
+        // `"alpha"`/`"beta"`/`"gamma"` are already in ASCII lex order
+        // in declaration), the declaration-axis strict-open-range
+        // containment predicate coincides with the lex-axis peer on
+        // every (variant, lo, hi) triple. Sibling posture to
+        // `is_sorted_between_coincides_with_is_between_when_declaration_and_lex_orders_agree`
+        // on the (inclusive-exclusive) endpoint-inclusivity axis of
+        // the ternary strict-open-range containment surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_strictly_between(v, lo, hi),
+                        <StubKind as ClosedSet>::is_sorted_strictly_between(v, lo, hi),
+                        "StubKind::{v:?}.is_strictly_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         coincide with StubKind::{v:?}.is_sorted_strictly_between(StubKind::{lo:?}, \
+                         StubKind::{hi:?}) when declaration and lex orders agree",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_between_full_range_admits_only_the_interior() {
+        // FULL-RANGE CONTRACT (strict peer): the strict-open range
+        // `(first, last)` — the widest strict-open range on the
+        // closed-set surface — contains EVERY strict-interior
+        // variant, and NEITHER endpoint. Sibling posture to
+        // `is_between_full_range_admits_every_variant` one arm over
+        // on the (inclusive-exclusive) endpoint-inclusivity axis of
+        // the ternary closed-range containment surface — where the
+        // inclusive-both peer's full range admits EVERY variant, the
+        // strict peer's full range admits exactly the DECLARATION-
+        // ORDER interior partition (`T::interior()`). Pins the
+        // strict-open full-range equivalence with the closed-set
+        // interior projection directly so a regression that drifts
+        // either primitive on the (endpoint-inclusivity ×
+        // partition-flavor) 2×2 sub-matrix surfaces here.
+        let first = <StubKind as ClosedSet>::first();
+        let last = <StubKind as ClosedSet>::last();
+        let filtered: Vec<_> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|v| <StubKind as ClosedSet>::is_strictly_between(*v, first, last))
+            .collect();
+        assert_eq!(
+            filtered,
+            <StubKind as ClosedSet>::interior(),
+            "The filter `T::ALL.filter(is_strictly_between(first, last))` must equal \
+             T::interior() — the strict interior of the full range is exactly the \
+             declaration-order interior partition",
+        );
+    }
+
+    #[test]
+    fn is_sorted_strictly_between_full_sorted_range_admits_only_the_sorted_interior() {
+        // FULL-RANGE CONTRACT (lex strict peer): the lex-order strict-
+        // open range `(sorted_first, sorted_last)` contains EVERY
+        // lex-order strict-interior variant, and NEITHER lex endpoint.
+        // Sibling posture to
+        // `is_strictly_between_full_range_admits_only_the_interior` on
+        // the (declaration, lex) ordering axis. The lex-strict full
+        // range admits exactly the LEX-ORDER interior partition
+        // (`T::sorted_interior()`).
+        let sorted_first = <StubKind as ClosedSet>::sorted_first();
+        let sorted_last = <StubKind as ClosedSet>::sorted_last();
+        let filtered: Vec<_> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|v| {
+                <StubKind as ClosedSet>::is_sorted_strictly_between(*v, sorted_first, sorted_last)
+            })
+            .collect();
+        assert_eq!(
+            filtered,
+            <StubKind as ClosedSet>::sorted_interior(),
+            "The filter `T::ALL.filter(is_sorted_strictly_between(sorted_first, sorted_last))` \
+             must equal T::sorted_interior() — the lex-order strict interior of the full lex \
+             range is exactly the lex-order interior partition",
+        );
     }
 }

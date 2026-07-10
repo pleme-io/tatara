@@ -4136,6 +4136,394 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::contains_label(s) && !<Self as ClosedSet>::is_sorted_endpoint_label(s)
     }
 
+    /// The declaration-order index-shaped endpoint-membership predicate —
+    /// `true` iff the `usize` argument equals `0` (the declaration-order
+    /// head-endpoint's slot in [`Self::ALL`]) OR
+    /// `T::CARDINALITY - 1` (the declaration-order tail-endpoint's
+    /// slot), `false` on every strictly-interior slot AND on every
+    /// out-of-range `usize`. Opens the `usize`-arg column of the
+    /// (arg-type × ordering × predicate-flavor × endpoint-direction)
+    /// hyperbook at the (declaration, endpoint) corner alongside the
+    /// pre-existing `Self`-arg column ([`Self::is_endpoint`],
+    /// [`Self::is_interior`], [`Self::is_sorted_endpoint`],
+    /// [`Self::is_sorted_interior`]) and `&str`-arg column
+    /// ([`Self::is_endpoint_label`], [`Self::is_interior_label`],
+    /// [`Self::is_sorted_endpoint_label`], [`Self::is_sorted_interior_label`]).
+    ///
+    /// Sibling posture to [`Self::is_endpoint_label`] one arg-type axis
+    /// over on the (`Self`, `&str`, `usize`) partition of the
+    /// declaration-axis boolean-boundary surface:
+    /// [`Self::is_endpoint_label`] answers "is this &str the label of a
+    /// declaration-endpoint variant?", this method answers "is this
+    /// usize the array slot of a declaration-endpoint variant?" for a
+    /// raw index without materializing through [`Self::from_index`] or
+    /// [`Self::label_at`]. Every generic consumer that wants a
+    /// zero-alloc O(1) `usize`-shaped declaration-boundary query (a
+    /// compact wire codec that short-circuits on either declaration-
+    /// endpoint slot before materializing a typed variant, a bitset
+    /// state machine whose bounded head+tail arms fire ONLY on the
+    /// declaration-endpoint slots, a Prometheus per-slot bucket
+    /// renderer that draws a shared boundary badge on both endpoints
+    /// without duplicating the badge-emit fork, a byte-tagged compact-
+    /// encoding on the declaration-slot carve that anchors both
+    /// endpoints at distinguished bytes, a `tatara-check` diagnostic
+    /// renderer that emits an anchored `"declaration boundary slot"`
+    /// banner ONLY when the offending index equals either endpoint
+    /// slot) binds to ONE typed predicate rather than hand-rolling
+    /// either the `i == 0 || i + 1 == T::CARDINALITY` inline
+    /// composition on the declaration axis (which re-derives the same
+    /// two-literal composition at every callsite AND silently drifts
+    /// when the definition of "declaration boundary" gets tightened —
+    /// a future closed set that reserves declaration slot `0` for a
+    /// sentinel and shifts every canonical slot up by one, a future
+    /// const-fn axis that makes the predicate callable in const
+    /// contexts) OR the `T::from_index(i).map(<T as ClosedSet>::is_endpoint).unwrap_or(false)`
+    /// composition (which pays an `Option<Self>`-typed dispatch AND
+    /// folds the out-of-range boundary onto `false` implicitly rather
+    /// than by direct `usize` composition) OR the
+    /// `T::label_at(i).map(<T as ClosedSet>::is_endpoint_label).unwrap_or(false)`
+    /// composition (which pays an `Option<&'static str>`-typed
+    /// dispatch AND routes through the label-shaped declaration-
+    /// endpoint predicate one arg-type axis over).
+    ///
+    /// Default body composes [`Self::is_first_index`] with
+    /// [`Self::is_last_index`] under `||` — the index-shaped
+    /// declaration-boundary-membership predicate is a typed CONSEQUENCE
+    /// of the two pre-existing index-shaped declaration point-membership
+    /// primitives, not a third codepath through inline literals. The
+    /// `usize::MAX` overflow answer inherits from
+    /// [`Self::is_last_index`]'s `checked_add(1) == Some(CARDINALITY)`
+    /// composition — both arms return `false` on `usize::MAX`, so the
+    /// disjunction correctly returns `false`. Implementors override
+    /// only when the index-shaped declaration-boundary-membership
+    /// surface needs to diverge from the natural
+    /// `is_first_index(i) || is_last_index(i)` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `is_endpoint` / `is_endpoint_label` overrides exist
+    /// — a typed escape hatch rather than forcing the implementor to
+    /// hand-roll the impl). An implementor that overrides either
+    /// [`Self::is_first_index`] OR [`Self::is_last_index`] propagates
+    /// the override through this default body automatically.
+    ///
+    /// The (declaration-endpoint, declaration-interior) partition
+    /// contract on the CANONICAL sub-domain
+    /// `0..T::CARDINALITY` — `is_endpoint_index(i) !=
+    /// is_interior_index(i)` for every `i ∈ 0..T::CARDINALITY` —
+    /// is guaranteed by the default composition; the well-formedness
+    /// clause (78) pins the complementarity assertion on every
+    /// canonical slot AND the shared out-of-range boundary rejection
+    /// (`T::is_endpoint_index(T::CARDINALITY) == false`). Outside the
+    /// canonical sub-domain BOTH predicates return `false` (the input
+    /// belongs to neither the endpoint sub-slot nor the interior sub-
+    /// slot — the index-shaped predicates project to `false` on the
+    /// out-of-range column, mirroring the `find_by_label(s).is_none()`
+    /// rejection semantics of the `&str`-arg column at
+    /// [`Self::is_endpoint_label`] and [`Self::is_interior_label`]).
+    ///
+    /// Singleton degeneracy — for `T::CARDINALITY == 1` this predicate
+    /// returns `true` for the sole variant's slot `0` (both index-
+    /// shaped point-membership predicates fire on the same slot);
+    /// [`Self::is_interior_index`] correspondingly returns `false`.
+    ///
+    /// THEORY.md §III — the typescape; the (usize → declaration-
+    /// boundary-membership bool) projection becomes a TYPE projection
+    /// on the trait rather than a per-consumer inline
+    /// `i == 0 || i + 1 == T::CARDINALITY` composition on a
+    /// declaration-slot input at every downstream index-shaped
+    /// declaration-boundary query site.
+    /// THEORY.md §V.1 — knowable platform; naming the projection on
+    /// the trait turns "the index is a declaration-endpoint slot" from
+    /// an unnamed compound into a workspace-wide theorem.
+    /// THEORY.md §VI.1 — generation over composition; the projection
+    /// emerges from the composition of TWO substrate primitives
+    /// ([`Self::is_first_index`], [`Self::is_last_index`]) under the
+    /// standard-library boolean `||` operator, rather than as a per-
+    /// implementor `match i { 0 | (T::CARDINALITY - 1) => true, _ =>
+    /// false }` block.
+    ///
+    /// Frontier inspiration: Racket's `enum-boundary-index?` on
+    /// closed enumerations under declaration-order index projection;
+    /// Idris's `isFZOrFS n (last n) : Fin (S n) -> Bool` composed
+    /// through `finToNat` on the declaration-order finite type;
+    /// Haskell's `\i -> i == 0 || i == length labels - 1` on the
+    /// `Bounded + Enum` type-class pair; MLIR's
+    /// `RegisteredOperationName::isDeclEndpointIndex(idx)` on the
+    /// declaration-order Op registry. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::is_first_index`] and [`Self::is_last_index`]
+    /// surfaces under the standard-library boolean `||` operator — no
+    /// new dep, no new IR layer, no supertrait bound, no allocation,
+    /// no [`Option`]-typed dispatch.
+    fn is_endpoint_index(i: usize) -> bool {
+        <Self as ClosedSet>::is_first_index(i) || <Self as ClosedSet>::is_last_index(i)
+    }
+
+    /// The declaration-order index-shaped interior-membership predicate —
+    /// `true` iff `i` names the array slot of a strictly-interior
+    /// variant (neither the declaration-order head slot `0` nor the
+    /// declaration-order tail slot `T::CARDINALITY - 1`), `false` on
+    /// both endpoint slots AND on every out-of-range `usize`. Closes
+    /// the (`usize`, declaration, interior) corner of the (arg-type ×
+    /// ordering × predicate-flavor) 3×2×2 = 12-corner boolean-boundary
+    /// hypercube alongside [`Self::is_endpoint_index`] (usize,
+    /// declaration, endpoint) and the pre-existing eight `Self`-and-
+    /// `&str` corners.
+    ///
+    /// Sibling posture to [`Self::is_interior_label`] one arg-type axis
+    /// over on the (`Self`, `&str`, `usize`) partition of the
+    /// declaration-axis boolean-boundary surface: [`Self::is_interior_label`]
+    /// answers "is this &str the label of a strictly-interior variant?"
+    /// gated by [`Self::contains_label`]; this method answers "is this
+    /// usize the array slot of a strictly-interior variant?" gated by
+    /// the canonical-domain range check `i < T::CARDINALITY`.
+    ///
+    /// Default body composes the canonical-domain gate
+    /// `i < T::CARDINALITY` with [`!Self::is_endpoint_index`] under
+    /// `&&` — a canonical slot answers `true` iff it is in the
+    /// canonical index domain `0..T::CARDINALITY` AND is NOT an
+    /// endpoint slot; every out-of-range input answers `false` because
+    /// the domain gate rejects it. This shape diverges from the
+    /// `Self`-arg default `!is_endpoint(self)` (which would answer
+    /// `true` for a non-canonical input on the label side) — the
+    /// `usize` arg-type axis requires a domain-membership gate because
+    /// the input domain is unbounded, unlike the closed `Self` domain.
+    /// The domain gate `i < T::CARDINALITY` is the natural `usize`-
+    /// arg parallel of [`Self::contains_label`]'s canonical-label
+    /// membership sweep on the `&str`-arg column: both gate the input
+    /// to the closed set's finite canonical sub-domain (the
+    /// `0..CARDINALITY` slot range on the `usize` axis, the canonical
+    /// label sub-set on the `&str` axis) before the boundary-partition
+    /// arm fires.
+    ///
+    /// Composition rejects `T::CARDINALITY` (falls out of the domain
+    /// gate — the CARDINALITY-th slot is one past the canonical
+    /// range) AND rejects `usize::MAX` (also out of range). The
+    /// (declaration-endpoint, declaration-interior) partition
+    /// contract on the CANONICAL sub-domain
+    /// `0..T::CARDINALITY` — `is_endpoint_index(i) !=
+    /// is_interior_index(i)` for every `i ∈ 0..T::CARDINALITY` — is
+    /// guaranteed by the default composition; the well-formedness
+    /// clause (79) pins the complementarity assertion on every
+    /// canonical slot AND the shared out-of-range rejection
+    /// (`T::is_interior_index(T::CARDINALITY) == false`).
+    ///
+    /// Singleton degeneracy — for `T::CARDINALITY == 1` this predicate
+    /// returns `false` for the sole variant's slot `0` (the sole slot
+    /// is BOTH endpoints so [`Self::is_endpoint_index`] fires; the
+    /// interior arm correspondingly rejects). A singleton closed set
+    /// has ZERO strictly-interior slots by construction — mirrors the
+    /// singleton collapse [`Self::is_interior`] and
+    /// [`Self::is_interior_label`] observe on the two sibling arg-type
+    /// axes.
+    ///
+    /// Implementors override only when the index-shaped declaration-
+    /// interior-membership surface needs to diverge from the natural
+    /// `i < T::CARDINALITY && !is_endpoint_index(i)` shape (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason `is_endpoint_index` /
+    /// `is_interior_label` overrides exist — a typed escape hatch). An
+    /// implementor that overrides [`Self::is_endpoint_index`]
+    /// propagates the override through this default body automatically.
+    ///
+    /// THEORY.md §III — the typescape; the (usize → declaration-
+    /// interior-membership bool) projection becomes a TYPE projection
+    /// on the trait rather than a per-consumer inline
+    /// `i < T::CARDINALITY && !(i == 0 || i + 1 == T::CARDINALITY)`
+    /// composition.
+    /// THEORY.md §V.1 — knowable platform; naming the projection on
+    /// the trait turns "the index is a strictly-declaration-interior
+    /// slot" from an unnamed compound into a workspace-wide theorem.
+    ///
+    /// Frontier inspiration: Racket's `enum-interior-index?` on closed
+    /// enumerations under declaration-order index projection;
+    /// Haskell's `\i -> i > 0 && i < length labels - 1` on the
+    /// `Bounded + Enum` type-class pair; MLIR's
+    /// `RegisteredOperationName::isDeclInteriorIndex(idx)` on the
+    /// declaration-order Op registry. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// [`Self::CARDINALITY`] and [`Self::is_endpoint_index`] surfaces
+    /// under the standard-library `<` comparison and boolean `&&` /
+    /// `!` operators — no new dep, no new IR layer, no supertrait
+    /// bound, no allocation, no [`Option`]-typed dispatch.
+    fn is_interior_index(i: usize) -> bool {
+        i < <Self as ClosedSet>::CARDINALITY && !<Self as ClosedSet>::is_endpoint_index(i)
+    }
+
+    /// The lexicographic-order index-shaped endpoint-membership
+    /// predicate — `true` iff the `usize` argument equals `0` (the
+    /// lex-order head-endpoint's slot in [`Self::sorted_variants`],
+    /// where the argument is interpreted as a LEX position — the
+    /// natural output shape of [`Self::sorted_index_of`],
+    /// [`Self::sorted_next_index`], [`Self::sorted_prev_index`],
+    /// [`Self::cycle_sorted_next_index`], and
+    /// [`Self::cycle_sorted_prev_index`]) OR `T::CARDINALITY - 1` (the
+    /// lex-order tail-endpoint's slot), `false` on every strictly-lex-
+    /// interior lex slot AND on every out-of-range `usize`. Closes the
+    /// (`usize`, lex, endpoint) corner of the (arg-type × ordering ×
+    /// predicate-flavor) 3×2×2 = 12-corner boolean-boundary hypercube
+    /// alongside [`Self::is_endpoint_index`] (usize, declaration,
+    /// endpoint).
+    ///
+    /// Sibling posture to [`Self::is_endpoint_index`] one ordering
+    /// axis over on the (declaration, lex) partition —
+    /// [`Self::is_endpoint_index`] interprets `i` as a DECLARATION slot
+    /// in [`Self::ALL`] and answers "is this the declaration-endpoint
+    /// slot?"; this method interprets `i` as a LEX position in
+    /// [`Self::sorted_variants`] and answers "is this the lex-endpoint
+    /// slot?". The `usize` bodies coincide (both endpoints land at
+    /// slots `0` / `T::CARDINALITY - 1` under their respective
+    /// orderings) but the SEMANTIC and load-bearing consumer paths
+    /// differ — a caller who computed a lex-position via
+    /// [`Self::sorted_index_of`] and wants to test lex-boundary
+    /// membership binds to THIS method (not [`Self::is_endpoint_index`])
+    /// to make the lex axis explicit at the call site and to inherit
+    /// the (80) well-formedness pin against
+    /// `T::is_sorted_endpoint_index(T::sorted_index_of(v)) ==
+    /// v.is_sorted_endpoint()` rather than the (78) pin against
+    /// `T::is_endpoint_index(T::index_of(v)) == v.is_endpoint()`.
+    ///
+    /// Default body composes [`Self::is_sorted_first_index`] with
+    /// [`Self::is_sorted_last_index`] under `||` — the lex index-
+    /// shaped boundary-membership predicate is a typed CONSEQUENCE of
+    /// the two pre-existing index-shaped lex point-membership
+    /// primitives. Implementors override only when the lex index-
+    /// shaped boundary-membership surface needs to diverge from the
+    /// natural `is_sorted_first_index(i) || is_sorted_last_index(i)`
+    /// shape. An implementor that overrides either
+    /// [`Self::is_sorted_first_index`] OR
+    /// [`Self::is_sorted_last_index`] propagates the override through
+    /// this default body automatically.
+    ///
+    /// The (lex-endpoint, lex-interior) partition contract on the
+    /// CANONICAL sub-domain `0..T::CARDINALITY` —
+    /// `is_sorted_endpoint_index(i) != is_sorted_interior_index(i)`
+    /// for every `i ∈ 0..T::CARDINALITY` — is guaranteed by the
+    /// default composition; the well-formedness clause (80) pins the
+    /// complementarity assertion on every canonical slot AND the
+    /// shared out-of-range rejection
+    /// (`T::is_sorted_endpoint_index(T::CARDINALITY) == false`).
+    /// Outside the canonical sub-domain BOTH predicates return `false`.
+    ///
+    /// Singleton degeneracy — for `T::CARDINALITY == 1` this predicate
+    /// returns `true` for the sole variant's slot `0` (both lex-
+    /// endpoint point-membership predicates fire on the same slot);
+    /// [`Self::is_sorted_interior_index`] correspondingly returns
+    /// `false`.
+    ///
+    /// THEORY.md §III — the typescape; the (usize → lex-boundary-
+    /// membership bool) projection on a LEX-position input becomes a
+    /// TYPE projection on the trait rather than a per-consumer inline
+    /// `i == 0 || i + 1 == T::CARDINALITY` composition on a lex-
+    /// position input.
+    /// THEORY.md §V.1 — knowable platform; naming the projection on
+    /// the trait turns "the lex slot is a lex-endpoint slot" from an
+    /// unnamed compound into a workspace-wide theorem.
+    ///
+    /// Frontier inspiration: Racket's `enum-sorted-boundary-index?` on
+    /// closed enumerations under lex-ordered index projection; Idris's
+    /// `\i -> i == FZ || i == last n` on the lex-permuted finite type;
+    /// Haskell's `\i -> i == 0 || i == length sortedLabels - 1` on the
+    /// `Bounded + Show` type-class pair with a `sortBy` prelude;
+    /// MLIR's `RegisteredOperationName::isLexEndpointIndex(idx)` on
+    /// the lex-sorted Op registry. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::is_sorted_first_index`] and
+    /// [`Self::is_sorted_last_index`] surfaces under the standard-
+    /// library boolean `||` operator — no new dep, no new IR layer,
+    /// no supertrait bound, no allocation, no [`Option`]-typed
+    /// dispatch.
+    fn is_sorted_endpoint_index(i: usize) -> bool {
+        <Self as ClosedSet>::is_sorted_first_index(i)
+            || <Self as ClosedSet>::is_sorted_last_index(i)
+    }
+
+    /// The lexicographic-order index-shaped interior-membership
+    /// predicate — `true` iff `i` names the lex slot of a strictly-
+    /// lex-interior variant, `false` on both lex-endpoint slots AND on
+    /// every out-of-range `usize`. Closes the (`usize`, lex, interior)
+    /// corner AND the FINAL corner of the (arg-type × ordering ×
+    /// predicate-flavor) 3×2×2 = 12-corner boolean-boundary hypercube
+    /// alongside [`Self::is_sorted_endpoint_index`] (usize, lex,
+    /// endpoint), [`Self::is_endpoint_index`] (usize, declaration,
+    /// endpoint), [`Self::is_interior_index`] (usize, declaration,
+    /// interior), and the pre-existing eight `Self`-and-`&str` corners.
+    ///
+    /// Sibling posture to [`Self::is_sorted_interior_label`] one arg-
+    /// type axis over on the (`Self`, `&str`, `usize`) partition of
+    /// the lex-axis boolean-boundary surface:
+    /// [`Self::is_sorted_interior_label`] answers "is this &str the
+    /// label of a strictly-lex-interior variant?" gated by
+    /// [`Self::contains_label`]; this method answers "is this usize
+    /// the lex slot of a strictly-lex-interior variant?" gated by the
+    /// canonical-domain range check `i < T::CARDINALITY`.
+    ///
+    /// Default body composes the canonical-domain gate
+    /// `i < T::CARDINALITY` with [`!Self::is_sorted_endpoint_index`]
+    /// under `&&` — mirrors the declaration-axis
+    /// [`Self::is_interior_index`] one ordering axis over. The `usize`
+    /// arg-type axis requires the same domain-membership gate as
+    /// [`Self::is_interior_index`] because the input domain is
+    /// unbounded; the composition rejects the out-of-range boundary
+    /// `T::CARDINALITY` AND `usize::MAX`.
+    ///
+    /// Implementors override only when the lex index-shaped interior-
+    /// membership surface needs to diverge from the natural
+    /// `i < T::CARDINALITY && !is_sorted_endpoint_index(i)` shape. An
+    /// implementor that overrides [`Self::is_sorted_endpoint_index`]
+    /// propagates the override through this default body automatically.
+    ///
+    /// The (lex-endpoint, lex-interior) partition contract on the
+    /// CANONICAL sub-domain `0..T::CARDINALITY` —
+    /// `is_sorted_endpoint_index(i) != is_sorted_interior_index(i)`
+    /// for every `i ∈ 0..T::CARDINALITY` — is guaranteed by the
+    /// default composition; the well-formedness clause (81) pins the
+    /// complementarity assertion on every canonical slot AND the
+    /// shared out-of-range rejection
+    /// (`T::is_sorted_interior_index(T::CARDINALITY) == false`).
+    /// Outside the canonical sub-domain BOTH predicates return `false`.
+    ///
+    /// Singleton degeneracy — for `T::CARDINALITY == 1` this predicate
+    /// returns `false` for the sole variant's slot `0` (the sole slot
+    /// is BOTH lex endpoints so [`Self::is_sorted_endpoint_index`]
+    /// fires; the interior arm correspondingly rejects).
+    ///
+    /// Clauses (32) + (33) + (54) + (55) + (56) + (57) + (78) + (79) +
+    /// (80) + (81) together CLOSE the (arg-type × ordering ×
+    /// predicate-flavor) 3×2×2 = 12-corner boolean-boundary hypercube
+    /// EXHAUSTIVELY — every generic consumer that walks any of the
+    /// twelve (Self-or-&str-or-usize, declaration-or-lex, endpoint-or-
+    /// interior) corners of the boundary-partition space binds to ONE
+    /// typed predicate rather than hand-rolling a composition.
+    ///
+    /// THEORY.md §III — the typescape; the (usize → lex-interior-
+    /// membership bool) projection becomes a TYPE projection on the
+    /// trait. The 12-corner boolean-boundary hypercube CLOSES with
+    /// this method — every corner of the (arg-type × ordering ×
+    /// predicate-flavor) space is a typed default trait body composed
+    /// from substrate primitives.
+    /// THEORY.md §V.1 — knowable platform; naming the projection on
+    /// the trait turns "the lex slot is a strictly-lex-interior slot"
+    /// from an unnamed compound into a workspace-wide theorem.
+    /// THEORY.md §VI.1 — generation over composition; the projection
+    /// emerges from the composition of TWO substrate primitives under
+    /// the standard-library `<` comparison and boolean `&&` / `!`
+    /// operators.
+    ///
+    /// Frontier inspiration: Racket's `enum-sorted-interior-index?` on
+    /// closed enumerations under lex-ordered index projection;
+    /// Haskell's `\i -> i > 0 && i < length sortedLabels - 1` on the
+    /// `Bounded + Show` type-class pair with a `sortBy` prelude;
+    /// MLIR's `RegisteredOperationName::isLexInteriorIndex(idx)` on
+    /// the lex-sorted Op registry. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// [`Self::CARDINALITY`] and [`Self::is_sorted_endpoint_index`]
+    /// surfaces under the standard-library `<` comparison and boolean
+    /// `&&` / `!` operators — no new dep, no new IR layer, no
+    /// supertrait bound, no allocation, no [`Option`]-typed dispatch.
+    fn is_sorted_interior_index(i: usize) -> bool {
+        i < <Self as ClosedSet>::CARDINALITY && !<Self as ClosedSet>::is_sorted_endpoint_index(i)
+    }
+
     /// The declaration-order endpoint anchor pair — the tuple
     /// `(T::first(), T::last())` projected onto the trait surface as
     /// ONE call. Closes the pair-aggregation corner of the closed-set
@@ -12421,6 +12809,161 @@ where
         !T::is_sorted_last_index(T::ALL.len()),
         "{type_name}: T::is_sorted_last_index(T::CARDINALITY) != false — the (usize → lex tail-membership bool) projection on a lex-position input accepted the out-of-range boundary probe T::CARDINALITY (one past the lex-tail), silently folding a one-past-the-end lex slot onto the lex-tail-endpoint `true` answer while the natural `i + 1 == T::CARDINALITY` composition should return `false`. The out-of-range boundary — canonical or otherwise — must reject via the closed-set lex-tail-slot literal T::CARDINALITY - 1's structural rejection of every out-of-range `usize`",
     );
+    // (78) — For every variant `v` in `T::ALL`,
+    // `T::is_endpoint_index(T::index_of(v))` MUST equal `v.is_endpoint()`,
+    // AND `T::is_endpoint_index(T::CARDINALITY) == false` (the out-of-
+    // range boundary probe). The default trait body is the disjunction
+    // `is_first_index(i) || is_last_index(i)` composing the two pre-
+    // existing declaration-axis index-shaped point-membership
+    // primitives; the assertion catches a future implementor whose
+    // override drifts the index-shaped declaration-boundary-membership
+    // predicate (a swapped override that returns `true` on strictly-
+    // interior slots and `false` on the endpoint slots; an offset
+    // override that folds the disjunction onto only ONE endpoint arm;
+    // a permissive override that accepts the out-of-range
+    // `T::CARDINALITY` probe or `usize::MAX` — folding the out-of-range
+    // boundary onto the `true` answer every downstream index-shaped
+    // declaration-boundary consumer routes through). Sibling posture
+    // to clauses (32) + (54) — clause (32) pins the `Self`-arg
+    // declaration-axis boundary-membership predicate against
+    // `is_first(self) || is_last(self)`, clause (54) pins the
+    // `&str`-arg declaration-axis boundary-membership predicate
+    // against `is_first_label(s) || is_last_label(s)`, this clause
+    // pins the `usize`-arg declaration-axis boundary-membership
+    // predicate against `is_first_index(i) || is_last_index(i)` on
+    // the DECLARATION-slot input axis. Opens the `usize`-arg column
+    // of the (arg-type × ordering × predicate-flavor) 3×2×2 = 12-
+    // corner boolean-boundary hypercube at the (declaration, endpoint)
+    // corner — the `Self` and `&str` columns of this surface already
+    // exist at clauses (32) + (33) + (54) + (55) + (56) + (57).
+    for &v in T::ALL {
+        let expected_is_endpoint_index = v.is_endpoint();
+        assert_eq!(
+            T::is_endpoint_index(<T as ClosedSet>::index_of(v)),
+            expected_is_endpoint_index,
+            "{type_name}: T::is_endpoint_index(T::index_of({v:?})) drifted from {v:?}.is_endpoint() — the direct (usize → declaration boundary-membership bool) projection no longer agrees with the natural `Self`-arg is_endpoint predicate through the (variant → declaration slot) forward projection, so a downstream compact wire codec / bitset state machine / Prometheus per-slot bucket renderer / byte-tagged compact-encoding consumer that binds `T::is_endpoint_index(idx)` as its index-shaped declaration-boundary rendering surface would emit the wrong bool for {v:?}'s slot",
+        );
+    }
+    assert!(
+        !T::is_endpoint_index(T::ALL.len()),
+        "{type_name}: T::is_endpoint_index(T::CARDINALITY) != false — the (usize → declaration boundary-membership bool) projection accepted the out-of-range boundary probe T::CARDINALITY, silently folding a one-past-the-end slot onto the declaration-boundary `true` answer while the natural `is_first_index(i) || is_last_index(i)` composition should return `false`. The out-of-range boundary — canonical or otherwise — must reject via the closed-set head-slot literal `0`'s and tail-slot literal `T::CARDINALITY - 1`'s structural rejection of every out-of-range `usize`",
+    );
+    // (79) — For every variant `v` in `T::ALL`,
+    // `T::is_interior_index(T::index_of(v))` MUST equal
+    // `v.is_interior()`, AND `T::is_interior_index(T::CARDINALITY) ==
+    // false` (the out-of-range boundary probe), AND per-slot
+    // complementarity `T::is_endpoint_index(i) !=
+    // T::is_interior_index(i)` for every `i ∈ 0..T::CARDINALITY`. The
+    // default trait body is the natural
+    // `i < T::CARDINALITY && !is_endpoint_index(i)` composition; the
+    // assertion catches a future implementor whose override drifts the
+    // index-shaped declaration-interior-membership predicate (a
+    // swapped override that returns `true` on the endpoint slots; a
+    // permissive override that returns `true` on `T::CARDINALITY` or
+    // `usize::MAX` — silently folding the out-of-range boundary onto
+    // the interior `true` answer; a missing domain gate override that
+    // returns `!is_endpoint_index(i)` unconditionally — silently
+    // folding every out-of-range `usize` onto the interior `true`
+    // answer). Sibling posture to clauses (32) + (55) — clause (32)
+    // pins the `Self`-arg declaration-interior predicate against
+    // `!is_endpoint(self)` (no domain gate needed on the closed
+    // `Self`-arg), clause (55) pins the `&str`-arg declaration-
+    // interior predicate against `contains_label(s) &&
+    // !is_endpoint_label(s)` (with the `contains_label` domain gate),
+    // this clause pins the `usize`-arg declaration-interior predicate
+    // against `i < T::CARDINALITY && !is_endpoint_index(i)` (with the
+    // canonical-index-range domain gate — the natural `usize`-arg
+    // parallel of `contains_label`'s canonical-label domain gate).
+    for &v in T::ALL {
+        let expected_is_interior_index = v.is_interior();
+        assert_eq!(
+            T::is_interior_index(<T as ClosedSet>::index_of(v)),
+            expected_is_interior_index,
+            "{type_name}: T::is_interior_index(T::index_of({v:?})) drifted from {v:?}.is_interior() — the direct (usize → declaration interior-membership bool) projection no longer agrees with the natural `Self`-arg is_interior predicate through the (variant → declaration slot) forward projection, so a downstream bounded interior-loop / phase-fold reducer / interior-completion pass consumer that binds `T::is_interior_index(idx)` would drift for {v:?}'s slot",
+        );
+    }
+    assert!(
+        !T::is_interior_index(T::ALL.len()),
+        "{type_name}: T::is_interior_index(T::CARDINALITY) != false — the (usize → declaration interior-membership bool) projection accepted the out-of-range boundary probe T::CARDINALITY, silently folding a one-past-the-end slot onto the declaration-interior `true` answer while the natural `i < T::CARDINALITY && !is_endpoint_index(i)` composition should return `false`. The canonical-index-range domain gate must reject every out-of-range `usize`, mirroring `contains_label(s)`'s canonical-label domain gate on the `&str`-arg axis one arg-type axis over",
+    );
+    for i in 0..T::ALL.len() {
+        assert_ne!(
+            T::is_endpoint_index(i),
+            T::is_interior_index(i),
+            "{type_name}: T::is_endpoint_index({i}) == T::is_interior_index({i}) — the (declaration-endpoint, declaration-interior) partition collapsed on slot {i}, breaking the boolean-partition contract every generic consumer expects. On every canonical slot in 0..T::CARDINALITY the two predicates MUST answer complementary bools, mirroring the `Self`-arg complementarity clause (32) one arg-type axis over AND the `&str`-arg complementarity clause (55) one arg-type axis over",
+        );
+    }
+    // (80) — For every variant `v` in `T::ALL`,
+    // `T::is_sorted_endpoint_index(T::sorted_index_of(v))` MUST equal
+    // `v.is_sorted_endpoint()`, AND
+    // `T::is_sorted_endpoint_index(T::CARDINALITY) == false` (the out-
+    // of-range boundary probe). The default trait body is the
+    // disjunction `is_sorted_first_index(i) ||
+    // is_sorted_last_index(i)` composing the two pre-existing lex-axis
+    // index-shaped point-membership primitives; the assertion catches
+    // a future implementor whose override drifts the lex-axis index-
+    // shaped boundary-membership predicate (a lex-vs-declaration
+    // confusion that keys the lex-axis predicate off `index_of`
+    // instead of `sorted_index_of` — silently bifurcating the lex
+    // axis onto the declaration face). Sibling posture to clauses
+    // (33) + (56) + (78) — clause (33) pins the `Self`-arg lex-axis
+    // boundary predicate, clause (56) pins the `&str`-arg lex-axis
+    // boundary predicate, clause (78) pins the `usize`-arg
+    // declaration-axis boundary predicate, this clause pins the
+    // `usize`-arg LEX-axis boundary predicate.
+    for &v in T::ALL {
+        let expected_is_sorted_endpoint_index = v.is_sorted_endpoint();
+        assert_eq!(
+            T::is_sorted_endpoint_index(<T as ClosedSet>::sorted_index_of(v)),
+            expected_is_sorted_endpoint_index,
+            "{type_name}: T::is_sorted_endpoint_index(T::sorted_index_of({v:?})) drifted from {v:?}.is_sorted_endpoint() — the direct (usize → lex boundary-membership bool) projection on a lex-position input no longer agrees with the natural `Self`-arg is_sorted_endpoint predicate through the (variant → lex slot) forward projection, so a downstream alphabetized-boundary compact wire codec / lex-sorted Prometheus per-lex-slot bucket renderer consumer that binds `T::is_sorted_endpoint_index(lex_idx)` would emit the wrong bool for {v:?}'s lex slot",
+        );
+    }
+    assert!(
+        !T::is_sorted_endpoint_index(T::ALL.len()),
+        "{type_name}: T::is_sorted_endpoint_index(T::CARDINALITY) != false — the (usize → lex boundary-membership bool) projection on a lex-position input accepted the out-of-range boundary probe T::CARDINALITY, silently folding a one-past-the-end lex slot onto the lex-boundary `true` answer while the natural `is_sorted_first_index(i) || is_sorted_last_index(i)` composition should return `false`",
+    );
+    // (81) — For every variant `v` in `T::ALL`,
+    // `T::is_sorted_interior_index(T::sorted_index_of(v))` MUST equal
+    // `v.is_sorted_interior()`, AND
+    // `T::is_sorted_interior_index(T::CARDINALITY) == false` (the out-
+    // of-range boundary probe), AND per-slot complementarity
+    // `T::is_sorted_endpoint_index(i) != T::is_sorted_interior_index(i)`
+    // for every `i ∈ 0..T::CARDINALITY`. Closes the (`usize`, lex,
+    // interior) corner and the FINAL corner of the (arg-type ×
+    // ordering × predicate-flavor) 3×2×2 = 12-corner boolean-boundary
+    // hypercube alongside clauses (32) + (33) + (54) + (55) + (56) +
+    // (57) + (78) + (79) + (80). Every generic consumer that binds
+    // any of the twelve endpoint-partition methods sees the SAME
+    // partition answer at every crate boundary regardless of which
+    // arg-type / ordering / predicate-flavor axis it walks. The
+    // natural next lift is the (endpoint-partition-agreement) axis
+    // across the twelve corners — pairwise agreement between the
+    // three arg-type columns on the same (ordering, predicate-flavor)
+    // corner — or the (endpoint-partition axis) fold onto the
+    // wrapping-neighbor + neighbor projections (a
+    // `sorted_next_index_or_wrap_endpoint` composite that renders the
+    // wrapping neighbor iff the current lex slot is strictly-lex-
+    // interior).
+    for &v in T::ALL {
+        let expected_is_sorted_interior_index = v.is_sorted_interior();
+        assert_eq!(
+            T::is_sorted_interior_index(<T as ClosedSet>::sorted_index_of(v)),
+            expected_is_sorted_interior_index,
+            "{type_name}: T::is_sorted_interior_index(T::sorted_index_of({v:?})) drifted from {v:?}.is_sorted_interior() — the direct (usize → lex interior-membership bool) projection on a lex-position input no longer agrees with the natural `Self`-arg is_sorted_interior predicate through the (variant → lex slot) forward projection, so a downstream bounded lex-interior loop / lex-phase-fold reducer / alphabetized-completion interior-hiding consumer that binds `T::is_sorted_interior_index(lex_idx)` would drift for {v:?}'s lex slot",
+        );
+    }
+    assert!(
+        !T::is_sorted_interior_index(T::ALL.len()),
+        "{type_name}: T::is_sorted_interior_index(T::CARDINALITY) != false — the (usize → lex interior-membership bool) projection on a lex-position input accepted the out-of-range boundary probe T::CARDINALITY, silently folding a one-past-the-end lex slot onto the lex-interior `true` answer while the natural `i < T::CARDINALITY && !is_sorted_endpoint_index(i)` composition should return `false`",
+    );
+    for i in 0..T::ALL.len() {
+        assert_ne!(
+            T::is_sorted_endpoint_index(i),
+            T::is_sorted_interior_index(i),
+            "{type_name}: T::is_sorted_endpoint_index({i}) == T::is_sorted_interior_index({i}) — the (lex-endpoint, lex-interior) partition collapsed on lex slot {i}, breaking the boolean-partition contract every generic consumer expects. On every canonical slot in 0..T::CARDINALITY the two predicates MUST answer complementary bools, mirroring the `Self`-arg complementarity clause (33) one arg-type axis over AND the `&str`-arg complementarity clause (57) one arg-type axis over",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -25362,6 +25905,390 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an is_sorted_last_index() override that returns a strictly-interior lex slot rather than composing `i + 1 == T::CARDINALITY`",
+        );
+    }
+
+    #[test]
+    fn is_endpoint_index_and_is_interior_index_partition_declaration_slots_on_stub_kind() {
+        // The declaration-axis index-shaped boundary partition on the
+        // three-variant `StubKind` — declaration slots 0 (`Alpha`) and
+        // 2 (`Gamma`) fire `is_endpoint_index`; slot 1 (`Beta`) fires
+        // `is_interior_index`. Sibling posture to
+        // `is_endpoint_returns_true_only_on_declaration_order_endpoints`
+        // + `is_interior_returns_true_only_on_declaration_order_interior_variants`
+        // one arg-type axis over on the (`Self`, `usize`) partition —
+        // the (`Self`-arg, `usize`-arg) columns agree slot-for-slot
+        // through the (variant → declaration slot) forward projection.
+        for (i, v) in StubKind::ALL.iter().enumerate() {
+            assert_eq!(
+                <StubKind as ClosedSet>::is_endpoint_index(i),
+                v.is_endpoint(),
+                "is_endpoint_index({i}) diverged from {v:?}.is_endpoint() — the (Self, usize) arg-type axis bifurcated at the declaration boundary partition",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::is_interior_index(i),
+                v.is_interior(),
+                "is_interior_index({i}) diverged from {v:?}.is_interior() — the (Self, usize) arg-type axis bifurcated at the declaration interior partition",
+            );
+        }
+    }
+
+    #[test]
+    fn is_sorted_endpoint_index_and_is_sorted_interior_index_partition_lex_slots_on_stub_kind() {
+        // The lex-axis index-shaped boundary partition on the three-
+        // variant `StubKind` (declaration order matches lex order here,
+        // so slot mapping coincides with the declaration-axis test one
+        // ordering axis over). Sibling posture to
+        // `is_sorted_endpoint_returns_true_only_on_lex_order_endpoints`
+        // + `is_sorted_interior_returns_true_only_on_lex_order_interior_variants`
+        // one arg-type axis over on the (`Self`, `usize`) partition.
+        for v in StubKind::ALL.iter().copied() {
+            let lex_idx = <StubKind as ClosedSet>::sorted_index_of(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::is_sorted_endpoint_index(lex_idx),
+                v.is_sorted_endpoint(),
+                "is_sorted_endpoint_index({lex_idx}) diverged from {v:?}.is_sorted_endpoint() — the (Self, usize) arg-type axis bifurcated at the lex boundary partition",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::is_sorted_interior_index(lex_idx),
+                v.is_sorted_interior(),
+                "is_sorted_interior_index({lex_idx}) diverged from {v:?}.is_sorted_interior() — the (Self, usize) arg-type axis bifurcated at the lex interior partition",
+            );
+        }
+    }
+
+    #[test]
+    fn is_endpoint_partition_index_predicates_reject_out_of_range_indices() {
+        // Out-of-range domain gate: both `is_endpoint_index` and
+        // `is_interior_index` (plus the two lex-axis siblings) MUST
+        // reject every `usize` outside `0..T::CARDINALITY` including
+        // the canonical boundary `T::CARDINALITY`, arbitrary
+        // out-of-range slots, AND `usize::MAX`. Mirrors the domain-
+        // gate rejection semantics `contains_label` provides on the
+        // `&str`-arg column one arg-type axis over — outside the
+        // canonical sub-domain BOTH endpoint AND interior arms answer
+        // `false`. Sibling posture to
+        // `is_first_index_and_is_last_index_reject_out_of_range_indices`
+        // (if it exists) one predicate-flavor axis over.
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        for probe in [cardinality, cardinality + 1, cardinality + 42, usize::MAX] {
+            assert!(
+                !<StubKind as ClosedSet>::is_endpoint_index(probe),
+                "is_endpoint_index({probe}) drifted from the canonical-index-domain rejection — every out-of-range `usize` MUST answer `false` on the declaration boundary partition",
+            );
+            assert!(
+                !<StubKind as ClosedSet>::is_interior_index(probe),
+                "is_interior_index({probe}) drifted from the canonical-index-domain rejection — every out-of-range `usize` MUST answer `false` on the declaration interior partition (the domain gate rejects before the interior arm fires)",
+            );
+            assert!(
+                !<StubKind as ClosedSet>::is_sorted_endpoint_index(probe),
+                "is_sorted_endpoint_index({probe}) drifted from the canonical-index-domain rejection — every out-of-range `usize` MUST answer `false` on the lex boundary partition",
+            );
+            assert!(
+                !<StubKind as ClosedSet>::is_sorted_interior_index(probe),
+                "is_sorted_interior_index({probe}) drifted from the canonical-index-domain rejection — every out-of-range `usize` MUST answer `false` on the lex interior partition",
+            );
+        }
+    }
+
+    #[test]
+    fn is_endpoint_partition_index_predicates_collapse_on_singleton_closed_set() {
+        // Singleton degeneracy — for `T::CARDINALITY == 1` the sole
+        // slot `0` is BOTH declaration endpoints AND BOTH lex endpoints
+        // simultaneously, so all four index-shaped endpoint-partition
+        // predicates collapse: `is_endpoint_index(0) ==
+        // is_sorted_endpoint_index(0) == true` and
+        // `is_interior_index(0) == is_sorted_interior_index(0) ==
+        // false`. Mirrors the singleton collapses observed on
+        // `is_endpoint` / `is_interior` (Self-arg) and
+        // `is_endpoint_label` / `is_interior_label` (&str-arg) one
+        // arg-type axis over — a singleton closed set has ZERO
+        // strictly-interior slots by construction on every arg-type
+        // axis.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonEndpointPartitionIndexKind {
+            Sole,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonEndpointPartitionIndexKind(pub String);
+        impl core::fmt::Display for UnknownSingletonEndpointPartitionIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown singleton endpoint partition index kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for SingletonEndpointPartitionIndexKind {
+            const ALL: &'static [Self] = &[Self::Sole];
+            const SET_LABEL: &'static str = "singleton endpoint partition index kind";
+            type Unknown = UnknownSingletonEndpointPartitionIndexKind;
+            fn label(self) -> &'static str {
+                "sole"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonEndpointPartitionIndexKind(s.to_owned())
+            }
+        }
+        assert!(<SingletonEndpointPartitionIndexKind as ClosedSet>::is_endpoint_index(0));
+        assert!(!<SingletonEndpointPartitionIndexKind as ClosedSet>::is_interior_index(0));
+        assert!(<SingletonEndpointPartitionIndexKind as ClosedSet>::is_sorted_endpoint_index(0));
+        assert!(!<SingletonEndpointPartitionIndexKind as ClosedSet>::is_sorted_interior_index(0));
+        // Every out-of-range slot rejects on all four predicates on
+        // the singleton set as well.
+        assert!(!<SingletonEndpointPartitionIndexKind as ClosedSet>::is_endpoint_index(1));
+        assert!(!<SingletonEndpointPartitionIndexKind as ClosedSet>::is_interior_index(1));
+        assert!(!<SingletonEndpointPartitionIndexKind as ClosedSet>::is_sorted_endpoint_index(1));
+        assert!(!<SingletonEndpointPartitionIndexKind as ClosedSet>::is_sorted_interior_index(1));
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_endpoint_index_and_is_first_index_or_is_last_index(
+    ) {
+        // The well-formedness sweep's (78) clause —
+        // `T::is_endpoint_index(T::index_of(v))` MUST equal
+        // `v.is_endpoint()`. A hand-impl'd implementor whose override
+        // returns `true` on every slot silently folds the strict-
+        // interior partition onto the boundary partition. Sibling
+        // posture to
+        // `assert_closed_set_well_formed_catches_drift_between_is_endpoint_and_is_first_or_is_last`
+        // one arg-type axis over on the (`Self`, `usize`) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsEndpointIndexKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsEndpointIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsEndpointIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is-endpoint-index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsEndpointIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-endpoint-index kind";
+            type Unknown = UnknownDriftedIsEndpointIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsEndpointIndexKind(s.to_owned())
+            }
+            fn is_endpoint_index(i: usize) -> bool {
+                // Drifted override — returns `true` on every slot,
+                // folding the strict-interior partition onto the
+                // boundary partition and silently breaking clause
+                // (78)'s per-slot equality pin on `Middle`'s
+                // declaration slot 1.
+                let _ = i;
+                true
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsEndpointIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_endpoint_index() override drifted from the natural is_first_index || is_last_index composition",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_interior_index_and_domain_gate_composition(
+    ) {
+        // The well-formedness sweep's (79) clause —
+        // `T::is_interior_index(T::index_of(v))` MUST equal
+        // `v.is_interior()`, AND
+        // `T::is_interior_index(T::CARDINALITY) == false`. A missing
+        // domain-gate override that returns
+        // `!is_endpoint_index(i)` unconditionally silently folds every
+        // out-of-range `usize` onto the interior `true` answer — the
+        // `T::CARDINALITY` boundary probe would silently answer
+        // `true` while the natural
+        // `i < T::CARDINALITY && !is_endpoint_index(i)` composition
+        // returns `false`. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_is_interior_and_not_is_endpoint`
+        // one arg-type axis over — the `Self`-arg column doesn't need
+        // a domain gate (closed domain) while the `usize`-arg column
+        // does (unbounded domain).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsInteriorIndexKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsInteriorIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsInteriorIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is-interior-index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsInteriorIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-interior-index kind";
+            type Unknown = UnknownDriftedIsInteriorIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsInteriorIndexKind(s.to_owned())
+            }
+            fn is_interior_index(i: usize) -> bool {
+                // Drifted override — drops the canonical-domain gate
+                // `i < T::CARDINALITY` so the out-of-range boundary
+                // probe `T::CARDINALITY` silently answers `true`.
+                !<Self as ClosedSet>::is_endpoint_index(i)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsInteriorIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_interior_index() override that dropped the canonical-index-domain gate",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_sorted_endpoint_index_and_is_sorted_first_index_or_is_sorted_last_index(
+    ) {
+        // The well-formedness sweep's (80) clause —
+        // `T::is_sorted_endpoint_index(T::sorted_index_of(v))` MUST
+        // equal `v.is_sorted_endpoint()`. A permissive override that
+        // returns `true` on every slot silently folds the strict-lex-
+        // interior partition onto the lex-boundary partition — the
+        // sweep catches this on any lex-interior variant's slot.
+        // Note: on `usize` the lex-endpoint predicate and the
+        // declaration-endpoint predicate coincide (both endpoints
+        // land at slots `{0, T::CARDINALITY - 1}` under either
+        // ordering — the ordering axis distinguishes only which
+        // VARIANT sits at those slots, not the slot numbers), so
+        // this drift test uses the always-`true` override rather
+        // than routing through the declaration-axis siblings.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_is_sorted_endpoint_and_is_sorted_first_or_is_sorted_last`
+        // one arg-type axis over on the (`Self`, `usize`) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSortedEndpointIndexKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsSortedEndpointIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsSortedEndpointIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted is-sorted-endpoint-index kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DriftedIsSortedEndpointIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-sorted-endpoint-index kind";
+            type Unknown = UnknownDriftedIsSortedEndpointIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSortedEndpointIndexKind(s.to_owned())
+            }
+            fn is_sorted_endpoint_index(i: usize) -> bool {
+                // Drifted override — returns `true` on every slot,
+                // folding the strict-lex-interior partition onto the
+                // lex-boundary partition and silently breaking clause
+                // (80)'s per-slot equality pin on `Middle`'s lex slot 1.
+                let _ = i;
+                true
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsSortedEndpointIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_sorted_endpoint_index() override drifted from the natural is_sorted_first_index || is_sorted_last_index composition",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_sorted_interior_index_and_domain_gate_composition(
+    ) {
+        // The well-formedness sweep's (81) clause —
+        // `T::is_sorted_interior_index(T::sorted_index_of(v))` MUST
+        // equal `v.is_sorted_interior()`, AND
+        // `T::is_sorted_interior_index(T::CARDINALITY) == false`. A
+        // missing domain-gate override that returns
+        // `!is_sorted_endpoint_index(i)` unconditionally silently
+        // folds every out-of-range `usize` onto the lex-interior
+        // `true` answer. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_is_interior_index_and_domain_gate_composition`
+        // one ordering axis over — both `usize`-arg interior arms
+        // require the canonical-index-range domain gate to reject
+        // out-of-range indices, mirroring the `contains_label` domain
+        // gate on the `&str`-arg axis two arg-type axes over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSortedInteriorIndexKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsSortedInteriorIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsSortedInteriorIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted is-sorted-interior-index kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DriftedIsSortedInteriorIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is-sorted-interior-index kind";
+            type Unknown = UnknownDriftedIsSortedInteriorIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSortedInteriorIndexKind(s.to_owned())
+            }
+            fn is_sorted_interior_index(i: usize) -> bool {
+                // Drifted override — drops the canonical-domain gate
+                // `i < T::CARDINALITY` so the out-of-range boundary
+                // probe `T::CARDINALITY` silently answers `true`.
+                !<Self as ClosedSet>::is_sorted_endpoint_index(i)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsSortedInteriorIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_sorted_interior_index() override that dropped the canonical-index-domain gate",
         );
     }
 }

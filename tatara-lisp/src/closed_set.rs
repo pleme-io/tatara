@@ -7708,6 +7708,271 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn cycle_sorted_prev_label(self) -> &'static str {
         <Self as ClosedSet>::label(<Self as ClosedSet>::cycle_sorted_prev(self))
     }
+
+    /// The `usize` DECLARATION-ORDER INDEX of the neighbor immediately
+    /// AFTER `self` in [`Self::ALL`], WRAPPING to `0` at the tail — the
+    /// declaration-order position of [`Self::cycle_next`] projected
+    /// through [`Self::index_of`]. Returns `usize`, never
+    /// [`Option<usize>`]: the wrapping arm folds the tail-endpoint
+    /// boundary onto the head-index-anchor `0` rather than leaving the
+    /// [`None`] the bounded-neighbor-index axis returns.
+    ///
+    /// The declaration-order forward-wrapping arm of the (declaration ×
+    /// lex) × (forward, backward) × (Option-typed-bounded, wrapping) ×
+    /// (`Self`-return, `&'static str`-return, `usize`-return) 2×2×2×3 =
+    /// 24-corner index-and-label-and-variant bounded-plus-wrapping
+    /// traversal hypercube — one bounded/wrapping axis over from
+    /// [`Self::next_index`] (declaration-order bounded-forward index),
+    /// one return-type axis over from [`Self::cycle_next`] (declaration-
+    /// order wrapping-forward variant) AND from [`Self::cycle_next_label`]
+    /// (declaration-order wrapping-forward label). Together with
+    /// [`Self::cycle_prev_index`], [`Self::cycle_sorted_next_index`], and
+    /// [`Self::cycle_sorted_prev_index`], the quartet closes the
+    /// (`usize`-return, wrapping) 2×2 corner of the hypercube on BOTH
+    /// ordering axes AND both direction axes:
+    ///
+    /// | Direction \\ Ordering             | Declaration order                | Lexicographic order                    |
+    /// |-----------------------------------|----------------------------------|----------------------------------------|
+    /// | Forward wrapping index            | [`Self::cycle_next_index`]       | [`Self::cycle_sorted_next_index`]      |
+    /// | Backward wrapping index           | [`Self::cycle_prev_index`]       | [`Self::cycle_sorted_prev_index`]      |
+    ///
+    /// Every generic consumer that renders the wrapping-forward-neighbor
+    /// SLOT of a typed variant (a compact wire codec emitting
+    /// `next_slot_cyclic=<index>` for cross-boundary handoff without
+    /// threading the tail-endpoint `None` branch, a cyclic round-robin
+    /// scheduler that binds `slot.cycle_next_index()` as its rotation
+    /// step without an unconditional wrap-guard, a byte-tagged compact
+    /// encoding that keys per-transition metrics off the cyclic
+    /// successor's declaration slot, a cyclic bitset state machine
+    /// setting the cyclic successor's bit without threading
+    /// `index_of` through a `unwrap_or(0)` at the callsite, a Sekiban
+    /// per-cyclic-transition audit binner keying on the next declaration
+    /// slot, a carousel-widget renderer that stamps
+    /// `next-slot-cyclic=<index>` onto a per-tab annotation) binds to
+    /// ONE typed method on the trait rather than re-deriving the
+    /// `v.cycle_next().index_of()` two-primitive composition OR the
+    /// `v.next_index().unwrap_or(0)` two-primitive composition at every
+    /// callsite.
+    ///
+    /// Default body composes [`Self::cycle_next`] with [`Self::index_of`]
+    /// verbatim — the wrapping-forward-neighbor-index projection is a
+    /// typed CONSEQUENCE of the pre-existing (wrapping forward neighbor,
+    /// canonical declaration position) pair, not a third codepath.
+    /// Implementors override only when the wrapping-forward-neighbor-
+    /// index surface needs to diverge from the natural
+    /// `cycle_next().index_of()` shape (no production implementor
+    /// reaches for this today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` / `index_of` / `from_index` /
+    /// `first` / `last` / `next` / `next_label` / `next_index` /
+    /// `cycle_next` / `cycle_next_label` overrides exist — a typed
+    /// escape hatch the trait surface exposes rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that overrides
+    /// [`Self::cycle_next`] OR [`Self::index_of`] propagates the
+    /// override through this default body automatically; the (variant →
+    /// wrapping-forward-neighbor declaration slot) projection funnels
+    /// through ONE typed primitive.
+    ///
+    /// The wrapping-neighbor-index contract — the tail arm returns `0`
+    /// (the head-endpoint's declaration slot) — is guaranteed by the
+    /// default composition through [`Self::cycle_next`]'s tail-wrap-to-
+    /// head fold + [`Self::index_of`]'s natural `0`-at-head projection;
+    /// the well-formedness contract [`assert_closed_set_well_formed`]'s
+    /// new clause (70) pins the composition against the natural
+    /// `cycle_next().index_of()` shape AND the tail-endpoint `0` fold on
+    /// every implementor, so a passing well-formedness sweep means every
+    /// generic consumer can call [`Self::cycle_next_index`] on any typed
+    /// variant and expect the same [`usize`]-typed answer at every crate
+    /// boundary. `T::last().cycle_next_index() ==
+    /// T::first().index_of()` (i.e. `0`) is the natural fixpoint the
+    /// forward-wrapping-neighbor-index axis and the tail-endpoint anchor
+    /// share, mirroring `T::last().cycle_next() == T::first()` one
+    /// return-type axis over AND `T::last().cycle_next_label() ==
+    /// T::first_label()` one return-type axis over.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → wrapping-forward
+    /// declaration-neighbor slot) projection becomes a TYPE projection
+    /// on the trait rather than a per-consumer inline
+    /// `self.cycle_next().index_of()` composition at every downstream
+    /// declaration-cyclic-index-traversal site. The (return-type ×
+    /// direction × ordering × bounded/wrapping) 3×2×2×2 = 24-corner
+    /// traversal hypercube partitions exhaustively into TWENTY-FOUR
+    /// typed projections; the (`usize`-return, declaration, forward,
+    /// wrapping) corner lands at this method. Extending the (return-
+    /// type ∈ {`Self`, label}) 2×2×2×2 bounded-plus-wrapping label-and-
+    /// variant hypercube one return-type dimension into {`Self`, label,
+    /// index} 3×2×2×2 makes the declaration-cyclic-index projection a
+    /// first-class typed sibling of the typed-variant and canonical-
+    /// label siblings on the declaration-cyclic-forward corner.
+    /// THEORY.md §V.1 — knowable platform; the wrapping-forward-
+    /// neighbor-index projection was an unnamed compound of
+    /// [`Self::cycle_next`] + [`Self::index_of`] pre-lift; naming it on
+    /// the trait makes the projection a TYPED CONSEQUENCE of the two
+    /// substrate primitives — generic consumers see ONE wrapping-
+    /// forward-index method per ordering axis, not one wrapping-index-
+    /// shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the wrapping-
+    /// forward-neighbor-index projection emerges from composition of
+    /// substrate primitives rather than as a per-implementor
+    /// `match self { A => 1, B => 2, C => 0 }` block keyed on the
+    /// declaration slot.
+    ///
+    /// Frontier inspiration: Racket's `(enum-cycle-next-index enum val)`
+    /// — the index-projection sibling of `enum-cycle-next` on a closed
+    /// enumeration composed through the declaration position projection;
+    /// Idris's `Fin n` composed through `finToNat` on the cyclic-
+    /// successor's finite-position projection; MLIR's
+    /// `RegisteredOperationName::cycleNext().getIndex()` folded to ONE
+    /// method on the declaration-order cyclic Op registry; Rust's
+    /// `strum::EnumIter::iter().position(|v| Some(v) == self.next()).unwrap_or(0)`
+    /// composed through the iterator API + a cyclic tail-arm fold.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::cycle_next`] +
+    /// [`Self::index_of`] surfaces verbatim — no new dep, no new IR
+    /// layer, no supertrait bound, no `Option`-typed dispatch, no
+    /// allocation, no `strum` / `enum-iterator` crate dependency.
+    fn cycle_next_index(self) -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::cycle_next(self))
+    }
+
+    /// The `usize` DECLARATION-ORDER INDEX of the neighbor immediately
+    /// BEFORE `self` in [`Self::ALL`], WRAPPING to `T::CARDINALITY - 1`
+    /// at the head — the declaration-order position of
+    /// [`Self::cycle_prev`] projected through [`Self::index_of`].
+    /// Returns `usize`, never [`Option<usize>`]: the wrapping arm folds
+    /// the head-endpoint boundary onto the tail-index-anchor rather
+    /// than leaving the [`None`] the bounded-neighbor-index axis
+    /// returns.
+    ///
+    /// Sibling posture to [`Self::cycle_next_index`] one direction over
+    /// on the (forward, backward) direction partition of the
+    /// declaration-axis index-shaped wrapping-neighbor surface:
+    /// [`Self::cycle_next_index`] returns the declaration-order
+    /// successor slot with tail-wrap-to-head-slot `0`, this method
+    /// returns the declaration-order predecessor slot with head-wrap-
+    /// to-tail-slot `T::CARDINALITY - 1`. See
+    /// [`Self::cycle_next_index`] for the shared design rationale, the
+    /// 3×2×2×2 = 24-corner hypercube, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration — this
+    /// method is the backward-direction arm of the same axis and
+    /// inherits every property from the forward arm's documentation,
+    /// differing only in the composition through [`Self::cycle_prev`]
+    /// instead of [`Self::cycle_next`] and the head-endpoint
+    /// `T::CARDINALITY - 1` fold rather than the tail-endpoint `0`
+    /// fold.
+    ///
+    /// Default body composes [`Self::cycle_prev`] with [`Self::index_of`]
+    /// verbatim. The wrapping-neighbor-index contract — the head arm
+    /// returns `T::CARDINALITY - 1` (the tail-endpoint's declaration
+    /// slot) — is guaranteed by the default composition through
+    /// [`Self::cycle_prev`]'s head-wrap-to-tail fold; the well-
+    /// formedness contract [`assert_closed_set_well_formed`]'s new
+    /// clause (71) pins the composition against the natural
+    /// `cycle_prev().index_of()` shape AND the head-endpoint
+    /// `T::CARDINALITY - 1` fold on every implementor.
+    /// `T::first().cycle_prev_index() == T::last().index_of()`
+    /// (i.e. `T::CARDINALITY - 1`) is the natural fixpoint the
+    /// backward-wrapping-neighbor-index axis and the head-endpoint
+    /// anchor share, mirroring `T::first().cycle_prev() == T::last()`
+    /// one return-type axis over AND `T::first().cycle_prev_label() ==
+    /// T::last_label()` one return-type axis over.
+    fn cycle_prev_index(self) -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::cycle_prev(self))
+    }
+
+    /// The `usize` LEXICOGRAPHIC-ORDER INDEX of the neighbor immediately
+    /// AFTER `self` in [`Self::sorted_variants`], WRAPPING to `0` at
+    /// the lex tail — the lex position of [`Self::cycle_sorted_next`]
+    /// projected through [`Self::sorted_index_of`]. Returns `usize`,
+    /// never [`Option<usize>`]: the wrapping arm folds the lex-tail-
+    /// endpoint boundary onto the lex-head-index-anchor `0` rather than
+    /// leaving the [`None`] the bounded-lex-neighbor-index axis returns.
+    ///
+    /// The lex-order forward-wrapping arm of the (declaration × lex) ×
+    /// (forward, backward) × (Option-typed-bounded, wrapping) ×
+    /// (`Self`-return, `&'static str`-return, `usize`-return) 2×2×2×3 =
+    /// 24-corner index-and-label-and-variant bounded-plus-wrapping
+    /// traversal hypercube — one ordering axis over from
+    /// [`Self::cycle_next_index`] (declaration-order wrapping-forward
+    /// index), one bounded/wrapping axis over from
+    /// [`Self::sorted_next_index`] (lex-order bounded-forward index),
+    /// and one return-type axis over from [`Self::cycle_sorted_next`]
+    /// (lex-order wrapping-forward variant) AND from
+    /// [`Self::cycle_sorted_next_label`] (lex-order wrapping-forward
+    /// label).
+    ///
+    /// Every generic consumer that renders the wrapping-forward-lex-
+    /// neighbor SLOT of a typed variant (an alphabetized-cyclic LSP
+    /// completion cursor that emits "next-lex-slot: <index>" for the
+    /// wrapping lex-sorted successor unconditionally, an alphabetized
+    /// round-robin picker that logs the next lex-cyclic slot as its
+    /// rotation banner, an alphabetized carousel widget's next-tab lex-
+    /// slot renderer, a lex-cyclic per-tick animation frame picker) binds
+    /// to ONE typed method on the trait rather than re-deriving the
+    /// `v.cycle_sorted_next().sorted_index_of()` two-primitive
+    /// composition OR the `v.sorted_next_index().unwrap_or(0)` two-
+    /// primitive composition at every callsite.
+    ///
+    /// Default body composes [`Self::cycle_sorted_next`] with
+    /// [`Self::sorted_index_of`] verbatim. The wrapping-lex-neighbor-
+    /// index contract — the lex-tail arm returns `0` (the lex-head-
+    /// endpoint's lex slot) — is guaranteed by the default composition
+    /// through [`Self::cycle_sorted_next`]'s lex-tail-wrap-to-lex-head
+    /// fold + [`Self::sorted_index_of`]'s natural `0`-at-lex-head
+    /// projection; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (72) pins the
+    /// composition against the natural
+    /// `cycle_sorted_next().sorted_index_of()` shape AND the lex-tail-
+    /// endpoint `0` fold on every implementor.
+    /// `T::sorted_last().cycle_sorted_next_index() ==
+    /// T::sorted_first().sorted_index_of()` (i.e. `0`) is the natural
+    /// fixpoint the forward-wrapping-lex-neighbor-index axis and the
+    /// lex-tail-endpoint anchor share, mirroring
+    /// `T::sorted_last().cycle_sorted_next() == T::sorted_first()`
+    /// one return-type axis over AND
+    /// `T::sorted_last().cycle_sorted_next_label() ==
+    /// T::sorted_first_label()` one return-type axis over AND
+    /// `T::last().cycle_next_index() == 0` one ordering axis over.
+    fn cycle_sorted_next_index(self) -> usize {
+        <Self as ClosedSet>::sorted_index_of(<Self as ClosedSet>::cycle_sorted_next(self))
+    }
+
+    /// The `usize` LEXICOGRAPHIC-ORDER INDEX of the neighbor immediately
+    /// BEFORE `self` in [`Self::sorted_variants`], WRAPPING to
+    /// `T::CARDINALITY - 1` at the lex head — the lex position of
+    /// [`Self::cycle_sorted_prev`] projected through
+    /// [`Self::sorted_index_of`]. Returns `usize`, never
+    /// [`Option<usize>`]: the wrapping arm folds the lex-head-endpoint
+    /// boundary onto the lex-tail-index-anchor rather than leaving the
+    /// [`None`] the bounded-lex-neighbor-index axis returns.
+    ///
+    /// Sibling posture to [`Self::cycle_sorted_next_index`] one
+    /// direction over on the (forward, backward) direction partition of
+    /// the closed-set wrapping-lex-index-neighbor surface. See
+    /// [`Self::cycle_sorted_next_index`] for the shared design
+    /// rationale, sibling 2×2×2×3 = 24-corner hypercube, override axis,
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration.
+    ///
+    /// Default body composes [`Self::cycle_sorted_prev`] with
+    /// [`Self::sorted_index_of`] verbatim. The wrapping-lex-neighbor-
+    /// index contract — the lex-head arm returns `T::CARDINALITY - 1`
+    /// (the lex-tail-endpoint's lex slot) — is guaranteed by the
+    /// default composition through [`Self::cycle_sorted_prev`]'s lex-
+    /// head-wrap-to-lex-tail fold; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (73) pins the
+    /// composition against the natural
+    /// `cycle_sorted_prev().sorted_index_of()` shape AND the lex-head-
+    /// endpoint `T::CARDINALITY - 1` fold on every implementor. Clauses
+    /// (26) + (27) + (28) + (29) + (58) + (59) + (60) + (61) + (62) +
+    /// (63) + (64) + (65) + (66) + (67) + (68) + (69) + (70) + (71) +
+    /// (72) + (73) together CLOSE the (declaration × lex) × (forward,
+    /// backward) × (Option-typed-bounded, wrapping) × (`Self`-return,
+    /// `&'static str`-return, `usize`-return) 2×2×2×3 = 24-corner
+    /// bounded-plus-wrapping return-shape hypercube on the closed-set
+    /// traversal surface.
+    fn cycle_sorted_prev_index(self) -> usize {
+        <Self as ClosedSet>::sorted_index_of(<Self as ClosedSet>::cycle_sorted_prev(self))
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -11304,6 +11569,166 @@ where
         T::sorted_first().sorted_prev_index(),
         None,
         "{type_name}: T::sorted_first().sorted_prev_index() returned Some(_) — the (variant → backward lex-neighbor lex-slot) projection accepted the lex-head-endpoint boundary, silently folding a lex-head-boundary lex-slot render onto a wraparound to the lex-tail-slot while the natural `sorted_prev().map(sorted_index_of)` composition should return `None`. Clauses (27) + (69) together pin `T::sorted_first().sorted_prev_index() == None` as the structural fixpoint the lex-head-endpoint anchor and the backward-lex-neighbor-index axis share, mirroring `T::sorted_first().sorted_prev() == None` one return-type axis over AND `T::sorted_first().sorted_prev_label() == None` one return-type axis over AND `T::first().prev_index() == None` one ordering axis over",
+    );
+    // (70) — For every variant `v` in `T::ALL`,
+    // `v.cycle_next_index()` MUST equal `T::index_of(v.cycle_next())`,
+    // AND `T::last().cycle_next_index()` MUST equal `0` (the head-
+    // endpoint's declaration slot). The default trait body composes
+    // `cycle_next(self)` with `index_of` verbatim and satisfies both
+    // arms for free; the assertion catches a future implementor whose
+    // override drifts the wrapping-forward-neighbor-index projection
+    // (a permissive override that returns `T::CARDINALITY` at the tail
+    // — folding the tail-boundary walk onto a one-past-the-end slot
+    // while the composed projection would return `0`; a swapped
+    // override that returns the wrapping predecessor's slot for
+    // `cycle_next_index`, silently inverting the direction of the
+    // index-rendered cyclic forward walk; a stale override that
+    // returns the wrong wrapping-neighbor slot after a variant-listing
+    // edit reorders `T::ALL`) loudly rather than silently bifurcating
+    // the wrapping-forward-neighbor-index projection surface every
+    // downstream cyclic round-robin scheduler / carousel-widget
+    // renderer / Sekiban per-cyclic-transition audit binner consumer
+    // routes through. Sibling posture to clauses (28) + (62) + (66) —
+    // clause (28) pins the `Self`-return wrapping-forward-neighbor
+    // projection at the tail-wrap-to-head fixpoint, clause (62) pins
+    // the `&'static str`-return wrapping-forward-neighbor projection
+    // against the composition of `cycle_next` + `label`, clause (66)
+    // pins the `usize`-return bounded-forward-neighbor projection
+    // against the composition of `next` + `index_of` on the same
+    // declaration axis, this clause pins the `usize`-return wrapping-
+    // forward-neighbor projection against the composition of
+    // `cycle_next` + `index_of` AND pins the tail-endpoint `0` fold —
+    // so the closed-set index-shaped forward-neighbor surface stays
+    // sound at BOTH bounded/wrapping arms AND on the shared tail-
+    // endpoint fixpoint (`T::last().cycle_next_index() == 0`).
+    for &v in T::ALL {
+        let expected_cycle_next_index = <T as ClosedSet>::index_of(v.cycle_next());
+        assert_eq!(
+            v.cycle_next_index(),
+            expected_cycle_next_index,
+            "{type_name}: {v:?}.cycle_next_index() drifted from T::index_of({v:?}.cycle_next()) — the direct (variant → wrapping forward-neighbor declaration slot) projection no longer agrees with the natural cycle_next+index_of composition, so a downstream cyclic round-robin scheduler / carousel-widget renderer / Sekiban per-cyclic-transition audit binner consumer that binds `v.cycle_next_index()` as its wrapping-forward-neighbor index-rendering surface would emit the wrong slot for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::last().cycle_next_index(),
+        0,
+        "{type_name}: T::last().cycle_next_index() != 0 — the (variant → wrapping forward-neighbor declaration slot) projection accepted the tail-endpoint boundary but did not fold onto the head-endpoint's declaration slot 0, so the wrapping arm silently bifurcated from the natural `cycle_next().index_of()` composition. Clauses (28) + (70) together pin `T::last().cycle_next_index() == 0` as the structural fixpoint the tail-endpoint anchor and the forward-wrapping-neighbor-index axis share, mirroring `T::last().cycle_next() == T::first()` one return-type axis over AND `T::last().cycle_next_label() == T::first_label()` one return-type axis over",
+    );
+    // (71) — For every variant `v` in `T::ALL`,
+    // `v.cycle_prev_index()` MUST equal `T::index_of(v.cycle_prev())`,
+    // AND `T::first().cycle_prev_index()` MUST equal `T::CARDINALITY -
+    // 1` (the tail-endpoint's declaration slot). The default trait
+    // body composes `cycle_prev(self)` with `index_of` verbatim and
+    // satisfies both arms for free; the assertion catches a future
+    // implementor whose override drifts the wrapping-backward-neighbor-
+    // index projection (a permissive override that returns
+    // `T::CARDINALITY` at the head — folding the head-boundary walk
+    // onto a one-past-the-end slot while the composed projection would
+    // return `T::CARDINALITY - 1`; a swapped override that returns the
+    // wrapping successor's slot for `cycle_prev_index`, silently
+    // inverting the direction of the index-rendered cyclic backward
+    // walk; a stale override that returns the wrong wrapping-neighbor
+    // slot after a variant-listing edit reorders `T::ALL`) loudly
+    // rather than silently bifurcating the wrapping-backward-neighbor-
+    // index projection surface. Sibling posture to clauses (29) + (63)
+    // + (67) + (70) on the same 3×2×2 = 12-corner declaration-axis
+    // wrapping-neighbor-index return-shape face.
+    for &v in T::ALL {
+        let expected_cycle_prev_index = <T as ClosedSet>::index_of(v.cycle_prev());
+        assert_eq!(
+            v.cycle_prev_index(),
+            expected_cycle_prev_index,
+            "{type_name}: {v:?}.cycle_prev_index() drifted from T::index_of({v:?}.cycle_prev()) — the direct (variant → wrapping backward-neighbor declaration slot) projection no longer agrees with the natural cycle_prev+index_of composition, so a downstream cyclic round-robin scheduler / carousel-widget renderer / Sekiban per-cyclic-transition audit binner consumer that binds `v.cycle_prev_index()` as its wrapping-backward-neighbor index-rendering surface would emit the wrong slot for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::first().cycle_prev_index(),
+        T::ALL.len() - 1,
+        "{type_name}: T::first().cycle_prev_index() != T::CARDINALITY - 1 — the (variant → wrapping backward-neighbor declaration slot) projection accepted the head-endpoint boundary but did not fold onto the tail-endpoint's declaration slot T::CARDINALITY - 1, so the wrapping arm silently bifurcated from the natural `cycle_prev().index_of()` composition. Clauses (29) + (71) together pin `T::first().cycle_prev_index() == T::CARDINALITY - 1` as the structural fixpoint the head-endpoint anchor and the backward-wrapping-neighbor-index axis share, mirroring `T::first().cycle_prev() == T::last()` one return-type axis over AND `T::first().cycle_prev_label() == T::last_label()` one return-type axis over",
+    );
+    // (72) — For every variant `v` in `T::ALL`,
+    // `v.cycle_sorted_next_index()` MUST equal
+    // `T::sorted_index_of(v.cycle_sorted_next())`, AND
+    // `T::sorted_last().cycle_sorted_next_index()` MUST equal `0` (the
+    // lex-head-endpoint's lex slot). The default trait body composes
+    // `cycle_sorted_next(self)` with `sorted_index_of` verbatim and
+    // satisfies both arms for free; the assertion catches a future
+    // implementor whose override drifts the wrapping-forward-lex-
+    // neighbor-index projection (a permissive override that returns
+    // `T::CARDINALITY` at the lex-tail — folding the lex-tail-boundary
+    // walk onto a one-past-the-end slot while the composed projection
+    // would return `0`; a swapped override that returns the lex-
+    // wrapping predecessor's slot for `cycle_sorted_next_index`,
+    // silently inverting the direction of the lex-index-rendered
+    // cyclic forward walk; a stale override that returns the wrong
+    // lex-wrapping-neighbor slot after a variant-listing edit reorders
+    // the lex partition) loudly rather than silently bifurcating the
+    // wrapping-forward-lex-neighbor-index projection surface every
+    // downstream alphabetized-cyclic LSP completion cursor /
+    // alphabetized round-robin picker / alphabetized carousel widget /
+    // lex-cyclic per-tick animation frame picker consumer routes
+    // through. Sibling posture to clauses (28) + (64) + (68) + (70) on
+    // the (declaration, lex) × (bounded, wrapping) × (`Self`-return,
+    // `&'static str`-return, `usize`-return) 2×2×3 = 12-corner
+    // wrapping-forward-neighbor face.
+    for &v in T::ALL {
+        let expected_cycle_sorted_next_index =
+            <T as ClosedSet>::sorted_index_of(v.cycle_sorted_next());
+        assert_eq!(
+            v.cycle_sorted_next_index(),
+            expected_cycle_sorted_next_index,
+            "{type_name}: {v:?}.cycle_sorted_next_index() drifted from T::sorted_index_of({v:?}.cycle_sorted_next()) — the direct (variant → wrapping forward-lex-neighbor lex-slot) projection no longer agrees with the natural cycle_sorted_next+sorted_index_of composition, so a downstream alphabetized-cyclic LSP completion cursor / alphabetized round-robin picker / alphabetized carousel widget / lex-cyclic per-tick animation frame picker consumer that binds `v.cycle_sorted_next_index()` as its wrapping-forward-lex-neighbor lex-slot-rendering surface would emit the wrong slot for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::sorted_last().cycle_sorted_next_index(),
+        0,
+        "{type_name}: T::sorted_last().cycle_sorted_next_index() != 0 — the (variant → wrapping forward-lex-neighbor lex-slot) projection accepted the lex-tail-endpoint boundary but did not fold onto the lex-head-endpoint's lex slot 0, so the wrapping arm silently bifurcated from the natural `cycle_sorted_next().sorted_index_of()` composition. Clauses (64) + (72) together pin `T::sorted_last().cycle_sorted_next_index() == 0` as the structural fixpoint the lex-tail-endpoint anchor and the forward-wrapping-lex-neighbor-index axis share, mirroring `T::sorted_last().cycle_sorted_next() == T::sorted_first()` one return-type axis over AND `T::sorted_last().cycle_sorted_next_label() == T::sorted_first_label()` one return-type axis over AND `T::last().cycle_next_index() == 0` one ordering axis over",
+    );
+    // (73) — For every variant `v` in `T::ALL`,
+    // `v.cycle_sorted_prev_index()` MUST equal
+    // `T::sorted_index_of(v.cycle_sorted_prev())`, AND
+    // `T::sorted_first().cycle_sorted_prev_index()` MUST equal
+    // `T::CARDINALITY - 1` (the lex-tail-endpoint's lex slot). The
+    // default trait body composes `cycle_sorted_prev(self)` with
+    // `sorted_index_of` verbatim and satisfies both arms for free; the
+    // assertion catches a future implementor whose override drifts the
+    // wrapping-backward-lex-neighbor-index projection (a permissive
+    // override that returns `T::CARDINALITY` at the lex-head — folding
+    // the lex-head-boundary walk onto a one-past-the-end slot while
+    // the composed projection would return `T::CARDINALITY - 1`; a
+    // swapped override that returns the lex-wrapping successor's slot
+    // for `cycle_sorted_prev_index`, silently inverting the direction
+    // of the lex-index-rendered cyclic backward walk; a stale override
+    // that returns the wrong lex-wrapping-neighbor slot after a
+    // variant-listing edit reorders the lex partition) loudly rather
+    // than silently bifurcating the wrapping-backward-lex-neighbor-
+    // index projection surface. Clauses (26) + (27) + (28) + (29) +
+    // (58) + (59) + (60) + (61) + (62) + (63) + (64) + (65) + (66) +
+    // (67) + (68) + (69) + (70) + (71) + (72) + (73) together CLOSE
+    // the (declaration × lex) × (forward, backward) × (Option-typed-
+    // bounded, wrapping) × (`Self`-return, `&'static str`-return,
+    // `usize`-return) 2×2×2×3 = 24-corner bounded-plus-wrapping return-
+    // shape hypercube on the closed-set traversal surface. Every
+    // generic consumer that binds any of the twenty-four projection
+    // methods sees the SAME structural answer at every crate boundary
+    // regardless of which ordering / direction / bounded-wrapping /
+    // return-type axis corner it walks, and the return-type axis is
+    // now closed at the {`Self`, label, index} trio on BOTH ordering
+    // axes AND on BOTH bounded/wrapping arms.
+    for &v in T::ALL {
+        let expected_cycle_sorted_prev_index =
+            <T as ClosedSet>::sorted_index_of(v.cycle_sorted_prev());
+        assert_eq!(
+            v.cycle_sorted_prev_index(),
+            expected_cycle_sorted_prev_index,
+            "{type_name}: {v:?}.cycle_sorted_prev_index() drifted from T::sorted_index_of({v:?}.cycle_sorted_prev()) — the direct (variant → wrapping backward-lex-neighbor lex-slot) projection no longer agrees with the natural cycle_sorted_prev+sorted_index_of composition, so a downstream alphabetized-cyclic LSP completion cursor / alphabetized round-robin picker / alphabetized carousel widget consumer that binds `v.cycle_sorted_prev_index()` as its wrapping-backward-lex-neighbor lex-slot-rendering surface would emit the wrong slot for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::sorted_first().cycle_sorted_prev_index(),
+        T::ALL.len() - 1,
+        "{type_name}: T::sorted_first().cycle_sorted_prev_index() != T::CARDINALITY - 1 — the (variant → wrapping backward-lex-neighbor lex-slot) projection accepted the lex-head-endpoint boundary but did not fold onto the lex-tail-endpoint's lex slot T::CARDINALITY - 1, so the wrapping arm silently bifurcated from the natural `cycle_sorted_prev().sorted_index_of()` composition. Clauses (65) + (73) together pin `T::sorted_first().cycle_sorted_prev_index() == T::CARDINALITY - 1` as the structural fixpoint the lex-head-endpoint anchor and the backward-wrapping-lex-neighbor-index axis share, mirroring `T::sorted_first().cycle_sorted_prev() == T::sorted_last()` one return-type axis over AND `T::sorted_first().cycle_sorted_prev_label() == T::sorted_last_label()` one return-type axis over AND `T::first().cycle_prev_index() == T::CARDINALITY - 1` one ordering axis over",
     );
 }
 
@@ -23211,6 +23636,443 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_prev_index() override that wraps around at the lex-head rather than returning None",
+        );
+    }
+
+    #[test]
+    fn cycle_next_index_walks_declaration_order_forward_chain_with_tail_wrap_to_head_slot() {
+        // The wrapping-forward-neighbor-index projection —
+        // `v.cycle_next_index()` walks `T::ALL` one slot forward from
+        // each variant, returning the natural successor's declaration
+        // slot at every interior slot AND folding the tail-endpoint
+        // boundary onto the head-endpoint's slot `0` (never leaving the
+        // `None` the bounded-forward-neighbor-index axis returns).
+        // `StubKind`'s declaration order `[Alpha, Beta, Gamma]` yields
+        // the forward cyclic index chain Alpha → 1 → 2 → 0.
+        // Sibling posture to
+        // `cycle_next_label_walks_declaration_order_forward_chain_with_tail_wrap_to_head_label`
+        // (one return-type axis over on `&'static str`-return) AND
+        // `next_index_walks_declaration_order_forward_chain_of_indices`
+        // (one bounded/wrapping axis over on the bounded arm).
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next_index(StubKind::Alpha),
+            1,
+        );
+        assert_eq!(<StubKind as ClosedSet>::cycle_next_index(StubKind::Beta), 2,);
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next_index(StubKind::Gamma),
+            0,
+        );
+    }
+
+    #[test]
+    fn cycle_prev_index_walks_declaration_order_backward_chain_with_head_wrap_to_tail_slot() {
+        // The wrapping-backward-neighbor-index projection —
+        // `v.cycle_prev_index()` walks `T::ALL` one slot backward from
+        // each variant, returning the natural predecessor's declaration
+        // slot at every interior slot AND folding the head-endpoint
+        // boundary onto the tail-endpoint's slot `T::CARDINALITY - 1`
+        // (never leaving the `None` the bounded-backward-neighbor-index
+        // axis returns). `StubKind`'s declaration order `[Alpha, Beta,
+        // Gamma]` yields the backward cyclic index chain
+        // Gamma → 1 → 0 → 2. Sibling posture to
+        // `cycle_next_index_walks_declaration_order_forward_chain_with_tail_wrap_to_head_slot`
+        // one direction over on the (forward, backward) partition of
+        // the wrapping-neighbor-index surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev_index(StubKind::Alpha),
+            2,
+        );
+        assert_eq!(<StubKind as ClosedSet>::cycle_prev_index(StubKind::Beta), 0,);
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev_index(StubKind::Gamma),
+            1,
+        );
+    }
+
+    #[test]
+    fn cycle_sorted_next_index_walks_lex_order_forward_chain_with_lex_tail_wrap_to_lex_head_slot() {
+        // The wrapping-forward-lex-neighbor-index projection —
+        // `v.cycle_sorted_next_index()` walks `T::sorted_variants` one
+        // lex slot forward from each variant, returning the natural lex-
+        // successor's lex slot at every interior lex slot AND folding
+        // the lex-tail-endpoint boundary onto the lex-head-endpoint's
+        // lex slot `0` (never leaving the `None` the bounded-lex-
+        // forward-neighbor-index axis returns). `StubKind`'s declaration
+        // order `[Alpha, Beta, Gamma]` aligns with its lex order
+        // `[Alpha, Beta, Gamma]`, so the forward cyclic lex-index chain
+        // is Alpha → 1 → 2 → 0.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_next_index(StubKind::Alpha),
+            1,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_next_index(StubKind::Beta),
+            2,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_next_index(StubKind::Gamma),
+            0,
+        );
+    }
+
+    #[test]
+    fn cycle_sorted_prev_index_walks_lex_order_backward_chain_with_lex_head_wrap_to_lex_tail_slot()
+    {
+        // The wrapping-backward-lex-neighbor-index projection —
+        // `v.cycle_sorted_prev_index()` walks `T::sorted_variants` one
+        // lex slot backward from each variant, returning the natural
+        // lex-predecessor's lex slot at every interior lex slot AND
+        // folding the lex-head-endpoint boundary onto the lex-tail-
+        // endpoint's lex slot `T::CARDINALITY - 1`. Sibling posture to
+        // `cycle_sorted_next_index_walks_lex_order_forward_chain_with_lex_tail_wrap_to_lex_head_slot`
+        // one direction over on the (forward, backward) partition of
+        // the wrapping-lex-neighbor-index surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_prev_index(StubKind::Alpha),
+            2,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_prev_index(StubKind::Beta),
+            0,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_prev_index(StubKind::Gamma),
+            1,
+        );
+    }
+
+    #[test]
+    fn last_cycle_next_index_and_first_cycle_prev_index_pin_the_declaration_endpoint_wrapping_fixpoints(
+    ) {
+        // The declaration-endpoint-anchor / wrapping-neighbor-index-axis
+        // fixpoints — `T::last().cycle_next_index() == 0` AND
+        // `T::first().cycle_prev_index() == T::CARDINALITY - 1`. The
+        // two fixpoints thread the tail-endpoint anchor back through the
+        // forward-wrapping-neighbor-index axis AND the head-endpoint
+        // anchor back through the backward-wrapping-neighbor-index axis
+        // at ONE structural landmark each. A regression that returns
+        // `T::CARDINALITY` at the tail (a one-past-the-end slot) or
+        // returns `0` at the head (folding onto the wrong endpoint) would
+        // silently bifurcate a cyclic index-rendered traversal every
+        // downstream cyclic round-robin scheduler / carousel-widget
+        // renderer consumer routes through. Sibling posture to
+        // `first_prev_index_and_last_next_index_pin_the_endpoint_boundary_index_fixpoints`
+        // one bounded/wrapping axis over on the same declaration-axis
+        // return-shape column.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next_index(<StubKind as ClosedSet>::last()),
+            0,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev_index(<StubKind as ClosedSet>::first()),
+            <StubKind as ClosedSet>::ALL.len() - 1,
+        );
+    }
+
+    #[test]
+    fn sorted_last_cycle_sorted_next_index_and_sorted_first_cycle_sorted_prev_index_pin_the_lex_endpoint_wrapping_fixpoints(
+    ) {
+        // The lex-endpoint-anchor / wrapping-lex-neighbor-index-axis
+        // fixpoints — `T::sorted_last().cycle_sorted_next_index() == 0`
+        // AND `T::sorted_first().cycle_sorted_prev_index() ==
+        // T::CARDINALITY - 1`. Sibling posture to
+        // `last_cycle_next_index_and_first_cycle_prev_index_pin_the_declaration_endpoint_wrapping_fixpoints`
+        // one ordering axis over on the (declaration, lex) partition of
+        // the wrapping-neighbor-index return-shape column.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_next_index(<StubKind as ClosedSet>::sorted_last()),
+            0,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_prev_index(
+                <StubKind as ClosedSet>::sorted_first()
+            ),
+            <StubKind as ClosedSet>::ALL.len() - 1,
+        );
+    }
+
+    #[test]
+    fn cycle_sorted_next_index_and_cycle_sorted_prev_index_walk_lex_order_not_declaration_order() {
+        // The lex-vs-declaration-axis divergence probe — an implementor
+        // whose declaration order diverges from its lex order surfaces
+        // the axis mismatch through the wrapping-sorted-neighbor-index
+        // projections. `CycleSortedNeighborIndexReverseKind`'s
+        // declaration order `[Gamma, Beta, Alpha]` reverses its lex
+        // order `[Alpha, Beta, Gamma]`. The `cycle_sorted_next_index` /
+        // `cycle_sorted_prev_index` pair MUST walk the LEX chain,
+        // projecting each cyclic neighbor through `sorted_index_of`:
+        // Alpha → 1 → 2 → 0 on forward AND Gamma → 1 → 0 → 2 on
+        // backward. A regression that keyed on `index_of` (declaration
+        // slot) instead of `sorted_index_of` (lex slot) would silently
+        // invert the returned indices. Sibling posture to
+        // `cycle_sorted_next_label_and_cycle_sorted_prev_label_walk_lex_order_not_declaration_order`
+        // one return-type axis over on the `&'static str`-return arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum CycleSortedNeighborIndexReverseKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownCycleSortedNeighborIndexReverseKind(pub String);
+        impl core::fmt::Display for UnknownCycleSortedNeighborIndexReverseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown cycle sorted neighbor index reverse kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for CycleSortedNeighborIndexReverseKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "cycle sorted neighbor index reverse kind";
+            type Unknown = UnknownCycleSortedNeighborIndexReverseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownCycleSortedNeighborIndexReverseKind(s.to_owned())
+            }
+        }
+        // Lex order: Alpha (lex 0) → Beta (lex 1) → Gamma (lex 2).
+        // Cyclic forward lex-index walk projects the wrapping lex-
+        // neighbor's lex slot.
+        assert_eq!(
+            <CycleSortedNeighborIndexReverseKind as ClosedSet>::cycle_sorted_next_index(
+                CycleSortedNeighborIndexReverseKind::Alpha
+            ),
+            1,
+        );
+        assert_eq!(
+            <CycleSortedNeighborIndexReverseKind as ClosedSet>::cycle_sorted_next_index(
+                CycleSortedNeighborIndexReverseKind::Beta
+            ),
+            2,
+        );
+        assert_eq!(
+            <CycleSortedNeighborIndexReverseKind as ClosedSet>::cycle_sorted_next_index(
+                CycleSortedNeighborIndexReverseKind::Gamma
+            ),
+            0,
+        );
+        assert_eq!(
+            <CycleSortedNeighborIndexReverseKind as ClosedSet>::cycle_sorted_prev_index(
+                CycleSortedNeighborIndexReverseKind::Gamma
+            ),
+            1,
+        );
+        assert_eq!(
+            <CycleSortedNeighborIndexReverseKind as ClosedSet>::cycle_sorted_prev_index(
+                CycleSortedNeighborIndexReverseKind::Beta
+            ),
+            0,
+        );
+        assert_eq!(
+            <CycleSortedNeighborIndexReverseKind as ClosedSet>::cycle_sorted_prev_index(
+                CycleSortedNeighborIndexReverseKind::Alpha
+            ),
+            2,
+        );
+    }
+
+    #[test]
+    fn cycle_next_index_and_cycle_prev_index_on_singleton_closed_set_both_return_zero() {
+        // The wrapping-neighbor-index-axis degenerate case — a
+        // singleton closed set has `T::ALL[0] == T::first() ==
+        // T::last()` at declaration slot `0`, so BOTH
+        // `T::first().cycle_prev_index() == 0` AND
+        // `T::last().cycle_next_index() == 0` collapse onto the same
+        // slot. The wrapping fold on both directions lands the sole
+        // variant back on itself at slot `0` — the natural fixpoint of
+        // both the forward-wrapping-neighbor-index axis and the
+        // backward-wrapping-neighbor-index axis on the singleton. The
+        // lex-axis variants collapse identically because
+        // `T::sorted_variants` matches `T::ALL` order on a singleton.
+        // Sibling posture to
+        // `cycle_next_label_and_cycle_prev_label_on_singleton_closed_set_both_return_the_sole_label`
+        // one return-type axis over on the `&'static str`-return arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum CycleNeighborIndexSingletonKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownCycleNeighborIndexSingletonKind(pub String);
+        impl core::fmt::Display for UnknownCycleNeighborIndexSingletonKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown cycle neighbor index singleton kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for CycleNeighborIndexSingletonKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "cycle neighbor index singleton kind";
+            type Unknown = UnknownCycleNeighborIndexSingletonKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownCycleNeighborIndexSingletonKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <CycleNeighborIndexSingletonKind as ClosedSet>::cycle_next_index(
+                CycleNeighborIndexSingletonKind::Only
+            ),
+            0,
+        );
+        assert_eq!(
+            <CycleNeighborIndexSingletonKind as ClosedSet>::cycle_prev_index(
+                CycleNeighborIndexSingletonKind::Only
+            ),
+            0,
+        );
+        assert_eq!(
+            <CycleNeighborIndexSingletonKind as ClosedSet>::cycle_sorted_next_index(
+                CycleNeighborIndexSingletonKind::Only
+            ),
+            0,
+        );
+        assert_eq!(
+            <CycleNeighborIndexSingletonKind as ClosedSet>::cycle_sorted_prev_index(
+                CycleNeighborIndexSingletonKind::Only
+            ),
+            0,
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_cycle_next_index_and_composition() {
+        // The well-formedness sweep's (70) clause —
+        // `v.cycle_next_index()` MUST equal
+        // `T::index_of(v.cycle_next())` on every variant AND
+        // `T::last().cycle_next_index()` MUST equal `0`. A hand-impl'd
+        // implementor whose override drifts the wrapping-forward-
+        // neighbor-index projection (returns `T::CARDINALITY` at the
+        // tail — folding the tail-boundary walk onto a one-past-the-
+        // end slot while the natural composition would return `0`)
+        // fails the sweep loudly rather than silently bifurcating the
+        // wrapping-index-rendered forward-traversal surface every
+        // downstream cyclic round-robin scheduler / carousel-widget
+        // renderer consumer routes through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_next_index_and_composition`
+        // one bounded/wrapping axis over on the same declaration-axis
+        // return-shape partition of clause (70).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedCycleNextIndexKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedCycleNextIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedCycleNextIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted cycle next index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedCycleNextIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted cycle next index kind";
+            type Unknown = UnknownDriftedCycleNextIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedCycleNextIndexKind(s.to_owned())
+            }
+            fn cycle_next_index(self) -> usize {
+                // Drifted override — returns `Self::ALL.len()` (a one-
+                // past-the-end slot) at the tail rather than folding to
+                // `0`, silently bifurcating a cyclic forward index walk
+                // every downstream cyclic round-robin scheduler /
+                // carousel-widget renderer consumer routes through.
+                match self {
+                    Self::Head => 1,
+                    Self::Tail => 2,
+                }
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedCycleNextIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a cycle_next_index() override that returns a one-past-the-end slot at the tail rather than folding to 0",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_cycle_sorted_prev_index_and_composition()
+    {
+        // The well-formedness sweep's (73) clause —
+        // `v.cycle_sorted_prev_index()` MUST equal
+        // `T::sorted_index_of(v.cycle_sorted_prev())` on every variant
+        // AND `T::sorted_first().cycle_sorted_prev_index()` MUST equal
+        // `T::CARDINALITY - 1`. A hand-impl'd implementor whose
+        // override drifts the wrapping-backward-lex-neighbor-index
+        // projection (returns `0` at the lex-head — folding onto the
+        // wrong endpoint while the natural composition would return
+        // `T::CARDINALITY - 1`) fails the sweep loudly rather than
+        // silently bifurcating the wrapping-lex-index-rendered
+        // backward-traversal surface. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_cycle_next_index_and_composition`
+        // one ordering axis over AND one direction over — the diagonal
+        // corner catches a cross-axis drift that would slip through
+        // both single-axis siblings.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedCycleSortedPrevIndexKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedCycleSortedPrevIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedCycleSortedPrevIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted cycle sorted prev index kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DriftedCycleSortedPrevIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted cycle sorted prev index kind";
+            type Unknown = UnknownDriftedCycleSortedPrevIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedCycleSortedPrevIndexKind(s.to_owned())
+            }
+            fn cycle_sorted_prev_index(self) -> usize {
+                // Drifted override — folds the lex-head-endpoint onto
+                // slot 0 rather than the tail-endpoint's slot
+                // `T::CARDINALITY - 1`, silently bifurcating a cyclic
+                // backward lex-index walk every alphabetized-cyclic
+                // consumer routes through.
+                match self {
+                    Self::Head => 0, // Should be Self::ALL.len() - 1
+                    Self::Tail => 0,
+                }
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedCycleSortedPrevIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a cycle_sorted_prev_index() override that folds the lex-head onto slot 0 rather than the tail slot",
         );
     }
 }

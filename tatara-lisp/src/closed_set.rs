@@ -2134,6 +2134,229 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::index_of(self) + 1 == <Self as ClosedSet>::CARDINALITY
     }
 
+    /// The declaration-order head-endpoint INDEX predicate — `true`
+    /// iff the `usize` argument equals `0` (the declaration-order
+    /// head-endpoint's array slot in [`Self::ALL`]), `false`
+    /// otherwise. Closes the `(usize, head)` corner of the
+    /// (arg-type × endpoint-direction) 3×2 declaration-axis
+    /// endpoint-membership matrix alongside [`Self::is_first`]
+    /// (`Self`, head), [`Self::is_last`] (`Self`, tail),
+    /// [`Self::is_first_label`] (`&str`, head), and
+    /// [`Self::is_last_label`] (`&str`, tail).
+    ///
+    /// The (arg-type × endpoint-direction) 3×2 endpoint-membership
+    /// matrix over the declaration-axis surface partitions post-lift:
+    ///
+    /// | Arg-type \\ Endpoint  | Head                          | Tail                         |
+    /// |-----------------------|-------------------------------|------------------------------|
+    /// | `Self` (variant)      | [`Self::is_first`]            | [`Self::is_last`]            |
+    /// | `&str` (label)        | [`Self::is_first_label`]      | [`Self::is_last_label`]      |
+    /// | `usize` (index)       | [`Self::is_first_index`]      | [`Self::is_last_index`]      |
+    ///
+    /// Sibling posture to [`Self::is_first`] one arg-type axis over
+    /// on the (`Self`, `&str`, `usize`) trio — [`Self::is_first`]
+    /// answers "am I at the declaration-order head endpoint?" for
+    /// a typed variant, [`Self::is_first_label`] answers the same
+    /// question for a raw label string, this method answers the
+    /// same question for a raw `usize` array-slot index WITHOUT
+    /// decoding through [`Self::from_index`] (which would allocate
+    /// the `Option<Self>`-typed dispatch on out-of-range inputs)
+    /// OR through [`Self::label_at`] combined with
+    /// [`Self::is_first_label`] (which would force the caller
+    /// through the `Option<&'static str>`-typed dispatch AND the
+    /// per-callsite `and_then` composition).
+    ///
+    /// Every generic consumer that wants a zero-alloc O(1)
+    /// `usize`-shaped head-boundary query (a compact wire codec that
+    /// short-circuits on the head-anchor slot before materializing
+    /// a typed variant, a bitset state machine that folds the head-
+    /// anchor bit onto a canonical default, a Prometheus per-slot
+    /// bucket renderer that highlights the head-anchor bucket, a
+    /// `tatara-check` diagnostic renderer that emits an anchored
+    /// `"expected first slot: 0"` banner ONLY when the offending
+    /// index equals the head slot — a distinguished error shape,
+    /// not the generic `"expected one of: 0, 1, 2"` shape, a byte-
+    /// tagged compact-encoding that treats the head slot as the
+    /// canonical `0`-tag and folds every other slot onto a shifted
+    /// tail-arm) binds to ONE typed predicate rather than hand-rolling
+    /// either the `i == 0` inline comparison (which re-derives the
+    /// same magic-literal composition at every callsite AND silently
+    /// drifts when the definition of "declaration-order head slot"
+    /// gets tightened — a future closed-set that reserves slot `0`
+    /// for a sentinel and shifts every canonical slot up by one, a
+    /// future const-fn axis that makes the predicate callable in
+    /// const contexts) OR the `T::from_index(i).map(<T as
+    /// ClosedSet>::is_first).unwrap_or(false)` composition (which
+    /// pays an `Option<Self>`-typed dispatch AND folds the out-of-
+    /// range boundary onto `false` implicitly rather than by direct
+    /// `usize` equality).
+    ///
+    /// Default body is a zero-alloc `usize` equality check against
+    /// the literal `0` — the index-shaped head-membership predicate
+    /// is the natural array-slot rendering of the closed-set
+    /// declaration-order head endpoint. Implementors override only
+    /// when the index-shaped head-membership surface needs to
+    /// diverge from the natural `i == 0` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `via` / `set_label` / `labels` / `first` /
+    /// `first_label` / `is_first_label` overrides exist — a typed
+    /// escape hatch rather than forcing the implementor to hand-
+    /// roll the impl).
+    ///
+    /// The index-shaped head-membership contract —
+    /// `T::is_first_index(0) == true` AND
+    /// `T::is_first_index(i) == false` for every
+    /// `i ∈ 1..T::CARDINALITY` on every implementor — is guaranteed
+    /// by the natural `usize` equality against `0`; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (74)
+    /// pins the composition against the natural `i == 0` shape on
+    /// every implementor across every canonical variant's array slot
+    /// AND the out-of-range boundary `T::CARDINALITY` probe so a
+    /// passing well-formedness sweep means every generic consumer
+    /// can call [`Self::is_first_index`] on any `usize` input at any
+    /// crate boundary and expect the same `bool` answer as the
+    /// natural composition.
+    ///
+    /// Out-of-range boundary — for any input `i` outside
+    /// `0..T::CARDINALITY` (the canonical `T::CARDINALITY` probe, a
+    /// large slot like `usize::MAX`, any slot past the tail), this
+    /// predicate returns `false` (the equality against `0` fails
+    /// structurally — the head slot is by construction `0` and no
+    /// out-of-range slot equals `0` under the non-empty-`T::ALL`
+    /// contract). Callers that want "is this a valid slot AND the
+    /// head slot" compose this predicate with an `i <
+    /// T::CARDINALITY` range check at the callsite; callers that
+    /// want "is this the head slot OR reject as out-of-range"
+    /// compose this predicate with the natural `!` inversion.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, the sole variant's array slot `0` is
+    /// BOTH the declaration-order head-endpoint slot AND the
+    /// declaration-order tail-endpoint slot so this predicate and
+    /// [`Self::is_last_index`] collapse onto the same `usize`
+    /// equality check, mirroring [`Self::is_first`] /
+    /// [`Self::is_last`]'s singleton collapse at the (Self, bool)
+    /// arm AND [`Self::is_first_label`] / [`Self::is_last_label`]'s
+    /// singleton collapse at the (`&str`, bool) arm one arg-type
+    /// axis over.
+    ///
+    /// THEORY.md §III — the typescape; the (usize → head-membership
+    /// bool) projection becomes a TYPE projection on the trait rather
+    /// than a per-consumer inline `i == 0` comparison at every
+    /// downstream index-shaped head-boundary query site. Opens the
+    /// arg-type dimension of the declaration-axis endpoint-membership
+    /// matrix from the 2×2 (`Self`, `&str`) subset to the 3×2
+    /// (`Self`, `&str`, `usize`) trio.
+    /// THEORY.md §V.1 — knowable platform; the (usize →
+    /// head-membership) projection was an unnamed compound of the
+    /// `i == 0` comparison pre-lift; naming it on the trait makes
+    /// the projection a TYPED CONSEQUENCE of the closed-set
+    /// declaration-order head-slot literal — generic consumers see
+    /// ONE method, not one index-shaped-head-boundary-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (usize →
+    /// head-membership) projection emerges from the closed-set
+    /// declaration-order head-slot literal `0` rather than as a
+    /// per-implementor `match i { 0 => true, _ => false }` block.
+    ///
+    /// Frontier inspiration: Racket's `(enum-first-index? enum i)`
+    /// on a closed enumeration (the index-shaped head-membership
+    /// predicate composed through the array-position projection);
+    /// Idris's `isFZ : Fin (S n) -> Bool` composed through `finToNat`
+    /// on the head-anchor slot of the non-empty finite-type universe;
+    /// Haskell's `(== 0)` on the `Bounded + Enum` type-class pair's
+    /// `fromEnum minBound` projection; MLIR's
+    /// `RegisteredOperationName::isBeginIndex(idx)` on the
+    /// declaration-order Op registry; Rust's `strum::EnumIter::iter()
+    /// .position(|v| v == self).map(|i| i == 0).unwrap_or(false)`
+    /// composed through the iterator API. Translation through pleme-io
+    /// primitives: a pure default method composing the closed-set
+    /// declaration-order head-slot literal `0` with the standard-
+    /// library `usize` equality operator — no new dep, no new IR
+    /// layer, no supertrait bound, no allocation, no [`Option`]-typed
+    /// dispatch.
+    fn is_first_index(i: usize) -> bool {
+        i == 0
+    }
+
+    /// The declaration-order tail-endpoint INDEX predicate — `true`
+    /// iff the `usize` argument equals `T::CARDINALITY - 1` (the
+    /// declaration-order tail-endpoint's array slot in [`Self::ALL`]),
+    /// `false` otherwise. Closes the `(usize, tail)` corner of the
+    /// (arg-type × endpoint-direction) 3×2 declaration-axis
+    /// endpoint-membership matrix alongside [`Self::is_first`]
+    /// (`Self`, head), [`Self::is_last`] (`Self`, tail),
+    /// [`Self::is_first_label`] (`&str`, head),
+    /// [`Self::is_last_label`] (`&str`, tail), and its head-direction
+    /// sibling [`Self::is_first_index`] (`usize`, head), completing
+    /// the (arg-type × endpoint-direction) 3×2 declaration-axis
+    /// index-and-label-and-variant endpoint-membership rectangle.
+    ///
+    /// Sibling posture to [`Self::is_first_index`] one endpoint-
+    /// direction axis over on the (head, tail) partition of the
+    /// declaration-axis index-shaped endpoint-membership surface:
+    /// [`Self::is_first_index`] answers "is this usize the
+    /// declaration-order head-endpoint slot?", this method answers
+    /// "is this usize the declaration-order tail-endpoint slot?".
+    /// See [`Self::is_first_index`] for the shared design rationale,
+    /// sibling matrix, override axis, future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method
+    /// is the tail-direction arm of the same axis and inherits every
+    /// property from the head arm's documentation, differing only in
+    /// the composition through the closed-set declaration-order
+    /// tail-slot literal `T::CARDINALITY - 1` (expressed as
+    /// `i + 1 == T::CARDINALITY` to avoid the `usize` underflow
+    /// question on the empty-`T::ALL` boundary the well-formedness
+    /// clause (1) forbids) instead of the head-slot literal `0`.
+    ///
+    /// Default body is a zero-alloc `checked_add(1) == Some(CARDINALITY)`
+    /// composition — the index-shaped tail-membership predicate is
+    /// the natural array-slot rendering of the closed-set declaration-
+    /// order tail endpoint. The `checked_add` form (rather than the
+    /// raw `i + 1 == Self::CARDINALITY` composition) avoids the
+    /// `usize` overflow question on the `usize::MAX` boundary probe
+    /// — a raw `i + 1` computation would panic at runtime on
+    /// `usize::MAX` under `overflow-checks = true`, folding the
+    /// out-of-range boundary onto a panic while the natural typed
+    /// answer is `false`. The `Option<usize>`-typed dispatch through
+    /// `Some(CARDINALITY)` folds the overflow arm onto `None`
+    /// (structurally not equal to any `Some` variant), preserving
+    /// the tail-membership predicate's `false`-on-out-of-range
+    /// contract on every `usize` input including the arithmetic
+    /// boundary.
+    ///
+    /// The index-shaped tail-membership contract —
+    /// `T::is_last_index(T::CARDINALITY - 1) == true` AND
+    /// `T::is_last_index(i) == false` for every
+    /// `i ∈ 0..T::CARDINALITY - 1` on every implementor — is
+    /// guaranteed by the natural `usize` equality against
+    /// `T::CARDINALITY`; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (75) pins the
+    /// composition against the natural `i + 1 == T::CARDINALITY`
+    /// shape on every implementor across every canonical variant's
+    /// array slot AND the out-of-range boundary `T::CARDINALITY`
+    /// probe.
+    ///
+    /// Clauses (30), (31), (32), (33), (50), (51), (52), (53), (74),
+    /// and (75) together CLOSE the (arg-type × ordering ×
+    /// endpoint-direction) 3×2×2 = 12-corner endpoint-membership
+    /// hypercube on the declaration-axis surface at SIX of the twelve
+    /// corners: (`Self`, declaration, head/tail) at clauses (30) —
+    /// [`Self::is_first`] / [`Self::is_last`]; (`&str`, declaration,
+    /// head/tail) at clauses (50) and (51) — [`Self::is_first_label`]
+    /// and [`Self::is_last_label`]; and now (`usize`, declaration,
+    /// head/tail) at clauses (74) and (75) — this method and its
+    /// head-direction sibling. The remaining six corners on the
+    /// lex-axis column (`is_sorted_first_index`,
+    /// `is_sorted_last_index`, plus their `Self`-arg /
+    /// `&str`-arg siblings which already exist as
+    /// [`Self::is_sorted_first`], [`Self::is_sorted_last`],
+    /// [`Self::is_sorted_first_label`], and
+    /// [`Self::is_sorted_last_label`]) leave only the two
+    /// `(usize, lex, head/tail)` corners as the natural next lift.
+    fn is_last_index(i: usize) -> bool {
+        i.checked_add(1) == Some(<Self as ClosedSet>::CARDINALITY)
+    }
+
     /// The lexicographically-least variant of the closed set — the
     /// canonical minimum-by-[`Self::label`] under the standard-library
     /// `str: Ord` ordering, projected onto the trait surface as a
@@ -11729,6 +11952,99 @@ where
         T::sorted_first().cycle_sorted_prev_index(),
         T::ALL.len() - 1,
         "{type_name}: T::sorted_first().cycle_sorted_prev_index() != T::CARDINALITY - 1 — the (variant → wrapping backward-lex-neighbor lex-slot) projection accepted the lex-head-endpoint boundary but did not fold onto the lex-tail-endpoint's lex slot T::CARDINALITY - 1, so the wrapping arm silently bifurcated from the natural `cycle_sorted_prev().sorted_index_of()` composition. Clauses (65) + (73) together pin `T::sorted_first().cycle_sorted_prev_index() == T::CARDINALITY - 1` as the structural fixpoint the lex-head-endpoint anchor and the backward-wrapping-lex-neighbor-index axis share, mirroring `T::sorted_first().cycle_sorted_prev() == T::sorted_last()` one return-type axis over AND `T::sorted_first().cycle_sorted_prev_label() == T::sorted_last_label()` one return-type axis over AND `T::first().cycle_prev_index() == T::CARDINALITY - 1` one ordering axis over",
+    );
+    // (74) — For every variant `v` in `T::ALL`,
+    // `T::is_first_index(T::index_of(v))` MUST equal `v.is_first()`,
+    // AND `T::is_first_index(0) == true`, AND
+    // `T::is_first_index(T::CARDINALITY) == false` (the out-of-range
+    // boundary probe). The default trait body is the natural `i == 0`
+    // literal and satisfies all three arms for free; the assertion
+    // catches a future implementor whose override drifts the index-
+    // shaped head-membership predicate (a swapped override that
+    // returns `true` on the declaration-tail slot `T::CARDINALITY - 1`
+    // instead of the declaration-head slot `0` — silently folding
+    // the index-shaped head-membership predicate onto the tail-
+    // direction predicate at the (head, tail) endpoint-direction
+    // axis; an offset override that returns `true` on a strictly-
+    // interior slot; a permissive override that accepts the out-of-
+    // range `T::CARDINALITY` probe or `usize::MAX` — folding the
+    // out-of-range boundary onto the head slot every downstream
+    // index-shaped head-boundary consumer routes through) loudly
+    // rather than silently bifurcating the declaration-axis index-
+    // shaped head-membership surface every downstream compact wire
+    // codec / bitset state machine / Prometheus per-slot bucket
+    // renderer / byte-tagged compact-encoding consumer routes
+    // through. Sibling posture to clauses (30) + (50) — clause (30)
+    // pins the `Self`-arg declaration-axis head-membership predicate
+    // against `index_of(self) == 0`, clause (50) pins the `&str`-arg
+    // declaration-axis head-membership predicate against
+    // `s == T::first_label()`, this clause pins the `usize`-arg
+    // declaration-axis head-membership predicate against `i == 0` on
+    // the same declaration-axis head-endpoint slot AND on the
+    // shared out-of-range boundary probe — so the closed-set index-
+    // shaped head-membership surface stays sound at every arg-type
+    // corner (`Self`, `&str`, `usize`) AND on the shared head-
+    // endpoint fixpoint (`T::is_first_index(0) == true`) AND on the
+    // shared out-of-range rejection (`T::is_first_index(T::CARDINALITY)
+    // == false`).
+    for &v in T::ALL {
+        let expected_is_first_index = v.is_first();
+        assert_eq!(
+            T::is_first_index(<T as ClosedSet>::index_of(v)),
+            expected_is_first_index,
+            "{type_name}: T::is_first_index(T::index_of({v:?})) drifted from {v:?}.is_first() — the direct (usize → declaration head-membership bool) projection no longer agrees with the natural `Self`-arg is_first predicate through the (variant → declaration slot) forward projection, so a downstream compact wire codec / bitset state machine / Prometheus per-slot bucket renderer / byte-tagged compact-encoding consumer that binds `T::is_first_index(idx)` as its index-shaped declaration-head-boundary rendering surface would emit the wrong bool for {v:?}'s slot",
+        );
+    }
+    assert!(
+        T::is_first_index(0),
+        "{type_name}: T::is_first_index(0) != true — the (usize → declaration head-membership bool) projection rejected the canonical declaration-order head-endpoint slot 0, silently forking the index-shaped head-membership predicate from the natural `i == 0` composition. Clauses (30) + (50) + (74) together pin `T::is_first_index(0) == true` as the structural fixpoint the declaration-head-endpoint slot and the index-shaped head-membership axis share, mirroring `T::first().is_first() == true` one arg-type axis over AND `T::is_first_label(T::first_label()) == true` one arg-type axis over",
+    );
+    assert!(
+        !T::is_first_index(T::ALL.len()),
+        "{type_name}: T::is_first_index(T::CARDINALITY) != false — the (usize → declaration head-membership bool) projection accepted the out-of-range boundary probe T::CARDINALITY, silently folding a one-past-the-end slot onto the declaration-head-endpoint `true` answer while the natural `i == 0` composition should return `false`. The out-of-range boundary — canonical or otherwise — must reject via the closed-set head-slot literal 0's structural rejection of every non-zero `usize`",
+    );
+    // (75) — For every variant `v` in `T::ALL`,
+    // `T::is_last_index(T::index_of(v))` MUST equal `v.is_last()`,
+    // AND `T::is_last_index(T::CARDINALITY - 1) == true`, AND
+    // `T::is_last_index(T::CARDINALITY) == false` (the out-of-range
+    // boundary probe). The default trait body is the natural
+    // `i + 1 == T::CARDINALITY` literal and satisfies all three arms
+    // for free; the assertion catches a future implementor whose
+    // override drifts the index-shaped tail-membership predicate (a
+    // swapped override that returns `true` on the declaration-head
+    // slot `0` instead of the declaration-tail slot `T::CARDINALITY -
+    // 1` — silently folding the index-shaped tail-membership
+    // predicate onto the head-direction predicate at the (head, tail)
+    // endpoint-direction axis; an off-by-one override that returns
+    // `true` on `T::CARDINALITY` instead of `T::CARDINALITY - 1` —
+    // silently walking one slot past the tail-endpoint boundary; a
+    // stale override that returns the wrong slot after a variant-
+    // listing edit changes the cardinality). Clauses (30) + (31) +
+    // (32) + (33) + (50) + (51) + (52) + (53) + (74) + (75) together
+    // CLOSE the (arg-type × ordering × endpoint-direction) 3×2×2 =
+    // 12-corner endpoint-membership hypercube on the declaration-axis
+    // face at SIX of the twelve corners: (`Self`, declaration,
+    // head/tail) at clauses (30), (`&str`, declaration, head/tail) at
+    // clauses (50) + (51), and now (`usize`, declaration, head/tail)
+    // at clauses (74) + (75). The remaining SIX corners on the lex-
+    // axis column (`is_sorted_first_index`, `is_sorted_last_index`,
+    // plus the six `Self`-arg / `&str`-arg / `usize`-arg lex-endpoint
+    // predicates) leave the lex-axis face as the natural next lift.
+    for &v in T::ALL {
+        let expected_is_last_index = v.is_last();
+        assert_eq!(
+            T::is_last_index(<T as ClosedSet>::index_of(v)),
+            expected_is_last_index,
+            "{type_name}: T::is_last_index(T::index_of({v:?})) drifted from {v:?}.is_last() — the direct (usize → declaration tail-membership bool) projection no longer agrees with the natural `Self`-arg is_last predicate through the (variant → declaration slot) forward projection, so a downstream compact wire codec / bitset state machine / Prometheus per-slot bucket renderer / byte-tagged compact-encoding consumer that binds `T::is_last_index(idx)` as its index-shaped declaration-tail-boundary rendering surface would emit the wrong bool for {v:?}'s slot",
+        );
+    }
+    assert!(
+        T::is_last_index(T::ALL.len() - 1),
+        "{type_name}: T::is_last_index(T::CARDINALITY - 1) != true — the (usize → declaration tail-membership bool) projection rejected the canonical declaration-order tail-endpoint slot T::CARDINALITY - 1, silently forking the index-shaped tail-membership predicate from the natural `i + 1 == T::CARDINALITY` composition. Clauses (30) + (51) + (75) together pin `T::is_last_index(T::CARDINALITY - 1) == true` as the structural fixpoint the declaration-tail-endpoint slot and the index-shaped tail-membership axis share, mirroring `T::last().is_last() == true` one arg-type axis over AND `T::is_last_label(T::last_label()) == true` one arg-type axis over",
+    );
+    assert!(
+        !T::is_last_index(T::ALL.len()),
+        "{type_name}: T::is_last_index(T::CARDINALITY) != false — the (usize → declaration tail-membership bool) projection accepted the out-of-range boundary probe T::CARDINALITY (one past the tail), silently folding a one-past-the-end slot onto the declaration-tail-endpoint `true` answer while the natural `i + 1 == T::CARDINALITY` composition should return `false` (T::CARDINALITY + 1 > T::CARDINALITY). The out-of-range boundary — canonical or otherwise — must reject via the closed-set tail-slot literal T::CARDINALITY - 1's structural rejection of every out-of-range `usize`",
     );
 }
 
@@ -24073,6 +24389,252 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a cycle_sorted_prev_index() override that folds the lex-head onto slot 0 rather than the tail slot",
+        );
+    }
+
+    #[test]
+    fn is_first_index_matches_declaration_head_slot_and_rejects_every_non_head_slot() {
+        // The declaration-axis index-shaped head-endpoint membership
+        // predicate returns `true` on the canonical head-anchor slot
+        // `0` (the declaration-order head-endpoint's `T::ALL`
+        // position on any non-empty closed set) and `false` on every
+        // non-head slot. The pin is the natural `i == 0` composition
+        // — the index-shaped head-membership predicate answers "is
+        // this usize the declaration-order head-endpoint slot?" for
+        // a raw `usize` array-slot index WITHOUT decoding through
+        // [`ClosedSet::from_index`] or composing [`ClosedSet::label_at`]
+        // with [`ClosedSet::is_first_label`].
+        assert!(<StubKind as ClosedSet>::is_first_index(0));
+        assert!(!<StubKind as ClosedSet>::is_first_index(1));
+        assert!(!<StubKind as ClosedSet>::is_first_index(2));
+    }
+
+    #[test]
+    fn is_last_index_matches_declaration_tail_slot_and_rejects_every_non_tail_slot() {
+        // Sibling of
+        // `is_first_index_matches_declaration_head_slot_and_rejects_every_non_head_slot`
+        // one endpoint-direction axis over on the (head, tail)
+        // partition of the declaration-axis index-shaped endpoint-
+        // membership surface. Returns `true` on the canonical tail-
+        // anchor slot `T::CARDINALITY - 1` (slot `2` on the stub
+        // whose declaration order is `[Alpha, Beta, Gamma]`) and
+        // `false` on every non-tail slot.
+        assert!(<StubKind as ClosedSet>::is_last_index(2));
+        assert!(!<StubKind as ClosedSet>::is_last_index(0));
+        assert!(!<StubKind as ClosedSet>::is_last_index(1));
+    }
+
+    #[test]
+    fn is_first_index_and_is_last_index_reject_out_of_range_and_cardinality_boundary() {
+        // The index-shaped endpoint-membership predicates MUST reject
+        // every input outside the closed set's canonical
+        // `0..T::CARDINALITY` slot range — the canonical
+        // `T::CARDINALITY` probe (one past the tail slot) and the
+        // `usize::MAX` boundary. Pins the "out-of-range boundary"
+        // documented on [`ClosedSet::is_first_index`]: any out-of-
+        // range input returns `false` via the `usize` equality
+        // structural rejection against the closed-set head-slot
+        // literal `0` / tail-slot literal `T::CARDINALITY - 1`.
+        let cardinality = <StubKind as ClosedSet>::ALL.len();
+        assert!(!<StubKind as ClosedSet>::is_first_index(cardinality));
+        assert!(!<StubKind as ClosedSet>::is_last_index(cardinality));
+        assert!(!<StubKind as ClosedSet>::is_first_index(usize::MAX));
+        assert!(!<StubKind as ClosedSet>::is_last_index(usize::MAX));
+    }
+
+    #[test]
+    fn is_first_index_and_is_last_index_agree_with_variant_predicates_on_every_canonical_slot() {
+        // For every canonical variant `v` in the closed set, the
+        // index-shaped endpoint-membership predicates agree with the
+        // `Self`-arg endpoint-membership predicates through the
+        // natural (variant → declaration slot) forward projection:
+        // `T::is_first_index(T::index_of(v))` matches `v.is_first()`
+        // and `T::is_last_index(T::index_of(v))` matches
+        // `v.is_last()` — the (arg-type × endpoint-direction) 3×2
+        // endpoint-membership matrix agrees on every canonical slot
+        // regardless of which arg-type column the caller walks. The
+        // pin catches a regression that silently bifurcates the
+        // (`Self`, `&str`, `usize`) arg-type axis at either endpoint
+        // direction on any variant.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let idx = <StubKind as ClosedSet>::index_of(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::is_first_index(idx),
+                v.is_first(),
+                "is_first_index({idx}) diverged from {v:?}.is_first() — the (Self, usize) arg-type axis bifurcated at the declaration head-endpoint slot",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::is_last_index(idx),
+                v.is_last(),
+                "is_last_index({idx}) diverged from {v:?}.is_last() — the (Self, usize) arg-type axis bifurcated at the declaration tail-endpoint slot",
+            );
+        }
+    }
+
+    #[test]
+    fn is_first_index_and_is_last_index_collapse_on_singleton_closed_set() {
+        // For a closed set with `T::CARDINALITY == 1`, the sole
+        // variant's array slot `0` is BOTH the declaration-head-
+        // endpoint slot AND the declaration-tail-endpoint slot so
+        // the two index-shaped endpoint-membership predicates
+        // collapse onto the same `usize` equality check. Mirrors
+        // [`ClosedSet::is_first`] / [`ClosedSet::is_last`]'s
+        // singleton collapse at the (`Self`, bool) arm AND
+        // [`ClosedSet::is_first_label`] / [`ClosedSet::is_last_label`]'s
+        // singleton collapse at the (`&str`, bool) arm one arg-type
+        // axis over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonIndexKind {
+            Sole,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonIndexKind(pub String);
+        impl core::fmt::Display for UnknownSingletonIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonIndexKind {
+            const ALL: &'static [Self] = &[Self::Sole];
+            const SET_LABEL: &'static str = "singleton index kind";
+            type Unknown = UnknownSingletonIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Sole => "sole",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonIndexKind(s.to_owned())
+            }
+        }
+        assert!(<SingletonIndexKind as ClosedSet>::is_first_index(0));
+        assert!(<SingletonIndexKind as ClosedSet>::is_last_index(0));
+        assert!(!<SingletonIndexKind as ClosedSet>::is_first_index(1));
+        assert!(!<SingletonIndexKind as ClosedSet>::is_last_index(1));
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_first_index_and_head_slot_composition(
+    ) {
+        // The well-formedness sweep's (74) clause —
+        // `T::is_first_index(T::index_of(v))` MUST equal `v.is_first()`
+        // on every canonical variant AND `T::is_first_index(0) ==
+        // true`. A hand-impl'd implementor whose override folds the
+        // index-shaped head-membership predicate onto the index-
+        // shaped tail-membership predicate at the (head, tail)
+        // endpoint-direction axis (returning `true` on the
+        // declaration-tail slot instead of the declaration-head
+        // slot) fails the sweep loudly rather than silently
+        // bifurcating the index-shaped head-membership surface every
+        // downstream index-shaped head-boundary consumer routes
+        // through.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsFirstIndexKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsFirstIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsFirstIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is first index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsFirstIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is first index kind";
+            type Unknown = UnknownDriftedIsFirstIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsFirstIndexKind(s.to_owned())
+            }
+            fn is_first_index(i: usize) -> bool {
+                // Drifted override — folds the index-shaped head-
+                // endpoint membership predicate onto the index-shaped
+                // tail-endpoint membership predicate, silently
+                // swapping the head-direction predicate with the
+                // tail-direction predicate at the (head, tail)
+                // endpoint-direction axis every downstream index-
+                // shaped head-boundary consumer routes through.
+                // Declaration order on this stub is `[Head, Middle,
+                // Tail]` (cardinality 3), so the intended head slot
+                // is `0` but the override answers `i == 2` instead.
+                i == 2
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsFirstIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_first_index() override that folds the declaration-head-endpoint slot predicate onto the declaration-tail-endpoint slot predicate rather than composing `i == 0`",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_last_index_and_tail_slot_composition()
+    {
+        // The well-formedness sweep's (75) clause —
+        // `T::is_last_index(T::index_of(v))` MUST equal `v.is_last()`
+        // on every canonical variant AND
+        // `T::is_last_index(T::CARDINALITY - 1) == true`. A hand-
+        // impl'd implementor whose override accepts a strictly-
+        // interior slot as the tail slot fails the sweep loudly
+        // rather than silently routing an interior slot into the
+        // index-shaped tail-membership predicate.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsLastIndexKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsLastIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsLastIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is last index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsLastIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is last index kind";
+            type Unknown = UnknownDriftedIsLastIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsLastIndexKind(s.to_owned())
+            }
+            fn is_last_index(i: usize) -> bool {
+                // Drifted override — routes a strictly-interior slot
+                // into the index-shaped tail-endpoint predicate,
+                // silently forking the tail-membership predicate
+                // from the natural `i + 1 == T::CARDINALITY`
+                // composition every downstream index-shaped tail-
+                // boundary consumer routes through. Declaration order
+                // on this stub is `[Head, Middle, Tail]` (cardinality
+                // 3), so the intended tail slot is `2` but the
+                // override answers `i == 1` instead.
+                i == 1
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsLastIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_last_index() override that returns a strictly-interior slot rather than composing `i + 1 == T::CARDINALITY`",
         );
     }
 }

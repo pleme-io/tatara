@@ -2085,6 +2085,202 @@ pub trait ClosedSet: Sized + Copy + 'static {
         best
     }
 
+    /// The lex-order head-endpoint label — `T::sorted_first().label()`
+    /// projected onto the trait surface as ONE call. Closes the
+    /// (`Self`, `&'static str`) return-type axis on the lex-axis
+    /// (head, tail) endpoint-anchor partition at the head slot,
+    /// completing the (declaration × lex) × (head, tail) × (Self-anchor,
+    /// label) 2×2×2 = 8-corner endpoint-anchor return-shape cube
+    /// alongside [`Self::first`] / [`Self::last`] / [`Self::sorted_first`] /
+    /// [`Self::sorted_last`] (the Self-anchor corners), [`Self::first_label`] /
+    /// [`Self::last_label`] (the declaration-axis label corners), and
+    /// [`Self::sorted_last_label`] (the lex tail-label corner).
+    ///
+    /// Sibling posture to [`Self::first_label`] one ordering axis over
+    /// on the (declaration, lex) partition of the closed-set head-
+    /// endpoint singular-label return-shape column — [`Self::first_label`]
+    /// returns the declaration-order head-anchor label,
+    /// this method returns the lex-order head-anchor label. Sibling
+    /// posture to [`Self::sorted_first`] one return-type axis over on
+    /// the (typed-variant `Self`, canonical-label `&'static str`)
+    /// partition of the closed-set lex-axis head-endpoint return-shape
+    /// column — [`Self::sorted_first`] materializes the typed lex-head
+    /// anchor, this method materializes its canonical label WITHOUT
+    /// threading the caller through the two-hop
+    /// `T::sorted_first().label()` composition. Sibling posture to
+    /// [`Self::sorted_endpoint_labels`] one aggregation-shape axis over
+    /// on the (single-slot `&'static str`, pair-tuple `(&'static str,
+    /// &'static str)`) partition of the closed-set lex-axis endpoint-
+    /// label return-shape column — [`Self::sorted_endpoint_labels`]
+    /// aggregates BOTH lex-endpoint-anchor labels into a tuple, this
+    /// method returns ONLY the lex-head-endpoint label without forcing
+    /// the caller to destructure the pair and drop the tail slot.
+    ///
+    /// The (ordering × return-type × endpoint-direction) 2×2×2 matrix
+    /// over the singular endpoint-anchor return-shape surface
+    /// partitions post-lift:
+    ///
+    /// | Ordering \\ (Return-type, Endpoint) | (Self, Head)          | (Self, Tail)          | (label, Head)              | (label, Tail)             |
+    /// |-------------------------------------|-----------------------|-----------------------|----------------------------|---------------------------|
+    /// | Declaration                         | [`Self::first`]       | [`Self::last`]        | [`Self::first_label`]      | [`Self::last_label`]      |
+    /// | Lex                                 | [`Self::sorted_first`]| [`Self::sorted_last`] | [`Self::sorted_first_label`] | [`Self::sorted_last_label`] |
+    ///
+    /// Every generic consumer that wants the lex-order head-endpoint
+    /// canonical label as ONE `&'static str` (an alphabetized-completion
+    /// banner that renders `"expected first: <lex-head-label>"` without
+    /// materializing the typed anchor, a bounded-alphabetized-loop guard
+    /// that short-circuits on `s == T::sorted_first_label()` before
+    /// decoding into a typed variant, a per-implementor coherence probe
+    /// that anchors an edge assertion at the lex-head-endpoint label
+    /// slot, an alphabetized-completion UI that renders the lex head
+    /// anchor by label without threading the caller through a
+    /// `T::sorted_first().label()` two-primitive composition, a
+    /// deterministic-across-machines Prometheus tag anchored at the
+    /// lex-min anchor label without materializing the
+    /// [`Self::sorted_labels`] list) binds to ONE typed method rather
+    /// than hand-rolling either the `T::sorted_first().label()`
+    /// composition (which re-derives the same two-primitive projection
+    /// at every callsite) OR a per-implementor `SORTED_HEAD_LABEL:
+    /// &'static str = "..."` const that silently drifts from
+    /// [`Self::label`] on rename OR from the label-keyed lex ordering
+    /// on any label rename that shifts the lex-min slot.
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::sorted_first`]) with the per-slot [`Self::label`]
+    /// projection — the lex-head-endpoint label is a typed CONSEQUENCE
+    /// of the (typed lex-head anchor) primitive composed with the
+    /// (label projection) primitive, not a per-implementor `const
+    /// SORTED_HEAD_LABEL: &'static str = "..."` declaration.
+    /// Implementors override only when the lex-head-endpoint label
+    /// needs to diverge from the natural `T::sorted_first().label()`
+    /// shape (no production implementor reaches for this today; the
+    /// axis exists for the same reason `via` / `set_label` / `labels` /
+    /// `first` / `last` / `sorted_first` / `sorted_last` /
+    /// `endpoint_labels` / `sorted_endpoint_labels` / `first_label` /
+    /// `last_label` overrides exist — a typed escape hatch rather than
+    /// forcing the implementor to hand-roll the impl). An implementor
+    /// that overrides [`Self::sorted_first`] OR overrides
+    /// [`Self::label`] propagates the override through this default
+    /// body automatically; the lex-head-endpoint-label surface funnels
+    /// through the lex-head-anchor primitive on the anchor-
+    /// materialization column AND the per-slot label projection on
+    /// the rendering column.
+    ///
+    /// The lex-head-endpoint-label contract —
+    /// `T::sorted_first_label() == T::sorted_first().label()` on every
+    /// implementor — is guaranteed by the default composition through
+    /// [`Self::sorted_first`] and [`Self::label`]; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (48)
+    /// pins the composition against the natural
+    /// `T::sorted_first().label()` shape on every implementor so a
+    /// passing well-formedness sweep means every generic consumer can
+    /// call [`Self::sorted_first_label`] on any typed carrier and
+    /// expect the same `&'static str` answer at every crate boundary.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::sorted_first`] returns the sole
+    /// variant and this method returns its label, mirroring
+    /// [`Self::sorted_last_label`]'s singleton behavior one endpoint-
+    /// direction axis over. All four singular endpoint-label projections
+    /// ([`Self::first_label`], [`Self::last_label`],
+    /// [`Self::sorted_first_label`], [`Self::sorted_last_label`])
+    /// collapse onto the same label on a singleton, preserving the
+    /// label projection SHAPE at the boundary-cardinality edge where
+    /// all four SLOTS collapse onto the same anchor.
+    ///
+    /// THEORY.md §III — the typescape; the (lex-head anchor → canonical
+    /// label) singular projection becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline
+    /// `T::sorted_first().label()` two-primitive composition at every
+    /// downstream lex-head-label rendering site.
+    /// THEORY.md §V.1 — knowable platform; the (lex-head anchor →
+    /// label) projection was an unnamed compound of
+    /// [`Self::sorted_first`] + [`Self::label`] pre-lift; naming it on
+    /// the trait makes the projection a TYPED CONSEQUENCE of TWO
+    /// substrate primitives — generic consumers see ONE method, not
+    /// one lex-head-label-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (lex-head
+    /// anchor → label) projection emerges from the composition of TWO
+    /// substrate primitives ([`Self::sorted_first`], [`Self::label`])
+    /// rather than as a per-implementor `const SORTED_HEAD_LABEL:
+    /// &'static str = "..."` declaration. A future tightening of
+    /// either primitive (a future perfect-hash label lookup, a future
+    /// const-fn axis that makes the projection callable in const
+    /// contexts, a future case-insensitive-label extension that shifts
+    /// which variant lands at the lex-min slot) propagates to every
+    /// closed-set lex-head-label consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-sorted-first-label` on
+    /// closed enumerations under lex-ordering (the singular lex-head-
+    /// anchor-label projection on the alphabetized chain); Idris's
+    /// `showSortedFirst` on `Fin (S n)` non-empty finite-cardinality
+    /// lex-head-anchor projections; Haskell's
+    /// `show (minimumBy (comparing show) [minBound..maxBound])` on
+    /// the `Bounded + Show` type-class pair (the lex-head-anchor-label
+    /// rendering composed from three prelude primitives on the bounded
+    /// chain); MLIR's `RegisteredOperationName::lex_begin_name()` on
+    /// the lex-sorted Op registry; Rust's `strum::EnumIter().min_by_key(|v|
+    /// v.get_str()).unwrap().get_str()` composed through the iterator
+    /// API. Translation through pleme-io primitives: a pure default
+    /// method composing the trait's existing [`Self::sorted_first`]
+    /// surface with the per-slot [`Self::label`] projection — no new
+    /// dep, no new IR layer, no supertrait bound, no allocation.
+    fn sorted_first_label() -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_first())
+    }
+
+    /// The lex-order tail-endpoint label — `T::sorted_last().label()`
+    /// projected onto the trait surface as ONE call. Closes the
+    /// (`Self`, `&'static str`) return-type axis on the lex-axis
+    /// (head, tail) endpoint-anchor partition at the tail slot,
+    /// completing the (declaration × lex) × (head, tail) × (Self-anchor,
+    /// label) 2×2×2 = 8-corner endpoint-anchor return-shape cube.
+    ///
+    /// Sibling posture to [`Self::sorted_first_label`] one endpoint-
+    /// direction axis over on the (head, tail) partition of the lex-
+    /// axis singular endpoint-label return-shape column:
+    /// [`Self::sorted_first_label`] returns the lex-head-anchor label,
+    /// this method returns the lex-tail-anchor label. See
+    /// [`Self::sorted_first_label`] for the shared design rationale,
+    /// sibling matrix, override axis, future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method is
+    /// the tail-direction arm of the same axis and inherits every
+    /// property from the head arm's documentation, differing only in
+    /// the composition through [`Self::sorted_last`] instead of
+    /// [`Self::sorted_first`].
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::sorted_last`]) with the per-slot [`Self::label`]
+    /// projection. The lex-tail-endpoint-label contract —
+    /// `T::sorted_last_label() == T::sorted_last().label()` on every
+    /// implementor — is guaranteed by the default composition; the
+    /// well-formedness contract [`assert_closed_set_well_formed`]'s
+    /// new clause (49) pins the composition against the natural
+    /// `T::sorted_last().label()` shape on every implementor.
+    ///
+    /// Clauses (18) + (19) + (34) + (35) + (36) + (37) + (46) + (47) +
+    /// (48) + (49) together CLOSE the (return-type × ordering ×
+    /// endpoint-direction × aggregation-shape) 2×2×2×2 = 16-corner
+    /// projection hypercube on the closed-set endpoint-anchor return-
+    /// shape surface: [`Self::first`] / [`Self::last`] /
+    /// [`Self::sorted_first`] / [`Self::sorted_last`] on (`Self`,
+    /// ordering × head/tail, singular) — clauses (18) + (19);
+    /// [`Self::endpoints`] / [`Self::sorted_endpoints`] on ((`Self`,
+    /// `Self`), ordering × (head, tail), pair-tuple) — clauses (34) +
+    /// (35); [`Self::endpoint_labels`] / [`Self::sorted_endpoint_labels`]
+    /// on ((`&'static str`, `&'static str`), ordering × (head, tail),
+    /// pair-tuple) — clauses (36) + (37); and now [`Self::first_label`] /
+    /// [`Self::last_label`] / [`Self::sorted_first_label`] /
+    /// [`Self::sorted_last_label`] on (`&'static str`, ordering ×
+    /// head/tail, singular) — clauses (46) + (47) + (48) + (49). Every
+    /// generic consumer that binds any of the twelve endpoint-anchor
+    /// projection methods sees the SAME endpoint-anchor answer at every
+    /// crate boundary regardless of which return-type axis / ordering-
+    /// axis / endpoint-direction / aggregation-shape corner it walks.
+    fn sorted_last_label() -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_last())
+    }
+
     /// The lexicographic-order head-endpoint membership predicate —
     /// `true` when `self` is [`Self::sorted_first`], `false` otherwise.
     /// Closes the (lex, head) corner of the (ordering-axis × endpoint-
@@ -8416,6 +8612,104 @@ where
         T::last_label(),
         T::last().label(),
         "{type_name}: T::last_label() drifted from T::last().label() — the singular declaration-order tail-endpoint label projection no longer agrees with the natural `T::last().label()` two-primitive composition, so a downstream tail-label banner / tail-label completion / tail-label coherence probe consumer that binds `T::last_label()` as its singular tail-anchor label query surface would render the wrong `&'static str`",
+    );
+    // (48) — `T::sorted_first_label()` MUST equal
+    // `T::sorted_first().label()` — the singular lex-head-endpoint
+    // label projection on the lex-axis endpoint-label return-shape
+    // column composes the (lex head anchor) primitive with the
+    // (per-slot label) projection. The default trait body composes
+    // `T::label(T::sorted_first())` verbatim and satisfies the clause
+    // for free; the assertion catches a future implementor whose
+    // override drifts the lex-head-label projection (a stale override
+    // that hard-codes a literal `&'static str` detached from
+    // [`Self::label`] — silently forking the lex-head-anchor rendering
+    // from the label-projection primitive every downstream lex-head-
+    // label consumer routes through; a permissive override that
+    // returns a strictly-lex-interior variant's label — silently
+    // routing an interior slot into the lex-head-endpoint-label
+    // projection; a fold override that returns
+    // `T::sorted_last().label()` — silently swapping the lex-head-
+    // endpoint label onto the lex-tail-endpoint label; a stale
+    // override that folds `T::sorted_first_label()` onto
+    // `T::first_label()` — silently bifurcating the (declaration, lex)
+    // ordering axis at the singular head-endpoint-label return-shape
+    // slot on any implementor whose declaration order diverges from
+    // its lex order; an override that returns
+    // [`Self::sorted_endpoint_labels`]'s slot-1 instead of slot-0 —
+    // silently bifurcating the singular lex-head-label projection
+    // with the pair-tuple's lex-tail-label slot; a fabricated override
+    // that returns the empty string — silently detaching the lex-
+    // head-label rendering from every canonical label in [`T::ALL`])
+    // loudly rather than silently bifurcating the singular lex-head-
+    // endpoint-label projection surface every downstream lex-head-
+    // label consumer routes through. Sibling posture to clauses
+    // (18) + (34) + (36) + (37) + (46) — clause (18) pins the
+    // individual (declaration head, declaration tail) scalar endpoint-
+    // anchor projections against `T::ALL[0]` /
+    // `T::ALL[T::CARDINALITY - 1]`, clause (34) pins the (typed
+    // variant, typed variant) pair-aggregation projection on the
+    // declaration axis, clause (36) pins the (label, label) pair-
+    // aggregation projection on the declaration axis, clause (37)
+    // pins the (label, label) pair-aggregation projection on the lex
+    // axis, clause (46) pins the singular `&'static str` head-label
+    // projection against the composition of the declaration head-
+    // endpoint-anchor primitive with the per-slot label projection,
+    // this clause pins the singular `&'static str` lex-head-label
+    // projection against the composition of the lex head-endpoint-
+    // anchor primitive with the per-slot label projection. Clauses
+    // (36) + (37) + (46) + (48) together open the (ordering ×
+    // aggregation-shape) 2×2 matrix over the head-endpoint anchor's
+    // label return-shape column at ALL FOUR corners.
+    assert_eq!(
+        T::sorted_first_label(),
+        T::sorted_first().label(),
+        "{type_name}: T::sorted_first_label() drifted from T::sorted_first().label() — the singular lex-order head-endpoint label projection no longer agrees with the natural `T::sorted_first().label()` two-primitive composition, so a downstream lex-head-label banner / alphabetized-completion cursor / lex-head-label coherence probe consumer that binds `T::sorted_first_label()` as its singular lex-head-anchor label query surface would render the wrong `&'static str`",
+    );
+    // (49) — `T::sorted_last_label()` MUST equal
+    // `T::sorted_last().label()` — the singular lex-tail-endpoint
+    // label projection on the lex-axis endpoint-label return-shape
+    // column composes the (lex tail anchor) primitive with the
+    // (per-slot label) projection. The default trait body composes
+    // `T::label(T::sorted_last())` verbatim and satisfies the clause
+    // for free; the assertion catches a future implementor whose
+    // override drifts the lex-tail-label projection (a stale override
+    // that hard-codes a literal `&'static str` detached from
+    // [`Self::label`]; a permissive override that returns a strictly-
+    // lex-interior variant's label — silently routing an interior
+    // slot into the lex-tail-endpoint-label projection; a fold
+    // override that returns `T::sorted_first().label()` — silently
+    // swapping the lex-tail-endpoint label onto the lex-head-endpoint
+    // label; a stale override that folds `T::sorted_last_label()`
+    // onto `T::last_label()` — silently bifurcating the (declaration,
+    // lex) ordering axis at the singular tail-endpoint-label return-
+    // shape slot on any implementor whose declaration order diverges
+    // from its lex order; an override that returns
+    // [`Self::sorted_endpoint_labels`]'s slot-0 instead of slot-1 —
+    // silently bifurcating the singular lex-tail-label projection with
+    // the pair-tuple's lex-head-label slot; a fabricated override
+    // that returns the empty string) loudly rather than silently
+    // bifurcating the singular lex-tail-endpoint-label projection
+    // surface every downstream lex-tail-label consumer routes through.
+    // Sibling posture to clause (48) one endpoint-direction axis over
+    // on the (head, tail) partition of the lex-axis singular
+    // endpoint-label return-shape column. Clauses (18) + (19) + (34) +
+    // (35) + (36) + (37) + (46) + (47) + (48) + (49) together CLOSE
+    // the (return-type × ordering × endpoint-direction × aggregation-
+    // shape) 2×2×2×2 = 16-corner projection hypercube on the closed-
+    // set endpoint-anchor return-shape surface: (`Self`, ordering ×
+    // head/tail, singular) at clauses (18) + (19); ((`Self`, `Self`),
+    // ordering × (head, tail), pair) at clauses (34) + (35); ((label,
+    // label), ordering × (head, tail), pair) at clauses (36) + (37);
+    // and (`&'static str`, ordering × head/tail, singular) at
+    // clauses (46) + (47) + (48) + (49). Every generic consumer that
+    // binds any of the twelve declaration-axis-or-lex-axis projection
+    // methods sees the SAME endpoint-anchor answer at every crate
+    // boundary regardless of which return-type axis / ordering-axis /
+    // endpoint-direction / aggregation-shape corner it walks.
+    assert_eq!(
+        T::sorted_last_label(),
+        T::sorted_last().label(),
+        "{type_name}: T::sorted_last_label() drifted from T::sorted_last().label() — the singular lex-order tail-endpoint label projection no longer agrees with the natural `T::sorted_last().label()` two-primitive composition, so a downstream lex-tail-label banner / alphabetized-completion cursor / lex-tail-label coherence probe consumer that binds `T::sorted_last_label()` as its singular lex-tail-anchor label query surface would render the wrong `&'static str`",
     );
 }
 
@@ -17287,6 +17581,341 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_endpoint_labels_joined override drifted from the natural sorted-endpoint-labels-then-join composition",
+        );
+    }
+
+    #[test]
+    fn sorted_first_label_returns_lex_order_head_endpoint_label() {
+        // The singular lex-order head-endpoint label projection returns
+        // `T::sorted_first().label()`. `StubKind`'s declaration order is
+        // `[Alpha, Beta, Gamma]` and labels are `("alpha", "beta",
+        // "gamma")` — the lex-min label is `"alpha"`, so
+        // `T::sorted_first_label()` returns `"alpha"`. Sibling posture to
+        // `first_label_returns_declaration_order_head_endpoint_label`
+        // one ordering axis over on the (declaration, lex) partition of
+        // the closed-set head-endpoint singular-label return-shape
+        // column — on `StubKind` the declaration ordering matches the
+        // lex ordering, so the singular head-label projections agree
+        // on this stub (the divergence between the two axes is
+        // exercised on the deliberate ordering-divergent stub in
+        // `sorted_first_label_and_sorted_last_label_diverge_on_declaration_order_that_diverges_from_lex_order`).
+        assert_eq!(<StubKind as ClosedSet>::sorted_first_label(), "alpha");
+    }
+
+    #[test]
+    fn sorted_last_label_returns_lex_order_tail_endpoint_label() {
+        // The singular lex-order tail-endpoint label projection returns
+        // `T::sorted_last().label()`. `StubKind`'s lex-max label is
+        // `"gamma"`, so `T::sorted_last_label()` returns `"gamma"`.
+        // Sibling posture to `sorted_first_label_returns_lex_order_head_endpoint_label`
+        // one endpoint-direction axis over on the (head, tail)
+        // partition of the lex-axis singular endpoint-label return-
+        // shape column.
+        assert_eq!(<StubKind as ClosedSet>::sorted_last_label(), "gamma");
+    }
+
+    #[test]
+    fn sorted_first_label_and_sorted_last_label_recover_sorted_endpoint_labels_tuple_slots() {
+        // The (singular lex-head-label, singular lex-tail-label) pair
+        // recovers the `T::sorted_endpoint_labels()` tuple slot-by-slot
+        // on every implementor — the singular lex-axis projections are
+        // the two scalar shadows of the lex-axis pair-aggregation
+        // projection, so any implementor whose singular arms drift from
+        // `sorted_endpoint_labels().0` / `sorted_endpoint_labels().1`
+        // would be caught here even if the well-formedness clauses (48)
+        // + (49) were bypassed. Anchors the (singular, pair)
+        // aggregation-shape axis on the lex-axis endpoint-label
+        // return-shape column against structural equality with the
+        // pre-existing pair-tuple surface. Sibling posture to
+        // `first_label_and_last_label_recover_endpoint_labels_tuple_slots`
+        // one ordering axis over on the (declaration, lex) partition
+        // of the closed-set singular ↔ pair-tuple aggregation-shape
+        // recovery surface.
+        let (head, tail) = <StubKind as ClosedSet>::sorted_endpoint_labels();
+        assert_eq!(<StubKind as ClosedSet>::sorted_first_label(), head);
+        assert_eq!(<StubKind as ClosedSet>::sorted_last_label(), tail);
+    }
+
+    #[test]
+    fn sorted_first_label_and_sorted_last_label_diverge_on_declaration_order_that_diverges_from_lex_order(
+    ) {
+        // The (declaration-axis, lex-axis) singular endpoint-label
+        // contract on a stub whose declaration order deliberately
+        // diverges from its lex order — the (declaration head-label,
+        // declaration tail-label) pair and the (lex head-label, lex
+        // tail-label) pair name DIFFERENT slots on any implementor
+        // whose declaration ordering differs from its lex ordering. A
+        // regression that folded `sorted_first_label` onto
+        // `first_label` (or `sorted_last_label` onto `last_label`)
+        // would pass on `StubKind` (where declaration ordering matches
+        // lex ordering) and silently bifurcate the four singular
+        // endpoint-label projections on any implementor whose
+        // declaration order diverges from its lex order. The
+        // deliberate 3-variant stub has declaration order `[Gamma,
+        // Beta, Alpha]` and labels `("gamma", "beta", "alpha")`. The
+        // declaration-endpoints are `Gamma` (declaration head) +
+        // `Alpha` (declaration tail); the lex-endpoints under the
+        // ASCII `str: Ord` ordering are `Alpha` (lex head) + `Gamma`
+        // (lex tail). The four singular endpoint-label projections
+        // therefore diverge in a strict permutation: `first_label()`
+        // = `"gamma"`, `last_label()` = `"alpha"`,
+        // `sorted_first_label()` = `"alpha"`,
+        // `sorted_last_label()` = `"gamma"`. Sibling posture to
+        // `interior_and_sorted_interior_diverge_on_declaration_order_that_diverges_from_lex_order`
+        // one partition-flavor axis over on the (interior, endpoint)
+        // partition of the ordering-divergent stub surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SortedEndpointLabelDivergenceStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownSortedEndpointLabelDivergenceStubKind(pub String);
+        impl core::fmt::Display for UnknownSortedEndpointLabelDivergenceStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown sorted endpoint label divergence stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for SortedEndpointLabelDivergenceStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "sorted endpoint label divergence stub kind";
+            type Unknown = UnknownSortedEndpointLabelDivergenceStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSortedEndpointLabelDivergenceStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SortedEndpointLabelDivergenceStubKind as ClosedSet>::first_label(),
+            "gamma",
+        );
+        assert_eq!(
+            <SortedEndpointLabelDivergenceStubKind as ClosedSet>::last_label(),
+            "alpha",
+        );
+        assert_eq!(
+            <SortedEndpointLabelDivergenceStubKind as ClosedSet>::sorted_first_label(),
+            "alpha",
+        );
+        assert_eq!(
+            <SortedEndpointLabelDivergenceStubKind as ClosedSet>::sorted_last_label(),
+            "gamma",
+        );
+        assert_ne!(
+            <SortedEndpointLabelDivergenceStubKind as ClosedSet>::first_label(),
+            <SortedEndpointLabelDivergenceStubKind as ClosedSet>::sorted_first_label(),
+            "first_label() and sorted_first_label() returned the SAME label on a stub whose declaration order deliberately diverges from its lex order — the (declaration, lex) ordering partition MUST be structurally observed by the two singular head-label projections",
+        );
+        assert_ne!(
+            <SortedEndpointLabelDivergenceStubKind as ClosedSet>::last_label(),
+            <SortedEndpointLabelDivergenceStubKind as ClosedSet>::sorted_last_label(),
+            "last_label() and sorted_last_label() returned the SAME label on a stub whose declaration order deliberately diverges from its lex order — the (declaration, lex) ordering partition MUST be structurally observed by the two singular tail-label projections",
+        );
+        // The stub also satisfies the well-formedness sweep — clauses
+        // (46) + (47) + (48) + (49) all fire on a declaration order
+        // that diverges from the lex order, pinning ALL FOUR singular
+        // endpoint-label projections at the ordering-divergent
+        // implementor edge.
+        super::assert_closed_set_well_formed::<SortedEndpointLabelDivergenceStubKind>();
+    }
+
+    #[test]
+    fn sorted_first_label_and_sorted_last_label_collapse_on_singleton_closed_set() {
+        // Singleton degeneracy — a closed set with one variant has
+        // `T::sorted_first()` and `T::sorted_last()` both return the
+        // sole variant, so `T::sorted_first_label()` and
+        // `T::sorted_last_label()` both return the sole variant's
+        // label. All four singular endpoint-label projections
+        // ([`Self::first_label`], [`Self::last_label`],
+        // [`Self::sorted_first_label`], [`Self::sorted_last_label`])
+        // collapse onto the same label at the boundary-cardinality
+        // edge where all four SLOTS collapse onto the same anchor.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonSortedFirstLastLabelStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonSortedFirstLastLabelStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonSortedFirstLastLabelStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown singleton sorted first last label stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for SingletonSortedFirstLastLabelStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton sorted first last label stub kind";
+            type Unknown = UnknownSingletonSortedFirstLastLabelStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonSortedFirstLastLabelStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonSortedFirstLastLabelStubKind as ClosedSet>::sorted_first_label(),
+            "only",
+        );
+        assert_eq!(
+            <SingletonSortedFirstLastLabelStubKind as ClosedSet>::sorted_last_label(),
+            "only",
+        );
+        assert_eq!(
+            <SingletonSortedFirstLastLabelStubKind as ClosedSet>::sorted_first_label(),
+            <SingletonSortedFirstLastLabelStubKind as ClosedSet>::sorted_last_label(),
+        );
+        // All four singular endpoint-label projections collapse onto
+        // the same label at the singleton boundary-cardinality edge.
+        assert_eq!(
+            <SingletonSortedFirstLastLabelStubKind as ClosedSet>::first_label(),
+            <SingletonSortedFirstLastLabelStubKind as ClosedSet>::sorted_first_label(),
+        );
+        assert_eq!(
+            <SingletonSortedFirstLastLabelStubKind as ClosedSet>::last_label(),
+            <SingletonSortedFirstLastLabelStubKind as ClosedSet>::sorted_last_label(),
+        );
+        super::assert_closed_set_well_formed::<SingletonSortedFirstLastLabelStubKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_first_label_and_sorted_first_label_composition(
+    ) {
+        // The well-formedness sweep's (48) clause —
+        // `T::sorted_first_label()` MUST equal
+        // `T::sorted_first().label()`. A hand-impl'd implementor whose
+        // override drifts the singular lex-head-label projection
+        // (hard-codes a literal detached from [`Self::label`], routes
+        // a strictly-lex-interior variant's label into the lex-head-
+        // endpoint slot, folds the lex-head-label onto the lex-tail-
+        // label at the endpoint-direction axis, folds the lex-head-
+        // label onto the declaration-head-label at the ordering axis)
+        // fails the sweep loudly rather than silently bifurcating the
+        // lex-axis singular head-endpoint-label projection surface
+        // every downstream lex-head-label consumer routes through.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_first_label_and_first_label_composition`
+        // one ordering axis over on the (declaration, lex) partition
+        // of clauses (46) + (48).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedFirstLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedFirstLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedFirstLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted first label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedFirstLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted sorted first label kind";
+            type Unknown = UnknownDriftedSortedFirstLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedFirstLabelKind(s.to_owned())
+            }
+            fn sorted_first_label() -> &'static str {
+                // Drifted override — routes a strictly-lex-interior
+                // variant's label into the lex-head-endpoint slot,
+                // silently forking the singular lex-head-label
+                // projection from the natural
+                // `T::sorted_first().label()` composition every
+                // downstream lex-head-label consumer routes through.
+                // Lex order on this stub is `head` < `middle` <
+                // `tail`, so the intended lex-head label is `"head"`.
+                "middle"
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedFirstLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_first_label() override that returns a strictly-lex-interior variant's label rather than composing T::sorted_first().label()",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_last_label_and_sorted_last_label_composition(
+    ) {
+        // The well-formedness sweep's (49) clause —
+        // `T::sorted_last_label()` MUST equal
+        // `T::sorted_last().label()`. A hand-impl'd implementor whose
+        // override drifts the singular lex-tail-label projection fails
+        // the sweep loudly. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_sorted_first_label_and_sorted_first_label_composition`
+        // one endpoint-direction axis over on the (head, tail)
+        // partition of the lex-axis singular endpoint-label sweep.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedLastLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedLastLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedLastLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted last label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedLastLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted sorted last label kind";
+            type Unknown = UnknownDriftedSortedLastLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedLastLabelKind(s.to_owned())
+            }
+            fn sorted_last_label() -> &'static str {
+                // Drifted override — folds the lex-tail-endpoint label
+                // onto the lex-head-endpoint label, silently swapping
+                // the singular lex-tail-label projection with the
+                // singular lex-head-label projection every downstream
+                // lex-tail-label consumer routes through. Lex order on
+                // this stub is `head` < `middle` < `tail`, so the
+                // intended lex-tail label is `"tail"`.
+                "head"
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedLastLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_last_label() override that folds the lex-tail-endpoint label onto the lex-head-endpoint label rather than composing T::sorted_last().label()",
         );
     }
 }

@@ -7121,6 +7121,228 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn cycle_sorted_prev(self) -> Self {
         <Self as ClosedSet>::sorted_prev(self).unwrap_or_else(<Self as ClosedSet>::sorted_last)
     }
+
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// neighbor immediately AFTER `self` in [`Self::ALL`], WRAPPING
+    /// to [`Self::first_label`] at the tail — the label of
+    /// [`Self::cycle_next`] projected through [`Self::label`]. Returns
+    /// `&'static str`, never [`Option<&'static str>`]: the wrapping arm
+    /// folds the tail-endpoint boundary onto the head-endpoint anchor
+    /// label rather than leaving the [`None`] the bounded-neighbor-
+    /// label axis returns.
+    ///
+    /// The wrapping-return arm of the (Option-typed, wrapping)
+    /// partition over the closed-set forward-declaration-neighbor label
+    /// surface — one return-type axis over from [`Self::next_label`],
+    /// which returns the bounded [`Option<&'static str>`] variant.
+    /// Together with [`Self::cycle_prev_label`], the pair closes the
+    /// (forward, backward) direction axis of the WRAPPING label arm on
+    /// the declaration ordering axis, and together with the pre-existing
+    /// [`Self::cycle_sorted_next_label`] / [`Self::cycle_sorted_prev_label`]
+    /// pair (added in the same lift) completes the (declaration × lex)
+    /// × (forward, backward) 2×2 wrapping-label-neighbor matrix:
+    ///
+    /// | Ordering \\ Direction | Forward wrap                     | Backward wrap                     |
+    /// |-----------------------|----------------------------------|-----------------------------------|
+    /// | Declaration           | [`Self::cycle_next_label`]       | [`Self::cycle_prev_label`]        |
+    /// | Lex                   | [`Self::cycle_sorted_next_label`] | [`Self::cycle_sorted_prev_label`] |
+    ///
+    /// Every generic consumer that renders the wrapping-forward-neighbor
+    /// LABEL of a typed variant (a cyclic LSP completion cursor that
+    /// emits "next: <label>" unconditionally without threading an
+    /// `Option`-branch through the label-render path, a round-robin
+    /// picker that logs the next cyclic label as its rotation banner, a
+    /// carousel widget's next-tab label renderer, a per-tick animation
+    /// frame picker that stamps the next cyclic label into a per-frame
+    /// audit trail, a Kubernetes annotation stamper that writes the
+    /// wrapping-successor label onto a per-transition CRD without
+    /// threading the typed variant through `.label()` at the callsite)
+    /// binds to ONE typed method on the trait rather than re-deriving
+    /// the `v.cycle_next().label()` two-primitive composition at every
+    /// callsite OR the `v.next_label().unwrap_or(T::first_label())`
+    /// three-primitive composition at every callsite.
+    ///
+    /// Default body composes [`Self::cycle_next`] with [`Self::label`]
+    /// verbatim — the wrapping-forward-neighbor-label projection is a
+    /// typed CONSEQUENCE of the pre-existing (wrapping forward-neighbor,
+    /// canonical label) pair, not a third codepath. Implementors override
+    /// only when the wrapping-forward-neighbor-label surface needs to
+    /// diverge from the natural `cycle_next().label()` shape. An
+    /// implementor that overrides [`Self::cycle_next`] or [`Self::label`]
+    /// propagates the override through this default body automatically;
+    /// the (variant → wrapping-forward-neighbor label) projection funnels
+    /// through TWO typed primitives.
+    ///
+    /// The wrapping-neighbor-label contract — the tail arm returns
+    /// [`Self::first_label`] for [`Self::last`] — is guaranteed by the
+    /// default composition through [`Self::cycle_next`]'s tail-wrap-to-
+    /// head fold; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (62) pins the
+    /// composition against the natural `cycle_next().label()` shape AND
+    /// the tail-endpoint `T::first_label()` fold on every implementor,
+    /// so a passing well-formedness sweep means every generic consumer
+    /// can call [`Self::cycle_next_label`] on any typed variant and
+    /// expect the same `&'static str` answer at every crate boundary.
+    /// `T::last().cycle_next_label() == T::first_label()` is the natural
+    /// fixpoint the forward-wrapping-neighbor-label axis and the
+    /// tail-endpoint anchor share, mirroring
+    /// `T::last().cycle_next() == T::first()` one return-type axis over.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → wrapping-forward
+    /// declaration-neighbor label) projection becomes a TYPE projection
+    /// on the trait rather than a per-consumer inline
+    /// `self.cycle_next().label()` composition at every downstream
+    /// declaration-cyclic-label-traversal site. Clauses (28) + (29) +
+    /// (58) + (59) + (60) + (61) + (62) + (63) + (64) + (65) together
+    /// close the (declaration × lex) × (forward, backward) ×
+    /// (Option-typed-bounded, wrapping) × (`Self`-return,
+    /// `&'static str`-return) 2×2×2×2 = 16-corner label-and-variant
+    /// bounded-plus-wrapping traversal hypercube.
+    /// THEORY.md §V.1 — knowable platform; the wrapping-declaration-
+    /// neighbor-label projections were unnamed compounds of
+    /// [`Self::cycle_next`] + [`Self::label`] pre-lift; naming them on
+    /// the trait makes the projections TYPED CONSEQUENCES of the two
+    /// substrate primitives — generic consumers see ONE wrapping-label
+    /// method per direction per ordering axis, not one wrapping-label-
+    /// shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the wrapping-
+    /// declaration-neighbor-label projection emerges from composition
+    /// of substrate primitives rather than as a per-implementor
+    /// `match self { A => "b-label", B => "c-label", C => "a-label" }`
+    /// block keyed on the declaration slot.
+    ///
+    /// Frontier inspiration: Racket's `(enum-cycle-next-label enum sym)`
+    /// — the label-projection sibling of `enum-cycle-next` on a closed
+    /// enumeration; Idris's `Fin n` with `showFin` composed through a
+    /// cyclic-successor projection on the finite-type universe; MLIR's
+    /// `RegisteredOperationName::cycleNext().getName()` folded to ONE
+    /// method on the declaration-order cyclic Op registry; Emacs's
+    /// `(symbol-name (enum-next-cyclic v))`. Translation through
+    /// pleme-io primitives: a pure default method composing the trait's
+    /// existing [`Self::cycle_next`] + [`Self::label`] surfaces
+    /// verbatim — no new dep, no new IR layer, no supertrait bound, no
+    /// `Option`-typed dispatch, no allocation.
+    fn cycle_next_label(self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::cycle_next(self))
+    }
+
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// neighbor immediately BEFORE `self` in [`Self::ALL`], WRAPPING
+    /// to [`Self::last_label`] at the head — the label of
+    /// [`Self::cycle_prev`] projected through [`Self::label`]. Returns
+    /// `&'static str`, never [`Option<&'static str>`].
+    ///
+    /// Sibling posture to [`Self::cycle_next_label`] one direction over
+    /// on the (forward, backward) direction partition of the closed-set
+    /// wrapping-label-neighbor surface: [`Self::cycle_next_label`] returns
+    /// the declaration-order successor label with tail-wrap-to-head-label,
+    /// this method returns the declaration-order predecessor label with
+    /// head-wrap-to-tail-label. See [`Self::cycle_next_label`] for the
+    /// shared design rationale, sibling 2×2 matrix, override axis,
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the backward-direction arm of the
+    /// same axis and inherits every property from the forward arm's
+    /// documentation, differing only in the [`Self::cycle_prev`] /
+    /// [`Self::last_label`] substrate primitives it composes.
+    ///
+    /// Default body composes [`Self::cycle_prev`] with [`Self::label`]
+    /// verbatim. The wrapping-neighbor-label contract — the head arm
+    /// returns [`Self::last_label`] for [`Self::first`] — is guaranteed
+    /// by the default composition through [`Self::cycle_prev`]'s head-
+    /// wrap-to-tail fold; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (63) pins the
+    /// composition against the natural `cycle_prev().label()` shape AND
+    /// the head-endpoint `T::last_label()` fold on every implementor.
+    /// `T::first().cycle_prev_label() == T::last_label()` is the natural
+    /// fixpoint the backward-wrapping-neighbor-label axis and the
+    /// head-endpoint anchor share, mirroring
+    /// `T::first().cycle_prev() == T::last()` one return-type axis over.
+    fn cycle_prev_label(self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::cycle_prev(self))
+    }
+
+    /// The canonical `&'static str` LABEL of the lexicographic-order
+    /// neighbor immediately AFTER `self` in [`Self::sorted_variants`],
+    /// WRAPPING to [`Self::sorted_first_label`] at the lex tail — the
+    /// label of [`Self::cycle_sorted_next`] projected through
+    /// [`Self::label`]. Returns `&'static str`, never
+    /// [`Option<&'static str>`].
+    ///
+    /// The lex-order forward-wrapping arm of the (declaration × lex) ×
+    /// (forward, backward) × (`Self`-return, `&'static str`-return)
+    /// × (Option-typed-bounded, wrapping) 2×2×2×2 = 16-corner label-
+    /// and-variant bounded-plus-wrapping traversal hypercube — one
+    /// ordering axis over from [`Self::cycle_next_label`] (declaration-
+    /// order wrapping-forward label), one return-type axis over from
+    /// [`Self::cycle_sorted_next`] (lex-order wrapping-forward variant),
+    /// and one bounded/wrapping axis over from [`Self::sorted_next_label`]
+    /// (lex-order bounded-forward label).
+    ///
+    /// Every generic consumer that renders the wrapping-forward-lex-
+    /// neighbor LABEL of a typed variant (an alphabetized-cyclic LSP
+    /// completion cursor that emits "next: <lex-label>" for the wrapping
+    /// lex-sorted successor unconditionally, an alphabetized round-robin
+    /// picker that logs the next lex-cyclic label as its rotation banner,
+    /// an alphabetized carousel widget's next-tab label renderer, a
+    /// lex-cyclic per-tick animation frame picker) binds to ONE typed
+    /// method on the trait rather than re-deriving the
+    /// `v.cycle_sorted_next().label()` two-primitive composition at every
+    /// callsite OR the `v.sorted_next_label().unwrap_or(T::sorted_first_label())`
+    /// three-primitive composition at every callsite.
+    ///
+    /// Default body composes [`Self::cycle_sorted_next`] with
+    /// [`Self::label`] verbatim. The wrapping-lex-neighbor-label contract
+    /// — the lex-tail arm returns [`Self::sorted_first_label`] for
+    /// [`Self::sorted_last`] — is guaranteed by the default composition
+    /// through [`Self::cycle_sorted_next`]'s lex-tail-wrap-to-lex-head
+    /// fold; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (64) pins the
+    /// composition against the natural `cycle_sorted_next().label()`
+    /// shape AND the lex-tail-endpoint `T::sorted_first_label()` fold on
+    /// every implementor.
+    /// `T::sorted_last().cycle_sorted_next_label() == T::sorted_first_label()`
+    /// is the natural fixpoint the forward-wrapping-lex-neighbor-label
+    /// axis and the lex-tail-endpoint anchor share, mirroring
+    /// `T::sorted_last().cycle_sorted_next() == T::sorted_first()` one
+    /// return-type axis over AND
+    /// `T::last().cycle_next_label() == T::first_label()` one ordering
+    /// axis over.
+    fn cycle_sorted_next_label(self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::cycle_sorted_next(self))
+    }
+
+    /// The canonical `&'static str` LABEL of the lexicographic-order
+    /// neighbor immediately BEFORE `self` in [`Self::sorted_variants`],
+    /// WRAPPING to [`Self::sorted_last_label`] at the lex head — the
+    /// label of [`Self::cycle_sorted_prev`] projected through
+    /// [`Self::label`]. Returns `&'static str`, never
+    /// [`Option<&'static str>`].
+    ///
+    /// Sibling posture to [`Self::cycle_sorted_next_label`] one direction
+    /// over on the (forward, backward) direction partition of the closed-
+    /// set wrapping-lex-label-neighbor surface. See
+    /// [`Self::cycle_sorted_next_label`] for the shared design rationale,
+    /// sibling 2×2 matrix, override axis, future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration.
+    ///
+    /// Default body composes [`Self::cycle_sorted_prev`] with
+    /// [`Self::label`] verbatim. The wrapping-lex-neighbor-label contract
+    /// — the lex-head arm returns [`Self::sorted_last_label`] for
+    /// [`Self::sorted_first`] — is guaranteed by the default composition
+    /// through [`Self::cycle_sorted_prev`]'s lex-head-wrap-to-lex-tail
+    /// fold; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (65) pins the
+    /// composition against the natural `cycle_sorted_prev().label()`
+    /// shape AND the lex-head-endpoint `T::sorted_last_label()` fold on
+    /// every implementor. Clauses (28) + (29) + (58) + (59) + (60) +
+    /// (61) + (62) + (63) + (64) + (65) together CLOSE the (declaration
+    /// × lex) × (forward, backward) × (Option-typed-bounded, wrapping) ×
+    /// (`Self`-return, `&'static str`-return) 2×2×2×2 = 16-corner
+    /// label-and-variant bounded-plus-wrapping traversal hypercube on
+    /// the closed-set neighbor surface.
+    fn cycle_sorted_prev_label(self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::cycle_sorted_prev(self))
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -10417,6 +10639,134 @@ where
         T::sorted_first().sorted_prev_label(),
         None,
         "{type_name}: T::sorted_first().sorted_prev_label() returned Some(_) — the (variant → backward lex-neighbor label) projection accepted the lex-head-endpoint boundary, silently folding a lex-head-boundary label render onto a wraparound to the lex-tail's label while the natural `sorted_prev().map(label)` composition should return `None`. Clauses (27) + (61) together pin `T::sorted_first().sorted_prev_label() == None` as the structural fixpoint the lex-head-endpoint anchor and the backward-lex-neighbor-label axis share, mirroring `T::sorted_first().sorted_prev() == None` one return-type axis over AND `T::first().prev_label() == None` one ordering axis over",
+    );
+    // (62) — For every variant `v` in `T::ALL`, `v.cycle_next_label()`
+    // MUST equal `v.cycle_next().label()`, AND
+    // `T::last().cycle_next_label()` MUST equal `T::first_label()`. The
+    // default trait body composes `label(cycle_next(self))` verbatim and
+    // satisfies both arms for free; the assertion catches a future
+    // implementor whose override drifts the wrapping-forward-neighbor-
+    // label projection (a divergent override that folds the tail label
+    // onto some interior label rather than the head label, silently
+    // bifurcating the cyclic label-rendered forward walk; a swapped
+    // override that returns the predecessor's label; a stale override
+    // that returns the wrong wrapping-neighbor label after a variant-
+    // listing edit reorders `T::ALL`) loudly rather than silently
+    // bifurcating the wrapping-forward-neighbor-label projection surface
+    // every downstream cyclic LSP completion cursor / round-robin picker
+    // rotation banner / carousel-widget next-tab renderer / per-tick
+    // animation-frame audit trail / Kubernetes wrapping-annotation
+    // stamper consumer routes through. Sibling posture to clauses (28) +
+    // (58) — clause (28) pins the `Self`-return wrapping-forward-neighbor
+    // projection at the tail-wraparound fixpoint, clause (58) pins the
+    // `&'static str`-return bounded-forward-neighbor projection at the
+    // tail-endpoint `None` fixpoint, this clause pins the `&'static str`-
+    // return wrapping-forward-neighbor projection against the composition
+    // of the wrapping variant primitive with the canonical label AND at
+    // the shared tail-wraparound label fixpoint
+    // (`T::last().cycle_next_label() == T::first_label()`).
+    for &v in T::ALL {
+        let expected_cycle_next_label = <T as ClosedSet>::label(v.cycle_next());
+        assert_eq!(
+            v.cycle_next_label(),
+            expected_cycle_next_label,
+            "{type_name}: {v:?}.cycle_next_label() drifted from {v:?}.cycle_next().label() — the direct (variant → wrapping-forward-neighbor label) projection no longer agrees with the natural cycle_next+label composition, so a downstream cyclic LSP completion cursor / round-robin picker rotation banner / carousel-widget next-tab renderer / per-tick animation-frame audit trail / Kubernetes wrapping-annotation stamper consumer that binds `v.cycle_next_label()` as its wrapping-forward-neighbor label-rendering surface would emit the wrong label for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::last().cycle_next_label(),
+        T::first_label(),
+        "{type_name}: T::last().cycle_next_label() drifted from T::first_label() — the (variant → wrapping-forward-neighbor label) projection at the tail-endpoint boundary did not fold onto the head-endpoint anchor label while the natural `cycle_next().label()` composition folds `T::last()` onto `T::first()` at the wraparound edge and then projects `T::first().label()`. Clauses (28) + (62) together pin `T::last().cycle_next_label() == T::first_label()` as the structural fixpoint the tail-endpoint anchor and the wrapping-forward-neighbor-label axis share, mirroring `T::last().cycle_next() == T::first()` one return-type axis over",
+    );
+    // (63) — For every variant `v` in `T::ALL`, `v.cycle_prev_label()`
+    // MUST equal `v.cycle_prev().label()`, AND
+    // `T::first().cycle_prev_label()` MUST equal `T::last_label()`. The
+    // default trait body composes `label(cycle_prev(self))` verbatim and
+    // satisfies both arms for free; the assertion catches a future
+    // implementor whose override drifts the wrapping-backward-neighbor-
+    // label projection loudly rather than silently bifurcating the
+    // wrapping-backward-neighbor-label projection surface every
+    // downstream cyclic-backward LSP completion cursor / round-robin
+    // picker rotation banner / carousel-widget prev-tab renderer /
+    // per-tick animation-frame audit trail consumer routes through.
+    // Sibling posture to clauses (28) + (59) on the (forward, backward)
+    // partition of the declaration-axis wrapping-label-neighbor surface.
+    for &v in T::ALL {
+        let expected_cycle_prev_label = <T as ClosedSet>::label(v.cycle_prev());
+        assert_eq!(
+            v.cycle_prev_label(),
+            expected_cycle_prev_label,
+            "{type_name}: {v:?}.cycle_prev_label() drifted from {v:?}.cycle_prev().label() — the direct (variant → wrapping-backward-neighbor label) projection no longer agrees with the natural cycle_prev+label composition, so a downstream cyclic-backward LSP completion cursor / round-robin picker rotation banner / carousel-widget prev-tab renderer / per-tick animation-frame audit trail consumer that binds `v.cycle_prev_label()` as its wrapping-backward-neighbor label-rendering surface would emit the wrong label for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::first().cycle_prev_label(),
+        T::last_label(),
+        "{type_name}: T::first().cycle_prev_label() drifted from T::last_label() — the (variant → wrapping-backward-neighbor label) projection at the head-endpoint boundary did not fold onto the tail-endpoint anchor label while the natural `cycle_prev().label()` composition folds `T::first()` onto `T::last()` at the wraparound edge and then projects `T::last().label()`. Clauses (28) + (63) together pin `T::first().cycle_prev_label() == T::last_label()` as the structural fixpoint the head-endpoint anchor and the wrapping-backward-neighbor-label axis share, mirroring `T::first().cycle_prev() == T::last()` one return-type axis over",
+    );
+    // (64) — For every variant `v` in `T::ALL`, `v.cycle_sorted_next_label()`
+    // MUST equal `v.cycle_sorted_next().label()`, AND
+    // `T::sorted_last().cycle_sorted_next_label()` MUST equal
+    // `T::sorted_first_label()`. The default trait body composes
+    // `label(cycle_sorted_next(self))` verbatim and satisfies both arms
+    // for free; the assertion catches a future implementor whose override
+    // drifts the wrapping-forward-lex-neighbor-label projection loudly
+    // rather than silently bifurcating the projection surface every
+    // downstream alphabetized-cyclic LSP completion cursor /
+    // alphabetized round-robin picker / alphabetized carousel-widget
+    // next-tab renderer / lex-cyclic per-tick animation-frame audit
+    // trail consumer routes through. Sibling posture to clauses (29) +
+    // (60) + (62) — clause (29) pins the `Self`-return wrapping-
+    // forward-lex-neighbor projection at the lex-tail-wraparound
+    // fixpoint, clause (60) pins the `&'static str`-return bounded-
+    // forward-lex-neighbor projection at the lex-tail-endpoint `None`
+    // fixpoint, clause (62) pins the `&'static str`-return wrapping-
+    // forward-declaration-neighbor projection at the tail-wraparound
+    // label fixpoint on the declaration axis, this clause pins the same
+    // `&'static str`-return wrapping-forward-neighbor projection on the
+    // LEX axis AND at the shared lex-tail-wraparound label fixpoint
+    // (`T::sorted_last().cycle_sorted_next_label() == T::sorted_first_label()`).
+    for &v in T::ALL {
+        let expected_cycle_sorted_next_label = <T as ClosedSet>::label(v.cycle_sorted_next());
+        assert_eq!(
+            v.cycle_sorted_next_label(),
+            expected_cycle_sorted_next_label,
+            "{type_name}: {v:?}.cycle_sorted_next_label() drifted from {v:?}.cycle_sorted_next().label() — the direct (variant → wrapping-forward lex-neighbor label) projection no longer agrees with the natural cycle_sorted_next+label composition, so a downstream alphabetized-cyclic LSP completion cursor / alphabetized round-robin picker / alphabetized carousel-widget next-tab renderer / lex-cyclic per-tick animation-frame audit trail consumer that binds `v.cycle_sorted_next_label()` as its wrapping-forward-lex-neighbor label-rendering surface would emit the wrong label for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::sorted_last().cycle_sorted_next_label(),
+        T::sorted_first_label(),
+        "{type_name}: T::sorted_last().cycle_sorted_next_label() drifted from T::sorted_first_label() — the (variant → wrapping-forward lex-neighbor label) projection at the lex-tail-endpoint boundary did not fold onto the lex-head-endpoint anchor label while the natural `cycle_sorted_next().label()` composition folds `T::sorted_last()` onto `T::sorted_first()` at the lex-wraparound edge and then projects `T::sorted_first().label()`. Clauses (29) + (64) together pin `T::sorted_last().cycle_sorted_next_label() == T::sorted_first_label()` as the structural fixpoint the lex-tail-endpoint anchor and the wrapping-forward-lex-neighbor-label axis share, mirroring `T::sorted_last().cycle_sorted_next() == T::sorted_first()` one return-type axis over AND `T::last().cycle_next_label() == T::first_label()` one ordering axis over",
+    );
+    // (65) — For every variant `v` in `T::ALL`, `v.cycle_sorted_prev_label()`
+    // MUST equal `v.cycle_sorted_prev().label()`, AND
+    // `T::sorted_first().cycle_sorted_prev_label()` MUST equal
+    // `T::sorted_last_label()`. The default trait body composes
+    // `label(cycle_sorted_prev(self))` verbatim and satisfies both arms
+    // for free; the assertion catches a future implementor whose override
+    // drifts the wrapping-backward-lex-neighbor-label projection loudly.
+    // Clauses (28) + (29) + (58) + (59) + (60) + (61) + (62) + (63) +
+    // (64) + (65) together CLOSE the (declaration × lex) × (forward,
+    // backward) × (Option-typed-bounded, wrapping) × (`Self`-return,
+    // `&'static str`-return) 2×2×2×2 = 16-corner label-and-variant
+    // bounded-plus-wrapping traversal hypercube on the closed-set
+    // neighbor surface. Every generic consumer that binds any of the
+    // sixteen projection methods sees the SAME structural answer at
+    // every crate boundary regardless of which ordering / direction /
+    // bounded-or-wrapping / return-type axis corner it walks.
+    for &v in T::ALL {
+        let expected_cycle_sorted_prev_label = <T as ClosedSet>::label(v.cycle_sorted_prev());
+        assert_eq!(
+            v.cycle_sorted_prev_label(),
+            expected_cycle_sorted_prev_label,
+            "{type_name}: {v:?}.cycle_sorted_prev_label() drifted from {v:?}.cycle_sorted_prev().label() — the direct (variant → wrapping-backward lex-neighbor label) projection no longer agrees with the natural cycle_sorted_prev+label composition, so a downstream alphabetized-cyclic-backward LSP completion cursor / alphabetized round-robin picker / alphabetized carousel-widget prev-tab renderer / lex-cyclic per-tick animation-frame audit trail consumer that binds `v.cycle_sorted_prev_label()` as its wrapping-backward-lex-neighbor label-rendering surface would emit the wrong label for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::sorted_first().cycle_sorted_prev_label(),
+        T::sorted_last_label(),
+        "{type_name}: T::sorted_first().cycle_sorted_prev_label() drifted from T::sorted_last_label() — the (variant → wrapping-backward lex-neighbor label) projection at the lex-head-endpoint boundary did not fold onto the lex-tail-endpoint anchor label while the natural `cycle_sorted_prev().label()` composition folds `T::sorted_first()` onto `T::sorted_last()` at the lex-wraparound edge and then projects `T::sorted_last().label()`. Clauses (29) + (65) together pin `T::sorted_first().cycle_sorted_prev_label() == T::sorted_last_label()` as the structural fixpoint the lex-head-endpoint anchor and the wrapping-backward-lex-neighbor-label axis share, mirroring `T::sorted_first().cycle_sorted_prev() == T::sorted_last()` one return-type axis over AND `T::first().cycle_prev_label() == T::last_label()` one ordering axis over",
     );
 }
 
@@ -17544,6 +17894,451 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a cycle_sorted_prev() override that folds the lex head onto an interior variant rather than T::sorted_last()",
+        );
+    }
+
+    #[test]
+    fn cycle_next_label_walks_declaration_order_forward_chain_with_tail_wrap_to_head_label() {
+        // The wrapping-forward-neighbor-label projection —
+        // `v.cycle_next_label()` walks `T::ALL` one slot forward from
+        // each variant AND projects the canonical label of the wrapping
+        // successor, folding the tail-endpoint boundary onto the head-
+        // endpoint anchor label (`T::first_label()`) at the cyclic edge.
+        // Declaration order on `StubKind` is [Alpha, Beta, Gamma] with
+        // canonical labels `["alpha", "beta", "gamma"]`, so the forward-
+        // wrapping-label chain reads `Alpha → "beta" → Beta → "gamma"
+        // → Gamma → "alpha" (wraparound) → Alpha → …`, an infinite
+        // cyclic label walk. Sibling posture to
+        // `cycle_next_walks_declaration_order_forward_chain_with_tail_wrap`
+        // one return-type axis over on the (`Self`, `&'static str`)
+        // partition of the wrapping-forward-neighbor surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next_label(StubKind::Alpha),
+            "beta",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next_label(StubKind::Beta),
+            "gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next_label(StubKind::Gamma),
+            "alpha",
+        );
+    }
+
+    #[test]
+    fn cycle_prev_label_walks_declaration_order_backward_chain_with_head_wrap_to_tail_label() {
+        // The wrapping-backward-neighbor-label projection —
+        // `v.cycle_prev_label()` walks `T::ALL` one slot backward from
+        // each variant AND projects the canonical label of the wrapping
+        // predecessor, folding the head-endpoint boundary onto the tail-
+        // endpoint anchor label (`T::last_label()`) at the cyclic edge.
+        // On `StubKind` the backward-wrapping-label chain reads
+        // `Alpha → "gamma" (wraparound) → Gamma → "beta" → Beta →
+        // "alpha" → Alpha → …`.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev_label(StubKind::Alpha),
+            "gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev_label(StubKind::Beta),
+            "alpha",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev_label(StubKind::Gamma),
+            "beta",
+        );
+    }
+
+    #[test]
+    fn last_cycle_next_label_and_first_cycle_prev_label_pin_the_endpoint_wraparound_label_fixpoints(
+    ) {
+        // The endpoint-anchor / wrapping-neighbor-label-axis fixpoints —
+        // `T::last().cycle_next_label() == T::first_label()` AND
+        // `T::first().cycle_prev_label() == T::last_label()`. The two
+        // fixpoints thread the tail-endpoint anchor forward through the
+        // wrapping-forward-neighbor-label axis onto the head-endpoint
+        // anchor's canonical label, AND the head-endpoint anchor
+        // backward through the wrapping-backward-neighbor-label axis
+        // onto the tail-endpoint anchor's canonical label. Sibling
+        // posture to
+        // `last_cycle_next_and_first_cycle_prev_pin_the_endpoint_wraparound_fixpoints`
+        // one return-type axis over on the (`Self`, `&'static str`)
+        // partition of the closed-set wrapping-neighbor endpoint-
+        // fixpoint surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_next_label(<StubKind as ClosedSet>::last()),
+            <StubKind as ClosedSet>::first_label(),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_prev_label(<StubKind as ClosedSet>::first()),
+            <StubKind as ClosedSet>::last_label(),
+        );
+    }
+
+    #[test]
+    fn cycle_sorted_next_label_walks_lex_order_forward_chain_with_lex_tail_wrap_to_lex_head_label()
+    {
+        // The wrapping-forward-lex-neighbor-label projection —
+        // `v.cycle_sorted_next_label()` walks `T::sorted_variants()` one
+        // lex slot forward from each variant AND projects the canonical
+        // label of the wrapping lex-successor, folding the lex-tail-
+        // endpoint boundary onto the lex-head-endpoint anchor label
+        // (`T::sorted_first_label()`) at the cyclic edge. On `StubKind`
+        // (declaration order aligned with lex order) the forward-
+        // wrapping-lex-label chain reads `Alpha → "beta" → Beta →
+        // "gamma" → Gamma → "alpha" (wraparound) → Alpha → …`.
+        // The divergent-ordering
+        // `cycle_sorted_next_label_and_cycle_sorted_prev_label_walk_lex_order_not_declaration_order`
+        // sweep below pins the lex-axis binding on a stub whose two
+        // orderings intentionally diverge.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_next_label(StubKind::Alpha),
+            "beta",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_next_label(StubKind::Beta),
+            "gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_next_label(StubKind::Gamma),
+            "alpha",
+        );
+    }
+
+    #[test]
+    fn cycle_sorted_prev_label_walks_lex_order_backward_chain_with_lex_head_wrap_to_lex_tail_label()
+    {
+        // The wrapping-backward-lex-neighbor-label projection —
+        // `v.cycle_sorted_prev_label()` walks `T::sorted_variants()` one
+        // lex slot backward from each variant AND projects the canonical
+        // label of the wrapping lex-predecessor, folding the lex-head-
+        // endpoint boundary onto the lex-tail-endpoint anchor label
+        // (`T::sorted_last_label()`) at the cyclic edge.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_prev_label(StubKind::Alpha),
+            "gamma",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_prev_label(StubKind::Beta),
+            "alpha",
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_prev_label(StubKind::Gamma),
+            "beta",
+        );
+    }
+
+    #[test]
+    fn sorted_last_cycle_sorted_next_label_and_sorted_first_cycle_sorted_prev_label_pin_the_lex_endpoint_wraparound_label_fixpoints(
+    ) {
+        // The lex-endpoint-anchor / wrapping-lex-neighbor-label-axis
+        // fixpoints — `T::sorted_last().cycle_sorted_next_label() ==
+        // T::sorted_first_label()` AND
+        // `T::sorted_first().cycle_sorted_prev_label() ==
+        // T::sorted_last_label()`. Sibling posture to
+        // `sorted_last_cycle_sorted_next_and_sorted_first_cycle_sorted_prev_pin_the_lex_endpoint_wraparound_fixpoints`
+        // one return-type axis over on the (`Self`, `&'static str`)
+        // partition of the closed-set wrapping-lex-neighbor endpoint-
+        // fixpoint surface — AND
+        // `last_cycle_next_label_and_first_cycle_prev_label_pin_the_endpoint_wraparound_label_fixpoints`
+        // one ordering axis over on the (declaration, lex) partition of
+        // the wrapping-neighbor-label endpoint-fixpoint surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_next_label(
+                <StubKind as ClosedSet>::sorted_last(),
+            ),
+            <StubKind as ClosedSet>::sorted_first_label(),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::cycle_sorted_prev_label(
+                <StubKind as ClosedSet>::sorted_first(),
+            ),
+            <StubKind as ClosedSet>::sorted_last_label(),
+        );
+    }
+
+    #[test]
+    fn cycle_sorted_next_label_and_cycle_sorted_prev_label_walk_lex_order_not_declaration_order() {
+        // Arbitrary-declaration-order sweep — the wrapping-lex-neighbor-
+        // label pair keys on LEX order (`T::sorted_variants()`'s layout),
+        // NOT declaration order. On a deliberately-reverse stub whose
+        // `T::ALL` is `[Gamma, Beta, Alpha]` but whose lex order is
+        // `[Alpha, Beta, Gamma]`, the lex-cyclic forward-label walk reads
+        // `Alpha → "beta" → Beta → "gamma" → Gamma → "alpha"
+        // (lex-wraparound)`, NOT the declaration-order `Gamma →
+        // "beta" → Beta → "alpha" → Alpha → "gamma" (declaration-
+        // wraparound)`. A regression that keyed on declaration slot
+        // (rather than lex slot) would pass on `StubKind` (where
+        // declaration order aligns with lex order) but silently bifurcate
+        // on this reverse stub.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum CycleSortedLabelReverseKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownCycleSortedLabelReverseKind(pub String);
+        impl core::fmt::Display for UnknownCycleSortedLabelReverseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown cycle sorted label reverse kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for CycleSortedLabelReverseKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "cycle sorted label reverse kind";
+            type Unknown = UnknownCycleSortedLabelReverseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownCycleSortedLabelReverseKind(s.to_owned())
+            }
+        }
+        // Lex-order cyclic forward-label walk — [Alpha, Beta, Gamma]
+        // under lex ordering → lex-tail-wraparound onto "alpha" at the
+        // Gamma edge.
+        assert_eq!(
+            <CycleSortedLabelReverseKind as ClosedSet>::cycle_sorted_next_label(
+                CycleSortedLabelReverseKind::Alpha,
+            ),
+            "beta",
+        );
+        assert_eq!(
+            <CycleSortedLabelReverseKind as ClosedSet>::cycle_sorted_next_label(
+                CycleSortedLabelReverseKind::Beta,
+            ),
+            "gamma",
+        );
+        assert_eq!(
+            <CycleSortedLabelReverseKind as ClosedSet>::cycle_sorted_next_label(
+                CycleSortedLabelReverseKind::Gamma,
+            ),
+            "alpha",
+        );
+        // Lex-order cyclic backward-label walk — mirror.
+        assert_eq!(
+            <CycleSortedLabelReverseKind as ClosedSet>::cycle_sorted_prev_label(
+                CycleSortedLabelReverseKind::Alpha,
+            ),
+            "gamma",
+        );
+        assert_eq!(
+            <CycleSortedLabelReverseKind as ClosedSet>::cycle_sorted_prev_label(
+                CycleSortedLabelReverseKind::Beta,
+            ),
+            "alpha",
+        );
+        assert_eq!(
+            <CycleSortedLabelReverseKind as ClosedSet>::cycle_sorted_prev_label(
+                CycleSortedLabelReverseKind::Gamma,
+            ),
+            "beta",
+        );
+        // Clauses (64) + (65) hold on the reverse stub — the well-
+        // formedness sweep validates the wrapping-lex-neighbor-label pair
+        // composes through the natural `cycle_sorted_next().label()` /
+        // `cycle_sorted_prev().label()` shape on every variant even when
+        // declaration order and lex order diverge.
+        super::assert_closed_set_well_formed::<CycleSortedLabelReverseKind>();
+    }
+
+    #[test]
+    fn cycle_next_label_and_cycle_prev_label_on_singleton_closed_set_both_return_the_sole_label() {
+        // The wrapping-neighbor-label-axis degenerate case — a singleton
+        // closed set (one variant) has
+        // `T::ALL[0] == T::first() == T::last() == T::sorted_first() ==
+        // T::sorted_last()`, so BOTH
+        // `T::last().cycle_next_label() == T::first_label()` AND
+        // `T::first().cycle_prev_label() == T::last_label()` collapse
+        // onto `Only.cycle_next_label() == "only" == Only.cycle_prev_label()`
+        // — every wrapping-neighbor-label walk from the sole variant
+        // must return the sole variant's label. And the same collapse
+        // holds on the lex axis:
+        // `Only.cycle_sorted_next_label() == "only" ==
+        // Only.cycle_sorted_prev_label()`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum CycleLabelSingletonKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownCycleLabelSingletonKind(pub String);
+        impl core::fmt::Display for UnknownCycleLabelSingletonKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown cycle label singleton kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for CycleLabelSingletonKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "cycle label singleton kind";
+            type Unknown = UnknownCycleLabelSingletonKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownCycleLabelSingletonKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <CycleLabelSingletonKind as ClosedSet>::cycle_next_label(CycleLabelSingletonKind::Only,),
+            "only",
+        );
+        assert_eq!(
+            <CycleLabelSingletonKind as ClosedSet>::cycle_prev_label(CycleLabelSingletonKind::Only,),
+            "only",
+        );
+        assert_eq!(
+            <CycleLabelSingletonKind as ClosedSet>::cycle_sorted_next_label(
+                CycleLabelSingletonKind::Only,
+            ),
+            "only",
+        );
+        assert_eq!(
+            <CycleLabelSingletonKind as ClosedSet>::cycle_sorted_prev_label(
+                CycleLabelSingletonKind::Only,
+            ),
+            "only",
+        );
+        // Clauses (62) + (63) + (64) + (65) all hold — the well-
+        // formedness sweep passes on the singleton stub since every
+        // wrapping-label projection collapses onto the sole variant's
+        // canonical label at every fixpoint.
+        super::assert_closed_set_well_formed::<CycleLabelSingletonKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_cycle_next_label_and_composition() {
+        // The well-formedness sweep's (62) clause —
+        // `v.cycle_next_label()` MUST equal `v.cycle_next().label()` on
+        // every variant AND `T::last().cycle_next_label()` MUST equal
+        // `T::first_label()`. A hand-impl'd implementor whose override
+        // drifts the wrapping-forward-neighbor-label projection (folds
+        // the tail label onto some interior label rather than the head
+        // anchor label, silently bifurcating the wraparound label edge
+        // every cyclic LSP completion cursor / round-robin picker
+        // rotation banner / carousel-widget next-tab renderer consumer
+        // routes through) fails the sweep loudly. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_cycle_next_and_composition`
+        // one return-type axis over on the (`Self`, `&'static str`)
+        // partition of clause (62).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedCycleNextLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedCycleNextLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedCycleNextLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted cycle next label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedCycleNextLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted cycle next label kind";
+            type Unknown = UnknownDriftedCycleNextLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedCycleNextLabelKind(s.to_owned())
+            }
+            fn cycle_next_label(self) -> &'static str {
+                // Drifted override — folds the tail onto "middle" rather
+                // than the head anchor label ("head"), silently
+                // bifurcating the wraparound label edge every cyclic
+                // banner-rendering consumer routes through.
+                match self {
+                    Self::Head => "middle",
+                    Self::Middle => "tail",
+                    Self::Tail => "middle",
+                }
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedCycleNextLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a cycle_next_label() override that folds the tail label onto an interior label rather than T::first_label()",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_cycle_sorted_prev_label_and_composition()
+    {
+        // The well-formedness sweep's (65) clause —
+        // `v.cycle_sorted_prev_label()` MUST equal
+        // `v.cycle_sorted_prev().label()` on every variant AND
+        // `T::sorted_first().cycle_sorted_prev_label()` MUST equal
+        // `T::sorted_last_label()`. A hand-impl'd implementor whose
+        // override drifts the wrapping-backward-lex-neighbor-label
+        // projection (folds the lex-head label onto some interior label
+        // rather than the lex-tail anchor label, silently bifurcating
+        // the lex-wraparound label edge every alphabetized-cyclic-
+        // backward consumer routes through) fails the sweep loudly.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_cycle_next_label_and_composition`
+        // three axes over on the (declaration, lex) × (forward, backward)
+        // partition of clauses (62) + (65).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedCycleSortedPrevLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedCycleSortedPrevLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedCycleSortedPrevLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted cycle sorted prev label kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DriftedCycleSortedPrevLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted cycle sorted prev label kind";
+            type Unknown = UnknownDriftedCycleSortedPrevLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedCycleSortedPrevLabelKind(s.to_owned())
+            }
+            fn cycle_sorted_prev_label(self) -> &'static str {
+                // Drifted override — folds the lex head onto "middle"
+                // rather than the lex-tail anchor label ("tail"),
+                // silently bifurcating the lex-wraparound label edge.
+                match self {
+                    Self::Head => "middle",
+                    Self::Middle => "head",
+                    Self::Tail => "middle",
+                }
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedCycleSortedPrevLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a cycle_sorted_prev_label() override that folds the lex head label onto an interior label rather than T::sorted_last_label()",
         );
     }
 

@@ -1621,6 +1621,172 @@ pub trait ClosedSet: Sized + Copy + 'static {
         Self::ALL[Self::ALL.len() - 1]
     }
 
+    /// The declaration-order head-endpoint label — `T::first().label()`
+    /// projected onto the trait surface as ONE call. Closes the
+    /// (`Self`, `&'static str`) return-type axis on the declaration-
+    /// axis (head, tail) endpoint-anchor partition at the head slot.
+    ///
+    /// Sibling posture to [`Self::first`] one return-type axis over on
+    /// the (typed-variant `Self`, canonical-label `&'static str`)
+    /// partition of the closed-set declaration-axis head-endpoint
+    /// return-shape column — [`Self::first`] materializes the typed
+    /// head-endpoint variant, this method materializes its canonical
+    /// label WITHOUT threading the caller through the two-hop
+    /// `T::first().label()` composition. Sibling posture to
+    /// [`Self::endpoint_labels`] one aggregation-shape axis over on
+    /// the (single-slot `&'static str`, pair-tuple `(&'static str,
+    /// &'static str)`) partition of the closed-set declaration-axis
+    /// endpoint-label return-shape column — [`Self::endpoint_labels`]
+    /// aggregates BOTH endpoint-anchor labels into a tuple, this
+    /// method returns ONLY the head-endpoint label without forcing
+    /// the caller to destructure the pair and drop the tail slot.
+    ///
+    /// The (return-type × endpoint-direction) 2×2 matrix over the
+    /// declaration-axis endpoint-anchor return-shape column partitions
+    /// post-lift:
+    ///
+    /// | Return type \\ Endpoint  | Head                     | Tail                    |
+    /// |--------------------------|--------------------------|-------------------------|
+    /// | `Self` (typed variant)   | [`Self::first`]          | [`Self::last`]          |
+    /// | `&'static str` (label)   | [`Self::first_label`]    | [`Self::last_label`]    |
+    ///
+    /// Every generic consumer that wants the declaration-order head-
+    /// endpoint canonical label as ONE `&'static str` (a static
+    /// diagnostic banner that renders `"first: <head-label>"` without
+    /// materializing the typed anchor, a bounded-loop guard that
+    /// short-circuits on `s == T::first_label()` before decoding the
+    /// input string into a typed variant, a per-implementor coherence
+    /// probe that anchors an edge assertion at the head-endpoint
+    /// label slot, a completion UI that renders the declaration head
+    /// anchor by label without threading the caller through a
+    /// `T::first().label()` two-primitive composition) binds to ONE
+    /// typed method rather than hand-rolling either the
+    /// `T::first().label()` composition (which re-derives the same
+    /// two-primitive projection at every callsite) OR a per-
+    /// implementor `HEAD_LABEL: &'static str = "..."` const that
+    /// silently drifts from [`Self::label`] on rename.
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::first`]) with the per-slot [`Self::label`] projection
+    /// — the head-endpoint label is a typed CONSEQUENCE of the
+    /// (typed head anchor) primitive composed with the (label
+    /// projection) primitive, not a per-implementor `const HEAD_LABEL:
+    /// &'static str = "..."` declaration. Implementors override only
+    /// when the head-endpoint label needs to diverge from the natural
+    /// `T::first().label()` shape (no production implementor reaches
+    /// for this today; the axis exists for the same reason `via` /
+    /// `set_label` / `labels` / `first` / `last` / `endpoint_labels`
+    /// overrides exist — a typed escape hatch rather than forcing
+    /// the implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::first`] OR overrides [`Self::label`]
+    /// propagates the override through this default body
+    /// automatically; the head-endpoint-label surface funnels through
+    /// the declaration head-anchor primitive on the anchor-materialization
+    /// column AND the per-slot label projection on the rendering
+    /// column.
+    ///
+    /// The head-endpoint-label contract — `T::first_label() ==
+    /// T::first().label()` on every implementor — is guaranteed by
+    /// the default composition through [`Self::first`] and
+    /// [`Self::label`]; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (46) pins the
+    /// composition against the natural `T::first().label()` shape on
+    /// every implementor so a passing well-formedness sweep means
+    /// every generic consumer can call [`Self::first_label`] on any
+    /// typed carrier and expect the same `&'static str` answer at
+    /// every crate boundary.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::first`] returns the sole
+    /// variant and this method returns its label, mirroring
+    /// [`Self::last_label`]'s singleton behavior one endpoint-
+    /// direction axis over. Both head and tail label projections
+    /// collapse onto the same label, preserving the label
+    /// projection SHAPE at the boundary-cardinality edge where the
+    /// two SLOTS collapse onto the same anchor.
+    ///
+    /// THEORY.md §III — the typescape; the (declaration head anchor →
+    /// canonical label) singular projection becomes a TYPE projection
+    /// on the trait rather than a per-consumer inline
+    /// `T::first().label()` two-primitive composition at every
+    /// downstream head-label rendering site.
+    /// THEORY.md §V.1 — knowable platform; the (declaration head
+    /// anchor → label) projection was an unnamed compound of
+    /// [`Self::first`] + [`Self::label`] pre-lift; naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of TWO
+    /// substrate primitives — generic consumers see ONE method, not
+    /// one head-label-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (declaration
+    /// head anchor → label) projection emerges from the composition
+    /// of TWO substrate primitives ([`Self::first`], [`Self::label`])
+    /// rather than as a per-implementor `const HEAD_LABEL: &'static
+    /// str = "..."` declaration. A future tightening of either
+    /// primitive (a future perfect-hash label lookup, a future
+    /// const-fn axis that makes the projection callable in const
+    /// contexts) propagates to every closed-set head-label consumer
+    /// through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-first-label` on closed
+    /// enumerations (the singular head-anchor-label projection on the
+    /// declaration-order chain); Idris's `showFirst` on `Fin (S n)`
+    /// non-empty finite-cardinality head-anchor projections; Haskell's
+    /// `show minBound` on the `Bounded + Show` type-class pair (the
+    /// head-anchor-label rendering composed from two prelude
+    /// primitives on the bounded chain); MLIR's
+    /// `RegisteredOperationName::begin_name()` on the declaration-
+    /// order Op registry; Rust's `strum::EnumIter::next().map(|v|
+    /// v.get_str())` composed through the iterator API. Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's existing [`Self::first`] surface with the per-slot
+    /// [`Self::label`] projection — no new dep, no new IR layer, no
+    /// supertrait bound, no allocation.
+    fn first_label() -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::first())
+    }
+
+    /// The declaration-order tail-endpoint label — `T::last().label()`
+    /// projected onto the trait surface as ONE call. Closes the
+    /// (`Self`, `&'static str`) return-type axis on the declaration-
+    /// axis (head, tail) endpoint-anchor partition at the tail slot.
+    ///
+    /// Sibling posture to [`Self::first_label`] one endpoint-direction
+    /// axis over on the (head, tail) partition of the declaration-
+    /// axis endpoint-label return-shape column: [`Self::first_label`]
+    /// returns the declaration-order head-anchor label, this method
+    /// returns the declaration-order tail-anchor label. See
+    /// [`Self::first_label`] for the shared design rationale, sibling
+    /// matrix, override axis, future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the tail-
+    /// direction arm of the same axis and inherits every property
+    /// from the head arm's documentation, differing only in the
+    /// composition through [`Self::last`] instead of [`Self::first`].
+    ///
+    /// Default body composes ONE substrate primitive ([`Self::last`])
+    /// with the per-slot [`Self::label`] projection. The tail-endpoint-
+    /// label contract — `T::last_label() == T::last().label()` on
+    /// every implementor — is guaranteed by the default composition;
+    /// the well-formedness contract [`assert_closed_set_well_formed`]'s
+    /// new clause (47) pins the composition against the natural
+    /// `T::last().label()` shape on every implementor.
+    ///
+    /// Clauses (18) + (34) + (36) + (46) + (47) together CLOSE the
+    /// (return-type × endpoint-direction × aggregation-shape) 2×2×2
+    /// = 8-corner projection cube on the declaration-axis endpoint-
+    /// anchor return-shape surface: [`Self::first`] / [`Self::last`]
+    /// on (`Self`, head/tail, singular) — clauses (18); [`Self::endpoints`]
+    /// on ((`Self`, `Self`), (head, tail), pair-tuple) — clause (34);
+    /// [`Self::endpoint_labels`] on ((`&'static str`, `&'static str`),
+    /// (head, tail), pair-tuple) — clause (36); and now
+    /// [`Self::first_label`] / [`Self::last_label`] on (`&'static str`,
+    /// head/tail, singular) — clauses (46) + (47). Every generic
+    /// consumer that binds any of the six projection methods sees the
+    /// SAME endpoint-anchor answer at every crate boundary regardless
+    /// of which return-type axis / endpoint-direction / aggregation-
+    /// shape corner it walks.
+    fn last_label() -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::last())
+    }
+
     /// The declaration-order head-endpoint membership predicate —
     /// `true` when `self` is [`Self::first`], `false` otherwise.
     /// Closes the (endpoint-anchor `Self`-returning, endpoint-membership
@@ -8171,6 +8337,86 @@ where
             "{type_name}: T::sorted_endpoint_labels_joined({sep:?}) drifted from [T::sorted_endpoint_labels().0, T::sorted_endpoint_labels().1].join({sep:?}) — the lex-axis alphabetized endpoint-labels-as-string rendering every alphabetized-boundary-badge / alphabetized-boundary-diagnostic / alphabetized-boundary-audit-event consumer routes through no longer matches the natural sorted-endpoint-labels-then-join composition",
         );
     }
+    // (46) — `T::first_label()` MUST equal `T::first().label()` — the
+    // singular head-endpoint label projection on the declaration-axis
+    // endpoint-label return-shape column composes the (declaration
+    // head anchor) primitive with the (per-slot label) projection. The
+    // default trait body composes `T::label(T::first())` verbatim and
+    // satisfies the clause for free; the assertion catches a future
+    // implementor whose override drifts the head-label projection (a
+    // stale override that hard-codes a literal `&'static str` detached
+    // from [`Self::label`] — silently forking the head-anchor
+    // rendering from the label-projection primitive every downstream
+    // head-label consumer routes through; a permissive override that
+    // returns a strictly-interior variant's label — silently routing
+    // an interior slot into the head-endpoint-label projection; a fold
+    // override that returns `T::last().label()` — silently swapping
+    // the head-endpoint label onto the tail-endpoint label; an
+    // override that returns [`Self::endpoint_labels`]'s slot-1
+    // instead of slot-0 — silently bifurcating the singular head-
+    // label projection with the pair-tuple's tail-label slot; a
+    // fabricated override that returns the empty string — silently
+    // detaching the head-label rendering from every canonical label
+    // in [`T::ALL`]) loudly rather than silently bifurcating the
+    // singular head-endpoint-label projection surface every downstream
+    // head-label consumer routes through. Sibling posture to clauses
+    // (18) + (34) + (36) — clause (18) pins the individual (head,
+    // tail) scalar endpoint-anchor projections against `T::ALL[0]` /
+    // `T::ALL[T::CARDINALITY - 1]`, clause (34) pins the (typed
+    // variant, typed variant) pair-aggregation projection, clause (36)
+    // pins the (label, label) pair-aggregation projection, this
+    // clause pins the singular `&'static str` head-label projection
+    // against the composition of the scalar head-endpoint-anchor
+    // primitive with the per-slot label projection. Clauses (18) +
+    // (36) + (46) together open the (return-type × aggregation-shape)
+    // 2×2 matrix over the declaration-axis head-endpoint anchor's
+    // return-shape column at THREE of the four corners (typed-variant
+    // singular / (typed-variant, typed-variant) pair-tuple / label
+    // singular); the fourth corner is the (label, label) pair-tuple
+    // arm covered by clause (36) on the head-slot column.
+    assert_eq!(
+        T::first_label(),
+        T::first().label(),
+        "{type_name}: T::first_label() drifted from T::first().label() — the singular declaration-order head-endpoint label projection no longer agrees with the natural `T::first().label()` two-primitive composition, so a downstream head-label banner / head-label completion / head-label coherence probe consumer that binds `T::first_label()` as its singular head-anchor label query surface would render the wrong `&'static str`",
+    );
+    // (47) — `T::last_label()` MUST equal `T::last().label()` — the
+    // singular tail-endpoint label projection on the declaration-axis
+    // endpoint-label return-shape column composes the (declaration
+    // tail anchor) primitive with the (per-slot label) projection. The
+    // default trait body composes `T::label(T::last())` verbatim and
+    // satisfies the clause for free; the assertion catches a future
+    // implementor whose override drifts the tail-label projection (a
+    // stale override that hard-codes a literal `&'static str` detached
+    // from [`Self::label`]; a permissive override that returns a
+    // strictly-interior variant's label — silently routing an interior
+    // slot into the tail-endpoint-label projection; a fold override
+    // that returns `T::first().label()` — silently swapping the tail-
+    // endpoint label onto the head-endpoint label; an override that
+    // returns [`Self::endpoint_labels`]'s slot-0 instead of slot-1 —
+    // silently bifurcating the singular tail-label projection with the
+    // pair-tuple's head-label slot; a fabricated override that returns
+    // the empty string) loudly rather than silently bifurcating the
+    // singular tail-endpoint-label projection surface every downstream
+    // tail-label consumer routes through. Sibling posture to clause
+    // (46) one endpoint-direction axis over on the (head, tail)
+    // partition of the declaration-axis singular endpoint-label
+    // return-shape column. Clauses (18) + (34) + (36) + (46) + (47)
+    // together CLOSE the (return-type × endpoint-direction ×
+    // aggregation-shape) 2×2×2 = 8-corner projection cube on the
+    // declaration-axis endpoint-anchor return-shape surface: (`Self`,
+    // head/tail, singular) at clauses (18); ((`Self`, `Self`), (head,
+    // tail), pair) at clause (34); ((`&'static str`, `&'static str`),
+    // (head, tail), pair) at clause (36); and (`&'static str`,
+    // head/tail, singular) at clauses (46) + (47). Every generic
+    // consumer that binds any of the six declaration-axis projection
+    // methods sees the SAME endpoint-anchor answer at every crate
+    // boundary regardless of which return-type axis / endpoint-
+    // direction / aggregation-shape corner it walks.
+    assert_eq!(
+        T::last_label(),
+        T::last().label(),
+        "{type_name}: T::last_label() drifted from T::last().label() — the singular declaration-order tail-endpoint label projection no longer agrees with the natural `T::last().label()` two-primitive composition, so a downstream tail-label banner / tail-label completion / tail-label coherence probe consumer that binds `T::last_label()` as its singular tail-anchor label query surface would render the wrong `&'static str`",
+    );
 }
 
 #[cfg(test)]
@@ -15306,6 +15552,214 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_endpoint_labels() override that folds the lex tail label onto an interior variant's label rather than composing (T::sorted_first().label(), T::sorted_last().label())",
+        );
+    }
+
+    #[test]
+    fn first_label_returns_declaration_order_head_endpoint_label() {
+        // The singular declaration-order head-endpoint label projection
+        // returns `T::first().label()`. `StubKind`'s declaration order
+        // is `[Alpha, Beta, Gamma]`, so `T::first_label()` returns
+        // `"alpha"`. Sibling posture to
+        // `endpoint_labels_returns_declaration_order_head_and_tail_labels_as_a_tuple`
+        // one aggregation-shape axis over on the (singular `&'static
+        // str`, pair-tuple `(&'static str, &'static str)`) partition
+        // of the closed-set declaration-axis endpoint-label return-
+        // shape column — the singular projection returns the head
+        // slot of the tuple projection.
+        assert_eq!(<StubKind as ClosedSet>::first_label(), "alpha");
+    }
+
+    #[test]
+    fn last_label_returns_declaration_order_tail_endpoint_label() {
+        // The singular declaration-order tail-endpoint label projection
+        // returns `T::last().label()`. `StubKind`'s declaration order
+        // is `[Alpha, Beta, Gamma]`, so `T::last_label()` returns
+        // `"gamma"`. Sibling posture to
+        // `first_label_returns_declaration_order_head_endpoint_label`
+        // one endpoint-direction axis over on the (head, tail)
+        // partition of the declaration-axis singular endpoint-label
+        // return-shape column.
+        assert_eq!(<StubKind as ClosedSet>::last_label(), "gamma");
+    }
+
+    #[test]
+    fn first_label_and_last_label_recover_endpoint_labels_tuple_slots() {
+        // The (singular head-label, singular tail-label) pair
+        // recovers the `T::endpoint_labels()` tuple slot-by-slot on
+        // every implementor — the singular projections are the two
+        // scalar shadows of the pair-aggregation projection, so any
+        // implementor whose singular arms drift from
+        // `endpoint_labels().0` / `endpoint_labels().1` would be
+        // caught here even if the well-formedness clauses (46) + (47)
+        // were bypassed. Anchors the (singular, pair) aggregation-
+        // shape axis on the declaration-axis endpoint-label return-
+        // shape column against structural equality with the pre-
+        // existing pair-tuple surface.
+        let (head, tail) = <StubKind as ClosedSet>::endpoint_labels();
+        assert_eq!(<StubKind as ClosedSet>::first_label(), head);
+        assert_eq!(<StubKind as ClosedSet>::last_label(), tail);
+    }
+
+    #[test]
+    fn first_label_and_last_label_collapse_on_singleton_closed_set() {
+        // Singleton degeneracy — a closed set with one variant has
+        // `T::first()` and `T::last()` both return the sole variant,
+        // so `T::first_label()` and `T::last_label()` both return
+        // the sole variant's label. The singular projection preserves
+        // its `&'static str` SHAPE at the boundary-cardinality edge
+        // where the two SLOTS collapse onto the same anchor label.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonFirstLastLabelStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonFirstLastLabelStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonFirstLastLabelStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown singleton first last label stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for SingletonFirstLastLabelStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton first last label stub kind";
+            type Unknown = UnknownSingletonFirstLastLabelStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonFirstLastLabelStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonFirstLastLabelStubKind as ClosedSet>::first_label(),
+            "only",
+        );
+        assert_eq!(
+            <SingletonFirstLastLabelStubKind as ClosedSet>::last_label(),
+            "only",
+        );
+        assert_eq!(
+            <SingletonFirstLastLabelStubKind as ClosedSet>::first_label(),
+            <SingletonFirstLastLabelStubKind as ClosedSet>::last_label(),
+        );
+        super::assert_closed_set_well_formed::<SingletonFirstLastLabelStubKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_first_label_and_first_label_composition()
+    {
+        // The well-formedness sweep's (46) clause —
+        // `T::first_label()` MUST equal `T::first().label()`. A hand-
+        // impl'd implementor whose override drifts the singular head-
+        // label projection (hard-codes a literal detached from
+        // [`Self::label`], routes a strictly-interior variant's label
+        // into the head-endpoint slot, folds the head-label onto the
+        // tail-label at the endpoint-direction axis) fails the sweep
+        // loudly rather than silently bifurcating the declaration-
+        // axis singular head-endpoint-label projection surface every
+        // downstream head-label consumer routes through.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedFirstLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedFirstLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedFirstLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted first label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedFirstLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted first label kind";
+            type Unknown = UnknownDriftedFirstLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedFirstLabelKind(s.to_owned())
+            }
+            fn first_label() -> &'static str {
+                // Drifted override — routes a strictly-interior
+                // variant's label into the head-endpoint slot,
+                // silently forking the singular head-label projection
+                // from the natural `T::first().label()` composition
+                // every downstream head-label consumer routes through.
+                "middle"
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedFirstLabelKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a first_label() override that returns an interior variant's label rather than composing T::first().label()",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_last_label_and_last_label_composition() {
+        // The well-formedness sweep's (47) clause —
+        // `T::last_label()` MUST equal `T::last().label()`. A hand-
+        // impl'd implementor whose override drifts the singular tail-
+        // label projection fails the sweep loudly. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_first_label_and_first_label_composition`
+        // one endpoint-direction axis over on the (head, tail)
+        // partition of the declaration-axis singular endpoint-label
+        // sweep.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedLastLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedLastLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedLastLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted last label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedLastLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted last label kind";
+            type Unknown = UnknownDriftedLastLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedLastLabelKind(s.to_owned())
+            }
+            fn last_label() -> &'static str {
+                // Drifted override — folds the tail-endpoint label
+                // onto the head-endpoint label, silently swapping the
+                // singular tail-label projection with the singular
+                // head-label projection every downstream tail-label
+                // consumer routes through.
+                "head"
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedLastLabelKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a last_label() override that folds the tail-endpoint label onto the head-endpoint label rather than composing T::last().label()",
         );
     }
 

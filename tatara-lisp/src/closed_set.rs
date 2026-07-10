@@ -9391,6 +9391,156 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn sorted_succeeds_or_equal(self, other: Self) -> bool {
         <Self as ClosedSet>::sorted_precedes_or_equal(other, self)
     }
+
+    /// The declaration-order INCLUSIVE-both closed-range containment
+    /// predicate — `true` iff `self` sits in the closed range
+    /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
+    /// `self` sits strictly before `lo` OR strictly after `hi`. The
+    /// TERNARY-arity opener on the closed-set surface, past the
+    /// exhaustively-closed 8-corner (ordering × direction × strictness)
+    /// 2×2×2 pairwise-comparison hypercube (78)+(79)+(80)+(81) — opens
+    /// the arity axis one step further from binary pairwise-comparison
+    /// to ternary closed-range containment.
+    ///
+    /// Sibling posture to the pairwise-comparison hypercube's eight
+    /// corners one arity level down: the pairwise-comparison predicates
+    /// answer "does `self` sit at, before, or after `other`?" over ONE
+    /// bound; this method answers "does `self` sit between `lo` and
+    /// `hi` inclusive?" over TWO bounds. The declaration-axis
+    /// composition binds through the non-strict-precedence predicate
+    /// on both bound-to-self edges of the range —
+    /// `lo.precedes_or_equal(self) ∧ self.precedes_or_equal(hi)` — so
+    /// the ternary containment predicate is a typed CONSEQUENCE of the
+    /// non-strict pairwise-precedence predicate applied at the two
+    /// range endpoints. Not a fresh substrate primitive on the index
+    /// axis — the composition emerges from the just-closed 8-corner
+    /// pairwise-comparison hypercube through conjunction of two of its
+    /// (non-strict, forward) arms.
+    ///
+    /// Endpoint-inclusivity contract: BOTH `lo` and `hi` sit INSIDE
+    /// the closed range — `lo.is_between(lo, hi)` and
+    /// `hi.is_between(lo, hi)` are BOTH `true` when
+    /// `lo.precedes_or_equal(hi)`. Reflexivity on the diagonal:
+    /// `v.is_between(v, v)` is `true` for every `v` (the singleton
+    /// range `[v, v]` contains exactly `v`). Empty-range degeneracy:
+    /// `v.is_between(hi, lo)` is `false` when `hi` strictly succeeds
+    /// `lo` — the reversed range is empty because no variant can
+    /// simultaneously non-strictly succeed `hi` AND non-strictly
+    /// precede `lo` when `hi` sits later than `lo`. The empty-range
+    /// arm is a typed CONSEQUENCE of the non-strict-precedence
+    /// predicate's totality (declaration order is total, so `hi
+    /// precedes lo` iff `lo precedes hi` is false modulo equality) —
+    /// pinned by `is_between_is_false_on_reversed_range_endpoints`.
+    ///
+    /// Range-partition contract: for every ordered pair `(lo, hi)`
+    /// with `lo.precedes_or_equal(hi)`, the set of variants `v` for
+    /// which `v.is_between(lo, hi)` is `true` equals the contiguous
+    /// declaration-order range `[Self::index_of(lo),
+    /// Self::index_of(hi)]` — the ternary containment predicate
+    /// partitions [`Self::ALL`] into the inside-range set and the
+    /// outside-range set at every ordered range. Pinned by
+    /// `is_between_partitions_all_across_every_bound_pair`.
+    ///
+    /// Future consumers that compose against [`Self::is_between`]: an
+    /// LSP diagnostic that ranges over a closed interval of variants
+    /// via `T::ALL.iter().filter(|v| v.is_between(lo, hi))` — bind to
+    /// ONE typed ternary closed-range containment predicate rather
+    /// than re-deriving `lo.precedes_or_equal(v) &&
+    /// v.precedes_or_equal(hi)` inline per callsite; a `tatara-check`
+    /// predicate `(check-phase-in-window …)` verifying a workspace-
+    /// wide phase-transition constraint where a phase must sit
+    /// between a lower and upper watermark (e.g. `Executing.is_between
+    /// (Warming, Contracting)` on the substrate's `WorkloadPhase`
+    /// lifecycle); a Sekiban audit-trail metric jointly labeled by
+    /// membership in a phase-transition window; the substrate's own
+    /// `WorkloadPhase` lifecycle projected via `phase.is_between
+    /// (Warming(_), Contracting(_))` to gate SIGHUP admission on the
+    /// executing-window.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the ternary
+    /// closed-range containment predicate becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline conjunction of two non-strict-precedence calls at every
+    /// downstream generic site. THEORY.md §V.1 — knowable platform;
+    /// the ternary-arity axis was an unnamed inline composition
+    /// (`lo.precedes_or_equal(v) && v.precedes_or_equal(hi)`)
+    /// recurring at every prospective downstream closed-range-
+    /// membership site pre-lift. Naming it on the trait makes the
+    /// predicate a TYPED CONSEQUENCE of the non-strict pairwise-
+    /// precedence predicate applied at both range endpoints.
+    /// THEORY.md §VI.1 — generation over composition; the ternary
+    /// closed-range containment predicate emerges from the
+    /// composition of TWO substrate primitives ([`Self::precedes_or_equal`]
+    /// at both bound-to-self edges + the standard-library `&&` on
+    /// `bool`) rather than as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Ruby's `Comparable#between?(lo, hi)`
+    /// surfaces the ternary closed-range containment predicate as a
+    /// first-class inclusive-both membership check on any ordered
+    /// type; Rust's own `std::ops::RangeInclusive::contains(&v)`
+    /// exposes the same predicate on the inclusive-range value
+    /// carrier. Translation through pleme-io primitives: the ternary
+    /// closed-range containment predicate on the closed-set trait
+    /// binds through [`Self::precedes_or_equal`]'s non-strict
+    /// pairwise-precedence composition applied at both range
+    /// endpoints, so the ternary containment emerges from the
+    /// substrate's typed non-strict pairwise-comparison surface
+    /// rather than as a fresh substrate primitive on the index axis
+    /// or from a foreign `RangeInclusive` value carrier that would
+    /// leak an implementation detail through the trait's API. The
+    /// closed-set trait carries the containment predicate as a
+    /// typed projection on the variant, not on a heap-allocated
+    /// range carrier.
+    fn is_between(self, lo: Self, hi: Self) -> bool {
+        <Self as ClosedSet>::precedes_or_equal(lo, self)
+            && <Self as ClosedSet>::precedes_or_equal(self, hi)
+    }
+
+    /// The lex-order INCLUSIVE-both closed-range containment
+    /// predicate — `true` iff `self` sits in the closed range
+    /// `[lo, hi]` of the lex-order [`Self::sorted_labels`], `false`
+    /// when `self` sits strictly before `lo` OR strictly after `hi`
+    /// in lex order. The lex-ordering peer of [`Self::is_between`] on
+    /// the (declaration, lex) ordering axis of the ternary closed-
+    /// range containment surface.
+    ///
+    /// Sibling posture to [`Self::is_between`] one arm over on the
+    /// (declaration, lex) ordering axis — [`Self::is_between`] uses
+    /// [`Self::precedes_or_equal`] (declaration order), this method
+    /// uses [`Self::sorted_precedes_or_equal`] (lex order). See
+    /// [`Self::is_between`] for the shared closed-range-containment
+    /// laws (reflexivity, endpoint-inclusivity, empty-range
+    /// degeneracy), the range-partition contract, the future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the lex-axis arm of the same ternary closed-
+    /// range containment surface and inherits every property from
+    /// the declaration arm's documentation, differing only in the
+    /// projection method the composition routes through.
+    ///
+    /// Default body composes [`Self::sorted_precedes_or_equal`] at
+    /// both range endpoints:
+    /// `lo.sorted_precedes_or_equal(self) &&
+    /// self.sorted_precedes_or_equal(hi)`. Implementors override only
+    /// when the lex-axis ternary closed-range containment surface
+    /// needs to diverge from the natural composition of the
+    /// pre-existing non-strict pairwise-precedence predicate applied
+    /// at both range endpoints.
+    ///
+    /// (82) + (83) together OPEN the (ordering) 2×1 arity-3 opener on
+    /// the ternary-containment surface — the two arms cover the
+    /// declaration and lex axes at inclusive-both ternary arity, past
+    /// the exhaustively-closed 8-corner pairwise-comparison hypercube
+    /// on the trait one arity level down. Future extensions along
+    /// (inclusive-exclusive) endpoint-inclusivity axes can further
+    /// carve the ternary-containment surface into the 4-corner
+    /// (ordering × endpoint-inclusivity-flavor) matrix (`[lo, hi]` /
+    /// `(lo, hi)` / `[lo, hi)` / `(lo, hi]`) — the (82)+(83) pair sits
+    /// at the (inclusive-both) corner of each axis and stays the
+    /// canonical entry point on the ternary-containment surface.
+    fn is_sorted_between(self, lo: Self, hi: Self) -> bool {
+        <Self as ClosedSet>::sorted_precedes_or_equal(lo, self)
+            && <Self as ClosedSet>::sorted_precedes_or_equal(self, hi)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -27261,6 +27411,272 @@ mod tests {
                      StubKind::{b:?}.sorted_precedes_or_equal(StubKind::{a:?})",
                 );
             }
+        }
+    }
+
+    #[test]
+    fn is_between_is_reflexive_across_every_variant() {
+        // `T::is_between` is REFLEXIVE at the singleton range: every
+        // variant sits in its own singleton closed range `[v, v]`.
+        // The ternary closed-range containment predicate folds the
+        // diagonal singleton into the acceptance side — reflexivity
+        // is a typed CONSEQUENCE of the non-strict pairwise-precedence
+        // predicate's reflexivity at both endpoints simultaneously
+        // (`v.precedes_or_equal(v) ∧ v.precedes_or_equal(v)`).
+        // Sibling posture to
+        // `precedes_or_equal_is_reflexive_across_every_variant` on the
+        // (arity) 2×1 opener: the pairwise-comparison predicate folds
+        // the diagonal at ONE endpoint, this ternary-containment
+        // predicate folds it at BOTH endpoints simultaneously.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                <StubKind as ClosedSet>::is_between(v, v, v),
+                "StubKind::{v:?}.is_between(StubKind::{v:?}, StubKind::{v:?}) must be true \
+                 — the singleton closed range [{v:?}, {v:?}] contains exactly {v:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn is_between_agrees_with_precedes_or_equal_conjunction_on_every_triple() {
+        // The (variant × range → bool ternary closed-range containment)
+        // projection MUST bind byte-for-byte to the conjunction of the
+        // two non-strict pairwise-precedence predicates applied at
+        // the two range endpoints — `self.is_between(lo, hi)` is
+        // exactly `lo.precedes_or_equal(self) &&
+        // self.precedes_or_equal(hi)`. This pin catches a regression
+        // that drifts the ternary containment predicate from the
+        // underlying non-strict pairwise-comparison composition (e.g.
+        // an override that reintroduces a strict inequality at one
+        // endpoint silently narrowing the range, or that inverts one
+        // endpoint's operand order silently mirroring the range).
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_between(v, lo, hi),
+                        <StubKind as ClosedSet>::precedes_or_equal(lo, v)
+                            && <StubKind as ClosedSet>::precedes_or_equal(v, hi),
+                        "StubKind::{v:?}.is_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         equal precedes_or_equal({lo:?}, {v:?}) && precedes_or_equal({v:?}, {hi:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_between_holds_at_both_range_endpoints_for_every_ordered_pair() {
+        // ENDPOINT-INCLUSIVITY CONTRACT: both `lo` and `hi` sit INSIDE
+        // the closed range `[lo, hi]` whenever the range is non-empty
+        // (`lo.precedes_or_equal(hi)`) — `lo.is_between(lo, hi)` and
+        // `hi.is_between(lo, hi)` are BOTH `true`. Pin the endpoint-
+        // inclusivity property across every ordered pair on `T::ALL`
+        // × `T::ALL` so a regression that tightens one endpoint into
+        // strict-precedence silently truncating the range surfaces
+        // here at whichever endpoint got tightened. Sibling posture
+        // to the pairwise-comparison hypercube's reflexivity pins on
+        // the (arity) 2×1 opener: the binary predicate folds ONE
+        // endpoint through reflexivity, the ternary predicate folds
+        // BOTH endpoints through reflexivity simultaneously.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                    assert!(
+                        <StubKind as ClosedSet>::is_between(lo, lo, hi),
+                        "StubKind::{lo:?}.is_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         be true — the lower endpoint sits INSIDE its own closed range",
+                    );
+                    assert!(
+                        <StubKind as ClosedSet>::is_between(hi, lo, hi),
+                        "StubKind::{hi:?}.is_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         be true — the upper endpoint sits INSIDE its own closed range",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_between_is_false_on_reversed_range_endpoints() {
+        // EMPTY-RANGE DEGENERACY: when `hi` sits STRICTLY BEFORE `lo`
+        // in declaration order (`hi.precedes(lo)`), no variant `v` can
+        // sit in the closed range `[lo, hi]` — the range is empty
+        // because no variant can simultaneously non-strictly succeed
+        // `lo` AND non-strictly precede `hi` when `hi` sits earlier
+        // than `lo`. Pin the empty-range degeneracy across every
+        // variant `v` and every strictly-reversed pair `(lo, hi)` so
+        // a regression that silently accepts the diagonal on the
+        // reversed range fails-loudly here.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::precedes(hi, lo) {
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        assert!(
+                            !<StubKind as ClosedSet>::is_between(v, lo, hi),
+                            "StubKind::{v:?}.is_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                             be false — the reversed range [{lo:?}, {hi:?}] is empty when {hi:?} \
+                             strictly precedes {lo:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_between_partitions_all_across_every_bound_pair() {
+        // RANGE-PARTITION CONTRACT: for every ordered pair `(lo, hi)`
+        // with `lo.precedes_or_equal(hi)`, the set of variants `v` for
+        // which `v.is_between(lo, hi)` is `true` equals the
+        // contiguous declaration-order slice
+        // `[Self::index_of(lo), Self::index_of(hi)]` byte-for-byte —
+        // the ternary containment predicate partitions `Self::ALL`
+        // into the inside-range set and the outside-range set at
+        // every ordered range. Pin the partition across every ordered
+        // bound pair so a regression that drops or duplicates one
+        // variant from the inside-range set silently biasing the
+        // partition fails-loudly here.
+        for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                    let inside: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .filter(|v| <StubKind as ClosedSet>::is_between(*v, lo, hi))
+                        .collect();
+                    let lo_idx = <StubKind as ClosedSet>::index_of(lo);
+                    let hi_idx = <StubKind as ClosedSet>::index_of(hi);
+                    let expected: Vec<StubKind> =
+                        <StubKind as ClosedSet>::ALL[lo_idx..=hi_idx].to_vec();
+                    assert_eq!(
+                        inside, expected,
+                        "the inside-range set for [{lo:?}, {hi:?}] must equal the \
+                         contiguous declaration-order slice [{lo_idx}, {hi_idx}]",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_sorted_between_agrees_with_sorted_precedes_or_equal_conjunction_on_every_triple() {
+        // The lex-axis (variant × range → bool ternary closed-range
+        // containment) projection MUST bind byte-for-byte to the
+        // conjunction of the two lex-axis non-strict pairwise-
+        // precedence predicates applied at the two range endpoints
+        // — `self.is_sorted_between(lo, hi)` is exactly
+        // `lo.sorted_precedes_or_equal(self) &&
+        // self.sorted_precedes_or_equal(hi)`. Sibling posture to
+        // `is_between_agrees_with_precedes_or_equal_conjunction_on_every_triple`
+        // on the (declaration, lex) ordering axis of the ternary
+        // closed-range containment surface — the lex-axis predicate
+        // routes through `sorted_precedes_or_equal` rather than
+        // `precedes_or_equal`.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_between(v, lo, hi),
+                        <StubKind as ClosedSet>::sorted_precedes_or_equal(lo, v)
+                            && <StubKind as ClosedSet>::sorted_precedes_or_equal(v, hi),
+                        "StubKind::{v:?}.is_sorted_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         equal sorted_precedes_or_equal({lo:?}, {v:?}) && sorted_precedes_or_equal({v:?}, {hi:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_sorted_between_coincides_with_is_between_when_declaration_and_lex_orders_agree() {
+        // CROSS-AXIS COINCIDENCE: on a closed set whose declaration
+        // order and lex order coincide (`StubKind`'s
+        // `[Alpha, Beta, Gamma]` are declared in alphabetical order,
+        // so both axes agree at every variant), the ternary closed-
+        // range containment predicates on the two axes bind byte-for-
+        // byte across every triple. Pin the coincidence on `StubKind`
+        // so a regression that drifts ONE axis's ternary containment
+        // predicate silently bifurcating the two axes fails-loudly
+        // here. Sibling posture to
+        // `precedes_agrees_with_sorted_precedes_when_declaration_and_lex_orders_agree`
+        // (pre-existing) on the pairwise-comparison hypercube one
+        // arity level down.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_between(v, lo, hi),
+                        <StubKind as ClosedSet>::is_sorted_between(v, lo, hi),
+                        "StubKind::{v:?}.is_between(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         coincide with StubKind::{v:?}.is_sorted_between(StubKind::{lo:?}, \
+                         StubKind::{hi:?}) — declaration order and lex order coincide on StubKind",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_between_singleton_range_admits_only_the_endpoint_variant() {
+        // SINGLETON-RANGE CONTRACT: the singleton closed range
+        // `[v, v]` contains EXACTLY the endpoint variant `v` — no
+        // other variant sits inside. Pin the singleton-range admission
+        // across every variant so a regression that admits a
+        // structurally-distinct variant into the singleton range
+        // silently widening the containment predicate fails-loudly
+        // here.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for other in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_between(other, v, v),
+                    other == v,
+                    "StubKind::{other:?}.is_between(StubKind::{v:?}, StubKind::{v:?}) must \
+                     equal ({other:?} == {v:?}) — the singleton range [{v:?}, {v:?}] contains \
+                     exactly {v:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_between_full_range_admits_every_variant() {
+        // FULL-RANGE CONTRACT: the closed range `[first, last]` — the
+        // widest closed range on the closed-set surface — contains
+        // EVERY variant. The full-range predicate is a typed
+        // CONSEQUENCE of the declaration-order totality: every variant
+        // sits between the head and the tail of `Self::ALL` inclusive.
+        // Pin the full-range admission across every variant so a
+        // regression that silently excludes one variant from the
+        // full range surfaces here.
+        let first = <StubKind as ClosedSet>::first();
+        let last = <StubKind as ClosedSet>::last();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                <StubKind as ClosedSet>::is_between(v, first, last),
+                "StubKind::{v:?}.is_between(StubKind::{first:?}, StubKind::{last:?}) must be true \
+                 — every variant sits inside the full closed range [first, last]",
+            );
+        }
+    }
+
+    #[test]
+    fn is_sorted_between_full_sorted_range_admits_every_variant() {
+        // FULL-RANGE CONTRACT (lex peer): the closed range
+        // `[sorted_first, sorted_last]` — the widest lex-order closed
+        // range on the closed-set surface — contains EVERY variant.
+        // Sibling posture to `is_between_full_range_admits_every_variant`
+        // on the (declaration, lex) ordering axis of the ternary
+        // closed-range containment surface.
+        let sorted_first = <StubKind as ClosedSet>::sorted_first();
+        let sorted_last = <StubKind as ClosedSet>::sorted_last();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                <StubKind as ClosedSet>::is_sorted_between(v, sorted_first, sorted_last),
+                "StubKind::{v:?}.is_sorted_between(StubKind::{sorted_first:?}, \
+                 StubKind::{sorted_last:?}) must be true — every variant sits inside the full \
+                 lex-order closed range [sorted_first, sorted_last]",
+            );
         }
     }
 }

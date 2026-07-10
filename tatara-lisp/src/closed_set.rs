@@ -6242,6 +6242,164 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
     }
 
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// neighbor immediately AFTER `self` in [`Self::ALL`] — the label
+    /// of [`Self::next`] projected through [`Self::label`], or [`None`]
+    /// when `self` is the declaration-order tail-endpoint.
+    ///
+    /// The `&'static str`-return sibling of [`Self::next`] on the
+    /// declaration axis of the (return-type × direction) 2×2 matrix
+    /// over the (`Self`-return, `&'static str`-return) partition of
+    /// the declaration-order neighbor surface. Together with
+    /// [`Self::prev_label`], the pair closes the (return-type ×
+    /// direction) 2×2 declaration-axis label-shaped neighbor matrix
+    /// alongside the pre-existing [`Self::next`] / [`Self::prev`]
+    /// (`Self`-return) pair:
+    ///
+    /// | Return-type \\ Direction | Forward             | Backward            |
+    /// |--------------------------|---------------------|---------------------|
+    /// | `Self`                   | [`Self::next`]      | [`Self::prev`]      |
+    /// | `&'static str`           | [`Self::next_label`]| [`Self::prev_label`]|
+    ///
+    /// Every generic consumer that wants the declaration-order
+    /// forward-neighbor CANONICAL LABEL rendering (a diagnostic
+    /// emitter that renders `"advanced to <next-label>"` after every
+    /// state-machine step without threading the typed variant through
+    /// [`Self::label`] at the callsite, a Kubernetes annotation
+    /// stamper that writes the successor-phase label onto a
+    /// per-transition CRD without materializing the typed successor,
+    /// a per-slot audit trail that logs the forward-neighbor label at
+    /// every advance without a two-step `v.next()?.label()`
+    /// composition at each rendering site, a `tatara-check` diagnostic
+    /// that displays the "expected next: <label>" hint on a saga-step
+    /// misalignment) binds to ONE trait method rather than hand-rolling
+    /// the `Self::next(self).map(<Self as ClosedSet>::label)`
+    /// composition at every callsite AND makes every downstream site
+    /// depend on the two-primitive composition.
+    ///
+    /// Sibling posture to [`Self::first_label`] / [`Self::last_label`]
+    /// one structural landmark over on the (endpoint anchor,
+    /// neighbor) axis of the `&'static str`-return column: the
+    /// endpoint-anchor pair projects the head / tail labels
+    /// (guaranteed non-empty by clause (1)'s non-empty ALL), this
+    /// method projects the forward-neighbor label as an
+    /// [`Option`]-typed value because the tail-endpoint arm has no
+    /// forward neighbor to render.
+    ///
+    /// Default body composes [`Self::next`] with [`Self::label`]
+    /// through `Option::map` — the label-shaped forward-neighbor
+    /// projection is a typed CONSEQUENCE of the pre-existing
+    /// [`Self::next`] surface funneled through [`Self::label`], not a
+    /// third codepath. Implementors override only when the
+    /// composition needs to diverge from the natural
+    /// `next().map(label)` shape (no production implementor reaches
+    /// for this today; the axis exists for the same reason `via` /
+    /// `set_label` / `labels` / `first_label` / `next` overrides
+    /// exist — a typed escape hatch rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::next`] propagates the override through this
+    /// default body automatically; the (variant → forward-neighbor
+    /// label) projection funnels through ONE typed primitive.
+    ///
+    /// The bounded-neighbor-label contract — the tail-endpoint arm
+    /// returns [`None`] — is guaranteed by the default composition
+    /// through [`Self::next`]'s `Option::map` shape; the
+    /// well-formedness contract [`assert_closed_set_well_formed`]'s
+    /// new clause (58) pins the composition against the natural
+    /// `next().map(label)` shape AND the tail-endpoint `None` guard
+    /// on every implementor, so a passing well-formedness sweep means
+    /// every generic consumer can call [`Self::next_label`] on any
+    /// typed variant and expect the same [`Option`]-typed answer at
+    /// every crate boundary. `T::last().next_label() == None` is the
+    /// natural fixpoint the forward-neighbor-label axis and the
+    /// tail-endpoint anchor share, mirroring the `T::last().next() ==
+    /// None` fixpoint one return-type axis over.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → forward-neighbor
+    /// label) projection becomes a TYPE projection on the trait rather
+    /// than a per-consumer inline `self.next().map(|v| v.label())`
+    /// composition at every downstream label-shaped forward-neighbor
+    /// rendering site. The (return-type × direction) 2×2 declaration-
+    /// axis neighbor matrix partitions exhaustively into FOUR typed
+    /// projections, each with a distinct load-bearing consumer surface.
+    /// THEORY.md §V.1 — knowable platform; the (variant → forward-
+    /// neighbor label) projection was an unnamed compound of
+    /// [`Self::next`] + [`Self::label`] + `Option::map` pre-lift;
+    /// naming it on the trait makes the projection a TYPED CONSEQUENCE
+    /// of the two substrate primitives — generic consumers see ONE
+    /// method, not one forward-neighbor-label-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (variant →
+    /// forward-neighbor label) projection emerges from the
+    /// composition of TWO substrate primitives ([`Self::next`],
+    /// [`Self::label`]) via `Option::map` rather than as a per-
+    /// implementor `match self { A => Some("b-label"), ... }` block.
+    ///
+    /// Frontier inspiration: Racket's `(enum-next-label enum sym)` on
+    /// a closed enumeration (the direct label-projection sibling of
+    /// `enum-next`); Idris's `Fin n` with a `showFin` composed
+    /// through `weakenN` on the declaration-order chain; MLIR's
+    /// `RegisteredOperationName::next().getName()` folded to ONE
+    /// method on the Op registry's declaration-order chain; Rust's
+    /// `strum::EnumIter::iter().skip_while(|v| *v != self).nth(1)
+    /// .map(|v| v.get_str())` composed through the iterator API.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::next`] + [`Self::label`]
+    /// surfaces via `Option::map` — no new dep, no new IR layer, no
+    /// supertrait bound, no allocation.
+    fn next_label(self) -> Option<&'static str> {
+        <Self as ClosedSet>::next(self).map(<Self as ClosedSet>::label)
+    }
+
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// neighbor immediately BEFORE `self` in [`Self::ALL`] — the
+    /// label of [`Self::prev`] projected through [`Self::label`], or
+    /// [`None`] when `self` is the declaration-order head-endpoint.
+    ///
+    /// Sibling posture to [`Self::next_label`] one direction over on
+    /// the (forward, backward) direction partition of the declaration-
+    /// axis label-shaped neighbor surface: [`Self::next_label`]
+    /// returns the declaration-order successor label, this method
+    /// returns the declaration-order predecessor label. See
+    /// [`Self::next_label`] for the shared design rationale, the
+    /// (return-type × direction) 2×2 matrix, override axis, future-
+    /// consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the backward-direction arm of the
+    /// same axis and inherits every property from the forward arm's
+    /// documentation, differing only in the composition through
+    /// [`Self::prev`] instead of [`Self::next`] and the head-endpoint
+    /// `None` guard rather than the tail-endpoint `None` guard.
+    ///
+    /// Default body composes [`Self::prev`] with [`Self::label`]
+    /// through `Option::map`. The bounded-neighbor-label contract —
+    /// the head-endpoint arm returns [`None`] — is guaranteed by the
+    /// default composition through [`Self::prev`]'s head-endpoint
+    /// `None` guard; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (59) pins the
+    /// composition against the natural `prev().map(label)` shape AND
+    /// the head-endpoint `None` guard on every implementor.
+    /// `T::first().prev_label() == None` is the natural fixpoint the
+    /// backward-neighbor-label axis and the head-endpoint anchor
+    /// share, mirroring the `T::first().prev() == None` fixpoint one
+    /// return-type axis over.
+    ///
+    /// Clauses (18) + (26) + (46) + (47) + (58) + (59) together CLOSE
+    /// the (return-type × direction × structural-landmark) 2×2×2 =
+    /// 8-corner declaration-axis label-and-variant endpoint-anchor +
+    /// neighbor hypercube: [`Self::first`] / [`Self::last`] on
+    /// (`Self`, endpoint) — clause (18); [`Self::next`] /
+    /// [`Self::prev`] on (`Self`, neighbor) — clause (26);
+    /// [`Self::first_label`] / [`Self::last_label`] on
+    /// (`&'static str`, endpoint) — clauses (46) + (47); and now
+    /// [`Self::next_label`] / [`Self::prev_label`] on
+    /// (`&'static str`, neighbor) — clauses (58) + (59). Every
+    /// generic consumer that binds any of the eight projection
+    /// methods sees the SAME structural answer at every crate
+    /// boundary regardless of which return-type / direction /
+    /// landmark axis corner it walks.
+    fn prev_label(self) -> Option<&'static str> {
+        <Self as ClosedSet>::prev(self).map(<Self as ClosedSet>::label)
+    }
+
     /// The lexicographic-order neighbor immediately AFTER `self` in
     /// [`Self::sorted_variants`] — `Some(Self::sorted_variants()[
     /// self.sorted_index_of() + 1])` when `self` is not the lex-tail,
@@ -9932,6 +10090,89 @@ where
     assert!(
         !T::is_sorted_interior_label(""),
         "{type_name}: T::is_sorted_interior_label(\"\") returned true on the empty-string boundary — the label-shaped lex-interior-membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling and the domain-membership gate through `contains_label` rejects it accordingly",
+    );
+    // (58) — For every variant `v` in `T::ALL`, `v.next_label()` MUST
+    // equal `v.next().map(T::label)`, AND `T::last().next_label()`
+    // MUST equal `None`. The default trait body composes
+    // `next(self).map(label)` verbatim and satisfies both arms for
+    // free; the assertion catches a future implementor whose override
+    // drifts the forward-neighbor-label projection (a permissive
+    // override that returns `Some(<some interior-neighbor label>)` at
+    // the tail — folding the tail-boundary walk onto a wraparound to
+    // the head's label while the composed projection would return
+    // `None`; a swapped override that returns the predecessor's label
+    // for `next_label`, silently inverting the direction of the label-
+    // rendered forward walk; a stale override that returns the wrong
+    // neighbor label after a variant-listing edit reorders `T::ALL`)
+    // loudly rather than silently bifurcating the forward-neighbor-
+    // label projection surface every downstream diagnostic renderer /
+    // Kubernetes annotation stamper / per-slot audit trail / saga-step
+    // hint consumer routes through. Sibling posture to clauses (26) +
+    // (46) + (47) — clause (26) pins the `Self`-return forward-
+    // neighbor projection at both direction arms + endpoint fixpoints,
+    // clauses (46) + (47) pin the `&'static str`-return endpoint-
+    // anchor projections at both direction arms of the (head, tail)
+    // partition, this clause pins the `&'static str`-return forward-
+    // neighbor projection against the composition of both AND pins the
+    // tail-endpoint `None` guard — so the closed-set label-shaped
+    // forward-neighbor surface stays sound at the declaration axis AND
+    // on the shared tail-endpoint fixpoint (`T::last().next_label() ==
+    // None`).
+    for &v in T::ALL {
+        let expected_next_label = v.next().map(<T as ClosedSet>::label);
+        assert_eq!(
+            v.next_label(),
+            expected_next_label,
+            "{type_name}: {v:?}.next_label() drifted from {v:?}.next().map(T::label) — the direct (variant → forward-neighbor label) projection no longer agrees with the natural next+label composition, so a downstream diagnostic renderer / Kubernetes annotation stamper / per-slot audit trail / saga-step hint consumer that binds `v.next_label()` as its forward-neighbor label-rendering surface would emit the wrong label for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::last().next_label(),
+        None,
+        "{type_name}: T::last().next_label() returned Some(_) — the (variant → forward-neighbor label) projection accepted the tail-endpoint boundary, silently folding a tail-boundary label render onto a wraparound to the head's label while the natural `next().map(label)` composition should return `None`. Clauses (26) + (58) together pin `T::last().next_label() == None` as the structural fixpoint the tail-endpoint anchor and the forward-neighbor-label axis share, mirroring `T::last().next() == None` one return-type axis over",
+    );
+    // (59) — For every variant `v` in `T::ALL`, `v.prev_label()` MUST
+    // equal `v.prev().map(T::label)`, AND `T::first().prev_label()`
+    // MUST equal `None`. The default trait body composes
+    // `prev(self).map(label)` verbatim and satisfies both arms for
+    // free; the assertion catches a future implementor whose override
+    // drifts the backward-neighbor-label projection (a permissive
+    // override that returns `Some(<some interior-neighbor label>)` at
+    // the head — folding the head-boundary walk onto a wraparound to
+    // the tail's label while the composed projection would return
+    // `None`; a swapped override that returns the successor's label
+    // for `prev_label`, silently inverting the direction of the label-
+    // rendered backward walk; a stale override that returns the wrong
+    // neighbor label after a variant-listing edit reorders `T::ALL`)
+    // loudly rather than silently bifurcating the backward-neighbor-
+    // label projection surface every downstream diagnostic renderer /
+    // Kubernetes annotation stamper / per-slot audit trail / saga-step
+    // hint consumer routes through. Clauses (18) + (26) + (46) + (47)
+    // + (58) + (59) together CLOSE the (return-type × direction ×
+    // structural-landmark) 2×2×2 = 8-corner declaration-axis label-
+    // and-variant endpoint-anchor + neighbor hypercube: (`Self`,
+    // endpoint) at clause (18) — [`Self::first`] / [`Self::last`];
+    // (`Self`, neighbor) at clause (26) — [`Self::next`] /
+    // [`Self::prev`]; (`&'static str`, endpoint) at clauses (46) +
+    // (47) — [`Self::first_label`] / [`Self::last_label`]; and
+    // (`&'static str`, neighbor) at clauses (58) + (59) —
+    // [`Self::next_label`] / [`Self::prev_label`]. Every generic
+    // consumer that binds any of the eight projection methods sees
+    // the SAME structural answer at every crate boundary regardless
+    // of which return-type / direction / landmark axis corner it
+    // walks.
+    for &v in T::ALL {
+        let expected_prev_label = v.prev().map(<T as ClosedSet>::label);
+        assert_eq!(
+            v.prev_label(),
+            expected_prev_label,
+            "{type_name}: {v:?}.prev_label() drifted from {v:?}.prev().map(T::label) — the direct (variant → backward-neighbor label) projection no longer agrees with the natural prev+label composition, so a downstream diagnostic renderer / Kubernetes annotation stamper / per-slot audit trail / saga-step hint consumer that binds `v.prev_label()` as its backward-neighbor label-rendering surface would emit the wrong label for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::first().prev_label(),
+        None,
+        "{type_name}: T::first().prev_label() returned Some(_) — the (variant → backward-neighbor label) projection accepted the head-endpoint boundary, silently folding a head-boundary label render onto a wraparound to the tail's label while the natural `prev().map(label)` composition should return `None`. Clauses (26) + (59) together pin `T::first().prev_label() == None` as the structural fixpoint the head-endpoint anchor and the backward-neighbor-label axis share, mirroring `T::first().prev() == None` one return-type axis over",
     );
 }
 
@@ -15264,6 +15505,310 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a prev() override that wraps around at the head rather than returning None",
+        );
+    }
+
+    #[test]
+    fn next_label_walks_declaration_order_forward_chain_of_labels() {
+        // The forward-neighbor-label projection — `v.next_label()`
+        // walks `T::ALL` one slot forward from each variant, returning
+        // `Some(<label>)` on every interior slot and `None` at the
+        // tail. `StubKind`'s declaration order is `[Alpha, Beta,
+        // Gamma]` with labels `["alpha", "beta", "gamma"]`, so the
+        // forward label chain is Alpha → "beta" → "gamma" → None.
+        // Sibling posture to `next_walks_declaration_order_forward_chain`
+        // one return-type axis over on the (`Self`-return,
+        // `&'static str`-return) partition — both walk `T::ALL`
+        // through the same `index_of` + `from_index` composition, one
+        // returning the typed variant and one returning its canonical
+        // label.
+        assert_eq!(
+            <StubKind as ClosedSet>::next_label(StubKind::Alpha),
+            Some("beta"),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::next_label(StubKind::Beta),
+            Some("gamma"),
+        );
+        assert_eq!(<StubKind as ClosedSet>::next_label(StubKind::Gamma), None);
+    }
+
+    #[test]
+    fn prev_label_walks_declaration_order_backward_chain_of_labels() {
+        // The backward-neighbor-label projection — `v.prev_label()`
+        // walks `T::ALL` one slot backward from each variant,
+        // returning `Some(<label>)` on every interior slot and `None`
+        // at the head. `StubKind`'s declaration order is `[Alpha,
+        // Beta, Gamma]` with labels `["alpha", "beta", "gamma"]`, so
+        // the backward label chain is Gamma → "beta" → "alpha" →
+        // None. Sibling posture to
+        // `next_label_walks_declaration_order_forward_chain_of_labels`
+        // one direction over on the (forward, backward) partition of
+        // the label-shaped declaration-axis neighbor surface.
+        assert_eq!(<StubKind as ClosedSet>::prev_label(StubKind::Alpha), None);
+        assert_eq!(
+            <StubKind as ClosedSet>::prev_label(StubKind::Beta),
+            Some("alpha"),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::prev_label(StubKind::Gamma),
+            Some("beta"),
+        );
+    }
+
+    #[test]
+    fn first_prev_label_and_last_next_label_pin_the_endpoint_boundary_label_fixpoints() {
+        // The endpoint-anchor / neighbor-label-axis fixpoints —
+        // `T::first().prev_label() == None` AND
+        // `T::last().next_label() == None`. The two fixpoints thread
+        // the head-endpoint anchor back through the backward-neighbor-
+        // label axis AND the tail-endpoint anchor back through the
+        // forward-neighbor-label axis at ONE structural landmark each.
+        // A regression that wraps around (returning
+        // `Some(T::last_label())` for `T::first().prev_label()`, or
+        // `Some(T::first_label())` for `T::last().next_label()`) would
+        // silently fold a bounded label-rendered traversal onto an
+        // infinite loop every downstream diagnostic renderer /
+        // Kubernetes annotation stamper consumer routes through.
+        // Sibling posture to
+        // `first_prev_and_last_next_pin_the_endpoint_boundary_fixpoints`
+        // one return-type axis over on the (`Self`-return,
+        // `&'static str`-return) partition.
+        assert_eq!(
+            <StubKind as ClosedSet>::prev_label(<StubKind as ClosedSet>::first()),
+            None,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::next_label(<StubKind as ClosedSet>::last()),
+            None,
+        );
+    }
+
+    #[test]
+    fn next_label_and_prev_label_walk_arbitrary_declaration_order() {
+        // The neighbor-label projection contract on an arbitrary
+        // declaration order — `v.next_label()` MUST project the
+        // successor's label in `T::ALL`'s layout regardless of the
+        // label ordering, AND `v.prev_label()` MUST project the
+        // predecessor's label. A regression that keyed on the lex
+        // order of labels (rather than `T::ALL` position) would pass
+        // on `StubKind` (where declaration order aligns with alphabetic
+        // order) but silently bifurcate on any implementor whose
+        // `ALL`-array layout differs from its lex order.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum NeighborLabelReverseKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownNeighborLabelReverseKind(pub String);
+        impl core::fmt::Display for UnknownNeighborLabelReverseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown neighbor label reverse kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for NeighborLabelReverseKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "neighbor label reverse kind";
+            type Unknown = UnknownNeighborLabelReverseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownNeighborLabelReverseKind(s.to_owned())
+            }
+        }
+        // Declaration order: Gamma → Beta → Alpha. Forward label walk
+        // follows this layout, NOT the alphabetic order.
+        assert_eq!(
+            <NeighborLabelReverseKind as ClosedSet>::next_label(NeighborLabelReverseKind::Gamma),
+            Some("beta"),
+        );
+        assert_eq!(
+            <NeighborLabelReverseKind as ClosedSet>::next_label(NeighborLabelReverseKind::Beta),
+            Some("alpha"),
+        );
+        assert_eq!(
+            <NeighborLabelReverseKind as ClosedSet>::next_label(NeighborLabelReverseKind::Alpha),
+            None,
+        );
+        assert_eq!(
+            <NeighborLabelReverseKind as ClosedSet>::prev_label(NeighborLabelReverseKind::Gamma),
+            None,
+        );
+        assert_eq!(
+            <NeighborLabelReverseKind as ClosedSet>::prev_label(NeighborLabelReverseKind::Beta),
+            Some("gamma"),
+        );
+        assert_eq!(
+            <NeighborLabelReverseKind as ClosedSet>::prev_label(NeighborLabelReverseKind::Alpha),
+            Some("beta"),
+        );
+    }
+
+    #[test]
+    fn next_label_and_prev_label_on_singleton_closed_set_both_return_none() {
+        // The neighbor-label-axis degenerate case — a singleton closed
+        // set has `T::ALL[0] == T::first() == T::last()`, so BOTH
+        // `T::first().prev_label() == None` AND `T::last().next_label()
+        // == None` collapse onto the same variant. Every neighbor-label
+        // walk from the sole variant must return `None`. Sibling posture
+        // to `next_and_prev_on_singleton_closed_set_both_return_none`
+        // one return-type axis over on the (`Self`-return,
+        // `&'static str`-return) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum NeighborLabelSingletonKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownNeighborLabelSingletonKind(pub String);
+        impl core::fmt::Display for UnknownNeighborLabelSingletonKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown neighbor label singleton kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for NeighborLabelSingletonKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "neighbor label singleton kind";
+            type Unknown = UnknownNeighborLabelSingletonKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownNeighborLabelSingletonKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <NeighborLabelSingletonKind as ClosedSet>::next_label(NeighborLabelSingletonKind::Only),
+            None,
+        );
+        assert_eq!(
+            <NeighborLabelSingletonKind as ClosedSet>::prev_label(NeighborLabelSingletonKind::Only),
+            None,
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_next_label_and_composition() {
+        // The well-formedness sweep's (58) clause — `v.next_label()`
+        // MUST equal `v.next().map(T::label)` on every variant AND
+        // `T::last().next_label()` MUST equal `None`. A hand-impl'd
+        // implementor whose override drifts the forward-neighbor-label
+        // projection (accepts `Some(<some-label>)` at the tail where
+        // the natural composition would return `None`, folds a
+        // tail-boundary label render onto a wraparound to the head's
+        // label) fails the sweep loudly rather than silently
+        // bifurcating the label-rendered forward-traversal surface
+        // every downstream diagnostic renderer / Kubernetes
+        // annotation stamper consumer routes through. Sibling posture
+        // to `assert_closed_set_well_formed_catches_drift_between_next_and_composition`
+        // one return-type axis over on the (`Self`-return,
+        // `&'static str`-return) partition of clause (58).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedNextLabelKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedNextLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedNextLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted next label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedNextLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted next label kind";
+            type Unknown = UnknownDriftedNextLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedNextLabelKind(s.to_owned())
+            }
+            fn next_label(self) -> Option<&'static str> {
+                // Drifted override — wraps around at the tail rather
+                // than returning `None`, folding a bounded forward
+                // label walk onto an infinite loop every diagnostic
+                // renderer consumer routes through.
+                Some(match self {
+                    Self::Head => "tail",
+                    Self::Tail => "head",
+                })
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedNextLabelKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a next_label() override that wraps around at the tail rather than returning None",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_prev_label_and_composition() {
+        // The well-formedness sweep's (59) clause — `v.prev_label()`
+        // MUST equal `v.prev().map(T::label)` on every variant AND
+        // `T::first().prev_label()` MUST equal `None`. A hand-impl'd
+        // implementor whose override drifts the backward-neighbor-
+        // label projection (accepts `Some(<some-label>)` at the head
+        // where the natural composition would return `None`, folds a
+        // head-boundary label render onto a wraparound to the tail's
+        // label) fails the sweep loudly rather than silently
+        // bifurcating the label-rendered backward-traversal surface.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_next_label_and_composition`
+        // one direction over on the (forward, backward) partition of
+        // clause (59).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedPrevLabelKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedPrevLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedPrevLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted prev label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedPrevLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted prev label kind";
+            type Unknown = UnknownDriftedPrevLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedPrevLabelKind(s.to_owned())
+            }
+            fn prev_label(self) -> Option<&'static str> {
+                // Drifted override — wraps around at the head rather
+                // than returning `None`, folding a bounded backward
+                // label walk onto an infinite loop every diagnostic
+                // renderer consumer routes through.
+                Some(match self {
+                    Self::Head => "tail",
+                    Self::Tail => "head",
+                })
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedPrevLabelKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a prev_label() override that wraps around at the head rather than returning None",
         );
     }
 

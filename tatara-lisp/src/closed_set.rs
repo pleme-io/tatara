@@ -2641,6 +2641,245 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_index_of(self) + 1 == <Self as ClosedSet>::CARDINALITY
     }
 
+    /// The lexicographic-order head-endpoint LABEL predicate — `true`
+    /// iff `s` equals [`Self::sorted_first_label`], `false` otherwise.
+    /// Closes the (`&str`, lex, head) corner of the (arg-type × ordering
+    /// × endpoint-direction) 2×2×2 = 8-corner endpoint-membership
+    /// hypercube alongside [`Self::is_first`] (Self, declaration, head),
+    /// [`Self::is_last`] (Self, declaration, tail),
+    /// [`Self::is_sorted_first`] (Self, lex, head),
+    /// [`Self::is_sorted_last`] (Self, lex, tail),
+    /// [`Self::is_first_label`] (&str, declaration, head), and
+    /// [`Self::is_last_label`] (&str, declaration, tail).
+    ///
+    /// The (arg-type × ordering × endpoint-direction) 2×2×2 = 8-corner
+    /// endpoint-membership hypercube over the closed-set `bool`-typed
+    /// endpoint surface partitions post-lift:
+    ///
+    /// | Arg-type \\ Ordering × Direction | Declaration head             | Declaration tail            | Lex head                          | Lex tail                         |
+    /// |----------------------------------|------------------------------|-----------------------------|-----------------------------------|----------------------------------|
+    /// | `Self` (variant)                 | [`Self::is_first`]           | [`Self::is_last`]           | [`Self::is_sorted_first`]         | [`Self::is_sorted_last`]         |
+    /// | `&str` (label)                   | [`Self::is_first_label`]     | [`Self::is_last_label`]     | [`Self::is_sorted_first_label`]   | [`Self::is_sorted_last_label`]   |
+    ///
+    /// Sibling posture to [`Self::sorted_first_label`] one return-type
+    /// axis over on the (`&'static str`-returning label projection,
+    /// `bool`-returning label predicate) partition —
+    /// [`Self::sorted_first_label`] projects the lex-order head-endpoint
+    /// label, this method answers "is this &str the lex-order head-
+    /// endpoint label?" without threading the caller through a per-
+    /// callsite `s == T::sorted_first_label()` comparison. Sibling
+    /// posture to [`Self::is_first_label`] one ordering axis over on
+    /// the (declaration, lex) partition — [`Self::is_first_label`]
+    /// answers "is this &str the DECLARATION-order head-endpoint
+    /// label?", this method answers "is this &str the LEX-order head-
+    /// endpoint label?". Sibling posture to [`Self::is_sorted_first`]
+    /// one arg-type axis over on the (Self, &str) partition —
+    /// [`Self::is_sorted_first`] answers "am I at the lex head
+    /// endpoint?" for a typed variant, this method answers the same
+    /// question for a raw label string WITHOUT decoding through
+    /// [`Self::parse_label`] or [`Self::find_by_label`] (which would
+    /// allocate the reject carrier on non-matching inputs OR force the
+    /// caller through the `Option<Self>`-typed dispatch).
+    ///
+    /// Every generic consumer that wants a zero-alloc O(1) label-shaped
+    /// lex-head-boundary query (an alphabetized-completion LSP cursor
+    /// that short-circuits on the alphabetically-first label before
+    /// materializing a typed variant, a CLI subcommand dispatcher that
+    /// folds the lex-min anchor label onto a special "default" path
+    /// (natural when the closed set's canonical ordering is alphabetic
+    /// rather than declaration-based), a serde deserializer wrapper
+    /// that treats the lex-min anchor label as the alphabetic default
+    /// alignment, a `tatara-check` diagnostic renderer that emits an
+    /// anchored `"expected first alphabetically: <lex-head-label>"`
+    /// banner ONLY when the offending input equals the lex-min label —
+    /// a distinguished error shape, not the generic
+    /// `"expected one of: A, B, C"` shape) binds to ONE typed predicate
+    /// rather than hand-rolling either the
+    /// `s == T::sorted_first_label()` inline comparison (which re-
+    /// derives the same one-primitive projection at every callsite AND
+    /// silently drifts when [`Self::sorted_first_label`] is overridden
+    /// after a label edit shifts the lex-min anchor) OR the two-
+    /// primitive `T::find_by_label(s).map(<T as ClosedSet>::is_sorted_first)
+    /// .unwrap_or(false)` composition (which forces the caller through
+    /// the `Option<Self>`-typed dispatch AND folds the not-a-label
+    /// input onto `false` implicitly rather than by direct `&str`
+    /// equality).
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::sorted_first_label`]) with the standard-library `&str`
+    /// equality operator — the label-shaped lex-head-membership
+    /// predicate is a typed CONSEQUENCE of the (lex-order head label)
+    /// projection, not a per-implementor `match s { "lex-head-label"
+    /// => true, _ => false }` block. Implementors override only when
+    /// the label-shaped lex-head-membership surface needs to diverge
+    /// from the natural `s == T::sorted_first_label()` shape (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason `via` / `set_label` / `labels` /
+    /// `sorted_first` / `sorted_first_label` overrides exist — a typed
+    /// escape hatch rather than forcing the implementor to hand-roll
+    /// the impl). An implementor that overrides
+    /// [`Self::sorted_first_label`] propagates the override through
+    /// this default body automatically; the (label → bool lex-head-
+    /// membership) projection funnels through ONE typed primitive.
+    ///
+    /// The label-shaped lex-head-membership contract —
+    /// `T::is_sorted_first_label(T::sorted_first().label()) == true` AND
+    /// `T::is_sorted_first_label(v.label()) == false` for every non-lex-
+    /// first canonical variant `v` on every implementor — is guaranteed
+    /// by the composition through [`Self::sorted_first_label`] AND the
+    /// label-pairwise-distinctness contract clause (3); the well-
+    /// formedness contract [`assert_closed_set_well_formed`]'s new
+    /// clause (52) pins the composition against the natural
+    /// `s == T::sorted_first_label()` shape on every implementor across
+    /// every canonical variant label AND the reserved probe input AND
+    /// the empty-string boundary so a passing well-formedness sweep
+    /// means every generic consumer can call
+    /// [`Self::is_sorted_first_label`] on any `&str` input at any crate
+    /// boundary and expect the same `bool` answer as the natural
+    /// composition.
+    ///
+    /// Not-a-label boundary — for any input `s` that is not a canonical
+    /// label of [`T::ALL`] (the reserved probe, the empty string, an
+    /// unknown token), this predicate returns `false` (the equality
+    /// against [`Self::sorted_first_label`] fails structurally — the
+    /// lex-head label is by clause (4) non-empty and is by clause (3)
+    /// distinct from every other canonical label AND is by the probe's
+    /// construction distinct from any input that lands in the substrate's
+    /// `make_unknown` carrier). Callers that want "is this a valid label
+    /// AND the lex-head label" compose this predicate with
+    /// [`Self::contains_label`] at the callsite; callers that want
+    /// "is this the lex-head label OR reject as unknown" compose this
+    /// predicate with the natural `!` inversion.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::sorted_first_label`] equals
+    /// [`Self::sorted_last_label`] (both project the sole canonical
+    /// label) so this predicate and [`Self::is_sorted_last_label`]
+    /// collapse onto the same `&str` equality check, mirroring
+    /// [`Self::is_sorted_first`] and [`Self::is_sorted_last`]'s
+    /// singleton collapse at the (Self, bool) arm one arg-type axis
+    /// over AND [`Self::is_first_label`] / [`Self::is_last_label`]'s
+    /// singleton collapse at the (&str, bool) arm one ordering axis
+    /// over. Preserves the (endpoint XOR interior) partition semantics
+    /// even at the boundary-cardinality edge where the two SLOTS
+    /// collapse onto the same anchor.
+    ///
+    /// Clauses (30) + (31) + (50) + (51) + (52) together open the
+    /// (arg-type × ordering × endpoint-direction) 2×2×2 = 8-corner
+    /// endpoint-membership hypercube at SEVEN of the eight corners on
+    /// the closed-set endpoint-membership surface: (Self, declaration,
+    /// head/tail) at clauses (30) — [`Self::is_first`] /
+    /// [`Self::is_last`]; (Self, lex, head/tail) at clauses (31) —
+    /// [`Self::is_sorted_first`] / [`Self::is_sorted_last`]; (&str,
+    /// declaration, head/tail) at clauses (50) + (51) —
+    /// [`Self::is_first_label`] / [`Self::is_last_label`]; (&str, lex,
+    /// head) at clause (52) — this method. The remaining corner on
+    /// (&str, lex, tail) is [`Self::is_sorted_last_label`], the natural
+    /// tail-direction sibling this method's docs pair to.
+    ///
+    /// THEORY.md §III — the typescape; the (label → lex-head-membership
+    /// bool) projection becomes a TYPE projection on the trait rather
+    /// than a per-consumer inline `s == T::sorted_first_label()`
+    /// comparison at every downstream label-shaped lex-head-boundary
+    /// query site.
+    /// THEORY.md §V.1 — knowable platform; the (label → lex-head-
+    /// membership) projection was an unnamed compound of
+    /// [`Self::sorted_first_label`] + `&str` `==` pre-lift; naming it
+    /// on the trait makes the projection a TYPED CONSEQUENCE of ONE
+    /// substrate primitive — generic consumers see ONE method, not one
+    /// label-shaped-lex-head-boundary-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (label →
+    /// lex-head-membership) projection emerges from the composition of
+    /// [`Self::sorted_first_label`] with the standard-library `&str`
+    /// equality operator rather than as a per-implementor
+    /// `match s { ... }` block. A future tightening of
+    /// [`Self::sorted_first_label`] (a future perfect-hash forward
+    /// projection, a future const-fn axis that makes the predicate
+    /// callable in const contexts, a future case-insensitive-label
+    /// extension that shifts which variant lands at the lex-min slot)
+    /// propagates to every closed-set label-shaped lex-head-boundary
+    /// consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-sorted-first-label?` on
+    /// closed enumerations under a canonical labeling (the label-shaped
+    /// lex-head-membership predicate on the alphabetized chain);
+    /// Idris's `isSortedFirstLabel : String -> Bool` on a `Show`ed
+    /// lex-sorted `Fin (S n)` composed via
+    /// `showFin (sortedFirst xs) == s` on the lex-head-anchor slot;
+    /// Haskell's `(== minimumBy (comparing show) [minBound..maxBound])`
+    /// on the `Bounded + Show` type-class pair projected through `show`
+    /// on the alphabetized chain; MLIR's
+    /// `RegisteredOperationName::isLexBeginName(name)` on the lex-
+    /// sorted Op registry; Rust's `strum::EnumIter().min_by_key(|v|
+    /// v.get_str()).map(|v| v.get_str() == s).unwrap_or(false)`
+    /// composed through the iterator API. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::sorted_first_label`] surface with the standard-
+    /// library `&str` equality operator — no new dep, no new IR layer,
+    /// no supertrait bound, no allocation, no [`Option`]-typed
+    /// dispatch.
+    fn is_sorted_first_label(s: &str) -> bool {
+        s == <Self as ClosedSet>::sorted_first_label()
+    }
+
+    /// The lexicographic-order tail-endpoint LABEL predicate — `true`
+    /// iff `s` equals [`Self::sorted_last_label`], `false` otherwise.
+    /// Closes the (`&str`, lex, tail) corner of the (arg-type ×
+    /// ordering × endpoint-direction) 2×2×2 = 8-corner endpoint-
+    /// membership hypercube alongside [`Self::is_first`] (Self,
+    /// declaration, head), [`Self::is_last`] (Self, declaration, tail),
+    /// [`Self::is_sorted_first`] (Self, lex, head),
+    /// [`Self::is_sorted_last`] (Self, lex, tail),
+    /// [`Self::is_first_label`] (&str, declaration, head),
+    /// [`Self::is_last_label`] (&str, declaration, tail), and
+    /// [`Self::is_sorted_first_label`] (&str, lex, head), completing
+    /// the 8-corner hypercube on the closed-set endpoint-membership
+    /// surface.
+    ///
+    /// Sibling posture to [`Self::is_sorted_first_label`] one endpoint-
+    /// direction axis over on the (head, tail) partition of the lex-
+    /// axis label-shaped endpoint-membership surface:
+    /// [`Self::is_sorted_first_label`] answers "is this &str the lex-
+    /// order head-endpoint label?", this method answers "is this &str
+    /// the lex-order tail-endpoint label?". See
+    /// [`Self::is_sorted_first_label`] for the shared design rationale,
+    /// sibling matrix, override axis, future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method is
+    /// the tail-direction arm of the same axis and inherits every
+    /// property from the head arm's documentation, differing only in
+    /// the composition through [`Self::sorted_last_label`] instead of
+    /// [`Self::sorted_first_label`].
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::sorted_last_label`]) with the standard-library `&str`
+    /// equality operator. The label-shaped lex-tail-membership contract
+    /// — `T::is_sorted_last_label(T::sorted_last().label()) == true`
+    /// AND `T::is_sorted_last_label(v.label()) == false` for every non-
+    /// lex-last canonical variant `v` on every implementor — is
+    /// guaranteed by the composition; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (53) pins the
+    /// composition against the natural `s == T::sorted_last_label()`
+    /// shape on every implementor across every canonical variant label
+    /// AND the reserved probe input AND the empty-string boundary.
+    ///
+    /// Clauses (30) + (31) + (50) + (51) + (52) + (53) together CLOSE
+    /// the (arg-type × ordering × endpoint-direction) 2×2×2 = 8-corner
+    /// endpoint-membership hypercube on the closed-set endpoint-
+    /// membership surface: (Self, declaration, head/tail) at clauses
+    /// (30) — [`Self::is_first`] / [`Self::is_last`]; (Self, lex,
+    /// head/tail) at clauses (31) — [`Self::is_sorted_first`] /
+    /// [`Self::is_sorted_last`]; (&str, declaration, head/tail) at
+    /// clauses (50) + (51) — [`Self::is_first_label`] /
+    /// [`Self::is_last_label`]; (&str, lex, head/tail) at clauses (52)
+    /// and (53) — [`Self::is_sorted_first_label`] and this method.
+    /// Every generic consumer that binds any of the eight endpoint-
+    /// membership methods sees the SAME endpoint-membership answer at
+    /// every crate boundary regardless of which arg-type axis /
+    /// ordering-axis / endpoint-direction axis it walks.
+    fn is_sorted_last_label(s: &str) -> bool {
+        s == <Self as ClosedSet>::sorted_last_label()
+    }
+
     /// The declaration-order endpoint-membership predicate — `true`
     /// when `self` is either [`Self::first`] or [`Self::last`],
     /// `false` on every strictly-interior slot. The endpoint-partition
@@ -9012,6 +9251,118 @@ where
     assert!(
         !T::is_last_label(""),
         "{type_name}: T::is_last_label(\"\") returned true on the empty-string boundary — the label-shaped tail-endpoint membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling",
+    );
+    // (52) — `T::is_sorted_first_label(s)` MUST equal
+    // `s == T::sorted_first_label()` on every representative input:
+    // every canonical variant label matches iff the variant is the lex-
+    // order head anchor, the reserved probe rejects (`false`), and the
+    // empty-string boundary rejects (`false`). The default trait body
+    // composes `s == <T as ClosedSet>::sorted_first_label()` verbatim
+    // and satisfies the clause for free; the assertion catches a future
+    // implementor whose override drifts the composition (a permissive
+    // override that returns `true` for a non-lex-head label — silently
+    // routing an interior lex slot's label into the label-shaped lex-
+    // head-membership predicate; a strict override that returns `false`
+    // for the canonical lex-head label — silently detaching the label-
+    // shaped lex-head-membership predicate from the natural
+    // `s == T::sorted_first_label()` composition every downstream
+    // label-shaped lex-head-boundary consumer routes through; a fold
+    // override that answers "is this the declaration-head label?"
+    // instead — silently swapping the lex-axis onto the declaration-
+    // axis at the (declaration, lex) ordering axis; a fold override
+    // that answers "is this the lex-tail label?" instead — silently
+    // swapping the head-direction onto the tail-direction at the (head,
+    // tail) endpoint-direction axis; an override that always returns
+    // `true` for non-empty inputs — silently collapsing the label-
+    // shaped lex-head-membership onto a trivial non-empty predicate; a
+    // fabricated override that returns `true` on the empty-string
+    // boundary — silently detaching the label-shaped lex-head-
+    // membership from the non-empty canonical-label surface clause (4)
+    // pins) loudly rather than silently bifurcating the label-shaped
+    // lex-head-membership surface every downstream label-shaped lex-
+    // head-boundary consumer routes through. Sibling posture to clauses
+    // (31) + (48) + (50) — clause (31) pins the Self-arg lex-head-
+    // membership predicate against the natural
+    // `sorted_index_of(self) == 0` composition, clause (48) pins the
+    // singular lex-head-endpoint label projection against
+    // `T::sorted_first().label()`, clause (50) pins the &str-arg
+    // declaration-head-membership predicate against
+    // `s == T::first_label()`, this clause pins the &str-arg lex-head-
+    // membership predicate against the natural
+    // `s == T::sorted_first_label()` composition. Clauses (30) + (31) +
+    // (50) + (52) together open the (arg-type × ordering × head-
+    // direction) 2×2 = 4-corner endpoint-membership matrix at the head
+    // arm on BOTH arg-type axes AND BOTH ordering axes.
+    for &v in T::ALL {
+        let label = v.label();
+        let lifted = T::is_sorted_first_label(label);
+        let natural = label == T::sorted_first_label();
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::is_sorted_first_label({label:?}) drifted from `{label:?} == T::sorted_first_label()` — the label-shaped lex-head-endpoint membership predicate no longer agrees with the natural `s == T::sorted_first_label()` one-primitive composition on the canonical label of variant {v:?}, so a downstream alphabetized-completion LSP cursor / alphabetic-default-deserializer / lex-anchored-diagnostic renderer that binds `T::is_sorted_first_label(s)` as its zero-alloc label-shaped lex-head-anchor query surface would answer the wrong `bool`",
+        );
+    }
+    assert!(
+        !T::is_sorted_first_label(probe),
+        "{type_name}: T::is_sorted_first_label({probe:?}) returned true on the reserved probe input — the label-shaped lex-head-endpoint membership predicate MUST reject every input outside the closed set's canonical labeling; the probe is by construction distinct from every canonical label AND from every substrate-produced label, so a `true` answer here silently permits inputs beyond the closed set into the label-shaped lex-head-boundary surface",
+    );
+    assert!(
+        !T::is_sorted_first_label(""),
+        "{type_name}: T::is_sorted_first_label(\"\") returned true on the empty-string boundary — the label-shaped lex-head-endpoint membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling, so a `true` answer here silently permits the empty-string boundary into the label-shaped lex-head-boundary surface",
+    );
+    // (53) — `T::is_sorted_last_label(s)` MUST equal
+    // `s == T::sorted_last_label()` on every representative input:
+    // every canonical variant label matches iff the variant is the lex-
+    // order tail anchor, the reserved probe rejects (`false`), and the
+    // empty-string boundary rejects (`false`). The default trait body
+    // composes `s == <T as ClosedSet>::sorted_last_label()` verbatim
+    // and satisfies the clause for free; the assertion catches a future
+    // implementor whose override drifts the composition (a permissive
+    // override that returns `true` for a non-lex-tail label; a strict
+    // override that returns `false` for the canonical lex-tail label; a
+    // fold override that answers "is this the declaration-tail label?"
+    // instead — silently swapping the lex-axis onto the declaration-
+    // axis at the (declaration, lex) ordering axis; a fold override
+    // that answers "is this the lex-head label?" instead — silently
+    // swapping the tail-direction onto the head-direction at the (head,
+    // tail) endpoint-direction axis; an override that always returns
+    // `true` for non-empty inputs; a fabricated override that returns
+    // `true` on the empty-string boundary) loudly rather than silently
+    // bifurcating the label-shaped lex-tail-membership surface every
+    // downstream label-shaped lex-tail-boundary consumer routes
+    // through. Sibling posture to clause (52) one endpoint-direction
+    // axis over on the (head, tail) partition of the lex-axis label-
+    // shaped endpoint-membership sweep. Clauses (30) + (31) + (50) +
+    // (51) + (52) + (53) together CLOSE the (arg-type × ordering ×
+    // endpoint-direction) 2×2×2 = 8-corner endpoint-membership
+    // hypercube on the closed-set endpoint-membership surface: (Self,
+    // declaration, head/tail) at clause (30) — [`Self::is_first`] /
+    // [`Self::is_last`]; (Self, lex, head/tail) at clause (31) —
+    // [`Self::is_sorted_first`] / [`Self::is_sorted_last`]; (&str,
+    // declaration, head/tail) at clauses (50) + (51) —
+    // [`Self::is_first_label`] / [`Self::is_last_label`]; (&str, lex,
+    // head/tail) at clauses (52) + (53) —
+    // [`Self::is_sorted_first_label`] / [`Self::is_sorted_last_label`].
+    // Every generic consumer that binds any of the eight endpoint-
+    // membership methods sees the SAME endpoint-membership answer at
+    // every crate boundary regardless of which arg-type axis / ordering-
+    // axis / endpoint-direction axis it walks.
+    for &v in T::ALL {
+        let label = v.label();
+        let lifted = T::is_sorted_last_label(label);
+        let natural = label == T::sorted_last_label();
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::is_sorted_last_label({label:?}) drifted from `{label:?} == T::sorted_last_label()` — the label-shaped lex-tail-endpoint membership predicate no longer agrees with the natural `s == T::sorted_last_label()` one-primitive composition on the canonical label of variant {v:?}, so a downstream alphabetized-completion LSP cursor / alphabetic-default-deserializer / lex-anchored-diagnostic renderer that binds `T::is_sorted_last_label(s)` as its zero-alloc label-shaped lex-tail-anchor query surface would answer the wrong `bool`",
+        );
+    }
+    assert!(
+        !T::is_sorted_last_label(probe),
+        "{type_name}: T::is_sorted_last_label({probe:?}) returned true on the reserved probe input — the label-shaped lex-tail-endpoint membership predicate MUST reject every input outside the closed set's canonical labeling",
+    );
+    assert!(
+        !T::is_sorted_last_label(""),
+        "{type_name}: T::is_sorted_last_label(\"\") returned true on the empty-string boundary — the label-shaped lex-tail-endpoint membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling",
     );
 }
 
@@ -18462,6 +18813,346 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an is_last_label() override that returns a strictly-interior variant's label rather than composing `s == T::last_label()`",
+        );
+    }
+
+    #[test]
+    fn is_sorted_first_label_matches_lex_head_label_and_rejects_every_non_lex_head_variant_label() {
+        // The lex-axis label-shaped head-endpoint membership predicate
+        // returns `true` on the canonical lex-head-anchor label
+        // (`"alpha"` on the stub whose lex order coincides with its
+        // declaration order `[Alpha, Beta, Gamma]`) and `false` on
+        // every non-lex-head canonical variant label. The pin is the
+        // natural `s == <StubKind as ClosedSet>::sorted_first_label()`
+        // composition — the label-shaped lex-head-membership predicate
+        // answers "is this &str the lex-order head-endpoint label?"
+        // for a raw label string WITHOUT decoding through
+        // [`ClosedSet::parse_label`] or [`ClosedSet::find_by_label`].
+        assert!(<StubKind as ClosedSet>::is_sorted_first_label("alpha"));
+        assert!(!<StubKind as ClosedSet>::is_sorted_first_label("beta"));
+        assert!(!<StubKind as ClosedSet>::is_sorted_first_label("gamma"));
+    }
+
+    #[test]
+    fn is_sorted_last_label_matches_lex_tail_label_and_rejects_every_non_lex_tail_variant_label() {
+        // Sibling of
+        // `is_sorted_first_label_matches_lex_head_label_and_rejects_every_non_lex_head_variant_label`
+        // one endpoint-direction axis over on the (head, tail)
+        // partition of the lex-axis label-shaped endpoint-membership
+        // surface. Returns `true` on the canonical lex-tail-anchor
+        // label (`"gamma"` on the stub whose lex order coincides with
+        // its declaration order `[Alpha, Beta, Gamma]`) and `false` on
+        // every non-lex-tail canonical variant label.
+        assert!(<StubKind as ClosedSet>::is_sorted_last_label("gamma"));
+        assert!(!<StubKind as ClosedSet>::is_sorted_last_label("alpha"));
+        assert!(!<StubKind as ClosedSet>::is_sorted_last_label("beta"));
+    }
+
+    #[test]
+    fn is_sorted_first_label_and_is_sorted_last_label_reject_reserved_probe_and_empty_string_boundary(
+    ) {
+        // The lex-axis label-shaped endpoint-membership predicates
+        // MUST reject every input outside the closed set's canonical
+        // labeling — the reserved probe (by construction distinct
+        // from every canonical label AND from every substrate-
+        // produced label) and the empty-string boundary (clause (4)
+        // pins the empty string as structurally reserved outside every
+        // canonical labeling). Pins the "not-a-label boundary"
+        // documented on [`ClosedSet::is_sorted_first_label`]: any non-
+        // canonical input returns `false` via the `&str` equality
+        // structural rejection.
+        let probe = "__is_sorted_endpoint_label_probe__";
+        assert!(!<StubKind as ClosedSet>::is_sorted_first_label(probe));
+        assert!(!<StubKind as ClosedSet>::is_sorted_last_label(probe));
+        assert!(!<StubKind as ClosedSet>::is_sorted_first_label(""));
+        assert!(!<StubKind as ClosedSet>::is_sorted_last_label(""));
+    }
+
+    #[test]
+    fn is_sorted_first_label_and_is_sorted_last_label_agree_with_variant_predicates_on_every_canonical_label(
+    ) {
+        // For every canonical variant `v` in the closed set, the lex-
+        // axis label-shaped endpoint-membership predicates agree with
+        // the Self-arg lex-axis endpoint-membership predicates through
+        // the natural (variant → label) projection:
+        // `T::is_sorted_first_label(v.label())` matches
+        // `v.is_sorted_first()` and `T::is_sorted_last_label(v.label())`
+        // matches `v.is_sorted_last()` — the (arg-type × endpoint-
+        // direction) 2×2 lex-axis endpoint-membership matrix agrees on
+        // every canonical slot regardless of which arg-type column the
+        // caller walks. The pin catches a regression that silently
+        // bifurcates the (Self, &str) arg-type axis at either lex-
+        // endpoint direction on any variant.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let label = v.label();
+            assert_eq!(
+                <StubKind as ClosedSet>::is_sorted_first_label(label),
+                v.is_sorted_first(),
+                "is_sorted_first_label({label:?}) diverged from {v:?}.is_sorted_first() — the (Self, &str) arg-type axis bifurcated at the lex head-endpoint slot",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::is_sorted_last_label(label),
+                v.is_sorted_last(),
+                "is_sorted_last_label({label:?}) diverged from {v:?}.is_sorted_last() — the (Self, &str) arg-type axis bifurcated at the lex tail-endpoint slot",
+            );
+        }
+    }
+
+    #[test]
+    fn is_sorted_first_label_and_is_sorted_last_label_bracket_lex_endpoints_on_arbitrary_declaration_order(
+    ) {
+        // The lex-endpoint-membership label-shaped contract on a
+        // declaration order that neither matches nor cleanly reverses
+        // the lex order — the label-shaped predicates route through
+        // the lex-anchor label projection, NOT through the
+        // declaration-anchor label projection, regardless of where in
+        // `T::ALL` the lex-min / lex-max variant sits. A regression
+        // that hard-coded either predicate against the declaration
+        // anchor (a stray `s == T::first_label()` shape composed one
+        // ordering axis over) rather than routing through
+        // `T::sorted_first_label()` / `T::sorted_last_label()` would
+        // pass on `StubKind` (because its declaration order coincides
+        // with its lex order) and silently bifurcate the predicates
+        // on any implementor whose declaration and lex orders
+        // disagree. The stub's declaration is `[Gamma, Beta, Alpha]`
+        // with labels `("gamma", "beta", "alpha")` — declaration head
+        // label `"gamma"`, declaration tail label `"alpha"`, lex head
+        // label `"alpha"`, lex tail label `"gamma"` — putting the
+        // (declaration, lex) × (head, tail) label projection at four
+        // distinct labels so a lex-vs-declaration confusion in either
+        // label-shaped predicate fails at least one arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum LexEndpointLabelMembershipStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownLexEndpointLabelMembershipStubKind(pub String);
+        impl core::fmt::Display for UnknownLexEndpointLabelMembershipStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown lex endpoint label membership stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for LexEndpointLabelMembershipStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "lex endpoint label membership stub kind";
+            type Unknown = UnknownLexEndpointLabelMembershipStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownLexEndpointLabelMembershipStubKind(s.to_owned())
+            }
+        }
+        // Lex head label `"alpha"` fires `is_sorted_first_label`;
+        // declaration head label `"gamma"` does NOT.
+        assert!(<LexEndpointLabelMembershipStubKind as ClosedSet>::is_sorted_first_label("alpha"));
+        assert!(!<LexEndpointLabelMembershipStubKind as ClosedSet>::is_sorted_first_label("gamma"));
+        assert!(!<LexEndpointLabelMembershipStubKind as ClosedSet>::is_sorted_first_label("beta"));
+        // Lex tail label `"gamma"` fires `is_sorted_last_label`;
+        // declaration tail label `"alpha"` does NOT.
+        assert!(<LexEndpointLabelMembershipStubKind as ClosedSet>::is_sorted_last_label("gamma"));
+        assert!(!<LexEndpointLabelMembershipStubKind as ClosedSet>::is_sorted_last_label("alpha"));
+        assert!(!<LexEndpointLabelMembershipStubKind as ClosedSet>::is_sorted_last_label("beta"));
+        // The well-formedness sweep passes on this stub, pinning the
+        // clauses (52) + (53) label-shaped lex-endpoint-membership
+        // composition against the natural
+        // `s == T::sorted_first_label()` / `s == T::sorted_last_label()`
+        // shape on every canonical label.
+        super::assert_closed_set_well_formed::<LexEndpointLabelMembershipStubKind>();
+    }
+
+    #[test]
+    fn is_sorted_first_label_and_is_sorted_last_label_collapse_on_singleton_closed_set() {
+        // For a closed set with `T::CARDINALITY == 1`, the sole
+        // variant's canonical label is BOTH the lex-head-endpoint
+        // label AND the lex-tail-endpoint label so the two lex-axis
+        // label-shaped endpoint-membership predicates collapse onto
+        // the same `&str` equality check. Mirrors
+        // [`ClosedSet::is_first_label`] /
+        // [`ClosedSet::is_last_label`]'s singleton collapse one
+        // ordering axis over AND [`ClosedSet::is_sorted_first`] /
+        // [`ClosedSet::is_sorted_last`]'s singleton collapse at the
+        // (Self, bool) arm one arg-type axis over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonLexLabelKind {
+            Sole,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonLexLabelKind(pub String);
+        impl core::fmt::Display for UnknownSingletonLexLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton lex label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonLexLabelKind {
+            const ALL: &'static [Self] = &[Self::Sole];
+            const SET_LABEL: &'static str = "singleton lex label kind";
+            type Unknown = UnknownSingletonLexLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Sole => "sole",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonLexLabelKind(s.to_owned())
+            }
+        }
+        assert!(<SingletonLexLabelKind as ClosedSet>::is_sorted_first_label(
+            "sole"
+        ));
+        assert!(<SingletonLexLabelKind as ClosedSet>::is_sorted_last_label(
+            "sole"
+        ));
+        assert!(!<SingletonLexLabelKind as ClosedSet>::is_sorted_first_label("other"));
+        assert!(!<SingletonLexLabelKind as ClosedSet>::is_sorted_last_label(
+            "other"
+        ));
+        // The singleton also satisfies the well-formedness clauses
+        // (52) + (53) — the sole variant's label matches BOTH lex-
+        // endpoint-label projections so both predicates fire on the
+        // sole slot.
+        super::assert_closed_set_well_formed::<SingletonLexLabelKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_sorted_first_label_and_sorted_first_label_composition(
+    ) {
+        // The well-formedness sweep's (52) clause —
+        // `T::is_sorted_first_label(s)` MUST equal
+        // `s == T::sorted_first_label()` on every canonical variant
+        // label. A hand-impl'd implementor whose override folds the
+        // label-shaped lex-head-membership predicate onto the label-
+        // shaped lex-tail-membership predicate at the (head, tail)
+        // endpoint-direction axis (returning `true` on the lex-tail
+        // label instead of the lex-head label) fails the sweep loudly
+        // rather than silently bifurcating the label-shaped lex-head-
+        // membership surface every downstream label-shaped lex-head-
+        // boundary consumer routes through. The stub's declaration is
+        // `[Head, Middle, Tail]` with labels `("bbb", "aaa", "ccc")`
+        // — lex order is `["aaa"(Middle), "bbb"(Head), "ccc"(Tail)]`
+        // — so declaration head label `"bbb"` is lex-interior, and
+        // the drifted override that answers `s == "ccc"` folds the
+        // lex-head-membership onto the lex-tail-label slot.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSortedFirstLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsSortedFirstLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsSortedFirstLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is sorted first label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsSortedFirstLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is sorted first label kind";
+            type Unknown = UnknownDriftedIsSortedFirstLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "bbb",
+                    Self::Middle => "aaa",
+                    Self::Tail => "ccc",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSortedFirstLabelKind(s.to_owned())
+            }
+            fn is_sorted_first_label(s: &str) -> bool {
+                // Drifted override — folds the label-shaped lex-head-
+                // endpoint membership predicate onto the label-shaped
+                // lex-tail-endpoint membership predicate, silently
+                // swapping the head-direction predicate with the tail-
+                // direction predicate at the (head, tail) endpoint-
+                // direction axis every downstream label-shaped lex-
+                // head-boundary consumer routes through. Lex order on
+                // this stub is `["aaa", "bbb", "ccc"]`, so the intended
+                // lex-head label is `"aaa"` but the override answers
+                // `s == "ccc"` instead — the lex-tail label.
+                s == "ccc"
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsSortedFirstLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_sorted_first_label() override that folds the lex-head-endpoint label predicate onto the lex-tail-endpoint label predicate rather than composing `s == T::sorted_first_label()`",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_sorted_last_label_and_sorted_last_label_composition(
+    ) {
+        // The well-formedness sweep's (53) clause —
+        // `T::is_sorted_last_label(s)` MUST equal
+        // `s == T::sorted_last_label()` on every canonical variant
+        // label. A hand-impl'd implementor whose override routes the
+        // lex-head label into the label-shaped lex-tail-membership
+        // predicate — folding the tail-direction predicate onto the
+        // head-direction predicate at the (head, tail) endpoint-
+        // direction axis — fails the sweep loudly rather than
+        // silently bifurcating the label-shaped lex-tail-membership
+        // surface every downstream label-shaped lex-tail-boundary
+        // consumer routes through.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSortedLastLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsSortedLastLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsSortedLastLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is sorted last label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsSortedLastLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is sorted last label kind";
+            type Unknown = UnknownDriftedIsSortedLastLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "bbb",
+                    Self::Middle => "aaa",
+                    Self::Tail => "ccc",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSortedLastLabelKind(s.to_owned())
+            }
+            fn is_sorted_last_label(s: &str) -> bool {
+                // Drifted override — routes the lex-head label into
+                // the label-shaped lex-tail-endpoint slot, silently
+                // forking the tail-membership predicate from the
+                // natural `s == T::sorted_last_label()` composition
+                // every downstream label-shaped lex-tail-boundary
+                // consumer routes through. Lex order on this stub is
+                // `["aaa", "bbb", "ccc"]`, so the intended lex-tail
+                // label is `"ccc"` but the override answers
+                // `s == "aaa"` instead — the lex-head label.
+                s == "aaa"
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsSortedLastLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_sorted_last_label() override that folds the lex-tail-endpoint label predicate onto the lex-head-endpoint label predicate rather than composing `s == T::sorted_last_label()`",
         );
     }
 }

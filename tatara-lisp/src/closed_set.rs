@@ -2357,6 +2357,268 @@ pub trait ClosedSet: Sized + Copy + 'static {
         i.checked_add(1) == Some(<Self as ClosedSet>::CARDINALITY)
     }
 
+    /// The lexicographic-order head-endpoint INDEX predicate — `true`
+    /// iff the `usize` argument equals `0` (the lex-order head-
+    /// endpoint's slot in [`Self::sorted_variants`], where the argument
+    /// is interpreted as a LEX position — the natural output shape of
+    /// [`Self::sorted_index_of`], [`Self::sorted_next_index`],
+    /// [`Self::sorted_prev_index`], [`Self::cycle_sorted_next_index`],
+    /// and [`Self::cycle_sorted_prev_index`]), `false` otherwise.
+    /// Closes the `(usize, lex, head)` corner of the (arg-type ×
+    /// ordering × endpoint-direction) 3×2×2 = 12-corner endpoint-
+    /// membership hypercube alongside [`Self::is_first`] (`Self`,
+    /// declaration, head), [`Self::is_last`] (`Self`, declaration,
+    /// tail), [`Self::is_sorted_first`] (`Self`, lex, head),
+    /// [`Self::is_sorted_last`] (`Self`, lex, tail),
+    /// [`Self::is_first_label`] (`&str`, declaration, head),
+    /// [`Self::is_last_label`] (`&str`, declaration, tail),
+    /// [`Self::is_sorted_first_label`] (`&str`, lex, head),
+    /// [`Self::is_sorted_last_label`] (`&str`, lex, tail),
+    /// [`Self::is_first_index`] (`usize`, declaration, head), and
+    /// [`Self::is_last_index`] (`usize`, declaration, tail).
+    ///
+    /// The (arg-type × ordering × endpoint-direction) 3×2×2 endpoint-
+    /// membership hypercube over the closed-set boundary surface
+    /// partitions post-lift into eleven of twelve corners; only the
+    /// lex-tail sibling [`Self::is_sorted_last_index`] remains to close
+    /// the twelfth:
+    ///
+    /// | Arg-type \\ Ordering \\ Endpoint | Declaration head            | Declaration tail            | Lex head                         | Lex tail                         |
+    /// |----------------------------------|-----------------------------|-----------------------------|----------------------------------|----------------------------------|
+    /// | `Self` (variant)                 | [`Self::is_first`]          | [`Self::is_last`]           | [`Self::is_sorted_first`]        | [`Self::is_sorted_last`]         |
+    /// | `&str` (label)                   | [`Self::is_first_label`]    | [`Self::is_last_label`]     | [`Self::is_sorted_first_label`]  | [`Self::is_sorted_last_label`]   |
+    /// | `usize` (index)                  | [`Self::is_first_index`]    | [`Self::is_last_index`]     | [`Self::is_sorted_first_index`]  | [`Self::is_sorted_last_index`]   |
+    ///
+    /// Sibling posture to [`Self::is_first_index`] one ordering axis
+    /// over on the (declaration, lex) partition — [`Self::is_first_index`]
+    /// interprets `i` as a DECLARATION slot in [`Self::ALL`] and pins
+    /// it against the declaration-order head-slot literal `0`; this
+    /// method interprets `i` as a LEX position in [`Self::sorted_variants`]
+    /// and pins it against the lex-order head-slot literal `0`. The
+    /// `usize` bodies coincide (both endpoints land at slot `0` under
+    /// their respective orderings) but the SEMANTIC and load-bearing
+    /// consumer paths differ — a caller who computed a lex-position via
+    /// [`Self::sorted_index_of`] and wants to test lex-head membership
+    /// binds to THIS method (not [`Self::is_first_index`]) to make the
+    /// lex axis explicit at the call site and to inherit the (76)
+    /// well-formedness pin against `T::is_sorted_first_index(T::sorted_index_of(v))
+    /// == v.is_sorted_first()` rather than the (74) pin against
+    /// `T::is_first_index(T::index_of(v)) == v.is_first()`.
+    ///
+    /// Every generic consumer that wants a zero-alloc O(1) `usize`-
+    /// shaped lex-head-boundary query (an alphabetized compact wire
+    /// codec that short-circuits on the lex-head-anchor slot before
+    /// materializing a typed variant, an LSP completion widget that
+    /// highlights the alphabetically-first candidate slot in a lex-
+    /// sorted picker, a lex-sorted Prometheus per-lex-slot bucket
+    /// renderer that anchors the lex-head-anchor bucket at a
+    /// distinguished color, a `tatara-check` diagnostic renderer that
+    /// emits an anchored `"expected first lex slot: 0"` banner ONLY
+    /// when the offending lex-position equals the lex-head slot, a
+    /// byte-tagged compact-encoding on the alphabetized carve that
+    /// treats the lex-head slot as the canonical `0`-tag) binds to ONE
+    /// typed predicate rather than hand-rolling either the `i == 0`
+    /// inline comparison on the lex axis (which re-derives the same
+    /// magic-literal composition at every callsite AND silently drifts
+    /// when the definition of "lex-head slot" gets tightened — a future
+    /// closed set that reserves lex-position `0` for a sentinel and
+    /// shifts every canonical lex-slot up by one, a future const-fn
+    /// axis that makes the predicate callable in const contexts, a
+    /// future `#[closed_set(compare_labels_with = ...)]` derive
+    /// attribute that swaps the ordering) OR the `T::from_sorted_index(i).
+    /// map(<T as ClosedSet>::is_sorted_first).unwrap_or(false)`
+    /// composition (which pays an `Option<Self>`-typed dispatch AND
+    /// folds the out-of-range boundary onto `false` implicitly rather
+    /// than by direct `usize` equality) OR the
+    /// `T::sorted_label_at(i).map(<T as ClosedSet>::is_sorted_first_label).
+    /// unwrap_or(false)` composition (which pays an
+    /// `Option<&'static str>`-typed dispatch AND routes through the
+    /// label-shaped lex-head predicate one arg-type axis over).
+    ///
+    /// Default body is a zero-alloc `usize` equality check against the
+    /// literal `0` — the index-shaped lex-head-membership predicate is
+    /// the natural lex-position rendering of the closed-set lex-order
+    /// head endpoint. Implementors override only when the index-shaped
+    /// lex-head-membership surface needs to diverge from the natural
+    /// `i == 0` shape (no production implementor reaches for this
+    /// today; the axis exists for the same reason `via` / `set_label` /
+    /// `labels` / `sorted_first` / `sorted_first_label` /
+    /// `is_sorted_first_label` overrides exist — a typed escape hatch
+    /// rather than forcing the implementor to hand-roll the impl).
+    ///
+    /// The index-shaped lex-head-membership contract —
+    /// `T::is_sorted_first_index(0) == true` AND
+    /// `T::is_sorted_first_index(i) == false` for every
+    /// `i ∈ 1..T::CARDINALITY` on every implementor — is guaranteed
+    /// by the natural `usize` equality against `0`; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (76)
+    /// pins the composition against the natural `i == 0` shape AND
+    /// against agreement with [`Self::is_sorted_first`] through the
+    /// (variant → lex slot) forward projection
+    /// [`Self::sorted_index_of`] on every implementor across every
+    /// canonical variant's lex slot AND the out-of-range boundary
+    /// `T::CARDINALITY` probe so a passing well-formedness sweep means
+    /// every generic consumer can call [`Self::is_sorted_first_index`]
+    /// on any `usize` input at any crate boundary and expect the same
+    /// `bool` answer as the natural composition.
+    ///
+    /// Out-of-range boundary — for any input `i` outside
+    /// `0..T::CARDINALITY` (the canonical `T::CARDINALITY` probe, a
+    /// large slot like `usize::MAX`, any lex-position past the lex-
+    /// tail), this predicate returns `false` (the equality against `0`
+    /// fails structurally — the lex-head slot is by construction `0`
+    /// and no out-of-range lex-position equals `0` under the non-empty
+    /// `T::ALL` contract). Callers that want "is this a valid lex-slot
+    /// AND the lex-head slot" compose this predicate with an `i <
+    /// T::CARDINALITY` range check at the callsite; callers that want
+    /// "is this the lex-head slot OR reject as out-of-range" compose
+    /// this predicate with the natural `!` inversion.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, the sole variant's lex slot `0` is BOTH
+    /// the lex-order head-endpoint slot AND the lex-order tail-endpoint
+    /// slot so this predicate and [`Self::is_sorted_last_index`]
+    /// collapse onto the same `usize` equality check, mirroring
+    /// [`Self::is_sorted_first`] / [`Self::is_sorted_last`]'s singleton
+    /// collapse at the (`Self`, bool) arm AND
+    /// [`Self::is_sorted_first_label`] / [`Self::is_sorted_last_label`]'s
+    /// singleton collapse at the (`&str`, bool) arm one arg-type axis
+    /// over AND [`Self::is_first_index`] / [`Self::is_last_index`]'s
+    /// singleton collapse at the (declaration, `usize`) arm one
+    /// ordering axis over.
+    ///
+    /// THEORY.md §III — the typescape; the (usize → lex-head-membership
+    /// bool) projection becomes a TYPE projection on the trait rather
+    /// than a per-consumer inline `i == 0` comparison on a lex-position
+    /// input. Closes the ordering-axis of the index-shaped endpoint-
+    /// membership matrix from the 3×2×(declaration only) subset to the
+    /// full 3×2×2 = 12-corner endpoint-membership hypercube at eleven
+    /// of twelve corners (the sole remaining gap is
+    /// [`Self::is_sorted_last_index`] one endpoint-direction over).
+    /// THEORY.md §V.1 — knowable platform; the (usize → lex-head-
+    /// membership) projection was an unnamed compound of the `i == 0`
+    /// comparison on a lex-position input pre-lift; naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of the closed-set
+    /// lex-order head-slot literal — generic consumers see ONE method,
+    /// not one index-shaped-lex-head-boundary-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (usize →
+    /// lex-head-membership) projection emerges from the closed-set
+    /// lex-order head-slot literal `0` rather than as a per-implementor
+    /// `match i { 0 => true, _ => false }` block on a lex-position
+    /// input.
+    ///
+    /// Frontier inspiration: Racket's `(enum-sorted-first-index? enum
+    /// i)` on a closed enumeration under the lexicographic ordering
+    /// (the index-shaped lex-head-membership predicate on the
+    /// alphabetized chain composed through the array-position
+    /// projection); Idris's `isFZ : Fin (S n) -> Bool` composed through
+    /// `finToNat` on a `sortByLabel`-permuted labeling on the lex-head-
+    /// anchor slot of the non-empty finite-type universe; Haskell's
+    /// `(== 0)` composed with `sortOn show [minBound..maxBound]` on the
+    /// `Bounded + Show` type-class pair projected through `show` on the
+    /// alphabetized chain; MLIR's
+    /// `RegisteredOperationName::isLexBeginIndex(idx)` on the lex-
+    /// sorted Op registry; Rust's `strum::EnumIter::iter().collect::
+    /// <Vec<_>>().sort_by_key(|v| v.get_str()).iter().position(|v| v ==
+    /// self).map(|i| i == 0).unwrap_or(false)` composed through the
+    /// iterator API + a sort-by-label prelude. Translation through
+    /// pleme-io primitives: a pure default method composing the closed-
+    /// set lex-order head-slot literal `0` with the standard-library
+    /// `usize` equality operator — no new dep, no new IR layer, no
+    /// supertrait bound, no allocation, no [`Option`]-typed dispatch.
+    fn is_sorted_first_index(i: usize) -> bool {
+        i == 0
+    }
+
+    /// The lexicographic-order tail-endpoint INDEX predicate — `true`
+    /// iff the `usize` argument equals `T::CARDINALITY - 1` (the lex-
+    /// order tail-endpoint's slot in [`Self::sorted_variants`], where
+    /// the argument is interpreted as a LEX position — the natural
+    /// output shape of [`Self::sorted_index_of`],
+    /// [`Self::sorted_next_index`], [`Self::sorted_prev_index`],
+    /// [`Self::cycle_sorted_next_index`], and
+    /// [`Self::cycle_sorted_prev_index`]), `false` otherwise. Closes
+    /// the `(usize, lex, tail)` corner of the (arg-type × ordering ×
+    /// endpoint-direction) 3×2×2 = 12-corner endpoint-membership
+    /// hypercube — the TWELFTH and final corner alongside the eleven
+    /// enumerated in [`Self::is_sorted_first_index`]'s docstring.
+    ///
+    /// Sibling posture to [`Self::is_sorted_first_index`] one endpoint-
+    /// direction axis over on the (head, tail) partition of the lex-
+    /// axis index-shaped endpoint-membership surface:
+    /// [`Self::is_sorted_first_index`] answers "is this usize the lex-
+    /// order head-endpoint lex-slot?", this method answers "is this
+    /// usize the lex-order tail-endpoint lex-slot?". See
+    /// [`Self::is_sorted_first_index`] for the shared design rationale,
+    /// sibling matrix, override axis, future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method is
+    /// the tail-direction arm of the same axis and inherits every
+    /// property from the head arm's documentation, differing only in
+    /// the composition through the closed-set lex-order tail-slot
+    /// literal `T::CARDINALITY - 1` (expressed as
+    /// `i.checked_add(1) == Some(T::CARDINALITY)` to avoid the `usize`
+    /// underflow question on the empty-`T::ALL` boundary the well-
+    /// formedness clause (1) forbids AND to avoid the `usize` overflow
+    /// question on the `usize::MAX` boundary probe) instead of the
+    /// head-slot literal `0`.
+    ///
+    /// Default body is a zero-alloc `checked_add(1) == Some(CARDINALITY)`
+    /// composition — mirrors [`Self::is_last_index`]'s body one ordering
+    /// axis over on the (declaration, lex) partition. The `checked_add`
+    /// form (rather than the raw `i + 1 == Self::CARDINALITY`
+    /// composition) folds the arithmetic-overflow arm onto `None`
+    /// structurally, preserving the tail-membership predicate's
+    /// `false`-on-out-of-range contract on every `usize` input
+    /// including `usize::MAX`.
+    ///
+    /// The index-shaped lex-tail-membership contract —
+    /// `T::is_sorted_last_index(T::CARDINALITY - 1) == true` AND
+    /// `T::is_sorted_last_index(i) == false` for every
+    /// `i ∈ 0..T::CARDINALITY - 1` on every implementor — is
+    /// guaranteed by the natural `usize` equality against
+    /// `T::CARDINALITY`; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (77) pins the
+    /// composition against the natural `i + 1 == T::CARDINALITY`
+    /// shape AND against agreement with [`Self::is_sorted_last`]
+    /// through the (variant → lex slot) forward projection
+    /// [`Self::sorted_index_of`] on every implementor across every
+    /// canonical variant's lex slot AND the out-of-range boundary
+    /// `T::CARDINALITY` probe.
+    ///
+    /// Clauses (30), (31), (32), (33), (50), (51), (52), (53), (74),
+    /// (75), (76), and (77) together CLOSE the (arg-type × ordering ×
+    /// endpoint-direction) 3×2×2 = 12-corner endpoint-membership
+    /// hypercube on the closed-set boundary surface EXHAUSTIVELY:
+    /// (`Self`, declaration, head/tail) at clauses (30) —
+    /// [`Self::is_first`] / [`Self::is_last`]; (`Self`, lex, head/tail)
+    /// at clauses (31) — [`Self::is_sorted_first`] /
+    /// [`Self::is_sorted_last`]; (`&str`, declaration, head/tail) at
+    /// clauses (50) + (51) — [`Self::is_first_label`] /
+    /// [`Self::is_last_label`]; (`&str`, lex, head/tail) at clauses
+    /// (52) + (53) — [`Self::is_sorted_first_label`] /
+    /// [`Self::is_sorted_last_label`]; (`usize`, declaration,
+    /// head/tail) at clauses (74) + (75) — [`Self::is_first_index`] /
+    /// [`Self::is_last_index`]; and now (`usize`, lex, head/tail) at
+    /// clauses (76) + (77) — [`Self::is_sorted_first_index`] and this
+    /// method. Every generic consumer that binds any of the twelve
+    /// endpoint-membership methods sees the SAME endpoint-membership
+    /// answer at every crate boundary regardless of which arg-type
+    /// axis / ordering-axis / endpoint-direction axis it walks, and
+    /// the (arg-type × ordering × endpoint-direction) hypercube is now
+    /// FULLY closed — the next natural extension is the
+    /// (endpoint-partition axis) arm on the `usize` column
+    /// (`is_endpoint_index`, `is_interior_index`,
+    /// `is_sorted_endpoint_index`, `is_sorted_interior_index`) already
+    /// closed on the `Self` and `&str` columns at
+    /// [`Self::is_endpoint`] / [`Self::is_interior`] /
+    /// [`Self::is_sorted_endpoint`] / [`Self::is_sorted_interior`] /
+    /// [`Self::is_endpoint_label`] / [`Self::is_interior_label`] /
+    /// [`Self::is_sorted_endpoint_label`] /
+    /// [`Self::is_sorted_interior_label`].
+    fn is_sorted_last_index(i: usize) -> bool {
+        i.checked_add(1) == Some(<Self as ClosedSet>::CARDINALITY)
+    }
+
     /// The lexicographically-least variant of the closed set — the
     /// canonical minimum-by-[`Self::label`] under the standard-library
     /// `str: Ord` ordering, projected onto the trait surface as a
@@ -12045,6 +12307,119 @@ where
     assert!(
         !T::is_last_index(T::ALL.len()),
         "{type_name}: T::is_last_index(T::CARDINALITY) != false — the (usize → declaration tail-membership bool) projection accepted the out-of-range boundary probe T::CARDINALITY (one past the tail), silently folding a one-past-the-end slot onto the declaration-tail-endpoint `true` answer while the natural `i + 1 == T::CARDINALITY` composition should return `false` (T::CARDINALITY + 1 > T::CARDINALITY). The out-of-range boundary — canonical or otherwise — must reject via the closed-set tail-slot literal T::CARDINALITY - 1's structural rejection of every out-of-range `usize`",
+    );
+    // (76) — For every variant `v` in `T::ALL`,
+    // `T::is_sorted_first_index(T::sorted_index_of(v))` MUST equal
+    // `v.is_sorted_first()`, AND `T::is_sorted_first_index(0) == true`,
+    // AND `T::is_sorted_first_index(T::CARDINALITY) == false` (the out-
+    // of-range boundary probe). The default trait body is the natural
+    // `i == 0` literal on a LEX-position input and satisfies all three
+    // arms for free; the assertion catches a future implementor whose
+    // override drifts the index-shaped lex-head-membership predicate
+    // (a swapped override that returns `true` on the lex-tail slot
+    // `T::CARDINALITY - 1` instead of the lex-head slot `0` — silently
+    // folding the index-shaped lex-head-membership predicate onto the
+    // tail-direction predicate at the (head, tail) endpoint-direction
+    // axis; an offset override that returns `true` on a strictly-
+    // interior lex slot; a permissive override that accepts the out-
+    // of-range `T::CARDINALITY` probe or `usize::MAX` — folding the
+    // out-of-range boundary onto the lex-head slot every downstream
+    // index-shaped lex-head-boundary consumer routes through; a lex-
+    // vs-declaration confusion that keys the index-shaped lex-head-
+    // membership predicate off `index_of` instead of `sorted_index_of`
+    // — silently bifurcating the lex-axis face onto the declaration-
+    // axis face every downstream alphabetized compact wire codec /
+    // lex-sorted Prometheus per-lex-slot bucket renderer consumer
+    // routes through) loudly rather than silently bifurcating the lex-
+    // axis index-shaped head-membership surface. Sibling posture to
+    // clauses (31) + (52) + (74) — clause (31) pins the `Self`-arg
+    // lex-axis head-membership predicate against `sorted_index_of(self)
+    // == 0`, clause (52) pins the `&str`-arg lex-axis head-membership
+    // predicate against `s == T::sorted_first_label()`, clause (74)
+    // pins the `usize`-arg declaration-axis head-membership predicate
+    // against `i == 0` on the declaration axis, this clause pins the
+    // `usize`-arg lex-axis head-membership predicate against `i == 0`
+    // on the LEX-position input axis AND on the shared out-of-range
+    // boundary probe — so the closed-set index-shaped head-membership
+    // surface stays sound at every (arg-type, ordering) corner AND on
+    // the shared lex-head-endpoint fixpoint
+    // (`T::is_sorted_first_index(0) == true`) AND on the shared out-of-
+    // range rejection (`T::is_sorted_first_index(T::CARDINALITY) ==
+    // false`).
+    for &v in T::ALL {
+        let expected_is_sorted_first_index = v.is_sorted_first();
+        assert_eq!(
+            T::is_sorted_first_index(<T as ClosedSet>::sorted_index_of(v)),
+            expected_is_sorted_first_index,
+            "{type_name}: T::is_sorted_first_index(T::sorted_index_of({v:?})) drifted from {v:?}.is_sorted_first() — the direct (usize → lex head-membership bool) projection on a lex-position input no longer agrees with the natural `Self`-arg is_sorted_first predicate through the (variant → lex slot) forward projection, so a downstream alphabetized compact wire codec / lex-sorted Prometheus per-lex-slot bucket renderer / lex-sorted LSP completion highlighter consumer that binds `T::is_sorted_first_index(lex_idx)` as its index-shaped lex-head-boundary rendering surface would emit the wrong bool for {v:?}'s lex slot",
+        );
+    }
+    assert!(
+        T::is_sorted_first_index(0),
+        "{type_name}: T::is_sorted_first_index(0) != true — the (usize → lex head-membership bool) projection on a lex-position input rejected the canonical lex-order head-endpoint slot 0, silently forking the index-shaped lex-head-membership predicate from the natural `i == 0` composition. Clauses (31) + (52) + (76) together pin `T::is_sorted_first_index(0) == true` as the structural fixpoint the lex-head-endpoint slot and the index-shaped lex-head-membership axis share, mirroring `T::sorted_first().is_sorted_first() == true` one arg-type axis over AND `T::is_sorted_first_label(T::sorted_first_label()) == true` one arg-type axis over AND `T::is_first_index(0) == true` one ordering axis over",
+    );
+    assert!(
+        !T::is_sorted_first_index(T::ALL.len()),
+        "{type_name}: T::is_sorted_first_index(T::CARDINALITY) != false — the (usize → lex head-membership bool) projection on a lex-position input accepted the out-of-range boundary probe T::CARDINALITY, silently folding a one-past-the-end lex slot onto the lex-head-endpoint `true` answer while the natural `i == 0` composition should return `false`. The out-of-range boundary — canonical or otherwise — must reject via the closed-set lex-head-slot literal 0's structural rejection of every non-zero `usize`",
+    );
+    // (77) — For every variant `v` in `T::ALL`,
+    // `T::is_sorted_last_index(T::sorted_index_of(v))` MUST equal
+    // `v.is_sorted_last()`, AND `T::is_sorted_last_index(T::CARDINALITY
+    // - 1) == true`, AND `T::is_sorted_last_index(T::CARDINALITY) ==
+    // false` (the out-of-range boundary probe). The default trait body
+    // is the natural `i + 1 == T::CARDINALITY` literal (via
+    // `checked_add` to avoid `usize::MAX` overflow) on a LEX-position
+    // input and satisfies all three arms for free; the assertion
+    // catches a future implementor whose override drifts the index-
+    // shaped lex-tail-membership predicate (a swapped override that
+    // returns `true` on the lex-head slot `0` instead of the lex-tail
+    // slot `T::CARDINALITY - 1` — silently folding the index-shaped
+    // lex-tail-membership predicate onto the head-direction predicate
+    // at the (head, tail) endpoint-direction axis; an off-by-one
+    // override that returns `true` on `T::CARDINALITY` instead of
+    // `T::CARDINALITY - 1` — silently walking one lex slot past the
+    // lex-tail-endpoint boundary; a stale override that returns the
+    // wrong lex slot after a variant-listing edit changes the
+    // cardinality; a lex-vs-declaration confusion that keys the index-
+    // shaped lex-tail-membership predicate off `index_of` instead of
+    // `sorted_index_of`). Clauses (30) + (31) + (32) + (33) + (50) +
+    // (51) + (52) + (53) + (74) + (75) + (76) + (77) together CLOSE
+    // the (arg-type × ordering × endpoint-direction) 3×2×2 = 12-corner
+    // endpoint-membership hypercube on the closed-set boundary surface
+    // EXHAUSTIVELY at all twelve corners: (`Self`, declaration,
+    // head/tail) at clauses (30) — [`is_first`] / [`is_last`]; (`Self`,
+    // lex, head/tail) at clauses (31) — [`is_sorted_first`] /
+    // [`is_sorted_last`]; (`&str`, declaration, head/tail) at clauses
+    // (50) + (51) — [`is_first_label`] / [`is_last_label`]; (`&str`,
+    // lex, head/tail) at clauses (52) + (53) — [`is_sorted_first_label`]
+    // / [`is_sorted_last_label`]; (`usize`, declaration, head/tail) at
+    // clauses (74) + (75) — [`is_first_index`] / [`is_last_index`];
+    // and now (`usize`, lex, head/tail) at clauses (76) + (77) —
+    // [`is_sorted_first_index`] / [`is_sorted_last_index`]. Every
+    // generic consumer that binds any of the twelve endpoint-
+    // membership methods sees the SAME endpoint-membership answer at
+    // every crate boundary regardless of which arg-type / ordering /
+    // endpoint-direction axis it walks. The natural next lift is the
+    // (endpoint-partition axis) arm on the `usize` column
+    // (`is_endpoint_index`, `is_interior_index`,
+    // `is_sorted_endpoint_index`, `is_sorted_interior_index`) — the
+    // `Self` and `&str` columns of that surface already exist at
+    // clauses (32) + (33) + (54) + (55) + (56) + (57).
+    for &v in T::ALL {
+        let expected_is_sorted_last_index = v.is_sorted_last();
+        assert_eq!(
+            T::is_sorted_last_index(<T as ClosedSet>::sorted_index_of(v)),
+            expected_is_sorted_last_index,
+            "{type_name}: T::is_sorted_last_index(T::sorted_index_of({v:?})) drifted from {v:?}.is_sorted_last() — the direct (usize → lex tail-membership bool) projection on a lex-position input no longer agrees with the natural `Self`-arg is_sorted_last predicate through the (variant → lex slot) forward projection, so a downstream alphabetized compact wire codec / lex-sorted Prometheus per-lex-slot bucket renderer / lex-sorted LSP completion highlighter consumer that binds `T::is_sorted_last_index(lex_idx)` as its index-shaped lex-tail-boundary rendering surface would emit the wrong bool for {v:?}'s lex slot",
+        );
+    }
+    assert!(
+        T::is_sorted_last_index(T::ALL.len() - 1),
+        "{type_name}: T::is_sorted_last_index(T::CARDINALITY - 1) != true — the (usize → lex tail-membership bool) projection on a lex-position input rejected the canonical lex-order tail-endpoint slot T::CARDINALITY - 1, silently forking the index-shaped lex-tail-membership predicate from the natural `i + 1 == T::CARDINALITY` composition. Clauses (31) + (53) + (77) together pin `T::is_sorted_last_index(T::CARDINALITY - 1) == true` as the structural fixpoint the lex-tail-endpoint slot and the index-shaped lex-tail-membership axis share, mirroring `T::sorted_last().is_sorted_last() == true` one arg-type axis over AND `T::is_sorted_last_label(T::sorted_last_label()) == true` one arg-type axis over AND `T::is_last_index(T::CARDINALITY - 1) == true` one ordering axis over",
+    );
+    assert!(
+        !T::is_sorted_last_index(T::ALL.len()),
+        "{type_name}: T::is_sorted_last_index(T::CARDINALITY) != false — the (usize → lex tail-membership bool) projection on a lex-position input accepted the out-of-range boundary probe T::CARDINALITY (one past the lex-tail), silently folding a one-past-the-end lex slot onto the lex-tail-endpoint `true` answer while the natural `i + 1 == T::CARDINALITY` composition should return `false`. The out-of-range boundary — canonical or otherwise — must reject via the closed-set lex-tail-slot literal T::CARDINALITY - 1's structural rejection of every out-of-range `usize`",
     );
 }
 
@@ -24635,6 +25010,358 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an is_last_index() override that returns a strictly-interior slot rather than composing `i + 1 == T::CARDINALITY`",
+        );
+    }
+
+    #[test]
+    fn is_sorted_first_index_matches_lex_head_slot_and_rejects_every_non_lex_head_slot() {
+        // The lex-axis index-shaped head-endpoint membership predicate
+        // on a LEX-position input returns `true` on the canonical lex-
+        // head-anchor slot `0` (the lex-order head-endpoint's
+        // `T::sorted_variants` position on any non-empty closed set)
+        // and `false` on every non-lex-head lex slot. The pin is the
+        // natural `i == 0` composition on a lex-position input — the
+        // index-shaped lex-head-membership predicate answers "is this
+        // usize the lex-order head-endpoint lex-slot?" for a raw
+        // `usize` lex-position WITHOUT decoding through
+        // [`ClosedSet::from_sorted_index`] or composing
+        // [`ClosedSet::sorted_label_at`] with
+        // [`ClosedSet::is_sorted_first_label`].
+        assert!(<StubKind as ClosedSet>::is_sorted_first_index(0));
+        assert!(!<StubKind as ClosedSet>::is_sorted_first_index(1));
+        assert!(!<StubKind as ClosedSet>::is_sorted_first_index(2));
+    }
+
+    #[test]
+    fn is_sorted_last_index_matches_lex_tail_slot_and_rejects_every_non_lex_tail_slot() {
+        // Sibling of
+        // `is_sorted_first_index_matches_lex_head_slot_and_rejects_every_non_lex_head_slot`
+        // one endpoint-direction axis over on the (head, tail)
+        // partition of the lex-axis index-shaped endpoint-membership
+        // surface. Returns `true` on the canonical lex-tail-anchor
+        // slot `T::CARDINALITY - 1` (lex slot `2` on the stub whose
+        // lex order coincides with its declaration order
+        // `[Alpha, Beta, Gamma]`) and `false` on every non-lex-tail
+        // lex slot.
+        assert!(<StubKind as ClosedSet>::is_sorted_last_index(2));
+        assert!(!<StubKind as ClosedSet>::is_sorted_last_index(0));
+        assert!(!<StubKind as ClosedSet>::is_sorted_last_index(1));
+    }
+
+    #[test]
+    fn is_sorted_first_index_and_is_sorted_last_index_reject_out_of_range_and_cardinality_boundary()
+    {
+        // The lex-axis index-shaped endpoint-membership predicates
+        // MUST reject every input outside the closed set's canonical
+        // `0..T::CARDINALITY` lex-slot range — the canonical
+        // `T::CARDINALITY` probe (one past the lex-tail slot) and the
+        // `usize::MAX` boundary. Pins the "out-of-range boundary"
+        // documented on [`ClosedSet::is_sorted_first_index`]: any out-
+        // of-range input returns `false` via the `usize` equality
+        // structural rejection against the closed-set lex-head-slot
+        // literal `0` / lex-tail-slot literal `T::CARDINALITY - 1`.
+        let cardinality = <StubKind as ClosedSet>::ALL.len();
+        assert!(!<StubKind as ClosedSet>::is_sorted_first_index(cardinality));
+        assert!(!<StubKind as ClosedSet>::is_sorted_last_index(cardinality));
+        assert!(!<StubKind as ClosedSet>::is_sorted_first_index(usize::MAX));
+        assert!(!<StubKind as ClosedSet>::is_sorted_last_index(usize::MAX));
+    }
+
+    #[test]
+    fn is_sorted_first_index_and_is_sorted_last_index_agree_with_variant_predicates_on_every_canonical_lex_slot(
+    ) {
+        // For every canonical variant `v` in the closed set, the lex-
+        // axis index-shaped endpoint-membership predicates agree with
+        // the `Self`-arg lex-axis endpoint-membership predicates
+        // through the natural (variant → lex slot) forward projection:
+        // `T::is_sorted_first_index(T::sorted_index_of(v))` matches
+        // `v.is_sorted_first()` and
+        // `T::is_sorted_last_index(T::sorted_index_of(v))` matches
+        // `v.is_sorted_last()` — the (arg-type × endpoint-direction)
+        // 3×2 lex-axis endpoint-membership matrix agrees on every
+        // canonical lex slot regardless of which arg-type column the
+        // caller walks. The pin catches a regression that silently
+        // bifurcates the (`Self`, `&str`, `usize`) arg-type axis at
+        // either lex endpoint direction on any variant.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let lex_idx = <StubKind as ClosedSet>::sorted_index_of(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::is_sorted_first_index(lex_idx),
+                v.is_sorted_first(),
+                "is_sorted_first_index({lex_idx}) diverged from {v:?}.is_sorted_first() — the (Self, usize) arg-type axis bifurcated at the lex head-endpoint slot",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::is_sorted_last_index(lex_idx),
+                v.is_sorted_last(),
+                "is_sorted_last_index({lex_idx}) diverged from {v:?}.is_sorted_last() — the (Self, usize) arg-type axis bifurcated at the lex tail-endpoint slot",
+            );
+        }
+    }
+
+    #[test]
+    fn is_sorted_first_index_and_is_sorted_last_index_bracket_lex_endpoints_on_arbitrary_declaration_order(
+    ) {
+        // The lex-vs-declaration-axis divergence probe on the index-
+        // shaped lex-endpoint predicates — an implementor whose
+        // declaration order reverses its lex order surfaces the axis
+        // interpretation of the input `i` (a LEX position, NOT a
+        // declaration slot) through the (variant → lex slot) forward
+        // projection [`ClosedSet::sorted_index_of`]. A regression that
+        // hard-coded either predicate against `T::index_of` (the
+        // declaration slot projection) rather than routing through
+        // `T::sorted_index_of` would pass on `StubKind` (because its
+        // declaration order coincides with its lex order) and silently
+        // bifurcate the predicates on any implementor whose
+        // declaration and lex orders disagree. The stub's declaration
+        // is `[Gamma, Beta, Alpha]` with labels `("gamma", "beta",
+        // "alpha")` — declaration slots (Gamma=0, Beta=1, Alpha=2),
+        // lex slots (Alpha=0, Beta=1, Gamma=2) — putting the
+        // (declaration, lex) × (head, tail) slot projection at four
+        // distinct anchors on every variant except the interior Beta
+        // so a lex-vs-declaration confusion in either index-shaped
+        // predicate fails at least one arm. Sibling posture to
+        // `is_sorted_first_label_and_is_sorted_last_label_bracket_lex_endpoints_on_arbitrary_declaration_order`
+        // one arg-type axis over on the (`&str`, `usize`) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum LexEndpointIndexMembershipStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownLexEndpointIndexMembershipStubKind(pub String);
+        impl core::fmt::Display for UnknownLexEndpointIndexMembershipStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown lex endpoint index membership stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for LexEndpointIndexMembershipStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "lex endpoint index membership stub kind";
+            type Unknown = UnknownLexEndpointIndexMembershipStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownLexEndpointIndexMembershipStubKind(s.to_owned())
+            }
+        }
+        // Alpha is the lex head — its lex slot is 0 and
+        // `sorted_index_of(Alpha) == 0` fires is_sorted_first_index.
+        // Its DECLARATION slot is 2, and reading is_sorted_first_index
+        // off `index_of(Alpha)` would answer `false` — so hard-coding
+        // against `index_of` bifurcates.
+        let alpha_lex = <LexEndpointIndexMembershipStubKind as ClosedSet>::sorted_index_of(
+            LexEndpointIndexMembershipStubKind::Alpha,
+        );
+        assert_eq!(alpha_lex, 0);
+        assert!(
+            <LexEndpointIndexMembershipStubKind as ClosedSet>::is_sorted_first_index(alpha_lex)
+        );
+        // Gamma is the lex tail — its lex slot is 2 and
+        // `sorted_index_of(Gamma) == 2` fires is_sorted_last_index. Its
+        // DECLARATION slot is 0 (the declaration head).
+        let gamma_lex = <LexEndpointIndexMembershipStubKind as ClosedSet>::sorted_index_of(
+            LexEndpointIndexMembershipStubKind::Gamma,
+        );
+        assert_eq!(gamma_lex, 2);
+        assert!(<LexEndpointIndexMembershipStubKind as ClosedSet>::is_sorted_last_index(gamma_lex));
+        // Beta sits at lex slot 1 (interior on both orderings) — both
+        // predicates return false.
+        let beta_lex = <LexEndpointIndexMembershipStubKind as ClosedSet>::sorted_index_of(
+            LexEndpointIndexMembershipStubKind::Beta,
+        );
+        assert_eq!(beta_lex, 1);
+        assert!(
+            !<LexEndpointIndexMembershipStubKind as ClosedSet>::is_sorted_first_index(beta_lex)
+        );
+        assert!(!<LexEndpointIndexMembershipStubKind as ClosedSet>::is_sorted_last_index(beta_lex));
+        // The well-formedness sweep passes on this stub, pinning the
+        // clauses (76) + (77) index-shaped lex-endpoint-membership
+        // composition against agreement with [`is_sorted_first`] /
+        // [`is_sorted_last`] through the (variant → lex slot) forward
+        // projection [`sorted_index_of`] on every canonical variant.
+        super::assert_closed_set_well_formed::<LexEndpointIndexMembershipStubKind>();
+    }
+
+    #[test]
+    fn is_sorted_first_index_and_is_sorted_last_index_collapse_on_singleton_closed_set() {
+        // For a closed set with `T::CARDINALITY == 1`, the sole
+        // variant's lex slot `0` is BOTH the lex-head-endpoint slot
+        // AND the lex-tail-endpoint slot so the two lex-axis index-
+        // shaped endpoint-membership predicates collapse onto the same
+        // `usize` equality check. Mirrors [`ClosedSet::is_sorted_first`]
+        // / [`ClosedSet::is_sorted_last`]'s singleton collapse at the
+        // (`Self`, bool) arm AND [`ClosedSet::is_sorted_first_label`] /
+        // [`ClosedSet::is_sorted_last_label`]'s singleton collapse at
+        // the (`&str`, bool) arm one arg-type axis over AND
+        // [`ClosedSet::is_first_index`] / [`ClosedSet::is_last_index`]'s
+        // singleton collapse at the (declaration, `usize`) arm one
+        // ordering axis over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonSortedIndexKind {
+            Sole,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonSortedIndexKind(pub String);
+        impl core::fmt::Display for UnknownSingletonSortedIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton sorted index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonSortedIndexKind {
+            const ALL: &'static [Self] = &[Self::Sole];
+            const SET_LABEL: &'static str = "singleton sorted index kind";
+            type Unknown = UnknownSingletonSortedIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Sole => "sole",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonSortedIndexKind(s.to_owned())
+            }
+        }
+        assert!(<SingletonSortedIndexKind as ClosedSet>::is_sorted_first_index(0));
+        assert!(<SingletonSortedIndexKind as ClosedSet>::is_sorted_last_index(0));
+        assert!(!<SingletonSortedIndexKind as ClosedSet>::is_sorted_first_index(1));
+        assert!(!<SingletonSortedIndexKind as ClosedSet>::is_sorted_last_index(1));
+        // Singleton passes well-formedness — sole variant's lex slot
+        // 0 matches both lex-endpoint-index projections.
+        super::assert_closed_set_well_formed::<SingletonSortedIndexKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_sorted_first_index_and_lex_head_slot_composition(
+    ) {
+        // The well-formedness sweep's (76) clause —
+        // `T::is_sorted_first_index(T::sorted_index_of(v))` MUST equal
+        // `v.is_sorted_first()` on every canonical variant AND
+        // `T::is_sorted_first_index(0) == true`. A hand-impl'd
+        // implementor whose override folds the index-shaped lex-head-
+        // membership predicate onto the index-shaped lex-tail-membership
+        // predicate at the (head, tail) endpoint-direction axis
+        // (returning `true` on the lex-tail slot `T::CARDINALITY - 1`
+        // instead of the lex-head slot `0`) fails the sweep loudly
+        // rather than silently bifurcating the lex-axis index-shaped
+        // head-membership surface every downstream alphabetized compact
+        // wire codec / lex-sorted Prometheus per-lex-slot bucket
+        // renderer consumer routes through.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSortedFirstIndexKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsSortedFirstIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsSortedFirstIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is sorted first index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsSortedFirstIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is sorted first index kind";
+            type Unknown = UnknownDriftedIsSortedFirstIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSortedFirstIndexKind(s.to_owned())
+            }
+            fn is_sorted_first_index(i: usize) -> bool {
+                // Drifted override — folds the index-shaped lex-head-
+                // endpoint membership predicate onto the index-shaped
+                // lex-tail-endpoint membership predicate, silently
+                // swapping the head-direction predicate with the tail-
+                // direction predicate at the (head, tail) endpoint-
+                // direction axis every downstream index-shaped lex-
+                // head-boundary consumer routes through. Lex order on
+                // this stub is `[head, middle, tail]` (cardinality 3),
+                // so the intended lex-head slot is `0` but the override
+                // answers `i == 2` instead — the lex-tail slot.
+                i == 2
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsSortedFirstIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_sorted_first_index() override that folds the lex-head-endpoint slot predicate onto the lex-tail-endpoint slot predicate rather than composing `i == 0`",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_sorted_last_index_and_lex_tail_slot_composition(
+    ) {
+        // The well-formedness sweep's (77) clause —
+        // `T::is_sorted_last_index(T::sorted_index_of(v))` MUST equal
+        // `v.is_sorted_last()` on every canonical variant AND
+        // `T::is_sorted_last_index(T::CARDINALITY - 1) == true`. A
+        // hand-impl'd implementor whose override accepts a strictly-
+        // interior lex slot as the lex-tail slot fails the sweep
+        // loudly rather than silently routing an interior lex slot
+        // into the index-shaped lex-tail-membership predicate.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSortedLastIndexKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsSortedLastIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsSortedLastIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is sorted last index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsSortedLastIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is sorted last index kind";
+            type Unknown = UnknownDriftedIsSortedLastIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSortedLastIndexKind(s.to_owned())
+            }
+            fn is_sorted_last_index(i: usize) -> bool {
+                // Drifted override — routes a strictly-interior lex
+                // slot into the index-shaped lex-tail-endpoint
+                // predicate, silently forking the tail-membership
+                // predicate from the natural `i + 1 == T::CARDINALITY`
+                // composition every downstream index-shaped lex-tail-
+                // boundary consumer routes through. Lex order on this
+                // stub is `[head, middle, tail]` (cardinality 3), so
+                // the intended lex-tail slot is `2` but the override
+                // answers `i == 1` instead.
+                i == 1
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsSortedLastIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_sorted_last_index() override that returns a strictly-interior lex slot rather than composing `i + 1 == T::CARDINALITY`",
         );
     }
 }

@@ -1787,6 +1787,207 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::label(<Self as ClosedSet>::last())
     }
 
+    /// The declaration-order head-endpoint LABEL predicate — `true`
+    /// iff `s` equals [`Self::first_label`], `false` otherwise. Closes
+    /// the (arg-type × endpoint-direction) 2×2 declaration-axis
+    /// endpoint-membership matrix at the (`&str`, head) corner
+    /// alongside [`Self::is_first`] (Self, head), [`Self::is_last`]
+    /// (Self, tail), and its tail-direction sibling
+    /// [`Self::is_last_label`] (&str, tail).
+    ///
+    /// The (arg-type × endpoint-direction) 2×2 endpoint-membership
+    /// matrix over the declaration-axis surface partitions post-lift:
+    ///
+    /// | Arg-type \\ Endpoint  | Head                          | Tail                         |
+    /// |-----------------------|-------------------------------|------------------------------|
+    /// | `Self` (variant)      | [`Self::is_first`]            | [`Self::is_last`]            |
+    /// | `&str` (label)        | [`Self::is_first_label`]      | [`Self::is_last_label`]      |
+    ///
+    /// Sibling posture to [`Self::first_label`] one return-type axis
+    /// over on the (`&'static str`-returning label projection,
+    /// `bool`-returning label predicate) partition — [`Self::first_label`]
+    /// projects the declaration-order head-endpoint label,
+    /// this method answers "is this &str the declaration-order head-
+    /// endpoint label?" without threading the caller through a
+    /// per-callsite `s == T::first_label()` comparison. Sibling
+    /// posture to [`Self::is_first`] one arg-type axis over on the
+    /// (Self, &str) partition — [`Self::is_first`] answers "am I at
+    /// the head endpoint?" for a typed variant, this method answers
+    /// the same question for a raw label string WITHOUT decoding
+    /// through [`Self::parse_label`] or [`Self::find_by_label`]
+    /// (which would allocate the reject carrier on non-matching
+    /// inputs OR force the caller through the `Option<Self>`-typed
+    /// dispatch).
+    ///
+    /// Every generic consumer that wants a zero-alloc O(1)
+    /// label-shaped head-boundary query (a streaming Lisp reader
+    /// that short-circuits on the head-anchor label before
+    /// materializing a typed variant, a CLI subcommand dispatcher
+    /// that folds the head-anchor label onto a special "default"
+    /// path, a serde deserializer wrapper that treats the head-
+    /// anchor label as a canonical default alignment, a
+    /// `tatara-check` diagnostic renderer that emits an anchored
+    /// `"expected first: <head-label>"` banner ONLY when the offending
+    /// input equals the head label — a distinguished error shape,
+    /// not the generic `"expected one of: A, B, C"` shape) binds to
+    /// ONE typed predicate rather than hand-rolling either the
+    /// `s == T::first_label()` inline comparison (which re-derives
+    /// the same one-primitive projection at every callsite AND
+    /// silently drifts when [`Self::first_label`] is overridden) OR
+    /// the two-primitive `T::find_by_label(s).map(<T as ClosedSet>::is_first)
+    /// .unwrap_or(false)` composition (which forces the caller through
+    /// the `Option<Self>`-typed dispatch AND folds the not-a-label
+    /// input onto `false` implicitly rather than by direct `&str`
+    /// equality).
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::first_label`]) with the standard-library `&str`
+    /// equality operator — the label-shaped head-membership predicate
+    /// is a typed CONSEQUENCE of the (declaration-order head label)
+    /// projection, not a per-implementor `match s { "head-label" =>
+    /// true, _ => false }` block. Implementors override only when
+    /// the label-shaped head-membership surface needs to diverge
+    /// from the natural `s == T::first_label()` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `via` / `set_label` / `labels` / `first` /
+    /// `first_label` overrides exist — a typed escape hatch rather
+    /// than forcing the implementor to hand-roll the impl). An
+    /// implementor that overrides [`Self::first_label`] propagates
+    /// the override through this default body automatically; the
+    /// (label → bool head-membership) projection funnels through ONE
+    /// typed primitive.
+    ///
+    /// The label-shaped head-membership contract —
+    /// `T::is_first_label(T::first().label()) == true` AND
+    /// `T::is_first_label(v.label()) == false` for every non-first
+    /// canonical variant `v` on every implementor — is guaranteed by
+    /// the composition through [`Self::first_label`] AND the label-
+    /// pairwise-distinctness contract clause (3); the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (50)
+    /// pins the composition against the natural
+    /// `s == T::first_label()` shape on every implementor across every
+    /// canonical variant label AND the reserved probe input AND the
+    /// empty-string boundary so a passing well-formedness sweep means
+    /// every generic consumer can call [`Self::is_first_label`] on any
+    /// `&str` input at any crate boundary and expect the same `bool`
+    /// answer as the natural composition.
+    ///
+    /// Not-a-label boundary — for any input `s` that is not a
+    /// canonical label of [`T::ALL`] (the reserved probe, the empty
+    /// string, an unknown token), this predicate returns `false`
+    /// (the equality against [`Self::first_label`] fails structurally
+    /// — the head label is by clause (4) non-empty and is by clause
+    /// (3) distinct from every other canonical label AND is by
+    /// the probe's construction distinct from any input that lands
+    /// in the substrate's `make_unknown` carrier). Callers that want
+    /// "is this a valid label AND the head label" compose this
+    /// predicate with [`Self::contains_label`] at the callsite;
+    /// callers that want "is this the head label OR reject as
+    /// unknown" compose this predicate with the natural `!` inversion.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::first_label`] equals
+    /// [`Self::last_label`] (both project the sole canonical label)
+    /// so this predicate and [`Self::is_last_label`] collapse onto
+    /// the same `&str` equality check, mirroring [`Self::is_first`]
+    /// and [`Self::is_last`]'s singleton collapse at the (Self, bool)
+    /// arm one arg-type axis over.
+    ///
+    /// THEORY.md §III — the typescape; the (label → head-membership
+    /// bool) projection becomes a TYPE projection on the trait rather
+    /// than a per-consumer inline `s == T::first_label()` comparison
+    /// at every downstream label-shaped head-boundary query site.
+    /// THEORY.md §V.1 — knowable platform; the (label → head-
+    /// membership) projection was an unnamed compound of
+    /// [`Self::first_label`] + `&str` `==` pre-lift; naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of ONE substrate
+    /// primitive — generic consumers see ONE method, not one label-
+    /// shaped-head-boundary-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (label →
+    /// head-membership) projection emerges from the composition of
+    /// [`Self::first_label`] with the standard-library `&str` equality
+    /// operator rather than as a per-implementor `match s { ... }`
+    /// block. A future tightening of [`Self::first_label`] (a future
+    /// perfect-hash forward projection, a future const-fn axis that
+    /// makes the predicate callable in const contexts, a future
+    /// case-insensitive-label extension threaded through the head-
+    /// label default) propagates to every closed-set label-shaped
+    /// head-boundary consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-first-label?` on closed
+    /// enumerations under a canonical labeling (the label-shaped
+    /// head-membership predicate on the declaration-order chain);
+    /// Idris's `isFirstLabel : String -> Bool` on a `Show`ed `Fin (S n)`
+    /// composed via `showFin fZ == s` on the head-anchor slot;
+    /// Haskell's `(== show (minBound :: T))` on the `Bounded + Show`
+    /// type-class pair (the head-label equality check composed from
+    /// three prelude primitives on the bounded chain); MLIR's
+    /// `RegisteredOperationName::isBeginName(name)` on the
+    /// declaration-order Op registry; Rust's `strum::EnumIter::next()
+    /// .map(|v| v.get_str() == s).unwrap_or(false)` composed through
+    /// the iterator API. Translation through pleme-io primitives: a
+    /// pure default method composing the trait's existing
+    /// [`Self::first_label`] surface with the standard-library `&str`
+    /// equality operator — no new dep, no new IR layer, no supertrait
+    /// bound, no allocation, no [`Option`]-typed dispatch.
+    fn is_first_label(s: &str) -> bool {
+        s == <Self as ClosedSet>::first_label()
+    }
+
+    /// The declaration-order tail-endpoint LABEL predicate — `true`
+    /// iff `s` equals [`Self::last_label`], `false` otherwise.
+    /// Closes the (`&str`, tail) corner of the (arg-type ×
+    /// endpoint-direction) 2×2 declaration-axis endpoint-membership
+    /// matrix alongside [`Self::is_first`] (Self, head),
+    /// [`Self::is_last`] (Self, tail), and [`Self::is_first_label`]
+    /// (&str, head), completing the (arg-type × endpoint-direction)
+    /// 2×2 declaration-axis label-and-variant endpoint-membership
+    /// square.
+    ///
+    /// Sibling posture to [`Self::is_first_label`] one endpoint-
+    /// direction axis over on the (head, tail) partition of the
+    /// declaration-axis label-shaped endpoint-membership surface:
+    /// [`Self::is_first_label`] answers "is this &str the
+    /// declaration-order head-endpoint label?", this method answers
+    /// "is this &str the declaration-order tail-endpoint label?".
+    /// See [`Self::is_first_label`] for the shared design rationale,
+    /// sibling matrix, override axis, future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method
+    /// is the tail-direction arm of the same axis and inherits every
+    /// property from the head arm's documentation, differing only in
+    /// the composition through [`Self::last_label`] instead of
+    /// [`Self::first_label`].
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::last_label`]) with the standard-library `&str`
+    /// equality operator. The label-shaped tail-membership contract —
+    /// `T::is_last_label(T::last().label()) == true` AND
+    /// `T::is_last_label(v.label()) == false` for every non-last
+    /// canonical variant `v` on every implementor — is guaranteed by
+    /// the composition; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (51) pins the
+    /// composition against the natural `s == T::last_label()` shape
+    /// on every implementor across every canonical variant label AND
+    /// the reserved probe input AND the empty-string boundary.
+    ///
+    /// Clauses (30) + (31) + (32) + (33) + (50) + (51) together open
+    /// the (arg-type × ordering × endpoint-direction) 2×2×2 = 8-corner
+    /// endpoint-membership hypercube at SIX of the eight corners on
+    /// the closed-set endpoint-membership surface: (Self,
+    /// declaration, head/tail) at clauses (30) — [`Self::is_first`] /
+    /// [`Self::is_last`]; (Self, lex, head/tail) at clauses (31) —
+    /// [`Self::is_sorted_first`] / [`Self::is_sorted_last`]; (&str,
+    /// declaration, head/tail) at clauses (50) + (51) — this method
+    /// and its head-direction sibling [`Self::is_first_label`]. The
+    /// remaining two corners on the (`&str`, lex, head/tail) column
+    /// (`is_sorted_first_label(s: &str) -> bool` and
+    /// `is_sorted_last_label(s: &str) -> bool`) are the natural next
+    /// lift on the lex-axis of the label-shaped endpoint-membership
+    /// hypercube.
+    fn is_last_label(s: &str) -> bool {
+        s == <Self as ClosedSet>::last_label()
+    }
+
     /// The declaration-order head-endpoint membership predicate —
     /// `true` when `self` is [`Self::first`], `false` otherwise.
     /// Closes the (endpoint-anchor `Self`-returning, endpoint-membership
@@ -8710,6 +8911,107 @@ where
         T::sorted_last_label(),
         T::sorted_last().label(),
         "{type_name}: T::sorted_last_label() drifted from T::sorted_last().label() — the singular lex-order tail-endpoint label projection no longer agrees with the natural `T::sorted_last().label()` two-primitive composition, so a downstream lex-tail-label banner / alphabetized-completion cursor / lex-tail-label coherence probe consumer that binds `T::sorted_last_label()` as its singular lex-tail-anchor label query surface would render the wrong `&'static str`",
+    );
+    // (50) — `T::is_first_label(s)` MUST equal `s == T::first_label()`
+    // on every representative input: every canonical variant label
+    // matches iff the variant is the declaration-order head anchor,
+    // the reserved probe rejects (`false`), and the empty-string
+    // boundary rejects (`false`). The default trait body composes
+    // `s == <T as ClosedSet>::first_label()` verbatim and satisfies
+    // the clause for free; the assertion catches a future implementor
+    // whose override drifts the composition (a permissive override
+    // that returns `true` for a non-head label — silently routing a
+    // strictly-interior variant's label into the label-shaped head-
+    // membership predicate; a strict override that returns `false`
+    // for the canonical head label — silently detaching the label-
+    // shaped head-membership predicate from the natural
+    // `s == T::first_label()` composition every downstream label-
+    // shaped head-boundary consumer routes through; a fold override
+    // that answers "is this the tail label?" instead — silently
+    // swapping the head-direction predicate onto the tail-direction
+    // predicate at the (head, tail) endpoint-direction axis; an
+    // override that always returns `true` for non-empty inputs —
+    // silently collapsing the label-shaped head-membership onto a
+    // trivial non-empty predicate; a fabricated override that
+    // returns `true` on the empty-string boundary — silently
+    // detaching the label-shaped head-membership from the non-empty
+    // canonical-label surface clause (4) pins) loudly rather than
+    // silently bifurcating the label-shaped head-membership surface
+    // every downstream label-shaped head-boundary consumer routes
+    // through. Sibling posture to clauses (30) + (46) — clause (30)
+    // pins the `Self`-arg head-membership predicate against the
+    // natural `self.index_of() == 0` composition, clause (46) pins
+    // the singular head-endpoint label projection against
+    // `T::first().label()`, this clause pins the `&str`-arg head-
+    // membership predicate against the natural `s == T::first_label()`
+    // composition. Clauses (30) + (50) together open the (arg-type,
+    // head) column of the (arg-type × endpoint-direction) 2×2 = 4-
+    // corner declaration-axis endpoint-membership matrix at the head
+    // arm on BOTH arg-type axes.
+    for &v in T::ALL {
+        let label = v.label();
+        let lifted = T::is_first_label(label);
+        let natural = label == T::first_label();
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::is_first_label({label:?}) drifted from `{label:?} == T::first_label()` — the label-shaped head-endpoint membership predicate no longer agrees with the natural `s == T::first_label()` one-primitive composition on the canonical label of variant {v:?}, so a downstream streaming Lisp reader / CLI subcommand dispatcher / anchored-diagnostic renderer that binds `T::is_first_label(s)` as its zero-alloc label-shaped head-anchor query surface would answer the wrong `bool`",
+        );
+    }
+    assert!(
+        !T::is_first_label(probe),
+        "{type_name}: T::is_first_label({probe:?}) returned true on the reserved probe input — the label-shaped head-endpoint membership predicate MUST reject every input outside the closed set's canonical labeling; the probe is by construction distinct from every canonical label AND from every substrate-produced label, so a `true` answer here silently permits inputs beyond the closed set into the label-shaped head-boundary surface",
+    );
+    assert!(
+        !T::is_first_label(""),
+        "{type_name}: T::is_first_label(\"\") returned true on the empty-string boundary — the label-shaped head-endpoint membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling, so a `true` answer here silently permits the empty-string boundary into the label-shaped head-boundary surface",
+    );
+    // (51) — `T::is_last_label(s)` MUST equal `s == T::last_label()`
+    // on every representative input: every canonical variant label
+    // matches iff the variant is the declaration-order tail anchor,
+    // the reserved probe rejects (`false`), and the empty-string
+    // boundary rejects (`false`). The default trait body composes
+    // `s == <T as ClosedSet>::last_label()` verbatim and satisfies
+    // the clause for free; the assertion catches a future implementor
+    // whose override drifts the composition (a permissive override
+    // that returns `true` for a non-tail label; a strict override
+    // that returns `false` for the canonical tail label; a fold
+    // override that answers "is this the head label?" instead —
+    // silently swapping the tail-direction predicate onto the head-
+    // direction predicate at the (head, tail) endpoint-direction axis;
+    // an override that always returns `true` for non-empty inputs; a
+    // fabricated override that returns `true` on the empty-string
+    // boundary) loudly rather than silently bifurcating the label-
+    // shaped tail-membership surface every downstream label-shaped
+    // tail-boundary consumer routes through. Sibling posture to
+    // clause (50) one endpoint-direction axis over on the (head, tail)
+    // partition of the declaration-axis label-shaped endpoint-
+    // membership sweep. Clauses (30) + (50) + (51) together CLOSE the
+    // (arg-type × endpoint-direction) 2×2 = 4-corner declaration-axis
+    // endpoint-membership matrix on the closed-set head/tail-
+    // membership surface: (Self, head/tail) at clause (30) —
+    // [`Self::is_first`] / [`Self::is_last`]; (&str, head/tail) at
+    // clauses (50) + (51) — [`Self::is_first_label`] /
+    // [`Self::is_last_label`]. Every generic consumer that binds any
+    // of the four declaration-axis endpoint-membership methods sees
+    // the SAME endpoint-membership answer at every crate boundary
+    // regardless of which arg-type axis / endpoint-direction axis it
+    // walks.
+    for &v in T::ALL {
+        let label = v.label();
+        let lifted = T::is_last_label(label);
+        let natural = label == T::last_label();
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::is_last_label({label:?}) drifted from `{label:?} == T::last_label()` — the label-shaped tail-endpoint membership predicate no longer agrees with the natural `s == T::last_label()` one-primitive composition on the canonical label of variant {v:?}, so a downstream streaming Lisp reader / CLI subcommand dispatcher / anchored-diagnostic renderer that binds `T::is_last_label(s)` as its zero-alloc label-shaped tail-anchor query surface would answer the wrong `bool`",
+        );
+    }
+    assert!(
+        !T::is_last_label(probe),
+        "{type_name}: T::is_last_label({probe:?}) returned true on the reserved probe input — the label-shaped tail-endpoint membership predicate MUST reject every input outside the closed set's canonical labeling",
+    );
+    assert!(
+        !T::is_last_label(""),
+        "{type_name}: T::is_last_label(\"\") returned true on the empty-string boundary — the label-shaped tail-endpoint membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling",
     );
 }
 
@@ -17916,6 +18218,250 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_last_label() override that folds the lex-tail-endpoint label onto the lex-head-endpoint label rather than composing T::sorted_last().label()",
+        );
+    }
+
+    #[test]
+    fn is_first_label_matches_declaration_head_label_and_rejects_every_non_head_variant_label() {
+        // The declaration-axis label-shaped head-endpoint membership
+        // predicate returns `true` on the canonical head-anchor label
+        // (`"alpha"` on the stub whose declaration order is `[Alpha,
+        // Beta, Gamma]`) and `false` on every non-head canonical
+        // variant label. The pin is the natural
+        // `s == <StubKind as ClosedSet>::first_label()` composition —
+        // the label-shaped head-membership predicate answers "is this
+        // &str the declaration-order head-endpoint label?" for a raw
+        // label string WITHOUT decoding through
+        // [`ClosedSet::parse_label`] or [`ClosedSet::find_by_label`].
+        assert!(<StubKind as ClosedSet>::is_first_label("alpha"));
+        assert!(!<StubKind as ClosedSet>::is_first_label("beta"));
+        assert!(!<StubKind as ClosedSet>::is_first_label("gamma"));
+    }
+
+    #[test]
+    fn is_last_label_matches_declaration_tail_label_and_rejects_every_non_tail_variant_label() {
+        // Sibling of
+        // `is_first_label_matches_declaration_head_label_and_rejects_every_non_head_variant_label`
+        // one endpoint-direction axis over on the (head, tail)
+        // partition of the declaration-axis label-shaped endpoint-
+        // membership surface. Returns `true` on the canonical tail-
+        // anchor label (`"gamma"` on the stub whose declaration order
+        // is `[Alpha, Beta, Gamma]`) and `false` on every non-tail
+        // canonical variant label.
+        assert!(<StubKind as ClosedSet>::is_last_label("gamma"));
+        assert!(!<StubKind as ClosedSet>::is_last_label("alpha"));
+        assert!(!<StubKind as ClosedSet>::is_last_label("beta"));
+    }
+
+    #[test]
+    fn is_first_label_and_is_last_label_reject_reserved_probe_and_empty_string_boundary() {
+        // The label-shaped endpoint-membership predicates MUST reject
+        // every input outside the closed set's canonical labeling —
+        // the reserved probe (by construction distinct from every
+        // canonical label AND from every substrate-produced label)
+        // and the empty-string boundary (clause (4) pins the empty
+        // string as structurally reserved outside every canonical
+        // labeling). Pins the "not-a-label boundary" documented on
+        // [`ClosedSet::is_first_label`]: any non-canonical input
+        // returns `false` via the `&str` equality structural
+        // rejection.
+        let probe = "__is_endpoint_label_probe__";
+        assert!(!<StubKind as ClosedSet>::is_first_label(probe));
+        assert!(!<StubKind as ClosedSet>::is_last_label(probe));
+        assert!(!<StubKind as ClosedSet>::is_first_label(""));
+        assert!(!<StubKind as ClosedSet>::is_last_label(""));
+    }
+
+    #[test]
+    fn is_first_label_and_is_last_label_agree_with_variant_predicates_on_every_canonical_label() {
+        // For every canonical variant `v` in the closed set, the
+        // label-shaped endpoint-membership predicates agree with the
+        // Self-arg endpoint-membership predicates through the natural
+        // (variant → label) projection: `T::is_first_label(v.label())`
+        // matches `v.is_first()` and `T::is_last_label(v.label())`
+        // matches `v.is_last()` — the (arg-type × endpoint-direction)
+        // 2×2 endpoint-membership matrix agrees on every canonical
+        // slot regardless of which arg-type column the caller walks.
+        // The pin catches a regression that silently bifurcates the
+        // (Self, &str) arg-type axis at either endpoint direction on
+        // any variant.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let label = v.label();
+            assert_eq!(
+                <StubKind as ClosedSet>::is_first_label(label),
+                v.is_first(),
+                "is_first_label({label:?}) diverged from {v:?}.is_first() — the (Self, &str) arg-type axis bifurcated at the declaration head-endpoint slot",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::is_last_label(label),
+                v.is_last(),
+                "is_last_label({label:?}) diverged from {v:?}.is_last() — the (Self, &str) arg-type axis bifurcated at the declaration tail-endpoint slot",
+            );
+        }
+    }
+
+    #[test]
+    fn is_first_label_and_is_last_label_collapse_on_singleton_closed_set() {
+        // For a closed set with `T::CARDINALITY == 1`, the sole
+        // variant's canonical label is BOTH the declaration-head-
+        // endpoint label AND the declaration-tail-endpoint label so
+        // the two label-shaped endpoint-membership predicates
+        // collapse onto the same `&str` equality check. Mirrors
+        // [`ClosedSet::is_first`] / [`ClosedSet::is_last`]'s
+        // singleton collapse at the (Self, bool) arm one arg-type
+        // axis over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonKind {
+            Sole,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonKind(pub String);
+        impl core::fmt::Display for UnknownSingletonKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonKind {
+            const ALL: &'static [Self] = &[Self::Sole];
+            const SET_LABEL: &'static str = "singleton kind";
+            type Unknown = UnknownSingletonKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Sole => "sole",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonKind(s.to_owned())
+            }
+        }
+        assert!(<SingletonKind as ClosedSet>::is_first_label("sole"));
+        assert!(<SingletonKind as ClosedSet>::is_last_label("sole"));
+        assert!(!<SingletonKind as ClosedSet>::is_first_label("other"));
+        assert!(!<SingletonKind as ClosedSet>::is_last_label("other"));
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_first_label_and_first_label_composition(
+    ) {
+        // The well-formedness sweep's (50) clause —
+        // `T::is_first_label(s)` MUST equal `s == T::first_label()`
+        // on every canonical variant label. A hand-impl'd
+        // implementor whose override folds the label-shaped head-
+        // membership predicate onto the label-shaped tail-membership
+        // predicate at the (head, tail) endpoint-direction axis
+        // (returning `true` on the declaration-tail label instead of
+        // the declaration-head label) fails the sweep loudly rather
+        // than silently bifurcating the label-shaped head-membership
+        // surface every downstream label-shaped head-boundary
+        // consumer routes through.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsFirstLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsFirstLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsFirstLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is first label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsFirstLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is first label kind";
+            type Unknown = UnknownDriftedIsFirstLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsFirstLabelKind(s.to_owned())
+            }
+            fn is_first_label(s: &str) -> bool {
+                // Drifted override — folds the label-shaped head-
+                // endpoint membership predicate onto the label-
+                // shaped tail-endpoint membership predicate,
+                // silently swapping the head-direction predicate
+                // with the tail-direction predicate at the (head,
+                // tail) endpoint-direction axis every downstream
+                // label-shaped head-boundary consumer routes
+                // through. Declaration order on this stub is
+                // `[Head, Middle, Tail]`, so the intended head
+                // label is `"head"` but the override answers
+                // `s == "tail"` instead.
+                s == "tail"
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsFirstLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_first_label() override that folds the declaration-head-endpoint label predicate onto the declaration-tail-endpoint label predicate rather than composing `s == T::first_label()`",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_last_label_and_last_label_composition(
+    ) {
+        // The well-formedness sweep's (51) clause —
+        // `T::is_last_label(s)` MUST equal `s == T::last_label()`
+        // on every canonical variant label. A hand-impl'd
+        // implementor whose override accepts a strictly-interior
+        // variant's label as the tail label fails the sweep loudly
+        // rather than silently routing an interior slot into the
+        // label-shaped tail-membership predicate.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsLastLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsLastLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsLastLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is last label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsLastLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is last label kind";
+            type Unknown = UnknownDriftedIsLastLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsLastLabelKind(s.to_owned())
+            }
+            fn is_last_label(s: &str) -> bool {
+                // Drifted override — routes a strictly-interior
+                // variant's label into the label-shaped tail-
+                // endpoint slot, silently forking the tail-
+                // membership predicate from the natural
+                // `s == T::last_label()` composition every
+                // downstream label-shaped tail-boundary consumer
+                // routes through. Declaration order on this stub is
+                // `[Head, Middle, Tail]`, so the intended tail
+                // label is `"tail"` but the override answers
+                // `s == "middle"` instead.
+                s == "middle"
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsLastLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_last_label() override that returns a strictly-interior variant's label rather than composing `s == T::last_label()`",
         );
     }
 }

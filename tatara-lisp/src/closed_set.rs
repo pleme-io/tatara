@@ -3311,6 +3311,346 @@ pub trait ClosedSet: Sized + Copy + 'static {
         !<Self as ClosedSet>::is_sorted_endpoint(self)
     }
 
+    /// The declaration-order label-shaped endpoint-membership predicate —
+    /// `true` iff `s` equals [`Self::first_label`] OR [`Self::last_label`],
+    /// `false` on every strictly-interior canonical label AND on every non-
+    /// canonical input. Closes the (`&str`, declaration, endpoint) corner
+    /// of the (arg-type × ordering × predicate-flavor) 2×2×2 = 8-corner
+    /// boolean-boundary hypercube alongside [`Self::is_endpoint`] (Self,
+    /// declaration, endpoint), [`Self::is_interior`] (Self, declaration,
+    /// interior), [`Self::is_sorted_endpoint`] (Self, lex, endpoint), and
+    /// [`Self::is_sorted_interior`] (Self, lex, interior), opening the
+    /// label-shaped column on the boolean-boundary surface one arg-type
+    /// axis over from the pre-existing `Self`-arg (endpoint, interior)
+    /// partition.
+    ///
+    /// Sibling posture to [`Self::is_endpoint`] one arg-type axis over on
+    /// the (`Self`, `&str`) partition of the declaration-axis boolean-
+    /// boundary surface: [`Self::is_endpoint`] answers "is this variant
+    /// the declaration-order head OR tail?", this method answers "is this
+    /// &str the declaration-order head-endpoint OR tail-endpoint label?"
+    /// for a raw label string WITHOUT decoding through
+    /// [`Self::parse_label`] or [`Self::find_by_label`] (which would
+    /// allocate the reject carrier on non-matching inputs OR force the
+    /// caller through the `Option<Self>`-typed dispatch). See
+    /// [`Self::is_endpoint`] for the shared design rationale, sibling
+    /// matrix, override axis, future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the label-
+    /// shaped-arg-type arm of the same predicate-flavor + ordering axis
+    /// and inherits every property from the `Self`-arg endpoint arm's
+    /// documentation, differing only in the composition through
+    /// [`Self::is_first_label`] + [`Self::is_last_label`] instead of
+    /// [`Self::is_first`] + [`Self::is_last`].
+    ///
+    /// Default body composes [`Self::is_first_label`] with
+    /// [`Self::is_last_label`] under `||` — the label-shaped boundary-
+    /// membership predicate is a typed CONSEQUENCE of the two pre-
+    /// existing label-shaped point-membership primitives, not a third
+    /// codepath through [`Self::find_by_label`] with `Option::map`.
+    /// Implementors override only when the label-shaped boundary-
+    /// membership surface needs to diverge from the natural
+    /// `is_first_label(s) || is_last_label(s)` shape (no production
+    /// implementor reaches for this today; the axis exists for the same
+    /// reason `is_first_label` / `is_last_label` / `is_endpoint` /
+    /// `is_interior` overrides exist — a typed escape hatch the trait
+    /// surface exposes rather than forcing the implementor to hand-roll
+    /// the impl). An implementor that overrides either
+    /// [`Self::is_first_label`] OR [`Self::is_last_label`] propagates the
+    /// override through this default body automatically.
+    ///
+    /// Non-canonical input contract — the reserved probe rejects
+    /// (`false`) and the empty-string boundary rejects (`false`) by
+    /// clause (4) composed with the (50) + (51) clauses that pin
+    /// [`Self::is_first_label`] / [`Self::is_last_label`]'s non-empty
+    /// canonical-label surface. Every generic consumer that binds this
+    /// predicate as its zero-alloc label-shaped structural-boundary
+    /// query surface (an annotation-key filter that fires on
+    /// `tatara.pleme.io/*` boundary keys without decoding through
+    /// `parse_label`'s carrier allocation, a diagnostic renderer that
+    /// emits a shared boundary badge on either endpoint label without
+    /// paying the two-primitive disjunction at each callsite, a lint
+    /// that flags label strings drifting away from the declared endpoint
+    /// pair) sees the SAME `bool` at every crate boundary.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::first_label`] equals
+    /// [`Self::last_label`], so both label-shaped point-membership
+    /// predicates fire on the same canonical label and this predicate
+    /// returns `true` for the sole variant's label. [`Self::is_interior_label`]
+    /// correspondingly returns `false` — a singleton has zero interior
+    /// slots. Mirrors the singleton collapse [`Self::is_endpoint`]
+    /// observes at the `Self`-arg column one arg-type axis over.
+    ///
+    /// THEORY.md §III — the typescape; the (&str → declaration-boundary-
+    /// membership bool) projection becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline
+    /// `T::is_first_label(s) || T::is_last_label(s)` composition at every
+    /// downstream label-shaped structural-boundary query site.
+    /// THEORY.md §V.1 — knowable platform; the (&str → declaration-
+    /// boundary-membership bool) projection was an unnamed compound of
+    /// [`Self::is_first_label`] + [`Self::is_last_label`] + `||` pre-
+    /// lift; naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two label-shaped point-membership primitives.
+    /// THEORY.md §VI.1 — generation over composition; the projection
+    /// emerges from the composition of TWO substrate primitives under
+    /// the standard-library boolean `||` operator rather than as a
+    /// per-implementor `match s { ... }` block.
+    ///
+    /// Frontier inspiration: Racket's `enum-boundary-label?` on closed
+    /// enumerations under label projection (the `∨`-composed label-
+    /// shaped endpoint-membership predicate over both declaration-order
+    /// anchors of the raw label string); Idris's `isBoundaryLabel :
+    /// String -> Bool` composed via `showFin (first xs) == s ||
+    /// showFin (last xs) == s`; MLIR's
+    /// `RegisteredOperationName::isDeclEndpointName(name)` on the
+    /// declaration-order Op registry. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's existing
+    /// [`Self::is_first_label`] and [`Self::is_last_label`] label-shaped
+    /// point-membership primitives under the standard-library boolean
+    /// `||` operator — no new dep, no new IR layer, no supertrait bound,
+    /// no allocation, no [`Option`]-typed dispatch.
+    fn is_endpoint_label(s: &str) -> bool {
+        <Self as ClosedSet>::is_first_label(s) || <Self as ClosedSet>::is_last_label(s)
+    }
+
+    /// The declaration-order label-shaped interior-membership predicate —
+    /// `true` iff `s` is a canonical label of a strictly-interior variant
+    /// (neither [`Self::first_label`] nor [`Self::last_label`]),
+    /// `false` on both endpoint labels AND on every non-canonical input.
+    /// Closes the (`&str`, declaration, interior) corner of the (arg-type
+    /// × ordering × predicate-flavor) 2×2×2 = 8-corner boolean-boundary
+    /// hypercube alongside [`Self::is_endpoint_label`] (&str,
+    /// declaration, endpoint).
+    ///
+    /// Sibling posture to [`Self::is_interior`] one arg-type axis over
+    /// on the (`Self`, `&str`) partition of the declaration-axis
+    /// boolean-boundary surface: [`Self::is_interior`] answers "is this
+    /// variant strictly interior?", this method answers "is this &str
+    /// the label of a strictly-interior variant?" for a raw label string
+    /// WITHOUT decoding through [`Self::parse_label`] or
+    /// [`Self::find_by_label`].
+    ///
+    /// Default body composes [`Self::contains_label`] with
+    /// [`!Self::is_endpoint_label`] under `&&` — a canonical label
+    /// answers `true` iff it is in the closed-set canonical labeling
+    /// AND is NOT an endpoint label; every non-canonical input answers
+    /// `false` because [`Self::contains_label`] rejects it. This shape
+    /// diverges from the `Self`-arg default `!is_endpoint(self)` (which
+    /// would answer `true` for a non-canonical input on the label
+    /// side) — the `&str` arg-type axis requires a domain-membership
+    /// gate because the input domain is unbounded, unlike the closed
+    /// `Self` domain. Composition rejects the reserved probe (falls out
+    /// of `contains_label`) and the empty-string boundary
+    /// (falls out of clause (4)'s empty-string reservation composed
+    /// with `contains_label`'s natural sweep).
+    ///
+    /// Implementors override only when the label-shaped interior-
+    /// membership surface needs to diverge from the natural
+    /// `contains_label(s) && !is_endpoint_label(s)` shape (no production
+    /// implementor reaches for this today; the axis exists for the same
+    /// reason `is_endpoint_label` / `is_interior` / `contains_label`
+    /// overrides exist — a typed escape hatch). An implementor that
+    /// overrides [`Self::contains_label`] OR [`Self::is_endpoint_label`]
+    /// propagates the override through this default body automatically.
+    ///
+    /// The (label-shaped endpoint, label-shaped interior) partition
+    /// contract on the CANONICAL sub-domain —
+    /// `is_endpoint_label(v.label()) != is_interior_label(v.label())`
+    /// for every variant `v` in [`Self::ALL`] — is guaranteed by the
+    /// default composition; the well-formedness clause (55) pins the
+    /// complementarity assertion on every canonical label. Outside the
+    /// canonical sub-domain BOTH predicates return `false` (the input
+    /// belongs to neither the endpoint sub-label nor the interior sub-
+    /// label — the label-shaped predicates project to `false` on the
+    /// non-canonical column, mirroring the `find_by_label(s).is_none()`
+    /// rejection semantics of [`Self::parse_label`]).
+    ///
+    /// Singleton degeneracy — for `T::CARDINALITY == 1` this predicate
+    /// returns `false` for the sole variant's label (the sole label is
+    /// BOTH endpoints so `is_endpoint_label` fires; the interior arm
+    /// correspondingly rejects).
+    ///
+    /// THEORY.md §III — the typescape; the (&str → declaration-interior-
+    /// membership bool) projection becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline
+    /// `T::contains_label(s) && !T::is_endpoint_label(s)` composition.
+    /// THEORY.md §V.1 — knowable platform; naming the projection on the
+    /// trait turns "the label is a strictly-interior canonical" from an
+    /// unnamed compound into a workspace-wide theorem.
+    ///
+    /// Frontier inspiration: Racket's `enum-interior-label?` on closed
+    /// enumerations under label projection; Haskell's
+    /// `(\s -> s `elem` labels && s /= minLabel && s /= maxLabel)` on
+    /// the `Bounded + Show` type-class pair with a `sortBy id` prelude;
+    /// MLIR's `RegisteredOperationName::isDeclInteriorName(name)` on the
+    /// declaration-order Op registry. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's existing
+    /// [`Self::contains_label`] and [`Self::is_endpoint_label`] surfaces
+    /// under the standard-library boolean `&&` operator with unary `!` —
+    /// no new dep, no new IR layer, no supertrait bound, no allocation,
+    /// no [`Option`]-typed dispatch.
+    fn is_interior_label(s: &str) -> bool {
+        <Self as ClosedSet>::contains_label(s) && !<Self as ClosedSet>::is_endpoint_label(s)
+    }
+
+    /// The lexicographic-order label-shaped endpoint-membership
+    /// predicate — `true` iff `s` equals [`Self::sorted_first_label`]
+    /// OR [`Self::sorted_last_label`], `false` on every strictly-lex-
+    /// interior canonical label AND on every non-canonical input.
+    /// Closes the (`&str`, lex, endpoint) corner of the (arg-type ×
+    /// ordering × predicate-flavor) 2×2×2 = 8-corner boolean-boundary
+    /// hypercube alongside [`Self::is_endpoint_label`] (&str,
+    /// declaration, endpoint) and [`Self::is_sorted_endpoint`] (Self,
+    /// lex, endpoint).
+    ///
+    /// Sibling posture to [`Self::is_sorted_endpoint`] one arg-type
+    /// axis over on the (`Self`, `&str`) partition of the lex-axis
+    /// boolean-boundary surface: [`Self::is_sorted_endpoint`] answers
+    /// "is this variant the lex head OR tail?", this method answers "is
+    /// this &str the lex head-endpoint OR tail-endpoint label?" for a
+    /// raw label string. See [`Self::is_sorted_endpoint`] for the
+    /// shared rationale, sibling matrix, override axis, and future-
+    /// consumer inventory.
+    ///
+    /// Default body composes [`Self::is_sorted_first_label`] with
+    /// [`Self::is_sorted_last_label`] under `||` — the lex label-
+    /// shaped boundary-membership predicate is a typed CONSEQUENCE of
+    /// the two pre-existing lex label-shaped point-membership
+    /// primitives. Implementors override only when the lex label-
+    /// shaped boundary-membership surface needs to diverge from the
+    /// natural `is_sorted_first_label(s) || is_sorted_last_label(s)`
+    /// shape. An implementor that overrides either
+    /// [`Self::is_sorted_first_label`] OR [`Self::is_sorted_last_label`]
+    /// propagates the override through this default body automatically.
+    ///
+    /// Non-canonical input contract — the reserved probe rejects and
+    /// the empty-string boundary rejects by clause (4) composed with
+    /// (52) + (53). Divergence from [`Self::is_endpoint_label`] on the
+    /// declaration axis is real: on any implementor whose declaration
+    /// order diverges from its lex order at the endpoints, this
+    /// predicate answers `true` on the lex-endpoint canonical labels
+    /// (which may be strictly-interior on the declaration axis), and
+    /// [`Self::is_endpoint_label`] answers `true` on the declaration-
+    /// endpoint canonical labels (which may be strictly-interior on
+    /// the lex axis).
+    ///
+    /// Singleton degeneracy — for `T::CARDINALITY == 1` this predicate
+    /// returns `true` for the sole variant's label (both lex point-
+    /// membership predicates fire on the same label).
+    ///
+    /// THEORY.md §III — the typescape; the (&str → lex-boundary-
+    /// membership bool) projection becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline
+    /// `T::is_sorted_first_label(s) || T::is_sorted_last_label(s)`
+    /// composition.
+    /// THEORY.md §V.1 — knowable platform; naming the projection on the
+    /// trait turns "the label is an alphabetized-boundary label" from
+    /// an unnamed compound into a workspace-wide theorem.
+    ///
+    /// Frontier inspiration: Racket's `enum-sorted-boundary-label?` on
+    /// closed enumerations under lex-ordered label projection; Idris's
+    /// `isSortedBoundaryLabel : String -> Bool` composed via
+    /// `showFin (sortedFirst xs) == s ||
+    /// showFin (sortedLast xs) == s`; MLIR's
+    /// `RegisteredOperationName::isLexEndpointName(name)` on the lex-
+    /// sorted Op registry. Translation through pleme-io primitives: a
+    /// pure default method composing the trait's existing
+    /// [`Self::is_sorted_first_label`] and
+    /// [`Self::is_sorted_last_label`] surfaces under the standard-
+    /// library boolean `||` operator — no new dep, no new IR layer, no
+    /// supertrait bound, no allocation, no [`Option`]-typed dispatch.
+    fn is_sorted_endpoint_label(s: &str) -> bool {
+        <Self as ClosedSet>::is_sorted_first_label(s)
+            || <Self as ClosedSet>::is_sorted_last_label(s)
+    }
+
+    /// The lexicographic-order label-shaped interior-membership
+    /// predicate — `true` iff `s` is a canonical label of a strictly-
+    /// lex-interior variant, `false` on both lex-endpoint labels AND on
+    /// every non-canonical input. Closes the (`&str`, lex, interior)
+    /// corner and the final corner of the (arg-type × ordering ×
+    /// predicate-flavor) 2×2×2 = 8-corner boolean-boundary hypercube
+    /// alongside [`Self::is_sorted_endpoint_label`] (&str, lex,
+    /// endpoint), [`Self::is_endpoint_label`] (&str, declaration,
+    /// endpoint), [`Self::is_interior_label`] (&str, declaration,
+    /// interior), [`Self::is_endpoint`] / [`Self::is_interior`] on the
+    /// declaration `Self`-arg column, and [`Self::is_sorted_endpoint`]
+    /// / [`Self::is_sorted_interior`] on the lex `Self`-arg column.
+    ///
+    /// Sibling posture to [`Self::is_sorted_interior`] one arg-type
+    /// axis over on the (`Self`, `&str`) partition of the lex-axis
+    /// boolean-boundary surface: [`Self::is_sorted_interior`] answers
+    /// "is this variant strictly lex-interior?", this method answers
+    /// "is this &str the label of a strictly-lex-interior variant?"
+    /// for a raw label string WITHOUT decoding through
+    /// [`Self::parse_label`] or [`Self::find_by_label`].
+    ///
+    /// Default body composes [`Self::contains_label`] with
+    /// [`!Self::is_sorted_endpoint_label`] under `&&` — mirrors the
+    /// declaration-axis [`Self::is_interior_label`] one ordering axis
+    /// over. The `&str` arg-type axis requires the same domain-
+    /// membership gate as [`Self::is_interior_label`] because the
+    /// input domain is unbounded; the composition rejects the reserved
+    /// probe and the empty-string boundary.
+    ///
+    /// Implementors override only when the lex label-shaped interior-
+    /// membership surface needs to diverge from the natural
+    /// `contains_label(s) && !is_sorted_endpoint_label(s)` shape. An
+    /// implementor that overrides [`Self::contains_label`] OR
+    /// [`Self::is_sorted_endpoint_label`] propagates the override
+    /// through this default body automatically.
+    ///
+    /// The (lex-endpoint-label, lex-interior-label) partition contract
+    /// on the CANONICAL sub-domain —
+    /// `is_sorted_endpoint_label(v.label()) !=
+    /// is_sorted_interior_label(v.label())` for every variant `v` in
+    /// [`Self::ALL`] — is guaranteed by the default composition; the
+    /// well-formedness clause (57) pins the complementarity assertion
+    /// on every canonical label. Outside the canonical sub-domain BOTH
+    /// predicates return `false`.
+    ///
+    /// Singleton degeneracy — for `T::CARDINALITY == 1` this predicate
+    /// returns `false` for the sole variant's label (the sole label is
+    /// BOTH lex endpoints so `is_sorted_endpoint_label` fires; the
+    /// interior arm correspondingly rejects).
+    ///
+    /// Clauses (32) + (33) + (54) + (55) + (56) + (57) together CLOSE
+    /// the (arg-type × ordering × predicate-flavor) 2×2×2 = 8-corner
+    /// boolean-boundary hypercube — every generic consumer that walks
+    /// any of the eight (Self-or-&str, declaration-or-lex, endpoint-
+    /// or-interior) corners of the boundary-partition space binds to
+    /// ONE typed predicate rather than hand-rolling a composition.
+    ///
+    /// THEORY.md §III — the typescape; the (&str → lex-interior-
+    /// membership bool) projection becomes a TYPE projection on the
+    /// trait. The 8-corner boolean-boundary hypercube CLOSES with
+    /// this method — every corner of the (arg-type × ordering ×
+    /// predicate-flavor) space is a typed default trait body composed
+    /// from substrate primitives.
+    /// THEORY.md §V.1 — knowable platform; naming the projection on
+    /// the trait turns "the label is a strictly-lex-interior canonical"
+    /// from an unnamed compound into a workspace-wide theorem.
+    /// THEORY.md §VI.1 — generation over composition; the projection
+    /// emerges from the composition of TWO substrate primitives under
+    /// standard-library boolean operators, rather than as a per-
+    /// implementor `match s { ... }` block.
+    ///
+    /// Frontier inspiration: Racket's `enum-sorted-interior-label?` on
+    /// closed enumerations under lex-ordered label projection;
+    /// Haskell's
+    /// `(\s -> s `elem` labels && s /= sortedMinLabel && s /= sortedMaxLabel)`
+    /// on the `Bounded + Show` type-class pair; MLIR's
+    /// `RegisteredOperationName::isLexInteriorName(name)` on the lex-
+    /// sorted Op registry. Translation through pleme-io primitives: a
+    /// pure default method composing the trait's existing
+    /// [`Self::contains_label`] and [`Self::is_sorted_endpoint_label`]
+    /// surfaces under the standard-library boolean `&&` operator with
+    /// unary `!` — no new dep, no new IR layer, no supertrait bound,
+    /// no allocation, no [`Option`]-typed dispatch.
+    fn is_sorted_interior_label(s: &str) -> bool {
+        <Self as ClosedSet>::contains_label(s) && !<Self as ClosedSet>::is_sorted_endpoint_label(s)
+    }
+
     /// The declaration-order endpoint anchor pair — the tuple
     /// `(T::first(), T::last())` projected onto the trait surface as
     /// ONE call. Closes the pair-aggregation corner of the closed-set
@@ -9363,6 +9703,235 @@ where
     assert!(
         !T::is_sorted_last_label(""),
         "{type_name}: T::is_sorted_last_label(\"\") returned true on the empty-string boundary — the label-shaped lex-tail-endpoint membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling",
+    );
+    // (54) — `T::is_endpoint_label(s)` MUST equal
+    // `T::is_first_label(s) || T::is_last_label(s)` on every
+    // representative input: every canonical variant label answers
+    // `true` iff the variant is a declaration-order endpoint anchor,
+    // the reserved probe rejects (`false`), and the empty-string
+    // boundary rejects (`false`). Additionally the label-shaped
+    // endpoint pin agrees with the `Self`-arg endpoint pin through
+    // the natural label projection —
+    // `T::is_endpoint_label(v.label()) == v.is_endpoint()` for every
+    // canonical variant `v`, tying the label-shaped column
+    // (arg-type = &str) to the pre-existing `Self`-arg column
+    // (arg-type = Self) at every canonical slot. The default trait
+    // body composes
+    // `<T as ClosedSet>::is_first_label(s) || <T as ClosedSet>::is_last_label(s)`
+    // verbatim and satisfies the clause for free; the assertion
+    // catches a future implementor whose override drifts the
+    // composition (a permissive override that returns `true` for a
+    // strictly-interior canonical label — silently routing an
+    // interior slot's label into the label-shaped structural-
+    // boundary predicate; a strict override that returns `false`
+    // for the canonical head-endpoint OR tail-endpoint label — silently
+    // detaching the label-shaped boundary-membership from the natural
+    // point-membership disjunction; a fold override that answers "is
+    // this the lex-endpoint label?" instead — silently swapping the
+    // declaration-axis onto the lex-axis at the (declaration, lex)
+    // ordering axis; an override that always returns `true` on any
+    // non-empty input — silently collapsing the boundary predicate
+    // onto a trivial non-empty predicate; a fabricated override
+    // that returns `true` on the empty-string boundary or the
+    // reserved probe) loudly rather than silently bifurcating the
+    // label-shaped boundary-membership surface every downstream
+    // label-shaped structural-boundary consumer routes through.
+    // Sibling posture to clause (32) — clause (32) pins the `Self`-arg
+    // declaration-axis boundary-membership predicate against the
+    // natural `is_first(self) || is_last(self)` composition, this
+    // clause pins the `&str`-arg declaration-axis boundary-
+    // membership predicate against the natural
+    // `is_first_label(s) || is_last_label(s)` composition. Clauses
+    // (32) + (54) together open the (arg-type × predicate-flavor)
+    // 2×2 = 4-corner boundary-membership matrix at BOTH arg-type
+    // axes on the endpoint arm of the declaration-axis boolean-
+    // boundary surface.
+    for &v in T::ALL {
+        let label = v.label();
+        let lifted = T::is_endpoint_label(label);
+        let natural = T::is_first_label(label) || T::is_last_label(label);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::is_endpoint_label({label:?}) drifted from `T::is_first_label({label:?}) || T::is_last_label({label:?})` — the label-shaped declaration-boundary-membership predicate no longer agrees with the natural `is_first_label(s) || is_last_label(s)` two-primitive composition on the canonical label of variant {v:?}, so a downstream shared-endpoint-badge renderer / annotation-key filter / lint that flags label strings drifting away from the declared endpoint pair — consumers that bind `T::is_endpoint_label(s)` as their zero-alloc label-shaped structural-boundary query surface — would answer the wrong `bool`",
+        );
+        assert_eq!(
+            lifted,
+            v.is_endpoint(),
+            "{type_name}: T::is_endpoint_label({label:?}) diverged from {v:?}.is_endpoint() through the natural label projection — the (Self, &str) arg-type axis bifurcated at the declaration boundary-membership predicate on the canonical label of variant {v:?}",
+        );
+    }
+    assert!(
+        !T::is_endpoint_label(probe),
+        "{type_name}: T::is_endpoint_label({probe:?}) returned true on the reserved probe input — the label-shaped declaration-boundary-membership predicate MUST reject every input outside the closed set's canonical labeling; the probe is by construction distinct from every canonical label AND from every substrate-produced label, so a `true` answer here silently permits inputs beyond the closed set into the label-shaped structural-boundary surface",
+    );
+    assert!(
+        !T::is_endpoint_label(""),
+        "{type_name}: T::is_endpoint_label(\"\") returned true on the empty-string boundary — the label-shaped declaration-boundary-membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling",
+    );
+    // (55) — `T::is_interior_label(s)` MUST equal
+    // `T::contains_label(s) && !T::is_endpoint_label(s)` on every
+    // representative input: every canonical variant label answers
+    // `true` iff the variant is a strictly-interior declaration
+    // slot, the reserved probe rejects (`false` — non-canonical),
+    // and the empty-string boundary rejects (`false` — non-
+    // canonical). Additionally the label-shaped interior pin agrees
+    // with the `Self`-arg interior pin through the natural label
+    // projection — `T::is_interior_label(v.label()) == v.is_interior()`
+    // for every canonical variant `v`, tying the label-shaped
+    // interior column to the pre-existing `Self`-arg interior
+    // column at every canonical slot. Additionally the (label-
+    // shaped endpoint, label-shaped interior) partition contract on
+    // the canonical sub-domain —
+    // `is_endpoint_label(v.label()) != is_interior_label(v.label())`
+    // for every variant `v` — is pinned as an exhaustive
+    // complementarity assertion, mirroring clause (32)'s
+    // complementarity pin one arg-type axis over. The default trait
+    // body composes
+    // `<T as ClosedSet>::contains_label(s) && !<T as ClosedSet>::is_endpoint_label(s)`
+    // verbatim and satisfies the clause for free; the assertion
+    // catches a future implementor whose override drifts the
+    // composition (a permissive override that returns `true` for an
+    // endpoint label — folding the endpoint slot into the interior
+    // slot; a permissive override that returns `true` for a non-
+    // canonical input — dropping the domain-membership gate; a
+    // strict override that returns `false` for a strictly-interior
+    // canonical label — silently detaching the interior arm from
+    // the canonical partition; a swap override that inverts the
+    // (endpoint, interior) partition on the label-shaped column)
+    // loudly rather than silently bifurcating the label-shaped
+    // interior-membership surface. Sibling posture to clause (32)
+    // one arg-type axis over. Clauses (32) + (54) + (55) together
+    // CLOSE the (arg-type × predicate-flavor) 2×2 = 4-corner
+    // boundary-membership matrix on the declaration-axis boolean-
+    // boundary surface at ALL FOUR corners: (Self, endpoint) at
+    // clause (32), (Self, interior) at clause (32), (&str,
+    // endpoint) at clause (54), (&str, interior) at clause (55).
+    for &v in T::ALL {
+        let label = v.label();
+        let lifted = T::is_interior_label(label);
+        let natural = T::contains_label(label) && !T::is_endpoint_label(label);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::is_interior_label({label:?}) drifted from `T::contains_label({label:?}) && !T::is_endpoint_label({label:?})` — the label-shaped declaration-interior-membership predicate no longer agrees with the natural domain-gated interior composition on the canonical label of variant {v:?}, so a downstream strictly-interior renderer / interior-slot audit event / boundary-hidden completion pass consumer that binds `T::is_interior_label(s)` as its zero-alloc label-shaped interior query surface would answer the wrong `bool`",
+        );
+        assert_eq!(
+            lifted,
+            v.is_interior(),
+            "{type_name}: T::is_interior_label({label:?}) diverged from {v:?}.is_interior() through the natural label projection — the (Self, &str) arg-type axis bifurcated at the declaration interior-membership predicate on the canonical label of variant {v:?}",
+        );
+        assert_ne!(
+            T::is_endpoint_label(label),
+            T::is_interior_label(label),
+            "{type_name}: T::is_endpoint_label({label:?}) and T::is_interior_label({label:?}) returned the SAME bool on the canonical label of variant {v:?} — the label-shaped (endpoint, interior) partition MUST be exhaustive on canonical labels: every canonical label answers `true` to EXACTLY ONE of the two predicates. A drift here means BOTH predicates fired OR BOTH predicates rejected on {v:?}'s canonical label, breaking the label-shaped boundary-partition on the declaration axis",
+        );
+    }
+    assert!(
+        !T::is_interior_label(probe),
+        "{type_name}: T::is_interior_label({probe:?}) returned true on the reserved probe input — the label-shaped declaration-interior-membership predicate MUST reject every input outside the closed set's canonical labeling; the domain-membership gate through `contains_label` is load-bearing on the `&str` arg-type column",
+    );
+    assert!(
+        !T::is_interior_label(""),
+        "{type_name}: T::is_interior_label(\"\") returned true on the empty-string boundary — the label-shaped declaration-interior-membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling and the domain-membership gate through `contains_label` rejects it accordingly",
+    );
+    // (56) — `T::is_sorted_endpoint_label(s)` MUST equal
+    // `T::is_sorted_first_label(s) || T::is_sorted_last_label(s)`
+    // on every representative input: every canonical variant label
+    // answers `true` iff the variant is a lex-order endpoint anchor,
+    // the reserved probe rejects, and the empty-string boundary
+    // rejects. Additionally the label-shaped lex-endpoint pin
+    // agrees with the `Self`-arg lex-endpoint pin through the
+    // natural label projection —
+    // `T::is_sorted_endpoint_label(v.label()) == v.is_sorted_endpoint()`
+    // for every canonical variant `v`. The default trait body
+    // composes
+    // `<T as ClosedSet>::is_sorted_first_label(s) || <T as ClosedSet>::is_sorted_last_label(s)`
+    // verbatim and satisfies the clause for free. Sibling posture
+    // to clause (33) one arg-type axis over, and to clause (54)
+    // one ordering axis over. Clauses (33) + (54) + (56) open the
+    // (arg-type × ordering) 2×2 matrix on the endpoint arm of the
+    // boolean-boundary surface at ALL FOUR arg-type × ordering
+    // corners.
+    for &v in T::ALL {
+        let label = v.label();
+        let lifted = T::is_sorted_endpoint_label(label);
+        let natural = T::is_sorted_first_label(label) || T::is_sorted_last_label(label);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::is_sorted_endpoint_label({label:?}) drifted from `T::is_sorted_first_label({label:?}) || T::is_sorted_last_label({label:?})` — the label-shaped lex-boundary-membership predicate no longer agrees with the natural `is_sorted_first_label(s) || is_sorted_last_label(s)` two-primitive composition on the canonical label of variant {v:?}, so a downstream alphabetized-boundary-badge renderer / lex-boundary annotation-key filter consumer that binds `T::is_sorted_endpoint_label(s)` as its zero-alloc label-shaped lex-structural-boundary query surface would answer the wrong `bool`",
+        );
+        assert_eq!(
+            lifted,
+            v.is_sorted_endpoint(),
+            "{type_name}: T::is_sorted_endpoint_label({label:?}) diverged from {v:?}.is_sorted_endpoint() through the natural label projection — the (Self, &str) arg-type axis bifurcated at the lex boundary-membership predicate on the canonical label of variant {v:?}",
+        );
+    }
+    assert!(
+        !T::is_sorted_endpoint_label(probe),
+        "{type_name}: T::is_sorted_endpoint_label({probe:?}) returned true on the reserved probe input — the label-shaped lex-boundary-membership predicate MUST reject every input outside the closed set's canonical labeling",
+    );
+    assert!(
+        !T::is_sorted_endpoint_label(""),
+        "{type_name}: T::is_sorted_endpoint_label(\"\") returned true on the empty-string boundary — the label-shaped lex-boundary-membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling",
+    );
+    // (57) — `T::is_sorted_interior_label(s)` MUST equal
+    // `T::contains_label(s) && !T::is_sorted_endpoint_label(s)` on
+    // every representative input: every canonical variant label
+    // answers `true` iff the variant is a strictly-lex-interior
+    // slot, the reserved probe rejects, and the empty-string
+    // boundary rejects. Additionally the label-shaped lex-interior
+    // pin agrees with the `Self`-arg lex-interior pin through the
+    // natural label projection —
+    // `T::is_sorted_interior_label(v.label()) == v.is_sorted_interior()`
+    // for every canonical variant `v`. Additionally the (label-
+    // shaped lex-endpoint, label-shaped lex-interior) partition
+    // contract on the canonical sub-domain —
+    // `is_sorted_endpoint_label(v.label()) != is_sorted_interior_label(v.label())`
+    // for every variant `v` — is pinned as an exhaustive
+    // complementarity assertion. The default trait body composes
+    // `<T as ClosedSet>::contains_label(s) && !<T as ClosedSet>::is_sorted_endpoint_label(s)`
+    // verbatim and satisfies the clause for free. Clauses (32) +
+    // (33) + (54) + (55) + (56) + (57) together CLOSE the (arg-type
+    // × ordering × predicate-flavor) 2×2×2 = 8-corner boolean-
+    // boundary hypercube on the closed-set boolean-boundary surface:
+    // (Self, declaration, endpoint/interior) at clause (32) —
+    // [`Self::is_endpoint`] / [`Self::is_interior`]; (Self, lex,
+    // endpoint/interior) at clause (33) — [`Self::is_sorted_endpoint`]
+    // / [`Self::is_sorted_interior`]; (&str, declaration,
+    // endpoint/interior) at clauses (54) + (55) —
+    // [`Self::is_endpoint_label`] / [`Self::is_interior_label`];
+    // (&str, lex, endpoint/interior) at clauses (56) + (57) —
+    // [`Self::is_sorted_endpoint_label`] /
+    // [`Self::is_sorted_interior_label`]. Every generic consumer
+    // that binds any of the eight boolean-boundary methods sees
+    // the SAME structural-boundary answer at every crate boundary
+    // regardless of which arg-type axis / ordering-axis /
+    // predicate-flavor axis it walks.
+    for &v in T::ALL {
+        let label = v.label();
+        let lifted = T::is_sorted_interior_label(label);
+        let natural = T::contains_label(label) && !T::is_sorted_endpoint_label(label);
+        assert_eq!(
+            lifted, natural,
+            "{type_name}: T::is_sorted_interior_label({label:?}) drifted from `T::contains_label({label:?}) && !T::is_sorted_endpoint_label({label:?})` — the label-shaped lex-interior-membership predicate no longer agrees with the natural domain-gated lex-interior composition on the canonical label of variant {v:?}",
+        );
+        assert_eq!(
+            lifted,
+            v.is_sorted_interior(),
+            "{type_name}: T::is_sorted_interior_label({label:?}) diverged from {v:?}.is_sorted_interior() through the natural label projection — the (Self, &str) arg-type axis bifurcated at the lex interior-membership predicate on the canonical label of variant {v:?}",
+        );
+        assert_ne!(
+            T::is_sorted_endpoint_label(label),
+            T::is_sorted_interior_label(label),
+            "{type_name}: T::is_sorted_endpoint_label({label:?}) and T::is_sorted_interior_label({label:?}) returned the SAME bool on the canonical label of variant {v:?} — the label-shaped (lex-endpoint, lex-interior) partition MUST be exhaustive on canonical labels: every canonical label answers `true` to EXACTLY ONE of the two predicates. A drift here means BOTH predicates fired OR BOTH predicates rejected on {v:?}'s canonical label, breaking the label-shaped boundary-partition on the lex axis",
+        );
+    }
+    assert!(
+        !T::is_sorted_interior_label(probe),
+        "{type_name}: T::is_sorted_interior_label({probe:?}) returned true on the reserved probe input — the label-shaped lex-interior-membership predicate MUST reject every input outside the closed set's canonical labeling",
+    );
+    assert!(
+        !T::is_sorted_interior_label(""),
+        "{type_name}: T::is_sorted_interior_label(\"\") returned true on the empty-string boundary — the label-shaped lex-interior-membership predicate MUST reject the empty string; clause (4) pins the empty string as structurally reserved outside every canonical labeling and the domain-membership gate through `contains_label` rejects it accordingly",
     );
 }
 
@@ -19153,6 +19722,365 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an is_sorted_last_label() override that folds the lex-tail-endpoint label predicate onto the lex-head-endpoint label predicate rather than composing `s == T::sorted_last_label()`",
+        );
+    }
+
+    #[test]
+    fn is_endpoint_label_and_is_interior_label_partition_canonical_labels_on_declaration_axis() {
+        // The (`&str`, declaration, endpoint) + (`&str`, declaration,
+        // interior) corners of the (arg-type × ordering × predicate-
+        // flavor) 2×2×2 = 8-corner boolean-boundary hypercube — on the
+        // standard stub `[Alpha, Beta, Gamma]` the declaration head +
+        // tail labels are `"alpha"` + `"gamma"`, and the sole interior
+        // label is `"beta"`. The two label-shaped boundary predicates
+        // partition the canonical labels; both reject every non-
+        // canonical input (probe + empty-string boundary).
+        assert!(<StubKind as ClosedSet>::is_endpoint_label("alpha"));
+        assert!(!<StubKind as ClosedSet>::is_endpoint_label("beta"));
+        assert!(<StubKind as ClosedSet>::is_endpoint_label("gamma"));
+        assert!(!<StubKind as ClosedSet>::is_interior_label("alpha"));
+        assert!(<StubKind as ClosedSet>::is_interior_label("beta"));
+        assert!(!<StubKind as ClosedSet>::is_interior_label("gamma"));
+    }
+
+    #[test]
+    fn is_sorted_endpoint_label_and_is_sorted_interior_label_partition_canonical_labels_on_lex_axis(
+    ) {
+        // The (`&str`, lex, endpoint) + (`&str`, lex, interior) corners
+        // — on `StubKind` lex order coincides with declaration order so
+        // the lex head + tail labels are also `"alpha"` + `"gamma"`,
+        // the sole lex-interior label is `"beta"`. Divergence from the
+        // declaration axis is pinned by
+        // `is_endpoint_label_and_is_sorted_endpoint_label_diverge_when_declaration_and_lex_orders_split`
+        // below.
+        assert!(<StubKind as ClosedSet>::is_sorted_endpoint_label("alpha"));
+        assert!(!<StubKind as ClosedSet>::is_sorted_endpoint_label("beta"));
+        assert!(<StubKind as ClosedSet>::is_sorted_endpoint_label("gamma"));
+        assert!(!<StubKind as ClosedSet>::is_sorted_interior_label("alpha"));
+        assert!(<StubKind as ClosedSet>::is_sorted_interior_label("beta"));
+        assert!(!<StubKind as ClosedSet>::is_sorted_interior_label("gamma"));
+    }
+
+    #[test]
+    fn label_shaped_boundary_predicates_reject_reserved_probe_and_empty_string_boundary() {
+        // Both the endpoint arm AND the interior arm of the label-
+        // shaped (arg-type = &str) boolean-boundary predicates MUST
+        // reject every input outside the closed set's canonical
+        // labeling. The endpoint arm rejects through the underlying
+        // `is_first_label` / `is_last_label` / `is_sorted_first_label`
+        // / `is_sorted_last_label` `s == T::*_label()` structural
+        // equality check; the interior arm rejects through the
+        // domain-membership gate `T::contains_label(s)` — which
+        // itself walks `T::ALL` and answers `false` for any non-
+        // canonical input. Pins the "not-a-label boundary" documented
+        // on each of the four new label-shaped boundary methods.
+        let probe = "__boundary_label_probe__";
+        assert!(!<StubKind as ClosedSet>::is_endpoint_label(probe));
+        assert!(!<StubKind as ClosedSet>::is_interior_label(probe));
+        assert!(!<StubKind as ClosedSet>::is_sorted_endpoint_label(probe));
+        assert!(!<StubKind as ClosedSet>::is_sorted_interior_label(probe));
+        assert!(!<StubKind as ClosedSet>::is_endpoint_label(""));
+        assert!(!<StubKind as ClosedSet>::is_interior_label(""));
+        assert!(!<StubKind as ClosedSet>::is_sorted_endpoint_label(""));
+        assert!(!<StubKind as ClosedSet>::is_sorted_interior_label(""));
+    }
+
+    #[test]
+    fn label_shaped_boundary_predicates_agree_with_variant_predicates_on_every_canonical_label() {
+        // For every canonical variant `v` in the closed set, the label-
+        // shaped boundary predicates agree with the `Self`-arg boundary
+        // predicates through the natural (variant → label) projection:
+        // `T::is_endpoint_label(v.label())` matches `v.is_endpoint()`,
+        // `T::is_interior_label(v.label())` matches `v.is_interior()`,
+        // `T::is_sorted_endpoint_label(v.label())` matches
+        // `v.is_sorted_endpoint()`, and
+        // `T::is_sorted_interior_label(v.label())` matches
+        // `v.is_sorted_interior()` — the (arg-type × ordering ×
+        // predicate-flavor) 2×2×2 = 8-corner boolean-boundary hypercube
+        // agrees on every canonical slot regardless of which arg-type
+        // column the caller walks. The pin catches a regression that
+        // silently bifurcates the (Self, &str) arg-type axis at either
+        // predicate flavor on either ordering axis on any variant.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let label = v.label();
+            assert_eq!(
+                <StubKind as ClosedSet>::is_endpoint_label(label),
+                v.is_endpoint(),
+                "is_endpoint_label({label:?}) diverged from {v:?}.is_endpoint() — the (Self, &str) arg-type axis bifurcated at the declaration boundary-membership slot",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::is_interior_label(label),
+                v.is_interior(),
+                "is_interior_label({label:?}) diverged from {v:?}.is_interior() — the (Self, &str) arg-type axis bifurcated at the declaration interior-membership slot",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::is_sorted_endpoint_label(label),
+                v.is_sorted_endpoint(),
+                "is_sorted_endpoint_label({label:?}) diverged from {v:?}.is_sorted_endpoint() — the (Self, &str) arg-type axis bifurcated at the lex boundary-membership slot",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::is_sorted_interior_label(label),
+                v.is_sorted_interior(),
+                "is_sorted_interior_label({label:?}) diverged from {v:?}.is_sorted_interior() — the (Self, &str) arg-type axis bifurcated at the lex interior-membership slot",
+            );
+        }
+    }
+
+    #[test]
+    fn is_endpoint_label_and_is_sorted_endpoint_label_diverge_when_declaration_and_lex_orders_split(
+    ) {
+        // On any implementor whose declaration order disagrees with the
+        // lex order at the endpoints, `is_endpoint_label` and
+        // `is_sorted_endpoint_label` diverge on the strictly-interior
+        // labels of the disagreeing axis. The stub's declaration is
+        // `[Gamma, Alpha, Beta]` with labels `("gamma", "alpha",
+        // "beta")` — declaration endpoints (`"gamma"`, `"beta"`),
+        // declaration-interior (`"alpha"`); lex order is
+        // `["alpha", "beta", "gamma"]` — lex endpoints (`"alpha"`,
+        // `"gamma"`), lex-interior (`"beta"`). The label `"alpha"` is
+        // declaration-interior but lex-endpoint; the label `"beta"` is
+        // declaration-endpoint but lex-interior. The predicate
+        // divergence pins that the label-shaped column is REAL — not
+        // an alias of the declaration axis one arg-type over — and
+        // catches a hard-coded routing that folded either predicate
+        // onto the other's underlying primitive.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DivergentBoundaryLabelKind {
+            Gamma,
+            Alpha,
+            Beta,
+        }
+        #[derive(Debug)]
+        struct UnknownDivergentBoundaryLabelKind(pub String);
+        impl core::fmt::Display for UnknownDivergentBoundaryLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown divergent boundary label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DivergentBoundaryLabelKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Alpha, Self::Beta];
+            const SET_LABEL: &'static str = "divergent boundary label kind";
+            type Unknown = UnknownDivergentBoundaryLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDivergentBoundaryLabelKind(s.to_owned())
+            }
+        }
+        // Declaration endpoints: `"gamma"` + `"beta"`.
+        assert!(<DivergentBoundaryLabelKind as ClosedSet>::is_endpoint_label("gamma"));
+        assert!(<DivergentBoundaryLabelKind as ClosedSet>::is_endpoint_label("beta"));
+        assert!(!<DivergentBoundaryLabelKind as ClosedSet>::is_endpoint_label("alpha"));
+        // Declaration interior: `"alpha"`.
+        assert!(!<DivergentBoundaryLabelKind as ClosedSet>::is_interior_label("gamma"));
+        assert!(!<DivergentBoundaryLabelKind as ClosedSet>::is_interior_label("beta"));
+        assert!(<DivergentBoundaryLabelKind as ClosedSet>::is_interior_label("alpha"));
+        // Lex endpoints: `"alpha"` + `"gamma"`.
+        assert!(<DivergentBoundaryLabelKind as ClosedSet>::is_sorted_endpoint_label("alpha"));
+        assert!(<DivergentBoundaryLabelKind as ClosedSet>::is_sorted_endpoint_label("gamma"));
+        assert!(!<DivergentBoundaryLabelKind as ClosedSet>::is_sorted_endpoint_label("beta"));
+        // Lex interior: `"beta"`.
+        assert!(!<DivergentBoundaryLabelKind as ClosedSet>::is_sorted_interior_label("alpha"));
+        assert!(!<DivergentBoundaryLabelKind as ClosedSet>::is_sorted_interior_label("gamma"));
+        assert!(<DivergentBoundaryLabelKind as ClosedSet>::is_sorted_interior_label("beta"));
+        // The well-formedness sweep passes even under this divergent
+        // stub — clauses (54) + (55) + (56) + (57) pin the natural
+        // compositions AND the agreement with the `Self`-arg column,
+        // AND the exhaustive complementarity of the (endpoint,
+        // interior) partition on each ordering axis independently.
+        super::assert_closed_set_well_formed::<DivergentBoundaryLabelKind>();
+    }
+
+    #[test]
+    fn label_shaped_boundary_predicates_collapse_on_singleton_closed_set() {
+        // For a closed set with `T::CARDINALITY == 1`, the sole
+        // variant's canonical label is BOTH the declaration-head-
+        // endpoint label AND the declaration-tail-endpoint label AND
+        // the lex-head-endpoint label AND the lex-tail-endpoint label,
+        // so ALL FOUR label-shaped boundary predicates collapse onto
+        // the same `&str` equality check: the endpoint arms fire on
+        // the sole canonical label, and the interior arms uniformly
+        // reject (a singleton has zero interior slots). Mirrors the
+        // singleton collapse [`ClosedSet::is_endpoint`] observes at
+        // the `Self`-arg column one arg-type axis over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonBoundaryLabelKind {
+            Sole,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonBoundaryLabelKind(pub String);
+        impl core::fmt::Display for UnknownSingletonBoundaryLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton boundary label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonBoundaryLabelKind {
+            const ALL: &'static [Self] = &[Self::Sole];
+            const SET_LABEL: &'static str = "singleton boundary label kind";
+            type Unknown = UnknownSingletonBoundaryLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Sole => "sole",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonBoundaryLabelKind(s.to_owned())
+            }
+        }
+        assert!(<SingletonBoundaryLabelKind as ClosedSet>::is_endpoint_label("sole"));
+        assert!(<SingletonBoundaryLabelKind as ClosedSet>::is_sorted_endpoint_label("sole"));
+        assert!(!<SingletonBoundaryLabelKind as ClosedSet>::is_interior_label("sole"));
+        assert!(!<SingletonBoundaryLabelKind as ClosedSet>::is_sorted_interior_label("sole"));
+        // Non-canonical inputs still reject through the endpoint arm's
+        // `s == T::*_label()` structural check and through the interior
+        // arm's `contains_label` domain-membership gate.
+        assert!(!<SingletonBoundaryLabelKind as ClosedSet>::is_endpoint_label("other"));
+        assert!(!<SingletonBoundaryLabelKind as ClosedSet>::is_sorted_endpoint_label("other"));
+        assert!(!<SingletonBoundaryLabelKind as ClosedSet>::is_interior_label("other"));
+        assert!(!<SingletonBoundaryLabelKind as ClosedSet>::is_sorted_interior_label("other"));
+        // Clauses (54) + (55) + (56) + (57) all pass on the singleton
+        // — the sole variant's label matches BOTH endpoint arm
+        // projections AND rejects BOTH interior arm projections; the
+        // complementarity clauses (55) + (57) hold because both label-
+        // shaped endpoint arms fire AND both label-shaped interior
+        // arms reject.
+        super::assert_closed_set_well_formed::<SingletonBoundaryLabelKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_endpoint_label_and_point_membership_disjunction(
+    ) {
+        // The well-formedness sweep's (54) clause —
+        // `T::is_endpoint_label(s)` MUST equal
+        // `T::is_first_label(s) || T::is_last_label(s)` on every
+        // canonical variant label. A hand-impl'd implementor whose
+        // override folds a strictly-interior canonical label into the
+        // label-shaped endpoint-membership predicate (silently
+        // routing an interior slot's label into the label-shaped
+        // structural-boundary slot every downstream annotation-key
+        // filter / boundary-badge renderer consumer routes through)
+        // fails the sweep loudly rather than silently bifurcating
+        // the label-shaped boundary-membership surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsEndpointLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsEndpointLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsEndpointLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is endpoint label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedIsEndpointLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is endpoint label kind";
+            type Unknown = UnknownDriftedIsEndpointLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsEndpointLabelKind(s.to_owned())
+            }
+            fn is_endpoint_label(s: &str) -> bool {
+                // Drifted override — routes the strictly-interior
+                // label `"middle"` into the label-shaped endpoint
+                // slot alongside the canonical endpoint labels,
+                // silently forking the boundary-membership predicate
+                // from the natural `is_first_label(s) ||
+                // is_last_label(s)` composition every downstream
+                // label-shaped structural-boundary consumer routes
+                // through.
+                s == "head" || s == "middle" || s == "tail"
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsEndpointLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_endpoint_label() override that folds a strictly-interior canonical label into the label-shaped endpoint slot rather than composing `is_first_label(s) || is_last_label(s)`",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_is_sorted_interior_label_and_domain_gated_composition(
+    ) {
+        // The well-formedness sweep's (57) clause —
+        // `T::is_sorted_interior_label(s)` MUST equal
+        // `T::contains_label(s) && !T::is_sorted_endpoint_label(s)`
+        // on every canonical variant label AND the reserved probe AND
+        // the empty-string boundary. A hand-impl'd implementor whose
+        // override drops the domain-membership gate (returning `true`
+        // for a non-canonical input outside the canonical labeling)
+        // fails the sweep loudly rather than silently detaching the
+        // label-shaped lex-interior-membership predicate from the
+        // domain-gated composition every downstream strictly-lex-
+        // interior renderer / lex-interior audit event consumer
+        // routes through. The stub's declaration coincides with its
+        // lex order (`[Head, Middle, Tail]` labels
+        // `("head", "middle", "tail")`); the override answers `true`
+        // for the reserved probe by construction, folding the non-
+        // canonical column onto the interior arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSortedInteriorLabelKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIsSortedInteriorLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIsSortedInteriorLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted is sorted interior label kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DriftedIsSortedInteriorLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted is sorted interior label kind";
+            type Unknown = UnknownDriftedIsSortedInteriorLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSortedInteriorLabelKind(s.to_owned())
+            }
+            fn is_sorted_interior_label(s: &str) -> bool {
+                // Drifted override — drops the domain-membership gate,
+                // silently detaching the lex-interior predicate from
+                // the canonical labeling. Any non-endpoint string
+                // (including the reserved probe AND every strictly-
+                // interior canonical label) fires — a permissive
+                // override that folds the non-canonical column onto
+                // the interior arm.
+                s != "head" && s != "tail"
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIsSortedInteriorLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an is_sorted_interior_label() override that drops the domain-membership gate `contains_label(s)` rather than composing `contains_label(s) && !is_sorted_endpoint_label(s)`",
         );
     }
 }

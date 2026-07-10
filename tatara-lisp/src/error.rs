@@ -5725,31 +5725,54 @@ impl ExpectedKwargShape {
     ];
 
     /// Canonical `&'static str` bytes for the `Keyword` expected-shape —
-    /// emitted by `parse_kwargs`'s slot-must-be-a-keyword gate. Per-role
-    /// peer of `Self::Keyword` on the closed-set outer algebra; every
-    /// consumer of the `"keyword"` bytes (Display, FromStr, the derive-
+    /// aliases [`SexpShape::KEYWORD_LABEL`] on the ExpectedKwargShape ⊂
+    /// SexpShape 5-of-7 subset carving so the shared `"keyword"`
+    /// vocabulary binds at ONE `pub const` on the parent-superset's
+    /// `SexpShape::KEYWORD_LABEL` arm rather than at TWO independent
+    /// literal-discipline sites (the per-role `pub const` here AND the
+    /// per-role `pub const` on `SexpShape`). Per-role peer of
+    /// `Self::Keyword` on the closed-set outer algebra; every consumer
+    /// of the `"keyword"` bytes (Display, FromStr, the derive-
     /// generated `UnknownExpectedKwargShape` carrier, LSP completion,
     /// audit-trail metric labels) routes through THIS constant, so a
     /// spelling migration (a hypothetical port to `":keyword"`,
-    /// `"kwarg-key"`, or a case-fold to `"Keyword"`) is ONE edit HERE.
-    pub const KEYWORD_LABEL: &'static str = "keyword";
+    /// `"kwarg-key"`, or a case-fold to `"Keyword"`) at
+    /// [`SexpShape::KEYWORD_LABEL`] propagates HERE structurally at
+    /// rustc time rather than through a parallel literal edit.
+    ///
+    /// Sibling posture to [`Self::STRING_LABEL`], [`Self::INT_LABEL`],
+    /// [`Self::BOOL_LABEL`], [`Self::LIST_LABEL`] — the FIVE
+    /// ExpectedKwargShape variants that share bytes with a matching
+    /// [`SexpShape`] carving arm all bind through this same alias
+    /// chain. The TWO non-overlapping siblings [`Self::NUMBER_LABEL`]
+    /// (`"number"` — the wider numeric-union label distinct from
+    /// [`SexpShape::FLOAT_LABEL`]'s `"float"`) and
+    /// [`Self::LIST_OF_STRINGS_LABEL`] (`"list of strings"` — an
+    /// element-typed refinement with no [`SexpShape`] peer) stay as
+    /// direct literals since there is no superset arm to alias
+    /// through. The 5-of-7 carving IS the intersection
+    /// `ExpectedKwargShape::ALL ∩ SexpShape::ALL` on the
+    /// `&'static str` label vocabulary.
+    pub const KEYWORD_LABEL: &'static str = SexpShape::KEYWORD_LABEL;
 
     /// Canonical `&'static str` bytes for the `String` expected-shape —
-    /// emitted by `extract_string` / `extract_optional_string` AND by
-    /// `extract_string_list`'s per-item gate. Per-role peer of
-    /// `Self::String` on the closed-set outer algebra; matches
-    /// `SexpShape::STRING_LABEL` byte-for-byte (the cross-axis overlap
-    /// on the same `Sexp` algebra is intentional and load-bearing —
-    /// see `expected_kwarg_shape_from_str_accepts_only_canonical_labels`).
-    pub const STRING_LABEL: &'static str = "string";
+    /// aliases [`SexpShape::STRING_LABEL`] on the ExpectedKwargShape ⊂
+    /// SexpShape 5-of-7 subset carving. Per-role peer of `Self::String`
+    /// on the closed-set outer algebra. Emitted by `extract_string` /
+    /// `extract_optional_string` AND by `extract_string_list`'s per-
+    /// item gate. See [`Self::KEYWORD_LABEL`] for the alias-chain shape
+    /// every sibling in the 5-of-7 carving shares.
+    pub const STRING_LABEL: &'static str = SexpShape::STRING_LABEL;
 
     /// Canonical `&'static str` bytes for the `Int` expected-shape —
-    /// emitted by `extract_int` / `extract_optional_int` when the
-    /// kwarg's value isn't a `Sexp::Atom(Int(_))`. Per-role peer of
-    /// `Self::Int` on the closed-set outer algebra; the sibling
-    /// `NUMBER_LABEL` distinguishes the wider numeric-union case
-    /// `extract_float` emits.
-    pub const INT_LABEL: &'static str = "int";
+    /// aliases [`SexpShape::INT_LABEL`] on the ExpectedKwargShape ⊂
+    /// SexpShape 5-of-7 subset carving. Per-role peer of `Self::Int`
+    /// on the closed-set outer algebra; the sibling
+    /// [`Self::NUMBER_LABEL`] distinguishes the wider numeric-union
+    /// case `extract_float` emits (which has NO [`SexpShape`] peer —
+    /// [`SexpShape::FLOAT_LABEL`] is the narrower `"float"`). See
+    /// [`Self::KEYWORD_LABEL`] for the alias-chain shape.
+    pub const INT_LABEL: &'static str = SexpShape::INT_LABEL;
 
     /// Canonical `&'static str` bytes for the `Number` expected-shape —
     /// emitted by `extract_float` / `extract_optional_float` when the
@@ -5757,21 +5780,36 @@ impl ExpectedKwargShape {
     /// "float") is load-bearing: `extract_float` accepts BOTH
     /// `Sexp::Atom(Float(_))` and `Sexp::Atom(Int(_))` via
     /// `Sexp::as_float`, so the expected-shape label names the union
-    /// rather than the narrower Float element-type.
+    /// rather than the narrower Float element-type. INTENTIONALLY NOT
+    /// aliased through [`SexpShape`]: the `SexpShape::Float` variant's
+    /// label is `"float"` (the NARROWER element-type), not `"number"`,
+    /// so this constant has NO peer on the parent-superset algebra to
+    /// alias through. Divergence pinned by
+    /// `sexp_shape_atom_carving_labels_align_with_expected_kwarg_shape_labels`'s
+    /// `assert_ne!(SexpShape::FLOAT_LABEL, ExpectedKwargShape::NUMBER_LABEL)`
+    /// disjointness pin — the TWO non-overlapping arms of the 7-arm
+    /// closed set are the natural residual once the 5-of-7 subset
+    /// carving aliases through [`SexpShape`].
     pub const NUMBER_LABEL: &'static str = "number";
 
     /// Canonical `&'static str` bytes for the `Bool` expected-shape —
-    /// emitted by `extract_bool` / `extract_optional_bool` when the
-    /// kwarg's value isn't a `Sexp::Atom(Bool(_))`. Per-role peer of
-    /// `Self::Bool` on the closed-set outer algebra.
-    pub const BOOL_LABEL: &'static str = "bool";
+    /// aliases [`SexpShape::BOOL_LABEL`] on the ExpectedKwargShape ⊂
+    /// SexpShape 5-of-7 subset carving. Per-role peer of `Self::Bool`
+    /// on the closed-set outer algebra. Emitted by `extract_bool` /
+    /// `extract_optional_bool` when the kwarg's value isn't a
+    /// `Sexp::Atom(Bool(_))`. See [`Self::KEYWORD_LABEL`] for the
+    /// alias-chain shape.
+    pub const BOOL_LABEL: &'static str = SexpShape::BOOL_LABEL;
 
     /// Canonical `&'static str` bytes for the `List` expected-shape —
-    /// emitted by `extract_vec_via_serde`'s outer-shape gate when the
-    /// kwarg's value isn't a `Sexp::List(_)`. Per-role peer of
-    /// `Self::List` on the closed-set outer algebra; wider `LIST_OF_STRINGS_LABEL`
-    /// names the element-typed variant.
-    pub const LIST_LABEL: &'static str = "list";
+    /// aliases [`SexpShape::LIST_LABEL`] on the ExpectedKwargShape ⊂
+    /// SexpShape 5-of-7 subset carving. Per-role peer of `Self::List`
+    /// on the closed-set outer algebra; the wider
+    /// [`Self::LIST_OF_STRINGS_LABEL`] names the element-typed variant
+    /// (which has NO [`SexpShape`] peer — the SexpShape algebra
+    /// doesn't type-index list-of-strings as a distinct shape). See
+    /// [`Self::KEYWORD_LABEL`] for the alias-chain shape.
+    pub const LIST_LABEL: &'static str = SexpShape::LIST_LABEL;
 
     /// Canonical `&'static str` bytes for the `ListOfStrings`
     /// expected-shape — emitted by `extract_string_list`'s outer-shape
@@ -15568,6 +15606,126 @@ mod tests {
         // `extract_float` gate emits. The pair is intentionally
         // distinct — pin it so a naive rename doesn't collapse them.
         assert_ne!(SexpShape::FLOAT_LABEL, ExpectedKwargShape::NUMBER_LABEL);
+    }
+
+    #[test]
+    fn expected_kwarg_shape_per_role_labels_alias_sexp_shape_per_role_labels_via_static_ptr() {
+        // ALIAS-CHAIN ROUTING CONTRACT: the FIVE per-role
+        // `pub const ExpectedKwargShape::X_LABEL` constants that share
+        // vocabulary with a matching `SexpShape` carving arm MUST route
+        // through the parent-superset's `pub const SexpShape::X_LABEL`
+        // as a compile-time typed alias
+        // (`pub const ExpectedKwargShape::X_LABEL: &'static str =
+        // SexpShape::X_LABEL`) rather than as two independent inline
+        // string literals whose bytes happen to agree — the byte-
+        // equality contract is anchored one test up at
+        // `sexp_shape_atom_carving_labels_align_with_expected_kwarg_shape_labels`;
+        // THIS pin catches a regression that re-inlines ONE per-role
+        // ExpectedKwargShape constant to a fresh literal even when the
+        // rendered bytes still agree (because a distinct inline
+        // literal lives at a different `&'static str` address inside
+        // the rodata segment, while a `pub const` aliased through
+        // `SexpShape::X_LABEL` MUST point at the SAME rodata address
+        // as the parent superset's constant).
+        //
+        // Sibling-shape pin to the four prior-run alias-chain routing
+        // pins on the UnquoteForm ⊂ QuoteForm 2-of-4 subset carving
+        // (`unquote_form_marker_routes_through_to_quote_form_prefix_via_composition`,
+        // `unquote_form_label_routes_through_to_quote_form_label_via_composition`,
+        // `unquote_form_iac_forge_tag_routes_through_to_quote_form_iac_forge_tag_via_composition`,
+        // `unquote_form_hash_discriminator_routes_through_to_quote_form_hash_discriminator_via_composition`)
+        // — those pin the substitution-subset composition through the
+        // superset via runtime pointer-equality on a value-carrying
+        // method; THIS pin pins the ExpectedKwargShape ⊂ SexpShape
+        // 5-of-7 subset carving's alias-chain through the parent-
+        // superset via compile-time `pub const` identity on a
+        // vocabulary-carrying constant.
+        //
+        // The TWO non-overlapping ExpectedKwargShape arms
+        // (`NUMBER_LABEL` and `LIST_OF_STRINGS_LABEL`) stay OUTSIDE
+        // this pin's sweep — those are direct-literal constants with
+        // no [`SexpShape`] peer to alias through.
+        //
+        // Theory anchor: THEORY.md §II.1 invariant 5 (composition
+        // preserves proofs) — the alias-chain composition law
+        // `ExpectedKwargShape::X_LABEL == SexpShape::X_LABEL` on the
+        // 5-of-7 subset carving is a rustc-time typed identity, not a
+        // runtime byte-equality convention.
+        assert!(
+            std::ptr::eq(
+                ExpectedKwargShape::KEYWORD_LABEL.as_ptr(),
+                SexpShape::KEYWORD_LABEL.as_ptr(),
+            ),
+            "ExpectedKwargShape::KEYWORD_LABEL and SexpShape::KEYWORD_LABEL disagree on `&'static str` rodata address — the alias chain has been broken by an inline-literal re-derivation on the ExpectedKwargShape side",
+        );
+        assert!(
+            std::ptr::eq(
+                ExpectedKwargShape::STRING_LABEL.as_ptr(),
+                SexpShape::STRING_LABEL.as_ptr(),
+            ),
+            "ExpectedKwargShape::STRING_LABEL and SexpShape::STRING_LABEL disagree on `&'static str` rodata address — the alias chain has been broken by an inline-literal re-derivation on the ExpectedKwargShape side",
+        );
+        assert!(
+            std::ptr::eq(
+                ExpectedKwargShape::INT_LABEL.as_ptr(),
+                SexpShape::INT_LABEL.as_ptr(),
+            ),
+            "ExpectedKwargShape::INT_LABEL and SexpShape::INT_LABEL disagree on `&'static str` rodata address — the alias chain has been broken by an inline-literal re-derivation on the ExpectedKwargShape side",
+        );
+        assert!(
+            std::ptr::eq(
+                ExpectedKwargShape::BOOL_LABEL.as_ptr(),
+                SexpShape::BOOL_LABEL.as_ptr(),
+            ),
+            "ExpectedKwargShape::BOOL_LABEL and SexpShape::BOOL_LABEL disagree on `&'static str` rodata address — the alias chain has been broken by an inline-literal re-derivation on the ExpectedKwargShape side",
+        );
+        assert!(
+            std::ptr::eq(
+                ExpectedKwargShape::LIST_LABEL.as_ptr(),
+                SexpShape::LIST_LABEL.as_ptr(),
+            ),
+            "ExpectedKwargShape::LIST_LABEL and SexpShape::LIST_LABEL disagree on `&'static str` rodata address — the alias chain has been broken by an inline-literal re-derivation on the ExpectedKwargShape side",
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_residual_labels_lie_outside_sexp_shape_label_vocabulary() {
+        // RESIDUAL-CARVING DISJOINTNESS CONTRACT: the TWO
+        // ExpectedKwargShape arms that lie OUTSIDE the 5-of-7 aliased
+        // subset carving (`NUMBER_LABEL`, `LIST_OF_STRINGS_LABEL`)
+        // MUST carry vocabulary distinct from EVERY per-role
+        // `SexpShape::X_LABEL` constant — otherwise the 5-of-7
+        // carving would fail its subset-and-residual invariant (the
+        // subset would carry MORE than 5 aliasable arms, or the
+        // residual would carry FEWER than 2 direct-literal arms). The
+        // pre-existing pin
+        // `sexp_shape_atom_carving_labels_align_with_expected_kwarg_shape_labels`
+        // anchors ONE of the two disjointness edges (SexpShape::FLOAT
+        // vs ExpectedKwargShape::NUMBER); THIS pin anchors the
+        // whole-family disjointness of both residual arms against
+        // every SexpShape label at once.
+        //
+        // A regression that adds `SexpShape::Number` as a new variant
+        // (renaming Float to Number) would fail HERE by making
+        // `ExpectedKwargShape::NUMBER_LABEL` collide with the newly
+        // added `SexpShape::NUMBER_LABEL`; the 5-of-7 carving MUST be
+        // re-derived to 6-of-7 in that case (aliasing NUMBER_LABEL
+        // through the new SexpShape arm). The pin surfaces the
+        // structural-partition-change requirement at the disjointness
+        // gate rather than through a silent literal-duplication.
+        for &shape in SexpShape::ALL.iter() {
+            let via_shape = SexpShape::label(shape);
+            assert_ne!(
+                ExpectedKwargShape::NUMBER_LABEL,
+                via_shape,
+                "ExpectedKwargShape::NUMBER_LABEL `\"number\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-7 aliased subset carving's residual arm {{NUMBER}} MUST lie outside every SexpShape label; a collision means the carving needs to be re-derived to a 6-of-7 subset aliased through the newly-overlapping SexpShape arm",
+            );
+            assert_ne!(
+                ExpectedKwargShape::LIST_OF_STRINGS_LABEL,
+                via_shape,
+                "ExpectedKwargShape::LIST_OF_STRINGS_LABEL `\"list of strings\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-7 aliased subset carving's residual arm {{LIST_OF_STRINGS}} MUST lie outside every SexpShape label",
+            );
+        }
     }
 
     #[test]

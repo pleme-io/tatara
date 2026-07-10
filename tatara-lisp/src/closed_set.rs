@@ -6400,6 +6400,185 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::prev(self).map(<Self as ClosedSet>::label)
     }
 
+    /// The `usize` DECLARATION-ORDER INDEX of the neighbor immediately
+    /// AFTER `self` in [`Self::ALL`] — the position of [`Self::next`]
+    /// projected through [`Self::index_of`], or [`None`] when `self`
+    /// is the declaration-order tail-endpoint.
+    ///
+    /// The `usize`-return arm of the (`Self`-return, `&'static str`-
+    /// return, `usize`-return) 3-way partition of the declaration-axis
+    /// bounded-neighbor surface. One return-type axis over from
+    /// [`Self::next`] (`Self`-return) and [`Self::next_label`]
+    /// (`&'static str`-return); together with [`Self::prev_index`] the
+    /// pair mirrors [`Self::next`] / [`Self::prev`] and
+    /// [`Self::next_label`] / [`Self::prev_label`] at the third return-
+    /// type corner of the (return-type × direction) 3×2 = 6-corner
+    /// declaration-axis bounded-neighbor return-shape matrix:
+    ///
+    /// | Return-type \\ Direction | Forward               | Backward              |
+    /// |--------------------------|-----------------------|-----------------------|
+    /// | `Option<Self>`           | [`Self::next`]        | [`Self::prev`]        |
+    /// | `Option<&'static str>`   | [`Self::next_label`]  | [`Self::prev_label`]  |
+    /// | `Option<usize>`          | [`Self::next_index`]  | [`Self::prev_index`]  |
+    ///
+    /// Every generic consumer that renders the declaration-order
+    /// forward-neighbor as an ARRAY INDEX (a compact wire codec
+    /// emitting `next_slot=<index>` for the successor's `T::ALL`
+    /// position, a Prometheus histogram bucketed on the successor's
+    /// slot, a fixed-arity `[u64; T::CARDINALITY]` per-slot counter
+    /// incrementing at `next_index(self).unwrap_or(cardinality)`, a
+    /// bitset state machine that sets the successor's bit at the
+    /// next-index position, a byte-tagged compact-encoding emitting
+    /// `variant.next_index().unwrap_or(u8::MAX as usize) as u8` at
+    /// the tail boundary, a Sekiban audit binner keying the next
+    /// slot's array index into a per-transition audit trail) binds
+    /// to ONE typed method rather than re-deriving the
+    /// `v.next().map(T::index_of)` two-primitive composition at every
+    /// callsite.
+    ///
+    /// Sibling posture to [`Self::last`] on the (forward-neighbor,
+    /// tail-endpoint) axis of the declaration-order traversal surface
+    /// — `T::last().next_index() == None` is the natural fixpoint the
+    /// forward-neighbor-index axis and the tail-endpoint anchor share,
+    /// mirroring the `T::last().next() == None` fixpoint one return-
+    /// type axis over AND the `T::last().next_label() == None`
+    /// fixpoint one return-type axis over.
+    ///
+    /// Default body composes [`Self::next`] with [`Self::index_of`]
+    /// through `Option::map` — the forward-neighbor-index projection
+    /// is a typed CONSEQUENCE of the pre-existing (declaration-order
+    /// forward neighbor, canonical array position) pair, not a third
+    /// codepath. Implementors override only when the forward-
+    /// neighbor-index surface needs to diverge from the natural
+    /// `next().map(index_of)` shape (no production implementor
+    /// reaches for this today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` / `sorted_variants` /
+    /// `index_of` / `from_index` / `first` / `last` / `next` /
+    /// `next_label` overrides exist — a typed escape hatch the trait
+    /// surface exposes rather than forcing the implementor to
+    /// hand-roll the impl). An implementor that overrides
+    /// [`Self::next`] OR [`Self::index_of`] propagates the override
+    /// through this default body automatically; the (variant →
+    /// forward-neighbor index) projection funnels through ONE typed
+    /// primitive.
+    ///
+    /// The bounded-neighbor-index contract — the tail-endpoint arm
+    /// returns [`None`] — is guaranteed by the default composition
+    /// through [`Self::next`]'s `Option::map` shape; the well-
+    /// formedness contract [`assert_closed_set_well_formed`]'s new
+    /// clause (66) pins the composition against the natural
+    /// `next().map(index_of)` shape AND the tail-endpoint `None`
+    /// guard on every implementor, so a passing well-formedness sweep
+    /// means every generic consumer can call [`Self::next_index`] on
+    /// any typed variant and expect the same [`Option`]-typed answer
+    /// at every crate boundary.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → forward-
+    /// neighbor index) projection becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline
+    /// `self.next().map(|v| v.index_of())` composition at every
+    /// downstream index-shaped forward-neighbor rendering site. The
+    /// (return-type × direction) 3×2 declaration-axis bounded-
+    /// neighbor return-shape matrix partitions exhaustively into SIX
+    /// typed projections, each with a distinct load-bearing consumer
+    /// surface. Extending the (return-type ∈ {`Self`, label}) 2×2
+    /// declaration-axis bounded-neighbor matrix one return-type
+    /// dimension into {`Self`, label, index} 3×2 makes the array-
+    /// position projection a first-class typed sibling of the typed-
+    /// variant and canonical-label siblings on the same axis.
+    /// THEORY.md §V.1 — knowable platform; the (variant → forward-
+    /// neighbor index) projection was an unnamed compound of
+    /// [`Self::next`] + [`Self::index_of`] + `Option::map` pre-lift;
+    /// naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two substrate primitives — generic
+    /// consumers see ONE method, not one forward-neighbor-index-
+    /// shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (variant →
+    /// forward-neighbor index) projection emerges from the
+    /// composition of TWO substrate primitives ([`Self::next`],
+    /// [`Self::index_of`]) via `Option::map` rather than as a per-
+    /// implementor `match self { A => Some(1), B => Some(2), C =>
+    /// None }` block. A future tightening of either primitive (a
+    /// future perfect-hash `from_index` that speeds up `next`, a
+    /// future `#[closed_set(fast_index_of)]` derive attribute that
+    /// swaps in an inlined jump table for the linear sweep, a future
+    /// per-variant `#[closed_set(pin_index = N)]` reserved-slot
+    /// attribute) propagates to every closed-set forward-neighbor-
+    /// index consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `(enum-next-index enum sym)` on
+    /// a closed enumeration (the direct index-projection sibling of
+    /// `enum-next`); Idris's `Fin n` composed through `weakenN` on
+    /// the successor's finite-position projection; MLIR's
+    /// `RegisteredOperationName::next().getIndex()` folded to ONE
+    /// method on the Op registry's declaration-order chain; Rust's
+    /// `strum::EnumIter::iter().position(|v| Some(v) == self.next())`
+    /// composed through the iterator API. Translation through
+    /// pleme-io primitives: a pure default method composing the
+    /// trait's existing [`Self::next`] + [`Self::index_of`] surfaces
+    /// via `Option::map` — no new dep, no new IR layer, no supertrait
+    /// bound, no allocation, no `strum` / `enum-iterator` crate
+    /// dependency.
+    fn next_index(self) -> Option<usize> {
+        <Self as ClosedSet>::next(self).map(<Self as ClosedSet>::index_of)
+    }
+
+    /// The `usize` DECLARATION-ORDER INDEX of the neighbor immediately
+    /// BEFORE `self` in [`Self::ALL`] — the position of [`Self::prev`]
+    /// projected through [`Self::index_of`], or [`None`] when `self`
+    /// is the declaration-order head-endpoint.
+    ///
+    /// Sibling posture to [`Self::next_index`] one direction over on
+    /// the (forward, backward) direction partition of the
+    /// declaration-axis index-shaped bounded-neighbor surface:
+    /// [`Self::next_index`] returns the declaration-order successor
+    /// index, this method returns the declaration-order predecessor
+    /// index. See [`Self::next_index`] for the shared design
+    /// rationale, the (return-type × direction) 3×2 matrix, override
+    /// axis, future-consumer inventory, THEORY.md grounding, and
+    /// frontier inspiration — this method is the backward-direction
+    /// arm of the same axis and inherits every property from the
+    /// forward arm's documentation, differing only in the composition
+    /// through [`Self::prev`] instead of [`Self::next`] and the
+    /// head-endpoint `None` guard rather than the tail-endpoint
+    /// `None` guard.
+    ///
+    /// Default body composes [`Self::prev`] with [`Self::index_of`]
+    /// through `Option::map`. The bounded-neighbor-index contract —
+    /// the head-endpoint arm returns [`None`] — is guaranteed by the
+    /// default composition through [`Self::prev`]'s head-endpoint
+    /// `None` guard; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (67) pins the
+    /// composition against the natural `prev().map(index_of)` shape
+    /// AND the head-endpoint `None` guard on every implementor.
+    /// `T::first().prev_index() == None` is the natural fixpoint the
+    /// backward-neighbor-index axis and the head-endpoint anchor
+    /// share, mirroring the `T::first().prev() == None` fixpoint one
+    /// return-type axis over AND the `T::first().prev_label() ==
+    /// None` fixpoint one return-type axis over.
+    ///
+    /// Clauses (26) + (58) + (59) + (66) + (67) together CLOSE the
+    /// (return-type × direction) 3×2 = 6-corner declaration-axis
+    /// bounded-neighbor return-shape surface across the trio of
+    /// return types: `Option<Self>` at clause (26) — [`Self::next`] /
+    /// [`Self::prev`]; `Option<&'static str>` at clauses (58) + (59)
+    /// — [`Self::next_label`] / [`Self::prev_label`]; `Option<usize>`
+    /// at clauses (66) + (67) — [`Self::next_index`] /
+    /// [`Self::prev_index`]. Every generic consumer that binds any of
+    /// the six projection methods sees the SAME structural answer at
+    /// every crate boundary regardless of which return-type /
+    /// direction axis corner it walks, and the return-type axis is
+    /// now closed at the {`Self`, label, index} trio on the
+    /// declaration-axis bounded arm — the lex-axis mirrors
+    /// (`sorted_next_index` / `sorted_prev_index`) and the wrapping
+    /// mirrors (`cycle_next_index` / `cycle_prev_index` /
+    /// `cycle_sorted_next_index` / `cycle_sorted_prev_index`) become
+    /// the natural follow-up axes on the same 3×2×(bounded, wrapping)
+    /// × (declaration, lex) surface.
+    fn prev_index(self) -> Option<usize> {
+        <Self as ClosedSet>::prev(self).map(<Self as ClosedSet>::index_of)
+    }
+
     /// The canonical `&'static str` LABEL of the lexicographic-order
     /// neighbor immediately AFTER `self` in [`Self::sorted_variants`] —
     /// the label of [`Self::sorted_next`] projected through
@@ -10767,6 +10946,89 @@ where
         T::sorted_first().cycle_sorted_prev_label(),
         T::sorted_last_label(),
         "{type_name}: T::sorted_first().cycle_sorted_prev_label() drifted from T::sorted_last_label() — the (variant → wrapping-backward lex-neighbor label) projection at the lex-head-endpoint boundary did not fold onto the lex-tail-endpoint anchor label while the natural `cycle_sorted_prev().label()` composition folds `T::sorted_first()` onto `T::sorted_last()` at the lex-wraparound edge and then projects `T::sorted_last().label()`. Clauses (29) + (65) together pin `T::sorted_first().cycle_sorted_prev_label() == T::sorted_last_label()` as the structural fixpoint the lex-head-endpoint anchor and the wrapping-backward-lex-neighbor-label axis share, mirroring `T::sorted_first().cycle_sorted_prev() == T::sorted_last()` one return-type axis over AND `T::first().cycle_prev_label() == T::last_label()` one ordering axis over",
+    );
+    // (66) — For every variant `v` in `T::ALL`, `v.next_index()` MUST
+    // equal `v.next().map(T::index_of)`, AND `T::last().next_index()`
+    // MUST equal `None`. The default trait body composes
+    // `next(self).map(index_of)` verbatim and satisfies both arms for
+    // free; the assertion catches a future implementor whose override
+    // drifts the forward-neighbor-index projection (a permissive
+    // override that returns `Some(0)` at the tail — folding the tail-
+    // boundary walk onto a wraparound to the head-index while the
+    // composed projection would return `None`; a swapped override that
+    // returns the predecessor's index for `next_index`, silently
+    // inverting the direction of the index-rendered forward walk; a
+    // stale override that returns the wrong neighbor index after a
+    // variant-listing edit reorders `T::ALL`) loudly rather than
+    // silently bifurcating the forward-neighbor-index projection
+    // surface every downstream compact wire codec / Prometheus per-
+    // slot bucket / bitset state machine / byte-tagged compact
+    // encoding / Sekiban per-transition audit binner consumer routes
+    // through. Sibling posture to clauses (26) + (58) — clause (26)
+    // pins the `Self`-return forward-neighbor projection at both
+    // direction arms + endpoint fixpoints, clause (58) pins the
+    // `&'static str`-return forward-neighbor projection against the
+    // composition of `next` + `label`, this clause pins the
+    // `usize`-return forward-neighbor projection against the
+    // composition of `next` + `index_of` AND pins the tail-endpoint
+    // `None` guard — so the closed-set index-shaped forward-neighbor
+    // surface stays sound at the declaration axis AND on the shared
+    // tail-endpoint fixpoint (`T::last().next_index() == None`).
+    for &v in T::ALL {
+        let expected_next_index = v.next().map(<T as ClosedSet>::index_of);
+        assert_eq!(
+            v.next_index(),
+            expected_next_index,
+            "{type_name}: {v:?}.next_index() drifted from {v:?}.next().map(T::index_of) — the direct (variant → forward-neighbor index) projection no longer agrees with the natural next+index_of composition, so a downstream compact wire codec / Prometheus per-slot bucket / bitset state machine / byte-tagged compact encoding / Sekiban per-transition audit binner consumer that binds `v.next_index()` as its forward-neighbor index-rendering surface would emit the wrong slot for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::last().next_index(),
+        None,
+        "{type_name}: T::last().next_index() returned Some(_) — the (variant → forward-neighbor index) projection accepted the tail-endpoint boundary, silently folding a tail-boundary index render onto a wraparound to the head-index while the natural `next().map(index_of)` composition should return `None`. Clauses (26) + (66) together pin `T::last().next_index() == None` as the structural fixpoint the tail-endpoint anchor and the forward-neighbor-index axis share, mirroring `T::last().next() == None` one return-type axis over AND `T::last().next_label() == None` one return-type axis over",
+    );
+    // (67) — For every variant `v` in `T::ALL`, `v.prev_index()` MUST
+    // equal `v.prev().map(T::index_of)`, AND `T::first().prev_index()`
+    // MUST equal `None`. The default trait body composes
+    // `prev(self).map(index_of)` verbatim and satisfies both arms for
+    // free; the assertion catches a future implementor whose override
+    // drifts the backward-neighbor-index projection (a permissive
+    // override that returns `Some(T::CARDINALITY - 1)` at the head —
+    // folding the head-boundary walk onto a wraparound to the tail-
+    // index while the composed projection would return `None`; a
+    // swapped override that returns the successor's index for
+    // `prev_index`, silently inverting the direction of the index-
+    // rendered backward walk; a stale override that returns the
+    // wrong neighbor index after a variant-listing edit reorders
+    // `T::ALL`) loudly rather than silently bifurcating the backward-
+    // neighbor-index projection surface every downstream compact
+    // wire codec / Prometheus per-slot bucket / bitset state machine
+    // / byte-tagged compact encoding consumer routes through. Clauses
+    // (26) + (58) + (59) + (66) + (67) together CLOSE the (return-
+    // type × direction) 3×2 = 6-corner declaration-axis bounded-
+    // neighbor return-shape surface across the trio of return types:
+    // `Option<Self>` at clause (26) — [`Self::next`] / [`Self::prev`];
+    // `Option<&'static str>` at clauses (58) + (59) —
+    // [`Self::next_label`] / [`Self::prev_label`]; `Option<usize>` at
+    // clauses (66) + (67) — [`Self::next_index`] /
+    // [`Self::prev_index`]. Every generic consumer that binds any of
+    // the six projection methods sees the SAME structural answer at
+    // every crate boundary regardless of which return-type / direction
+    // axis corner it walks, and the return-type axis is now closed at
+    // the {`Self`, label, index} trio on the declaration-axis bounded
+    // arm.
+    for &v in T::ALL {
+        let expected_prev_index = v.prev().map(<T as ClosedSet>::index_of);
+        assert_eq!(
+            v.prev_index(),
+            expected_prev_index,
+            "{type_name}: {v:?}.prev_index() drifted from {v:?}.prev().map(T::index_of) — the direct (variant → backward-neighbor index) projection no longer agrees with the natural prev+index_of composition, so a downstream compact wire codec / Prometheus per-slot bucket / bitset state machine / byte-tagged compact encoding consumer that binds `v.prev_index()` as its backward-neighbor index-rendering surface would emit the wrong slot for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::first().prev_index(),
+        None,
+        "{type_name}: T::first().prev_index() returned Some(_) — the (variant → backward-neighbor index) projection accepted the head-endpoint boundary, silently folding a head-boundary index render onto a wraparound to the tail-index while the natural `prev().map(index_of)` composition should return `None`. Clauses (26) + (67) together pin `T::first().prev_index() == None` as the structural fixpoint the head-endpoint anchor and the backward-neighbor-index axis share, mirroring `T::first().prev() == None` one return-type axis over AND `T::first().prev_label() == None` one return-type axis over",
     );
 }
 
@@ -22011,6 +22273,316 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an is_sorted_interior_label() override that drops the domain-membership gate `contains_label(s)` rather than composing `contains_label(s) && !is_sorted_endpoint_label(s)`",
+        );
+    }
+
+    #[test]
+    fn next_index_walks_declaration_order_forward_chain_of_indices() {
+        // The forward-neighbor-index projection — `v.next_index()`
+        // walks `T::ALL` one slot forward from each variant, returning
+        // `Some(<slot>)` on every interior slot and `None` at the
+        // tail. `StubKind`'s declaration order is `[Alpha, Beta,
+        // Gamma]` with indices `[0, 1, 2]`, so the forward index
+        // chain is Alpha → 1 → 2 → None. Sibling posture to
+        // `next_walks_declaration_order_forward_chain` (one return-
+        // type axis over on `Self`-return) AND
+        // `next_label_walks_declaration_order_forward_chain_of_labels`
+        // (one return-type axis over on `&'static str`-return) — all
+        // three walk `T::ALL` through the same `index_of` +
+        // `from_index` composition, one returning the typed variant,
+        // one returning its canonical label, and one returning its
+        // array position.
+        assert_eq!(
+            <StubKind as ClosedSet>::next_index(StubKind::Alpha),
+            Some(1),
+        );
+        assert_eq!(<StubKind as ClosedSet>::next_index(StubKind::Beta), Some(2),);
+        assert_eq!(<StubKind as ClosedSet>::next_index(StubKind::Gamma), None);
+    }
+
+    #[test]
+    fn prev_index_walks_declaration_order_backward_chain_of_indices() {
+        // The backward-neighbor-index projection — `v.prev_index()`
+        // walks `T::ALL` one slot backward from each variant,
+        // returning `Some(<slot>)` on every interior slot and `None`
+        // at the head. `StubKind`'s declaration order is `[Alpha,
+        // Beta, Gamma]` with indices `[0, 1, 2]`, so the backward
+        // index chain is Gamma → 1 → 0 → None. Sibling posture to
+        // `next_index_walks_declaration_order_forward_chain_of_indices`
+        // one direction over on the (forward, backward) partition of
+        // the index-shaped declaration-axis neighbor surface.
+        assert_eq!(<StubKind as ClosedSet>::prev_index(StubKind::Alpha), None);
+        assert_eq!(<StubKind as ClosedSet>::prev_index(StubKind::Beta), Some(0),);
+        assert_eq!(
+            <StubKind as ClosedSet>::prev_index(StubKind::Gamma),
+            Some(1),
+        );
+    }
+
+    #[test]
+    fn first_prev_index_and_last_next_index_pin_the_endpoint_boundary_index_fixpoints() {
+        // The endpoint-anchor / neighbor-index-axis fixpoints —
+        // `T::first().prev_index() == None` AND
+        // `T::last().next_index() == None`. The two fixpoints thread
+        // the head-endpoint anchor back through the backward-neighbor-
+        // index axis AND the tail-endpoint anchor back through the
+        // forward-neighbor-index axis at ONE structural landmark
+        // each. A regression that wraps around (returning
+        // `Some(T::CARDINALITY - 1)` for `T::first().prev_index()`, or
+        // `Some(0)` for `T::last().next_index()`) would silently fold
+        // a bounded index-rendered traversal onto an infinite loop
+        // every downstream compact wire codec / Prometheus per-slot
+        // bucket / bitset state machine consumer routes through.
+        // Sibling posture to
+        // `first_prev_and_last_next_pin_the_endpoint_boundary_fixpoints`
+        // and
+        // `first_prev_label_and_last_next_label_pin_the_endpoint_boundary_label_fixpoints`
+        // — the same structural landmarks projected through the
+        // `Self`-return, `&'static str`-return, and `usize`-return
+        // corners of the (return-type × direction) 3×2 declaration-
+        // axis bounded-neighbor return-shape matrix.
+        assert_eq!(
+            <StubKind as ClosedSet>::prev_index(<StubKind as ClosedSet>::first()),
+            None,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::next_index(<StubKind as ClosedSet>::last()),
+            None,
+        );
+    }
+
+    #[test]
+    fn next_index_and_prev_index_walk_arbitrary_declaration_order() {
+        // The neighbor-index projection contract on an arbitrary
+        // declaration order — `v.next_index()` MUST project the
+        // successor's array position in `T::ALL`'s layout regardless
+        // of the label ordering, AND `v.prev_index()` MUST project
+        // the predecessor's array position. A regression that keyed
+        // on the lex order of labels (rather than `T::ALL` position)
+        // would pass on `StubKind` (where declaration order aligns
+        // with alphabetic order) but silently bifurcate on any
+        // implementor whose `ALL`-array layout differs from its lex
+        // order.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum NeighborIndexReverseKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownNeighborIndexReverseKind(pub String);
+        impl core::fmt::Display for UnknownNeighborIndexReverseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown neighbor index reverse kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for NeighborIndexReverseKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "neighbor index reverse kind";
+            type Unknown = UnknownNeighborIndexReverseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownNeighborIndexReverseKind(s.to_owned())
+            }
+        }
+        // Declaration order: Gamma → Beta → Alpha with indices
+        // `[0, 1, 2]`. Forward index walk follows this layout, NOT
+        // the alphabetic order.
+        assert_eq!(
+            <NeighborIndexReverseKind as ClosedSet>::next_index(NeighborIndexReverseKind::Gamma),
+            Some(1),
+        );
+        assert_eq!(
+            <NeighborIndexReverseKind as ClosedSet>::next_index(NeighborIndexReverseKind::Beta),
+            Some(2),
+        );
+        assert_eq!(
+            <NeighborIndexReverseKind as ClosedSet>::next_index(NeighborIndexReverseKind::Alpha),
+            None,
+        );
+        assert_eq!(
+            <NeighborIndexReverseKind as ClosedSet>::prev_index(NeighborIndexReverseKind::Gamma),
+            None,
+        );
+        assert_eq!(
+            <NeighborIndexReverseKind as ClosedSet>::prev_index(NeighborIndexReverseKind::Beta),
+            Some(0),
+        );
+        assert_eq!(
+            <NeighborIndexReverseKind as ClosedSet>::prev_index(NeighborIndexReverseKind::Alpha),
+            Some(1),
+        );
+    }
+
+    #[test]
+    fn next_index_and_prev_index_on_singleton_closed_set_both_return_none() {
+        // The neighbor-index-axis degenerate case — a singleton
+        // closed set has `T::ALL[0] == T::first() == T::last()`, so
+        // BOTH `T::first().prev_index() == None` AND
+        // `T::last().next_index() == None` collapse onto the same
+        // variant. Every neighbor-index walk from the sole variant
+        // must return `None`. Sibling posture to
+        // `next_and_prev_on_singleton_closed_set_both_return_none`
+        // and
+        // `next_label_and_prev_label_on_singleton_closed_set_both_return_none`
+        // — the same singleton fixpoint projected through the third
+        // return-type corner.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum NeighborIndexSingletonKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownNeighborIndexSingletonKind(pub String);
+        impl core::fmt::Display for UnknownNeighborIndexSingletonKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown neighbor index singleton kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for NeighborIndexSingletonKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "neighbor index singleton kind";
+            type Unknown = UnknownNeighborIndexSingletonKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownNeighborIndexSingletonKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <NeighborIndexSingletonKind as ClosedSet>::next_index(NeighborIndexSingletonKind::Only),
+            None,
+        );
+        assert_eq!(
+            <NeighborIndexSingletonKind as ClosedSet>::prev_index(NeighborIndexSingletonKind::Only),
+            None,
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_next_index_and_composition() {
+        // The well-formedness sweep's (66) clause — `v.next_index()`
+        // MUST equal `v.next().map(T::index_of)` on every variant AND
+        // `T::last().next_index()` MUST equal `None`. A hand-impl'd
+        // implementor whose override drifts the forward-neighbor-
+        // index projection (accepts `Some(0)` at the tail where the
+        // natural composition would return `None`, folds a tail-
+        // boundary index render onto a wraparound to the head-slot)
+        // fails the sweep loudly rather than silently bifurcating
+        // the index-rendered forward-traversal surface every
+        // downstream compact wire codec / Prometheus per-slot bucket
+        // consumer routes through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_next_label_and_composition`
+        // one return-type axis over on the (`&'static str`-return,
+        // `usize`-return) partition of clause (66).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedNextIndexKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedNextIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedNextIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted next index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedNextIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted next index kind";
+            type Unknown = UnknownDriftedNextIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedNextIndexKind(s.to_owned())
+            }
+            fn next_index(self) -> Option<usize> {
+                // Drifted override — wraps around at the tail rather
+                // than returning `None`, folding a bounded forward
+                // index walk onto an infinite loop every compact
+                // wire codec / Prometheus per-slot bucket consumer
+                // routes through.
+                Some(match self {
+                    Self::Head => 1,
+                    Self::Tail => 0,
+                })
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedNextIndexKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a next_index() override that wraps around at the tail rather than returning None",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_prev_index_and_composition() {
+        // The well-formedness sweep's (67) clause — `v.prev_index()`
+        // MUST equal `v.prev().map(T::index_of)` on every variant AND
+        // `T::first().prev_index()` MUST equal `None`. A hand-impl'd
+        // implementor whose override drifts the backward-neighbor-
+        // index projection (accepts `Some(T::CARDINALITY - 1)` at the
+        // head where the natural composition would return `None`,
+        // folds a head-boundary index render onto a wraparound to
+        // the tail-slot) fails the sweep loudly rather than silently
+        // bifurcating the index-rendered backward-traversal surface.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_next_index_and_composition`
+        // one direction over on the (forward, backward) partition of
+        // clause (67).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedPrevIndexKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedPrevIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedPrevIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted prev index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedPrevIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted prev index kind";
+            type Unknown = UnknownDriftedPrevIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedPrevIndexKind(s.to_owned())
+            }
+            fn prev_index(self) -> Option<usize> {
+                // Drifted override — wraps around at the head rather
+                // than returning `None`, folding a bounded backward
+                // index walk onto an infinite loop every compact
+                // wire codec / Prometheus per-slot bucket consumer
+                // routes through.
+                Some(match self {
+                    Self::Head => 1,
+                    Self::Tail => 0,
+                })
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedPrevIndexKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a prev_index() override that wraps around at the head rather than returning None",
         );
     }
 }

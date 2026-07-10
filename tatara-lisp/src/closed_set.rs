@@ -6400,6 +6400,166 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::prev(self).map(<Self as ClosedSet>::label)
     }
 
+    /// The canonical `&'static str` LABEL of the lexicographic-order
+    /// neighbor immediately AFTER `self` in [`Self::sorted_variants`] —
+    /// the label of [`Self::sorted_next`] projected through
+    /// [`Self::label`], or [`None`] when `self` is the lex-tail-endpoint.
+    ///
+    /// The lex-order forward-direction arm of the (declaration, lex) ×
+    /// (forward, backward) × (`Self`-return, `&'static str`-return) 2×2×2
+    /// = 8-corner label-and-variant neighbor hypercube — one ordering
+    /// axis over from [`Self::next_label`] (declaration-order forward
+    /// label) and one return-type axis over from [`Self::sorted_next`]
+    /// (lex-order forward variant). Together with [`Self::sorted_prev_label`],
+    /// the pair mirrors [`Self::next_label`] / [`Self::prev_label`] one
+    /// ordering axis over, closing the (`&'static str`-return, neighbor)
+    /// corner of the hypercube on BOTH ordering axes:
+    ///
+    /// | Direction \\ Ordering       | Declaration order         | Lexicographic order       |
+    /// |------------------------------|---------------------------|---------------------------|
+    /// | Forward label                | [`Self::next_label`]      | [`Self::sorted_next_label`] |
+    /// | Backward label               | [`Self::prev_label`]      | [`Self::sorted_prev_label`] |
+    ///
+    /// Every generic consumer that renders the lex-order forward-neighbor
+    /// LABEL of a typed variant (an alphabetized-completion LSP cursor
+    /// that emits "next: <label>" for the lex-sorted successor as its
+    /// completion-hint payload, a lex-sorted `tatara-check` diagnostic
+    /// renderer that stamps `expected-next-lex-label: <label>` into a
+    /// per-slot audit trail without threading the typed variant through
+    /// `.label()` at the callsite, a Kubernetes annotation stamper that
+    /// writes a lex-successor phase label onto a per-transition CRD, a
+    /// lex-order compact-encoded wire codec that emits the successor's
+    /// label for cross-boundary handoff) binds to ONE typed method on
+    /// the trait rather than re-deriving the
+    /// `v.sorted_next().map(|n| n.label())` two-primitive composition at
+    /// every callsite.
+    ///
+    /// Default body composes [`Self::sorted_next`] with [`Self::label`]
+    /// through `Option::map` — the lex-order forward-neighbor-label
+    /// projection is a typed CONSEQUENCE of the pre-existing (lex
+    /// neighbor, canonical label) pair, not a third codepath.
+    /// Implementors override only when the lex-neighbor-label surface
+    /// needs to diverge from the natural `sorted_next().map(label)` shape
+    /// (no production implementor reaches for this today; the axis exists
+    /// for the same reason `via` / `set_label` / `labels` /
+    /// `sorted_index_of` / `from_sorted_index` / `sorted_first` /
+    /// `sorted_last` / `sorted_next` / `sorted_prev` overrides exist — a
+    /// typed escape hatch the trait surface exposes rather than forcing
+    /// the implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::sorted_next`] propagates the override through
+    /// this default body automatically; the (variant → lex-forward-neighbor
+    /// label) projection funnels through ONE typed primitive.
+    ///
+    /// The bounded-lex-neighbor-label contract — the lex-tail arm returns
+    /// [`None`] — is guaranteed by the default composition through
+    /// [`Self::sorted_next`]'s `Option::map` shape; the well-formedness
+    /// contract [`assert_closed_set_well_formed`]'s new clause (60) pins
+    /// the composition against the natural `sorted_next().map(label)`
+    /// shape AND the lex-tail-endpoint `None` guard on every implementor,
+    /// so a passing well-formedness sweep means every generic consumer
+    /// can call [`Self::sorted_next_label`] on any typed variant and
+    /// expect the same [`Option`]-typed answer at every crate boundary.
+    /// `T::sorted_last().sorted_next_label() == None` is the natural
+    /// fixpoint the forward-lex-neighbor-label axis and the lex-tail-
+    /// endpoint anchor share, mirroring the
+    /// `T::sorted_last().sorted_next() == None` fixpoint one return-type
+    /// axis over AND the `T::last().next_label() == None` fixpoint one
+    /// ordering axis over.
+    ///
+    /// THEORY.md §III — the typescape; the (variant → lex-forward-
+    /// neighbor label) projection becomes a TYPE projection on the trait
+    /// rather than a per-consumer inline
+    /// `self.sorted_next().map(|v| v.label())` composition at every
+    /// downstream lex-order label-shaped forward-traversal site. The
+    /// (declaration, lex) × (forward, backward) × (`Self`-return,
+    /// `&'static str`-return) 2×2×2 = 8-corner label-and-variant
+    /// neighbor hypercube partitions exhaustively into EIGHT typed
+    /// projections, each with a distinct load-bearing consumer surface.
+    /// THEORY.md §V.1 — knowable platform; the (variant → lex-forward-
+    /// neighbor label) projection was an unnamed compound of
+    /// [`Self::sorted_next`] + [`Self::label`] + `Option::map` pre-lift;
+    /// naming it on the trait makes the projection a TYPED CONSEQUENCE
+    /// of the two substrate primitives — generic consumers see ONE
+    /// method, not one lex-forward-neighbor-label-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (variant →
+    /// lex-forward-neighbor label) projection emerges from the
+    /// composition of TWO substrate primitives ([`Self::sorted_next`],
+    /// [`Self::label`]) via `Option::map` rather than as a per-
+    /// implementor `match self { A => Some("b-label"), ... }` block. A
+    /// future tightening of either primitive (a future perfect-hash
+    /// `from_sorted_index` that speeds up `sorted_next`, a future
+    /// `#[closed_set(compare_labels_with = ...)]` derive attribute that
+    /// swaps the ordering, a future `#[closed_set(label = "…")]`
+    /// per-variant attribute rework) propagates to every closed-set
+    /// lex-forward-neighbor-label consumer through this method's body.
+    ///
+    /// Frontier inspiration: Racket's `(enum-next-label enum sym #:order
+    /// 'lex)` on a closed enumeration under the lexicographic ordering
+    /// (the direct label-projection sibling of `enum-next` on the lex
+    /// axis); Idris's `Fin n` with a `showFin` composed through a
+    /// lex-sorted labeling projection on the finite-type universe;
+    /// MLIR's `RegisteredOperationName::nextByLexicalOrder().getName()`
+    /// folded to ONE method on the lex-sorted Op registry; Rust's
+    /// `strum::EnumIter::iter().collect::<Vec<_>>().sort_by_key(|v|
+    /// v.get_str()).skip_while(|v| *v != self).nth(1)
+    /// .map(|v| v.get_str())` composed through the iterator API + a
+    /// sorted-by-label prelude. Translation through pleme-io primitives:
+    /// a pure default method composing the trait's existing
+    /// [`Self::sorted_next`] + [`Self::label`] surfaces via `Option::map`
+    /// — no new dep, no new IR layer, no supertrait bound, no allocation,
+    /// no `strum` / `enum-iterator` crate dependency.
+    fn sorted_next_label(self) -> Option<&'static str> {
+        <Self as ClosedSet>::sorted_next(self).map(<Self as ClosedSet>::label)
+    }
+
+    /// The canonical `&'static str` LABEL of the lexicographic-order
+    /// neighbor immediately BEFORE `self` in [`Self::sorted_variants`] —
+    /// the label of [`Self::sorted_prev`] projected through
+    /// [`Self::label`], or [`None`] when `self` is the lex-head-endpoint.
+    ///
+    /// Sibling posture to [`Self::sorted_next_label`] one direction over
+    /// on the (forward, backward) direction partition of the lex-axis
+    /// label-shaped neighbor surface: [`Self::sorted_next_label`] returns
+    /// the lex-order successor label, this method returns the lex-order
+    /// predecessor label. See [`Self::sorted_next_label`] for the shared
+    /// design rationale, the (declaration × lex) × (forward, backward)
+    /// × (`Self`-return, `&'static str`-return) 2×2×2 = 8-corner
+    /// hypercube, override axis, future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the
+    /// backward-direction arm of the same lex-axis and inherits every
+    /// property from the forward arm's documentation, differing only in
+    /// the composition through [`Self::sorted_prev`] instead of
+    /// [`Self::sorted_next`] and the lex-head-endpoint `None` guard
+    /// rather than the lex-tail-endpoint `None` guard.
+    ///
+    /// Default body composes [`Self::sorted_prev`] with [`Self::label`]
+    /// through `Option::map`. The bounded-lex-neighbor-label contract —
+    /// the lex-head-endpoint arm returns [`None`] — is guaranteed by the
+    /// default composition through [`Self::sorted_prev`]'s lex-head-
+    /// endpoint `None` guard; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (61) pins the
+    /// composition against the natural `sorted_prev().map(label)` shape
+    /// AND the lex-head-endpoint `None` guard on every implementor.
+    /// `T::sorted_first().sorted_prev_label() == None` is the natural
+    /// fixpoint the backward-lex-neighbor-label axis and the lex-head-
+    /// endpoint anchor share, mirroring the
+    /// `T::sorted_first().sorted_prev() == None` fixpoint one return-type
+    /// axis over AND the `T::first().prev_label() == None` fixpoint one
+    /// ordering axis over.
+    ///
+    /// Clauses (18) + (26) + (27) + (46) + (47) + (48) + (49) + (58) +
+    /// (59) + (60) + (61) together CLOSE the (declaration × lex) ×
+    /// (forward, backward) × (`Self`-return, `&'static str`-return)
+    /// × (endpoint-anchor, neighbor) 2×2×2×2 = 16-corner label-and-
+    /// variant traversal hypercube on the closed-set neighbor and
+    /// endpoint-anchor surface. Every generic consumer that binds any of
+    /// the sixteen projection methods sees the SAME structural answer at
+    /// every crate boundary regardless of which ordering / direction /
+    /// return-type / landmark axis corner it walks.
+    fn sorted_prev_label(self) -> Option<&'static str> {
+        <Self as ClosedSet>::sorted_prev(self).map(<Self as ClosedSet>::label)
+    }
+
     /// The lexicographic-order neighbor immediately AFTER `self` in
     /// [`Self::sorted_variants`] — `Some(Self::sorted_variants()[
     /// self.sorted_index_of() + 1])` when `self` is not the lex-tail,
@@ -10173,6 +10333,90 @@ where
         T::first().prev_label(),
         None,
         "{type_name}: T::first().prev_label() returned Some(_) — the (variant → backward-neighbor label) projection accepted the head-endpoint boundary, silently folding a head-boundary label render onto a wraparound to the tail's label while the natural `prev().map(label)` composition should return `None`. Clauses (26) + (59) together pin `T::first().prev_label() == None` as the structural fixpoint the head-endpoint anchor and the backward-neighbor-label axis share, mirroring `T::first().prev() == None` one return-type axis over",
+    );
+    // (60) — For every variant `v` in `T::ALL`, `v.sorted_next_label()`
+    // MUST equal `v.sorted_next().map(T::label)`, AND
+    // `T::sorted_last().sorted_next_label()` MUST equal `None`. The
+    // default trait body composes `sorted_next(self).map(label)` verbatim
+    // and satisfies both arms for free; the assertion catches a future
+    // implementor whose override drifts the forward-lex-neighbor-label
+    // projection (a permissive override that returns `Some(<some interior
+    // lex-neighbor label>)` at the lex-tail — folding the lex-tail-
+    // boundary walk onto a wraparound to the lex-head's label while the
+    // composed projection would return `None`; a swapped override that
+    // returns the lex-predecessor's label for `sorted_next_label`,
+    // silently inverting the direction of the lex-label-rendered forward
+    // walk; a stale override that returns the wrong lex-neighbor label
+    // after a variant-listing edit reorders the lex partition) loudly
+    // rather than silently bifurcating the forward-lex-neighbor-label
+    // projection surface every downstream alphabetized-completion LSP
+    // cursor / lex-sorted `tatara-check` per-slot diagnostic renderer /
+    // Kubernetes annotation stamper / lex-order compact-encoded wire
+    // codec consumer routes through. Sibling posture to clauses (27) +
+    // (48) + (49) + (58) — clause (27) pins the `Self`-return lex-
+    // neighbor projection at both direction arms + lex-endpoint fixpoints,
+    // clauses (48) + (49) pin the `&'static str`-return lex-endpoint-
+    // anchor projections at both direction arms of the (lex-head,
+    // lex-tail) partition, clause (58) pins the `&'static str`-return
+    // forward-neighbor projection against the composition of both on the
+    // declaration axis, this clause pins the `&'static str`-return
+    // forward-neighbor projection against the composition of both on the
+    // LEX axis AND pins the lex-tail-endpoint `None` guard — so the
+    // closed-set label-shaped forward-neighbor surface stays sound at
+    // BOTH ordering axes AND on the shared lex-tail-endpoint fixpoint
+    // (`T::sorted_last().sorted_next_label() == None`).
+    for &v in T::ALL {
+        let expected_sorted_next_label = v.sorted_next().map(<T as ClosedSet>::label);
+        assert_eq!(
+            v.sorted_next_label(),
+            expected_sorted_next_label,
+            "{type_name}: {v:?}.sorted_next_label() drifted from {v:?}.sorted_next().map(T::label) — the direct (variant → forward lex-neighbor label) projection no longer agrees with the natural sorted_next+label composition, so a downstream alphabetized-completion LSP cursor / lex-sorted tatara-check per-slot diagnostic renderer / Kubernetes annotation stamper / lex-order compact-encoded wire codec consumer that binds `v.sorted_next_label()` as its forward-lex-neighbor label-rendering surface would emit the wrong label for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::sorted_last().sorted_next_label(),
+        None,
+        "{type_name}: T::sorted_last().sorted_next_label() returned Some(_) — the (variant → forward lex-neighbor label) projection accepted the lex-tail-endpoint boundary, silently folding a lex-tail-boundary label render onto a wraparound to the lex-head's label while the natural `sorted_next().map(label)` composition should return `None`. Clauses (27) + (60) together pin `T::sorted_last().sorted_next_label() == None` as the structural fixpoint the lex-tail-endpoint anchor and the forward-lex-neighbor-label axis share, mirroring `T::sorted_last().sorted_next() == None` one return-type axis over AND `T::last().next_label() == None` one ordering axis over",
+    );
+    // (61) — For every variant `v` in `T::ALL`, `v.sorted_prev_label()`
+    // MUST equal `v.sorted_prev().map(T::label)`, AND
+    // `T::sorted_first().sorted_prev_label()` MUST equal `None`. The
+    // default trait body composes `sorted_prev(self).map(label)` verbatim
+    // and satisfies both arms for free; the assertion catches a future
+    // implementor whose override drifts the backward-lex-neighbor-label
+    // projection (a permissive override that returns `Some(<some interior
+    // lex-neighbor label>)` at the lex-head — folding the lex-head-
+    // boundary walk onto a wraparound to the lex-tail's label while the
+    // composed projection would return `None`; a swapped override that
+    // returns the lex-successor's label for `sorted_prev_label`, silently
+    // inverting the direction of the lex-label-rendered backward walk; a
+    // stale override that returns the wrong lex-neighbor label after a
+    // variant-listing edit reorders the lex partition) loudly rather than
+    // silently bifurcating the backward-lex-neighbor-label projection
+    // surface every downstream alphabetized-completion LSP cursor /
+    // lex-sorted `tatara-check` per-slot diagnostic renderer / Kubernetes
+    // annotation stamper / lex-order compact-encoded wire codec consumer
+    // routes through. Clauses (18) + (26) + (27) + (46) + (47) + (48) +
+    // (49) + (58) + (59) + (60) + (61) together CLOSE the (declaration ×
+    // lex) × (forward, backward) × (`Self`-return, `&'static str`-return)
+    // × (endpoint-anchor, neighbor) 2×2×2×2 = 16-corner label-and-variant
+    // traversal hypercube on the closed-set neighbor + endpoint-anchor
+    // surface. Every generic consumer that binds any of the sixteen
+    // projection methods sees the SAME structural answer at every crate
+    // boundary regardless of which ordering / direction / return-type /
+    // landmark axis corner it walks.
+    for &v in T::ALL {
+        let expected_sorted_prev_label = v.sorted_prev().map(<T as ClosedSet>::label);
+        assert_eq!(
+            v.sorted_prev_label(),
+            expected_sorted_prev_label,
+            "{type_name}: {v:?}.sorted_prev_label() drifted from {v:?}.sorted_prev().map(T::label) — the direct (variant → backward lex-neighbor label) projection no longer agrees with the natural sorted_prev+label composition, so a downstream alphabetized-completion LSP cursor / lex-sorted tatara-check per-slot diagnostic renderer / Kubernetes annotation stamper / lex-order compact-encoded wire codec consumer that binds `v.sorted_prev_label()` as its backward-lex-neighbor label-rendering surface would emit the wrong label for {v:?}",
+        );
+    }
+    assert_eq!(
+        T::sorted_first().sorted_prev_label(),
+        None,
+        "{type_name}: T::sorted_first().sorted_prev_label() returned Some(_) — the (variant → backward lex-neighbor label) projection accepted the lex-head-endpoint boundary, silently folding a lex-head-boundary label render onto a wraparound to the lex-tail's label while the natural `sorted_prev().map(label)` composition should return `None`. Clauses (27) + (61) together pin `T::sorted_first().sorted_prev_label() == None` as the structural fixpoint the lex-head-endpoint anchor and the backward-lex-neighbor-label axis share, mirroring `T::sorted_first().sorted_prev() == None` one return-type axis over AND `T::first().prev_label() == None` one ordering axis over",
     );
 }
 
@@ -16177,6 +16421,352 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_prev() override that wraps around at the lex-head rather than returning None",
+        );
+    }
+
+    #[test]
+    fn sorted_next_label_walks_lex_order_forward_chain_of_labels() {
+        // The forward-lex-neighbor-label projection —
+        // `v.sorted_next_label()` walks `T::sorted_variants()` one slot
+        // forward from each variant, returning `Some(<label>)` on every
+        // interior lex slot and `None` at the lex-tail. On `StubKind` lex
+        // order aligns with declaration order (labels "alpha", "beta",
+        // "gamma") so the forward lex label chain is Alpha → "beta" →
+        // "gamma" → None. Sibling posture to
+        // `next_label_walks_declaration_order_forward_chain_of_labels`
+        // one ordering axis over on the (declaration, lex) partition of
+        // the label-shaped forward-neighbor surface AND to
+        // `sorted_next_walks_lex_order_forward_chain` one return-type
+        // axis over on the (`Self`-return, `&'static str`-return)
+        // partition of the lex-axis forward-neighbor surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_next_label(StubKind::Alpha),
+            Some("beta"),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_next_label(StubKind::Beta),
+            Some("gamma"),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_next_label(StubKind::Gamma),
+            None,
+        );
+    }
+
+    #[test]
+    fn sorted_prev_label_walks_lex_order_backward_chain_of_labels() {
+        // The backward-lex-neighbor-label projection —
+        // `v.sorted_prev_label()` walks `T::sorted_variants()` one slot
+        // backward from each variant, returning `Some(<label>)` on every
+        // interior lex slot and `None` at the lex-head. On `StubKind` lex
+        // order aligns with declaration order so the backward lex label
+        // chain is Gamma → "beta" → "alpha" → None. Sibling posture to
+        // `sorted_next_label_walks_lex_order_forward_chain_of_labels` one
+        // direction over on the (forward, backward) partition of the
+        // label-shaped lex-axis neighbor surface.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_prev_label(StubKind::Alpha),
+            None,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_prev_label(StubKind::Beta),
+            Some("alpha"),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_prev_label(StubKind::Gamma),
+            Some("beta"),
+        );
+    }
+
+    #[test]
+    fn sorted_first_sorted_prev_label_and_sorted_last_sorted_next_label_pin_the_lex_endpoint_boundary_label_fixpoints(
+    ) {
+        // The lex-endpoint-anchor / lex-neighbor-label-axis fixpoints —
+        // `T::sorted_first().sorted_prev_label() == None` AND
+        // `T::sorted_last().sorted_next_label() == None`. The two
+        // fixpoints thread the lex-head-endpoint anchor back through the
+        // backward-lex-neighbor-label axis AND the lex-tail-endpoint
+        // anchor back through the forward-lex-neighbor-label axis at ONE
+        // structural landmark each. A regression that wraps around
+        // (returning `Some(T::sorted_last_label())` for
+        // `T::sorted_first().sorted_prev_label()`, or
+        // `Some(T::sorted_first_label())` for
+        // `T::sorted_last().sorted_next_label()`) would silently fold a
+        // bounded lex-label-rendered traversal onto an infinite loop
+        // every downstream alphabetized-completion LSP cursor /
+        // Kubernetes annotation stamper consumer routes through. Sibling
+        // posture to
+        // `first_prev_label_and_last_next_label_pin_the_endpoint_boundary_label_fixpoints`
+        // one ordering axis over on the (declaration, lex) partition.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_prev_label(<StubKind as ClosedSet>::sorted_first(),),
+            None,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_next_label(<StubKind as ClosedSet>::sorted_last(),),
+            None,
+        );
+    }
+
+    #[test]
+    fn sorted_next_label_and_sorted_prev_label_walk_lex_order_not_declaration_order() {
+        // The lex-order-neighbor-label projection contract on an
+        // implementor whose declaration order DIVERGES from lex order —
+        // `v.sorted_next_label()` MUST project the LEX-successor's
+        // label in `T::sorted_variants()`'s layout regardless of the
+        // declaration order, AND `v.sorted_prev_label()` MUST project the
+        // LEX-predecessor's label. A regression that keyed on `T::ALL`
+        // position rather than `T::sorted_variants()` position would pass
+        // on `StubKind` (where declaration order aligns with alphabetic
+        // order) but silently bifurcate on any implementor whose
+        // `ALL`-array layout differs from its lex order. Sibling posture
+        // to `sorted_next_and_sorted_prev_walk_lex_order_not_declaration_order`
+        // one return-type axis over on the (`Self`-return,
+        // `&'static str`-return) partition of the lex-axis forward-
+        // neighbor surface AND to
+        // `next_label_and_prev_label_walk_arbitrary_declaration_order`
+        // one ordering axis over on the (declaration, lex) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SortedNeighborLabelReverseKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownSortedNeighborLabelReverseKind(pub String);
+        impl core::fmt::Display for UnknownSortedNeighborLabelReverseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown sorted neighbor label reverse kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SortedNeighborLabelReverseKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "sorted neighbor label reverse kind";
+            type Unknown = UnknownSortedNeighborLabelReverseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSortedNeighborLabelReverseKind(s.to_owned())
+            }
+        }
+        // Lex order: Alpha → Beta → Gamma. Forward lex label walk follows
+        // this layout, NOT the declaration order [Gamma, Beta, Alpha].
+        assert_eq!(
+            <SortedNeighborLabelReverseKind as ClosedSet>::sorted_next_label(
+                SortedNeighborLabelReverseKind::Alpha,
+            ),
+            Some("beta"),
+        );
+        assert_eq!(
+            <SortedNeighborLabelReverseKind as ClosedSet>::sorted_next_label(
+                SortedNeighborLabelReverseKind::Beta,
+            ),
+            Some("gamma"),
+        );
+        assert_eq!(
+            <SortedNeighborLabelReverseKind as ClosedSet>::sorted_next_label(
+                SortedNeighborLabelReverseKind::Gamma,
+            ),
+            None,
+        );
+        assert_eq!(
+            <SortedNeighborLabelReverseKind as ClosedSet>::sorted_prev_label(
+                SortedNeighborLabelReverseKind::Alpha,
+            ),
+            None,
+        );
+        assert_eq!(
+            <SortedNeighborLabelReverseKind as ClosedSet>::sorted_prev_label(
+                SortedNeighborLabelReverseKind::Beta,
+            ),
+            Some("alpha"),
+        );
+        assert_eq!(
+            <SortedNeighborLabelReverseKind as ClosedSet>::sorted_prev_label(
+                SortedNeighborLabelReverseKind::Gamma,
+            ),
+            Some("beta"),
+        );
+    }
+
+    #[test]
+    fn sorted_next_label_and_sorted_prev_label_on_singleton_closed_set_both_return_none() {
+        // The lex-neighbor-label-axis degenerate case — a singleton
+        // closed set has `T::ALL[0] == T::sorted_first() ==
+        // T::sorted_last()`, so BOTH `T::sorted_first().sorted_prev_label()
+        // == None` AND `T::sorted_last().sorted_next_label() == None`
+        // collapse onto the same variant. Every lex-neighbor-label walk
+        // from the sole variant must return `None`. Sibling posture to
+        // `sorted_next_and_sorted_prev_on_singleton_closed_set_both_return_none`
+        // one return-type axis over on the (`Self`-return,
+        // `&'static str`-return) partition of the lex-axis neighbor
+        // surface AND to
+        // `next_label_and_prev_label_on_singleton_closed_set_both_return_none`
+        // one ordering axis over on the (declaration, lex) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SortedNeighborLabelSingletonKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSortedNeighborLabelSingletonKind(pub String);
+        impl core::fmt::Display for UnknownSortedNeighborLabelSingletonKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown sorted neighbor label singleton kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for SortedNeighborLabelSingletonKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "sorted neighbor label singleton kind";
+            type Unknown = UnknownSortedNeighborLabelSingletonKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSortedNeighborLabelSingletonKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SortedNeighborLabelSingletonKind as ClosedSet>::sorted_next_label(
+                SortedNeighborLabelSingletonKind::Only,
+            ),
+            None,
+        );
+        assert_eq!(
+            <SortedNeighborLabelSingletonKind as ClosedSet>::sorted_prev_label(
+                SortedNeighborLabelSingletonKind::Only,
+            ),
+            None,
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_next_label_and_composition() {
+        // The well-formedness sweep's (60) clause —
+        // `v.sorted_next_label()` MUST equal `v.sorted_next().map(T::label)`
+        // on every variant AND `T::sorted_last().sorted_next_label()`
+        // MUST equal `None`. A hand-impl'd implementor whose override
+        // drifts the forward-lex-neighbor-label projection (accepts
+        // `Some(<some-label>)` at the lex-tail where the natural
+        // composition would return `None`, folds a lex-tail-boundary
+        // label render onto a wraparound to the lex-head's label) fails
+        // the sweep loudly rather than silently bifurcating the label-
+        // rendered lex-forward-traversal surface every downstream
+        // alphabetized-completion LSP cursor consumer routes through.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_next_label_and_composition`
+        // one ordering axis over on the (declaration, lex) partition of
+        // clause (60).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedNextLabelKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedNextLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedNextLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted next label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedNextLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted sorted next label kind";
+            type Unknown = UnknownDriftedSortedNextLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedNextLabelKind(s.to_owned())
+            }
+            fn sorted_next_label(self) -> Option<&'static str> {
+                // Drifted override — wraps around at the lex-tail rather
+                // than returning `None`, folding a bounded forward lex-
+                // label walk onto an infinite loop every alphabetized-
+                // completion LSP cursor consumer routes through.
+                Some(match self {
+                    Self::Head => "tail",
+                    Self::Tail => "head",
+                })
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedNextLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_next_label() override that wraps around at the lex-tail rather than returning None",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_prev_label_and_composition() {
+        // The well-formedness sweep's (61) clause —
+        // `v.sorted_prev_label()` MUST equal `v.sorted_prev().map(T::label)`
+        // on every variant AND `T::sorted_first().sorted_prev_label()`
+        // MUST equal `None`. A hand-impl'd implementor whose override
+        // drifts the backward-lex-neighbor-label projection (accepts
+        // `Some(<some-label>)` at the lex-head where the natural
+        // composition would return `None`, folds a lex-head-boundary
+        // label render onto a wraparound to the lex-tail's label) fails
+        // the sweep loudly rather than silently bifurcating the label-
+        // rendered lex-backward-traversal surface. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_sorted_next_label_and_composition`
+        // one direction over on the (forward, backward) partition of
+        // clause (61).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedPrevLabelKind {
+            Head,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedPrevLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedPrevLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted prev label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedPrevLabelKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Tail];
+            const SET_LABEL: &'static str = "drifted sorted prev label kind";
+            type Unknown = UnknownDriftedSortedPrevLabelKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedPrevLabelKind(s.to_owned())
+            }
+            fn sorted_prev_label(self) -> Option<&'static str> {
+                // Drifted override — wraps around at the lex-head rather
+                // than returning `None`, folding a bounded backward lex-
+                // label walk onto an infinite loop every alphabetized-
+                // completion LSP cursor consumer routes through.
+                Some(match self {
+                    Self::Head => "tail",
+                    Self::Tail => "head",
+                })
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedPrevLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_prev_label() override that wraps around at the lex-head rather than returning None",
         );
     }
 

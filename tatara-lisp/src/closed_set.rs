@@ -8846,6 +8846,269 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn cycle_sorted_prev_index(self) -> usize {
         <Self as ClosedSet>::sorted_index_of(<Self as ClosedSet>::cycle_sorted_prev(self))
     }
+
+    /// The declaration-order strict-precedence pairwise predicate —
+    /// `true` iff `self` appears strictly before `other` in
+    /// [`Self::ALL`]'s declaration order, `false` on equality or when
+    /// `self` appears strictly after `other`. The binary peer of every
+    /// pre-existing UNARY declaration-axis endpoint predicate
+    /// ([`Self::is_first`], [`Self::is_last`], [`Self::is_endpoint`],
+    /// [`Self::is_interior`], [`Self::is_first_label`],
+    /// [`Self::is_last_label`], [`Self::is_endpoint_label`],
+    /// [`Self::is_interior_label`], [`Self::is_first_index`],
+    /// [`Self::is_last_index`], [`Self::is_endpoint_index`],
+    /// [`Self::is_interior_index`]) — those methods answer "where does
+    /// this ONE variant sit in the declaration axis," this method
+    /// answers "which of these TWO variants sits earlier in the
+    /// declaration axis." Opens the (self, other) pairwise-comparison
+    /// axis on the closed-set surface at the declaration-order
+    /// strict-less-than corner.
+    ///
+    /// Sibling posture to [`Self::sorted_precedes`] (the lex-axis peer
+    /// on the same pairwise-comparison surface) and [`Self::succeeds`]
+    /// (the strict-greater-than direction-arm on the declaration
+    /// axis). Together the four methods CLOSE the (ordering × direction)
+    /// 2×2 = 4-corner pairwise-comparison matrix — declaration
+    /// × forward → [`Self::precedes`], declaration × backward →
+    /// [`Self::succeeds`], lex × forward → [`Self::sorted_precedes`],
+    /// lex × backward → [`Self::sorted_succeeds`].
+    ///
+    /// Default body composes [`Self::index_of`] on both operands with
+    /// the standard-library `<` operator — the pairwise-comparison
+    /// predicate is a typed CONSEQUENCE of the (variant → declaration
+    /// position) projection, not a second codepath through a
+    /// per-variant `match` body. Implementors override only when the
+    /// pairwise-comparison surface needs to diverge from the natural
+    /// `index_of(self) < index_of(other)` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `is_endpoint` / `is_first` / `is_last` overrides
+    /// exist — a typed escape hatch rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::index_of`] propagates the override through
+    /// this default body automatically; the (variant pair → bool
+    /// pairwise-precedence) projection funnels through ONE typed
+    /// primitive.
+    ///
+    /// Strict-order contract: [`Self::precedes`] is
+    /// - IRREFLEXIVE: `!v.precedes(v)` for every `v` in [`Self::ALL`]
+    ///   (a variant cannot strictly precede itself);
+    /// - ASYMMETRIC: `a.precedes(b) → !b.precedes(a)` for every pair
+    ///   `(a, b)` in [`Self::ALL`] × [`Self::ALL`] (strict precedence
+    ///   is a directed edge);
+    /// - TRANSITIVE: `a.precedes(b) ∧ b.precedes(c) → a.precedes(c)`
+    ///   for every triple `(a, b, c)` in
+    ///   [`Self::ALL`] × [`Self::ALL`] × [`Self::ALL`] (declaration
+    ///   order is a strict total order);
+    /// - TRICHOTOMOUS: exactly one of `a.precedes(b)`,
+    ///   `a == b`, `b.precedes(a)` holds for every pair `(a, b)` in
+    ///   [`Self::ALL`] × [`Self::ALL`] (declaration order is
+    ///   TOTAL — every pair of distinct variants is comparable).
+    ///
+    /// The four laws are guaranteed by the composition through
+    /// [`Self::index_of`] (which projects into `[0, CARDINALITY)` and
+    /// is injective by clause (17) on the well-formedness sweep) and
+    /// the standard-library `<` on `usize`'s strict total order — the
+    /// pairwise-comparison predicate emerges as a TYPED CONSEQUENCE
+    /// of the declaration-axis index bijection, not as a per-
+    /// implementor hand-rolled body. Pinned by
+    /// `precedes_is_irreflexive_across_every_variant`,
+    /// `precedes_is_asymmetric_across_every_pair`,
+    /// `precedes_is_transitive_across_every_triple`, and
+    /// `precedes_is_trichotomous_across_every_pair`.
+    ///
+    /// Cross-axis composition law:
+    /// `a.precedes(b) == (a.index_of() < b.index_of())` for every
+    /// pair `(a, b)` in [`Self::ALL`] × [`Self::ALL`] (the
+    /// declaration-axis strict-precedence predicate binds byte-for-
+    /// byte to the `<` comparison on the (variant → declaration
+    /// position) projection). Pinned by
+    /// `precedes_agrees_with_index_of_strict_less_than_on_every_pair`.
+    ///
+    /// Complement axis: `!a.precedes(b) && a != b → b.precedes(a)`
+    /// for every pair `(a, b)` in [`Self::ALL`] × [`Self::ALL`] (the
+    /// pairwise-precedence predicate's negation across the diagonal
+    /// IS the reverse-direction pairwise-precedence). Pinned by
+    /// `precedes_negation_off_diagonal_equals_reverse_precedence`.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::precedes`]: a `tatara-check` predicate
+    /// `(check-declaration-order-precedes …)` verifying a workspace-
+    /// wide phase-ordering constraint (e.g.
+    /// `Pending.precedes(Running)`), a Sekiban audit-trail metric
+    /// jointly labeled by the (before, after) pair of a phase
+    /// transition, an LSP diagnostic that sorts a set of variants in
+    /// declaration order via `Vec::sort_by(|a, b| if a.precedes(*b)
+    /// { Ordering::Less } else if b.precedes(*a) { Ordering::Greater
+    /// } else { Ordering::Equal })` — bind to ONE typed pairwise-
+    /// comparison predicate rather than re-deriving the
+    /// `index_of` composition inline per callsite.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the
+    /// pairwise-comparison predicate becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `index_of(self) < index_of(other)` composition at every
+    /// downstream generic site. THEORY.md §V.1 — knowable platform;
+    /// the pairwise-comparison surface was an unnamed inline
+    /// composition recurring at every prospective downstream
+    /// pairwise-ordering site pre-lift. Naming it on the trait makes
+    /// the predicate a TYPED CONSEQUENCE of the declaration-axis
+    /// index bijection — generic consumers see ONE typed predicate,
+    /// not ONE inline-composition-shape-per-crate. THEORY.md §VI.1 —
+    /// generation over composition; the pairwise-precedence
+    /// predicate emerges from the composition of TWO substrate
+    /// primitives ([`Self::index_of`] on both operands + the
+    /// standard-library `<` on `usize`) rather than as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Idris's `Fin n`-indexed comparison
+    /// primitives (`fin-lt`) surface pairwise-precedence as a
+    /// first-class predicate on the finite-cardinality type;
+    /// Haskell's `Data.Ord` type class exposes `compare :: a -> a
+    /// -> Ordering` as the trichotomous pairwise-comparison
+    /// primitive on any ordered type. Translation through pleme-io
+    /// primitives: the pairwise-precedence predicate on the closed-
+    /// set trait binds through [`Self::index_of`]'s declaration-axis
+    /// bijection into `usize`'s strict total order, so the trait
+    /// composition emerges from the substrate's typed index
+    /// projection rather than as a fresh substrate primitive.
+    fn precedes(self, other: Self) -> bool {
+        <Self as ClosedSet>::index_of(self) < <Self as ClosedSet>::index_of(other)
+    }
+
+    /// The declaration-order strict-succession pairwise predicate —
+    /// `true` iff `self` appears strictly AFTER `other` in
+    /// [`Self::ALL`]'s declaration order, `false` on equality or when
+    /// `self` appears strictly before `other`. The direction-complement
+    /// arm of [`Self::precedes`] on the (forward, backward) axis of
+    /// the declaration-order pairwise-comparison surface.
+    ///
+    /// Sibling posture to [`Self::precedes`] one arm over on the
+    /// (forward, backward) direction axis — [`Self::precedes`] fires
+    /// when `self` sits strictly earlier, this method fires when
+    /// `self` sits strictly later. See [`Self::precedes`] for the
+    /// shared strict-order laws (irreflexivity, asymmetry,
+    /// transitivity, trichotomy), the cross-axis composition through
+    /// [`Self::index_of`], the future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the
+    /// reverse-direction arm of the same pairwise-comparison surface
+    /// and inherits every property from the forward arm's
+    /// documentation, differing only in the reversed operand order.
+    ///
+    /// Default body composes [`Self::precedes`] with the operand
+    /// swap: `other.precedes(self)`. The succession predicate is a
+    /// typed CONSEQUENCE of the precedence predicate applied with
+    /// reversed operands, not a second codepath through
+    /// `index_of(self) > index_of(other)` inline. Implementors
+    /// override only when the succession surface needs to diverge
+    /// from the natural `other.precedes(self)` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `is_endpoint` / `is_first` / `is_last` overrides
+    /// exist — a typed escape hatch rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::precedes`] propagates the override through
+    /// this default body automatically; the (variant pair → bool
+    /// pairwise-succession) projection funnels through ONE typed
+    /// primitive.
+    ///
+    /// Direction-complement contract: `a.succeeds(b) == b.precedes(a)`
+    /// for every pair `(a, b)` in [`Self::ALL`] × [`Self::ALL`] (the
+    /// succession predicate binds byte-for-byte to the reverse-
+    /// operand precedence predicate). Pinned by
+    /// `succeeds_is_reverse_precedes_across_every_pair`.
+    fn succeeds(self, other: Self) -> bool {
+        <Self as ClosedSet>::precedes(other, self)
+    }
+
+    /// The lex-order strict-precedence pairwise predicate — `true`
+    /// iff `self` appears strictly before `other` in lexicographic
+    /// order over [`Self::label`]'s projection, `false` on equality
+    /// or when `self` appears strictly after `other`. The
+    /// lex-ordering peer of [`Self::precedes`] on the (declaration,
+    /// lex) ordering axis of the pairwise-comparison surface.
+    ///
+    /// Sibling posture to [`Self::precedes`] one arm over on the
+    /// (declaration, lex) ordering axis — [`Self::precedes`] uses
+    /// [`Self::index_of`] (declaration position), this method uses
+    /// [`Self::sorted_index_of`] (lex position). See
+    /// [`Self::precedes`] for the shared strict-order laws
+    /// (irreflexivity, asymmetry, transitivity, trichotomy), the
+    /// cross-axis composition, the future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method
+    /// is the lex-axis arm of the same pairwise-comparison surface
+    /// and inherits every property from the declaration arm's
+    /// documentation, differing only in the projection method the
+    /// composition routes through.
+    ///
+    /// Default body composes [`Self::sorted_index_of`] on both
+    /// operands with the standard-library `<` operator. Implementors
+    /// override only when the lex-axis pairwise-comparison surface
+    /// needs to diverge from the natural `sorted_index_of(self) <
+    /// sorted_index_of(other)` shape.
+    ///
+    /// Cross-axis composition law:
+    /// `a.sorted_precedes(b) == (a.sorted_index_of() <
+    /// b.sorted_index_of())` for every pair `(a, b)` in
+    /// [`Self::ALL`] × [`Self::ALL`] (the lex-axis strict-precedence
+    /// predicate binds byte-for-byte to the `<` comparison on the
+    /// (variant → lex position) projection). Pinned by
+    /// `sorted_precedes_agrees_with_sorted_index_of_strict_less_than_on_every_pair`.
+    ///
+    /// Cross-ordering peer contract:
+    /// `a.sorted_precedes(b) ↔ (a.label() < b.label())` for every
+    /// pair `(a, b)` in [`Self::ALL`] × [`Self::ALL`] (the lex-axis
+    /// pairwise-comparison predicate binds byte-for-byte to the
+    /// `&str`'s natural lex comparison). Pinned by
+    /// `sorted_precedes_agrees_with_label_lex_less_than_on_every_pair`.
+    fn sorted_precedes(self, other: Self) -> bool {
+        <Self as ClosedSet>::sorted_index_of(self) < <Self as ClosedSet>::sorted_index_of(other)
+    }
+
+    /// The lex-order strict-succession pairwise predicate — `true`
+    /// iff `self` appears strictly AFTER `other` in lexicographic
+    /// order over [`Self::label`]'s projection, `false` on equality
+    /// or when `self` appears strictly before `other`. The
+    /// direction-complement of [`Self::sorted_precedes`] on the
+    /// (forward, backward) direction axis of the lex-ordering
+    /// pairwise-comparison surface.
+    ///
+    /// Sibling posture to [`Self::sorted_precedes`] one arm over on
+    /// the (forward, backward) direction axis, AND to
+    /// [`Self::succeeds`] one arm over on the (declaration, lex)
+    /// ordering axis — the lex-order strict-succession predicate is
+    /// the intersection of both direction-complement axes over the
+    /// declaration-axis strict-precedence predicate. See
+    /// [`Self::precedes`] for the shared strict-order laws,
+    /// [`Self::succeeds`] for the direction-complement contract on
+    /// the declaration axis, and [`Self::sorted_precedes`] for the
+    /// lex-axis cross-composition — this method inherits every
+    /// property from those three and closes the four-corner
+    /// (ordering × direction) 2×2 pairwise-comparison matrix on the
+    /// closed-set surface EXHAUSTIVELY.
+    ///
+    /// Default body composes [`Self::sorted_precedes`] with the
+    /// operand swap: `other.sorted_precedes(self)`. The lex-order
+    /// succession predicate is a typed CONSEQUENCE of the lex-order
+    /// precedence predicate applied with reversed operands.
+    ///
+    /// Direction-complement contract: `a.sorted_succeeds(b) ==
+    /// b.sorted_precedes(a)` for every pair `(a, b)` in
+    /// [`Self::ALL`] × [`Self::ALL`] (the lex-order succession
+    /// predicate binds byte-for-byte to the reverse-operand lex-
+    /// order precedence predicate). Pinned by
+    /// `sorted_succeeds_is_reverse_sorted_precedes_across_every_pair`.
+    ///
+    /// (74) + (75) + (76) + (77) together CLOSE the (declaration ×
+    /// lex) × (forward, backward) 2×2 = 4-corner pairwise-comparison
+    /// matrix on the closed-set surface — declaration × forward →
+    /// [`Self::precedes`], declaration × backward →
+    /// [`Self::succeeds`], lex × forward → [`Self::sorted_precedes`],
+    /// lex × backward → [`Self::sorted_succeeds`] — opening the
+    /// (self, other) binary pairwise-comparison axis at the strict-
+    /// less-than / strict-greater-than corners of the declaration
+    /// AND lex ordering axes exhaustively.
+    fn sorted_succeeds(self, other: Self) -> bool {
+        <Self as ClosedSet>::sorted_precedes(other, self)
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -26290,5 +26553,214 @@ mod tests {
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an is_sorted_interior_index() override that dropped the canonical-index-domain gate",
         );
+    }
+
+    #[test]
+    fn precedes_is_irreflexive_across_every_variant() {
+        // `T::precedes` is IRREFLEXIVE: no variant strictly precedes
+        // itself. The strict-precedence predicate excludes the
+        // diagonal — a variant equal to itself sits neither before
+        // nor after itself on the declaration axis. Sibling posture
+        // to `is_first_returns_true_only_on_the_declaration_order_head_variant`
+        // on the diagonal-collapse arm — the unary declaration-axis
+        // predicates key on `self` alone, the binary declaration-axis
+        // predicate keys on `(self, other)` and inherits the same
+        // diagonal-collapse property from the underlying `<` on
+        // `usize`.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                !<StubKind as ClosedSet>::precedes(v, v),
+                "StubKind::{v:?}.precedes(StubKind::{v:?}) must be false (irreflexivity)",
+            );
+        }
+    }
+
+    #[test]
+    fn precedes_is_asymmetric_across_every_pair() {
+        // `T::precedes` is ASYMMETRIC: for every pair `(a, b)`, at
+        // most ONE of `a.precedes(b)` / `b.precedes(a)` holds. The
+        // strict-precedence predicate carves a directed edge — a
+        // pair of distinct variants sits with exactly one direction
+        // of precedence, and equal variants sit with neither. Sibling
+        // posture to `precedes_is_irreflexive_across_every_variant`
+        // on the pairwise-off-diagonal arm — the irreflexivity pin
+        // covers the diagonal, this pin covers the off-diagonal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::precedes(a, b) {
+                    assert!(
+                        !<StubKind as ClosedSet>::precedes(b, a),
+                        "StubKind::{a:?}.precedes(StubKind::{b:?}) AND \
+                         StubKind::{b:?}.precedes(StubKind::{a:?}) — precedence must be asymmetric",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn precedes_is_transitive_across_every_triple() {
+        // `T::precedes` is TRANSITIVE: `a < b ∧ b < c → a < c` on
+        // every triple `(a, b, c)`. Declaration order is a strict
+        // TOTAL order over `[0, T::CARDINALITY)` — the pairwise
+        // predicate inherits transitivity from the underlying `<` on
+        // `usize`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if <StubKind as ClosedSet>::precedes(a, b)
+                        && <StubKind as ClosedSet>::precedes(b, c)
+                    {
+                        assert!(
+                            <StubKind as ClosedSet>::precedes(a, c),
+                            "StubKind::{a:?}.precedes(StubKind::{b:?}) AND \
+                             StubKind::{b:?}.precedes(StubKind::{c:?}) but NOT \
+                             StubKind::{a:?}.precedes(StubKind::{c:?}) — precedence must be transitive",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn precedes_is_trichotomous_across_every_pair() {
+        // `T::precedes` is TRICHOTOMOUS on the closed set: for every
+        // pair `(a, b)`, exactly ONE of `a.precedes(b)`, `a == b`,
+        // `b.precedes(a)` holds. Declaration order is a TOTAL strict
+        // order over `[0, T::CARDINALITY)` — no pair of variants
+        // sits incomparable, and the diagonal is exclusive to the
+        // equality arm.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let ab = <StubKind as ClosedSet>::precedes(a, b);
+                let eq = a == b;
+                let ba = <StubKind as ClosedSet>::precedes(b, a);
+                assert_eq!(
+                    u8::from(ab) + u8::from(eq) + u8::from(ba),
+                    1,
+                    "StubKind::{a:?} vs StubKind::{b:?} — exactly one of \
+                     (precedes forward, equal, precedes backward) must hold, got \
+                     (forward={ab}, equal={eq}, backward={ba})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn precedes_agrees_with_index_of_strict_less_than_on_every_pair() {
+        // The (variant pair → bool pairwise-precedence) projection
+        // MUST bind byte-for-byte to the `<` comparison on the
+        // (variant → declaration position) projection — the
+        // pairwise-precedence predicate is a typed CONSEQUENCE of
+        // the declaration-axis index bijection, and this pin catches
+        // a regression that drifts the pairwise-comparison surface
+        // from the underlying index-based composition.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::precedes(a, b),
+                    <StubKind as ClosedSet>::index_of(a) < <StubKind as ClosedSet>::index_of(b),
+                    "StubKind::{a:?}.precedes(StubKind::{b:?}) must equal \
+                     index_of({a:?}) < index_of({b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn precedes_negation_off_diagonal_equals_reverse_precedence() {
+        // On the off-diagonal (`a != b`), `!a.precedes(b)` MUST equal
+        // `b.precedes(a)` — the complement axis of the strict-
+        // precedence predicate across distinct variants IS the
+        // reverse-direction pairwise-precedence.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if a == b {
+                    continue;
+                }
+                assert_eq!(
+                    !<StubKind as ClosedSet>::precedes(a, b),
+                    <StubKind as ClosedSet>::precedes(b, a),
+                    "!StubKind::{a:?}.precedes(StubKind::{b:?}) must equal \
+                     StubKind::{b:?}.precedes(StubKind::{a:?}) off-diagonal",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn succeeds_is_reverse_precedes_across_every_pair() {
+        // `T::succeeds` binds byte-for-byte to the reverse-operand
+        // `T::precedes` — the direction-complement of the pairwise-
+        // precedence predicate IS the pairwise-succession predicate,
+        // pinned across every ordered pair on `T::ALL` × `T::ALL`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::succeeds(a, b),
+                    <StubKind as ClosedSet>::precedes(b, a),
+                    "StubKind::{a:?}.succeeds(StubKind::{b:?}) must equal \
+                     StubKind::{b:?}.precedes(StubKind::{a:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_precedes_agrees_with_sorted_index_of_strict_less_than_on_every_pair() {
+        // The lex-axis (variant pair → bool pairwise-precedence)
+        // projection MUST bind byte-for-byte to the `<` comparison
+        // on the (variant → lex position) projection — the lex-axis
+        // pairwise-precedence predicate is a typed CONSEQUENCE of
+        // the lex-axis index bijection.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_precedes(a, b),
+                    <StubKind as ClosedSet>::sorted_index_of(a)
+                        < <StubKind as ClosedSet>::sorted_index_of(b),
+                    "StubKind::{a:?}.sorted_precedes(StubKind::{b:?}) must equal \
+                     sorted_index_of({a:?}) < sorted_index_of({b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_precedes_agrees_with_label_lex_less_than_on_every_pair() {
+        // The lex-axis pairwise-precedence predicate MUST bind
+        // byte-for-byte to the natural lex comparison on `&str` — a
+        // variant sits strictly earlier in lex order iff its
+        // canonical label is strictly less than the other's under
+        // `str`'s natural byte-wise lex comparison.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_precedes(a, b),
+                    <StubKind as ClosedSet>::label(a) < <StubKind as ClosedSet>::label(b),
+                    "StubKind::{a:?}.sorted_precedes(StubKind::{b:?}) must equal \
+                     label({a:?}) < label({b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_succeeds_is_reverse_sorted_precedes_across_every_pair() {
+        // `T::sorted_succeeds` binds byte-for-byte to the reverse-
+        // operand `T::sorted_precedes` — the direction-complement
+        // of the lex-axis pairwise-precedence predicate IS the
+        // lex-axis pairwise-succession predicate.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_succeeds(a, b),
+                    <StubKind as ClosedSet>::sorted_precedes(b, a),
+                    "StubKind::{a:?}.sorted_succeeds(StubKind::{b:?}) must equal \
+                     StubKind::{b:?}.sorted_precedes(StubKind::{a:?})",
+                );
+            }
+        }
     }
 }

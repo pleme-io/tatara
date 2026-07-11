@@ -10268,6 +10268,197 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .reduce(<Self as ClosedSet>::sorted_max)
     }
 
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// N-ARY MIN projection of `items` — the label of [`Self::min_of`]
+    /// projected through [`Self::label`], or [`None`] when `items` is
+    /// empty. The label-return-shape peer of [`Self::min_of`] one
+    /// return-shape axis over on the N-ary variadic-reduction surface,
+    /// AND the N-ary-arity peer of [`Self::min_label`] one arity level
+    /// up. Opens the label-return column of the (return-shape × ordering
+    /// × direction) 3×2×2 = 12-corner N-ary variadic-reduction hypercube
+    /// past the exhaustively-closed 4-corner Self-return face
+    /// [`Self::min_of`] / [`Self::max_of`] / [`Self::sorted_min_of`] /
+    /// [`Self::sorted_max_of`] — the N-ary counterpart of the binary
+    /// pairwise-selection hypercube's own return-shape column
+    /// [`Self::min_label`] / [`Self::max_label`] /
+    /// [`Self::sorted_min_label`] / [`Self::sorted_max_label`] one
+    /// arity level down.
+    ///
+    /// Empty-slice contract: `T::min_label_of(&[]) == None` — the empty
+    /// slice has no earliest member, so the label projection propagates
+    /// the empty-fixpoint witness through [`Option::map`] without
+    /// allocating a diagnostic carrier, mirroring the Self-return arm's
+    /// `T::min_of(&[]) == None` one return-shape column over. Pinned
+    /// by `min_label_of_returns_none_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::min_label_of(&[v]) == Some(v.label())`
+    /// on every variant `v` — a singleton slice reduces to its sole
+    /// member's label through [`Iterator::reduce`]'s 1-length identity
+    /// composed with [`Self::label`]. Pinned by
+    /// `min_label_of_returns_the_sole_member_label_on_every_singleton_slice_across_every_variant`.
+    ///
+    /// Self-return composition contract: `T::min_label_of(items) ==
+    /// T::min_of(items).map(T::label)` on every slice — the label-return
+    /// arm composes through the Self-return arm plus the trait's `label`
+    /// projection, not through a fresh substrate primitive on the
+    /// N-ary axis. Pinned by
+    /// `min_label_of_composes_min_of_with_label_across_every_triple`.
+    ///
+    /// Full-set contract: `T::min_label_of(<T as ClosedSet>::ALL) ==
+    /// Some(T::first().label())` — the N-ary min-label over the entire
+    /// closed set folds to the declaration-head variant's label,
+    /// mirroring the Self-return arm's `T::min_of(ALL) ==
+    /// Some(T::first())` one return-shape column over.
+    ///
+    /// Permutation-invariance contract: `T::min_label_of(items) ==
+    /// T::min_label_of(&permuted)` on every permutation of `items` —
+    /// the N-ary min-label is invariant under reordering of its input
+    /// slice because [`Self::min_of`] is, and the `label` map preserves
+    /// the invariance verbatim.
+    ///
+    /// Future consumers that compose against [`Self::min_label_of`]: a
+    /// diagnostic renderer that folds an observed-phase MULTIset to the
+    /// declaration-order earliest lifecycle stage's CANONICAL LABEL
+    /// (rather than the typed variant one return-shape column over);
+    /// a `tatara-check` predicate that renders the earliest-observed
+    /// phase across an arbitrary sample as an `&'static str` for
+    /// human-readable audit-trail output; a metrics tagger that folds
+    /// a rolling window of enum observations to the declaration-order
+    /// earliest peer's LABEL and emits the folded string as the
+    /// window's min-membership tag — bypassing the intermediate
+    /// `Option<Self>` unwrap-and-project chain. Every such consumer
+    /// binds to ONE typed method rather than re-deriving the
+    /// `items.iter().copied().reduce(T::min).map(T::label)` composition
+    /// at every callsite.
+    ///
+    /// Default body composes [`Self::min_of`] with [`Option::map`]
+    /// threading [`Self::label`] verbatim: `Self::min_of(items)
+    /// .map(Self::label)`. Implementors override only when the label-
+    /// return N-ary min projection needs to diverge from the natural
+    /// Self-return composition through the pre-existing label
+    /// projection (no production implementor reaches for this today).
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary min-
+    /// label projection becomes a TYPE-level primitive on the closed-
+    /// set trait rather than a per-consumer inline `.reduce(T::min)
+    /// .map(T::label)` composition. THEORY.md §V.1 — knowable platform;
+    /// the N-ary label-return axis was an unnamed inline composition
+    /// pre-lift. Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of TWO substrate primitives ([`Self::min_of`] +
+    /// [`Self::label`]) composed through [`Option::map`] at ONE
+    /// composition site. THEORY.md §VI.1 — generation over composition;
+    /// the N-ary min-label projection emerges from the composition of
+    /// TWO substrate primitives rather than a per-implementor hand-
+    /// rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(symbol->string (apply min
+    /// items))` composed with the language's apply idiom on a closed
+    /// symbolic union; Julia's `String(minimum(items))` on an ordered
+    /// enumeration; MLIR's `RegisteredOperationName::min_of(vector)
+    /// .getName()` folded to ONE method on the closed Op registry's
+    /// N-ary min projection. Translation through pleme-io primitives:
+    /// a pure default method composing the trait's existing
+    /// [`Self::min_of`] + [`Self::label`] surfaces through
+    /// [`Option::map`] verbatim — no new dep, no `apply` idiom, no
+    /// `String`-return allocating carrier.
+    fn min_label_of(items: &[Self]) -> Option<&'static str> {
+        <Self as ClosedSet>::min_of(items).map(<Self as ClosedSet>::label)
+    }
+
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// N-ARY MAX projection of `items` — the label of [`Self::max_of`]
+    /// projected through [`Self::label`], or [`None`] when `items` is
+    /// empty.
+    ///
+    /// The direction-complement peer of [`Self::min_label_of`] on the
+    /// (min, max) direction axis of the closed-set label-return N-ary
+    /// variadic-reduction surface. See [`Self::min_label_of`] for the
+    /// shared design rationale, empty-slice / singleton / composition /
+    /// full-set / permutation-invariance contracts, the future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration — this
+    /// method is the max-direction arm of the same label-return N-ary
+    /// surface and inherits every property from the min arm's
+    /// documentation, differing only in the substrate primitive the
+    /// N-ary fold routes through ([`Self::max_of`] rather than
+    /// [`Self::min_of`]).
+    ///
+    /// Full-set contract: `T::max_label_of(<T as ClosedSet>::ALL) ==
+    /// Some(T::last().label())` — the N-ary max-label over the entire
+    /// closed set folds to the declaration-tail variant's label,
+    /// mirroring the `T::min_label_of(ALL) == Some(T::first().label())`
+    /// fixpoint on the min arm one direction column over.
+    fn max_label_of(items: &[Self]) -> Option<&'static str> {
+        <Self as ClosedSet>::max_of(items).map(<Self as ClosedSet>::label)
+    }
+
+    /// The canonical `&'static str` LABEL of the lex-order N-ARY MIN
+    /// projection of `items` — the label of [`Self::sorted_min_of`]
+    /// projected through [`Self::label`], or [`None`] when `items` is
+    /// empty.
+    ///
+    /// The lex-ordering peer of [`Self::min_label_of`] on the
+    /// (declaration, lex) ordering axis of the closed-set label-return
+    /// N-ary variadic-reduction surface. See [`Self::min_label_of`] for
+    /// the shared design rationale, contracts, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration — this
+    /// method is the lex-axis arm of the same label-return N-ary
+    /// surface and inherits every property from the declaration arm's
+    /// documentation, differing only in the substrate primitive the
+    /// N-ary fold routes through ([`Self::sorted_min_of`] rather than
+    /// [`Self::min_of`]).
+    ///
+    /// Full-set contract: `T::sorted_min_label_of(<T as ClosedSet>::ALL)
+    /// == Some(T::sorted_first().label())` — the lex-order N-ary min-
+    /// label over the entire closed set folds to the lex-head variant's
+    /// label.
+    ///
+    /// Cross-ordering coincidence: `T::sorted_min_label_of(items) ==
+    /// T::min_label_of(items)` on every slice for which declaration and
+    /// lex orders agree pairwise — the two orderings collapse when the
+    /// declaration order IS the lex order on every operand.
+    fn sorted_min_label_of(items: &[Self]) -> Option<&'static str> {
+        <Self as ClosedSet>::sorted_min_of(items).map(<Self as ClosedSet>::label)
+    }
+
+    /// The canonical `&'static str` LABEL of the lex-order N-ARY MAX
+    /// projection of `items` — the label of [`Self::sorted_max_of`]
+    /// projected through [`Self::label`], or [`None`] when `items` is
+    /// empty.
+    ///
+    /// Closes the label-return column of the (return-shape × ordering ×
+    /// direction) 3×2×2 = 12-corner N-ary variadic-reduction hypercube
+    /// at the (label-return, lex-order, max) corner — sibling posture
+    /// to [`Self::sorted_min_label_of`] one direction axis over on the
+    /// lex arm AND to [`Self::max_label_of`] one ordering axis over on
+    /// the max arm. Together with [`Self::min_label_of`],
+    /// [`Self::max_label_of`], and [`Self::sorted_min_label_of`] this
+    /// method CLOSES the (ordering × direction) 2×2 = 4-corner label-
+    /// return N-ary variadic-reduction matrix past the pre-existing
+    /// Self-return 4-corner face ([`Self::min_of`], [`Self::max_of`],
+    /// [`Self::sorted_min_of`], [`Self::sorted_max_of`]) — the N-ary
+    /// arity face now carries an ALL of {declaration, lex} ordering ×
+    /// {min, max} direction × {Self, label} return-shape corners, with
+    /// the (index-return) return-shape column as the future extension
+    /// mirroring the binary-arity face's own 3×2×2 hypercube shape.
+    ///
+    /// See [`Self::min_label_of`] for the shared design rationale, the
+    /// empty-slice / singleton / composition / full-set / permutation-
+    /// invariance contracts, the future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the lex-
+    /// order arm of the max direction column on the label-return N-ary
+    /// surface and inherits every property from the declaration arm's
+    /// documentation, differing only in the substrate primitive the
+    /// N-ary fold routes through ([`Self::sorted_max_of`] rather than
+    /// [`Self::max_of`]).
+    ///
+    /// Full-set contract: `T::sorted_max_label_of(<T as ClosedSet>::ALL)
+    /// == Some(T::sorted_last().label())` — the lex-order N-ary max-
+    /// label over the entire closed set folds to the lex-tail variant's
+    /// label.
+    fn sorted_max_label_of(items: &[Self]) -> Option<&'static str> {
+        <Self as ClosedSet>::sorted_max_of(items).map(<Self as ClosedSet>::label)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -33249,6 +33440,239 @@ mod tests {
                         <StubKind as ClosedSet>::max_of(&slice),
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn min_label_of_returns_none_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (label-return N-ary arms): every arm of
+        // the (ordering × direction) 2×2 = 4-corner label-return N-ary
+        // variadic-reduction matrix folds an empty slice to `None` —
+        // the `Option::map` semantics on a `None` receiver propagates
+        // verbatim through the label projection, pinning the empty-
+        // fixpoint witness on every corner. Sibling posture to
+        // `min_of_returns_none_on_the_empty_slice_across_every_kind`
+        // one return-shape column over on the Self-return face.
+        assert_eq!(<StubKind as ClosedSet>::min_label_of(&[]), None);
+        assert_eq!(<StubKind as ClosedSet>::max_label_of(&[]), None);
+        assert_eq!(<StubKind as ClosedSet>::sorted_min_label_of(&[]), None);
+        assert_eq!(<StubKind as ClosedSet>::sorted_max_label_of(&[]), None);
+    }
+
+    #[test]
+    fn min_label_of_returns_the_sole_member_label_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT (label-return N-ary arms): every arm folds
+        // a singleton slice to `Some(v.label())` — the composition
+        // `Option::map(label)` on `Some(v)` yields the sole element's
+        // canonical `&'static str`, regardless of which Self-return
+        // N-ary primitive threads through the fold. Sibling posture to
+        // `min_of_returns_the_sole_member_on_every_singleton_slice_across_every_variant`
+        // one return-shape column over on the Self-return face.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = Some(<StubKind as ClosedSet>::label(v));
+            assert_eq!(<StubKind as ClosedSet>::min_label_of(&[v]), expected);
+            assert_eq!(<StubKind as ClosedSet>::max_label_of(&[v]), expected);
+            assert_eq!(<StubKind as ClosedSet>::sorted_min_label_of(&[v]), expected,);
+            assert_eq!(<StubKind as ClosedSet>::sorted_max_label_of(&[v]), expected,);
+        }
+    }
+
+    #[test]
+    fn min_label_of_composes_min_of_with_label_across_every_triple() {
+        // COMPOSITION CONTRACT (label-return N-ary arms): every arm's
+        // projection equals the corresponding Self-return arm's
+        // projection composed with `Option::map(Self::label)`. Pins the
+        // label-return column of the 12-corner N-ary hypercube to the
+        // Self-return column via ONE `Option::map(label)` — forbidding
+        // an override body that would silently drift the label-return
+        // arm from the Self-return arm's projection through a fresh
+        // reduce fold or a lookup table. Sibling posture to
+        // `min_of_agrees_with_left_fold_of_binary_min_on_every_triple`
+        // one return-shape column over on the Self-return face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::min_label_of(&slice),
+                        <StubKind as ClosedSet>::min_of(&slice).map(<StubKind as ClosedSet>::label),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::max_label_of(&slice),
+                        <StubKind as ClosedSet>::max_of(&slice).map(<StubKind as ClosedSet>::label),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_min_label_of(&slice),
+                        <StubKind as ClosedSet>::sorted_min_of(&slice)
+                            .map(<StubKind as ClosedSet>::label),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_max_label_of(&slice),
+                        <StubKind as ClosedSet>::sorted_max_of(&slice)
+                            .map(<StubKind as ClosedSet>::label),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn min_label_of_over_the_full_set_projects_to_the_declaration_head_label_across_every_kind() {
+        // FULL-SET CONTRACT (label-return N-ary arms): the N-ary min-
+        // label over the entire closed set projects to the declaration-
+        // head variant's label, the N-ary max-label to the declaration-
+        // tail's — the label-return column's counterpart of the Self-
+        // return arm's full-set fixpoint. The lex arms project to the
+        // lex-head and lex-tail labels. Pins the cross-primitive
+        // composition between the label-return N-ary variadic-reduction
+        // surface and the endpoint-anchor label surface:
+        // `T::min_label_of(ALL) == Some(T::first().label())` /
+        // `T::max_label_of(ALL) == Some(T::last().label())` /
+        // `T::sorted_min_label_of(ALL) == Some(T::sorted_first().label())` /
+        // `T::sorted_max_label_of(ALL) == Some(T::sorted_last().label())`.
+        // Sibling posture to
+        // `min_of_over_the_full_set_projects_to_the_declaration_head_across_every_kind`
+        // one return-shape column over on the Self-return face.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::min_label_of(all),
+            Some(<StubKind as ClosedSet>::label(
+                <StubKind as ClosedSet>::first(),
+            )),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::max_label_of(all),
+            Some(<StubKind as ClosedSet>::label(
+                <StubKind as ClosedSet>::last(),
+            )),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_min_label_of(all),
+            Some(<StubKind as ClosedSet>::label(
+                <StubKind as ClosedSet>::sorted_first(),
+            )),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_max_label_of(all),
+            Some(<StubKind as ClosedSet>::label(
+                <StubKind as ClosedSet>::sorted_last(),
+            )),
+        );
+    }
+
+    #[test]
+    fn min_label_of_is_invariant_under_permutation_of_the_input_slice_across_every_triple() {
+        // PERMUTATION-INVARIANCE CONTRACT (label-return N-ary arms):
+        // every arm folds every permutation of a length-3 slice to the
+        // SAME label projection — the N-ary min/max label is invariant
+        // under reordering of its input slice because the Self-return
+        // arm is (pinned one return-shape column over) AND the
+        // `Option::map(label)` composition preserves the invariance
+        // pointwise. Sibling posture to
+        // `min_of_is_invariant_under_permutation_of_the_input_slice_across_every_triple`
+        // one return-shape column over on the Self-return face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let canonical_min = <StubKind as ClosedSet>::min_label_of(&[a, b, c]);
+                    let canonical_max = <StubKind as ClosedSet>::max_label_of(&[a, b, c]);
+                    let canonical_sorted_min =
+                        <StubKind as ClosedSet>::sorted_min_label_of(&[a, b, c]);
+                    let canonical_sorted_max =
+                        <StubKind as ClosedSet>::sorted_max_label_of(&[a, b, c]);
+                    for permuted in [
+                        [a, b, c],
+                        [a, c, b],
+                        [b, a, c],
+                        [b, c, a],
+                        [c, a, b],
+                        [c, b, a],
+                    ] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::min_label_of(&permuted),
+                            canonical_min,
+                        );
+                        assert_eq!(
+                            <StubKind as ClosedSet>::max_label_of(&permuted),
+                            canonical_max,
+                        );
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_min_label_of(&permuted),
+                            canonical_sorted_min,
+                        );
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_max_label_of(&permuted),
+                            canonical_sorted_max,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_min_label_of_and_sorted_max_label_of_coincide_with_the_declaration_peers_when_orders_agree(
+    ) {
+        // CROSS-AXIS COINCIDENCE CONTRACT (label-return N-ary arms):
+        // when declaration and lex orders coincide (as they do on
+        // `StubKind`), the lex-order N-ary min-label / max-label
+        // projections coincide with the declaration-order arms on every
+        // slice. Sibling posture to
+        // `sorted_min_of_and_sorted_max_of_coincide_with_the_declaration_peers_when_orders_agree`
+        // one return-shape column over on the Self-return face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_min_label_of(&slice),
+                        <StubKind as ClosedSet>::min_label_of(&slice),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_max_label_of(&slice),
+                        <StubKind as ClosedSet>::max_label_of(&slice),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn min_label_of_agrees_with_binary_min_label_on_every_length_two_slice_across_every_pair() {
+        // BINARY-AGREEMENT CONTRACT (label-return N-ary arms): every
+        // arm folds a length-2 slice through the corresponding binary
+        // pairwise-selection label primitive on every operand pair —
+        // pins the label-return N-ary surface at arity-2 to the label-
+        // return arity-2 primitive one arity level down, closing the
+        // (arity × return-shape) 2×2 corner between the binary and
+        // N-ary faces on the label-return column. Sibling posture to
+        // `min_of_agrees_with_binary_min_on_every_length_two_slice_across_every_pair`
+        // one return-shape column over on the Self-return face; the
+        // N-ary label-return arm reaches the binary label-return arm
+        // at the length-2 slice through the two-step composition
+        // `Self::min_of → Option::map(label)` on the arity-N side and
+        // the direct `Self::label(Self::min(a, b))` on the arity-2
+        // side, which agree byte-for-byte by [`Iterator::reduce`]'s
+        // length-2 identity.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::min_label_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::min_label(a, b)),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::max_label_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::max_label(a, b)),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_min_label_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::sorted_min_label(a, b)),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_max_label_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::sorted_max_label(a, b)),
+                );
             }
         }
     }

@@ -12938,6 +12938,321 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
+    /// the `Vec<Self>` LEX-ORDER hit-set of [`Self::sorted_variants`],
+    /// keeping every variant that DOES occur in `items` and dropping
+    /// every variant that doesn't. The LEX-ORDER peer of
+    /// [`Self::present_variants`] on the (declaration, lex) ordering
+    /// axis of the Vec-return column of the equivalence-partition
+    /// surface — opens the lex arm past the declaration arm the prior
+    /// pair closed.
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::sorted_present_variants(items) ==
+    /// T::sorted_variants().into_iter().filter(|v| items.iter().any(|w|
+    /// T::index_of(*v) == T::index_of(*w))).collect()` — the projection
+    /// binds through the substrate's [`Self::sorted_variants`]
+    /// canonical-listing surface composed with the standard-library
+    /// filter combinator keyed on [`Self::index_of`] equality. The
+    /// hit-set MEMBERSHIP predicate matches [`Self::present_variants`]
+    /// byte-for-byte on every variant; only the ITERATION ORDER
+    /// differs (lex vs declaration).
+    ///
+    /// Cross-arm permutation identity: for every slice `items`,
+    /// `T::sorted_present_variants(items)` is a PERMUTATION of
+    /// `T::present_variants(items)` — the two projections filter the
+    /// SAME hit-set from [`Self::ALL`] / [`Self::sorted_variants`]
+    /// (both of which contain every variant exactly once by the
+    /// closed-set well-formedness invariant [`assert_closed_set_well_formed`]'s
+    /// clauses 3 + 17), so the multiset of variant identities in the
+    /// two returned Vecs coincides though the ordering differs. Pinned
+    /// by `sorted_present_variants_is_a_permutation_of_present_variants_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::sorted_present_variants(items).len() ==
+    /// T::count_distinct(items)` — the lex-order Vec-return present-
+    /// arm projection's length matches the usize-return present-arm
+    /// count exactly, and matches the declaration-order Vec-return
+    /// present-arm length. Pinned by
+    /// `sorted_present_variants_length_equals_count_distinct_across_every_triple`.
+    ///
+    /// Lex-order subsequence contract: the returned `Vec<Self>` is
+    /// ALWAYS a subsequence of [`Self::sorted_variants`] — every
+    /// variant appears at most once (dedup by well-formedness), in
+    /// [`Self::sorted_variants`]'s lex order. Pinned by
+    /// `sorted_present_variants_preserves_lex_order_across_every_triple`
+    /// which verifies the label sequence is strictly ascending in
+    /// ASCII order via `windows(2).all(|w| w[0] < w[1])`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the hit-set
+    /// membership predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order regardless of the input ordering. Pinned by
+    /// `sorted_present_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_present_variants(&[])` is the
+    /// empty `Vec` UNCONDITIONALLY — the empty slice hits zero
+    /// variants, so no variant of [`Self::sorted_variants`] passes the
+    /// membership filter. Sibling posture to the OPPOSITE
+    /// declaration-order arm at
+    /// `present_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`;
+    /// both projections agree on the empty-slice endpoint because the
+    /// zero-Vec has no ordering to distinguish. Pinned by
+    /// `sorted_present_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::sorted_present_variants(<T as ClosedSet>::ALL) ==
+    /// T::sorted_variants()` UNCONDITIONALLY — the well-formedness
+    /// pairwise-distinctness invariant pins every variant of
+    /// [`Self::ALL`] as hitting itself in the input, so the filter
+    /// keeps every variant of [`Self::sorted_variants`] in the same
+    /// lex order. The full-set endpoint reveals the ordering
+    /// asymmetry: the declaration arm returns [`Self::ALL`]-order;
+    /// the lex arm returns [`Self::sorted_variants`]-order. Pinned by
+    /// `sorted_present_variants_over_the_full_set_equals_sorted_variants_across_every_kind`.
+    ///
+    /// Doubled-full-set contract: `T::sorted_present_variants` on the
+    /// doubled full set collapses the doubled multiset into the
+    /// singleton hit-set [`Self::sorted_variants`] UNCONDITIONALLY —
+    /// the projection walks [`Self::sorted_variants`] and each variant
+    /// is kept at most once. Pinned by
+    /// `sorted_present_variants_over_the_doubled_full_set_equals_sorted_variants_across_every_kind`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::sorted_variants`] canonical-listing surface
+    /// composed with the substrate's [`Self::index_of`] projection at
+    /// the membership predicate. The composition uses
+    /// `<Self as ClosedSet>::sorted_variants().into_iter().filter(…)
+    /// .collect()` — the outer `sorted_variants()` allocation is O(N
+    /// log N) on the closed-set cardinality (from `sort_unstable_by_key`
+    /// inside [`Self::sorted_variants`]), plus O(N * n) on the slice
+    /// arity `n` for the filter's inner NON-membership sweep. No
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched), no
+    /// bitset-shape carrier.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_present_variants`]: a `tatara-check` predicate
+    /// `(check-phases-report-present-in-lex-order …)` that emits the
+    /// concrete list of `WorkloadPhase` variants that OCCURRED in a
+    /// rollout window in LEX ORDER (not declaration order, so operator-
+    /// facing diagnostics and metric-label sweeps agree with the
+    /// closed-set surface's canonical-listing surface); an LSP
+    /// completion hint that renders the hit-set in the same lex order
+    /// the substrate-wide "did you mean …?" suggestion surface uses; a
+    /// Sekiban audit-trail projection that carries the concrete
+    /// present-set of a classification poset window in lex order for
+    /// operator-facing render agreement across every downstream surface.
+    /// Each binds to ONE typed N-ary lex-order hit-witness projection
+    /// on the trait rather than re-deriving the sorted-then-filter
+    /// composition inline per callsite.
+    ///
+    /// Compounding closure: the (present, absent) × (bool, usize, Vec)
+    /// × (declaration, lex) 2×3×2 = 12-corner (partition-arm × return-
+    /// shape × ordering) prism on the equivalence-partition surface
+    /// now closes at TEN typed primitives — the pre-existing six-corner
+    /// declaration-order slice
+    /// ([`Self::is_covering`] + [`Self::count_distinct`] +
+    /// [`Self::present_variants`] on the present arm,
+    /// [`Self::is_missing_any`] + [`Self::count_missing`] +
+    /// [`Self::missing_variants`] on the absent arm) PLUS this pair
+    /// PLUS the just-lifted [`Self::sorted_missing_variants`] peer on
+    /// the lex arm. The remaining pair of the 12-corner prism —
+    /// `sorted_is_covering` + `sorted_is_missing_any` bool-return AND
+    /// `sorted_count_distinct` + `sorted_count_missing` usize-return —
+    /// COLLAPSES to the same bytes as the declaration-arm bool +
+    /// usize projections (the bool "does it cover?" and usize "how
+    /// many hit/miss?" projections are ordering-agnostic on the OUTPUT
+    /// axis, unlike the Vec return which carries ordering). Naming
+    /// them as separate primitives would duplicate the declaration-
+    /// arm's bytes; the (declaration, lex) axis of the prism is
+    /// materially distinct ONLY on the Vec-return column, so this
+    /// pair (+ [`Self::sorted_missing_variants`]) exhausts the
+    /// (declaration, lex) axis's naming budget on the equivalence-
+    /// partition surface.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order present-witness projection becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `T::sorted_variants().into_iter().filter(|v| items.contains(v))
+    /// .collect()` composition at every downstream generic site.
+    /// THEORY.md §V.1 — knowable platform; the (present-Vec, lex-order)
+    /// corner was an unnamed inline composition recurring at every
+    /// prospective downstream "which variants did we hit, in lex
+    /// order?" site pre-lift. Naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of the substrate's canonical-
+    /// listing surface composed with the substrate's total-ordering
+    /// discriminator via the standard-library filter combinator.
+    /// THEORY.md §VI.1 — generation over composition; the lex-order
+    /// present-witness projection emerges from the composition of TWO
+    /// substrate primitives ([`Self::sorted_variants`] + [`Self::index_of`])
+    /// via an `into_iter().filter(…).collect()` combinator, not as a
+    /// per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(sort (filter (lambda (v) (member
+    /// v items)) (enum->list T)) #:key T-label)` — the canonical-list-
+    /// then-filter idiom on any decidable-equality carrier, keyed on a
+    /// label projection; Haskell's `sortOn label . filter (\`elem\`
+    /// items)` on a `[T]` bundle-then-filter shape; NumPy's
+    /// `np.intersect1d(all, items)` idiom (which returns lex-sorted by
+    /// default, matching this projection's output ordering byte-for-
+    /// byte on ASCII-labeled closed sets). Translation through pleme-
+    /// io primitives: the N-ary lex-order present-witness projection
+    /// on the closed-set trait binds through [`Self::sorted_variants`]
+    /// (the canonical lex-order enumeration) composed with the
+    /// substrate's [`Self::index_of`] projection (the total-ordering
+    /// discriminator) via the standard-library filter combinator — no
+    /// new dep, no supertrait bound, no set-shape carrier.
+    fn sorted_present_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        <Self as ClosedSet>::sorted_variants()
+            .into_iter()
+            .filter(|v| {
+                items
+                    .iter()
+                    .any(|w| <Self as ClosedSet>::index_of(*v) == <Self as ClosedSet>::index_of(*w))
+            })
+            .collect()
+    }
+
+    /// The N-ARY ORDERING-AGNOSTIC "missing variants" projection —
+    /// the `Vec<Self>` LEX-ORDER miss-set of [`Self::sorted_variants`],
+    /// keeping every variant that does NOT occur in `items` and
+    /// dropping every variant that DOES. The LEX-ORDER peer of
+    /// [`Self::missing_variants`] on the (declaration, lex) ordering
+    /// axis of the Vec-return column of the equivalence-partition
+    /// surface — closes the lex arm past the declaration arm the
+    /// sibling [`Self::sorted_present_variants`] opened.
+    ///
+    /// De Morgan complement identity: for every slice `items`, the
+    /// concatenation of [`Self::sorted_present_variants`] and
+    /// [`Self::sorted_missing_variants`] (each walking
+    /// [`Self::sorted_variants`] in lex order) forms a PARTITION of
+    /// [`Self::sorted_variants`] — the two Vecs are DISJOINT and their
+    /// union preserves both the lex-order sub-sequence property AND
+    /// [`Self::sorted_variants`]'s full membership. Pinned by
+    /// `sorted_present_variants_and_sorted_missing_variants_are_disjoint_across_every_triple`
+    /// and
+    /// `sorted_present_variants_interleaved_with_sorted_missing_variants_recovers_sorted_variants_across_every_triple`.
+    ///
+    /// Cross-arm permutation identity: for every slice `items`,
+    /// `T::sorted_missing_variants(items)` is a PERMUTATION of
+    /// `T::missing_variants(items)` — the two projections filter the
+    /// SAME miss-set from [`Self::ALL`] / [`Self::sorted_variants`]
+    /// (both containing every variant exactly once), so the multiset
+    /// of variant identities in the two returned Vecs coincides though
+    /// the ordering differs. Pinned by
+    /// `sorted_missing_variants_is_a_permutation_of_missing_variants_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::sorted_missing_variants(items).len() ==
+    /// T::count_missing(items)` — the lex-order Vec-return absent-arm
+    /// projection's length matches the usize-return absent-arm count
+    /// exactly, and matches the declaration-order Vec-return absent-
+    /// arm length. Pinned by
+    /// `sorted_missing_variants_length_equals_count_missing_across_every_triple`.
+    ///
+    /// Bool-projection identity: for every slice `items`,
+    /// `T::sorted_missing_variants(items).is_empty()` iff
+    /// `T::is_covering(items)` — the miss-set is empty iff the
+    /// present-arm predicate holds. Pinned by
+    /// `sorted_missing_variants_is_empty_iff_is_covering_holds_across_every_triple`.
+    /// The bool-projection is INVARIANT under the (declaration, lex)
+    /// axis — same bool bytes on both arms — because
+    /// `Self::is_covering` is a function of the miss-set's cardinality
+    /// alone.
+    ///
+    /// Lex-order subsequence contract: the returned `Vec<Self>` is
+    /// ALWAYS a subsequence of [`Self::sorted_variants`] with each
+    /// variant appearing at most once, in [`Self::sorted_variants`]'s
+    /// lex order. Pinned by
+    /// `sorted_missing_variants_preserves_lex_order_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the miss-set
+    /// membership predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order. Pinned by
+    /// `sorted_missing_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract:
+    /// `T::sorted_missing_variants(&[]) == T::sorted_variants()`
+    /// UNCONDITIONALLY — the empty slice hits zero variants, so EVERY
+    /// variant of [`Self::sorted_variants`] passes the "not present"
+    /// filter. Pinned by
+    /// `sorted_missing_variants_over_the_empty_slice_equals_sorted_variants_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::sorted_missing_variants(<T as ClosedSet>::ALL)` is the empty
+    /// `Vec` UNCONDITIONALLY — every variant of [`Self::ALL`] hits
+    /// itself in the input, so no variant passes the "not present"
+    /// filter. Pinned by
+    /// `sorted_missing_variants_over_the_full_set_returns_the_empty_vec_across_every_kind`.
+    ///
+    /// Signature note: the projection composes the substrate's
+    /// [`Self::sorted_variants`] canonical-listing surface with the
+    /// substrate's [`Self::index_of`] projection via the standard-
+    /// library filter combinator with a NEGATED membership predicate.
+    /// The composition uses
+    /// `<Self as ClosedSet>::sorted_variants().into_iter().filter(…)
+    /// .collect()` with an inner `!items.iter().any(…)` non-membership
+    /// sweep, so the total sweep is O(N log N) for the sort step plus
+    /// O(N * n) on slice arity `n` for the filter — no supertrait
+    /// bound, no bitset carrier.
+    ///
+    /// Compounding closure: this projection AND
+    /// [`Self::sorted_present_variants`] close the lex-arm of the (Vec-
+    /// return × ordering) 2×2 face on the equivalence-partition
+    /// surface — the pair completes the 6-of-12-corner prism the sibling
+    /// declaration-arm pair (present_variants + missing_variants) opened
+    /// on the equivalence-partition surface's (partition-arm × return-
+    /// shape × ordering) 2×3×2 axes, with the bool + usize columns
+    /// COLLAPSING across the (declaration, lex) axis (ordering-
+    /// agnostic scalar returns) while the Vec column BIFURCATES
+    /// (ordering-carrying vector returns).
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order miss-witness projection becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `T::sorted_variants().into_iter().filter(|v| !items.contains
+    /// (v)).collect()` composition at every downstream generic site.
+    /// THEORY.md §V.1 — knowable platform; the (absent-Vec, lex-order)
+    /// corner was an unnamed inline composition recurring at every
+    /// prospective downstream "which variants did we MISS, in lex
+    /// order?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the lex-order miss-witness projection emerges
+    /// from the composition of TWO substrate primitives
+    /// ([`Self::sorted_variants`] + [`Self::index_of`]) via an
+    /// `into_iter().filter(!…).collect()` combinator, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(sort (filter (lambda (v) (not
+    /// (member v items))) (enum->list T)) #:key T-label)` — the
+    /// canonical-list-then-negated-filter idiom on any decidable-
+    /// equality carrier; Haskell's `sortOn label . filter (not . (\`elem\`
+    /// items))` on a `[T]` bundle-then-negated-filter shape; NumPy's
+    /// `np.setdiff1d(all, items)` idiom (which returns lex-sorted by
+    /// default, matching this projection's output ordering byte-for-
+    /// byte on ASCII-labeled closed sets). Translation through pleme-
+    /// io primitives: the N-ary lex-order miss-witness projection on
+    /// the closed-set trait binds through [`Self::sorted_variants`]
+    /// composed with the substrate's [`Self::index_of`] projection via
+    /// the standard-library filter combinator with a NEGATED
+    /// membership predicate — no new dep, no supertrait bound, no
+    /// set-shape carrier.
+    fn sorted_missing_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        <Self as ClosedSet>::sorted_variants()
+            .into_iter()
+            .filter(|v| {
+                !items
+                    .iter()
+                    .any(|w| <Self as ClosedSet>::index_of(*v) == <Self as ClosedSet>::index_of(*w))
+            })
+            .collect()
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -39462,5 +39777,551 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn sorted_present_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::sorted_present_variants(&[])` is
+        // the empty `Vec` on every implementor — the empty slice hits
+        // zero variants, so no variant of `T::sorted_variants()`
+        // passes the membership filter. Sibling posture to
+        // `present_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`
+        // one arm over on the (declaration, lex) ordering axis: both
+        // arms agree on the empty-slice endpoint because the zero-Vec
+        // has no ordering to distinguish.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_present_variants(empty),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_present_variants_returns_a_singleton_vec_on_every_singleton_slice_across_every_variant(
+    ) {
+        // SINGLETON CONTRACT: `T::sorted_present_variants(&[v])` is
+        // `vec![v]` for every variant `v` — a singleton hits exactly
+        // one variant, and the sorted-variants-walking filter keeps
+        // exactly that variant in lex order. Sibling posture to the
+        // declaration-arm's
+        // `present_variants_returns_a_singleton_vec_on_every_singleton_slice_across_every_variant`;
+        // both arms agree on the singleton endpoint because a length-
+        // 1 Vec has no ordering to distinguish.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_present_variants(&singleton),
+                vec![v],
+                "T::sorted_present_variants({singleton:?}) diverged from vec![v] — a singleton must materialize exactly its sole variant as the lex-order hit-set",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_present_variants_over_the_full_set_equals_sorted_variants_across_every_kind() {
+        // FULL-SET CONTRACT:
+        // `T::sorted_present_variants(<T as ClosedSet>::ALL) ==
+        // T::sorted_variants()` UNCONDITIONALLY — the well-formedness
+        // pairwise-distinctness invariant pins every variant of
+        // `T::ALL` as hitting itself in the input, so the filter
+        // keeps every variant of `T::sorted_variants()` in the same
+        // lex order. Sibling posture to the declaration-arm's
+        // `present_variants_over_the_full_set_equals_all_across_every_kind`
+        // — the two arms agree on the full-set MEMBERSHIP but diverge
+        // on the ordering (declaration arm returns `ALL`-order; lex
+        // arm returns `sorted_variants()`-order). This pin exercises
+        // the lex-arm's ordering-endpoint contract directly.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_present_variants(all),
+            <StubKind as ClosedSet>::sorted_variants(),
+        );
+    }
+
+    #[test]
+    fn sorted_present_variants_over_the_doubled_full_set_equals_sorted_variants_across_every_kind()
+    {
+        // DEDUP-AGAINST-SORTED CONTRACT: `T::sorted_present_variants`
+        // on the doubled full set MUST collapse the doubled multiset
+        // into the singleton hit-set `T::sorted_variants()` — the
+        // projection walks `T::sorted_variants()` and each variant is
+        // kept at most once. Sibling posture to the declaration-arm's
+        // `present_variants_over_the_doubled_full_set_equals_all_across_every_kind`
+        // — both arms collapse doubled multisets identically at the
+        // hit-set MEMBERSHIP level; the lex arm's OUTPUT ordering
+        // differs.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_present_variants(&doubled),
+            <StubKind as ClosedSet>::sorted_variants(),
+        );
+    }
+
+    #[test]
+    fn sorted_present_variants_length_equals_count_distinct_across_every_triple() {
+        // CARDINALITY IDENTITY (lex arm):
+        // `T::sorted_present_variants(items).len() ==
+        // T::count_distinct(items)` on every slice — the lex-order
+        // Vec-return present-arm projection's length matches the
+        // usize-return present-arm count exactly. Cross-checks the
+        // lex-arm hit-witness against the pre-existing hit-count. The
+        // usize-return count is INVARIANT under the (declaration,
+        // lex) axis (a scalar has no ordering to distinguish), so
+        // this identity also implies
+        // `sorted_present_variants(items).len() ==
+        // present_variants(items).len()` on every slice — sibling
+        // posture to the declaration-arm's
+        // `present_variants_length_equals_count_distinct_across_every_triple`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_present_variants(empty).len(),
+            <StubKind as ClosedSet>::count_distinct(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_present_variants(&triple).len(),
+                        <StubKind as ClosedSet>::count_distinct(&triple),
+                        "T::sorted_present_variants({triple:?}).len() diverged from T::count_distinct({triple:?}) — the (Vec-return, usize-return) present-arm cardinality identity was violated on the lex-order arm",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_variants_preserves_lex_order_across_every_triple() {
+        // LEX-ORDER SUBSEQUENCE CONTRACT: the returned `Vec<Self>` is
+        // ALWAYS a subsequence of `T::sorted_variants()` with each
+        // variant appearing at most once, in `T::sorted_variants()`'s
+        // lex order. Verified by walking the returned Vec's `label()`
+        // sequence and asserting strictly ASCII-ascending. Sibling
+        // posture to the declaration-arm's
+        // `present_variants_preserves_declaration_order_across_every_triple`
+        // — that pin binds strictly-increasing `index_of` (declaration
+        // order); this pin binds strictly-increasing `label()` (lex
+        // order).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::sorted_present_variants(&triple);
+                    let labels: Vec<&'static str> =
+                        present.iter().copied().map(|v| v.label()).collect();
+                    assert!(
+                        labels.windows(2).all(|w| w[0] < w[1]),
+                        "T::sorted_present_variants({triple:?}) labels {labels:?} not strictly ASCII-ascending — the lex-order subsequence property was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT (lex arm):
+        // `T::sorted_present_variants(items) ==
+        // T::sorted_present_variants(reversed items)` on every slice
+        // — reversing a slice preserves its multiset of variant
+        // identities, and the hit-set membership predicate is a
+        // function of that multiset alone. The OUTPUT ordering is
+        // fixed by `T::sorted_variants()`'s lex order regardless of
+        // the input ordering. Sibling posture to the declaration-
+        // arm's
+        // `present_variants_is_invariant_under_slice_reversal_across_every_triple`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_present_variants(&forward),
+                        <StubKind as ClosedSet>::sorted_present_variants(&reversed),
+                        "T::sorted_present_variants({forward:?}) diverged from T::sorted_present_variants({reversed:?}) — the lex-order present-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_variants_over_the_empty_slice_equals_sorted_variants_across_every_kind() {
+        // EMPTY-SLICE CONTRACT:
+        // `T::sorted_missing_variants(&[]) == T::sorted_variants()`
+        // UNCONDITIONALLY — the empty slice hits zero variants, so
+        // EVERY variant of `T::sorted_variants()` passes the "not
+        // present" filter. Sibling posture to the declaration-arm's
+        // `missing_variants_over_the_empty_slice_equals_all_across_every_kind`
+        // — the two arms diverge on the OUTPUT ordering (declaration
+        // arm returns `ALL`-order; lex arm returns
+        // `sorted_variants()`-order) while agreeing on the empty-slice
+        // MEMBERSHIP.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_missing_variants(empty),
+            <StubKind as ClosedSet>::sorted_variants(),
+        );
+    }
+
+    #[test]
+    fn sorted_missing_variants_over_the_full_set_returns_the_empty_vec_across_every_kind() {
+        // FULL-SET CONTRACT:
+        // `T::sorted_missing_variants(<T as ClosedSet>::ALL)` is the
+        // empty `Vec` UNCONDITIONALLY — every variant of `T::ALL`
+        // hits itself in the input, so no variant passes the "not
+        // present" filter. Sibling posture to the declaration-arm's
+        // `missing_variants_over_the_full_set_returns_the_empty_vec_across_every_kind`
+        // — both arms agree on the zero-Vec endpoint (no ordering to
+        // distinguish).
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_missing_variants(all),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_missing_variants_over_the_doubled_full_set_returns_the_empty_vec_across_every_kind() {
+        // CONCATENATION-MONOTONE CONTRACT (lex arm): appending
+        // positions to a covering slice cannot ADD a missing variant.
+        // The doubled full set covers, so the lex-order miss-set stays
+        // empty. Sibling posture to the declaration-arm's
+        // `missing_variants_over_the_doubled_full_set_returns_the_empty_vec_across_every_kind`.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_missing_variants(&doubled),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_missing_variants_length_equals_count_missing_across_every_triple() {
+        // CARDINALITY IDENTITY (lex arm):
+        // `T::sorted_missing_variants(items).len() ==
+        // T::count_missing(items)` on every slice — the lex-order
+        // Vec-return absent-arm projection's length matches the
+        // usize-return absent-arm count exactly. Cross-checks the
+        // lex-arm miss-witness against the pre-existing miss-count.
+        // Sibling posture to
+        // `missing_variants_length_equals_count_missing_across_every_triple`
+        // — the usize-return count is INVARIANT under the
+        // (declaration, lex) axis (scalars carry no ordering).
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_missing_variants(empty).len(),
+            <StubKind as ClosedSet>::count_missing(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_variants(&triple).len(),
+                        <StubKind as ClosedSet>::count_missing(&triple),
+                        "T::sorted_missing_variants({triple:?}).len() diverged from T::count_missing({triple:?}) — the (Vec-return, usize-return) absent-arm cardinality identity was violated on the lex-order arm",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_variants_preserves_lex_order_across_every_triple() {
+        // LEX-ORDER SUBSEQUENCE CONTRACT (absent arm): the returned
+        // `Vec<Self>` is ALWAYS a subsequence of `T::sorted_variants()`
+        // (with each variant appearing at most once, in
+        // `T::sorted_variants()`'s lex order). Verified by walking the
+        // returned Vec's `label()` sequence and asserting strictly
+        // ASCII-ascending. Sibling posture to
+        // `missing_variants_preserves_declaration_order_across_every_triple`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let missing = <StubKind as ClosedSet>::sorted_missing_variants(&triple);
+                    let labels: Vec<&'static str> =
+                        missing.iter().copied().map(|v| v.label()).collect();
+                    assert!(
+                        labels.windows(2).all(|w| w[0] < w[1]),
+                        "T::sorted_missing_variants({triple:?}) labels {labels:?} not strictly ASCII-ascending — the lex-order subsequence property was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT (lex absent arm):
+        // `T::sorted_missing_variants(items) ==
+        // T::sorted_missing_variants(reversed items)` on every slice.
+        // Sibling posture to
+        // `missing_variants_is_invariant_under_slice_reversal_across_every_triple`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_variants(&forward),
+                        <StubKind as ClosedSet>::sorted_missing_variants(&reversed),
+                        "T::sorted_missing_variants({forward:?}) diverged from T::sorted_missing_variants({reversed:?}) — the lex-order miss-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_variants_and_sorted_missing_variants_are_disjoint_across_every_triple() {
+        // DE MORGAN COMPLEMENT CONTRACT (lex arms): for every slice
+        // `items`, `T::sorted_present_variants(items)` and
+        // `T::sorted_missing_variants(items)` are DISJOINT — no
+        // variant appears in both. Sibling posture to
+        // `present_variants_and_missing_variants_are_disjoint_across_every_triple`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::sorted_present_variants(&triple);
+                    let missing = <StubKind as ClosedSet>::sorted_missing_variants(&triple);
+                    for p in present.iter().copied() {
+                        for m in missing.iter().copied() {
+                            assert_ne!(
+                                <StubKind as ClosedSet>::index_of(p),
+                                <StubKind as ClosedSet>::index_of(m),
+                                "T::sorted_present_variants({triple:?}) and T::sorted_missing_variants({triple:?}) share variant {p:?} == {m:?} — the (present, absent) lex partition arms MUST be disjoint",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_variants_interleaved_with_sorted_missing_variants_recovers_sorted_variants_across_every_triple(
+    ) {
+        // DE MORGAN UNION CONTRACT (lex arms): for every slice
+        // `items`, every variant `v` of `T::sorted_variants()` appears
+        // in EXACTLY ONE of `sorted_present_variants(items)` /
+        // `sorted_missing_variants(items)`. Sibling posture to
+        // `present_variants_interleaved_with_missing_variants_recovers_all_across_every_triple`
+        // one arm over on the (declaration, lex) axis.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::sorted_present_variants(&triple);
+                    let missing = <StubKind as ClosedSet>::sorted_missing_variants(&triple);
+                    for v in <StubKind as ClosedSet>::sorted_variants() {
+                        let in_present = present.iter().copied().any(|w| {
+                            <StubKind as ClosedSet>::index_of(v)
+                                == <StubKind as ClosedSet>::index_of(w)
+                        });
+                        let in_missing = missing.iter().copied().any(|w| {
+                            <StubKind as ClosedSet>::index_of(v)
+                                == <StubKind as ClosedSet>::index_of(w)
+                        });
+                        assert!(
+                            in_present ^ in_missing,
+                            "variant {v:?} appears in {} of the two lex projections for {triple:?} — expected EXACTLY ONE (present-XOR-absent)",
+                            u8::from(in_present) + u8::from(in_missing),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_variants_is_empty_iff_is_covering_holds_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY (lex arm):
+        // `T::sorted_missing_variants(items).is_empty() ==
+        // T::is_covering(items)` on every slice — the miss-set is
+        // empty iff the present-arm predicate holds. The dual
+        // `!T::sorted_missing_variants(items).is_empty() ==
+        // T::is_missing_any(items)` also holds. Both bool-projections
+        // are INVARIANT under the (declaration, lex) axis — the bool
+        // return carries no ordering, so the identity holds identically
+        // on the declaration arm (pinned by
+        // `missing_variants_is_empty_iff_is_covering_holds_across_every_triple`)
+        // AND on the lex arm (this pin).
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_missing_variants(empty).is_empty(),
+            <StubKind as ClosedSet>::is_covering(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_variants(&triple).is_empty(),
+                        <StubKind as ClosedSet>::is_covering(&triple),
+                        "T::sorted_missing_variants({triple:?}).is_empty() diverged from T::is_covering({triple:?}) — the lex-arm (Vec-return, bool-return) miss-set-emptiness identity was violated",
+                    );
+                    assert_eq!(
+                        !<StubKind as ClosedSet>::sorted_missing_variants(&triple).is_empty(),
+                        <StubKind as ClosedSet>::is_missing_any(&triple),
+                        "!T::sorted_missing_variants({triple:?}).is_empty() diverged from T::is_missing_any({triple:?}) — the lex-arm (Vec-return, bool-return) miss-set-non-emptiness identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_variants_is_a_permutation_of_present_variants_across_every_triple() {
+        // CROSS-ARM PERMUTATION IDENTITY (present arm): for every
+        // slice `items`, `T::sorted_present_variants(items)` and
+        // `T::present_variants(items)` are PERMUTATIONS of each other
+        // — the two projections filter the SAME hit-set from
+        // `T::ALL` / `T::sorted_variants()`, so the multiset of
+        // variant identities in the two returned Vecs coincides
+        // though the ordering differs (declaration order vs lex
+        // order). Verified by asserting the two projections' returned
+        // Vecs, once sorted by `index_of`, agree byte-for-byte.
+        // Sibling posture to the sibling
+        // `sorted_missing_variants_is_a_permutation_of_missing_variants_across_every_triple`
+        // — together the two pins bind the cross-arm permutation
+        // identity on BOTH partition arms of the (declaration, lex)
+        // axis of the Vec-return column.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut decl = <StubKind as ClosedSet>::present_variants(&triple);
+                    let mut lex = <StubKind as ClosedSet>::sorted_present_variants(&triple);
+                    decl.sort_unstable_by_key(|v| <StubKind as ClosedSet>::index_of(*v));
+                    lex.sort_unstable_by_key(|v| <StubKind as ClosedSet>::index_of(*v));
+                    assert_eq!(
+                        decl, lex,
+                        "T::sorted_present_variants({triple:?}) is not a permutation of T::present_variants({triple:?}) — the (declaration, lex) arms must filter the SAME hit-set on the equivalence-partition surface",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_variants_is_a_permutation_of_missing_variants_across_every_triple() {
+        // CROSS-ARM PERMUTATION IDENTITY (absent arm): for every
+        // slice `items`, `T::sorted_missing_variants(items)` and
+        // `T::missing_variants(items)` are PERMUTATIONS of each other
+        // — the two projections filter the SAME miss-set, so the
+        // multiset of variant identities in the two returned Vecs
+        // coincides though the ordering differs. Sibling posture to
+        // `sorted_present_variants_is_a_permutation_of_present_variants_across_every_triple`
+        // on the present arm.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut decl = <StubKind as ClosedSet>::missing_variants(&triple);
+                    let mut lex = <StubKind as ClosedSet>::sorted_missing_variants(&triple);
+                    decl.sort_unstable_by_key(|v| <StubKind as ClosedSet>::index_of(*v));
+                    lex.sort_unstable_by_key(|v| <StubKind as ClosedSet>::index_of(*v));
+                    assert_eq!(
+                        decl, lex,
+                        "T::sorted_missing_variants({triple:?}) is not a permutation of T::missing_variants({triple:?}) — the (declaration, lex) arms must filter the SAME miss-set on the equivalence-partition surface",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_variants_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order present-arm surface
+        // — `T::sorted_present_variants(items)` MUST normalize an
+        // arbitrary declaration order into ASCII lexicographic
+        // `label()` order, regardless of the implementor's `ALL`-
+        // array layout. A regression that returns
+        // `T::present_variants(items)` verbatim (without composing
+        // through `T::sorted_variants()`) would pass every StubKind
+        // pin above (because StubKind's declaration order aligns with
+        // lex order) but silently bifurcate the lex-order surface for
+        // any implementor whose declaration order differs from byte-
+        // wise sort order. Pinning the sort discipline here with a
+        // deliberately-out-of-order stub catches that drift directly.
+        // Sibling posture to
+        // `sorted_variants_normalizes_arbitrary_declaration_order`
+        // — this pin covers the composed-through-filter projection on
+        // the SAME deliberately-out-of-order stub layout.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseVariantStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseVariantStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseVariantStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse variant stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseVariantStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse variant stub kind";
+            type Unknown = UnknownReverseVariantStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseVariantStubKind(s.to_owned())
+            }
+        }
+        // Declaration order: Gamma, Beta, Alpha — the present-arm's
+        // declaration-order projection preserves this layout.
+        let all = <ReverseVariantStubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <ReverseVariantStubKind as ClosedSet>::present_variants(all),
+            vec![
+                ReverseVariantStubKind::Gamma,
+                ReverseVariantStubKind::Beta,
+                ReverseVariantStubKind::Alpha,
+            ],
+            "present_variants over the full set must preserve declaration order — Gamma, Beta, Alpha",
+        );
+        // Lex order: Alpha, Beta, Gamma — the sorted_present_variants
+        // arm normalizes to lexicographic-label order regardless of
+        // the input ordering.
+        assert_eq!(
+            <ReverseVariantStubKind as ClosedSet>::sorted_present_variants(all),
+            vec![
+                ReverseVariantStubKind::Alpha,
+                ReverseVariantStubKind::Beta,
+                ReverseVariantStubKind::Gamma,
+            ],
+            "sorted_present_variants over the full set must normalize to lex order — Alpha, Beta, Gamma — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Same probe on the absent arm: empty slice hits nothing, so
+        // the miss-set is the full set in lex order.
+        let empty: &[ReverseVariantStubKind] = &[];
+        assert_eq!(
+            <ReverseVariantStubKind as ClosedSet>::sorted_missing_variants(empty),
+            vec![
+                ReverseVariantStubKind::Alpha,
+                ReverseVariantStubKind::Beta,
+                ReverseVariantStubKind::Gamma,
+            ],
+            "sorted_missing_variants over the empty slice must return the full set in lex order — Alpha, Beta, Gamma — regardless of the implementor's ALL-array declaration layout",
+        );
     }
 }

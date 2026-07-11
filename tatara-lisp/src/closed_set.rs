@@ -9392,6 +9392,278 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_precedes_or_equal(other, self)
     }
 
+    /// The declaration-order binary pairwise MIN projection — the
+    /// earlier of `self` and `other` in [`Self::ALL`]'s declaration
+    /// order. Returns `self` when `self.precedes_or_equal(other)` (so
+    /// ties fold to `self`, matching Rust's [`core::cmp::min`] tie-
+    /// break convention), returns `other` otherwise.
+    ///
+    /// The Self-return value-selection sibling of the bool-return
+    /// pairwise-precedence predicate hypercube on the (return-shape)
+    /// axis of the binary-arity surface. Where
+    /// [`Self::precedes_or_equal`] answers "does `self` sit at or
+    /// before `other`?", this method returns the variant that DOES —
+    /// the min projection is the identity on the accepting half of
+    /// the non-strict pairwise-precedence relation. Together with
+    /// [`Self::max`] closes the (min, max) partition of the binary
+    /// pairwise-selection surface at the (return-shape) column on
+    /// the declaration axis; together with [`Self::sorted_min`] and
+    /// [`Self::sorted_max`] closes the (ordering × direction) 2×2 = 4-
+    /// corner pairwise-selection matrix on the closed-set surface at
+    /// the Self-return arm.
+    ///
+    /// The Self-return arm of the (bool-return, Self-return) return-
+    /// shape partition of the binary pairwise-comparison surface: the
+    /// bool-return arm carries the (78)+(79)+(80)+(81) pairwise-
+    /// comparison hypercube via [`Self::precedes`],
+    /// [`Self::succeeds`], [`Self::precedes_or_equal`],
+    /// [`Self::succeeds_or_equal`], and their sorted peers; the Self-
+    /// return arm carries the min/max value-selection quartet this
+    /// method opens. Every generic consumer that needs "the earlier
+    /// of two variants" as a variant (rather than a bool answer to
+    /// "does the earlier one exist?") binds to ONE typed method
+    /// rather than re-deriving the
+    /// `if a.precedes_or_equal(b) { a } else { b }` composition
+    /// inline per callsite — a compact-encoding step that picks the
+    /// canonical member of an unordered pair for a stable index-slot
+    /// key, an LSP quickfix that projects a pair of enum tags to the
+    /// declaration-order earlier one for a "widen to lo" recommendation,
+    /// a `tatara-check` predicate `(min-phase a b)` folding two phase
+    /// observations to the earlier lifecycle stage, a Sekiban audit-
+    /// trail projector that reduces observed phase pairs to the
+    /// earliest stage for the "phase-min" derived metric.
+    ///
+    /// Bracket contract: `min(a, b).precedes_or_equal(a)` AND
+    /// `min(a, b).precedes_or_equal(b)` on every pair `(a, b)` — the
+    /// min projection is a LOWER BOUND of the two operands under
+    /// non-strict declaration-order precedence. Pinned by
+    /// `min_precedes_or_equal_both_operands_on_every_pair`.
+    ///
+    /// Membership contract: `min(a, b) == a` OR `min(a, b) == b` on
+    /// every pair — the min projection is one of the two operands
+    /// (never a third variant). Pinned by
+    /// `min_returns_one_of_its_two_operands_on_every_pair`.
+    ///
+    /// Idempotence contract: `min(v, v) == v` on every variant — the
+    /// diagonal is the identity. Pinned by
+    /// `min_is_idempotent_on_the_diagonal_across_every_variant`.
+    ///
+    /// Tie-break contract: `min(a, a) == a` AND when `a.index_of() ==
+    /// b.index_of()` (only possible when `a == b` in the closed set)
+    /// the projection returns `a` — the tie-break is left-biased,
+    /// mirroring [`core::cmp::min`]'s convention.
+    ///
+    /// Cross-primitive composition contract: `clamp(v, lo, hi) ==
+    /// max(lo, min(v, hi))` on every well-formed triple `(v, lo, hi)`
+    /// with `lo.precedes_or_equal(hi)` — the ternary [`Self::clamp`]
+    /// projection is the canonical `max ∘ min` composition on the
+    /// closed-set surface. Pinned by
+    /// `min_composes_with_max_into_clamp_on_every_well_formed_triple`.
+    ///
+    /// Default body composes [`Self::precedes_or_equal`] with the
+    /// tie-break-left variant selection — `if
+    /// self.precedes_or_equal(other) { self } else { other }`.
+    /// Implementors override only when the declaration-axis binary
+    /// min projection needs to diverge from the natural non-strict-
+    /// precedence-guarded selection (no production implementor
+    /// reaches for this today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` / `precedes` / `clamp`
+    /// overrides exist — a typed escape hatch rather than forcing
+    /// the implementor to hand-roll the impl).
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the binary
+    /// pairwise MIN projection becomes a TYPE-level primitive on the
+    /// closed-set trait rather than a per-consumer inline
+    /// `if a <= b { a } else { b }` shape at every downstream
+    /// generic site. THEORY.md §V.1 — knowable platform; the min
+    /// projection was an unnamed inline composition
+    /// (`if a.precedes_or_equal(b) { a } else { b }`) recurring at
+    /// every prospective downstream pairwise-selection site pre-
+    /// lift. Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the non-strict pairwise-precedence predicate,
+    /// symmetric to how [`Self::clamp`] emerges as a typed
+    /// consequence of the strict pairwise-precedence predicate at
+    /// both range endpoints one arity level up on the (arity) axis.
+    /// THEORY.md §VI.1 — generation over composition; the binary MIN
+    /// projection emerges from the composition of ONE substrate
+    /// primitive ([`Self::precedes_or_equal`]) with the standard-
+    /// library `if`/`else` on `bool` rather than as a per-implementor
+    /// hand-rolled body. A future tightening of the underlying
+    /// non-strict-precedence primitive (a perfect-hash index lookup,
+    /// a const-fn axis making the predicate callable in const
+    /// contexts) propagates to every closed-set min consumer through
+    /// this method's body.
+    ///
+    /// Frontier inspiration: Rust's [`core::cmp::min`] exposes the
+    /// same left-biased pairwise MIN projection on any `Ord` type
+    /// (`if a <= b { a } else { b }`) — the substrate mirrors the
+    /// tie-break-left convention on the closed-set surface without
+    /// requiring the `Ord` supertrait bound the trait's typed
+    /// pairwise-precedence primitives make redundant. Kotlin's
+    /// `minOf(a, b)` and Julia's `Base.min(a, b)` surface the same
+    /// projection on ordered types; Idris's `min : Ord a => a -> a
+    /// -> a` on the `Ord` type-class. MLIR's
+    /// `RegisteredOperationName::min(a, b)` on the Op registry
+    /// under the declaration-order chain. Translation through
+    /// pleme-io primitives: a pure default method composing the
+    /// trait's existing [`Self::precedes_or_equal`] surface with the
+    /// standard-library `if`/`else` on `bool` — no new dep, no new
+    /// IR layer, no supertrait bound (the pairwise-precedence
+    /// primitive replaces the `Ord` bound), no `Option`-typed
+    /// dispatch, no allocation.
+    fn min(self, other: Self) -> Self {
+        if <Self as ClosedSet>::precedes_or_equal(self, other) {
+            self
+        } else {
+            other
+        }
+    }
+
+    /// The declaration-order binary pairwise MAX projection — the
+    /// later of `self` and `other` in [`Self::ALL`]'s declaration
+    /// order. Returns `self` when `self.succeeds_or_equal(other)`
+    /// (ties fold to `self`, mirroring [`Self::min`]'s tie-break-
+    /// left convention across the (min, max) axis), returns
+    /// `other` otherwise. The direction-complement arm of
+    /// [`Self::min`] on the (min, max) axis of the declaration-order
+    /// binary pairwise-selection surface.
+    ///
+    /// Sibling posture to [`Self::min`] one arm over on the (min,
+    /// max) partition — [`Self::min`] returns the declaration-order
+    /// earlier variant via [`Self::precedes_or_equal`], this method
+    /// returns the declaration-order later variant via
+    /// [`Self::succeeds_or_equal`]. See [`Self::min`] for the
+    /// shared design rationale, sibling matrix, bracket / membership
+    /// / idempotence / tie-break contracts, the cross-primitive
+    /// composition into [`Self::clamp`], the future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the direction-complement arm of the same
+    /// binary pairwise-selection surface and inherits every property
+    /// from the min arm's documentation, differing only in the
+    /// projection method the tie-break-left selection routes
+    /// through.
+    ///
+    /// Bracket contract: `max(a, b).succeeds_or_equal(a)` AND
+    /// `max(a, b).succeeds_or_equal(b)` on every pair — the max
+    /// projection is an UPPER BOUND of the two operands under
+    /// non-strict declaration-order succession.
+    ///
+    /// Direction-complement contract:
+    /// `a.max(b).index_of() >= a.min(b).index_of()` on every pair —
+    /// the max projection sits at OR after the min projection under
+    /// the declaration-order index. When `a != b` the two are
+    /// distinct (max returns the later, min returns the earlier);
+    /// when `a == b` they collapse onto the shared diagonal. Pinned
+    /// by `min_and_max_bracket_every_pair_on_the_declaration_axis`.
+    ///
+    /// Default body composes [`Self::succeeds_or_equal`] with the
+    /// tie-break-left variant selection — `if
+    /// self.succeeds_or_equal(other) { self } else { other }`.
+    /// Implementors override only when the declaration-axis binary
+    /// max projection needs to diverge from the natural non-strict-
+    /// succession-guarded selection.
+    fn max(self, other: Self) -> Self {
+        if <Self as ClosedSet>::succeeds_or_equal(self, other) {
+            self
+        } else {
+            other
+        }
+    }
+
+    /// The lex-order binary pairwise MIN projection — the lex-
+    /// earlier of `self` and `other` under [`Self::label`]'s
+    /// projection into ASCII lexicographic order. Returns `self`
+    /// when `self.sorted_precedes_or_equal(other)` (ties fold to
+    /// `self`), returns `other` otherwise. The lex-ordering peer of
+    /// [`Self::min`] on the (declaration, lex) ordering axis of the
+    /// binary pairwise-selection surface.
+    ///
+    /// Sibling posture to [`Self::min`] one arm over on the
+    /// (declaration, lex) ordering axis — [`Self::min`] uses
+    /// [`Self::precedes_or_equal`] (declaration position), this
+    /// method uses [`Self::sorted_precedes_or_equal`] (lex position).
+    /// See [`Self::min`] for the shared bracket / membership /
+    /// idempotence / tie-break contracts, the cross-primitive
+    /// composition into [`Self::sorted_clamp`], the future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the lex-axis arm of the same binary pairwise-
+    /// selection surface and inherits every property from the
+    /// declaration arm's documentation, differing only in the
+    /// projection method the tie-break-left selection routes
+    /// through.
+    ///
+    /// Cross-primitive composition contract: `sorted_clamp(v, lo,
+    /// hi) == sorted_max(lo, sorted_min(v, hi))` on every well-
+    /// formed lex-triple `(v, lo, hi)` with
+    /// `lo.sorted_precedes_or_equal(hi)` — the lex-axis peer of the
+    /// declaration-axis `clamp = max ∘ min` factoring one ordering
+    /// arm over.
+    ///
+    /// Cross-ordering coincidence: `sorted_min(a, b) == min(a, b)`
+    /// on every pair `(a, b)` for which declaration and lex orders
+    /// agree on both `a` and `b` — the two orderings collapse when
+    /// the declaration order IS the lex order on the pair. Pinned by
+    /// `sorted_min_coincides_with_min_when_declaration_and_lex_orders_agree`.
+    ///
+    /// Default body composes [`Self::sorted_precedes_or_equal`] with
+    /// the tie-break-left variant selection.
+    fn sorted_min(self, other: Self) -> Self {
+        if <Self as ClosedSet>::sorted_precedes_or_equal(self, other) {
+            self
+        } else {
+            other
+        }
+    }
+
+    /// The lex-order binary pairwise MAX projection — the lex-
+    /// later of `self` and `other` under [`Self::label`]'s
+    /// projection into ASCII lexicographic order. Returns `self`
+    /// when `self.sorted_succeeds_or_equal(other)` (ties fold to
+    /// `self`), returns `other` otherwise. Closes the (ordering ×
+    /// direction) 2×2 = 4-corner binary pairwise-selection matrix on
+    /// the closed-set surface at the (lex-order, max) corner —
+    /// sibling posture to [`Self::sorted_min`] one direction axis
+    /// over on the lex arm AND to [`Self::max`] one ordering axis
+    /// over on the max arm.
+    ///
+    /// Together with [`Self::min`], [`Self::max`], and
+    /// [`Self::sorted_min`], CLOSES the (ordering × direction) 2×2 =
+    /// 4-corner binary pairwise-selection matrix at the Self-return
+    /// arm on the closed-set surface — every combination of
+    /// {declaration, lex} ordering × {min, max} direction binds
+    /// through ONE typed pairwise-selection projection on the
+    /// trait, each routing through the substrate's non-strict
+    /// pairwise-comparison primitive at ONE composition site. The
+    /// (return-shape) axis of this face carries the pairwise-
+    /// selection at the Self-return column; a future extension of
+    /// the same axis lifts the (label-return, index-return)
+    /// columns as `min_label` / `max_label` / `sorted_min_label` /
+    /// `sorted_max_label` (the label-return face) and
+    /// `min_index` / `max_index` / `sorted_min_index` /
+    /// `sorted_max_index` (the index-return face), mirroring the
+    /// (return-shape) closure pattern the clamp face closed one
+    /// arity level up.
+    ///
+    /// See [`Self::min`] for the shared design rationale, bracket /
+    /// membership / idempotence / tie-break contracts, the cross-
+    /// primitive composition into [`Self::sorted_clamp`] via the
+    /// `sorted_clamp = sorted_max ∘ sorted_min` factoring, the
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the lex-order arm of the max
+    /// direction column and inherits every property from the min
+    /// arm's documentation, differing only in the projection method
+    /// the tie-break-left selection routes through.
+    ///
+    /// Default body composes [`Self::sorted_succeeds_or_equal`]
+    /// with the tie-break-left variant selection.
+    fn sorted_max(self, other: Self) -> Self {
+        if <Self as ClosedSet>::sorted_succeeds_or_equal(self, other) {
+            self
+        } else {
+            other
+        }
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -29006,6 +29278,231 @@ mod tests {
                     <StubKind as ClosedSet>::sorted_precedes_or_equal(b, a),
                     "StubKind::{a:?}.sorted_succeeds_or_equal(StubKind::{b:?}) must equal \
                      StubKind::{b:?}.sorted_precedes_or_equal(StubKind::{a:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_agrees_with_precedes_or_equal_guarded_selection_across_every_pair() {
+        // PATH-UNIFORMITY: the declaration-axis binary MIN projection
+        // is the tie-break-left non-strict-precedence-guarded selection
+        // (`if a.precedes_or_equal(b) { a } else { b }`) on every pair.
+        // Ties the Self-return min projection to ONE substrate primitive
+        // (`precedes_or_equal`), forbidding a divergent override that
+        // would silently drift from the natural guard.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected = if <StubKind as ClosedSet>::precedes_or_equal(a, b) {
+                    a
+                } else {
+                    b
+                };
+                assert_eq!(
+                    <StubKind as ClosedSet>::min(a, b),
+                    expected,
+                    "StubKind::{a:?}.min(StubKind::{b:?}) must agree with the \
+                     precedes_or_equal-guarded tie-break-left selection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn max_agrees_with_succeeds_or_equal_guarded_selection_across_every_pair() {
+        // PATH-UNIFORMITY (max arm): the declaration-axis binary MAX
+        // projection is the tie-break-left non-strict-succession-guarded
+        // selection (`if a.succeeds_or_equal(b) { a } else { b }`) on
+        // every pair. Direction-complement of the min pin.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected = if <StubKind as ClosedSet>::succeeds_or_equal(a, b) {
+                    a
+                } else {
+                    b
+                };
+                assert_eq!(
+                    <StubKind as ClosedSet>::max(a, b),
+                    expected,
+                    "StubKind::{a:?}.max(StubKind::{b:?}) must agree with the \
+                     succeeds_or_equal-guarded tie-break-left selection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_returns_one_of_its_two_operands_on_every_pair() {
+        // MEMBERSHIP CONTRACT: the min projection returns ONE OF the
+        // two operands — never a third variant. Pins the projection's
+        // codomain to the operand pair on every input.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let m = <StubKind as ClosedSet>::min(a, b);
+                assert!(
+                    m == a || m == b,
+                    "StubKind::{a:?}.min(StubKind::{b:?}) = {m:?} must be one of the two operands",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_is_idempotent_on_the_diagonal_across_every_variant() {
+        // IDEMPOTENCE / DIAGONAL FIXED POINT: `min(v, v) == v` on
+        // every variant — the min projection is the identity on the
+        // reflexive pair. Sibling posture to
+        // `is_between_is_reflexive_across_every_variant` one column
+        // over on the (bool-return, Self-return) axis of the
+        // pairwise/ternary surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::min(v, v),
+                v,
+                "StubKind::{v:?}.min(StubKind::{v:?}) must be the diagonal identity",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::max(v, v),
+                v,
+                "StubKind::{v:?}.max(StubKind::{v:?}) must be the diagonal identity",
+            );
+        }
+    }
+
+    #[test]
+    fn min_precedes_or_equal_both_operands_on_every_pair() {
+        // BRACKET CONTRACT (min arm): `min(a, b)` is a LOWER BOUND of
+        // the two operands under non-strict declaration-order
+        // precedence — it non-strictly precedes BOTH `a` and `b`.
+        // Pins the projection as a genuine minimum, not merely one of
+        // the operands.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let m = <StubKind as ClosedSet>::min(a, b);
+                assert!(
+                    <StubKind as ClosedSet>::precedes_or_equal(m, a),
+                    "StubKind::{a:?}.min(StubKind::{b:?}) = {m:?} must non-strictly precede {a:?}",
+                );
+                assert!(
+                    <StubKind as ClosedSet>::precedes_or_equal(m, b),
+                    "StubKind::{a:?}.min(StubKind::{b:?}) = {m:?} must non-strictly precede {b:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_and_max_bracket_every_pair_on_the_declaration_axis() {
+        // BRACKET CONTRACT (min ↔ max coupling): `min(a, b)` non-
+        // strictly precedes `max(a, b)` on every pair — the two
+        // projections jointly bracket the operand pair under the
+        // declaration-order index. Combined with membership + bracket
+        // pins, this establishes the (min, max) pair as the ordered
+        // rewrite of the operand pair on the closed-set surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let lo = <StubKind as ClosedSet>::min(a, b);
+                let hi = <StubKind as ClosedSet>::max(a, b);
+                assert!(
+                    <StubKind as ClosedSet>::precedes_or_equal(lo, hi),
+                    "StubKind::min({a:?}, {b:?}) = {lo:?} must non-strictly precede \
+                     StubKind::max({a:?}, {b:?}) = {hi:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_composes_with_max_into_clamp_on_every_well_formed_triple() {
+        // CROSS-PRIMITIVE COMPOSITION CONTRACT: the ternary clamp
+        // projection is the canonical `max ∘ min` composition on the
+        // closed-set surface — `clamp(v, lo, hi) == max(lo, min(v,
+        // hi))` on every well-formed triple `(v, lo, hi)` with
+        // `lo.precedes_or_equal(hi)`. Pins the min/max quartet as
+        // the compositional building blocks the ternary clamp
+        // factors through, mirroring Rust's `Ord::clamp = |v, lo, hi|
+        // v.max(lo).min(hi)` factoring one arity up on the (arity)
+        // axis.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    let via_clamp = <StubKind as ClosedSet>::clamp(v, lo, hi);
+                    let via_min_max =
+                        <StubKind as ClosedSet>::max(lo, <StubKind as ClosedSet>::min(v, hi));
+                    assert_eq!(
+                        via_clamp, via_min_max,
+                        "StubKind::{v:?}.clamp({lo:?}, {hi:?}) must factor as \
+                         max({lo:?}, min({v:?}, {hi:?}))",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_min_agrees_with_sorted_precedes_or_equal_guarded_selection_across_every_pair() {
+        // PATH-UNIFORMITY (lex arm): the lex-axis binary MIN projection
+        // is the tie-break-left lex-non-strict-precedence-guarded
+        // selection on every pair. Sibling posture to the declaration
+        // arm one ordering axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected = if <StubKind as ClosedSet>::sorted_precedes_or_equal(a, b) {
+                    a
+                } else {
+                    b
+                };
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_min(a, b),
+                    expected,
+                    "StubKind::{a:?}.sorted_min(StubKind::{b:?}) must agree with the \
+                     sorted_precedes_or_equal-guarded tie-break-left selection",
+                );
+                let expected_max = if <StubKind as ClosedSet>::sorted_succeeds_or_equal(a, b) {
+                    a
+                } else {
+                    b
+                };
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_max(a, b),
+                    expected_max,
+                    "StubKind::{a:?}.sorted_max(StubKind::{b:?}) must agree with the \
+                     sorted_succeeds_or_equal-guarded tie-break-left selection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_min_coincides_with_min_when_declaration_and_lex_orders_agree() {
+        // CROSS-AXIS COINCIDENCE: on `StubKind` the declaration order
+        // (`Alpha`, `Beta`, `Gamma`) coincides with lex order over the
+        // labels (`"alpha"`, `"beta"`, `"gamma"`), so `sorted_min` and
+        // `sorted_max` must coincide with `min` and `max` on every
+        // pair. Sibling posture to
+        // `sorted_clamp_coincides_with_clamp_when_declaration_and_lex_orders_agree`
+        // one arity level up on the (arity) axis — the cross-axis
+        // coincidence pin binds the lex arm to the declaration arm at
+        // the (binary-arity, Self-return) corner of the pairwise-
+        // selection surface, closing the (return-shape × arity) cross-
+        // axis coincidence matrix at the binary corner past the ternary
+        // corner already closed by the clamp sibling.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_min(a, b),
+                    <StubKind as ClosedSet>::min(a, b),
+                    "StubKind::sorted_min({a:?}, {b:?}) must coincide with \
+                     StubKind::min({a:?}, {b:?}) when declaration and lex orders agree",
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_max(a, b),
+                    <StubKind as ClosedSet>::max(a, b),
+                    "StubKind::sorted_max({a:?}, {b:?}) must coincide with \
+                     StubKind::max({a:?}, {b:?}) when declaration and lex orders agree",
                 );
             }
         }

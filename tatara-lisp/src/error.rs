@@ -20130,6 +20130,72 @@ mod tests {
     }
 
     #[test]
+    fn sexp_shape_hash_discriminators_align_with_typed_per_role_constants_by_index() {
+        // PER-ROLE ROUTING CONTRACT (family-wide array level): for every
+        // `i in 0..12`, `SexpShape::HASH_DISCRIMINATORS[i]` MUST equal the
+        // corresponding twelve-arm `SexpShape::*_HASH_DISCRIMINATOR`
+        // per-role `pub(crate) const` at the SAME position in
+        // `SexpShape::ALL`. Catches a regression that inlines byte
+        // LITERALS in the `HASH_DISCRIMINATORS` array definition (e.g.
+        // rewrites `[Self::NIL_HASH_DISCRIMINATOR, Self::SYMBOL_HASH_DISCRIMINATOR,
+        // ...]` to `[0u8, 1u8, ...]`) — that regression would still
+        // byte-equal the outer partition `{0..=6}`, still byte-equal the
+        // sub-carving projections, and still byte-equal
+        // `SexpShape::ALL[i].hash_discriminator()`, so every existing pin
+        // (`_pin_legacy_outer_cache_key_bytes`, `_align_with_all_by_index`,
+        // `_cover_outer_partition_zero_through_six`,
+        // `_align_with_sub_carvings_by_projection`) would still PASS while
+        // the FAMILY-WIDE array silently DRIFTED from the per-role
+        // primitives it aliases through. Pin the alias-identity across
+        // the twelve positions so the outer-shape ALL-array binds to the
+        // per-role sources of truth at rustc-time PLUS runtime by ONE
+        // typed pairing per position.
+        //
+        // Sibling posture to `sexp_shape_hash_discriminator_routes_through_typed_per_role_constants`
+        // on the METHOD-side per-role routing axis — that pin binds the
+        // twelve-arm projection method's per-role routing; this pin binds
+        // the twelve-position family-wide array's per-role routing. Together
+        // the two pins close the per-role routing contract at BOTH the
+        // METHOD-side and the ARRAY-side of the shape algebra, in the SAME
+        // shape as the sibling `SexpShape::LABELS` axis's
+        // `sexp_shape_labels_align_with_all_by_index` pin (via
+        // `SexpShape::ALL[i].label()`) — both axes now pin BOTH sides of
+        // the (method, array) pair to the SAME per-role source of truth.
+        let per_role = [
+            SexpShape::NIL_HASH_DISCRIMINATOR,
+            SexpShape::SYMBOL_HASH_DISCRIMINATOR,
+            SexpShape::KEYWORD_HASH_DISCRIMINATOR,
+            SexpShape::STRING_HASH_DISCRIMINATOR,
+            SexpShape::INT_HASH_DISCRIMINATOR,
+            SexpShape::FLOAT_HASH_DISCRIMINATOR,
+            SexpShape::BOOL_HASH_DISCRIMINATOR,
+            SexpShape::LIST_HASH_DISCRIMINATOR,
+            SexpShape::QUOTE_HASH_DISCRIMINATOR,
+            SexpShape::QUASIQUOTE_HASH_DISCRIMINATOR,
+            SexpShape::UNQUOTE_HASH_DISCRIMINATOR,
+            SexpShape::UNQUOTE_SPLICE_HASH_DISCRIMINATOR,
+        ];
+        assert_eq!(
+            per_role.len(),
+            SexpShape::HASH_DISCRIMINATORS.len(),
+            "the twelve per-role SexpShape::*_HASH_DISCRIMINATOR constants \
+             must cover the same cardinality as SexpShape::HASH_DISCRIMINATORS",
+        );
+        for (i, expected) in per_role.iter().copied().enumerate() {
+            assert_eq!(
+                SexpShape::HASH_DISCRIMINATORS[i],
+                expected,
+                "SexpShape::HASH_DISCRIMINATORS[{i}] `{actual}` drifted from \
+                 the per-role SexpShape::*_HASH_DISCRIMINATOR constant `{expected}` \
+                 for {shape:?} — the family-wide array MUST alias through the \
+                 per-role source of truth rather than inline a byte literal",
+                actual = SexpShape::HASH_DISCRIMINATORS[i],
+                shape = SexpShape::ALL[i],
+            );
+        }
+    }
+
+    #[test]
     fn sexp_shape_hash_discriminators_align_with_sub_carvings_by_projection() {
         // CROSS-ALGEBRA COMPOSITION CONTRACT: for every `i in 0..12`,
         // `Self::HASH_DISCRIMINATORS[i]` MUST equal the byte the SUB-

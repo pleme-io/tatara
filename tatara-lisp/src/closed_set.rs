@@ -10942,6 +10942,197 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .all(|w| <Self as ClosedSet>::sorted_succeeds_or_equal(w[0], w[1]))
     }
 
+    /// The declaration-order N-ARY STRICT ASCENDING monotonicity
+    /// predicate — `true` iff every consecutive pair `(items[i],
+    /// items[i+1])` satisfies `items[i].precedes(items[i+1])` under
+    /// [`Self::ALL`]'s declaration order, `false` on the first
+    /// consecutive pair that violates strict precedence (including
+    /// any adjacent equal pair, by irreflexivity of the strict
+    /// pairwise-precedence primitive). The strictness-complement arm
+    /// of [`Self::is_ascending`] on the (strict, non-strict) axis of
+    /// the N-ary monotonicity surface.
+    ///
+    /// See [`Self::is_ascending`] for the shared design rationale,
+    /// empty-slice / singleton / binary-agreement / full-set /
+    /// direction-reversal contracts, the future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method is
+    /// the strictness-complement arm of the same N-ary monotonicity
+    /// surface and inherits every property from the non-strict arm's
+    /// documentation, differing only in the substrate primitive the
+    /// `windows(2).all(…)` fold routes through ([`Self::precedes`]
+    /// rather than [`Self::precedes_or_equal`]).
+    ///
+    /// Full-set contract: `T::is_strictly_ascending(<T as
+    /// ClosedSet>::ALL)` is `true` — the entire closed set is by
+    /// construction strictly ascending under its own declaration
+    /// order (every consecutive pair `(ALL[i], ALL[i+1])` satisfies
+    /// `ALL[i].precedes(ALL[i+1])` because `index_of(ALL[i]) == i <
+    /// i + 1 == index_of(ALL[i+1])`), the canonical fixpoint the
+    /// strict-ascending predicate shares with the declaration order
+    /// itself. Pinned by `is_strictly_ascending_over_the_full_set_holds`.
+    ///
+    /// Constant-slice contract: `T::is_strictly_ascending(&[v, v])`
+    /// is `false` on every variant `v` — the irreflexivity axiom of
+    /// the strict pairwise-precedence primitive (`v.precedes(v) ==
+    /// false` for every `v`, since `index_of(v) < index_of(v)` is
+    /// `false`) forces the `windows(2)` fold to short-circuit on the
+    /// first adjacent equal pair, so any slice with at least two
+    /// consecutive equal elements is strictly non-monotonic on both
+    /// strictness-ascending and strictness-descending arms. Pinned by
+    /// `is_strictly_ascending_is_false_on_any_slice_with_adjacent_equal_elements`.
+    ///
+    /// Strict-implies-non-strict contract:
+    /// `T::is_strictly_ascending(items) →
+    /// T::is_ascending(items)` on every slice — the strict pairwise-
+    /// precedence primitive `precedes` implies the non-strict
+    /// pairwise-precedence primitive `precedes_or_equal` at every
+    /// pair through `Self::index_of`'s composition with `usize`'s
+    /// `<` and `<=` (`i < j → i <= j`), so the conjunctive fold
+    /// through `Iterator::all` propagates the implication across
+    /// every adjacent-pair window. Pinned by
+    /// `is_strictly_ascending_implies_is_ascending_across_every_triple`.
+    fn is_strictly_ascending(items: &[Self]) -> bool {
+        items
+            .windows(2)
+            .all(|w| <Self as ClosedSet>::precedes(w[0], w[1]))
+    }
+
+    /// The declaration-order N-ARY STRICT DESCENDING monotonicity
+    /// predicate — `true` iff every consecutive pair `(items[i],
+    /// items[i+1])` satisfies `items[i].succeeds(items[i+1])` under
+    /// [`Self::ALL`]'s declaration order, `false` on the first
+    /// consecutive pair that violates strict succession (including
+    /// any adjacent equal pair). The direction-complement arm of
+    /// [`Self::is_strictly_ascending`] on the (forward, backward)
+    /// axis of the N-ary strict-monotonicity surface AND the
+    /// strictness-complement arm of [`Self::is_descending`] on the
+    /// (strict, non-strict) axis.
+    ///
+    /// See [`Self::is_strictly_ascending`] for the shared design
+    /// rationale, empty-slice / singleton / binary-agreement / full-
+    /// set / direction-reversal / constant-slice / strict-implies-
+    /// non-strict contracts, the future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the
+    /// reverse-direction arm of the same N-ary strict-monotonicity
+    /// surface and inherits every property from the forward arm's
+    /// documentation, differing only in the substrate primitive the
+    /// `windows(2).all(…)` fold routes through ([`Self::succeeds`]
+    /// rather than [`Self::precedes`]).
+    ///
+    /// Full-set contract: `T::is_strictly_descending(<T as
+    /// ClosedSet>::ALL)` is `true` iff `ALL.len() <= 1` — the entire
+    /// closed set is strictly descending only when the closed set has
+    /// zero or one variants (in which case the `windows(2)` fold is
+    /// vacuously `true`); on any closed set with two or more
+    /// variants, the very first adjacent pair `(ALL[0], ALL[1])`
+    /// satisfies `ALL[0].precedes(ALL[1])`, so `ALL[0].succeeds(
+    /// ALL[1])` is `false` by asymmetry of the strict primitive and
+    /// the fold short-circuits. Pinned by
+    /// `is_strictly_descending_over_the_full_set_holds_iff_cardinality_is_zero_or_one`.
+    fn is_strictly_descending(items: &[Self]) -> bool {
+        items
+            .windows(2)
+            .all(|w| <Self as ClosedSet>::succeeds(w[0], w[1]))
+    }
+
+    /// The lex-order N-ARY STRICT ASCENDING monotonicity predicate —
+    /// `true` iff every consecutive pair `(items[i], items[i+1])`
+    /// satisfies `items[i].sorted_precedes(items[i+1])` under
+    /// [`Self::label`]'s projection into ASCII lexicographic order,
+    /// `false` on the first consecutive pair that violates strict
+    /// lex-precedence. The lex-ordering peer of
+    /// [`Self::is_strictly_ascending`] on the (declaration, lex)
+    /// ordering axis of the N-ary strict-monotonicity surface AND
+    /// the strictness-complement arm of [`Self::is_sorted_ascending`]
+    /// on the (strict, non-strict) axis.
+    ///
+    /// See [`Self::is_strictly_ascending`] for the shared design
+    /// rationale, empty-slice / singleton / binary-agreement / full-
+    /// set / direction-reversal / constant-slice / strict-implies-
+    /// non-strict contracts, the future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the lex-
+    /// axis arm of the same N-ary strict-monotonicity surface and
+    /// inherits every property from the declaration arm's
+    /// documentation, differing only in the substrate primitive the
+    /// `windows(2).all(…)` fold routes through
+    /// ([`Self::sorted_precedes`] rather than [`Self::precedes`]).
+    ///
+    /// Cross-ordering coincidence:
+    /// `T::is_sorted_strictly_ascending(items) ==
+    /// T::is_strictly_ascending(items)` on every slice for which
+    /// declaration and lex orders coincide pairwise — the two
+    /// orderings collapse on every adjacent pair, so the
+    /// `windows(2).all(…)` folds bind byte-for-byte. Pinned by
+    /// `is_sorted_strictly_ascending_and_is_sorted_strictly_descending_coincide_with_the_declaration_peers_when_orders_agree`.
+    fn is_sorted_strictly_ascending(items: &[Self]) -> bool {
+        items
+            .windows(2)
+            .all(|w| <Self as ClosedSet>::sorted_precedes(w[0], w[1]))
+    }
+
+    /// The lex-order N-ARY STRICT DESCENDING monotonicity predicate —
+    /// `true` iff every consecutive pair `(items[i], items[i+1])`
+    /// satisfies `items[i].sorted_succeeds(items[i+1])` under
+    /// [`Self::label`]'s projection into ASCII lexicographic order,
+    /// `false` on the first consecutive pair that violates strict
+    /// lex-succession. Closes the (ordering × direction × strictness)
+    /// 2×2×2 = 8-corner N-ary monotonicity hypercube on the closed-
+    /// set surface at the (lex-order, descending, strict) corner past
+    /// the seven prior corners at the four non-strict corners
+    /// (105)+(106)+(107)+(108) and the three prior strict corners
+    /// (declaration, ascending, strict), (declaration, descending,
+    /// strict), (lex, ascending, strict).
+    ///
+    /// Sibling posture to [`Self::is_sorted_strictly_ascending`] one
+    /// direction axis over on the lex arm, [`Self::is_strictly_descending`]
+    /// one ordering axis over on the descending arm, AND
+    /// [`Self::is_sorted_descending`] one strictness axis over on the
+    /// lex-descending arm — the lex-order strict-descending predicate
+    /// is the intersection of all three axis-complements over the
+    /// declaration-axis non-strict-ascending predicate. See
+    /// [`Self::is_strictly_ascending`] for the shared design
+    /// rationale, empty-slice / singleton / binary-agreement / full-
+    /// set / direction-reversal / constant-slice / strict-implies-
+    /// non-strict contracts, the future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the lex-
+    /// axis reverse-direction arm of the same N-ary strict-
+    /// monotonicity surface and inherits every property from the
+    /// three prior strict arms' documentation, differing only in the
+    /// substrate primitive the `windows(2).all(…)` fold routes
+    /// through ([`Self::sorted_succeeds`] rather than
+    /// [`Self::precedes`] / [`Self::succeeds`] /
+    /// [`Self::sorted_precedes`]).
+    ///
+    /// (109) + (110) + (111) + (112) together CLOSE the (ordering ×
+    /// direction × strictness) 2×2×2 = 8-corner N-ary monotonicity
+    /// hypercube on the closed-set surface EXHAUSTIVELY past the four
+    /// non-strict corners (105)+(106)+(107)+(108) — every combination
+    /// of {declaration, lex} ordering × {ascending, descending}
+    /// direction × {strict, non-strict} strictness binds through ONE
+    /// typed N-ary bool-return predicate on the trait, each routing
+    /// through the substrate's typed arity-2 pairwise-precedence
+    /// primitive (strict or non-strict per the strictness axis)
+    /// folded over [`slice::windows(2)`] via [`Iterator::all`] at ONE
+    /// composition site. The arity-N monotonicity hypercube now
+    /// mirrors the exhaustively-closed 8-corner arity-2 (ordering ×
+    /// direction × strictness) pairwise-comparison hypercube
+    /// (74)+(75)+(76)+(77)+(78)+(79)+(80)+(81) at every dimension.
+    ///
+    /// Anti-joint-strictness contract: on any slice with two or more
+    /// elements, `T::is_sorted_strictly_ascending(items) AND
+    /// T::is_sorted_strictly_descending(items)` is `false` — the
+    /// asymmetry axiom of the strict pairwise-precedence primitive
+    /// (`a.sorted_precedes(b) → NOT b.sorted_precedes(a)`) rules out
+    /// any adjacent pair from being simultaneously strictly ascending
+    /// AND strictly descending; on the empty slice OR a singleton the
+    /// joint conjunction is vacuously `true` on both arms. Pinned by
+    /// `is_strictly_ascending_and_is_strictly_descending_hold_jointly_iff_slice_has_zero_or_one_elements`.
+    fn is_sorted_strictly_descending(items: &[Self]) -> bool {
+        items
+            .windows(2)
+            .all(|w| <Self as ClosedSet>::sorted_succeeds(w[0], w[1]))
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -34649,6 +34840,348 @@ mod tests {
                     let all_equal = a == b && b == c;
                     assert_eq!(joint_decl, all_equal);
                     assert_eq!(joint_lex, all_equal);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_ascending_returns_true_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (N-ary strict-monotonicity arms):
+        // every arm of the (ordering × direction) 2×2 = 4-corner
+        // strict-monotonicity matrix folds an empty slice to `true`
+        // — the `windows(2)` iterator yields zero windows on the
+        // empty slice, and `Iterator::all` on the empty fold returns
+        // `true` vacuously, pinning the empty-fixpoint witness on
+        // every strict corner (mirroring the non-strict quartet's
+        // empty-slice contract in
+        // `is_ascending_returns_true_on_the_empty_slice_across_every_kind`
+        // one strictness axis over).
+        assert!(<StubKind as ClosedSet>::is_strictly_ascending(&[]));
+        assert!(<StubKind as ClosedSet>::is_strictly_descending(&[]));
+        assert!(<StubKind as ClosedSet>::is_sorted_strictly_ascending(&[]));
+        assert!(<StubKind as ClosedSet>::is_sorted_strictly_descending(&[]));
+    }
+
+    #[test]
+    fn is_strictly_ascending_returns_true_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT (N-ary strict-monotonicity arms): every
+        // arm folds a singleton slice to `true` on every variant —
+        // the `windows(2)` iterator yields zero windows on a length-1
+        // slice, so `Iterator::all` returns `true` vacuously through
+        // the conjunctive identity, regardless of which strict
+        // pairwise-precedence primitive threads through the adjacent-
+        // pair fold. Sibling posture to
+        // `is_ascending_returns_true_on_every_singleton_slice_across_every_variant`
+        // one strictness axis over on the N-ary non-strict-
+        // monotonicity face.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(<StubKind as ClosedSet>::is_strictly_ascending(&[v]));
+            assert!(<StubKind as ClosedSet>::is_strictly_descending(&[v]));
+            assert!(<StubKind as ClosedSet>::is_sorted_strictly_ascending(&[v]));
+            assert!(<StubKind as ClosedSet>::is_sorted_strictly_descending(&[v]));
+        }
+    }
+
+    #[test]
+    fn is_strictly_ascending_agrees_with_binary_precedes_on_every_length_two_slice_across_every_pair(
+    ) {
+        // BINARY-AGREEMENT CONTRACT (N-ary strict-monotonicity arms):
+        // every arm folds a length-2 slice through the corresponding
+        // arity-2 strict pairwise-precedence primitive on every
+        // operand pair — pins the bool-return N-ary strict-
+        // monotonicity surface at arity-2 to the bool-return arity-2
+        // pairwise-comparison primitive one arity level down,
+        // EXHAUSTIVELY closing the (arity × ordering × direction ×
+        // strictness) 2×2×2×2 = 16-corner cross-arity closure
+        // between the arity-2 pairwise-comparison hypercube and the
+        // arity-N monotonicity hypercube. Sibling posture to
+        // `is_ascending_agrees_with_binary_precedes_or_equal_on_every_length_two_slice_across_every_pair`
+        // one strictness axis over on the non-strict monotonicity
+        // face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_strictly_ascending(&[a, b]),
+                    <StubKind as ClosedSet>::precedes(a, b),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_strictly_descending(&[a, b]),
+                    <StubKind as ClosedSet>::succeeds(a, b),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_sorted_strictly_ascending(&[a, b]),
+                    <StubKind as ClosedSet>::sorted_precedes(a, b),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_sorted_strictly_descending(&[a, b]),
+                    <StubKind as ClosedSet>::sorted_succeeds(a, b),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_ascending_composes_precedes_over_windows_across_every_triple() {
+        // COMPOSITION CONTRACT (N-ary strict-monotonicity arms):
+        // every arm's projection equals the corresponding strict
+        // pairwise-precedence primitive folded over `windows(2)` via
+        // `Iterator::all` on every length-3 slice — pins the N-ary
+        // strict-monotonicity surface to the arity-2 strict pairwise-
+        // comparison surface via ONE
+        // `windows(2).all(pairwise_predicate)` composition, forbidding
+        // an override body that would silently drift the N-ary arm
+        // from the arity-2 arm through a fresh reduce fold, a lookup
+        // table, or a hand-rolled `zip(iter, iter.skip(1)).all(…)`
+        // composition.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_strictly_ascending(&slice),
+                        slice
+                            .windows(2)
+                            .all(|w| <StubKind as ClosedSet>::precedes(w[0], w[1])),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_strictly_descending(&slice),
+                        slice
+                            .windows(2)
+                            .all(|w| <StubKind as ClosedSet>::succeeds(w[0], w[1])),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_strictly_ascending(&slice),
+                        slice
+                            .windows(2)
+                            .all(|w| <StubKind as ClosedSet>::sorted_precedes(w[0], w[1])),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_strictly_descending(&slice),
+                        slice
+                            .windows(2)
+                            .all(|w| <StubKind as ClosedSet>::sorted_succeeds(w[0], w[1])),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_ascending_over_the_full_set_holds() {
+        // FULL-SET CONTRACT (N-ary strict-ascending monotonicity
+        // arms): the N-ary strict-ascending predicate over the entire
+        // closed set is `true` on both ordering arms — every
+        // consecutive pair `(ALL[i], ALL[i+1])` satisfies
+        // `ALL[i].precedes(ALL[i+1])` because `index_of(ALL[i]) == i
+        // < i + 1 == index_of(ALL[i+1])` (and symmetrically on the
+        // lex arm through `sorted_index_of`). The canonical fixpoint
+        // the strict-ascending predicate shares with the declaration
+        // (and lex) order itself.
+        assert!(<StubKind as ClosedSet>::is_strictly_ascending(
+            <StubKind as ClosedSet>::ALL,
+        ));
+        assert!(<StubKind as ClosedSet>::is_sorted_strictly_ascending(
+            <StubKind as ClosedSet>::ALL,
+        ));
+    }
+
+    #[test]
+    fn is_strictly_descending_over_the_full_set_holds_iff_cardinality_is_zero_or_one() {
+        // FULL-SET CONTRACT (N-ary strict-descending monotonicity
+        // arms): the N-ary strict-descending predicate over the
+        // entire closed set is `true` iff `ALL.len() <= 1` — on any
+        // closed set with two or more variants, the first adjacent
+        // pair `(ALL[0], ALL[1])` satisfies `ALL[0].precedes(ALL[1])`
+        // (strict declaration precedence), so
+        // `ALL[0].succeeds(ALL[1])` is `false` by asymmetry of the
+        // strict primitive and the fold short-circuits. On
+        // `StubKind` (cardinality > 1), both strict-descending arms
+        // are `false`.
+        let all = <StubKind as ClosedSet>::ALL;
+        let expected = all.len() <= 1;
+        assert_eq!(
+            <StubKind as ClosedSet>::is_strictly_descending(all),
+            expected,
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::is_sorted_strictly_descending(all),
+            expected,
+        );
+    }
+
+    #[test]
+    fn is_strictly_ascending_of_slice_agrees_with_is_strictly_descending_of_reversed_slice_across_every_triple(
+    ) {
+        // DIRECTION-REVERSAL CONTRACT (N-ary strict-monotonicity
+        // arms): `T::is_strictly_ascending(items)` binds byte-for-
+        // byte to `T::is_strictly_descending(reversed items)` on
+        // every slice because the (forward, backward) direction axis
+        // on the arity-2 strict pairwise-comparison face composes
+        // with the slice-reversal permutation on the N-ary-arity
+        // face — reversing a strictly ascending slice yields a
+        // strictly descending slice, and vice versa. Pinned on every
+        // length-3 slice and its reversal across every operand
+        // triple; the same law binds on both ordering arms.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_strictly_ascending(&slice),
+                        <StubKind as ClosedSet>::is_strictly_descending(&reversed),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_strictly_ascending(&slice),
+                        <StubKind as ClosedSet>::is_sorted_strictly_descending(&reversed),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_sorted_strictly_ascending_and_is_sorted_strictly_descending_coincide_with_the_declaration_peers_when_orders_agree(
+    ) {
+        // CROSS-AXIS COINCIDENCE CONTRACT (N-ary strict-monotonicity
+        // arms): when declaration and lex orders coincide (as they do
+        // on `StubKind`), the lex-order N-ary strict-ascending /
+        // strict-descending monotonicity predicates coincide with the
+        // declaration-order arms on every slice. Sibling posture to
+        // `is_sorted_ascending_and_is_sorted_descending_coincide_with_the_declaration_peers_when_orders_agree`
+        // one strictness axis over on the non-strict monotonicity
+        // face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_strictly_ascending(&slice),
+                        <StubKind as ClosedSet>::is_strictly_ascending(&slice),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_strictly_descending(&slice),
+                        <StubKind as ClosedSet>::is_strictly_descending(&slice),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_ascending_implies_is_ascending_across_every_triple() {
+        // STRICT-IMPLIES-NON-STRICT CONTRACT (N-ary monotonicity
+        // hypercube): every strict arm implies its non-strict peer at
+        // the same (ordering, direction) corner because the strict
+        // pairwise-precedence primitive implies the non-strict
+        // pairwise-precedence primitive at every pair (`i < j → i <=
+        // j` on `usize`), and the conjunctive `Iterator::all` fold
+        // over `windows(2)` propagates the implication through every
+        // adjacent-pair window. Binds the strict monotonicity face to
+        // the non-strict monotonicity face on the strictness axis of
+        // the N-ary hypercube.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    if <StubKind as ClosedSet>::is_strictly_ascending(&slice) {
+                        assert!(<StubKind as ClosedSet>::is_ascending(&slice));
+                    }
+                    if <StubKind as ClosedSet>::is_strictly_descending(&slice) {
+                        assert!(<StubKind as ClosedSet>::is_descending(&slice));
+                    }
+                    if <StubKind as ClosedSet>::is_sorted_strictly_ascending(&slice) {
+                        assert!(<StubKind as ClosedSet>::is_sorted_ascending(&slice));
+                    }
+                    if <StubKind as ClosedSet>::is_sorted_strictly_descending(&slice) {
+                        assert!(<StubKind as ClosedSet>::is_sorted_descending(&slice));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_ascending_is_false_on_any_slice_with_adjacent_equal_elements() {
+        // CONSTANT-SLICE CONTRACT (N-ary strict-monotonicity arms):
+        // any slice with two or more consecutive equal elements
+        // fails every strict-monotonicity arm — the irreflexivity
+        // axiom of the strict pairwise-precedence primitive
+        // (`v.precedes(v) == false` for every `v`, since
+        // `index_of(v) < index_of(v)` is `false`) forces the
+        // `windows(2).all(…)` fold to short-circuit on the first
+        // adjacent equal pair. On `StubKind`, this means any doubled
+        // singleton `[v, v]` and any tripled singleton `[v, v, v]`
+        // fails every strict arm.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let doubled = [v, v];
+            assert!(!<StubKind as ClosedSet>::is_strictly_ascending(&doubled));
+            assert!(!<StubKind as ClosedSet>::is_strictly_descending(&doubled));
+            assert!(!<StubKind as ClosedSet>::is_sorted_strictly_ascending(
+                &doubled,
+            ));
+            assert!(!<StubKind as ClosedSet>::is_sorted_strictly_descending(
+                &doubled,
+            ));
+            let tripled = [v, v, v];
+            assert!(!<StubKind as ClosedSet>::is_strictly_ascending(&tripled));
+            assert!(!<StubKind as ClosedSet>::is_strictly_descending(&tripled));
+            assert!(!<StubKind as ClosedSet>::is_sorted_strictly_ascending(
+                &tripled,
+            ));
+            assert!(!<StubKind as ClosedSet>::is_sorted_strictly_descending(
+                &tripled,
+            ));
+        }
+    }
+
+    #[test]
+    fn is_strictly_ascending_and_is_strictly_descending_hold_jointly_iff_slice_has_zero_or_one_elements(
+    ) {
+        // ANTI-JOINT-STRICTNESS CONTRACT (N-ary strict-monotonicity
+        // arms): on any slice with two or more elements, the
+        // conjunction `T::is_strictly_ascending(items) AND
+        // T::is_strictly_descending(items)` is `false` — the
+        // asymmetry axiom of the strict pairwise-precedence primitive
+        // (`a.precedes(b) → NOT b.precedes(a)`) rules out any
+        // adjacent pair from being simultaneously strictly ascending
+        // AND strictly descending; on the empty slice OR a singleton
+        // the joint conjunction is vacuously `true` on both arms
+        // because both `windows(2)` folds are empty. Complements the
+        // non-strict joint-monotonicity contract in
+        // `is_ascending_and_is_descending_hold_jointly_iff_slice_is_constant`
+        // one strictness axis over: non-strict joint holds on
+        // constant slices; strict joint holds only on the empty and
+        // singleton slices.
+        assert!(<StubKind as ClosedSet>::is_strictly_ascending(&[]));
+        assert!(<StubKind as ClosedSet>::is_strictly_descending(&[]));
+        assert!(<StubKind as ClosedSet>::is_sorted_strictly_ascending(&[]));
+        assert!(<StubKind as ClosedSet>::is_sorted_strictly_descending(&[]));
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(<StubKind as ClosedSet>::is_strictly_ascending(&[v]));
+            assert!(<StubKind as ClosedSet>::is_strictly_descending(&[v]));
+            assert!(<StubKind as ClosedSet>::is_sorted_strictly_ascending(&[v]));
+            assert!(<StubKind as ClosedSet>::is_sorted_strictly_descending(&[v]));
+        }
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let slice = [a, b];
+                let joint_decl = <StubKind as ClosedSet>::is_strictly_ascending(&slice)
+                    && <StubKind as ClosedSet>::is_strictly_descending(&slice);
+                let joint_lex = <StubKind as ClosedSet>::is_sorted_strictly_ascending(&slice)
+                    && <StubKind as ClosedSet>::is_sorted_strictly_descending(&slice);
+                assert!(!joint_decl);
+                assert!(!joint_lex);
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let joint_decl_triple = <StubKind as ClosedSet>::is_strictly_ascending(&triple)
+                        && <StubKind as ClosedSet>::is_strictly_descending(&triple);
+                    let joint_lex_triple =
+                        <StubKind as ClosedSet>::is_sorted_strictly_ascending(&triple)
+                            && <StubKind as ClosedSet>::is_sorted_strictly_descending(&triple);
+                    assert!(!joint_decl_triple);
+                    assert!(!joint_lex_triple);
                 }
             }
         }

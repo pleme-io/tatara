@@ -9664,6 +9664,180 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
     }
 
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// binary pairwise-MIN projection of `self` and `other` — the
+    /// label of [`Self::min`] projected through [`Self::label`].
+    /// Returns `&'static str`, never [`Option<&'static str>`]: the
+    /// binary min projection is TOTAL on every operand pair, and
+    /// every variant carries a canonical label.
+    ///
+    /// The label-return arm of the (`Self`-return, `&'static str`-return,
+    /// `usize`-return) return-shape partition of the closed-set
+    /// declaration-order binary pairwise-MIN surface — one return-shape
+    /// axis over from [`Self::min`] (`Self`-return declaration-axis
+    /// binary-min), one direction axis over from [`Self::max_label`]
+    /// (`&'static str`-return declaration-axis binary-max-label), and
+    /// one ordering axis over from [`Self::sorted_min_label`]
+    /// (`&'static str`-return lex-axis binary-min-label). Together
+    /// with the three sibling label-return pairwise-selection peers
+    /// this method opens the label-return column on the binary-arity
+    /// face at the (`&'static str`-return, ordering × direction)
+    /// 2×2 = 4-corner selection matrix past the pre-existing Self-return
+    /// 2×2 row (95)+(96) — mirroring the (return-shape × ordering)
+    /// column pattern the ternary-CLAMP-label lifts closed one arity
+    /// axis over at (93)+(94) on the ternary-arity face.
+    ///
+    /// Every generic consumer that renders the pairwise-MIN
+    /// projection's LABEL of two typed variants (an LSP quick-info
+    /// hover that folds an observed-phase pair to the earlier
+    /// lifecycle stage and emits "earlier phase: <label>" without
+    /// threading the `Self`-return variant through a separate
+    /// `label` fold, a diagnostic renderer that projects an unordered
+    /// phase-observation pair to the declaration-order earlier
+    /// member and threads the projected label into the
+    /// `earlier: <label>` shape, a metrics tagger that folds two
+    /// competing enum tags to their declaration-order earlier peer
+    /// and emits the folded label as the tag) binds to ONE typed
+    /// method rather than re-deriving the `a.min(b).label()`
+    /// two-primitive composition at every callsite.
+    ///
+    /// Default body composes [`Self::min`] with [`Self::label`]
+    /// verbatim. The min-projection LABEL contract — the
+    /// tie-break-left arm returns `self.label()` when
+    /// `self.precedes_or_equal(other)`, returns `other.label()`
+    /// otherwise — is guaranteed by the default composition through
+    /// [`Self::min`]'s non-strict-precedence-guarded selection.
+    /// `T::first().min_label(T::first()) == T::first().label()` is
+    /// the natural fixpoint the binary-min-label projection shares
+    /// with the declaration-head label, mirroring the
+    /// `T::first().clamp_label(T::first(), T::first()) ==
+    /// T::first().label()` fixpoint one arity level up on the
+    /// ternary-clamp-label face.
+    ///
+    /// Frontier inspiration: Racket's `(symbol-name (enum-min a b))`
+    /// — the label-projection sibling of `enum-min` on a closed
+    /// enumeration under the non-strict-precedence-guarded selection
+    /// variant of the ordering; MLIR's
+    /// `RegisteredOperationName::min(a, b).getName()` folded to ONE
+    /// method on the closed Op registry's binary min projection;
+    /// Julia's `Base.min(a, b) |> string` applied to a closed
+    /// enumeration and threaded through the canonical name
+    /// projection; Idris's `Ord a => min a b |> toLabel` on the
+    /// binary-min projection's label return-shape column. Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's existing [`Self::min`] + [`Self::label`] surfaces
+    /// verbatim — no new dep, no new IR layer, no supertrait bound,
+    /// no `Option`-typed dispatch, no allocation, no `strum` /
+    /// `enum-iterator` crate dependency.
+    fn min_label(self, other: Self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::min(self, other))
+    }
+
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// binary pairwise-MAX projection of `self` and `other` — the
+    /// label of [`Self::max`] projected through [`Self::label`].
+    /// Returns `&'static str`, never [`Option<&'static str>`].
+    ///
+    /// The direction-complement peer of [`Self::min_label`] on the
+    /// (min, max) direction axis of the closed-set label-return
+    /// binary pairwise-selection surface. See [`Self::min_label`]
+    /// for the shared design rationale, sibling matrix, override
+    /// axis, future-consumer inventory, THEORY.md grounding, and
+    /// frontier inspiration — this method is the max-direction arm
+    /// of the same label-return binary-selection surface and
+    /// inherits every property from the min arm's documentation,
+    /// differing only in the substrate primitive the label-fallback
+    /// routes through ([`Self::max`] rather than [`Self::min`]) and
+    /// the non-strict-succession guard it composes at the
+    /// tie-break-left selection ([`Self::succeeds_or_equal`] rather
+    /// than [`Self::precedes_or_equal`]).
+    ///
+    /// `T::first().max_label(T::first()) == T::first().label()` is
+    /// the natural fixpoint the binary-max-label projection shares
+    /// with the singleton-pair diagonal, mirroring the
+    /// `T::first().min_label(T::first()) == T::first().label()`
+    /// fixpoint on the min arm one direction column over.
+    fn max_label(self, other: Self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::max(self, other))
+    }
+
+    /// The canonical `&'static str` LABEL of the lex-order binary
+    /// pairwise-MIN projection of `self` and `other` — the label of
+    /// [`Self::sorted_min`] projected through [`Self::label`].
+    /// Returns `&'static str`, never [`Option<&'static str>`].
+    ///
+    /// The lex-ordering peer of [`Self::min_label`] on the
+    /// (declaration, lex) ordering axis of the closed-set label-return
+    /// binary pairwise-MIN surface. See [`Self::min_label`] for the
+    /// shared design rationale, sibling matrix, override axis,
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the lex-axis arm of the same
+    /// label-return binary-min surface and inherits every property
+    /// from the declaration arm's documentation, differing only in
+    /// the substrate primitive the label-fallback routes through
+    /// ([`Self::sorted_min`] rather than [`Self::min`]) and the
+    /// lex-ordering non-strict-precedence guard it composes at the
+    /// tie-break-left selection ([`Self::sorted_precedes_or_equal`]
+    /// rather than [`Self::precedes_or_equal`]).
+    ///
+    /// `T::sorted_first().sorted_min_label(T::sorted_first()) ==
+    /// T::sorted_first().label()` is the natural fixpoint the
+    /// lex-order binary-min-label projection shares with the lex-head
+    /// label, mirroring the `T::first().min_label(T::first()) ==
+    /// T::first().label()` fixpoint on the declaration arm one
+    /// ordering column over.
+    fn sorted_min_label(self, other: Self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_min(self, other))
+    }
+
+    /// The canonical `&'static str` LABEL of the lex-order binary
+    /// pairwise-MAX projection of `self` and `other` — the label of
+    /// [`Self::sorted_max`] projected through [`Self::label`].
+    /// Returns `&'static str`, never [`Option<&'static str>`].
+    ///
+    /// Closes the (return-shape × ordering × direction) 2×2×2 =
+    /// 8-corner label-return + Self-return binary pairwise-selection
+    /// hypercube on the binary-arity face at the (`&'static str`-return,
+    /// lex-order, max) corner — sibling posture to
+    /// [`Self::sorted_min_label`] one direction axis over on the lex
+    /// arm AND to [`Self::max_label`] one ordering axis over on the
+    /// max arm. Together with [`Self::min_label`], [`Self::max_label`],
+    /// and [`Self::sorted_min_label`] this method CLOSES the
+    /// (`&'static str`-return, ordering × direction) 2×2 = 4-corner
+    /// label-return face on the binary pairwise-selection surface
+    /// past the pre-existing Self-return 2×2 row that
+    /// [`Self::min`] / [`Self::max`] / [`Self::sorted_min`] /
+    /// [`Self::sorted_max`] closed at (95)+(96) — the (return-shape ×
+    /// ordering × direction) hypercube on the binary-arity face
+    /// carries every corner filled at the intersection of the
+    /// (`Self`, `&'static str`) return-shape pair and the
+    /// {declaration, lex} ordering × {min, max} direction 2×2
+    /// selection matrix, mirroring the (return-shape × ordering) 3×2 =
+    /// 6-corner CLAMP face closed one arity level up on the
+    /// ternary-arity face at (92)+(93)+(94).
+    ///
+    /// See [`Self::min_label`] for the shared design rationale,
+    /// sibling matrix, override axis, future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method
+    /// is the lex-order arm of the max direction column on the
+    /// label-return surface and inherits every property from the
+    /// declaration arm's documentation, differing only in the
+    /// substrate primitive the label-fallback routes through
+    /// ([`Self::sorted_max`] rather than [`Self::max`]) and the
+    /// lex-ordering non-strict-succession guard it composes at the
+    /// tie-break-left selection ([`Self::sorted_succeeds_or_equal`]
+    /// rather than [`Self::succeeds_or_equal`]).
+    ///
+    /// `T::sorted_first().sorted_max_label(T::sorted_first()) ==
+    /// T::sorted_first().label()` is the natural fixpoint the
+    /// lex-order binary-max-label projection shares with the
+    /// singleton-lex-pair diagonal, mirroring the
+    /// `T::first().max_label(T::first()) == T::first().label()`
+    /// fixpoint on the declaration arm one ordering column over.
+    fn sorted_max_label(self, other: Self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_max(self, other))
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -29503,6 +29677,202 @@ mod tests {
                     <StubKind as ClosedSet>::max(a, b),
                     "StubKind::sorted_max({a:?}, {b:?}) must coincide with \
                      StubKind::max({a:?}, {b:?}) when declaration and lex orders agree",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_label_agrees_with_min_dot_label_composition_across_every_pair() {
+        // PATH-UNIFORMITY CONTRACT (label peer): the declaration-
+        // order binary-min-LABEL projection is the natural
+        // `min(other).label()` composition — the Self-return binary
+        // min primitive folded through the canonical [`Self::label`]
+        // projection at every operand pair. Pins the min-label arm
+        // to the ONE substrate primitive pair (`min` + `label`) at
+        // every callsite, forbidding a divergent implementor body
+        // that would silently drift from the natural composition.
+        // Sibling posture to
+        // `clamp_label_agrees_with_clamp_dot_label_composition_on_every_well_formed_triple`
+        // one arity axis over on the binary-selection face — where
+        // the ternary-clamp-label arm binds through
+        // `clamp(lo, hi).label()`, the binary-min-label arm binds
+        // through `min(other).label()`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected = <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::min(a, b));
+                assert_eq!(
+                    <StubKind as ClosedSet>::min_label(a, b),
+                    expected,
+                    "StubKind::{a:?}.min_label(StubKind::{b:?}) must equal min(other).label() \
+                     — the declaration-order binary-min-LABEL projection is a typed CONSEQUENCE \
+                     of the Self-return binary-min primitive folded through the canonical label \
+                     projection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn max_label_agrees_with_max_dot_label_composition_across_every_pair() {
+        // PATH-UNIFORMITY CONTRACT (max-label peer): the declaration-
+        // order binary-max-LABEL projection is the natural
+        // `max(other).label()` composition on every operand pair.
+        // Sibling posture to
+        // `min_label_agrees_with_min_dot_label_composition_across_every_pair`
+        // one arm over on the (min, max) direction axis of the
+        // binary-label pairwise-selection surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected = <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::max(a, b));
+                assert_eq!(
+                    <StubKind as ClosedSet>::max_label(a, b),
+                    expected,
+                    "StubKind::{a:?}.max_label(StubKind::{b:?}) must equal max(other).label() \
+                     — the declaration-order binary-max-LABEL projection is a typed CONSEQUENCE \
+                     of the Self-return binary-max primitive folded through the canonical label \
+                     projection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_min_label_agrees_with_sorted_min_dot_label_composition_across_every_pair() {
+        // PATH-UNIFORMITY CONTRACT (lex-min-label peer): the lex-
+        // order binary-min-LABEL projection is the natural
+        // `sorted_min(other).label()` composition on every operand
+        // pair. Sibling posture to
+        // `min_label_agrees_with_min_dot_label_composition_across_every_pair`
+        // one arm over on the (declaration, lex) ordering axis of
+        // the binary-label pairwise-selection surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected =
+                    <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::sorted_min(a, b));
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_min_label(a, b),
+                    expected,
+                    "StubKind::{a:?}.sorted_min_label(StubKind::{b:?}) must equal \
+                     sorted_min(other).label() — the lex-order binary-min-LABEL projection is a \
+                     typed CONSEQUENCE of the Self-return lex-order binary-min primitive folded \
+                     through the canonical label projection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_max_label_agrees_with_sorted_max_dot_label_composition_across_every_pair() {
+        // PATH-UNIFORMITY CONTRACT (lex-max-label peer): the lex-
+        // order binary-max-LABEL projection is the natural
+        // `sorted_max(other).label()` composition on every operand
+        // pair. Together with the three sibling path-uniformity pins
+        // CLOSES the (declaration × lex) × (min, max) 2×2 = 4-corner
+        // path-uniformity matrix on the binary-label pairwise-
+        // selection face, jointly pinning the (`&'static str`-return,
+        // ordering × direction) 4-corner label face at every corner
+        // past the pre-existing Self-return 2×2 row.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected =
+                    <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::sorted_max(a, b));
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_max_label(a, b),
+                    expected,
+                    "StubKind::{a:?}.sorted_max_label(StubKind::{b:?}) must equal \
+                     sorted_max(other).label() — the lex-order binary-max-LABEL projection is a \
+                     typed CONSEQUENCE of the Self-return lex-order binary-max primitive folded \
+                     through the canonical label projection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_label_and_max_label_return_labels_from_the_operand_pair_on_every_pair() {
+        // MEMBERSHIP CONTRACT (label peers): the binary-min-label
+        // and binary-max-label projections return the LABEL of ONE
+        // OF the two operands — never a third variant's label. Pins
+        // the label-projection's codomain to the operand-pair label
+        // set on every input, mirroring the
+        // `min_returns_one_of_its_two_operands_on_every_pair` pin
+        // one return-shape axis over on the Self-return surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let a_lab = <StubKind as ClosedSet>::label(a);
+                let b_lab = <StubKind as ClosedSet>::label(b);
+                let mn = <StubKind as ClosedSet>::min_label(a, b);
+                let mx = <StubKind as ClosedSet>::max_label(a, b);
+                assert!(
+                    mn == a_lab || mn == b_lab,
+                    "StubKind::{a:?}.min_label(StubKind::{b:?}) = {mn:?} must be one of the two \
+                     operand labels",
+                );
+                assert!(
+                    mx == a_lab || mx == b_lab,
+                    "StubKind::{a:?}.max_label(StubKind::{b:?}) = {mx:?} must be one of the two \
+                     operand labels",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_label_and_max_label_are_idempotent_on_the_diagonal_across_every_variant() {
+        // IDEMPOTENCE / DIAGONAL FIXED POINT (label peers):
+        // `min_label(v, v) == v.label()` AND `max_label(v, v) ==
+        // v.label()` on every variant — the label projections fold
+        // the reflexive pair onto the shared operand's canonical
+        // label. Sibling posture to
+        // `min_is_idempotent_on_the_diagonal_across_every_variant`
+        // one return-shape axis over on the Self-return surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let v_lab = <StubKind as ClosedSet>::label(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::min_label(v, v),
+                v_lab,
+                "StubKind::{v:?}.min_label(StubKind::{v:?}) must be the diagonal label identity",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::max_label(v, v),
+                v_lab,
+                "StubKind::{v:?}.max_label(StubKind::{v:?}) must be the diagonal label identity",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_min_label_and_sorted_max_label_coincide_with_the_declaration_label_peers_when_orders_agree(
+    ) {
+        // CROSS-AXIS COINCIDENCE CONTRACT (label peers): when
+        // declaration and lex orders coincide (as they do on
+        // `StubKind`), the lex-order binary-min-LABEL and
+        // binary-max-LABEL projections coincide with the declaration-
+        // order arms on every operand pair. Pins the (declaration,
+        // lex) 2-column structural coincidence on the binary-label
+        // pairwise-selection surface one return-shape axis over from
+        // the
+        // `sorted_min_coincides_with_min_when_declaration_and_lex_orders_agree`
+        // pin on the Self-return surface — the LABEL projection
+        // inherits the ordering coincidence from the Self-return arm
+        // through the shared [`Self::label`] fold, mirroring the
+        // `sorted_clamp_label_coincides_with_clamp_label_when_declaration_and_lex_orders_agree`
+        // coincidence pattern one arity level up on the ternary-clamp
+        // face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_min_label(a, b),
+                    <StubKind as ClosedSet>::min_label(a, b),
+                    "StubKind::sorted_min_label({a:?}, {b:?}) must coincide with \
+                     StubKind::min_label({a:?}, {b:?}) when declaration and lex orders agree",
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_max_label(a, b),
+                    <StubKind as ClosedSet>::max_label(a, b),
+                    "StubKind::sorted_max_label({a:?}, {b:?}) must coincide with \
+                     StubKind::max_label({a:?}, {b:?}) when declaration and lex orders agree",
                 );
             }
         }

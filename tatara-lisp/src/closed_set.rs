@@ -12236,6 +12236,200 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::is_covering(items) && <Self as ClosedSet>::is_pairwise_distinct(items)
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "missing count" projection — the
+    /// `usize` cardinality of the SET of variants of [`Self::ALL`] that
+    /// do NOT occur in `items`, computed as the substrate-carried
+    /// [`Self::CARDINALITY`] constant minus the just-lifted usize-return
+    /// [`Self::count_distinct`] projection. The USIZE-RETURN opener on
+    /// the (absent) column of the (present, absent) partition-arm axis
+    /// of the equivalence-partition surface, positioned as the direct
+    /// dual of [`Self::count_distinct`] one column of the (partition-
+    /// arm) axis over — while [`Self::count_distinct`] reports "how
+    /// many variants does the slice HIT?", this projection reports
+    /// "how many variants does the slice MISS?", folding the ambient
+    /// set's partition into hit and miss cardinalities. Not a fresh
+    /// substrate primitive on the index axis — the count emerges from
+    /// one `usize`-subtraction of the just-lifted usize-return
+    /// [`Self::count_distinct`] projection from the trait-level
+    /// [`Self::CARDINALITY`] constant.
+    ///
+    /// Partition identity: for every slice `items`,
+    /// `T::count_missing(items) + T::count_distinct(items) ==
+    /// T::CARDINALITY` — the (present, absent) partition arms cover
+    /// the ambient set exactly. Pinned by
+    /// `count_missing_plus_count_distinct_equals_cardinality_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES on
+    /// element equality because the total-ordering discriminator
+    /// [`Self::index_of`] is a bijection into `[0, T::CARDINALITY)`,
+    /// so "which variants are missing?" is the same question under
+    /// EVERY ordering. Sibling posture to [`Self::count_distinct`],
+    /// [`Self::is_constant`], [`Self::is_pairwise_distinct`],
+    /// [`Self::is_covering`], and [`Self::is_permutation_of_all`]'s
+    /// ordering-axis invariance: every projection on the
+    /// equivalence-partition surface is direction- AND ordering-
+    /// agnostic; no separate `sorted_count_missing` peer is needed.
+    /// Pinned by
+    /// `count_missing_is_invariant_under_ordering_axis_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::count_missing(&[])` is
+    /// `T::CARDINALITY` on every implementor — the empty slice hits
+    /// zero variants, so it MISSES every variant of the ambient set.
+    /// Sibling posture to
+    /// `count_distinct_returns_zero_on_the_empty_slice_across_every_kind`
+    /// one column of the (partition-arm) axis over: the present-arm
+    /// projection reports its lower-bound fixpoint `0` at the empty-
+    /// slice endpoint, and the absent-arm projection reports its
+    /// upper-bound fixpoint `T::CARDINALITY` at the same endpoint.
+    /// Pinned by
+    /// `count_missing_returns_cardinality_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::count_missing(&[v])` is
+    /// `T::CARDINALITY - 1` for every variant `v` — a singleton hits
+    /// exactly one variant, so it misses `T::CARDINALITY - 1`-many.
+    /// Sibling posture to
+    /// `count_distinct_returns_one_on_every_singleton_slice_across_every_variant`
+    /// one column of the (partition-arm) axis over: the present-arm
+    /// projection collapses to `1` on every singleton, and the
+    /// absent-arm projection collapses to `T::CARDINALITY - 1` at
+    /// the same endpoint. Pinned by
+    /// `count_missing_returns_cardinality_minus_one_on_every_singleton_slice_across_every_variant`.
+    ///
+    /// Full-set contract: `T::count_missing(<T as ClosedSet>::ALL)`
+    /// is `0` UNCONDITIONALLY — the closed-set well-formedness
+    /// invariant [`assert_closed_set_well_formed`]'s clause (3) pins
+    /// labels (and hence variants) as pairwise distinct, so
+    /// `T::count_distinct(<T as ClosedSet>::ALL) == T::CARDINALITY`,
+    /// which folds through the subtraction identity to `0` missing.
+    /// Complements
+    /// `count_distinct_over_the_full_set_equals_cardinality` at the
+    /// OPPOSITE arm of the (partition-arm) axis: the present-arm
+    /// count reaches its `T::CARDINALITY` upper bound, and the
+    /// absent-arm count collapses to its `0` lower bound. Pinned by
+    /// `count_missing_over_the_full_set_equals_zero`.
+    ///
+    /// Concatenation-monotone contract: appending positions to a
+    /// slice can only KEEP or DECREASE the missing count (a superset
+    /// of a variant-hit slice misses AT MOST the variants the
+    /// sub-slice misses). Pinned by
+    /// `count_missing_over_the_doubled_full_set_equals_zero`.
+    ///
+    /// Bool-projection identity (covering arm): for every slice
+    /// `items`, `T::count_missing(items) == 0` iff
+    /// `T::is_covering(items)` — the surjectivity predicate is the
+    /// absent-arm count collapsing to its lower-bound fixpoint (a
+    /// slice covers every variant iff none is missing). Sibling
+    /// posture to
+    /// `is_covering_composes_through_count_distinct_equals_cardinality_across_every_triple`
+    /// on the SAME equivalence-partition surface, viewed from the
+    /// absent-arm side. Pinned by
+    /// `count_missing_equals_zero_iff_is_covering_holds_across_every_triple`.
+    ///
+    /// Upper-bound contract: `T::count_missing(items) <=
+    /// T::CARDINALITY` on every slice — the count is bounded above
+    /// by the ambient cardinality because the subtraction cannot
+    /// underflow (the well-formedness invariant guarantees
+    /// `T::count_distinct(items) <= T::CARDINALITY`, so the
+    /// difference is a non-negative `usize`). Pinned by
+    /// `count_missing_is_bounded_above_by_cardinality_across_every_triple`.
+    ///
+    /// Reversal-invariance: `T::count_missing(items)` equals
+    /// `T::count_missing(items.iter().rev().copied().collect::<Vec<_>>())`
+    /// — reversing a slice preserves its multiset of variant
+    /// identities, and the missing count is a function of that
+    /// multiset alone. Pinned by
+    /// `count_missing_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_distinct`] projection and the
+    /// [`Self::CARDINALITY`] constant. The composition uses one
+    /// `usize`-subtraction, so the sweep inherits
+    /// [`Self::count_distinct`]'s O(n(n-1)/2) cost on slice arity
+    /// `n` — allocation-free, no `PartialEq`/`Eq`/`Hash` supertrait
+    /// bound (the trait's minimal `Sized + Copy + 'static`
+    /// supertrait pair stays untouched), no bitset-shape carrier.
+    /// Underflow safety: the subtraction cannot wrap because
+    /// [`Self::count_distinct`]'s upper-bound contract (pinned by
+    /// `count_distinct_is_bounded_above_by_min_of_slice_length_and_cardinality_across_every_triple`)
+    /// pins `T::count_distinct(items) <= T::CARDINALITY` on every
+    /// slice.
+    ///
+    /// Future consumers that compose against [`Self::count_missing`]:
+    /// a `tatara-check` predicate `(check-phases-missing-count …)`
+    /// verifying that a `WorkloadPhase` sequence misses AT MOST K
+    /// phases at plan time — catching a spec that would silently
+    /// omit more phases than an SLO permits; an LSP diagnostic on a
+    /// Lisp-author-written closed-set field that quantifies BY HOW
+    /// MANY variants the value multiset falls short of covering the
+    /// ambient set (`:severities [:warn]` on a 3-variant severity
+    /// enum reports 2 missing rather than the ONE bit "not covering"
+    /// that [`Self::is_covering`] surfaces); a Sekiban audit-trail
+    /// metric labeled by the ambient-set miss-count of a
+    /// classification poset (a "how many classifications were
+    /// missed?" gauge across a window); a
+    /// `tatara-lisp::macro_expand::Expander` hygiene pass that
+    /// quantifies a template's miss-count against a required closed
+    /// vocabulary. Each binds to ONE typed N-ary absent-count
+    /// projection on the trait rather than re-deriving
+    /// `T::CARDINALITY - T::count_distinct(items)` inline per
+    /// callsite.
+    ///
+    /// Compounding closure: the (present, absent) × (bool, usize)
+    /// 2×2 = 4-corner partition-arm × return-shape face on the
+    /// equivalence-partition surface now closes at four typed
+    /// primitives — [`Self::count_distinct`] (present-usize),
+    /// [`Self::is_covering`] (present-bool: "present-count reaches
+    /// cardinality"), THIS projection (absent-usize), and the
+    /// implicit `!T::is_covering(items)` (absent-bool: "any-missing"
+    /// as a boolean projection of the absent-count reaching `> 0`).
+    /// Once THIS lift lands the four corners bind to two typed
+    /// substrate primitives on the equivalence-partition surface,
+    /// and the (any-missing) predicate is a trivial future
+    /// composition on THIS count.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// absent-count projection becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline
+    /// `T::CARDINALITY - T::count_distinct(items)` subtraction at
+    /// every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the (absent) column was an unnamed inline
+    /// composition recurring at every prospective downstream "how
+    /// many variants did we miss?" site pre-lift. Naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of the
+    /// substrate's total-ordering discriminator ([`Self::index_of`]
+    /// via [`Self::count_distinct`]) subtracted from the trait-level
+    /// [`Self::CARDINALITY`] constant. THEORY.md §VI.1 — generation
+    /// over composition; the missing-count projection emerges from
+    /// the composition of ONE substrate primitive
+    /// ([`Self::count_distinct`]) with the trait-level constant
+    /// ([`Self::CARDINALITY`]) via a single `-` on `usize`, not as
+    /// a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `length (list_diff T l)` idiom
+    /// composing list-set-difference with length to surface the
+    /// missing-count on a decidable-equality carrier; Idris's
+    /// `Data.Vect.Missing : Vect n a -> Vect m a -> Type` witness
+    /// combined with a fixed right-argument of the canonical full
+    /// set that surfaces the same projection at the type level;
+    /// Rust's own
+    /// `T::ALL.iter().filter(|v| !items.contains(v)).count()`
+    /// idiom binds through a per-position linear scan. Julia's
+    /// `length(setdiff(T, v))` on a typed vector; NumPy's
+    /// `len(np.setdiff1d(T, a))` idiom. Racket's
+    /// `(length (remove* v T))` composition on a list. Translation
+    /// through pleme-io primitives: the N-ary absent-count
+    /// projection on the closed-set trait binds through the
+    /// substrate's [`Self::count_distinct`] projection subtracted
+    /// from the trait-level [`Self::CARDINALITY`] constant — no
+    /// new dep, no supertrait bound (the [`Self::count_distinct`]
+    /// projection replaces the `Eq`/`Hash` bound the standard-
+    /// library set-difference signatures demand), no set-shape
+    /// carrier, no allocation.
+    fn count_missing(items: &[Self]) -> usize {
+        <Self as ClosedSet>::CARDINALITY - <Self as ClosedSet>::count_distinct(items)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -37895,6 +38089,273 @@ mod tests {
                         "T::is_permutation_of_all({triple:?}) diverged from T::is_pairwise_distinct({triple:?}) at the cardinality-{cardinality} × length-{len} corner where the two predicates coincide (length == CARDINALITY)",
                         cardinality = <StubKind as ClosedSet>::CARDINALITY,
                         len = triple.len(),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_missing_returns_cardinality_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (N-ary absent-count projection):
+        // `T::count_missing(&[])` is `T::CARDINALITY` — the empty
+        // slice hits zero variants, so it MISSES every variant of
+        // the ambient set. Sibling posture to
+        // `count_distinct_returns_zero_on_the_empty_slice_across_every_kind`
+        // one column of the (partition-arm) axis over: the present-
+        // arm projection reports its lower-bound fixpoint `0` at
+        // the empty-slice endpoint, and the absent-arm projection
+        // reports its upper-bound fixpoint `T::CARDINALITY` at the
+        // same endpoint.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::count_missing(empty),
+            <StubKind as ClosedSet>::CARDINALITY,
+        );
+    }
+
+    #[test]
+    fn count_missing_returns_cardinality_minus_one_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT: `T::count_missing(&[v])` is
+        // `T::CARDINALITY - 1` for every variant `v` — a singleton
+        // hits exactly one variant, so it misses
+        // `T::CARDINALITY - 1`-many. Sibling posture to
+        // `count_distinct_returns_one_on_every_singleton_slice_across_every_variant`
+        // one column of the (partition-arm) axis over: the present-
+        // arm projection collapses to `1` on every singleton, and
+        // the absent-arm projection collapses to
+        // `T::CARDINALITY - 1` at the same endpoint.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 1) };
+        let expected = <StubKind as ClosedSet>::CARDINALITY - 1;
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::count_missing(&singleton),
+                expected,
+                "T::count_missing({singleton:?}) diverged from T::CARDINALITY - 1 = {expected}",
+            );
+        }
+    }
+
+    #[test]
+    fn count_missing_over_the_full_set_equals_zero() {
+        // FULL-SET CONTRACT: `T::count_missing(<T as ClosedSet>::ALL)`
+        // is `0` — the closed-set well-formedness invariant
+        // `assert_closed_set_well_formed`'s clause (3) pins labels
+        // (and hence variants) as pairwise distinct, so
+        // `T::count_distinct(<T as ClosedSet>::ALL) == T::CARDINALITY`,
+        // which folds through the subtraction identity to `0`.
+        // Complements `count_distinct_over_the_full_set_equals_cardinality`
+        // at the OPPOSITE arm of the (partition-arm) axis: the
+        // present-arm count reaches its `T::CARDINALITY` upper
+        // bound, and the absent-arm count collapses to its `0`
+        // lower bound.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::count_missing(all),
+            0,
+            "T::count_missing on the full set diverged from 0 — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+        );
+    }
+
+    #[test]
+    fn count_missing_over_the_doubled_full_set_equals_zero() {
+        // CONCATENATION-MONOTONE CONTRACT: appending positions to a
+        // slice can only KEEP or DECREASE the missing count. Doubling
+        // the full set preserves the covering property (both halves
+        // hit every variant), so the multiset is still covering and
+        // the miss-count stays at its `0` fixpoint. Sibling posture
+        // to `is_covering_over_the_doubled_full_set_holds_unconditionally`
+        // one column of the (return-shape) axis over: the bool-return
+        // covering predicate accepts on the doubled full set, and
+        // the usize-return absent-count collapses to `0` at the
+        // same endpoint.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::count_missing(&doubled),
+            0,
+            "T::count_missing on the doubled full set diverged from 0 — appending positions cannot INCREASE the miss-count above the pre-appending value",
+        );
+    }
+
+    #[test]
+    fn count_missing_plus_count_distinct_equals_cardinality_across_every_triple() {
+        // PARTITION IDENTITY: for every slice `items`,
+        // `T::count_missing(items) + T::count_distinct(items) ==
+        // T::CARDINALITY`. The (present, absent) partition arms
+        // cover the ambient set exactly; the identity binds by
+        // construction from the method's body but the sweep catches
+        // a future override whose body diverges from the canonical
+        // subtraction of `count_distinct` from `CARDINALITY`.
+        // Sweeps every length-2 pair and length-3 triple to pin the
+        // identity across the full domain of every operand tuple.
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::count_missing(empty)
+                + <StubKind as ClosedSet>::count_distinct(empty),
+            cardinality,
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [a];
+            assert_eq!(
+                <StubKind as ClosedSet>::count_missing(&singleton)
+                    + <StubKind as ClosedSet>::count_distinct(&singleton),
+                cardinality,
+                "T::count_missing({singleton:?}) + T::count_distinct({singleton:?}) diverged from T::CARDINALITY = {cardinality} — the partition identity was violated",
+            );
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                assert_eq!(
+                    <StubKind as ClosedSet>::count_missing(&pair)
+                        + <StubKind as ClosedSet>::count_distinct(&pair),
+                    cardinality,
+                    "T::count_missing({pair:?}) + T::count_distinct({pair:?}) diverged from T::CARDINALITY = {cardinality} — the partition identity was violated",
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_missing(&triple)
+                            + <StubKind as ClosedSet>::count_distinct(&triple),
+                        cardinality,
+                        "T::count_missing({triple:?}) + T::count_distinct({triple:?}) diverged from T::CARDINALITY = {cardinality} — the partition identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_missing_equals_zero_iff_is_covering_holds_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY (covering arm): for every slice
+        // `items`, `T::count_missing(items) == 0` iff
+        // `T::is_covering(items)` — the surjectivity predicate is
+        // the absent-arm count collapsing to its lower-bound
+        // fixpoint (a slice covers every variant iff none is
+        // missing). Sibling posture to
+        // `is_covering_composes_through_count_distinct_equals_cardinality_across_every_triple`
+        // on the SAME equivalence-partition surface, viewed from
+        // the absent-arm side.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                assert_eq!(
+                    <StubKind as ClosedSet>::count_missing(&pair) == 0,
+                    <StubKind as ClosedSet>::is_covering(&pair),
+                    "T::count_missing({pair:?}) == 0 diverged from T::is_covering({pair:?}) — the (miss-count == 0) identity is the covering bool-projection",
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_missing(&triple) == 0,
+                        <StubKind as ClosedSet>::is_covering(&triple),
+                        "T::count_missing({triple:?}) == 0 diverged from T::is_covering({triple:?}) — the (miss-count == 0) identity is the covering bool-projection",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_missing_is_bounded_above_by_cardinality_across_every_triple() {
+        // UPPER-BOUND CONTRACT: `T::count_missing(items) <=
+        // T::CARDINALITY` on every slice — the count is bounded
+        // above by the ambient cardinality because the subtraction
+        // cannot underflow (the well-formedness invariant guarantees
+        // `T::count_distinct(items) <= T::CARDINALITY`, so the
+        // difference is a non-negative `usize` at most equal to
+        // `T::CARDINALITY`). Sweeps every length-2 pair and length-
+        // 3 triple to pin the bound across the full domain of every
+        // operand tuple. Catches a future override whose body
+        // accidentally wraps (a bug where the subtraction is
+        // inverted, for instance, would produce a wrapping value at
+        // `T::count_distinct(items) - T::CARDINALITY` on any non-
+        // covering slice).
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        let empty: &[StubKind] = &[];
+        assert!(<StubKind as ClosedSet>::count_missing(empty) <= cardinality);
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [a];
+            assert!(<StubKind as ClosedSet>::count_missing(&singleton) <= cardinality);
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                assert!(
+                    <StubKind as ClosedSet>::count_missing(&pair) <= cardinality,
+                    "T::count_missing({pair:?}) exceeded T::CARDINALITY",
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert!(
+                        <StubKind as ClosedSet>::count_missing(&triple) <= cardinality,
+                        "T::count_missing({triple:?}) exceeded T::CARDINALITY",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_missing_is_invariant_under_ordering_axis_across_every_triple() {
+        // ORDERING-AXIS INVARIANCE CONTRACT: element equality is
+        // intrinsically ordering-agnostic — a slice's absent-count
+        // is a property of the multiset of its element identities,
+        // not of the ordering the substrate uses to compare them.
+        // The projection composes on `count_distinct`, which itself
+        // composes on `<Self as ClosedSet>::index_of`, which is a
+        // bijection into `[0, T::CARDINALITY)`; and equality on
+        // that discriminator is invariant under any reordering of
+        // `T::ALL`. Sibling posture to
+        // `count_distinct_is_invariant_under_ordering_axis_across_every_triple`
+        // one column of the (partition-arm) axis over: both
+        // present-arm AND absent-arm projections on the
+        // equivalence-partition surface are ordering-agnostic
+        // fixpoints of the (declaration, lex) reordering. Sweeps
+        // over every triple and cross-checks the miss-count via
+        // the partition identity against the pre-existing
+        // present-arm count.
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_missing(&triple),
+                        cardinality - <StubKind as ClosedSet>::count_distinct(&triple),
+                        "T::count_missing({triple:?}) diverged from T::CARDINALITY - T::count_distinct({triple:?}) — the ordering-agnostic partition identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_missing_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::count_missing(items) ==
+        // T::count_missing(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and the miss-count is a function of that
+        // multiset alone (via the partition identity against the
+        // present-arm count, which is itself a fixpoint of slice
+        // reversal). Sibling posture to
+        // `count_distinct_is_invariant_under_slice_reversal_across_every_triple`
+        // and every other equivalence-partition-surface projection
+        // one column of the (partition-arm) axis over: every
+        // projection on the surface is a FIXPOINT of slice
+        // reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_missing(&forward),
+                        <StubKind as ClosedSet>::count_missing(&reversed),
+                        "T::count_missing({forward:?}) diverged from T::count_missing({reversed:?}) — the miss-count projection MUST be a fixpoint of slice reversal",
                     );
                 }
             }

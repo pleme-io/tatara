@@ -11370,6 +11370,159 @@ pub trait ClosedSet: Sized + Copy + 'static {
             || <Self as ClosedSet>::is_sorted_strictly_descending(items)
     }
 
+    /// The N-ARY DIRECTION-JOINED "constant slice" predicate — `true` iff
+    /// `items` is BOTH non-strictly ascending AND non-strictly descending
+    /// under [`Self::ALL`]'s declaration order, `false` otherwise. Since
+    /// the substrate's declaration order is total, the joint condition
+    /// holds iff every adjacent pair is EQUAL, i.e. `items` is a
+    /// repetition of ONE variant (possibly zero-arity). The direction-
+    /// CONJUNCTION peer of [`Self::is_monotonic`]'s direction-DISJUNCTION
+    /// on the (∧, ∨) axis of the N-ary monotonicity face — while
+    /// [`Self::is_monotonic`] widens the direction-split arms through
+    /// `||` to accept EITHER ordering, this predicate NARROWS them
+    /// through `&&` to accept ONLY the constant intersection.
+    ///
+    /// Ordering-axis invariance: `T::is_constant(items) ==
+    /// T::is_ascending(items) && T::is_descending(items) ==
+    /// T::is_sorted_ascending(items) && T::is_sorted_descending(items)`
+    /// — the constant-slice predicate is intrinsically ordering-
+    /// agnostic. Equality on the closed-set variants doesn't depend on
+    /// which order the substrate uses to compare them; a slice that is
+    /// simultaneously non-strictly ascending AND non-strictly descending
+    /// under ONE ordering is the same slice under EVERY ordering (all
+    /// elements equal). No separate `sorted_is_constant` peer is needed:
+    /// the (declaration, lex) axis COLLAPSES on this predicate by
+    /// construction, distinguishing it from every other N-ary
+    /// monotonicity predicate on the closed set (which needs both
+    /// declaration and lex arms because the two orderings differ pairwise
+    /// on non-constant slices). Pinned by
+    /// `is_constant_is_invariant_under_ordering_axis_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::is_constant(&[])` is `true` on every
+    /// implementor — both direction arms are `true` on the empty slice
+    /// by vacuous quantification over adjacent pairs, so the conjunction
+    /// is `true`. Pinned by
+    /// `is_constant_returns_true_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::is_constant(&[v])` is `true` for every
+    /// variant `v` — both direction arms are `true` on every singleton
+    /// slice by vacuous quantification over adjacent pairs, so the
+    /// conjunction is `true`. Pinned by
+    /// `is_constant_returns_true_on_every_singleton_slice_across_every_variant`.
+    ///
+    /// Repetition contract: `T::is_constant(&[v; N])` is `true` for every
+    /// variant `v` and every arity `N ≥ 0` — every adjacent pair is
+    /// `(v, v)`, so both direction arms accept the slice through their
+    /// non-strict-precedence composition (`v.precedes_or_equal(v)` and
+    /// `v.succeeds_or_equal(v)` both hold by reflexivity). Pinned by
+    /// `is_constant_returns_true_on_every_repetition_of_the_same_variant`.
+    ///
+    /// Two-distinct-variant contract: `T::is_constant(items)` is `false`
+    /// on every slice containing two DISTINCT variants — declaration
+    /// order is total, so the two distinct variants sit at different
+    /// positions in [`Self::ALL`] and their strict-precedence relation
+    /// holds in exactly ONE direction, forcing the OTHER direction's
+    /// non-strict arm to reject the slice through the total-ordering
+    /// antisymmetry axiom. Pinned by
+    /// `is_constant_returns_false_on_any_slice_with_two_distinct_variants`.
+    ///
+    /// Strict-implication contract: `T::is_constant(items) ⇒
+    /// !T::is_strictly_monotonic(items)` on every slice of arity ≥ 2 —
+    /// a constant slice with two or more elements contains adjacent equal
+    /// elements, which the strict-precedence primitive's irreflexivity
+    /// forces to reject through BOTH strict direction arms
+    /// ([`Self::is_strictly_ascending`] and
+    /// [`Self::is_strictly_descending`]), so the strictness-collapsed
+    /// disjunction ([`Self::is_strictly_monotonic`]) rejects too. The
+    /// arity ≥ 2 gate excludes the empty and singleton cases where both
+    /// predicates hold vacuously.
+    ///
+    /// Non-strict-implication contract: `T::is_constant(items) ⇒
+    /// T::is_monotonic(items)` on every slice — a constant slice is a
+    /// witness of BOTH direction arms of the non-strict monotonicity
+    /// predicate, so the disjunction of the two arms accepts it too.
+    /// The converse fails past arity 2 (a strictly-monotonic non-constant
+    /// slice is monotonic without being constant), so `is_constant` is
+    /// strictly stronger than `is_monotonic` on the non-strict axis and
+    /// strictly weaker than `is_strictly_monotonic` on the strict axis
+    /// (past the trivially-both-hold empty and singleton cases).
+    ///
+    /// Reversal-invariance: `T::is_constant(items) ==
+    /// T::is_constant(items.iter().rev().copied().collect::<Vec<_>>())`
+    /// — reversing a slice preserves its constant-ness because equality
+    /// is symmetric under position swap. The property is a typed
+    /// CONSEQUENCE of the direction-conjunction composition: reversing
+    /// swaps the ascending and descending arms, but the conjunction is
+    /// symmetric under that swap.
+    ///
+    /// The direction-conjunction predicate sits at the OPPOSITE end of
+    /// the (∧, ∨) axis from the direction-disjunction predicate
+    /// [`Self::is_monotonic`]; together the two predicates NAME the two
+    /// endpoints of the direction-arm-combination axis, and every other
+    /// direction-combination (XOR, NAND, implication) is a downstream
+    /// derivation that binds through boolean composition of the two.
+    /// Widening the direction axis (`||`) accepts EITHER ordering;
+    /// narrowing the direction axis (`&&`) accepts ONLY the constant
+    /// intersection.
+    ///
+    /// Future consumers that compose against [`Self::is_constant`]: a
+    /// `tatara-check` predicate `(check-phases-constant …)` verifying a
+    /// `WorkloadPhase` sequence is a repetition of ONE phase at plan
+    /// time (catching a spec whose "always in phase X" invariant is
+    /// silently violated, without pinning WHICH phase the check ranges
+    /// over); an LSP diagnostic verifying a Lisp-author-written closed-
+    /// set field is a repetition of the same variant across a batched
+    /// authoring surface; a Sekiban audit-trail metric verifying that a
+    /// convergence-classification trajectory is fixed at ONE
+    /// classification across a window (proof of the trajectory's
+    /// stability); a `tatara-lisp::macro_expand::Expander` cache pass
+    /// that skips a template rewrite when the operand slice is constant
+    /// (a valid optimization on any operator whose per-operand result
+    /// is idempotent). Each binds to ONE typed direction-joined N-ary
+    /// predicate on the trait rather than re-deriving `T::is_ascending(items)
+    /// && T::is_descending(items)` inline per callsite.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the direction-
+    /// joined N-ary "all elements equal" predicate becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::is_ascending(items) && T::is_descending(items)`
+    /// conjunction at every downstream generic site.
+    /// THEORY.md §V.1 — knowable platform; the direction-joined axis
+    /// was an unnamed inline composition
+    /// (`T::is_ascending(items) && T::is_descending(items)`) recurring
+    /// at every prospective downstream "is-this-slice-a-constant"
+    /// site pre-lift AND at the pre-lift
+    /// `is_ascending_and_is_descending_hold_jointly_iff_slice_is_constant`
+    /// test's inline conjunction. Naming it on the trait makes the
+    /// predicate a TYPED CONSEQUENCE of the direction-split arms
+    /// joined through the standard-library `&&`.
+    /// THEORY.md §VI.1 — generation over composition; the direction-
+    /// joined predicate emerges from the composition of TWO substrate
+    /// primitives ([`Self::is_ascending`] + [`Self::is_descending`]
+    /// joined via the standard-library `&&` short-circuit) rather
+    /// than as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(andmap (λ (x) (equal? x head))
+    /// rest)` pattern for constant-slice detection; Julia's
+    /// `allequal(v)` (v1.8+) built-in that names the same predicate
+    /// through a dedicated primitive rather than an inline `all` over
+    /// a comparison; NumPy's `np.all(a == a[0])` composition on typed
+    /// arrays; Idris's `Vect n a` witness of a constant vector via the
+    /// `Replicate` constructor which encodes the same "all equal"
+    /// property structurally at the type level. Rust's iterator
+    /// `windows(2).all(|w| w[0] == w[1])` binds the same predicate on
+    /// any iterable slice. MLIR's `constant_vector` verification pass
+    /// surfaces the same predicate on typed vector operands.
+    /// Translation through pleme-io primitives: the direction-joined
+    /// N-ary predicate on the closed-set trait binds through the
+    /// conjunction of the two direction-split N-ary arms at the same
+    /// (ordering-agnostic, non-strict) corner — no new dep, no supertrait
+    /// bound (the direction-split arms replace the `PartialEq` bound the
+    /// standard-library signatures demand), no vector-shape carrier.
+    fn is_constant(items: &[Self]) -> bool {
+        <Self as ClosedSet>::is_ascending(items) && <Self as ClosedSet>::is_descending(items)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -35679,5 +35832,233 @@ mod tests {
             assert!(<StubKind as ClosedSet>::is_sorted_monotonic(&doubled));
             assert!(<StubKind as ClosedSet>::is_sorted_monotonic(&tripled));
         }
+    }
+
+    #[test]
+    fn is_constant_returns_true_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (N-ary direction-joined "all equal"
+        // predicate): `T::is_constant(&[])` is `true` — both direction
+        // arms are `true` on the empty slice by vacuous quantification
+        // over adjacent pairs, so the conjunction is `true`. Sibling
+        // posture to `is_monotonic_returns_true_on_the_empty_slice_across_every_kind`
+        // on the direction-DISJUNCTION face — the empty-slice fixpoint is
+        // shared across both the (∧, ∨) axis endpoints of the direction-
+        // arm combination.
+        let empty: &[StubKind] = &[];
+        assert!(<StubKind as ClosedSet>::is_constant(empty));
+    }
+
+    #[test]
+    fn is_constant_returns_true_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT: `T::is_constant(&[v])` is `true` for every
+        // variant `v` — both direction arms are `true` on every
+        // singleton slice by vacuous quantification over adjacent pairs,
+        // so the conjunction is `true`. Sibling posture to
+        // `is_monotonic_returns_true_on_every_singleton_slice_across_every_variant`
+        // one direction-arm-combination axis over — the singleton
+        // fixpoint holds across both the disjunction and the conjunction
+        // arm because both direction-split arms hold vacuously.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert!(<StubKind as ClosedSet>::is_constant(&singleton));
+        }
+    }
+
+    #[test]
+    fn is_constant_returns_true_on_every_repetition_of_the_same_variant() {
+        // REPETITION CONTRACT: `T::is_constant(&[v; N])` is `true` for
+        // every variant `v` and every arity `N ≥ 0` — every adjacent
+        // pair is `(v, v)`, so both direction arms accept the slice
+        // through their non-strict-precedence composition
+        // (`v.precedes_or_equal(v) == true` and
+        // `v.succeeds_or_equal(v) == true` both hold by reflexivity of
+        // the non-strict pairwise-precedence primitive). Sibling posture
+        // to `is_monotonic_holds_on_every_constant_slice_across_every_variant`
+        // on the direction-DISJUNCTION face — both the disjunction and
+        // the conjunction accept constant slices, but only the
+        // conjunction rejects non-constant slices at arity ≥ 2.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let doubled = [v, v];
+            let tripled = [v, v, v];
+            let quadrupled = [v, v, v, v];
+            assert!(<StubKind as ClosedSet>::is_constant(&doubled));
+            assert!(<StubKind as ClosedSet>::is_constant(&tripled));
+            assert!(<StubKind as ClosedSet>::is_constant(&quadrupled));
+        }
+    }
+
+    #[test]
+    fn is_constant_returns_false_on_any_slice_with_two_distinct_variants() {
+        // TWO-DISTINCT-VARIANT CONTRACT: `T::is_constant(items)` is
+        // `false` on every slice containing two DISTINCT variants —
+        // declaration order is total, so the two distinct variants sit
+        // at different positions in `T::ALL` and their strict-precedence
+        // relation holds in exactly ONE direction, forcing the OTHER
+        // direction's non-strict arm to reject the slice through the
+        // total-ordering antisymmetry axiom. Sweeping every distinct
+        // ordered pair `(a, b)` on every arity-2 and arity-3 slice
+        // catches a regression that widens the conjunction into a
+        // disjunction (which would silently absorb non-constant
+        // monotone slices). The distinct-variant probe is the
+        // direction-conjunction's discriminating case that distinguishes
+        // this predicate from `is_monotonic` (which accepts every
+        // strictly-monotone non-constant slice).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if a == b {
+                    continue;
+                }
+                let two = [a, b];
+                assert!(
+                    !<StubKind as ClosedSet>::is_constant(&two),
+                    "T::is_constant({two:?}) accepted a two-distinct-variant slice",
+                );
+                let three_leading = [a, a, b];
+                assert!(
+                    !<StubKind as ClosedSet>::is_constant(&three_leading),
+                    "T::is_constant({three_leading:?}) accepted a slice with a distinct trailing variant",
+                );
+                let three_trailing = [a, b, b];
+                assert!(
+                    !<StubKind as ClosedSet>::is_constant(&three_trailing),
+                    "T::is_constant({three_trailing:?}) accepted a slice with a distinct leading variant",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_constant_agrees_with_ascending_and_descending_conjunction_across_every_triple() {
+        // COMPOSITION-LAW CONTRACT: `T::is_constant(items) ==
+        // T::is_ascending(items) && T::is_descending(items)` on every
+        // slice — the direction-joined predicate is defined AS the
+        // conjunction of the two direction-split non-strict arms, so
+        // the equality holds by construction. Sweeping every length-2
+        // and length-3 slice pins the composition-law contract across
+        // the full triple domain of every operand pair on the closed
+        // set, catching a future override whose body would diverge from
+        // the canonical conjunction. Sibling posture to
+        // `is_monotonic_composes_direction_split_arms_via_disjunction_across_every_triple`
+        // one (∧, ∨) axis over on the direction-arm combination — the
+        // conjunction test is the ∧-half of the direction-arm-
+        // combination axis's binding contract.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                let expected_pair = <StubKind as ClosedSet>::is_ascending(&pair)
+                    && <StubKind as ClosedSet>::is_descending(&pair);
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_constant(&pair),
+                    expected_pair,
+                    "T::is_constant({pair:?}) diverged from T::is_ascending && T::is_descending"
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected_triple = <StubKind as ClosedSet>::is_ascending(&triple)
+                        && <StubKind as ClosedSet>::is_descending(&triple);
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_constant(&triple),
+                        expected_triple,
+                        "T::is_constant({triple:?}) diverged from T::is_ascending && T::is_descending"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_constant_is_invariant_under_ordering_axis_across_every_triple() {
+        // ORDERING-AXIS INVARIANCE CONTRACT: `T::is_constant(items) ==
+        // T::is_sorted_ascending(items) && T::is_sorted_descending(items)`
+        // on every slice — the constant-slice predicate is intrinsically
+        // ordering-agnostic. A slice is simultaneously non-strictly
+        // ascending AND non-strictly descending under ONE ordering iff
+        // every adjacent pair is equal, which is the same condition
+        // under EVERY ordering. The (declaration, lex) axis COLLAPSES on
+        // this predicate, distinguishing it from every other N-ary
+        // monotonicity predicate on the closed set (which needs both
+        // declaration and lex arms because the two orderings differ
+        // pairwise on non-constant slices). Sweeping every length-2 and
+        // length-3 slice pins the ordering-axis-collapse contract across
+        // the full triple domain of every operand pair. Catches a future
+        // override whose body binds the conjunction against the lex-axis
+        // arms and drifts from the declaration-axis peer.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                let expected_pair = <StubKind as ClosedSet>::is_sorted_ascending(&pair)
+                    && <StubKind as ClosedSet>::is_sorted_descending(&pair);
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_constant(&pair),
+                    expected_pair,
+                    "T::is_constant({pair:?}) diverged from the lex-axis conjunction"
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected_triple = <StubKind as ClosedSet>::is_sorted_ascending(&triple)
+                        && <StubKind as ClosedSet>::is_sorted_descending(&triple);
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_constant(&triple),
+                        expected_triple,
+                        "T::is_constant({triple:?}) diverged from the lex-axis conjunction"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_constant_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT: `T::is_constant(items) ==
+        // T::is_constant(reversed items)` on every slice — reversing a
+        // slice preserves its constant-ness because equality is
+        // symmetric under position swap. The direction-conjunction is
+        // symmetric under the direction-arm exchange that slice reversal
+        // induces (ascending ↔ descending), so the conjunction is a
+        // FIXPOINT of the reversal permutation. Sweeping every length-3
+        // triple and its reversal pins the fixpoint contract across the
+        // full triple domain of every operand pair. Sibling posture to
+        // `is_monotonic_of_slice_agrees_with_is_monotonic_of_reversed_slice_across_every_triple`
+        // one (∧, ∨) axis over on the direction-arm combination — both
+        // the disjunction and the conjunction are FIXPOINTS of slice
+        // reversal (each direction-collapse axis absorbs the direction
+        // exchange), but only the conjunction discriminates non-constant
+        // monotone slices from constant ones.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_constant(&forward),
+                        <StubKind as ClosedSet>::is_constant(&reversed),
+                        "T::is_constant({forward:?}) diverged from T::is_constant({reversed:?}) — the direction-conjunction predicate MUST be a fixpoint of slice reversal"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_constant_over_the_full_set_holds_iff_cardinality_is_zero_or_one() {
+        // FULL-SET CONTRACT: `T::is_constant(<T as ClosedSet>::ALL)`
+        // holds iff `<T as ClosedSet>::ALL.len() ≤ 1` — the full set of
+        // a closed-set enum with two or more variants contains at least
+        // two DISTINCT variants (by the closed-set well-formedness
+        // pairwise-distinctness invariant `assert_closed_set_well_formed`
+        // pin (3)), so the direction-conjunction rejects the full-set
+        // sweep on every non-degenerate implementor. Complements
+        // `is_monotonic_over_the_full_set_holds` on the direction-
+        // DISJUNCTION arm which holds unconditionally on the full set
+        // by construction: the disjunction accepts EITHER ordering
+        // (the full-set ascending arm holds by declaration), while the
+        // conjunction rejects it because the descending arm rejects
+        // (the full set is not descending past cardinality 1).
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::is_constant(all),
+            all.len() <= 1,
+            "T::is_constant on the full set diverged from the cardinality gate"
+        );
     }
 }

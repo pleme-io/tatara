@@ -10727,6 +10727,198 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn sorted_saturating_prev_label(self) -> &'static str {
         <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_saturating_prev(self))
     }
+
+    /// The `usize` DECLARATION-ORDER INDEX of the neighbor immediately
+    /// AFTER `self` in [`Self::ALL`], SATURATING at
+    /// [`Self::index_of`]`(self)` at the tail — the declaration-order
+    /// position of [`Self::saturating_next`] projected through
+    /// [`Self::index_of`]. Returns `usize`, never [`Option<usize>`]:
+    /// the saturating arm folds the tail-endpoint boundary onto
+    /// `self`'s OWN slot rather than wrapping to `0` (the wrapping
+    /// arm's [`Self::cycle_next_index`] fold) or leaving the [`None`]
+    /// the bounded arm ([`Self::next_index`]) returns.
+    ///
+    /// The index-return arm of the (`Self`-return, `&'static str`-return,
+    /// `usize`-return) return-shape partition of the closed-set
+    /// SATURATING-forward-neighbor surface — one return-shape axis
+    /// over from [`Self::saturating_next`] (`Self`-return declaration-
+    /// axis saturating-forward), one return-shape axis over from
+    /// [`Self::saturating_next_label`] (`&'static str`-return
+    /// declaration-axis saturating-forward-label), one boundary-behavior
+    /// axis over from [`Self::next_index`] (`Option<usize>`-return
+    /// bounded-forward-index), and one boundary-behavior axis over
+    /// from [`Self::cycle_next_index`] (`usize`-return wrapping-forward-
+    /// index). Together with the three lex + backward peers below,
+    /// this CLOSES the index-return column on the SATURATING arm of
+    /// the (boundary-behavior) axis on the index-shaped neighbor
+    /// surface — the (return-shape × boundary-behavior × ordering ×
+    /// direction) 3×3×2×2 = 36-corner
+    /// index-and-label-and-variant-return neighbor hypercube on the
+    /// closed-set surface now carries every corner filled at the
+    /// intersection of the {`Self`, label, index} return-shape trio and
+    /// the {bounded, wrapping, saturating} boundary-behavior trio.
+    ///
+    /// Every generic consumer that renders the saturating-forward-
+    /// neighbor SLOT of a typed variant (an LSP completion cursor
+    /// that emits `next-slot: <index>` for the next variant but STAYS
+    /// at the current slot at the tail-endpoint rather than cycling
+    /// to slot `0`, a compact wire codec that emits the saturating
+    /// successor's slot for cross-boundary handoff without threading
+    /// `Option`-dispatch through the encoder, a bounded-selector's
+    /// "next" affordance's slot renderer that disables at the
+    /// boundary by re-emitting the current slot, a carousel widget's
+    /// next-arrow slot renderer that reads the same slot when the
+    /// arrow is disabled) binds to ONE typed method rather than
+    /// re-deriving the `v.saturating_next().index_of()`
+    /// two-primitive composition OR the
+    /// `v.next_index().unwrap_or(v.index_of())` three-primitive
+    /// composition at every callsite.
+    ///
+    /// Default body composes [`Self::saturating_next`] with
+    /// [`Self::index_of`] verbatim. The saturating-neighbor-index
+    /// contract — the tail arm returns `self.index_of()` for
+    /// [`Self::last`] — is guaranteed by the default composition
+    /// through [`Self::saturating_next`]'s tail-stay-at-`self` fold.
+    /// `T::last().saturating_next_index() == T::last().index_of()`
+    /// (i.e. `T::CARDINALITY - 1`) is the natural fixpoint the
+    /// forward-saturating-neighbor-index axis and the tail-endpoint
+    /// anchor share, mirroring the
+    /// `T::last().saturating_next() == T::last()` fixpoint one
+    /// return-type axis over on the variant-return surface AND the
+    /// `T::last().saturating_next_label() == T::last().label()`
+    /// fixpoint one return-type axis over on the label-return surface
+    /// AND the `T::last().cycle_next_index() == 0` fixpoint one
+    /// boundary-behavior axis over on the wrapping arm.
+    ///
+    /// Frontier inspiration: Racket's
+    /// `(enum-index (enum-next-clamped v))` — the index-projection
+    /// sibling of `enum-next-clamped` on a closed enumeration under
+    /// the clamp-at-boundary variant of the ordering; MLIR's
+    /// `RegisteredOperationName::saturatingNext().getIndex()` folded
+    /// to ONE method on the closed Op registry's saturating-successor
+    /// index projection; Idris's `Fin n` composed through `weakenN`
+    /// on the saturating-successor's finite-position projection under
+    /// the tail-stay-at-`n-1` variant of the ordering; UI toolkit
+    /// carousel bindings that read the disabled-tail next-slot from
+    /// the current slot without wrapping to slot 0 (React Aria's
+    /// `useCarousel` clamped-mode current-index rendering, Radix's
+    /// `Carousel.Next` disabled-tail current-index rendering).
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::saturating_next`] +
+    /// [`Self::index_of`] surfaces verbatim — no new dep, no new IR
+    /// layer, no supertrait bound, no `Option`-typed dispatch, no
+    /// allocation, no `strum` / `enum-iterator` crate dependency.
+    fn saturating_next_index(self) -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::saturating_next(self))
+    }
+
+    /// The `usize` DECLARATION-ORDER INDEX of the neighbor immediately
+    /// BEFORE `self` in [`Self::ALL`], SATURATING at
+    /// [`Self::index_of`]`(self)` at the head — the declaration-order
+    /// position of [`Self::saturating_prev`] projected through
+    /// [`Self::index_of`]. Returns `usize`, never [`Option<usize>`].
+    ///
+    /// Sibling posture to [`Self::saturating_next_index`] one
+    /// direction over on the (forward, backward) direction partition
+    /// of the closed-set saturating-index-neighbor surface. See
+    /// [`Self::saturating_next_index`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the backward-direction arm of the same axis
+    /// and inherits every property from the forward arm's
+    /// documentation, differing only in the [`Self::saturating_prev`]
+    /// substrate primitive it composes and the head-endpoint
+    /// stay-at-`self.index_of()` anchor it pins at the boundary.
+    ///
+    /// Default body composes [`Self::saturating_prev`] with
+    /// [`Self::index_of`] verbatim. The saturating-neighbor-index
+    /// contract — the head arm returns `self.index_of()` for
+    /// [`Self::first`] — is guaranteed by the default composition
+    /// through [`Self::saturating_prev`]'s head-stay-at-`self` fold.
+    /// `T::first().saturating_prev_index() == T::first().index_of()`
+    /// (i.e. `0`) is the natural fixpoint the backward-saturating-
+    /// neighbor-index axis and the head-endpoint anchor share,
+    /// mirroring `T::first().saturating_prev() == T::first()` one
+    /// return-type axis over on the variant-return surface AND
+    /// `T::first().saturating_prev_label() == T::first().label()`
+    /// one return-type axis over on the label-return surface AND
+    /// `T::first().cycle_prev_index() == T::CARDINALITY - 1` one
+    /// boundary-behavior axis over on the wrapping arm.
+    fn saturating_prev_index(self) -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::saturating_prev(self))
+    }
+
+    /// The `usize` LEXICOGRAPHIC-ORDER INDEX of the neighbor
+    /// immediately AFTER `self` in [`Self::sorted_variants`],
+    /// SATURATING at [`Self::sorted_index_of`]`(self)` at the lex
+    /// tail — the lex position of [`Self::sorted_saturating_next`]
+    /// projected through [`Self::sorted_index_of`]. Returns `usize`,
+    /// never [`Option<usize>`].
+    ///
+    /// The lex-ordering peer of [`Self::saturating_next_index`] on
+    /// the (declaration, lex) ordering axis of the closed-set
+    /// saturating-index-forward-neighbor surface. See
+    /// [`Self::saturating_next_index`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the lex-axis arm of the same
+    /// saturating-forward-index-neighbor surface and inherits every
+    /// property from the declaration arm's documentation, differing
+    /// only in the substrate primitive the saturating-index-fallback
+    /// routes through ([`Self::sorted_saturating_next`] rather than
+    /// [`Self::saturating_next`]) and the lex-tail-endpoint anchor it
+    /// pins at the boundary
+    /// ([`Self::sorted_index_of`]`(`[`Self::sorted_last`]`)` rather
+    /// than [`Self::index_of`]`(`[`Self::last`]`)`).
+    ///
+    /// `T::sorted_last().sorted_saturating_next_index() ==
+    /// T::sorted_last().sorted_index_of()` (i.e. `T::CARDINALITY - 1`)
+    /// is the natural fixpoint the forward-saturating-lex-index-
+    /// neighbor axis and the lex-tail-endpoint anchor share,
+    /// mirroring the
+    /// `T::last().saturating_next_index() == T::last().index_of()`
+    /// fixpoint on the declaration arm one ordering column over.
+    fn sorted_saturating_next_index(self) -> usize {
+        <Self as ClosedSet>::sorted_index_of(<Self as ClosedSet>::sorted_saturating_next(self))
+    }
+
+    /// The `usize` LEXICOGRAPHIC-ORDER INDEX of the neighbor
+    /// immediately BEFORE `self` in [`Self::sorted_variants`],
+    /// SATURATING at [`Self::sorted_index_of`]`(self)` at the lex
+    /// head — the lex position of [`Self::sorted_saturating_prev`]
+    /// projected through [`Self::sorted_index_of`]. Returns `usize`,
+    /// never [`Option<usize>`].
+    ///
+    /// Sibling posture to [`Self::sorted_saturating_next_index`] one
+    /// direction over on the (forward, backward) direction partition
+    /// of the closed-set saturating-lex-index-neighbor surface.
+    /// Together with [`Self::saturating_next_index`],
+    /// [`Self::saturating_prev_index`], and
+    /// [`Self::sorted_saturating_next_index`] this method CLOSES the
+    /// (declaration × lex) × (forward, backward) 2×2 = 4-corner
+    /// matrix on the SATURATING arm of the (boundary-behavior) axis
+    /// of the closed-set index-return neighbor surface — the
+    /// (return-shape × boundary-behavior × ordering × direction)
+    /// 3×3×2×2 = 36-corner
+    /// index-and-label-and-variant-return neighbor hypercube on the
+    /// closed-set surface now carries every corner filled at the
+    /// intersection of the {`Self`, label, index} return-shape trio
+    /// and the {bounded, wrapping, saturating} boundary-behavior trio
+    /// — the wrapping-and-bounded 2×3×2×2 = 24-corner hypercube on
+    /// the same return-shape × ordering × direction axes (which
+    /// commit 6e6c5b9 CLOSED) now extends to include the saturating
+    /// column that this quartet opens.
+    ///
+    /// `T::sorted_first().sorted_saturating_prev_index() ==
+    /// T::sorted_first().sorted_index_of()` (i.e. `0`) is the natural
+    /// fixpoint the backward-saturating-lex-index-neighbor axis and
+    /// the lex-head-endpoint anchor share, completing the four
+    /// saturating-index-neighbor fixpoints at every arm of the 2×2
+    /// (ordering × direction) matrix on the index-return SATURATING
+    /// column.
+    fn sorted_saturating_prev_index(self) -> usize {
+        <Self as ClosedSet>::sorted_index_of(<Self as ClosedSet>::sorted_saturating_prev(self))
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -30631,6 +30823,260 @@ mod tests {
                 "StubKind::{v:?}.sorted_clamp(sorted_first, sorted_last) must be the identity \
                  — every variant sits in the full lex-order closed range [sorted_first, \
                  sorted_last]",
+            );
+        }
+    }
+
+    #[test]
+    fn saturating_next_index_agrees_with_saturating_next_dot_index_of_across_every_variant() {
+        // PATH-UNIFORMITY CONTRACT (index peer, forward): the
+        // declaration-order saturating-forward-neighbor-INDEX
+        // projection is the natural `saturating_next().index_of()`
+        // composition — the variant-return saturating-forward
+        // primitive folded through the canonical [`Self::index_of`]
+        // projection at the tail-endpoint stay-at-`self` boundary.
+        // Pins the saturating-index arm to the ONE substrate primitive
+        // pair at every callsite, forbidding a divergent implementor
+        // body that would silently drift from the natural composition.
+        // Sibling posture to
+        // `saturating_next_label_agrees_with_saturating_next_dot_label_across_every_variant`
+        // one return-shape axis over on the label-return surface, AND
+        // to `saturating_next_agrees_with_next_unwrap_or_self_across_every_variant`
+        // one return-shape axis over on the variant-return surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected =
+                <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::saturating_next(v));
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_next_index(v),
+                expected,
+                "StubKind::{v:?}.saturating_next_index() must equal saturating_next().index_of() \
+                 — the saturating-forward-neighbor-INDEX projection is a typed CONSEQUENCE of the \
+                 variant-return saturating-forward-neighbor primitive folded through the canonical \
+                 index projection",
+            );
+        }
+    }
+
+    #[test]
+    fn saturating_prev_index_agrees_with_saturating_prev_dot_index_of_across_every_variant() {
+        // PATH-UNIFORMITY CONTRACT (index peer, backward): the
+        // declaration-order saturating-backward-neighbor-INDEX
+        // projection is the natural `saturating_prev().index_of()`
+        // composition. Sibling posture to
+        // `saturating_next_index_agrees_with_saturating_next_dot_index_of_across_every_variant`
+        // one arm over on the (forward, backward) direction axis.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected =
+                <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::saturating_prev(v));
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_prev_index(v),
+                expected,
+                "StubKind::{v:?}.saturating_prev_index() must equal saturating_prev().index_of() \
+                 — the saturating-backward-neighbor-INDEX projection is a typed CONSEQUENCE of the \
+                 variant-return saturating-backward-neighbor primitive folded through the \
+                 canonical index projection",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_next_index_agrees_with_sorted_saturating_next_dot_sorted_index_of_across_every_variant(
+    ) {
+        // PATH-UNIFORMITY CONTRACT (lex peer, forward-index): the
+        // lex-order saturating-forward-neighbor-INDEX projection is
+        // the natural `sorted_saturating_next().sorted_index_of()`
+        // composition. Sibling posture to
+        // `saturating_next_index_agrees_with_saturating_next_dot_index_of_across_every_variant`
+        // on the (declaration, lex) ordering axis.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = <StubKind as ClosedSet>::sorted_index_of(
+                <StubKind as ClosedSet>::sorted_saturating_next(v),
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_saturating_next_index(v),
+                expected,
+                "StubKind::{v:?}.sorted_saturating_next_index() must equal \
+                 sorted_saturating_next().sorted_index_of() — the lex-order saturating-forward-\
+                 neighbor-INDEX projection is a typed CONSEQUENCE of the variant-return lex-order \
+                 saturating-forward-neighbor primitive folded through the canonical lex-index \
+                 projection",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_prev_index_agrees_with_sorted_saturating_prev_dot_sorted_index_of_across_every_variant(
+    ) {
+        // PATH-UNIFORMITY CONTRACT (lex peer, backward-index): the
+        // lex-order saturating-backward-neighbor-INDEX projection is
+        // the natural `sorted_saturating_prev().sorted_index_of()`
+        // composition. Together with the three siblings CLOSES the
+        // (declaration × lex) × (forward, backward) 2×2 = 4-corner
+        // path-uniformity matrix on the SATURATING arm of the
+        // index-return neighbor surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = <StubKind as ClosedSet>::sorted_index_of(
+                <StubKind as ClosedSet>::sorted_saturating_prev(v),
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_saturating_prev_index(v),
+                expected,
+                "StubKind::{v:?}.sorted_saturating_prev_index() must equal \
+                 sorted_saturating_prev().sorted_index_of() — the lex-order saturating-backward-\
+                 neighbor-INDEX projection is a typed CONSEQUENCE of the variant-return lex-order \
+                 saturating-backward-neighbor primitive folded through the canonical lex-index \
+                 projection",
+            );
+        }
+    }
+
+    #[test]
+    fn saturating_next_index_fixes_the_declaration_tail_index() {
+        // TAIL FIXED-POINT CONTRACT (index peer): the declaration-
+        // order tail-endpoint variant's INDEX is a FIXED POINT of the
+        // saturating-forward-neighbor-index projection —
+        // `T::last().saturating_next_index() == T::last().index_of()`
+        // (i.e. `T::CARDINALITY - 1`). Pinned as its OWN assertion so
+        // a regression that returns `0` (the wrapping arm's fold) or
+        // panics on the `None` (a hand-rolled `.unwrap()` shape on
+        // the bounded arm) fails the tail pin without needing the
+        // path-uniformity pin to catch it. Distinguishing fixpoint of
+        // the saturating-INDEX arm across the three-way
+        // (boundary-behavior) partition on the index-return surface —
+        // the bounded arm returns `None` at the tail, the wrapping
+        // arm folds to `0`, and this arm PINS `self.index_of()` at
+        // the tail.
+        let last = <StubKind as ClosedSet>::last();
+        assert_eq!(
+            <StubKind as ClosedSet>::saturating_next_index(last),
+            <StubKind as ClosedSet>::index_of(last),
+            "StubKind::last().saturating_next_index() must equal last().index_of() — the \
+             declaration-order tail-endpoint's INDEX is a FIXED POINT of the saturating-forward-\
+             neighbor-index projection",
+        );
+    }
+
+    #[test]
+    fn saturating_prev_index_fixes_the_declaration_head_index() {
+        // HEAD FIXED-POINT CONTRACT (index peer): the declaration-
+        // order head-endpoint variant's INDEX is a FIXED POINT of
+        // the saturating-backward-neighbor-index projection —
+        // `T::first().saturating_prev_index() == T::first().index_of()`
+        // (i.e. `0`). Mirrors
+        // `saturating_next_index_fixes_the_declaration_tail_index`
+        // one arm over on the (forward, backward) direction axis.
+        let first = <StubKind as ClosedSet>::first();
+        assert_eq!(
+            <StubKind as ClosedSet>::saturating_prev_index(first),
+            <StubKind as ClosedSet>::index_of(first),
+            "StubKind::first().saturating_prev_index() must equal first().index_of() — the \
+             declaration-order head-endpoint's INDEX is a FIXED POINT of the saturating-backward-\
+             neighbor-index projection",
+        );
+    }
+
+    #[test]
+    fn sorted_saturating_next_index_fixes_the_lex_tail_index() {
+        // LEX-TAIL FIXED-POINT CONTRACT (index peer): the lex-order
+        // tail-endpoint variant's INDEX is a FIXED POINT of the
+        // lex-order saturating-forward-neighbor-index projection —
+        // `T::sorted_last().sorted_saturating_next_index() ==
+        // T::sorted_last().sorted_index_of()`. Sibling posture to
+        // `saturating_next_index_fixes_the_declaration_tail_index`
+        // one ordering axis over on the (declaration, lex) axis.
+        let sorted_last = <StubKind as ClosedSet>::sorted_last();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_saturating_next_index(sorted_last),
+            <StubKind as ClosedSet>::sorted_index_of(sorted_last),
+            "StubKind::sorted_last().sorted_saturating_next_index() must equal \
+             sorted_last().sorted_index_of() — the lex-order tail-endpoint's INDEX is a FIXED \
+             POINT of the lex-order saturating-forward-neighbor-index projection",
+        );
+    }
+
+    #[test]
+    fn sorted_saturating_prev_index_fixes_the_lex_head_index() {
+        // LEX-HEAD FIXED-POINT CONTRACT (index peer): the lex-order
+        // head-endpoint variant's INDEX is a FIXED POINT of the
+        // lex-order saturating-backward-neighbor-index projection —
+        // `T::sorted_first().sorted_saturating_prev_index() ==
+        // T::sorted_first().sorted_index_of()`. Together with the
+        // three sibling index-fixpoint pins CLOSES the
+        // (declaration × lex) × (forward, backward) 2×2 = 4-corner
+        // matrix of saturating-index-neighbor fixpoints on the
+        // index-return SATURATING column.
+        let sorted_first = <StubKind as ClosedSet>::sorted_first();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_saturating_prev_index(sorted_first),
+            <StubKind as ClosedSet>::sorted_index_of(sorted_first),
+            "StubKind::sorted_first().sorted_saturating_prev_index() must equal \
+             sorted_first().sorted_index_of() — the lex-order head-endpoint's INDEX is a FIXED \
+             POINT of the lex-order saturating-backward-neighbor-index projection",
+        );
+    }
+
+    #[test]
+    fn saturating_next_index_agrees_with_cycle_next_index_on_every_variant_except_the_tail() {
+        // INTERIOR COINCIDENCE + BOUNDARY DIVERGENCE (index peer,
+        // forward): the saturating-forward-neighbor-INDEX projection
+        // and the wrapping-forward-neighbor-INDEX projection agree
+        // on EVERY variant EXCEPT the tail-endpoint variant. The
+        // three arms of the (boundary-behavior) axis on the
+        // INDEX-return surface — bounded (`Option<usize>`), wrapping
+        // (`usize` folded to `0`), saturating (`usize` pinned at
+        // `self.index_of()`) — differ ONLY at the tail-endpoint
+        // variant, agreeing on EVERY interior variant. Sibling
+        // posture to
+        // `saturating_next_label_agrees_with_cycle_next_label_on_every_variant_except_the_tail`
+        // one return-shape axis over on the label-return surface AND
+        // to
+        // `saturating_next_agrees_with_cycle_next_on_every_variant_except_the_tail`
+        // one return-shape axis over on the variant-return surface.
+        let last = <StubKind as ClosedSet>::last();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            if v == last {
+                assert_ne!(
+                    <StubKind as ClosedSet>::saturating_next_index(v),
+                    <StubKind as ClosedSet>::cycle_next_index(v),
+                    "StubKind::{v:?}.saturating_next_index() must DIVERGE from cycle_next_index() \
+                     at the declaration-order tail-endpoint — saturating pins at self's slot, \
+                     wrapping folds to slot 0",
+                );
+            } else {
+                assert_eq!(
+                    <StubKind as ClosedSet>::saturating_next_index(v),
+                    <StubKind as ClosedSet>::cycle_next_index(v),
+                    "StubKind::{v:?}.saturating_next_index() must AGREE with cycle_next_index() \
+                     on every interior variant — the three boundary-behavior arms differ only at \
+                     the tail-endpoint",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_next_index_coincides_with_saturating_next_index_when_declaration_and_lex_orders_agree(
+    ) {
+        // CROSS-AXIS COINCIDENCE (saturating-forward-index): when the
+        // declaration order coincides with the lex order (as it does
+        // for `StubKind`), the declaration-axis saturating-forward-
+        // index projection coincides with the lex-axis peer on every
+        // variant. Sibling posture to
+        // `sorted_saturating_next_label_coincides_with_saturating_next_label_when_declaration_and_lex_orders_agree`
+        // one return-shape axis over on the label-return surface AND
+        // to
+        // `sorted_saturating_next_coincides_with_saturating_next_when_declaration_and_lex_orders_agree`
+        // one return-shape axis over on the variant-return surface —
+        // the index-return SATURATING column inherits the same
+        // cross-axis coincidence pattern the label-return and
+        // variant-return SATURATING columns carry when the two
+        // orderings agree.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_next_index(v),
+                <StubKind as ClosedSet>::sorted_saturating_next_index(v),
+                "StubKind::{v:?}.saturating_next_index() must coincide with \
+                 sorted_saturating_next_index() when declaration and lex orders agree",
             );
         }
     }

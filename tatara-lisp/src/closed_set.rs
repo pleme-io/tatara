@@ -10551,6 +10551,182 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn sorted_saturating_prev(self) -> Self {
         <Self as ClosedSet>::sorted_prev(self).unwrap_or(self)
     }
+
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// neighbor immediately AFTER `self` in [`Self::ALL`], SATURATING
+    /// at [`Self::label`] at the tail — the label of
+    /// [`Self::saturating_next`] projected through [`Self::label`].
+    /// Returns `&'static str`, never [`Option<&'static str>`]: the
+    /// saturating arm folds the tail-endpoint boundary onto `self`'s
+    /// OWN label rather than wrapping to [`Self::first_label`] (the
+    /// wrapping arm's [`Self::cycle_next_label`] fold) or leaving the
+    /// [`None`] the bounded arm ([`Self::next_label`]) returns.
+    ///
+    /// The label-return arm of the (Self-return, `&'static str`-return)
+    /// return-shape partition of the closed-set
+    /// SATURATING-forward-neighbor surface — one return-shape axis
+    /// over from [`Self::saturating_next`] (`Self`-return declaration-
+    /// axis saturating-forward), one boundary-behavior axis over from
+    /// [`Self::next_label`] (`Option<&'static str>`-return bounded-
+    /// forward-label), and one boundary-behavior axis over from
+    /// [`Self::cycle_next_label`] (`&'static str`-return wrapping-
+    /// forward-label). Together with the three lex + backward peers
+    /// below, this OPENS the label-return column on the SATURATING
+    /// arm of the (boundary-behavior) axis on the label-shaped
+    /// neighbor surface past the pre-existing (bounded, wrapping)
+    /// 2-row partition — the (return-shape × boundary-behavior)
+    /// column pattern the [`Self::saturating_next`] lift opened on
+    /// the variant-return surface now closes one return-shape column
+    /// over onto the label-return surface as well.
+    ///
+    /// Every generic consumer that renders the saturating-forward-
+    /// neighbor LABEL of a typed variant (an LSP completion cursor
+    /// that emits "next: <label>" for the next variant but STAYS at
+    /// the current label at the tail-endpoint rather than cycling to
+    /// the head-label, a paginated selector's "next" affordance's
+    /// label renderer that disables at the boundary by re-emitting
+    /// the current label, a carousel widget's next-arrow label
+    /// renderer that reads the same label when the arrow is
+    /// disabled) binds to ONE typed method rather than re-deriving
+    /// the `v.saturating_next().label()` two-primitive composition
+    /// OR the `v.next_label().unwrap_or(v.label())` three-primitive
+    /// composition at every callsite.
+    ///
+    /// Default body composes [`Self::saturating_next`] with
+    /// [`Self::label`] verbatim. The saturating-neighbor-label
+    /// contract — the tail arm returns `self.label()` for
+    /// [`Self::last`] — is guaranteed by the default composition
+    /// through [`Self::saturating_next`]'s tail-stay-at-`self` fold.
+    /// `T::last().saturating_next_label() == T::last().label()` is
+    /// the natural fixpoint the forward-saturating-neighbor-label
+    /// axis and the tail-endpoint anchor share, mirroring the
+    /// `T::last().saturating_next() == T::last()` fixpoint one
+    /// return-type axis over on the variant-return surface AND the
+    /// `T::last().cycle_next_label() == T::first_label()` fixpoint
+    /// one boundary-behavior axis over on the wrapping arm.
+    ///
+    /// Frontier inspiration: Racket's
+    /// `(symbol-name (enum-next-clamped v))` — the label-projection
+    /// sibling of `enum-next-clamped` on a closed enumeration under
+    /// the clamp-at-boundary variant of the ordering; MLIR's
+    /// `RegisteredOperationName::saturatingNext().getName()` folded to
+    /// ONE method on the closed Op registry's saturating-successor
+    /// projection; UI toolkit carousel bindings that read the "next"
+    /// affordance's label from the disabled-at-boundary state without
+    /// wrapping to the opposite endpoint's label (React Aria's
+    /// `useCarousel` clamped-mode label rendering, Radix's
+    /// `Carousel.Next` disabled-tail label rendering). Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's existing [`Self::saturating_next`] +
+    /// [`Self::label`] surfaces verbatim — no new dep, no new IR
+    /// layer, no supertrait bound, no `Option`-typed dispatch, no
+    /// allocation.
+    fn saturating_next_label(self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::saturating_next(self))
+    }
+
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// neighbor immediately BEFORE `self` in [`Self::ALL`], SATURATING
+    /// at [`Self::label`] at the head — the label of
+    /// [`Self::saturating_prev`] projected through [`Self::label`].
+    /// Returns `&'static str`, never [`Option<&'static str>`].
+    ///
+    /// Sibling posture to [`Self::saturating_next_label`] one
+    /// direction over on the (forward, backward) direction partition
+    /// of the closed-set saturating-label-neighbor surface. See
+    /// [`Self::saturating_next_label`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the backward-direction arm of the same axis and
+    /// inherits every property from the forward arm's documentation,
+    /// differing only in the [`Self::saturating_prev`] substrate
+    /// primitive it composes and the head-endpoint stay-at-`self`
+    /// anchor it pins at the boundary.
+    ///
+    /// Default body composes [`Self::saturating_prev`] with
+    /// [`Self::label`] verbatim. The saturating-neighbor-label
+    /// contract — the head arm returns `self.label()` for
+    /// [`Self::first`] — is guaranteed by the default composition
+    /// through [`Self::saturating_prev`]'s head-stay-at-`self` fold.
+    /// `T::first().saturating_prev_label() == T::first().label()` is
+    /// the natural fixpoint the backward-saturating-neighbor-label
+    /// axis and the head-endpoint anchor share, mirroring
+    /// `T::first().saturating_prev() == T::first()` one return-type
+    /// axis over on the variant-return surface AND
+    /// `T::first().cycle_prev_label() == T::last_label()` one
+    /// boundary-behavior axis over on the wrapping arm.
+    fn saturating_prev_label(self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::saturating_prev(self))
+    }
+
+    /// The canonical `&'static str` LABEL of the lexicographic-order
+    /// neighbor immediately AFTER `self` in [`Self::sorted_variants`],
+    /// SATURATING at [`Self::label`] at the lex tail — the label of
+    /// [`Self::sorted_saturating_next`] projected through
+    /// [`Self::label`]. Returns `&'static str`, never
+    /// [`Option<&'static str>`].
+    ///
+    /// The lex-ordering peer of [`Self::saturating_next_label`] on the
+    /// (declaration, lex) ordering axis of the closed-set
+    /// saturating-label-forward-neighbor surface. See
+    /// [`Self::saturating_next_label`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the lex-axis arm of the same
+    /// saturating-forward-label-neighbor surface and inherits every
+    /// property from the declaration arm's documentation, differing
+    /// only in the substrate primitive the saturating-label-fallback
+    /// routes through ([`Self::sorted_saturating_next`] rather than
+    /// [`Self::saturating_next`]) and the lex-tail-endpoint anchor it
+    /// pins at the boundary.
+    ///
+    /// `T::sorted_last().sorted_saturating_next_label() ==
+    /// T::sorted_last().label()` is the natural fixpoint the forward-
+    /// saturating-lex-label-neighbor axis and the lex-tail-endpoint
+    /// anchor share, mirroring the
+    /// `T::last().saturating_next_label() == T::last().label()`
+    /// fixpoint on the declaration arm one ordering column over.
+    fn sorted_saturating_next_label(self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_saturating_next(self))
+    }
+
+    /// The canonical `&'static str` LABEL of the lexicographic-order
+    /// neighbor immediately BEFORE `self` in [`Self::sorted_variants`],
+    /// SATURATING at [`Self::label`] at the lex head — the label of
+    /// [`Self::sorted_saturating_prev`] projected through
+    /// [`Self::label`]. Returns `&'static str`, never
+    /// [`Option<&'static str>`].
+    ///
+    /// Sibling posture to [`Self::sorted_saturating_next_label`] one
+    /// direction over on the (forward, backward) direction partition
+    /// of the closed-set saturating-lex-label-neighbor surface.
+    /// Together with [`Self::saturating_next_label`],
+    /// [`Self::saturating_prev_label`], and
+    /// [`Self::sorted_saturating_next_label`] this method CLOSES the
+    /// (declaration × lex) × (forward, backward) 2×2 = 4-corner matrix
+    /// on the SATURATING arm of the (boundary-behavior) axis of the
+    /// closed-set label-return neighbor surface — the (return-shape ×
+    /// boundary-behavior) 2×3 = 6-column plane on the (ordering ×
+    /// direction) 4-corner grid now carries an additional 4 corners
+    /// on the label-return side, mirroring the 4 corners the
+    /// [`Self::saturating_next`] lift opened on the variant-return
+    /// side, for a jointly-closed (return-shape × boundary-behavior ×
+    /// ordering × direction) 2×3×2×2 = 24-corner
+    /// label-and-variant-return neighbor sub-hypercube on the closed-
+    /// set surface — the wrapping-and-bounded 2×2×2×2 = 16-corner
+    /// hypercube on the same return-shape × ordering × direction axes
+    /// (which commit d10ab00 CLOSED) now extends to include the
+    /// saturating column that this quartet opens.
+    ///
+    /// `T::sorted_first().sorted_saturating_prev_label() ==
+    /// T::sorted_first().label()` is the natural fixpoint the
+    /// backward-saturating-lex-label-neighbor axis and the lex-head-
+    /// endpoint anchor share, completing the four saturating-label-
+    /// neighbor fixpoints at every arm of the 2×2 (ordering ×
+    /// direction) matrix on the label-return SATURATING column.
+    fn sorted_saturating_prev_label(self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_saturating_prev(self))
+    }
 }
 
 /// Generic well-formedness contract for a [`ClosedSet`] implementor —
@@ -30186,6 +30362,250 @@ mod tests {
                 <StubKind as ClosedSet>::sorted_saturating_prev(v),
                 "StubKind::{v:?}.saturating_prev() must coincide with \
                  StubKind::{v:?}.sorted_saturating_prev() when declaration and lex orders agree",
+            );
+        }
+    }
+
+    #[test]
+    fn saturating_next_label_agrees_with_saturating_next_dot_label_across_every_variant() {
+        // PATH-UNIFORMITY CONTRACT (label peer, forward): the
+        // declaration-order saturating-forward-neighbor-LABEL
+        // projection is the natural `saturating_next().label()`
+        // composition — the variant-return saturating-forward
+        // primitive folded through the canonical [`Self::label`]
+        // projection at the tail-endpoint stay-at-`self` boundary.
+        // Pins the saturating-label arm to the ONE substrate
+        // primitive pair at every callsite, forbidding a divergent
+        // implementor body that would silently drift from the
+        // natural composition. Sibling posture to
+        // `saturating_next_agrees_with_next_unwrap_or_self_across_every_variant`
+        // one return-shape axis over on the variant-return surface,
+        // AND to `cycle_next_label` on the wrapping arm of the same
+        // (return-shape × boundary-behavior × direction) face.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected =
+                <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::saturating_next(v));
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_next_label(v),
+                expected,
+                "StubKind::{v:?}.saturating_next_label() must equal saturating_next().label() — \
+                 the saturating-forward-neighbor-LABEL projection is a typed CONSEQUENCE of the \
+                 variant-return saturating-forward-neighbor primitive folded through the \
+                 canonical label projection",
+            );
+        }
+    }
+
+    #[test]
+    fn saturating_prev_label_agrees_with_saturating_prev_dot_label_across_every_variant() {
+        // PATH-UNIFORMITY CONTRACT (label peer, backward): the
+        // declaration-order saturating-backward-neighbor-LABEL
+        // projection is the natural `saturating_prev().label()`
+        // composition. Sibling posture to
+        // `saturating_next_label_agrees_with_saturating_next_dot_label_across_every_variant`
+        // one arm over on the (forward, backward) direction axis.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected =
+                <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::saturating_prev(v));
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_prev_label(v),
+                expected,
+                "StubKind::{v:?}.saturating_prev_label() must equal saturating_prev().label() — \
+                 the saturating-backward-neighbor-LABEL projection is a typed CONSEQUENCE of the \
+                 variant-return saturating-backward-neighbor primitive folded through the \
+                 canonical label projection",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_next_label_agrees_with_sorted_saturating_next_dot_label_across_every_variant(
+    ) {
+        // PATH-UNIFORMITY CONTRACT (lex peer, forward-label): the
+        // lex-order saturating-forward-neighbor-LABEL projection is
+        // the natural `sorted_saturating_next().label()` composition.
+        // Sibling posture to
+        // `saturating_next_label_agrees_with_saturating_next_dot_label_across_every_variant`
+        // on the (declaration, lex) ordering axis.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected =
+                <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::sorted_saturating_next(v));
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_saturating_next_label(v),
+                expected,
+                "StubKind::{v:?}.sorted_saturating_next_label() must equal \
+                 sorted_saturating_next().label() — the lex-order saturating-forward-neighbor-\
+                 LABEL projection is a typed CONSEQUENCE of the variant-return lex-order \
+                 saturating-forward-neighbor primitive folded through the canonical label \
+                 projection",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_prev_label_agrees_with_sorted_saturating_prev_dot_label_across_every_variant(
+    ) {
+        // PATH-UNIFORMITY CONTRACT (lex peer, backward-label): the
+        // lex-order saturating-backward-neighbor-LABEL projection is
+        // the natural `sorted_saturating_prev().label()` composition.
+        // Together with the three siblings CLOSES the (declaration ×
+        // lex) × (forward, backward) 2×2 = 4-corner path-uniformity
+        // matrix on the SATURATING arm of the label-return neighbor
+        // surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected =
+                <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::sorted_saturating_prev(v));
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_saturating_prev_label(v),
+                expected,
+                "StubKind::{v:?}.sorted_saturating_prev_label() must equal \
+                 sorted_saturating_prev().label() — the lex-order saturating-backward-neighbor-\
+                 LABEL projection is a typed CONSEQUENCE of the variant-return lex-order \
+                 saturating-backward-neighbor primitive folded through the canonical label \
+                 projection",
+            );
+        }
+    }
+
+    #[test]
+    fn saturating_next_label_fixes_the_declaration_tail_label() {
+        // TAIL FIXED-POINT CONTRACT (label peer): the declaration-
+        // order tail-endpoint variant's LABEL is a FIXED POINT of the
+        // saturating-forward-neighbor-label projection —
+        // `T::last().saturating_next_label() == T::last().label()`.
+        // Pinned as its OWN assertion so a regression that returns
+        // `T::first_label()` (the wrapping arm's fold) or panics on
+        // the `None` (a hand-rolled `.unwrap()` shape on the bounded
+        // arm) fails the tail pin without needing the path-uniformity
+        // pin to catch it. Distinguishing fixpoint of the saturating-
+        // LABEL arm across the three-way (boundary-behavior) partition
+        // on the label-return surface — the bounded arm returns
+        // `None` at the tail, the wrapping arm folds to
+        // `T::first_label()`, and this arm PINS `self.label()` at the
+        // tail.
+        let last = <StubKind as ClosedSet>::last();
+        assert_eq!(
+            <StubKind as ClosedSet>::saturating_next_label(last),
+            <StubKind as ClosedSet>::label(last),
+            "StubKind::last().saturating_next_label() must equal last().label() — the \
+             declaration-order tail-endpoint's LABEL is a FIXED POINT of the saturating-forward-\
+             neighbor-label projection",
+        );
+    }
+
+    #[test]
+    fn saturating_prev_label_fixes_the_declaration_head_label() {
+        // HEAD FIXED-POINT CONTRACT (label peer): the declaration-
+        // order head-endpoint variant's LABEL is a FIXED POINT of the
+        // saturating-backward-neighbor-label projection —
+        // `T::first().saturating_prev_label() == T::first().label()`.
+        // Mirrors `saturating_next_label_fixes_the_declaration_tail_label`
+        // one arm over on the (forward, backward) direction axis.
+        let first = <StubKind as ClosedSet>::first();
+        assert_eq!(
+            <StubKind as ClosedSet>::saturating_prev_label(first),
+            <StubKind as ClosedSet>::label(first),
+            "StubKind::first().saturating_prev_label() must equal first().label() — the \
+             declaration-order head-endpoint's LABEL is a FIXED POINT of the saturating-backward-\
+             neighbor-label projection",
+        );
+    }
+
+    #[test]
+    fn sorted_saturating_next_label_fixes_the_lex_tail_label() {
+        // LEX-TAIL FIXED-POINT CONTRACT (label peer): the lex-order
+        // tail-endpoint variant's LABEL is a FIXED POINT of the lex-
+        // order saturating-forward-neighbor-label projection —
+        // `T::sorted_last().sorted_saturating_next_label() ==
+        // T::sorted_last().label()`. Sibling posture to
+        // `saturating_next_label_fixes_the_declaration_tail_label`
+        // one ordering axis over on the (declaration, lex) axis.
+        let sorted_last = <StubKind as ClosedSet>::sorted_last();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_saturating_next_label(sorted_last),
+            <StubKind as ClosedSet>::label(sorted_last),
+            "StubKind::sorted_last().sorted_saturating_next_label() must equal \
+             sorted_last().label() — the lex-order tail-endpoint's LABEL is a FIXED POINT of the \
+             lex-order saturating-forward-neighbor-label projection",
+        );
+    }
+
+    #[test]
+    fn sorted_saturating_prev_label_fixes_the_lex_head_label() {
+        // LEX-HEAD FIXED-POINT CONTRACT (label peer): the lex-order
+        // head-endpoint variant's LABEL is a FIXED POINT of the lex-
+        // order saturating-backward-neighbor-label projection —
+        // `T::sorted_first().sorted_saturating_prev_label() ==
+        // T::sorted_first().label()`. Together with the three sibling
+        // label-fixpoint pins CLOSES the (declaration × lex) ×
+        // (forward, backward) 2×2 = 4-corner matrix of saturating-
+        // label-neighbor fixpoints on the label-return SATURATING
+        // column.
+        let sorted_first = <StubKind as ClosedSet>::sorted_first();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_saturating_prev_label(sorted_first),
+            <StubKind as ClosedSet>::label(sorted_first),
+            "StubKind::sorted_first().sorted_saturating_prev_label() must equal \
+             sorted_first().label() — the lex-order head-endpoint's LABEL is a FIXED POINT of \
+             the lex-order saturating-backward-neighbor-label projection",
+        );
+    }
+
+    #[test]
+    fn saturating_next_label_agrees_with_cycle_next_label_on_every_variant_except_the_tail() {
+        // INTERIOR COINCIDENCE + BOUNDARY DIVERGENCE (label peer,
+        // forward): the saturating-forward-neighbor-LABEL projection
+        // and the wrapping-forward-neighbor-LABEL projection agree on
+        // EVERY variant EXCEPT the tail-endpoint variant. The three
+        // arms of the (boundary-behavior) axis on the LABEL-return
+        // surface — bounded (`Option<&'static str>`), wrapping
+        // (`&'static str` folded to `T::first_label`), saturating
+        // (`&'static str` pinned at `self.label()`) — differ ONLY at
+        // the tail-endpoint variant, agreeing on EVERY interior
+        // variant. Sibling posture to
+        // `saturating_next_agrees_with_cycle_next_on_every_variant_except_the_tail`
+        // one return-shape axis over on the variant-return surface.
+        let last = <StubKind as ClosedSet>::last();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            if v == last {
+                assert_ne!(
+                    <StubKind as ClosedSet>::saturating_next_label(v),
+                    <StubKind as ClosedSet>::cycle_next_label(v),
+                    "StubKind::{v:?}.saturating_next_label() must DIVERGE from cycle_next_label() \
+                     at the declaration-order tail-endpoint — saturating pins at self's label, \
+                     wrapping folds to first's label",
+                );
+            } else {
+                assert_eq!(
+                    <StubKind as ClosedSet>::saturating_next_label(v),
+                    <StubKind as ClosedSet>::cycle_next_label(v),
+                    "StubKind::{v:?}.saturating_next_label() must AGREE with cycle_next_label() \
+                     on every interior variant — the three boundary-behavior arms differ only at \
+                     the tail-endpoint",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_saturating_next_label_coincides_with_saturating_next_label_when_declaration_and_lex_orders_agree(
+    ) {
+        // CROSS-AXIS COINCIDENCE (saturating-forward-label): when the
+        // declaration order coincides with the lex order (as it does
+        // for `StubKind`), the declaration-axis saturating-forward-
+        // label projection coincides with the lex-axis peer on every
+        // variant. Sibling posture to
+        // `sorted_saturating_next_coincides_with_saturating_next_when_declaration_and_lex_orders_agree`
+        // one return-shape axis over on the variant-return surface —
+        // the label-return SATURATING column inherits the same cross-
+        // axis coincidence pattern the variant-return SATURATING
+        // column carries when the two orderings agree.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::saturating_next_label(v),
+                <StubKind as ClosedSet>::sorted_saturating_next_label(v),
+                "StubKind::{v:?}.saturating_next_label() must coincide with \
+                 sorted_saturating_next_label() when declaration and lex orders agree",
             );
         }
     }

@@ -10459,6 +10459,241 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_max_of(items).map(<Self as ClosedSet>::label)
     }
 
+    /// The `usize` DECLARATION-ORDER INDEX of the declaration-order
+    /// N-ARY MIN projection of `items` — the declaration-order position
+    /// of [`Self::min_of`] projected through [`Self::index_of`], or
+    /// [`None`] when `items` is empty. The index-return-shape peer of
+    /// [`Self::min_of`] one return-shape axis over on the N-ary
+    /// variadic-reduction surface, AND the N-ary-arity peer of
+    /// [`Self::min_index`] one arity level up. Opens the index-return
+    /// column of the (return-shape × ordering × direction) 3×2×2 =
+    /// 12-corner N-ary variadic-reduction hypercube past the pre-
+    /// existing Self-return 4-corner face [`Self::min_of`] /
+    /// [`Self::max_of`] / [`Self::sorted_min_of`] / [`Self::sorted_max_of`]
+    /// AND the label-return 4-corner face [`Self::min_label_of`] /
+    /// [`Self::max_label_of`] / [`Self::sorted_min_label_of`] /
+    /// [`Self::sorted_max_label_of`] — the N-ary counterpart of the
+    /// binary pairwise-selection hypercube's own index-return column
+    /// [`Self::min_index`] / [`Self::max_index`] /
+    /// [`Self::sorted_min_index`] / [`Self::sorted_max_index`] one arity
+    /// level down.
+    ///
+    /// Empty-slice contract: `T::min_index_of(&[]) == None` — the empty
+    /// slice has no earliest member, so the index projection propagates
+    /// the empty-fixpoint witness through [`Option::map`] without
+    /// allocating a diagnostic carrier, mirroring the Self-return arm's
+    /// `T::min_of(&[]) == None` one return-shape column over AND the
+    /// label-return arm's `T::min_label_of(&[]) == None` one return-
+    /// shape column over. Pinned by
+    /// `min_index_of_returns_none_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::min_index_of(&[v]) == Some(v.index_of())`
+    /// on every variant `v` — a singleton slice reduces to its sole
+    /// member's declaration-order position through [`Iterator::reduce`]'s
+    /// 1-length identity composed with [`Self::index_of`]. Pinned by
+    /// `min_index_of_returns_the_sole_member_index_on_every_singleton_slice_across_every_variant`.
+    ///
+    /// Self-return composition contract: `T::min_index_of(items) ==
+    /// T::min_of(items).map(T::index_of)` on every slice — the index-
+    /// return arm composes through the Self-return arm plus the trait's
+    /// `index_of` projection, not through a fresh substrate primitive
+    /// on the N-ary axis. Pinned by
+    /// `min_index_of_composes_min_of_with_index_of_across_every_triple`.
+    ///
+    /// Full-set contract: `T::min_index_of(<T as ClosedSet>::ALL) ==
+    /// Some(0)` — the N-ary min-index over the entire closed set folds
+    /// to the declaration-head slot's index, mirroring the Self-return
+    /// arm's `T::min_of(ALL) == Some(T::first())` one return-shape
+    /// column over AND the label-return arm's `T::min_label_of(ALL) ==
+    /// Some(T::first().label())` one return-shape column over.
+    ///
+    /// Permutation-invariance contract: `T::min_index_of(items) ==
+    /// T::min_index_of(&permuted)` on every permutation of `items` —
+    /// the N-ary min-index is invariant under reordering of its input
+    /// slice because [`Self::min_of`] is, and the `index_of` map
+    /// preserves the invariance verbatim.
+    ///
+    /// Binary-agreement contract: `T::min_index_of(&[a, b]) ==
+    /// Some(a.min_index(b))` on every operand pair — the arity-2 slice
+    /// on the N-ary index-return arm equals the arity-2 index-return
+    /// arm [`Self::min_index`] one arity level down, closing the
+    /// (arity × return-shape) 2×2 corner between the binary and N-ary
+    /// faces on the index-return column.
+    ///
+    /// Future consumers that compose against [`Self::min_index_of`]: a
+    /// diagnostic renderer that folds an observed-phase MULTIset to the
+    /// declaration-order earliest lifecycle stage's CANONICAL SLOT
+    /// (rather than the typed variant one return-shape column over or
+    /// the label two return-shape columns over); a `tatara-check`
+    /// predicate that renders the earliest-observed phase across an
+    /// arbitrary sample as a `usize` for numeric audit-trail output
+    /// (index-tagged offsets are dense-packable in fixed-width metric
+    /// buffers where variant tags need padded discriminants and labels
+    /// need pointer-wide `&'static str` slots); a metrics tagger that
+    /// folds a rolling window of enum observations to the declaration-
+    /// order earliest peer's INDEX and emits the folded index as the
+    /// window's min-membership numeric tag — bypassing the intermediate
+    /// `Option<Self>` unwrap-and-project chain. Every such consumer
+    /// binds to ONE typed method rather than re-deriving the
+    /// `items.iter().copied().reduce(T::min).map(T::index_of)`
+    /// composition at every callsite.
+    ///
+    /// Default body composes [`Self::min_of`] with [`Option::map`]
+    /// threading [`Self::index_of`] verbatim: `Self::min_of(items)
+    /// .map(Self::index_of)`. Implementors override only when the
+    /// index-return N-ary min projection needs to diverge from the
+    /// natural Self-return composition through the pre-existing index
+    /// projection (no production implementor reaches for this today).
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary min-
+    /// index projection becomes a TYPE-level primitive on the closed-
+    /// set trait rather than a per-consumer inline `.reduce(T::min)
+    /// .map(T::index_of)` composition. THEORY.md §V.1 — knowable
+    /// platform; the N-ary index-return axis was an unnamed inline
+    /// composition pre-lift. Naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of TWO substrate primitives
+    /// ([`Self::min_of`] + [`Self::index_of`]) composed through
+    /// [`Option::map`] at ONE composition site. THEORY.md §VI.1 —
+    /// generation over composition; the N-ary min-index projection
+    /// emerges from the composition of TWO substrate primitives rather
+    /// than a per-implementor hand-rolled body. A future tightening of
+    /// the underlying Self-return `min_of` (a perfect-hash reduction, a
+    /// const-fn body making the projection callable in const contexts,
+    /// a SIMD-vectorised fold on `[Self; N]` fixed-size input)
+    /// propagates to every closed-set N-ary index consumer through ONE
+    /// composition site.
+    ///
+    /// Frontier inspiration: Racket's `(enum-index (apply enum-min
+    /// items))` composed with the language's apply idiom on a closed
+    /// symbolic union; Julia's `Int(minimum(items))` on an ordered
+    /// enumeration cast to its slot index; MLIR's
+    /// `RegisteredOperationName::min_of(vector).getIndex()` folded to
+    /// ONE method on the closed Op registry's N-ary min projection.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::min_of`] +
+    /// [`Self::index_of`] surfaces through [`Option::map`] verbatim —
+    /// no new dep, no `apply` idiom, no `Int`-cast carrier.
+    fn min_index_of(items: &[Self]) -> Option<usize> {
+        <Self as ClosedSet>::min_of(items).map(<Self as ClosedSet>::index_of)
+    }
+
+    /// The `usize` DECLARATION-ORDER INDEX of the declaration-order
+    /// N-ARY MAX projection of `items` — the declaration-order position
+    /// of [`Self::max_of`] projected through [`Self::index_of`], or
+    /// [`None`] when `items` is empty.
+    ///
+    /// The direction-complement peer of [`Self::min_index_of`] on the
+    /// (min, max) direction axis of the closed-set index-return N-ary
+    /// variadic-reduction surface. See [`Self::min_index_of`] for the
+    /// shared design rationale, empty-slice / singleton / composition /
+    /// full-set / permutation-invariance / binary-agreement contracts,
+    /// the future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the max-direction arm of the same
+    /// index-return N-ary surface and inherits every property from the
+    /// min arm's documentation, differing only in the substrate
+    /// primitive the N-ary fold routes through ([`Self::max_of`] rather
+    /// than [`Self::min_of`]).
+    ///
+    /// Full-set contract: `T::max_index_of(<T as ClosedSet>::ALL) ==
+    /// Some(<T as ClosedSet>::ALL.len() - 1)` — the N-ary max-index
+    /// over the entire closed set folds to the declaration-tail slot's
+    /// index, mirroring the `T::min_index_of(ALL) == Some(0)` fixpoint
+    /// on the min arm one direction column over.
+    fn max_index_of(items: &[Self]) -> Option<usize> {
+        <Self as ClosedSet>::max_of(items).map(<Self as ClosedSet>::index_of)
+    }
+
+    /// The `usize` LEXICOGRAPHIC-ORDER INDEX of the lex-order N-ARY MIN
+    /// projection of `items` — the lex position of
+    /// [`Self::sorted_min_of`] projected through
+    /// [`Self::sorted_index_of`], or [`None`] when `items` is empty.
+    ///
+    /// The lex-ordering peer of [`Self::min_index_of`] on the
+    /// (declaration, lex) ordering axis of the closed-set index-return
+    /// N-ary variadic-reduction surface. See [`Self::min_index_of`] for
+    /// the shared design rationale, contracts, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration — this
+    /// method is the lex-axis arm of the same index-return N-ary
+    /// surface and inherits every property from the declaration arm's
+    /// documentation, differing only in the substrate primitive the
+    /// N-ary fold routes through ([`Self::sorted_min_of`] rather than
+    /// [`Self::min_of`]) and the lex-ordering slot lookup it composes
+    /// at the projection ([`Self::sorted_index_of`] rather than
+    /// [`Self::index_of`]).
+    ///
+    /// Full-set contract: `T::sorted_min_index_of(<T as ClosedSet>::ALL)
+    /// == Some(0)` — the lex-order N-ary min-index over the entire
+    /// closed set folds to the lex-head slot's index.
+    ///
+    /// Cross-ordering coincidence: `T::sorted_min_index_of(items) ==
+    /// T::min_index_of(items)` on every slice for which declaration
+    /// and lex orders agree pairwise — the two orderings collapse when
+    /// the declaration order IS the lex order on every operand.
+    fn sorted_min_index_of(items: &[Self]) -> Option<usize> {
+        <Self as ClosedSet>::sorted_min_of(items).map(<Self as ClosedSet>::sorted_index_of)
+    }
+
+    /// The `usize` LEXICOGRAPHIC-ORDER INDEX of the lex-order N-ARY MAX
+    /// projection of `items` — the lex position of
+    /// [`Self::sorted_max_of`] projected through
+    /// [`Self::sorted_index_of`], or [`None`] when `items` is empty.
+    ///
+    /// Closes the (return-shape × ordering × direction) 3×2×2 =
+    /// 12-corner N-ary variadic-reduction hypercube on the N-ary arity
+    /// face at the (`usize`-return, lex-order, max) corner —
+    /// EXHAUSTIVELY closing the N-ary arity face after the Self-return
+    /// 4-corner (ordering × direction) 2×2 matrix ([`Self::min_of`] /
+    /// [`Self::max_of`] / [`Self::sorted_min_of`] /
+    /// [`Self::sorted_max_of`]) AND the label-return 4-corner
+    /// (ordering × direction) 2×2 matrix ([`Self::min_label_of`] /
+    /// [`Self::max_label_of`] / [`Self::sorted_min_label_of`] /
+    /// [`Self::sorted_max_label_of`]). Sibling posture to
+    /// [`Self::sorted_min_index_of`] one direction axis over on the lex
+    /// arm AND to [`Self::max_index_of`] one ordering axis over on the
+    /// max arm. Together with [`Self::min_index_of`],
+    /// [`Self::max_index_of`], and [`Self::sorted_min_index_of`] this
+    /// method CLOSES the (ordering × direction) 2×2 = 4-corner index-
+    /// return N-ary variadic-reduction matrix — the N-ary arity face
+    /// now MATCHES the binary-arity face's own 3×2×2 hypercube shape at
+    /// every corner of the (`Self`, `&'static str`, `usize`) return-
+    /// shape trio and the {declaration, lex} ordering × {min, max}
+    /// direction 2×2 selection matrix, the arity axis carrying the same
+    /// exhaustive 12-corner closure the binary axis carries one arity
+    /// level down.
+    ///
+    /// See [`Self::min_index_of`] for the shared design rationale, the
+    /// empty-slice / singleton / composition / full-set / permutation-
+    /// invariance / binary-agreement contracts, the future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration — this
+    /// method is the lex-order arm of the max direction column on the
+    /// index-return N-ary surface and inherits every property from the
+    /// declaration arm's documentation, differing only in the substrate
+    /// primitive the N-ary fold routes through ([`Self::sorted_max_of`]
+    /// rather than [`Self::max_of`]) and the lex-ordering slot lookup
+    /// it composes at the projection ([`Self::sorted_index_of`] rather
+    /// than [`Self::index_of`]).
+    ///
+    /// Full-set contract: `T::sorted_max_index_of(<T as ClosedSet>::ALL)
+    /// == Some(<T as ClosedSet>::ALL.len() - 1)` — the lex-order N-ary
+    /// max-index over the entire closed set folds to the lex-tail
+    /// slot's index. With the N-ary index-return face exhaustively
+    /// closed, the closed-set surface now carries a UNIFORM 12-corner
+    /// (return-shape × ordering × direction) 3×2×2 hypercube at BOTH
+    /// the binary-arity face AND the N-ary-arity face — every
+    /// projection under {Self, `&'static str`, `usize`} return-shape ×
+    /// {declaration, lex} ordering × {min, max} direction has a typed
+    /// method on the trait at BOTH arities, and no future N-ary
+    /// selection consumer at either arity needs to re-derive the
+    /// projection inline. The next extension on the arity axis carries
+    /// the same 12-corner shape one arity level up (ternary
+    /// closed-range selection over `[lo, hi]` under the {min, max}
+    /// direction axis + a {Self, label, index} return-shape trio),
+    /// mirroring the ternary CLAMP face's own 6-corner (return-shape ×
+    /// ordering) closure at (92)+(93)+(94).
+    fn sorted_max_index_of(items: &[Self]) -> Option<usize> {
+        <Self as ClosedSet>::sorted_max_of(items).map(<Self as ClosedSet>::sorted_index_of)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -33672,6 +33907,241 @@ mod tests {
                 assert_eq!(
                     <StubKind as ClosedSet>::sorted_max_label_of(&[a, b]),
                     Some(<StubKind as ClosedSet>::sorted_max_label(a, b)),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_index_of_returns_none_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (index-return N-ary arms): every arm of
+        // the (ordering × direction) 2×2 = 4-corner index-return N-ary
+        // variadic-reduction matrix folds an empty slice to `None` —
+        // the `Option::map` semantics on a `None` receiver propagates
+        // verbatim through the index projection, pinning the empty-
+        // fixpoint witness on every corner. Sibling posture to
+        // `min_of_returns_none_on_the_empty_slice_across_every_kind`
+        // one return-shape column over on the Self-return face AND to
+        // `min_label_of_returns_none_on_the_empty_slice_across_every_kind`
+        // one return-shape column over on the label-return face.
+        assert_eq!(<StubKind as ClosedSet>::min_index_of(&[]), None);
+        assert_eq!(<StubKind as ClosedSet>::max_index_of(&[]), None);
+        assert_eq!(<StubKind as ClosedSet>::sorted_min_index_of(&[]), None);
+        assert_eq!(<StubKind as ClosedSet>::sorted_max_index_of(&[]), None);
+    }
+
+    #[test]
+    fn min_index_of_returns_the_sole_member_index_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT (index-return N-ary arms): every arm folds
+        // a singleton slice to `Some(v.index_of())` (declaration arms)
+        // or `Some(v.sorted_index_of())` (lex arms) — the composition
+        // `Option::map(index_of)` on `Some(v)` yields the sole
+        // element's canonical `usize` slot, regardless of which Self-
+        // return N-ary primitive threads through the fold. Sibling
+        // posture to
+        // `min_label_of_returns_the_sole_member_label_on_every_singleton_slice_across_every_variant`
+        // one return-shape column over on the label-return face.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected_decl = Some(<StubKind as ClosedSet>::index_of(v));
+            let expected_lex = Some(<StubKind as ClosedSet>::sorted_index_of(v));
+            assert_eq!(<StubKind as ClosedSet>::min_index_of(&[v]), expected_decl);
+            assert_eq!(<StubKind as ClosedSet>::max_index_of(&[v]), expected_decl);
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_min_index_of(&[v]),
+                expected_lex,
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_max_index_of(&[v]),
+                expected_lex,
+            );
+        }
+    }
+
+    #[test]
+    fn min_index_of_composes_min_of_with_index_of_across_every_triple() {
+        // COMPOSITION CONTRACT (index-return N-ary arms): every arm's
+        // projection equals the corresponding Self-return arm's
+        // projection composed with `Option::map(Self::index_of)` (or
+        // `Option::map(Self::sorted_index_of)` on the lex arms). Pins
+        // the index-return column of the 12-corner N-ary hypercube to
+        // the Self-return column via ONE `Option::map(index_of)` —
+        // forbidding an override body that would silently drift the
+        // index-return arm from the Self-return arm's projection
+        // through a fresh reduce fold or a lookup table. Sibling
+        // posture to
+        // `min_label_of_composes_min_of_with_label_across_every_triple`
+        // one return-shape column over on the label-return face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::min_index_of(&slice),
+                        <StubKind as ClosedSet>::min_of(&slice)
+                            .map(<StubKind as ClosedSet>::index_of),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::max_index_of(&slice),
+                        <StubKind as ClosedSet>::max_of(&slice)
+                            .map(<StubKind as ClosedSet>::index_of),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_min_index_of(&slice),
+                        <StubKind as ClosedSet>::sorted_min_of(&slice)
+                            .map(<StubKind as ClosedSet>::sorted_index_of),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_max_index_of(&slice),
+                        <StubKind as ClosedSet>::sorted_max_of(&slice)
+                            .map(<StubKind as ClosedSet>::sorted_index_of),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn min_index_of_over_the_full_set_projects_to_the_endpoint_slots_across_every_kind() {
+        // FULL-SET CONTRACT (index-return N-ary arms): the N-ary min-
+        // index over the entire closed set projects to slot `0` on the
+        // min-direction arms (declaration and lex) AND to slot
+        // `ALL.len() - 1` on the max-direction arms — the index-return
+        // column's counterpart of the Self-return arm's full-set
+        // fixpoint `T::min_of(ALL) == Some(T::first())` and the label-
+        // return arm's `T::min_label_of(ALL) == Some(T::first().label())`.
+        // Pins the cross-primitive composition between the index-return
+        // N-ary variadic-reduction surface and the endpoint-slot
+        // fixpoints:
+        // `T::min_index_of(ALL) == Some(0)` /
+        // `T::max_index_of(ALL) == Some(ALL.len() - 1)` /
+        // `T::sorted_min_index_of(ALL) == Some(0)` /
+        // `T::sorted_max_index_of(ALL) == Some(ALL.len() - 1)`.
+        // Sibling posture to
+        // `min_label_of_over_the_full_set_projects_to_the_declaration_head_label_across_every_kind`
+        // one return-shape column over on the label-return face.
+        let all = <StubKind as ClosedSet>::ALL;
+        let last_slot = all.len() - 1;
+        assert_eq!(<StubKind as ClosedSet>::min_index_of(all), Some(0));
+        assert_eq!(<StubKind as ClosedSet>::max_index_of(all), Some(last_slot),);
+        assert_eq!(<StubKind as ClosedSet>::sorted_min_index_of(all), Some(0));
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_max_index_of(all),
+            Some(last_slot),
+        );
+    }
+
+    #[test]
+    fn min_index_of_is_invariant_under_permutation_of_the_input_slice_across_every_triple() {
+        // PERMUTATION-INVARIANCE CONTRACT (index-return N-ary arms):
+        // every arm folds every permutation of a length-3 slice to the
+        // SAME index projection — the N-ary min/max index is invariant
+        // under reordering of its input slice because the Self-return
+        // arm is (pinned one return-shape column over) AND the
+        // `Option::map(index_of)` composition preserves the invariance
+        // pointwise. Sibling posture to
+        // `min_label_of_is_invariant_under_permutation_of_the_input_slice_across_every_triple`
+        // one return-shape column over on the label-return face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let canonical_min = <StubKind as ClosedSet>::min_index_of(&[a, b, c]);
+                    let canonical_max = <StubKind as ClosedSet>::max_index_of(&[a, b, c]);
+                    let canonical_sorted_min =
+                        <StubKind as ClosedSet>::sorted_min_index_of(&[a, b, c]);
+                    let canonical_sorted_max =
+                        <StubKind as ClosedSet>::sorted_max_index_of(&[a, b, c]);
+                    for permuted in [
+                        [a, b, c],
+                        [a, c, b],
+                        [b, a, c],
+                        [b, c, a],
+                        [c, a, b],
+                        [c, b, a],
+                    ] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::min_index_of(&permuted),
+                            canonical_min,
+                        );
+                        assert_eq!(
+                            <StubKind as ClosedSet>::max_index_of(&permuted),
+                            canonical_max,
+                        );
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_min_index_of(&permuted),
+                            canonical_sorted_min,
+                        );
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_max_index_of(&permuted),
+                            canonical_sorted_max,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_min_index_of_and_sorted_max_index_of_coincide_with_the_declaration_peers_when_orders_agree(
+    ) {
+        // CROSS-AXIS COINCIDENCE CONTRACT (index-return N-ary arms):
+        // when declaration and lex orders coincide (as they do on
+        // `StubKind`), the lex-order N-ary min-index / max-index
+        // projections coincide with the declaration-order arms on every
+        // slice. Sibling posture to
+        // `sorted_min_label_of_and_sorted_max_label_of_coincide_with_the_declaration_peers_when_orders_agree`
+        // one return-shape column over on the label-return face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_min_index_of(&slice),
+                        <StubKind as ClosedSet>::min_index_of(&slice),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_max_index_of(&slice),
+                        <StubKind as ClosedSet>::max_index_of(&slice),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn min_index_of_agrees_with_binary_min_index_on_every_length_two_slice_across_every_pair() {
+        // BINARY-AGREEMENT CONTRACT (index-return N-ary arms): every
+        // arm folds a length-2 slice through the corresponding binary
+        // pairwise-selection index primitive on every operand pair —
+        // pins the index-return N-ary surface at arity-2 to the index-
+        // return arity-2 primitive one arity level down, EXHAUSTIVELY
+        // closing the (arity × return-shape) 2×3 = 6-corner cross-
+        // arity closure between the binary and N-ary faces on the
+        // Self / label / index return-shape trio. Sibling posture to
+        // `min_label_of_agrees_with_binary_min_label_on_every_length_two_slice_across_every_pair`
+        // one return-shape column over on the label-return face; the
+        // N-ary index-return arm reaches the binary index-return arm
+        // at the length-2 slice through the two-step composition
+        // `Self::min_of → Option::map(index_of)` on the arity-N side
+        // and the direct `Self::index_of(Self::min(a, b))` on the
+        // arity-2 side, which agree byte-for-byte by
+        // [`Iterator::reduce`]'s length-2 identity.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::min_index_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::min_index(a, b)),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::max_index_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::max_index(a, b)),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_min_index_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::sorted_min_index(a, b)),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_max_index_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::sorted_max_index(a, b)),
                 );
             }
         }

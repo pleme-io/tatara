@@ -12038,6 +12038,204 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::count_distinct(items) == <Self as ClosedSet>::CARDINALITY
     }
 
+    /// The BOOL-return N-ARY predicate answering "does this slice visit
+    /// every variant EXACTLY ONCE?" — the (covering ∧ distinct)
+    /// CONJUNCTION corner of the equivalence-partition surface,
+    /// closing the (constant, distinct, covering, permutation) 4-
+    /// projection square past the three pre-existing typed primitives.
+    ///
+    /// Composition: `T::is_permutation_of_all(items) ==
+    /// T::is_covering(items) && T::is_pairwise_distinct(items)` for
+    /// every slice, so the predicate is a TYPED CONSEQUENCE of two
+    /// prior N-ary primitives already lifted on the same surface. No
+    /// fresh substrate primitive — the (covering, distinct) conjunction
+    /// exactly names the "permutation of the full set" corner. The
+    /// prior [`Self::is_covering`] lift's compounding paragraph
+    /// explicitly named THIS predicate as the next natural lift on
+    /// the equivalence-partition surface once its two building-block
+    /// projections landed as typed primitives.
+    ///
+    /// EQUIVALENT formulations pinned by tests:
+    /// * `T::is_covering(items) && T::is_pairwise_distinct(items)`
+    ///   (the canonical form the body uses);
+    /// * `T::is_covering(items) && items.len() == T::CARDINALITY`
+    ///   (via the pairwise-distinctness length-equals-count fixpoint —
+    ///   a pairwise-distinct slice has `count_distinct == items.len()`,
+    ///   and a covering slice has `count_distinct == T::CARDINALITY`);
+    /// * `T::is_pairwise_distinct(items) && items.len() ==
+    ///   T::CARDINALITY` (the length-forced dual — a pairwise-distinct
+    ///   slice of length `T::CARDINALITY` MUST hit every variant since
+    ///   the distinct count and the ambient cardinality coincide);
+    /// * `T::count_distinct(items) == T::CARDINALITY && items.len() ==
+    ///   T::CARDINALITY` (routing through the raw USIZE-return count).
+    ///
+    /// Empty-slice contract: `T::is_permutation_of_all(&[])` iff
+    /// `T::CARDINALITY == 0` — the empty slice is a permutation of
+    /// the empty full set (both `is_covering` and
+    /// `is_pairwise_distinct` accept the empty slice on the
+    /// degenerate closed set with zero variants) and rejects on every
+    /// implementor of positive cardinality (the empty slice fails
+    /// the covering endpoint since `count_distinct == 0 <
+    /// T::CARDINALITY`). Pinned by
+    /// `is_permutation_of_all_returns_false_on_the_empty_slice_across_every_non_degenerate_kind`.
+    ///
+    /// Singleton contract: `T::is_permutation_of_all(&[v])` iff
+    /// `T::CARDINALITY == 1` — a singleton is a permutation of a
+    /// cardinality-1 full set. Every cardinality-≥-2 implementor
+    /// (including StubKind at cardinality 3) rejects. Pinned by
+    /// `is_permutation_of_all_returns_false_on_every_singleton_when_cardinality_is_at_least_two`.
+    ///
+    /// Full-set contract: `T::is_permutation_of_all(<T as ClosedSet>::ALL)`
+    /// is `true` UNCONDITIONALLY — the closed-set well-formedness
+    /// invariant [`assert_closed_set_well_formed`]'s clause (3) pins
+    /// variants as pairwise distinct, so `<T as ClosedSet>::ALL`
+    /// satisfies both `is_covering` (its distinct count reaches
+    /// `T::CARDINALITY`) and `is_pairwise_distinct` (no repetition).
+    /// Pinned by
+    /// `is_permutation_of_all_over_the_full_set_holds_unconditionally`.
+    ///
+    /// Length-EQUAL-cardinality contract: `T::is_permutation_of_all(items)`
+    /// implies `items.len() == T::CARDINALITY` (bidirectional lower AND
+    /// upper bound) — coverage forces `items.len() >= T::CARDINALITY`
+    /// (the covering length lower bound), and pairwise-distinctness
+    /// forces `items.len() == T::count_distinct(items) <=
+    /// T::CARDINALITY`; together the two force EQUALITY. Contrapositive:
+    /// `items.len() != T::CARDINALITY` implies
+    /// `!T::is_permutation_of_all(items)`. Pinned by
+    /// `is_permutation_of_all_forces_slice_length_equals_cardinality_across_every_triple`.
+    /// This is the STRICTER upper bound the covering predicate's
+    /// LOWER bound (`items.len() >= T::CARDINALITY`) does not carry
+    /// alone — the doubled full set covers but is NOT a permutation of
+    /// all, closing the composition-monotonicity gap at the ADDING-
+    /// pairwise-distinctness step.
+    ///
+    /// Doubled-full-set contract: `T::is_permutation_of_all` REJECTS
+    /// the doubled full set `[ALL[0], …, ALL[n-1], ALL[0], …,
+    /// ALL[n-1]]` whenever `T::CARDINALITY >= 1` — the doubled slice
+    /// covers (via [`Self::is_covering`]'s concatenation-monotonicity)
+    /// but repeats every variant so
+    /// [`Self::is_pairwise_distinct`] rejects. The contrast with
+    /// [`Self::is_covering`]'s
+    /// `is_covering_over_the_doubled_full_set_holds_unconditionally`
+    /// contract is the load-bearing difference the permutation
+    /// predicate carries past the covering predicate: coverage is
+    /// concatenation-MONOTONE while permutation-of-all is NOT (adding
+    /// a duplicate strictly breaks the conjunction). Pinned by
+    /// `is_permutation_of_all_rejects_the_doubled_full_set_across_every_non_degenerate_kind`.
+    ///
+    /// Reversal-invariance: `T::is_permutation_of_all(items)` equals
+    /// `T::is_permutation_of_all(items.iter().rev().copied().collect::<Vec<_>>())`
+    /// — reversing a slice preserves its multiset of variant
+    /// identities, and both building-block projections are ordering-
+    /// agnostic fixpoints of that multiset. Sibling posture to
+    /// [`Self::is_covering`]'s
+    /// `is_covering_is_invariant_under_slice_reversal_across_every_triple`,
+    /// [`Self::is_pairwise_distinct`]'s
+    /// `is_pairwise_distinct_is_invariant_under_slice_reversal_across_every_triple`,
+    /// and [`Self::is_constant`]'s
+    /// `is_constant_is_invariant_under_slice_reversal_across_every_triple`
+    /// one column of the (return-shape) axis over: every projection
+    /// on the equivalence-partition surface is a fixpoint of slice
+    /// reversal. Pinned by
+    /// `is_permutation_of_all_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the predicate composes on two typed CONSEQUENCE
+    /// projections ([`Self::is_covering`] +
+    /// [`Self::is_pairwise_distinct`]), which in turn compose on ONE
+    /// substrate primitive ([`Self::count_distinct`]) and the trait-
+    /// level [`Self::CARDINALITY`] constant. The composition inherits
+    /// [`Self::count_distinct`]'s O(n(n-1)/2) cost on slice arity `n`
+    /// — allocation-free, no `PartialEq`/`Eq`/`Hash` supertrait bound
+    /// (the trait's minimal `Sized + Copy + 'static` supertrait pair
+    /// stays untouched), no set-shape carrier, no allocation. The
+    /// short-circuit `&&` orders the covering-check first because
+    /// `count_distinct` is amortised across the sub-slice sweep the
+    /// pairwise-distinct predicate re-runs; a future micro-refactor
+    /// can substitute the equivalent `is_pairwise_distinct(items) &&
+    /// items.len() == T::CARDINALITY` form (pinned equivalent by the
+    /// length-forced dual test) without touching the surface.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::is_permutation_of_all`]: a `tatara-check` predicate
+    /// `(check-phases-permute-all …)` verifying that a
+    /// `WorkloadPhase` sequence hits every phase EXACTLY ONCE at
+    /// plan time — catching both an omitted phase (covering fails)
+    /// AND a duplicate (pairwise-distinct fails) at the ONE
+    /// predicate; an LSP diagnostic on a Lisp-author-written closed-
+    /// set field that emits at BOTH the "under-coverage" AND the
+    /// "duplicate" callsite through ONE typed sweep rather than
+    /// through two disjoint checks; a Sekiban audit-trail metric
+    /// labeled by whether a rollout window's per-phase transition
+    /// sequence forms a permutation of the full lifecycle (a
+    /// deterministic UP-DOWN cycle vs a degenerate churn); a
+    /// `tatara-lisp::macro_expand::Expander` hygiene pass that
+    /// verifies a template's generated identifier sequence forms a
+    /// permutation of a required closed vocabulary (each identifier
+    /// used exactly once, no omission and no re-use). Each binds to
+    /// ONE typed N-ary permutation predicate on the trait rather
+    /// than re-deriving the two-primitive conjunction inline per
+    /// callsite.
+    ///
+    /// Compounding closure: the (constant, distinct, covering,
+    /// permutation) 4-projection square on the equivalence-partition
+    /// surface now closes at four typed primitives —
+    /// [`Self::is_constant`] (all elements equal),
+    /// [`Self::is_pairwise_distinct`] (no elements equal),
+    /// [`Self::is_covering`] (every variant hit at least once), and
+    /// THIS predicate (every variant hit exactly once) — plus one
+    /// usize-return sibling [`Self::count_distinct`] (how many
+    /// variants hit). The square's fifth CONJUNCTION corner
+    /// `(constant ∧ covering)` is degenerate (holds iff
+    /// `T::CARDINALITY == 1`); the sixth corner `(constant ∧
+    /// distinct)` is degenerate (holds iff `items.len() <= 1`);
+    /// permutation is the load-bearing NON-DEGENERATE conjunction.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// permutation predicate becomes a TYPE-level primitive on the
+    /// closed-set trait rather than a per-consumer inline
+    /// `T::is_covering(items) && T::is_pairwise_distinct(items)`
+    /// composition at every downstream generic site. THEORY.md
+    /// §V.1 — knowable platform; the permutation-of-all axis was an
+    /// unnamed inline two-primitive conjunction pre-lift. Naming it
+    /// makes the predicate a TYPED CONSEQUENCE of two substrate
+    /// projections on the SAME equivalence-partition surface, so
+    /// the ONE bit of information "is this slice a permutation of
+    /// the ambient set?" binds against a NAMED predicate rather than
+    /// against an inline conjunction that could silently drift if
+    /// either building-block projection's semantics changes.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// permutation predicate emerges from the composition of TWO
+    /// substrate primitives ([`Self::is_covering`] +
+    /// [`Self::is_pairwise_distinct`]) via a single `&&` on `bool`,
+    /// not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `Permutation : list A -> list A ->
+    /// Prop` capturing the "same multiset" relation between two lists,
+    /// which restricted to a right-argument fixed to the canonical
+    /// full set exactly names THIS predicate structurally. Idris's
+    /// `Vect n a` combined with an isomorphism to a finite typed sum's
+    /// constructor set surfaces the same predicate through the
+    /// dependent-type lens (a `Vect n a` is a permutation of the full
+    /// set iff `n` matches the cardinality AND every constructor
+    /// appears). Rust's own
+    /// `let mut sorted: Vec<_> = items.to_vec(); sorted.sort(); sorted
+    /// == <T as ClosedSet>::ALL.to_vec()` idiom binds through an
+    /// allocating sort. Julia's `issetequal(v, T)` when
+    /// `length(v) == length(T)`. Haskell's `Data.List.sort a ==
+    /// [minBound .. maxBound]` on a `Bounded + Enum` type. NumPy's
+    /// `np.array_equal(np.sort(a), T)` idiom. Translation through
+    /// pleme-io primitives: the permutation predicate binds through
+    /// the substrate's [`Self::is_covering`] +
+    /// [`Self::is_pairwise_distinct`] conjunction — no new dep, no
+    /// `Ord`/`Eq`/`Hash` supertrait bound (the two building-block
+    /// projections already compose on the substrate's
+    /// [`Self::count_distinct`] primitive and the trait-level
+    /// [`Self::CARDINALITY`] constant), no sort-shape carrier, no
+    /// allocation.
+    fn is_permutation_of_all(items: &[Self]) -> bool {
+        <Self as ClosedSet>::is_covering(items) && <Self as ClosedSet>::is_pairwise_distinct(items)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -37410,6 +37608,294 @@ mod tests {
                             len = triple.len(),
                         );
                     }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_permutation_of_all_returns_false_on_the_empty_slice_across_every_non_degenerate_kind() {
+        // EMPTY-SLICE CONTRACT (N-ary permutation-of-all predicate):
+        // `T::is_permutation_of_all(&[])` iff `T::CARDINALITY == 0`.
+        // Every non-degenerate implementor rejects the empty slice
+        // because the covering conjunct rejects (`count_distinct(&[])
+        // == 0 < T::CARDINALITY` on cardinality >= 1). Sibling
+        // posture to `is_covering_returns_false_on_the_empty_slice_across_every_non_degenerate_kind`
+        // — the two building-block predicates share the empty-slice
+        // rejection contract on non-degenerate implementors.
+        let empty: &[StubKind] = &[];
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 1) };
+        assert!(!<StubKind as ClosedSet>::is_permutation_of_all(empty));
+    }
+
+    #[test]
+    fn is_permutation_of_all_returns_false_on_every_singleton_when_cardinality_is_at_least_two() {
+        // SINGLETON CONTRACT: `T::is_permutation_of_all(&[v])` iff
+        // `T::CARDINALITY == 1` — a singleton is a permutation of a
+        // cardinality-1 full set. Every cardinality-≥-2 implementor
+        // rejects because the covering conjunct rejects (a singleton
+        // hits ONE variant, which is fewer than the ambient
+        // cardinality). Sibling posture to
+        // `is_covering_returns_false_on_every_singleton_when_cardinality_is_at_least_two`.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert!(
+                !<StubKind as ClosedSet>::is_permutation_of_all(&singleton),
+                "T::is_permutation_of_all({singleton:?}) accepted a singleton on a cardinality-{cardinality} closed set — a singleton cannot be a permutation of a strictly-larger ambient set",
+                cardinality = <StubKind as ClosedSet>::CARDINALITY,
+            );
+        }
+    }
+
+    #[test]
+    fn is_permutation_of_all_over_the_full_set_holds_unconditionally() {
+        // FULL-SET CONTRACT: `T::is_permutation_of_all(<T as
+        // ClosedSet>::ALL)` is `true` UNCONDITIONALLY — the closed-
+        // set well-formedness invariant `assert_closed_set_well_formed`'s
+        // clause (3) pins variants as pairwise distinct, so `<T as
+        // ClosedSet>::ALL` satisfies both `is_covering` (its distinct
+        // count reaches `T::CARDINALITY`) and `is_pairwise_distinct`
+        // (no repetition). Sibling posture to
+        // `is_covering_over_the_full_set_holds_unconditionally` and
+        // `is_pairwise_distinct_over_the_full_set_holds_unconditionally`
+        // one column of the (return-shape) axis over.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert!(
+            <StubKind as ClosedSet>::is_permutation_of_all(all),
+            "T::is_permutation_of_all on the full set rejected — the closed-set well-formedness pairwise-distinctness invariant plus the covering full-set contract would be jointly violated"
+        );
+    }
+
+    #[test]
+    fn is_permutation_of_all_rejects_the_doubled_full_set_across_every_non_degenerate_kind() {
+        // NON-CONCATENATION-MONOTONE CONTRACT (load-bearing contrast
+        // with the covering predicate): the doubled full set
+        // `[ALL[0], …, ALL[n-1], ALL[0], …, ALL[n-1]]` COVERS (by
+        // `is_covering_over_the_doubled_full_set_holds_unconditionally`)
+        // but is NOT a permutation of all whenever `T::CARDINALITY
+        // >= 1` — every variant is repeated, so the pairwise-distinct
+        // conjunct rejects. The contrast pins the load-bearing
+        // difference the permutation predicate carries past the
+        // covering predicate: coverage is concatenation-MONOTONE
+        // while permutation-of-all is NOT (adding a duplicate
+        // strictly breaks the pairwise-distinct arm of the
+        // conjunction). Catches a future override whose body drops
+        // the pairwise-distinct conjunct and reduces to the raw
+        // covering predicate.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 1) };
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert!(
+            !<StubKind as ClosedSet>::is_permutation_of_all(&doubled),
+            "T::is_permutation_of_all on the doubled full set accepted — the pairwise-distinct conjunct MUST reject a slice with every variant repeated"
+        );
+    }
+
+    #[test]
+    fn is_permutation_of_all_composes_through_is_covering_and_is_pairwise_distinct_across_every_triple(
+    ) {
+        // COMPOSITION IDENTITY: for every slice `items`,
+        // `T::is_permutation_of_all(items) == (T::is_covering(items)
+        // && T::is_pairwise_distinct(items))`. The equality binds by
+        // construction from the method's body but the sweep catches
+        // a future override whose body diverges from the canonical
+        // two-primitive conjunction. Sibling posture to
+        // `is_covering_composes_through_count_distinct_equals_cardinality_across_every_triple`
+        // one equivalence-partition-surface layer up: `is_covering`
+        // composes on `count_distinct` + `CARDINALITY`;
+        // `is_permutation_of_all` composes on `is_covering` +
+        // `is_pairwise_distinct`. The (constant, distinct, covering,
+        // permutation) 4-projection square now closes at three
+        // typed-consequence identities plus one substrate primitive.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::is_permutation_of_all(empty),
+            <StubKind as ClosedSet>::is_covering(empty)
+                && <StubKind as ClosedSet>::is_pairwise_distinct(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [a];
+            assert_eq!(
+                <StubKind as ClosedSet>::is_permutation_of_all(&singleton),
+                <StubKind as ClosedSet>::is_covering(&singleton)
+                    && <StubKind as ClosedSet>::is_pairwise_distinct(&singleton),
+                "T::is_permutation_of_all({singleton:?}) diverged from (T::is_covering ∧ T::is_pairwise_distinct)({singleton:?}) — the composition identity was violated",
+            );
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_permutation_of_all(&pair),
+                    <StubKind as ClosedSet>::is_covering(&pair)
+                        && <StubKind as ClosedSet>::is_pairwise_distinct(&pair),
+                    "T::is_permutation_of_all({pair:?}) diverged from (T::is_covering ∧ T::is_pairwise_distinct)({pair:?}) — the composition identity was violated"
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_permutation_of_all(&triple),
+                        <StubKind as ClosedSet>::is_covering(&triple)
+                            && <StubKind as ClosedSet>::is_pairwise_distinct(&triple),
+                        "T::is_permutation_of_all({triple:?}) diverged from (T::is_covering ∧ T::is_pairwise_distinct)({triple:?}) — the composition identity was violated"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_permutation_of_all_forces_slice_length_equals_cardinality_across_every_triple() {
+        // LENGTH-EQUAL-CARDINALITY CONTRACT (bidirectional bound):
+        // `T::is_permutation_of_all(items)` implies `items.len() ==
+        // T::CARDINALITY` on every slice. Coverage forces
+        // `items.len() >= T::CARDINALITY` (the covering length
+        // lower bound), and pairwise-distinctness forces
+        // `items.len() == T::count_distinct(items) <= T::CARDINALITY`;
+        // together the two force EQUALITY. This is the STRICTER upper
+        // bound the covering predicate's length-lower-bound does not
+        // carry alone — closing the (>=, ==) gap at the ADDING-
+        // pairwise-distinctness step. Contrapositive:
+        // `items.len() != T::CARDINALITY` implies
+        // `!T::is_permutation_of_all(items)`. Sibling posture to
+        // `is_covering_implies_slice_length_is_at_least_cardinality_across_every_triple`
+        // and `is_covering_conjunction_with_is_pairwise_distinct_implies_slice_length_equals_cardinality_across_every_triple`
+        // — that pre-existing pin sweeps the same identity via the
+        // ad-hoc conjunction; this pin sweeps via the LIFTED typed
+        // predicate.
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                if <StubKind as ClosedSet>::is_permutation_of_all(&pair) {
+                    assert_eq!(
+                        pair.len(),
+                        cardinality,
+                        "T::is_permutation_of_all({pair:?}) accepted a slice of length {len} diverging from T::CARDINALITY = {cardinality} — the length-equal-cardinality contract was violated",
+                        len = pair.len(),
+                    );
+                }
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    if <StubKind as ClosedSet>::is_permutation_of_all(&triple) {
+                        assert_eq!(
+                            triple.len(),
+                            cardinality,
+                            "T::is_permutation_of_all({triple:?}) accepted a slice of length {len} diverging from T::CARDINALITY = {cardinality} — the length-equal-cardinality contract was violated",
+                            len = triple.len(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_permutation_of_all_agrees_with_pairwise_distinct_and_length_equals_cardinality_across_every_triple(
+    ) {
+        // EQUIVALENT-FORMULATION CONTRACT (length-forced dual):
+        // `T::is_permutation_of_all(items) ==
+        // (T::is_pairwise_distinct(items) && items.len() ==
+        // T::CARDINALITY)` for every slice. A pairwise-distinct
+        // slice has `count_distinct == items.len()`; requiring
+        // `items.len() == T::CARDINALITY` forces `count_distinct ==
+        // T::CARDINALITY` which is exactly the covering identity. Pin
+        // the length-forced dual equivalence at rustc-checked
+        // property sweep so a future micro-refactor of the body from
+        // `is_covering ∧ is_pairwise_distinct` to
+        // `is_pairwise_distinct ∧ len == CARDINALITY` (or any of the
+        // other equivalent formulations) remains provably equivalent
+        // rather than a silent surface drift.
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::is_permutation_of_all(empty),
+            <StubKind as ClosedSet>::is_pairwise_distinct(empty) && empty.len() == cardinality,
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_permutation_of_all(&pair),
+                    <StubKind as ClosedSet>::is_pairwise_distinct(&pair)
+                        && pair.len() == cardinality,
+                    "T::is_permutation_of_all({pair:?}) diverged from (is_pairwise_distinct ∧ len == CARDINALITY)({pair:?}) — the length-forced dual equivalence was violated"
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_permutation_of_all(&triple),
+                        <StubKind as ClosedSet>::is_pairwise_distinct(&triple)
+                            && triple.len() == cardinality,
+                        "T::is_permutation_of_all({triple:?}) diverged from (is_pairwise_distinct ∧ len == CARDINALITY)({triple:?}) — the length-forced dual equivalence was violated"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_permutation_of_all_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::is_permutation_of_all(items) ==
+        // T::is_permutation_of_all(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and both building-block projections
+        // (`is_covering`, `is_pairwise_distinct`) are ordering-
+        // agnostic fixpoints of that multiset. Sibling posture to
+        // `is_covering_is_invariant_under_slice_reversal_across_every_triple`,
+        // `is_pairwise_distinct_is_invariant_under_slice_reversal_across_every_triple`,
+        // `count_distinct_is_invariant_under_slice_reversal_across_every_triple`,
+        // and `is_constant_is_invariant_under_slice_reversal_across_every_triple`
+        // one column of the (return-shape) axis over: every
+        // projection on the equivalence-partition surface is a
+        // fixpoint of slice reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_permutation_of_all(&forward),
+                        <StubKind as ClosedSet>::is_permutation_of_all(&reversed),
+                        "T::is_permutation_of_all({forward:?}) diverged from T::is_permutation_of_all({reversed:?}) — the permutation predicate MUST be a fixpoint of slice reversal"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_permutation_of_all_accepts_exactly_the_pairwise_distinct_full_length_triples() {
+        // COMPLETENESS CONTRACT (on the cardinality-3 stub): on
+        // StubKind at cardinality 3, `T::is_permutation_of_all`
+        // accepts EXACTLY the pairwise-distinct length-3 triples
+        // (i.e. the 3! = 6 permutations of `ALL`). Pin the acceptance
+        // set at the stub level so a regression that over-accepts
+        // (e.g. dropping the pairwise-distinct conjunct — the
+        // doubled-full-set contract catches one direction; this pin
+        // catches the general case on every triple) or under-accepts
+        // (e.g. adding a spurious ordering conjunct — a hypothetical
+        // future override that demands the slice EQUAL `Self::ALL`
+        // byte-for-byte) surfaces here. Sibling posture to
+        // `is_covering_is_invariant_under_ordering_axis_across_every_triple`
+        // — that pin sweeps ordering invariance via the covering
+        // predicate; this pin sweeps the SAME invariance via the
+        // permutation-of-all predicate.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected = <StubKind as ClosedSet>::is_pairwise_distinct(&triple);
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_permutation_of_all(&triple),
+                        expected,
+                        "T::is_permutation_of_all({triple:?}) diverged from T::is_pairwise_distinct({triple:?}) at the cardinality-{cardinality} × length-{len} corner where the two predicates coincide (length == CARDINALITY)",
+                        cardinality = <StubKind as ClosedSet>::CARDINALITY,
+                        len = triple.len(),
+                    );
                 }
             }
         }

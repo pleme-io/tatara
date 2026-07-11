@@ -10023,6 +10023,251 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_index_of(<Self as ClosedSet>::sorted_max(self, other))
     }
 
+    /// The declaration-order N-ARY MIN projection — the earliest
+    /// variant of `items` under [`Self::ALL`]'s declaration order, or
+    /// [`None`] when `items` is empty. Folds [`Self::min`] over
+    /// `items` from left via [`Iterator::reduce`]: the singleton case
+    /// returns `Some(items[0])`, the k-length case returns
+    /// `Some(items.iter().copied().reduce(min).unwrap())`. The
+    /// arity-N opener on the closed-set surface past the exhaustively-
+    /// closed 12-corner binary pairwise-SELECTION hypercube (95)+(96)+
+    /// (97)+(98)+(99)+(100) — opens the arity axis one step further
+    /// from binary pairwise-selection to N-ary variadic reduction over
+    /// a slice.
+    ///
+    /// Sibling posture to the binary pairwise-selection hypercube's
+    /// 12 corners one arity level down: the pairwise-selection
+    /// projections answer "which of TWO variants is earlier?"; this
+    /// method answers "which of N variants is earliest?" over a slice.
+    /// The declaration-axis composition binds through the substrate's
+    /// non-strict-precedence-guarded binary min primitive folded left
+    /// via [`Iterator::reduce`] — so the N-ary min emerges as a typed
+    /// CONSEQUENCE of the binary min primitive through the standard-
+    /// library `reduce` fold rather than a fresh substrate primitive
+    /// on the index axis. Not a new pairwise-comparison primitive —
+    /// the composition emerges from the just-closed 4-corner binary
+    /// Self-return selection matrix through the standard-library
+    /// `reduce` fold on `Iterator`.
+    ///
+    /// Empty-slice contract: `T::min_of(&[]) == None` — the empty
+    /// slice has no earliest member, and the [`Option`]-typed return
+    /// carries the empty-fixpoint witness without allocating a
+    /// diagnostic carrier. Pinned by
+    /// `min_of_returns_none_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::min_of(&[v]) == Some(v)` on every
+    /// variant `v` — a singleton slice reduces to its sole member
+    /// through the [`Iterator::reduce`] identity on 1-length inputs.
+    /// Pinned by
+    /// `min_of_returns_the_sole_member_on_every_singleton_slice_across_every_variant`.
+    ///
+    /// Binary agreement contract: `T::min_of(&[a, b]) == Some(a.min(b))`
+    /// on every operand pair — the arity-2 reduction folds through the
+    /// substrate's binary min primitive, so the arity-N surface is
+    /// pointwise consistent with the arity-2 surface at the length-2
+    /// slice. Pinned by
+    /// `min_of_agrees_with_binary_min_on_every_length_two_slice_across_every_pair`.
+    ///
+    /// Fold-left contract: `T::min_of(&[a, b, c]) ==
+    /// Some(a.min(b).min(c))` on every operand triple — the ternary
+    /// reduction folds through the substrate's binary min primitive
+    /// twice from the left. Pinned by
+    /// `min_of_agrees_with_left_fold_of_binary_min_on_every_triple`.
+    ///
+    /// Full-set contract: `T::min_of(<T as ClosedSet>::ALL) ==
+    /// Some(T::first())` — the N-ary min over the entire closed set
+    /// folds to the declaration-head variant, the canonical fixpoint
+    /// the min projection shares with [`Self::first`] one arity axis
+    /// up. Pinned by
+    /// `min_of_over_the_full_set_projects_to_the_declaration_head_across_every_kind`.
+    ///
+    /// Permutation-invariance contract: `T::min_of(items) ==
+    /// T::min_of(&permuted)` on every permutation of `items` — the
+    /// N-ary min is invariant under reordering of its input slice
+    /// because binary min is commutative on distinct pairs AND
+    /// idempotent on equal pairs, and both properties propagate
+    /// through the [`Iterator::reduce`] fold. Pinned by
+    /// `min_of_is_invariant_under_permutation_of_the_input_slice_across_every_triple`.
+    ///
+    /// Future consumers that compose against [`Self::min_of`]: a
+    /// diagnostic renderer that folds an observed-phase MULTIset to
+    /// the declaration-order earliest lifecycle stage (as opposed to
+    /// the arity-2 renderer one arity down that folds a PAIR of
+    /// observations to their earlier peer); a `tatara-check`
+    /// predicate `(check-min-observed-phase items)` verifying a
+    /// workspace-wide lifecycle-observation constraint across an
+    /// arbitrary sample; a metrics tagger that folds a rolling window
+    /// of enum observations to the declaration-order earliest peer
+    /// and emits the folded tag as the window's min-membership label;
+    /// a WASI executor that folds a batch of admission-observed
+    /// phases from N concurrent controllers to the earliest lifecycle
+    /// stage and gates SIGHUP admission on the folded min. Every such
+    /// consumer binds to ONE typed method rather than re-deriving the
+    /// `items.iter().copied().reduce(T::min)` composition at every
+    /// callsite.
+    ///
+    /// Default body composes [`Iterator::copied`] +
+    /// [`Iterator::reduce`] with [`Self::min`] verbatim: `items.iter()
+    /// .copied().reduce(<Self as ClosedSet>::min)`. Implementors
+    /// override only when the N-ary min projection needs to diverge
+    /// from the natural `reduce`-fold over the pre-existing binary
+    /// min primitive (no production implementor reaches for this
+    /// today; the axis exists for the same reason `via` / `set_label`
+    /// / `labels` / `precedes` / `clamp` / `min` overrides exist — a
+    /// typed escape hatch rather than forcing the implementor to
+    /// hand-roll the impl).
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary min
+    /// projection becomes a TYPE-level primitive on the closed-set
+    /// trait rather than a per-consumer inline `items.iter().copied()
+    /// .reduce(T::min)` composition at every downstream generic site.
+    /// THEORY.md §V.1 — knowable platform; the N-ary min axis was an
+    /// unnamed inline composition (`.copied().reduce(min)`) that
+    /// would recur at every prospective downstream slice-reduction
+    /// site pre-lift. Naming it on the trait makes the projection a
+    /// TYPED CONSEQUENCE of the binary min primitive folded through
+    /// the standard-library `Iterator::reduce` at ONE composition
+    /// site. THEORY.md §VI.1 — generation over composition; the N-ary
+    /// min projection emerges from the composition of ONE substrate
+    /// primitive ([`Self::min`]) with the standard-library
+    /// [`Iterator::reduce`] rather than as a per-implementor hand-
+    /// rolled body. A future tightening of the underlying binary min
+    /// primitive (a perfect-hash index lookup, a const-fn axis making
+    /// the projection callable in const contexts) propagates to every
+    /// closed-set N-ary min consumer through this method's body.
+    ///
+    /// Frontier inspiration: Rust's [`Iterator::min`] folds an
+    /// arbitrary iterator to its minimum under any [`Ord`] bound; the
+    /// substrate mirrors the same N-ary min projection on the closed-
+    /// set surface without requiring the [`Ord`] supertrait bound the
+    /// trait's typed pairwise-precedence primitives make redundant.
+    /// Common Lisp's `(apply #'min items)` and Racket's `(apply min
+    /// items)` surface the same variadic reduction on numeric types
+    /// via the language's apply idiom; Julia's `minimum(items)` on
+    /// any iterable of ordered types. MLIR's `llvm.intr.vector.reduce
+    /// .smin(vector<Nxi32>)` folds a vector to its signed-min through
+    /// a typed op on the closed operand-vector shape. Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's existing [`Self::min`] surface with the standard-
+    /// library [`Iterator::copied`] + [`Iterator::reduce`] fold — no
+    /// new dep, no new IR layer, no supertrait bound (the pairwise-
+    /// precedence primitive replaces the `Ord` bound), no `apply`
+    /// idiom, no vector-shape carrier.
+    fn min_of(items: &[Self]) -> Option<Self> {
+        items.iter().copied().reduce(<Self as ClosedSet>::min)
+    }
+
+    /// The declaration-order N-ARY MAX projection — the latest
+    /// variant of `items` under [`Self::ALL`]'s declaration order, or
+    /// [`None`] when `items` is empty. Folds [`Self::max`] over
+    /// `items` from left via [`Iterator::reduce`].
+    ///
+    /// The direction-complement peer of [`Self::min_of`] on the
+    /// (min, max) direction axis of the closed-set N-ary variadic
+    /// reduction surface. See [`Self::min_of`] for the shared design
+    /// rationale, empty-slice / singleton / binary-agreement / fold-
+    /// left / permutation-invariance contracts, the future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the max-direction arm of the same N-ary
+    /// variadic reduction surface and inherits every property from
+    /// the min arm's documentation, differing only in the substrate
+    /// primitive the `reduce` fold routes through ([`Self::max`]
+    /// rather than [`Self::min`]).
+    ///
+    /// Full-set contract: `T::max_of(<T as ClosedSet>::ALL) ==
+    /// Some(T::last())` — the N-ary max over the entire closed set
+    /// folds to the declaration-tail variant, the canonical fixpoint
+    /// the max projection shares with [`Self::last`] one arity axis
+    /// up, mirroring the `T::min_of(<T as ClosedSet>::ALL) ==
+    /// Some(T::first())` fixpoint on the min arm one direction column
+    /// over.
+    ///
+    /// Bracket contract: `T::min_of(items).index_of() <=
+    /// T::max_of(items).index_of()` on every non-empty slice — the
+    /// N-ary min sits at OR before the N-ary max under the
+    /// declaration-order index, mirroring the arity-2 bracket
+    /// contract one arity level down.
+    fn max_of(items: &[Self]) -> Option<Self> {
+        items.iter().copied().reduce(<Self as ClosedSet>::max)
+    }
+
+    /// The lex-order N-ARY MIN projection — the lex-earliest variant
+    /// of `items` under [`Self::label`]'s projection into ASCII
+    /// lexicographic order, or [`None`] when `items` is empty. Folds
+    /// [`Self::sorted_min`] over `items` from left via
+    /// [`Iterator::reduce`].
+    ///
+    /// The lex-ordering peer of [`Self::min_of`] on the
+    /// (declaration, lex) ordering axis of the closed-set N-ary
+    /// variadic reduction surface. See [`Self::min_of`] for the
+    /// shared design rationale, empty-slice / singleton / binary-
+    /// agreement / fold-left / permutation-invariance contracts, the
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the lex-axis arm of the same
+    /// N-ary variadic reduction surface and inherits every property
+    /// from the declaration arm's documentation, differing only in
+    /// the substrate primitive the `reduce` fold routes through
+    /// ([`Self::sorted_min`] rather than [`Self::min`]).
+    ///
+    /// Full-set contract: `T::sorted_min_of(<T as ClosedSet>::ALL) ==
+    /// Some(T::sorted_first())` — the lex-order N-ary min over the
+    /// entire closed set folds to the lex-head variant.
+    ///
+    /// Cross-ordering coincidence: `T::sorted_min_of(items) ==
+    /// T::min_of(items)` on every slice for which declaration and
+    /// lex orders agree pairwise — the two orderings collapse when
+    /// the declaration order IS the lex order on every operand in
+    /// the slice.
+    fn sorted_min_of(items: &[Self]) -> Option<Self> {
+        items
+            .iter()
+            .copied()
+            .reduce(<Self as ClosedSet>::sorted_min)
+    }
+
+    /// The lex-order N-ARY MAX projection — the lex-latest variant of
+    /// `items` under [`Self::label`]'s projection into ASCII
+    /// lexicographic order, or [`None`] when `items` is empty. Folds
+    /// [`Self::sorted_max`] over `items` from left via
+    /// [`Iterator::reduce`].
+    ///
+    /// Closes the (ordering × direction) 2×2 = 4-corner N-ary
+    /// variadic-reduction Self-return matrix on the closed-set
+    /// surface at the (lex-order, max) corner — sibling posture to
+    /// [`Self::sorted_min_of`] one direction axis over on the lex arm
+    /// AND to [`Self::max_of`] one ordering axis over on the max arm.
+    /// Together with [`Self::min_of`], [`Self::max_of`], and
+    /// [`Self::sorted_min_of`] this method CLOSES the (ordering ×
+    /// direction) 2×2 = 4-corner Self-return N-ary variadic-reduction
+    /// matrix on the N-ary arity face past the exhaustively-closed
+    /// 12-corner (return-shape × ordering × direction) 3×2×2 binary
+    /// pairwise-SELECTION hypercube one arity level down — the arity
+    /// axis carries a Self-return N-ary opener at every combination
+    /// of {declaration, lex} ordering × {min, max} direction, with
+    /// the (label-return, index-return) return-shape columns as
+    /// future extensions mirroring the binary-arity face's
+    /// (return-shape × ordering × direction) 3×2×2 hypercube shape.
+    ///
+    /// See [`Self::min_of`] for the shared design rationale, empty-
+    /// slice / singleton / binary-agreement / fold-left / permutation-
+    /// invariance contracts, the future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the lex-
+    /// order arm of the max direction column on the N-ary variadic
+    /// reduction surface and inherits every property from the
+    /// declaration arm's documentation, differing only in the
+    /// substrate primitive the `reduce` fold routes through
+    /// ([`Self::sorted_max`] rather than [`Self::max`]).
+    ///
+    /// Full-set contract: `T::sorted_max_of(<T as ClosedSet>::ALL) ==
+    /// Some(T::sorted_last())` — the lex-order N-ary max over the
+    /// entire closed set folds to the lex-tail variant.
+    fn sorted_max_of(items: &[Self]) -> Option<Self> {
+        items
+            .iter()
+            .copied()
+            .reduce(<Self as ClosedSet>::sorted_max)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -32783,6 +33028,227 @@ mod tests {
                     "StubKind::sorted_max_index({a:?}, {b:?}) must coincide with \
                      StubKind::max_index({a:?}, {b:?}) when declaration and lex orders agree",
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn min_of_returns_none_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (Self-return N-ary arms): every arm of
+        // the (ordering × direction) 2×2 = 4-corner N-ary variadic-
+        // reduction matrix folds an empty slice to `None` — the
+        // [`Iterator::reduce`] semantics on 0-length inputs
+        // propagates verbatim through the trait's default body,
+        // pinning the empty-fixpoint witness on every corner without
+        // allocating a diagnostic carrier.
+        assert_eq!(<StubKind as ClosedSet>::min_of(&[]), None);
+        assert_eq!(<StubKind as ClosedSet>::max_of(&[]), None);
+        assert_eq!(<StubKind as ClosedSet>::sorted_min_of(&[]), None);
+        assert_eq!(<StubKind as ClosedSet>::sorted_max_of(&[]), None);
+    }
+
+    #[test]
+    fn min_of_returns_the_sole_member_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT (Self-return N-ary arms): every arm folds
+        // a singleton slice to `Some(v)` — [`Iterator::reduce`] on a
+        // 1-length input yields the sole element unmodified,
+        // regardless of which binary primitive threads through the
+        // fold. Pins the (arity = 1) fixpoint on every corner of the
+        // N-ary variadic-reduction 4-corner matrix.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(<StubKind as ClosedSet>::min_of(&[v]), Some(v));
+            assert_eq!(<StubKind as ClosedSet>::max_of(&[v]), Some(v));
+            assert_eq!(<StubKind as ClosedSet>::sorted_min_of(&[v]), Some(v));
+            assert_eq!(<StubKind as ClosedSet>::sorted_max_of(&[v]), Some(v));
+        }
+    }
+
+    #[test]
+    fn min_of_agrees_with_binary_min_on_every_length_two_slice_across_every_pair() {
+        // BINARY-AGREEMENT CONTRACT (Self-return N-ary arms): every
+        // arm of the (ordering × direction) 2×2 = 4-corner N-ary
+        // variadic-reduction matrix folds a length-2 slice through
+        // the corresponding binary pairwise-selection primitive on
+        // every operand pair — pins the arity-N surface to be
+        // pointwise consistent with the arity-2 surface at the
+        // length-2 slice, forbidding an override body that would
+        // silently drift from the binary composition.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::min_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::min(a, b)),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::max_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::max(a, b)),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_min_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::sorted_min(a, b)),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_max_of(&[a, b]),
+                    Some(<StubKind as ClosedSet>::sorted_max(a, b)),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_of_agrees_with_left_fold_of_binary_min_on_every_triple() {
+        // FOLD-LEFT CONTRACT (Self-return N-ary arms): every arm
+        // folds a length-3 slice through the binary primitive twice
+        // from the left — `T::min_of(&[a, b, c]) ==
+        // Some(a.min(b).min(c))` on every operand triple. Pins the
+        // arity-3 case to the arity-2 primitive folded left via
+        // [`Iterator::reduce`], forbidding a fold-right / fold-tree
+        // override body that would silently rearrange the
+        // composition.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let expected_min =
+                        <StubKind as ClosedSet>::min(<StubKind as ClosedSet>::min(a, b), c);
+                    let expected_max =
+                        <StubKind as ClosedSet>::max(<StubKind as ClosedSet>::max(a, b), c);
+                    let expected_sorted_min = <StubKind as ClosedSet>::sorted_min(
+                        <StubKind as ClosedSet>::sorted_min(a, b),
+                        c,
+                    );
+                    let expected_sorted_max = <StubKind as ClosedSet>::sorted_max(
+                        <StubKind as ClosedSet>::sorted_max(a, b),
+                        c,
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::min_of(&[a, b, c]),
+                        Some(expected_min),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::max_of(&[a, b, c]),
+                        Some(expected_max),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_min_of(&[a, b, c]),
+                        Some(expected_sorted_min),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_max_of(&[a, b, c]),
+                        Some(expected_sorted_max),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn min_of_over_the_full_set_projects_to_the_declaration_head_across_every_kind() {
+        // FULL-SET CONTRACT (Self-return N-ary arms): the N-ary min
+        // over the entire closed set projects to the declaration-head
+        // variant, the N-ary max to the declaration-tail — the arity-
+        // N counterpart of the arity-2 `bracket` contract one arity
+        // level down. The lex arms project to the lex-head and lex-
+        // tail. Pins the cross-primitive composition between the
+        // N-ary variadic-reduction surface and the endpoint-anchor
+        // surface: `T::min_of(ALL) == Some(T::first())` /
+        // `T::max_of(ALL) == Some(T::last())` /
+        // `T::sorted_min_of(ALL) == Some(T::sorted_first())` /
+        // `T::sorted_max_of(ALL) == Some(T::sorted_last())`.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::min_of(all),
+            Some(<StubKind as ClosedSet>::first()),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::max_of(all),
+            Some(<StubKind as ClosedSet>::last()),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_min_of(all),
+            Some(<StubKind as ClosedSet>::sorted_first()),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_max_of(all),
+            Some(<StubKind as ClosedSet>::sorted_last()),
+        );
+    }
+
+    #[test]
+    fn min_of_is_invariant_under_permutation_of_the_input_slice_across_every_triple() {
+        // PERMUTATION-INVARIANCE CONTRACT (Self-return N-ary arms):
+        // every arm folds every permutation of a length-3 slice to
+        // the SAME projection — the N-ary min/max is invariant under
+        // reordering of its input slice because binary min/max is
+        // commutative on distinct pairs (a.min(b) == b.min(a) when a
+        // != b modulo the tie-break-left convention, which resolves
+        // to the same variant either way for distinct enum values)
+        // AND idempotent on equal pairs (a.min(a) == a). Both
+        // properties propagate through the [`Iterator::reduce`] fold
+        // to the arity-N surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let canonical_min = <StubKind as ClosedSet>::min_of(&[a, b, c]);
+                    let canonical_max = <StubKind as ClosedSet>::max_of(&[a, b, c]);
+                    let canonical_sorted_min = <StubKind as ClosedSet>::sorted_min_of(&[a, b, c]);
+                    let canonical_sorted_max = <StubKind as ClosedSet>::sorted_max_of(&[a, b, c]);
+                    for permuted in [
+                        [a, b, c],
+                        [a, c, b],
+                        [b, a, c],
+                        [b, c, a],
+                        [c, a, b],
+                        [c, b, a],
+                    ] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::min_of(&permuted),
+                            canonical_min,
+                            "min_of is invariant under permutation of the input slice",
+                        );
+                        assert_eq!(
+                            <StubKind as ClosedSet>::max_of(&permuted),
+                            canonical_max,
+                            "max_of is invariant under permutation of the input slice",
+                        );
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_min_of(&permuted),
+                            canonical_sorted_min,
+                            "sorted_min_of is invariant under permutation of the input slice",
+                        );
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_max_of(&permuted),
+                            canonical_sorted_max,
+                            "sorted_max_of is invariant under permutation of the input slice",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_min_of_and_sorted_max_of_coincide_with_the_declaration_peers_when_orders_agree() {
+        // CROSS-AXIS COINCIDENCE CONTRACT (Self-return N-ary arms):
+        // when declaration and lex orders coincide (as they do on
+        // `StubKind`), the lex-order N-ary min/max projections
+        // coincide with the declaration-order arms on every slice.
+        // Pins the (declaration, lex) 2-column structural coincidence
+        // on the N-ary variadic-reduction Self-return face, mirroring
+        // the arity-2 cross-axis coincidence pin one arity level
+        // down.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_min_of(&slice),
+                        <StubKind as ClosedSet>::min_of(&slice),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_max_of(&slice),
+                        <StubKind as ClosedSet>::max_of(&slice),
+                    );
+                }
             }
         }
     }

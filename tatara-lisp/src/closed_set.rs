@@ -11133,6 +11133,243 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .all(|w| <Self as ClosedSet>::sorted_succeeds(w[0], w[1]))
     }
 
+    /// The declaration-order N-ARY NON-STRICT DIRECTION-COLLAPSED
+    /// monotonicity predicate — `true` iff `items` is EITHER non-
+    /// strictly ascending OR non-strictly descending under
+    /// [`Self::ALL`]'s declaration order, `false` when `items` fails
+    /// BOTH directions. The DIRECTION-COLLAPSED opener on the N-ary
+    /// monotonicity surface past the exhaustively-closed 8-corner
+    /// (arity-N × ordering × direction × strictness) 2×2×2 monotonicity
+    /// hypercube (105)+(106)+(107)+(108)+(109)+(110)+(111)+(112) — opens
+    /// the (direction-collapsed) axis one dimension over from the
+    /// direction-split predicates at the (declaration, non-strict)
+    /// corner.
+    ///
+    /// Sibling posture to the direction-split arms
+    /// [`Self::is_ascending`] and [`Self::is_descending`] one direction-
+    /// collapse axis over: those two arms answer "is this slice non-
+    /// strictly ascending (respectively descending)?" over ONE direction;
+    /// this method answers "is this slice non-strictly monotone in
+    /// EITHER direction?" — the disjunction of both direction arms at
+    /// the same (ordering, strictness) corner. Composition through TWO
+    /// substrate primitives ([`Self::is_ascending`] +
+    /// [`Self::is_descending`] joined via the standard-library `||`
+    /// short-circuit on `bool`); not a fresh substrate primitive on the
+    /// index axis — the composition emerges from the just-closed
+    /// 8-corner N-ary monotonicity hypercube through disjunction of two
+    /// of its (declaration, non-strict) arms.
+    ///
+    /// Empty-slice contract: `T::is_monotonic(&[])` is `true` — both
+    /// direction arms fold the empty slice to `true` (conjunctive
+    /// identity of `Iterator::all` on the zero-window `windows(2)`
+    /// fold), so the disjunction is `true` on the empty slice. Pinned by
+    /// `is_monotonic_returns_true_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::is_monotonic(&[v])` is `true` on every
+    /// variant `v` — both direction arms fold a length-1 slice to
+    /// `true` (no adjacent pairs → `all` returns `true` vacuously on
+    /// every arm), so the disjunction is `true` on every singleton.
+    /// Pinned by
+    /// `is_monotonic_returns_true_on_every_singleton_slice_across_every_variant`.
+    ///
+    /// Direction-reversal invariance contract:
+    /// `T::is_monotonic(items) == T::is_monotonic(reversed items)` on
+    /// every slice — the (forward, backward) direction axis on the
+    /// direction-split face composes with the slice-reversal permutation
+    /// on the N-ary face, so reversing a monotone slice yields a
+    /// monotone slice on the opposite direction arm, and the
+    /// disjunction commutes with reversal. Direction-collapse projection
+    /// collapses the direction axis, so the reversal permutation
+    /// becomes a fixpoint on this arm. Pinned by
+    /// `is_monotonic_of_slice_agrees_with_is_monotonic_of_reversed_slice_across_every_triple`.
+    ///
+    /// Constant-slice contract: `T::is_monotonic(&[v, v, …, v])` is
+    /// `true` on every constant slice of any length — both direction
+    /// arms are individually `true` on constant slices (through the
+    /// non-strict pairwise-precedence primitive's reflexivity), so the
+    /// disjunction is `true`. Pinned by
+    /// `is_monotonic_holds_on_every_constant_slice_across_every_variant`.
+    ///
+    /// Full-set contract: `T::is_monotonic(<T as ClosedSet>::ALL)` is
+    /// `true` — the ascending arm is `true` over the full set by
+    /// construction, so the disjunction is `true`. Pinned by
+    /// `is_monotonic_over_the_full_set_holds`.
+    ///
+    /// Future consumers that compose against [`Self::is_monotonic`]: a
+    /// `tatara-check` predicate `(check-phases-monotonic …)` verifying
+    /// a `WorkloadPhase` sequence is monotone in EITHER direction at
+    /// plan time (catching a spec whose phase sequence oscillates,
+    /// without pinning the direction the check ranges over); an LSP
+    /// diagnostic verifying a Lisp-author-written severity ladder is
+    /// monotonically ordered regardless of ascending vs descending
+    /// authoring convention; a Sekiban audit-trail metric verifying
+    /// that a convergence-distance trajectory is monotone across
+    /// convergence (either direction — the direction axis collapses
+    /// because a strictly-decreasing signal proves convergence and a
+    /// strictly-increasing signal proves divergence, and monotonicity
+    /// alone proves non-oscillation). Each binds to ONE typed direction-
+    /// collapsed N-ary monotonicity predicate on the trait rather than
+    /// re-deriving `T::is_ascending(items) || T::is_descending(items)`
+    /// inline per callsite.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the direction-
+    /// collapsed N-ary monotonicity predicate becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::is_ascending(items) || T::is_descending(items)`
+    /// disjunction at every downstream generic site.
+    /// THEORY.md §V.1 — knowable platform; the direction-collapsed
+    /// axis was an unnamed inline composition
+    /// (`T::is_ascending(items) || T::is_descending(items)`) recurring
+    /// at every prospective downstream direction-agnostic monotonicity
+    /// site pre-lift. Naming it on the trait makes the predicate a
+    /// TYPED CONSEQUENCE of the direction-split arms disjoined through
+    /// the standard-library `||`.
+    /// THEORY.md §VI.1 — generation over composition; the direction-
+    /// collapsed predicate emerges from the composition of TWO
+    /// substrate primitives ([`Self::is_ascending`] +
+    /// [`Self::is_descending`] joined via the standard-library `||`
+    /// short-circuit) rather than as a per-implementor hand-rolled
+    /// body.
+    ///
+    /// Frontier inspiration: Julia's `issorted(v)` predicate composed
+    /// with `issorted(reverse(v))` via `||` surfaces the same
+    /// direction-collapsed predicate on any iterable; NumPy's
+    /// `np.all(np.diff(a) >= 0) or np.all(np.diff(a) <= 0)` composes
+    /// the same disjunction on typed numeric arrays; Racket's
+    /// `(or (sorted? items <=) (sorted? items >=))` folds the same
+    /// disjunction variadically. Rust's `slice::is_sorted_by(|a, b|
+    /// order.compare(a, b))` on a "monotone" ordering that treats both
+    /// directions as sorted is the closest single-primitive peer.
+    /// MLIR's `isMonotonic` verification pass surfaces the same
+    /// predicate on typed vector operands. Translation through pleme-io
+    /// primitives: the direction-collapsed N-ary predicate on the
+    /// closed-set trait binds through the disjunction of the two
+    /// direction-split N-ary arms at the same (ordering, strictness)
+    /// corner — no new dep, no supertrait bound (the direction-split
+    /// arms replace the `Ord`+`PartialEq` bound the standard-library
+    /// signatures demand), no vector-shape carrier.
+    fn is_monotonic(items: &[Self]) -> bool {
+        <Self as ClosedSet>::is_ascending(items) || <Self as ClosedSet>::is_descending(items)
+    }
+
+    /// The declaration-order N-ARY STRICT DIRECTION-COLLAPSED
+    /// monotonicity predicate — `true` iff `items` is EITHER strictly
+    /// ascending OR strictly descending under [`Self::ALL`]'s
+    /// declaration order, `false` when `items` fails BOTH directions
+    /// (including any slice with two or more adjacent equal elements,
+    /// by irreflexivity of the strict pairwise-precedence primitive
+    /// on both direction arms). The strictness-complement arm of
+    /// [`Self::is_monotonic`] on the (strict, non-strict) axis of the
+    /// direction-collapsed N-ary monotonicity surface.
+    ///
+    /// See [`Self::is_monotonic`] for the shared design rationale,
+    /// empty-slice / singleton / direction-reversal / full-set
+    /// contracts, the future-consumer inventory, THEORY.md grounding,
+    /// and frontier inspiration — this method is the strictness-
+    /// complement arm of the same direction-collapsed N-ary
+    /// monotonicity surface and inherits every property from the non-
+    /// strict arm's documentation, differing only in the substrate
+    /// primitives the disjunction routes through
+    /// ([`Self::is_strictly_ascending`] +
+    /// [`Self::is_strictly_descending`] rather than
+    /// [`Self::is_ascending`] + [`Self::is_descending`]).
+    ///
+    /// Constant-slice contract: `T::is_strictly_monotonic(&[v, v])` is
+    /// `false` on every variant `v` — the irreflexivity axiom of the
+    /// strict pairwise-precedence primitive forces BOTH direction arms
+    /// to `false` on any slice with adjacent equal elements, so the
+    /// disjunction is `false`. Pinned by
+    /// `is_strictly_monotonic_is_false_on_any_slice_with_adjacent_equal_elements`.
+    ///
+    /// Strict-implies-non-strict contract:
+    /// `T::is_strictly_monotonic(items) → T::is_monotonic(items)` on
+    /// every slice — each direction arm's strict variant implies its
+    /// non-strict variant (through the substrate's `usize` `<`/`<=`
+    /// implication), so the strict disjunction implies the non-strict
+    /// disjunction. Pinned by
+    /// `is_strictly_monotonic_implies_is_monotonic_across_every_triple`.
+    fn is_strictly_monotonic(items: &[Self]) -> bool {
+        <Self as ClosedSet>::is_strictly_ascending(items)
+            || <Self as ClosedSet>::is_strictly_descending(items)
+    }
+
+    /// The lex-order N-ARY NON-STRICT DIRECTION-COLLAPSED monotonicity
+    /// predicate — `true` iff `items` is EITHER non-strictly lex-
+    /// ascending OR non-strictly lex-descending under [`Self::label`]'s
+    /// projection into ASCII lexicographic order, `false` when `items`
+    /// fails BOTH directions. The lex-ordering peer of
+    /// [`Self::is_monotonic`] on the (declaration, lex) ordering axis
+    /// of the direction-collapsed N-ary monotonicity surface.
+    ///
+    /// See [`Self::is_monotonic`] for the shared design rationale,
+    /// empty-slice / singleton / direction-reversal / constant-slice /
+    /// full-set contracts, the future-consumer inventory, THEORY.md
+    /// grounding, and frontier inspiration — this method is the lex-
+    /// axis arm of the same direction-collapsed N-ary monotonicity
+    /// surface and inherits every property from the declaration arm's
+    /// documentation, differing only in the substrate primitives the
+    /// disjunction routes through ([`Self::is_sorted_ascending`] +
+    /// [`Self::is_sorted_descending`] rather than
+    /// [`Self::is_ascending`] + [`Self::is_descending`]).
+    ///
+    /// Cross-ordering coincidence: `T::is_sorted_monotonic(items) ==
+    /// T::is_monotonic(items)` on every slice for which declaration
+    /// and lex orders coincide pairwise — both direction arms collapse
+    /// across the (declaration, lex) axis, so the disjunction
+    /// collapses too. Pinned by
+    /// `is_sorted_monotonic_and_is_sorted_strictly_monotonic_coincide_with_the_declaration_peers_when_orders_agree`.
+    fn is_sorted_monotonic(items: &[Self]) -> bool {
+        <Self as ClosedSet>::is_sorted_ascending(items)
+            || <Self as ClosedSet>::is_sorted_descending(items)
+    }
+
+    /// The lex-order N-ARY STRICT DIRECTION-COLLAPSED monotonicity
+    /// predicate — `true` iff `items` is EITHER strictly lex-ascending
+    /// OR strictly lex-descending under [`Self::label`]'s projection
+    /// into ASCII lexicographic order, `false` when `items` fails BOTH
+    /// directions. Closes the (ordering × strictness) 2×2 = 4-corner
+    /// direction-collapsed N-ary monotonicity matrix on the closed-set
+    /// surface at the (lex-order, strict) corner past the three prior
+    /// corners at (declaration, non-strict) / (declaration, strict) /
+    /// (lex, non-strict).
+    ///
+    /// Sibling posture to [`Self::is_sorted_monotonic`] one strictness
+    /// axis over on the lex arm, [`Self::is_strictly_monotonic`] one
+    /// ordering axis over on the strict arm, AND
+    /// [`Self::is_sorted_strictly_ascending`] one direction-collapse
+    /// axis over on the (lex, strict) arm — the lex-order strict
+    /// direction-collapsed predicate is the intersection of both axis-
+    /// complements over the declaration-axis non-strict direction-
+    /// collapsed predicate. See [`Self::is_monotonic`] for the shared
+    /// design rationale, empty-slice / singleton / direction-reversal /
+    /// constant-slice / full-set contracts, the future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration —
+    /// this method is the lex-axis strictness-complement arm of the
+    /// same direction-collapsed N-ary monotonicity surface and
+    /// inherits every property from the three prior arms' documentation,
+    /// differing only in the substrate primitives the disjunction
+    /// routes through ([`Self::is_sorted_strictly_ascending`] +
+    /// [`Self::is_sorted_strictly_descending`] rather than the three
+    /// other pairs).
+    ///
+    /// (113) + (114) + (115) + (116) together CLOSE the (ordering ×
+    /// strictness) 2×2 = 4-corner direction-collapsed N-ary
+    /// monotonicity matrix on the closed-set surface — every
+    /// combination of {declaration, lex} ordering × {strict, non-strict}
+    /// strictness binds through ONE typed direction-collapsed N-ary
+    /// bool-return predicate on the trait, each routing through the
+    /// substrate's typed direction-split N-ary arms disjoined via the
+    /// standard-library `||` at ONE composition site. The direction-
+    /// collapsed 4-corner matrix collapses the direction axis of the
+    /// exhaustively-closed 8-corner (arity-N × ordering × direction ×
+    /// strictness) monotonicity hypercube at (109)+(110)+(111)+(112),
+    /// partitioning the same (ordering × strictness) 4-corner face
+    /// through a direction-agnostic projection.
+    fn is_sorted_strictly_monotonic(items: &[Self]) -> bool {
+        <Self as ClosedSet>::is_sorted_strictly_ascending(items)
+            || <Self as ClosedSet>::is_sorted_strictly_descending(items)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -35184,6 +35421,263 @@ mod tests {
                     assert!(!joint_lex_triple);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn is_monotonic_returns_true_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (N-ary direction-collapsed monotonicity
+        // arms): every arm of the (ordering × strictness) 2×2 =
+        // 4-corner direction-collapsed monotonicity matrix folds an
+        // empty slice to `true` — both direction arms fold the empty
+        // slice to `true` through the conjunctive identity of
+        // `Iterator::all` on the zero-window `windows(2)` fold, so the
+        // disjunction is `true` on every direction-collapsed corner
+        // vacuously. Sibling posture to the direction-split empty-slice
+        // contract in
+        // `is_ascending_returns_true_on_the_empty_slice_across_every_kind`
+        // one direction-collapse axis over — the direction-collapsed
+        // arms inherit the empty-fixpoint witness because the
+        // disjunction of two vacuously-`true` arms is vacuously `true`.
+        assert!(<StubKind as ClosedSet>::is_monotonic(&[]));
+        assert!(<StubKind as ClosedSet>::is_strictly_monotonic(&[]));
+        assert!(<StubKind as ClosedSet>::is_sorted_monotonic(&[]));
+        assert!(<StubKind as ClosedSet>::is_sorted_strictly_monotonic(&[]));
+    }
+
+    #[test]
+    fn is_monotonic_returns_true_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT (N-ary direction-collapsed monotonicity
+        // arms): every direction-collapsed arm folds a singleton slice
+        // to `true` on every variant — both direction arms yield zero
+        // adjacent-pair windows on a length-1 slice, so `Iterator::all`
+        // returns `true` vacuously on both, and the disjunction is
+        // `true`. Sibling posture to the direction-split singleton
+        // contract one direction-collapse axis over.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(<StubKind as ClosedSet>::is_monotonic(&[v]));
+            assert!(<StubKind as ClosedSet>::is_strictly_monotonic(&[v]));
+            assert!(<StubKind as ClosedSet>::is_sorted_monotonic(&[v]));
+            assert!(<StubKind as ClosedSet>::is_sorted_strictly_monotonic(&[v],));
+        }
+    }
+
+    #[test]
+    fn is_monotonic_composes_direction_split_arms_via_disjunction_across_every_triple() {
+        // COMPOSITION CONTRACT (N-ary direction-collapsed monotonicity
+        // arms): every direction-collapsed arm equals the disjunction
+        // of its two direction-split peers at the same (ordering,
+        // strictness) corner on every length-3 slice — pins the
+        // direction-collapsed N-ary surface to the direction-split
+        // N-ary surface via ONE `||` composition on both direction
+        // arms, forbidding an override body that would silently drift
+        // the direction-collapsed arm from the direction-split arms
+        // through a fresh `windows(2).all(…)` reduce fold, a lookup
+        // table, or a hand-rolled `a.precedes_or_equal(b) ||
+        // a.succeeds_or_equal(b)`-per-pair composition. Sibling posture
+        // to the composition contract on the direction-split arms in
+        // `is_ascending_composes_precedes_or_equal_over_windows_across_every_triple`
+        // one direction-collapse axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_ascending(&slice)
+                            || <StubKind as ClosedSet>::is_descending(&slice),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_strictly_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_strictly_ascending(&slice)
+                            || <StubKind as ClosedSet>::is_strictly_descending(&slice),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_sorted_ascending(&slice)
+                            || <StubKind as ClosedSet>::is_sorted_descending(&slice),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_strictly_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_sorted_strictly_ascending(&slice)
+                            || <StubKind as ClosedSet>::is_sorted_strictly_descending(&slice),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_monotonic_over_the_full_set_holds() {
+        // FULL-SET CONTRACT (N-ary direction-collapsed monotonicity
+        // arms): every direction-collapsed arm is `true` over the
+        // entire closed set — the ascending arm is `true` over
+        // `<T as ClosedSet>::ALL` by construction (declaration and lex
+        // orders are both non-strictly AND strictly ascending on the
+        // full set), so the disjunction is `true` on every direction-
+        // collapsed corner. The canonical fixpoint the direction-
+        // collapsed monotonicity predicates share with the underlying
+        // ordering itself.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert!(<StubKind as ClosedSet>::is_monotonic(all));
+        assert!(<StubKind as ClosedSet>::is_strictly_monotonic(all));
+        assert!(<StubKind as ClosedSet>::is_sorted_monotonic(all));
+        assert!(<StubKind as ClosedSet>::is_sorted_strictly_monotonic(all));
+    }
+
+    #[test]
+    fn is_monotonic_of_slice_agrees_with_is_monotonic_of_reversed_slice_across_every_triple() {
+        // DIRECTION-REVERSAL INVARIANCE CONTRACT (N-ary direction-
+        // collapsed monotonicity arms): `T::is_monotonic(items) ==
+        // T::is_monotonic(reversed items)` on every slice because the
+        // direction-collapsed projection collapses the (forward,
+        // backward) direction axis, so the slice-reversal permutation
+        // maps monotone slices to monotone slices on the OTHER
+        // direction arm and the disjunction absorbs the direction
+        // exchange. Pinned on every length-3 slice and its reversal
+        // across every operand triple; the same law binds on every
+        // (ordering × strictness) corner. Sibling posture to the
+        // direction-split direction-reversal contract in
+        // `is_ascending_of_slice_agrees_with_is_descending_of_reversed_slice_across_every_triple`
+        // one direction-collapse axis over — reversal swaps ascending
+        // and descending on the split face and becomes a fixpoint on
+        // the collapsed face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_monotonic(&reversed),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_strictly_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_strictly_monotonic(&reversed),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_sorted_monotonic(&reversed),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_strictly_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_sorted_strictly_monotonic(&reversed),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_sorted_monotonic_and_is_sorted_strictly_monotonic_coincide_with_the_declaration_peers_when_orders_agree(
+    ) {
+        // CROSS-AXIS COINCIDENCE CONTRACT (N-ary direction-collapsed
+        // monotonicity arms): when declaration and lex orders coincide
+        // (as they do on `StubKind`), the lex-order direction-collapsed
+        // monotonicity predicates coincide with the declaration-order
+        // arms on every slice through both strictness corners. Sibling
+        // posture to the direction-split cross-axis coincidence in
+        // `is_sorted_ascending_and_is_sorted_descending_coincide_with_the_declaration_peers_when_orders_agree`
+        // one direction-collapse axis over — both direction-split arms
+        // coincide across the ordering axis, so the disjunction does
+        // too.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_monotonic(&slice),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_sorted_strictly_monotonic(&slice),
+                        <StubKind as ClosedSet>::is_strictly_monotonic(&slice),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_monotonic_implies_is_monotonic_across_every_triple() {
+        // STRICT-IMPLIES-NON-STRICT CONTRACT (N-ary direction-
+        // collapsed monotonicity arms): every strict direction-
+        // collapsed arm implies its non-strict peer at the same
+        // (ordering) corner on every slice — each direction-split
+        // strict arm implies its non-strict peer at the same
+        // (ordering, direction) corner through the composition of
+        // `Self::index_of`'s projection into `usize`'s `<` and `<=`
+        // implication (`i < j → i <= j`), and the disjunction
+        // propagates the implication because
+        // `(A → A') ∧ (B → B') → (A ∨ B → A' ∨ B')`. Pinned on every
+        // length-3 slice across every operand triple; the same law
+        // binds on both ordering arms. Sibling posture to the
+        // direction-split strict-implies-non-strict contract in
+        // `is_strictly_ascending_implies_is_ascending_across_every_triple`
+        // one direction-collapse axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let slice = [a, b, c];
+                    if <StubKind as ClosedSet>::is_strictly_monotonic(&slice) {
+                        assert!(<StubKind as ClosedSet>::is_monotonic(&slice));
+                    }
+                    if <StubKind as ClosedSet>::is_sorted_strictly_monotonic(&slice) {
+                        assert!(<StubKind as ClosedSet>::is_sorted_monotonic(&slice));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_monotonic_is_false_on_any_slice_with_adjacent_equal_elements() {
+        // CONSTANT-SLICE CONTRACT (N-ary strict direction-collapsed
+        // monotonicity arms): any slice with two or more consecutive
+        // equal elements fails every strict direction-collapsed arm —
+        // the irreflexivity axiom of the strict pairwise-precedence
+        // primitive (`v.precedes(v) == false`) forces BOTH direction-
+        // split strict arms to `false` on any slice with an adjacent
+        // equal pair, so the disjunction is `false`. Complements the
+        // non-strict direction-collapsed constant-slice contract in
+        // `is_monotonic_holds_on_every_constant_slice_across_every_variant`
+        // one strictness axis over: the non-strict arm holds on
+        // constant slices (through reflexivity of the non-strict
+        // primitive); the strict arm rejects them (through
+        // irreflexivity of the strict primitive).
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let doubled = [v, v];
+            let tripled = [v, v, v];
+            assert!(!<StubKind as ClosedSet>::is_strictly_monotonic(&doubled));
+            assert!(!<StubKind as ClosedSet>::is_strictly_monotonic(&tripled));
+            assert!(!<StubKind as ClosedSet>::is_sorted_strictly_monotonic(
+                &doubled,
+            ));
+            assert!(!<StubKind as ClosedSet>::is_sorted_strictly_monotonic(
+                &tripled,
+            ));
+        }
+    }
+
+    #[test]
+    fn is_monotonic_holds_on_every_constant_slice_across_every_variant() {
+        // CONSTANT-SLICE CONTRACT (N-ary non-strict direction-collapsed
+        // monotonicity arms): every non-strict direction-collapsed arm
+        // holds on every constant slice — both direction-split non-
+        // strict arms are individually `true` on constant slices
+        // (through reflexivity of the non-strict pairwise-precedence
+        // primitive: `v.precedes_or_equal(v) == true` for every `v`),
+        // so the disjunction is `true`. Complements the strict
+        // direction-collapsed constant-slice contract in
+        // `is_strictly_monotonic_is_false_on_any_slice_with_adjacent_equal_elements`
+        // one strictness axis over.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let doubled = [v, v];
+            let tripled = [v, v, v];
+            assert!(<StubKind as ClosedSet>::is_monotonic(&doubled));
+            assert!(<StubKind as ClosedSet>::is_monotonic(&tripled));
+            assert!(<StubKind as ClosedSet>::is_sorted_monotonic(&doubled));
+            assert!(<StubKind as ClosedSet>::is_sorted_monotonic(&tripled));
         }
     }
 }

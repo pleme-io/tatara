@@ -10306,6 +10306,225 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
     }
 
+    /// The canonical `&'static str` LABEL of the declaration-order
+    /// ternary-CLAMP projection of `self` into the closed range
+    /// `[lo, hi]` — the label of [`Self::clamp`] projected through
+    /// [`Self::label`]. Returns `&'static str`, never
+    /// [`Option<&'static str>`]: the ternary clamp projection is
+    /// TOTAL on well-formed ranges (every well-formed triple lands
+    /// on a variant in the closed range, and every variant carries
+    /// a canonical label).
+    ///
+    /// The label-return arm of the (`Self`-return, `&'static str`-return,
+    /// `usize`-return) return-shape partition of the closed-set
+    /// declaration-order ternary-CLAMP surface — one return-shape
+    /// axis over from [`Self::clamp`] (`Self`-return declaration-axis
+    /// ternary-clamp) and one ordering axis over from
+    /// [`Self::sorted_clamp_label`] (`&'static str`-return lex-axis
+    /// ternary-clamp-label). Together with the three sibling clamp-
+    /// projection peers ([`Self::sorted_clamp_label`],
+    /// [`Self::clamp_index`], [`Self::sorted_clamp_index`]) OPENS the
+    /// (return-shape × ordering) 3×2 = 6-corner clamp face on the
+    /// ternary-arity surface past the pre-existing Self-return
+    /// 1×2 = 2-corner (declaration, lex) row that (90)+(91) opened,
+    /// mirroring the (return-shape × ordering) column pattern the
+    /// SATURATING neighbor lifts closed one boundary-behavior axis
+    /// over on the neighbor surface.
+    ///
+    /// Every generic consumer that renders the ternary-clamp
+    /// projection's LABEL of a typed variant (an LSP quick-info
+    /// hover that clamps a phase into a validity window and emits
+    /// "phase clamped to: <label>", a diagnostic renderer that
+    /// projects an out-of-range enum tag into a policy-defined
+    /// clamp window and threads the projected label into the
+    /// `expected: <label>` shape, a metrics tagger that clamps an
+    /// observed variant into a reporting window and emits the
+    /// clamped label as the tag) binds to ONE typed method rather
+    /// than re-deriving the `v.clamp(lo, hi).label()` two-primitive
+    /// composition at every callsite.
+    ///
+    /// Default body composes [`Self::clamp`] with [`Self::label`]
+    /// verbatim. The clamp-projection LABEL contract — the in-range
+    /// arm returns `self.label()` for every containment-set variant,
+    /// the below-range arm returns `lo.label()`, and the above-range
+    /// arm returns `hi.label()` — is guaranteed by the default
+    /// composition through [`Self::clamp`]'s strict-precedence-
+    /// guarded saturation. `T::first().clamp_label(T::first(),
+    /// T::first()) == T::first().label()` is the natural fixpoint
+    /// the ternary-clamp-label projection shares with the singleton-
+    /// range endpoint, mirroring the `T::first().clamp(T::first(),
+    /// T::first()) == T::first()` fixpoint one return-shape axis
+    /// over on the variant-return surface.
+    ///
+    /// Frontier inspiration: Racket's
+    /// `(symbol-name (enum-clamp v lo hi))` — the label-projection
+    /// sibling of `enum-clamp` on a closed enumeration under the
+    /// strict-precedence-guarded saturation variant of the ordering;
+    /// MLIR's `RegisteredOperationName::clamp(lo, hi).getName()`
+    /// folded to ONE method on the closed Op registry's ternary
+    /// clamp projection; Julia's `Base.clamp(x, lo, hi) |> string`
+    /// applied to a closed enumeration and threaded through the
+    /// canonical name projection; Idris's `Fin n` composed through
+    /// `min lo (max hi x) |> toLabel` on the ternary-clamp
+    /// projection's finite-position projection under the label
+    /// return-shape column. Translation through pleme-io primitives:
+    /// a pure default method composing the trait's existing
+    /// [`Self::clamp`] + [`Self::label`] surfaces verbatim — no new
+    /// dep, no new IR layer, no supertrait bound, no `Option`-typed
+    /// dispatch, no allocation, no `strum` / `enum-iterator` crate
+    /// dependency.
+    fn clamp_label(self, lo: Self, hi: Self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::clamp(self, lo, hi))
+    }
+
+    /// The canonical `&'static str` LABEL of the lex-order ternary-
+    /// CLAMP projection of `self` into the closed lex-range
+    /// `[lo, hi]` — the label of [`Self::sorted_clamp`] projected
+    /// through [`Self::label`]. Returns `&'static str`, never
+    /// [`Option<&'static str>`].
+    ///
+    /// The lex-ordering peer of [`Self::clamp_label`] on the
+    /// (declaration, lex) ordering axis of the closed-set label-
+    /// return ternary-CLAMP surface. See [`Self::clamp_label`] for
+    /// the shared design rationale, sibling matrix, override axis,
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the lex-axis arm of the same
+    /// label-return ternary-clamp surface and inherits every
+    /// property from the declaration arm's documentation, differing
+    /// only in the substrate primitive the label-fallback routes
+    /// through ([`Self::sorted_clamp`] rather than [`Self::clamp`])
+    /// and the lex-ordering precedence guards it composes at both
+    /// bound-to-self edges ([`Self::sorted_precedes`] rather than
+    /// [`Self::precedes`]).
+    ///
+    /// `T::sorted_first().sorted_clamp_label(T::sorted_first(),
+    /// T::sorted_first()) == T::sorted_first().label()` is the
+    /// natural fixpoint the lex-order ternary-clamp-label projection
+    /// shares with the singleton-lex-range endpoint, mirroring the
+    /// `T::first().clamp_label(T::first(), T::first()) ==
+    /// T::first().label()` fixpoint on the declaration arm one
+    /// ordering column over.
+    fn sorted_clamp_label(self, lo: Self, hi: Self) -> &'static str {
+        <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_clamp(self, lo, hi))
+    }
+
+    /// The `usize` DECLARATION-ORDER INDEX of the declaration-order
+    /// ternary-CLAMP projection of `self` into the closed range
+    /// `[lo, hi]` — the declaration-order position of
+    /// [`Self::clamp`] projected through [`Self::index_of`].
+    /// Returns `usize`, never [`Option<usize>`]: the ternary clamp
+    /// projection is TOTAL on well-formed ranges, and every
+    /// variant carries a declaration-order slot.
+    ///
+    /// The index-return arm of the (`Self`-return, `&'static str`-return,
+    /// `usize`-return) return-shape partition of the closed-set
+    /// declaration-order ternary-CLAMP surface — one return-shape
+    /// axis over from [`Self::clamp`] (`Self`-return declaration-axis
+    /// ternary-clamp), one return-shape axis over from
+    /// [`Self::clamp_label`] (`&'static str`-return declaration-axis
+    /// ternary-clamp-label), and one ordering axis over from
+    /// [`Self::sorted_clamp_index`] (`usize`-return lex-axis
+    /// ternary-clamp-index). Together with the three sibling clamp-
+    /// projection peers this method CLOSES the (return-shape ×
+    /// ordering) 3×2 = 6-corner clamp face on the ternary-arity
+    /// surface past the pre-existing Self-return 1×2 = 2-corner
+    /// (declaration, lex) row — the {`Self`, label, index} return-
+    /// shape trio now carries every corner filled at the intersection
+    /// with the {declaration, lex} ordering pair on the ternary-
+    /// clamp column of the ternary-arity face.
+    ///
+    /// Every generic consumer that renders the ternary-clamp
+    /// projection's SLOT of a typed variant (a compact wire codec
+    /// that clamps an observed enum tag into a policy-defined
+    /// reporting window and emits the clamped slot for cross-
+    /// boundary handoff without threading `Option`-dispatch through
+    /// the encoder, a per-variant lookup-table indexer that clamps
+    /// an out-of-range probe into the declared range and reads the
+    /// clamped slot into a `[Payload; T::CARDINALITY]` array, a
+    /// bitset over the closed-set that clamps observed samples into
+    /// a monitored window and reads the clamped slot as the bit
+    /// index) binds to ONE typed method rather than re-deriving the
+    /// `v.clamp(lo, hi).index_of()` two-primitive composition at
+    /// every callsite.
+    ///
+    /// Default body composes [`Self::clamp`] with [`Self::index_of`]
+    /// verbatim. The clamp-projection INDEX contract — the in-range
+    /// arm returns `self.index_of()` for every containment-set
+    /// variant, the below-range arm returns `lo.index_of()`, and the
+    /// above-range arm returns `hi.index_of()` — is guaranteed by
+    /// the default composition through [`Self::clamp`]'s strict-
+    /// precedence-guarded saturation. `T::first().clamp_index(
+    /// T::first(), T::first()) == 0` is the natural fixpoint the
+    /// ternary-clamp-index projection shares with the declaration-
+    /// head slot, mirroring the `T::first().clamp(T::first(),
+    /// T::first()) == T::first()` fixpoint one return-shape axis
+    /// over on the variant-return surface AND the
+    /// `T::first().clamp_label(T::first(), T::first()) ==
+    /// T::first().label()` fixpoint one return-shape axis over on
+    /// the label-return surface.
+    ///
+    /// Frontier inspiration: Racket's
+    /// `(enum-index (enum-clamp v lo hi))` — the index-projection
+    /// sibling of `enum-clamp` on a closed enumeration under the
+    /// strict-precedence-guarded saturation variant of the ordering;
+    /// MLIR's `RegisteredOperationName::clamp(lo, hi).getIndex()`
+    /// folded to ONE method on the closed Op registry's ternary
+    /// clamp projection; Idris's `Fin n` composed through the
+    /// ternary-clamp projection's finite-position projection under
+    /// the index return-shape column; LLVM's `EnumAttr::getValue()`
+    /// composed through the clamp-into-attribute-range projection
+    /// on a closed attribute enum. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::clamp`] + [`Self::index_of`] surfaces
+    /// verbatim — no new dep, no new IR layer, no supertrait
+    /// bound, no `Option`-typed dispatch, no allocation, no
+    /// `strum` / `enum-iterator` crate dependency.
+    fn clamp_index(self, lo: Self, hi: Self) -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::clamp(self, lo, hi))
+    }
+
+    /// The `usize` LEXICOGRAPHIC-ORDER INDEX of the lex-order
+    /// ternary-CLAMP projection of `self` into the closed lex-range
+    /// `[lo, hi]` — the lex position of [`Self::sorted_clamp`]
+    /// projected through [`Self::sorted_index_of`]. Returns `usize`,
+    /// never [`Option<usize>`].
+    ///
+    /// The lex-ordering peer of [`Self::clamp_index`] on the
+    /// (declaration, lex) ordering axis of the closed-set index-
+    /// return ternary-CLAMP surface. See [`Self::clamp_index`] for
+    /// the shared design rationale, sibling matrix, override axis,
+    /// future-consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the lex-axis arm of the same
+    /// index-return ternary-clamp surface and inherits every property
+    /// from the declaration arm's documentation, differing only in
+    /// the substrate primitive the index-fallback routes through
+    /// ([`Self::sorted_clamp`] rather than [`Self::clamp`]) and the
+    /// lex-ordering slot lookup it composes at the projection
+    /// ([`Self::sorted_index_of`] rather than [`Self::index_of`]).
+    ///
+    /// Together with [`Self::clamp_label`], [`Self::sorted_clamp_label`],
+    /// and [`Self::clamp_index`] this method CLOSES the (return-shape
+    /// × ordering) 3×2 = 6-corner clamp face on the ternary-arity
+    /// surface past the pre-existing Self-return 1×2 = 2-corner
+    /// (declaration, lex) row that (90)+(91) opened — the ternary-
+    /// arity face on the closed-set surface now carries every corner
+    /// filled at the intersection of the {`Self`, label, index}
+    /// return-shape trio and the {declaration, lex} ordering pair on
+    /// the ternary-clamp column, mirroring the (return-shape ×
+    /// ordering × direction) 3×2×2 = 12-corner SATURATING neighbor
+    /// hypercube one boundary-behavior axis over on the neighbor
+    /// surface.
+    ///
+    /// `T::sorted_first().sorted_clamp_index(T::sorted_first(),
+    /// T::sorted_first()) == 0` is the natural fixpoint the lex-
+    /// order ternary-clamp-index projection shares with the lex-
+    /// head slot, mirroring the `T::first().clamp_index(T::first(),
+    /// T::first()) == 0` fixpoint on the declaration arm one
+    /// ordering column over.
+    fn sorted_clamp_index(self, lo: Self, hi: Self) -> usize {
+        <Self as ClosedSet>::sorted_index_of(<Self as ClosedSet>::sorted_clamp(self, lo, hi))
+    }
+
     /// The declaration-order neighbor immediately AFTER `self` in
     /// [`Self::ALL`], SATURATING at `self` at the tail — the third arm
     /// of the (boundary-behavior) axis on the closed-set forward-
@@ -31078,6 +31297,206 @@ mod tests {
                 "StubKind::{v:?}.saturating_next_index() must coincide with \
                  sorted_saturating_next_index() when declaration and lex orders agree",
             );
+        }
+    }
+
+    #[test]
+    fn clamp_label_agrees_with_clamp_dot_label_composition_on_every_well_formed_triple() {
+        // PATH-UNIFORMITY CONTRACT (label peer): the declaration-
+        // order ternary-clamp-LABEL projection is the natural
+        // `clamp(lo, hi).label()` composition — the variant-return
+        // ternary-clamp primitive folded through the canonical
+        // [`Self::label`] projection at every well-formed (variant,
+        // lo, hi) triple. Pins the clamp-label arm to the ONE
+        // substrate primitive pair (`clamp` + `label`) at every
+        // callsite, forbidding a divergent implementor body that
+        // would silently drift from the natural composition.
+        // Sibling posture to
+        // `saturating_next_label_agrees_with_saturating_next_dot_label_across_every_variant`
+        // one arity axis over on the ternary-clamp face — where the
+        // saturating-label arm binds through
+        // `saturating_next().label()`, the clamp-label arm binds
+        // through `clamp(lo, hi).label()`.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    let expected =
+                        <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::clamp(v, lo, hi));
+                    assert_eq!(
+                        <StubKind as ClosedSet>::clamp_label(v, lo, hi),
+                        expected,
+                        "StubKind::{v:?}.clamp_label(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         equal clamp(lo, hi).label() — the declaration-order ternary-clamp-LABEL \
+                         projection is a typed CONSEQUENCE of the variant-return ternary-clamp \
+                         primitive folded through the canonical label projection",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_clamp_label_agrees_with_sorted_clamp_dot_label_composition_on_every_well_formed_triple(
+    ) {
+        // PATH-UNIFORMITY CONTRACT (lex-label peer): the lex-order
+        // ternary-clamp-LABEL projection is the natural
+        // `sorted_clamp(lo, hi).label()` composition on every well-
+        // formed (variant, lo, hi) lex triple. Sibling posture to
+        // `clamp_label_agrees_with_clamp_dot_label_composition_on_every_well_formed_triple`
+        // one arm over on the (declaration, lex) ordering axis of the
+        // ternary-clamp-label surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::sorted_precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    let expected = <StubKind as ClosedSet>::label(
+                        <StubKind as ClosedSet>::sorted_clamp(v, lo, hi),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_clamp_label(v, lo, hi),
+                        expected,
+                        "StubKind::{v:?}.sorted_clamp_label(StubKind::{lo:?}, StubKind::{hi:?}) \
+                         must equal sorted_clamp(lo, hi).label() — the lex-order ternary-clamp-\
+                         LABEL projection is a typed CONSEQUENCE of the variant-return lex-order \
+                         ternary-clamp primitive folded through the canonical label projection",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn clamp_index_agrees_with_clamp_dot_index_of_composition_on_every_well_formed_triple() {
+        // PATH-UNIFORMITY CONTRACT (index peer): the declaration-
+        // order ternary-clamp-INDEX projection is the natural
+        // `clamp(lo, hi).index_of()` composition on every well-formed
+        // (variant, lo, hi) triple. Sibling posture to
+        // `clamp_label_agrees_with_clamp_dot_label_composition_on_every_well_formed_triple`
+        // one return-shape axis over on the ternary-clamp-index face
+        // — where the label-return arm binds through
+        // `clamp(lo, hi).label()`, the index-return arm binds through
+        // `clamp(lo, hi).index_of()`.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    let expected = <StubKind as ClosedSet>::index_of(
+                        <StubKind as ClosedSet>::clamp(v, lo, hi),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::clamp_index(v, lo, hi),
+                        expected,
+                        "StubKind::{v:?}.clamp_index(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         equal clamp(lo, hi).index_of() — the declaration-order ternary-clamp-\
+                         INDEX projection is a typed CONSEQUENCE of the variant-return ternary-\
+                         clamp primitive folded through the canonical index-of projection",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_clamp_index_agrees_with_sorted_clamp_dot_sorted_index_of_composition_on_every_well_formed_triple(
+    ) {
+        // PATH-UNIFORMITY CONTRACT (lex-index peer): the lex-order
+        // ternary-clamp-INDEX projection is the natural
+        // `sorted_clamp(lo, hi).sorted_index_of()` composition on
+        // every well-formed lex (variant, lo, hi) triple. Together
+        // with the three sibling path-uniformity pins CLOSES the
+        // (declaration × lex) × (label, index) 2×2 = 4-corner path-
+        // uniformity matrix on the ternary-clamp face, jointly
+        // pinning the (return-shape × ordering) 3×2 = 6-corner clamp
+        // face at every non-Self corner past the pre-existing
+        // Self-return 1×2 row.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::sorted_precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    let expected = <StubKind as ClosedSet>::sorted_index_of(
+                        <StubKind as ClosedSet>::sorted_clamp(v, lo, hi),
+                    );
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_clamp_index(v, lo, hi),
+                        expected,
+                        "StubKind::{v:?}.sorted_clamp_index(StubKind::{lo:?}, StubKind::{hi:?}) \
+                         must equal sorted_clamp(lo, hi).sorted_index_of() — the lex-order \
+                         ternary-clamp-INDEX projection is a typed CONSEQUENCE of the variant-\
+                         return lex-order ternary-clamp primitive folded through the canonical \
+                         lex-order slot projection",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_clamp_label_coincides_with_clamp_label_when_declaration_and_lex_orders_agree() {
+        // CROSS-AXIS COINCIDENCE CONTRACT (label peer): when
+        // declaration and lex orders coincide (as they do on
+        // `StubKind`), the lex-order ternary-clamp-LABEL projection
+        // coincides with the declaration-order arm on every well-
+        // formed triple. Pins the (declaration, lex) 2-column
+        // structural coincidence on the ternary-clamp-label surface
+        // one return-shape axis over from the
+        // `sorted_clamp_coincides_with_clamp_when_declaration_and_lex_orders_agree`
+        // pin on the variant-return surface — the LABEL projection
+        // inherits the ordering coincidence from the variant-return
+        // arm through the shared [`Self::label`] fold.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    assert_eq!(
+                        <StubKind as ClosedSet>::clamp_label(v, lo, hi),
+                        <StubKind as ClosedSet>::sorted_clamp_label(v, lo, hi),
+                        "StubKind::{v:?}.clamp_label(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         coincide with sorted_clamp_label(lo, hi) when declaration and lex orders \
+                         agree",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_clamp_index_coincides_with_clamp_index_when_declaration_and_lex_orders_agree() {
+        // CROSS-AXIS COINCIDENCE CONTRACT (index peer): when
+        // declaration and lex orders coincide, the lex-order ternary-
+        // clamp-INDEX projection coincides with the declaration-order
+        // arm on every well-formed triple. Together with the label
+        // coincidence pin CLOSES the (label, index) × (declaration ↔
+        // lex) 2-corner cross-axis coincidence matrix on the
+        // ternary-clamp face, mirroring the same coincidence pattern
+        // the label-return and variant-return arms carry on the
+        // SATURATING neighbor surface one boundary-behavior axis
+        // over.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for lo in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for hi in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    if !<StubKind as ClosedSet>::precedes_or_equal(lo, hi) {
+                        continue;
+                    }
+                    assert_eq!(
+                        <StubKind as ClosedSet>::clamp_index(v, lo, hi),
+                        <StubKind as ClosedSet>::sorted_clamp_index(v, lo, hi),
+                        "StubKind::{v:?}.clamp_index(StubKind::{lo:?}, StubKind::{hi:?}) must \
+                         coincide with sorted_clamp_index(lo, hi) when declaration and lex orders \
+                         agree",
+                    );
+                }
+            }
         }
     }
 }

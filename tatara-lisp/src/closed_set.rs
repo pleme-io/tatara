@@ -9838,6 +9838,191 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_max(self, other))
     }
 
+    /// The `usize` DECLARATION-ORDER INDEX of the declaration-order
+    /// binary pairwise-MIN projection of `self` and `other` — the
+    /// declaration-order position of [`Self::min`] projected through
+    /// [`Self::index_of`]. Returns `usize`, never [`Option<usize>`]:
+    /// the binary min projection is TOTAL on every operand pair, and
+    /// every variant carries a declaration-order slot.
+    ///
+    /// The index-return arm of the (`Self`-return, `&'static str`-return,
+    /// `usize`-return) return-shape partition of the closed-set
+    /// declaration-order binary pairwise-MIN surface — one return-shape
+    /// axis over from [`Self::min`] (`Self`-return declaration-axis
+    /// binary-min), one return-shape axis over from [`Self::min_label`]
+    /// (`&'static str`-return declaration-axis binary-min-label), and
+    /// one ordering axis over from [`Self::sorted_min_index`] (`usize`-
+    /// return lex-axis binary-min-index). Together with the three
+    /// sibling index-return pairwise-selection peers this method CLOSES
+    /// the (return-shape × ordering × direction) 3×2×2 = 12-corner
+    /// binary pairwise-selection hypercube on the binary-arity face
+    /// past the pre-existing Self-return 2×2 = 4-corner row that
+    /// (95)+(96) closed AND the label-return 2×2 = 4-corner row that
+    /// (97)+(98) closed — the {`Self`, label, index} return-shape trio
+    /// now carries every corner filled at the intersection with the
+    /// {declaration, lex} ordering × {min, max} direction 4-corner
+    /// selection matrix on the binary-arity face, mirroring the
+    /// (return-shape × ordering) 3×2 = 6-corner CLAMP face closed one
+    /// arity level up on the ternary-arity face at (92)+(93)+(94).
+    ///
+    /// Every generic consumer that renders the pairwise-MIN
+    /// projection's SLOT of two typed variants (a compact wire codec
+    /// that folds an observed-phase pair to the declaration-order
+    /// earlier member and emits the folded slot for cross-boundary
+    /// handoff without threading `Option`-dispatch through the encoder,
+    /// a per-variant lookup-table indexer that folds an unordered
+    /// phase-observation pair to the declaration-order earlier peer
+    /// and reads the folded slot into a `[Payload; T::CARDINALITY]`
+    /// array, a bitset over the closed-set that folds pairwise-min
+    /// samples into a monitored window and reads the folded slot as
+    /// the bit index) binds to ONE typed method rather than re-deriving
+    /// the `a.min(b).index_of()` two-primitive composition at every
+    /// callsite.
+    ///
+    /// Default body composes [`Self::min`] with [`Self::index_of`]
+    /// verbatim. The min-projection INDEX contract — the tie-break-
+    /// left arm returns `self.index_of()` when
+    /// `self.precedes_or_equal(other)`, returns `other.index_of()`
+    /// otherwise — is guaranteed by the default composition through
+    /// [`Self::min`]'s non-strict-precedence-guarded selection.
+    /// `T::first().min_index(T::first()) == 0` is the natural fixpoint
+    /// the binary-min-index projection shares with the declaration-
+    /// head slot, mirroring the `T::first().min_label(T::first()) ==
+    /// T::first().label()` fixpoint one return-shape axis over on
+    /// the label-return surface AND the `T::first().min(T::first())
+    /// == T::first()` fixpoint one return-shape axis over on the
+    /// variant-return surface.
+    ///
+    /// Frontier inspiration: Racket's `(enum-index (enum-min a b))` —
+    /// the index-projection sibling of `enum-min` on a closed
+    /// enumeration under the non-strict-precedence-guarded selection
+    /// variant of the ordering; MLIR's
+    /// `RegisteredOperationName::min(a, b).getIndex()` folded to ONE
+    /// method on the closed Op registry's binary min projection;
+    /// Julia's `Base.min(a, b) |> Int` applied to a closed enumeration
+    /// and threaded through the canonical slot projection; Idris's
+    /// `Ord a => min a b |> toIndex` on the binary-min projection's
+    /// index return-shape column. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::min`] + [`Self::index_of`] surfaces verbatim —
+    /// no new dep, no new IR layer, no supertrait bound, no `Option`-
+    /// typed dispatch, no allocation, no `strum` / `enum-iterator`
+    /// crate dependency.
+    fn min_index(self, other: Self) -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::min(self, other))
+    }
+
+    /// The `usize` DECLARATION-ORDER INDEX of the declaration-order
+    /// binary pairwise-MAX projection of `self` and `other` — the
+    /// declaration-order position of [`Self::max`] projected through
+    /// [`Self::index_of`]. Returns `usize`, never [`Option<usize>`].
+    ///
+    /// The direction-complement peer of [`Self::min_index`] on the
+    /// (min, max) direction axis of the closed-set index-return binary
+    /// pairwise-selection surface. See [`Self::min_index`] for the
+    /// shared design rationale, sibling matrix, override axis, future-
+    /// consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the max-direction arm of the same
+    /// index-return binary-selection surface and inherits every
+    /// property from the min arm's documentation, differing only in
+    /// the substrate primitive the index-fallback routes through
+    /// ([`Self::max`] rather than [`Self::min`]) and the non-strict-
+    /// succession guard it composes at the tie-break-left selection
+    /// ([`Self::succeeds_or_equal`] rather than
+    /// [`Self::precedes_or_equal`]).
+    ///
+    /// `T::first().max_index(T::first()) == 0` is the natural fixpoint
+    /// the binary-max-index projection shares with the singleton-pair
+    /// diagonal, mirroring the `T::first().min_index(T::first()) == 0`
+    /// fixpoint on the min arm one direction column over.
+    fn max_index(self, other: Self) -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::max(self, other))
+    }
+
+    /// The `usize` LEXICOGRAPHIC-ORDER INDEX of the lex-order binary
+    /// pairwise-MIN projection of `self` and `other` — the lex position
+    /// of [`Self::sorted_min`] projected through
+    /// [`Self::sorted_index_of`]. Returns `usize`, never
+    /// [`Option<usize>`].
+    ///
+    /// The lex-ordering peer of [`Self::min_index`] on the
+    /// (declaration, lex) ordering axis of the closed-set index-return
+    /// binary pairwise-MIN surface. See [`Self::min_index`] for the
+    /// shared design rationale, sibling matrix, override axis, future-
+    /// consumer inventory, THEORY.md grounding, and frontier
+    /// inspiration — this method is the lex-axis arm of the same
+    /// index-return binary-min surface and inherits every property
+    /// from the declaration arm's documentation, differing only in
+    /// the substrate primitive the index-fallback routes through
+    /// ([`Self::sorted_min`] rather than [`Self::min`]) and the
+    /// lex-ordering slot lookup it composes at the projection
+    /// ([`Self::sorted_index_of`] rather than [`Self::index_of`]).
+    ///
+    /// `T::sorted_first().sorted_min_index(T::sorted_first()) == 0` is
+    /// the natural fixpoint the lex-order binary-min-index projection
+    /// shares with the lex-head slot, mirroring the
+    /// `T::first().min_index(T::first()) == 0` fixpoint on the
+    /// declaration arm one ordering column over AND the
+    /// `T::sorted_first().sorted_clamp_index(T::sorted_first(),
+    /// T::sorted_first()) == 0` fixpoint one arity level up on the
+    /// ternary-clamp-index face.
+    fn sorted_min_index(self, other: Self) -> usize {
+        <Self as ClosedSet>::sorted_index_of(<Self as ClosedSet>::sorted_min(self, other))
+    }
+
+    /// The `usize` LEXICOGRAPHIC-ORDER INDEX of the lex-order binary
+    /// pairwise-MAX projection of `self` and `other` — the lex position
+    /// of [`Self::sorted_max`] projected through
+    /// [`Self::sorted_index_of`]. Returns `usize`, never
+    /// [`Option<usize>`].
+    ///
+    /// Closes the (return-shape × ordering × direction) 3×2×2 =
+    /// 12-corner binary pairwise-selection hypercube on the binary-
+    /// arity face at the (`usize`-return, lex-order, max) corner —
+    /// sibling posture to [`Self::sorted_min_index`] one direction
+    /// axis over on the lex arm AND to [`Self::max_index`] one
+    /// ordering axis over on the max arm. Together with
+    /// [`Self::min_index`], [`Self::max_index`], and
+    /// [`Self::sorted_min_index`] this method CLOSES the (`usize`-
+    /// return, ordering × direction) 2×2 = 4-corner index-return face
+    /// on the binary pairwise-selection surface past the pre-existing
+    /// Self-return 2×2 row that [`Self::min`] / [`Self::max`] /
+    /// [`Self::sorted_min`] / [`Self::sorted_max`] closed at
+    /// (95)+(96) AND the label-return 2×2 row that [`Self::min_label`]
+    /// / [`Self::max_label`] / [`Self::sorted_min_label`] /
+    /// [`Self::sorted_max_label`] closed at (97)+(98) — the
+    /// (return-shape × ordering × direction) 3×2×2 hypercube on the
+    /// binary-arity face carries every corner filled at the
+    /// intersection of the (`Self`, `&'static str`, `usize`) return-
+    /// shape trio and the {declaration, lex} ordering × {min, max}
+    /// direction 2×2 selection matrix, EXHAUSTIVELY closing the
+    /// binary-arity index-return face after the (return-shape ×
+    /// ordering) 3×2 = 6-corner CLAMP face was closed one arity level
+    /// up on the ternary-arity face at (92)+(93)+(94).
+    ///
+    /// See [`Self::min_index`] for the shared design rationale,
+    /// sibling matrix, override axis, future-consumer inventory,
+    /// THEORY.md grounding, and frontier inspiration — this method is
+    /// the lex-order arm of the max direction column on the index-
+    /// return surface and inherits every property from the declaration
+    /// arm's documentation, differing only in the substrate primitive
+    /// the index-fallback routes through ([`Self::sorted_max`] rather
+    /// than [`Self::max`]) and the lex-ordering slot lookup it composes
+    /// at the projection ([`Self::sorted_index_of`] rather than
+    /// [`Self::index_of`]).
+    ///
+    /// `T::sorted_first().sorted_max_index(T::sorted_first()) == 0` is
+    /// the natural fixpoint the lex-order binary-max-index projection
+    /// shares with the singleton-lex-pair diagonal, mirroring the
+    /// `T::first().max_index(T::first()) == 0` fixpoint on the
+    /// declaration arm one ordering column over AND the
+    /// `T::sorted_first().sorted_max_label(T::sorted_first()) ==
+    /// T::sorted_first().label()` fixpoint one return-shape axis over
+    /// on the label-return surface.
+    fn sorted_max_index(self, other: Self) -> usize {
+        <Self as ClosedSet>::sorted_index_of(<Self as ClosedSet>::sorted_max(self, other))
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -32363,6 +32548,241 @@ mod tests {
                          agree",
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn min_index_agrees_with_min_dot_index_of_composition_across_every_pair() {
+        // PATH-UNIFORMITY CONTRACT (index peer): the declaration-order
+        // binary-min-INDEX projection is the natural
+        // `min(other).index_of()` composition — the Self-return binary
+        // min primitive folded through the canonical [`Self::index_of`]
+        // projection at every operand pair. Pins the min-index arm to
+        // the ONE substrate primitive pair (`min` + `index_of`) at
+        // every callsite, forbidding a divergent implementor body that
+        // would silently drift from the natural composition. Sibling
+        // posture to
+        // `min_label_agrees_with_min_dot_label_composition_across_every_pair`
+        // one return-shape axis over on the binary-selection face —
+        // where the label-return arm binds through `min(other).label()`,
+        // the index-return arm binds through `min(other).index_of()`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected =
+                    <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::min(a, b));
+                assert_eq!(
+                    <StubKind as ClosedSet>::min_index(a, b),
+                    expected,
+                    "StubKind::{a:?}.min_index(StubKind::{b:?}) must equal min(other).index_of() \
+                     — the declaration-order binary-min-INDEX projection is a typed CONSEQUENCE \
+                     of the Self-return binary-min primitive folded through the canonical \
+                     index-of projection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn max_index_agrees_with_max_dot_index_of_composition_across_every_pair() {
+        // PATH-UNIFORMITY CONTRACT (max-index peer): the declaration-
+        // order binary-max-INDEX projection is the natural
+        // `max(other).index_of()` composition on every operand pair.
+        // Sibling posture to
+        // `min_index_agrees_with_min_dot_index_of_composition_across_every_pair`
+        // one arm over on the (min, max) direction axis of the
+        // binary-index pairwise-selection surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected =
+                    <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::max(a, b));
+                assert_eq!(
+                    <StubKind as ClosedSet>::max_index(a, b),
+                    expected,
+                    "StubKind::{a:?}.max_index(StubKind::{b:?}) must equal max(other).index_of() \
+                     — the declaration-order binary-max-INDEX projection is a typed CONSEQUENCE \
+                     of the Self-return binary-max primitive folded through the canonical \
+                     index-of projection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_min_index_agrees_with_sorted_min_dot_sorted_index_of_composition_across_every_pair() {
+        // PATH-UNIFORMITY CONTRACT (lex-min-index peer): the lex-order
+        // binary-min-INDEX projection is the natural
+        // `sorted_min(other).sorted_index_of()` composition on every
+        // operand pair. Sibling posture to
+        // `min_index_agrees_with_min_dot_index_of_composition_across_every_pair`
+        // one arm over on the (declaration, lex) ordering axis of the
+        // binary-index pairwise-selection surface — the lex-axis arm
+        // routes through `sorted_min` + `sorted_index_of` rather than
+        // `min` + `index_of`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected = <StubKind as ClosedSet>::sorted_index_of(
+                    <StubKind as ClosedSet>::sorted_min(a, b),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_min_index(a, b),
+                    expected,
+                    "StubKind::{a:?}.sorted_min_index(StubKind::{b:?}) must equal \
+                     sorted_min(other).sorted_index_of() — the lex-order binary-min-INDEX \
+                     projection is a typed CONSEQUENCE of the Self-return lex-order binary-min \
+                     primitive folded through the canonical lex-order slot projection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_max_index_agrees_with_sorted_max_dot_sorted_index_of_composition_across_every_pair() {
+        // PATH-UNIFORMITY CONTRACT (lex-max-index peer): the lex-order
+        // binary-max-INDEX projection is the natural
+        // `sorted_max(other).sorted_index_of()` composition on every
+        // operand pair. Together with the three sibling path-uniformity
+        // pins CLOSES the (declaration × lex) × (min, max) 2×2 =
+        // 4-corner path-uniformity matrix on the binary-index
+        // pairwise-selection face, jointly pinning the (`usize`-return,
+        // ordering × direction) 4-corner index face at every corner
+        // past the pre-existing Self-return 2×2 row AND the label-
+        // return 2×2 row — the (return-shape × ordering × direction)
+        // 3×2×2 = 12-corner binary pairwise-selection hypercube on the
+        // binary-arity face is now EXHAUSTIVELY pinned at every corner
+        // by ONE path-uniformity contract per corner.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let expected = <StubKind as ClosedSet>::sorted_index_of(
+                    <StubKind as ClosedSet>::sorted_max(a, b),
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_max_index(a, b),
+                    expected,
+                    "StubKind::{a:?}.sorted_max_index(StubKind::{b:?}) must equal \
+                     sorted_max(other).sorted_index_of() — the lex-order binary-max-INDEX \
+                     projection is a typed CONSEQUENCE of the Self-return lex-order binary-max \
+                     primitive folded through the canonical lex-order slot projection",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_index_and_max_index_return_indices_from_the_operand_pair_on_every_pair() {
+        // MEMBERSHIP CONTRACT (index peers): the binary-min-index and
+        // binary-max-index projections return the SLOT of ONE OF the
+        // two operands — never a third variant's slot. Pins the index-
+        // projection's codomain to the operand-pair slot set on every
+        // input, mirroring the
+        // `min_label_and_max_label_return_labels_from_the_operand_pair_on_every_pair`
+        // pin one return-shape axis over on the label-return surface
+        // AND the `min_returns_one_of_its_two_operands_on_every_pair`
+        // pin one return-shape axis over on the Self-return surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let a_idx = <StubKind as ClosedSet>::index_of(a);
+                let b_idx = <StubKind as ClosedSet>::index_of(b);
+                let mn = <StubKind as ClosedSet>::min_index(a, b);
+                let mx = <StubKind as ClosedSet>::max_index(a, b);
+                assert!(
+                    mn == a_idx || mn == b_idx,
+                    "StubKind::{a:?}.min_index(StubKind::{b:?}) = {mn} must be one of the two \
+                     operand slots ({a_idx}, {b_idx})",
+                );
+                assert!(
+                    mx == a_idx || mx == b_idx,
+                    "StubKind::{a:?}.max_index(StubKind::{b:?}) = {mx} must be one of the two \
+                     operand slots ({a_idx}, {b_idx})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn min_index_and_max_index_are_idempotent_on_the_diagonal_across_every_variant() {
+        // IDEMPOTENCE / DIAGONAL FIXED POINT (index peers):
+        // `min_index(v, v) == v.index_of()` AND `max_index(v, v) ==
+        // v.index_of()` on every variant — the index projections fold
+        // the reflexive pair onto the shared operand's canonical slot.
+        // Sibling posture to
+        // `min_label_and_max_label_are_idempotent_on_the_diagonal_across_every_variant`
+        // one return-shape axis over on the label-return surface AND
+        // `min_is_idempotent_on_the_diagonal_across_every_variant`
+        // one return-shape axis over on the Self-return surface.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let v_idx = <StubKind as ClosedSet>::index_of(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::min_index(v, v),
+                v_idx,
+                "StubKind::{v:?}.min_index(StubKind::{v:?}) must be the diagonal slot identity",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::max_index(v, v),
+                v_idx,
+                "StubKind::{v:?}.max_index(StubKind::{v:?}) must be the diagonal slot identity",
+            );
+        }
+    }
+
+    #[test]
+    fn min_index_and_max_index_bracket_every_pair_on_the_declaration_axis() {
+        // BRACKET CONTRACT (index peers): for every operand pair
+        // `(a, b)`, `min_index(a, b) <= max_index(a, b)` on the
+        // declaration-order slot axis — the pairwise-min-index sits at
+        // OR before the pairwise-max-index. When `a != b` the two are
+        // distinct (max returns the later slot, min returns the earlier
+        // slot); when `a == b` they collapse onto the shared diagonal
+        // slot. Sibling posture to
+        // `min_and_max_bracket_every_pair_on_the_declaration_axis` one
+        // return-shape axis over on the Self-return surface — where the
+        // Self-return arm pins the bracket via `index_of()` composed
+        // through `.min(b)` / `.max(b)`, the index-return arm pins it
+        // directly on `usize` returns.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let mn = <StubKind as ClosedSet>::min_index(a, b);
+                let mx = <StubKind as ClosedSet>::max_index(a, b);
+                assert!(
+                    mn <= mx,
+                    "StubKind::{a:?}.min_index(StubKind::{b:?}) = {mn} must sit at or before \
+                     max_index = {mx} on the declaration-order slot axis",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_min_index_and_sorted_max_index_coincide_with_the_declaration_index_peers_when_orders_agree(
+    ) {
+        // CROSS-AXIS COINCIDENCE CONTRACT (index peers): when
+        // declaration and lex orders coincide (as they do on
+        // `StubKind`), the lex-order binary-min-INDEX and binary-max-
+        // INDEX projections coincide with the declaration-order arms
+        // on every operand pair. Pins the (declaration, lex) 2-column
+        // structural coincidence on the binary-index pairwise-selection
+        // surface one return-shape axis over from the
+        // `sorted_min_label_and_sorted_max_label_coincide_with_the_declaration_label_peers_when_orders_agree`
+        // pin on the label-return surface AND the
+        // `sorted_min_coincides_with_min_when_declaration_and_lex_orders_agree`
+        // pin on the Self-return surface — closing the (return-shape ×
+        // ordering-coincidence) 3×1 = 3-corner cross-axis coincidence
+        // column on the binary pairwise-selection face across all
+        // three {`Self`, label, index} return-shape arms simultaneously.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_min_index(a, b),
+                    <StubKind as ClosedSet>::min_index(a, b),
+                    "StubKind::sorted_min_index({a:?}, {b:?}) must coincide with \
+                     StubKind::min_index({a:?}, {b:?}) when declaration and lex orders agree",
+                );
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_max_index(a, b),
+                    <StubKind as ClosedSet>::max_index(a, b),
+                    "StubKind::sorted_max_index({a:?}, {b:?}) must coincide with \
+                     StubKind::max_index({a:?}, {b:?}) when declaration and lex orders agree",
+                );
             }
         }
     }

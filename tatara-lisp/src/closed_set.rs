@@ -11883,6 +11883,161 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .count()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "covers every variant" surjectivity
+    /// predicate — `true` iff every variant of [`Self::ALL`] occurs at
+    /// least once in `items`. The BOOL-RETURN opener on the (covering)
+    /// axis of the equivalence-partition surface, positioned as a typed
+    /// CONSEQUENCE of the just-lifted USIZE-return [`Self::count_distinct`]
+    /// projection reaching the substrate-carried upper bound
+    /// [`Self::CARDINALITY`]. The predicate answers YES/NO to "does this
+    /// slice HIT every variant?" — dual to [`Self::is_pairwise_distinct`]
+    /// (which answers YES/NO to "does this slice REPEAT any variant?")
+    /// on the same equivalence-partition surface, and orthogonal to
+    /// [`Self::is_constant`] (which answers YES/NO to "do all positions
+    /// SHARE one variant?"). Not a fresh substrate primitive on the
+    /// index axis — the predicate emerges from a single equality check
+    /// on the just-lifted usize-return count against the trait-level
+    /// [`Self::CARDINALITY`] constant.
+    ///
+    /// Ordering-axis invariance: the predicate is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES on
+    /// element equality because the total-ordering discriminator
+    /// [`Self::index_of`] is a bijection into `[0, T::CARDINALITY)`, so
+    /// "did we hit every variant?" is the same question under EVERY
+    /// ordering. Sibling posture to [`Self::count_distinct`],
+    /// [`Self::is_constant`], and [`Self::is_pairwise_distinct`]'s
+    /// ordering-axis invariance: every projection on the equivalence-
+    /// partition surface is direction- AND ordering-agnostic; no
+    /// separate `sorted_is_covering` peer is needed. Pinned by
+    /// `is_covering_is_invariant_under_ordering_axis_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::is_covering(&[])` is `true` iff
+    /// `T::CARDINALITY == 0` on every implementor — the empty slice
+    /// visits zero variants, and coverage requires visiting
+    /// `T::CARDINALITY`-many. On every non-degenerate closed-set enum
+    /// (the substrate's 36+ implementors all carry cardinality ≥ 1),
+    /// the empty slice rejects. Pinned by
+    /// `is_covering_returns_false_on_the_empty_slice_across_every_non_degenerate_kind`.
+    ///
+    /// Singleton contract: `T::is_covering(&[v])` is `true` iff
+    /// `T::CARDINALITY == 1` on every implementor — a singleton visits
+    /// one variant, and coverage requires visiting `T::CARDINALITY`-many.
+    /// On every implementor with `T::CARDINALITY >= 2` (the substrate's
+    /// dominant case), every singleton rejects. Pinned by
+    /// `is_covering_returns_false_on_every_singleton_when_cardinality_is_at_least_two`.
+    ///
+    /// Full-set contract: `T::is_covering(<T as ClosedSet>::ALL)` is
+    /// `true` UNCONDITIONALLY — the closed-set well-formedness
+    /// invariant [`assert_closed_set_well_formed`]'s clause (3) pins
+    /// labels (and hence variants) as pairwise distinct, so
+    /// `T::count_distinct(<T as ClosedSet>::ALL) == T::CARDINALITY`,
+    /// which is exactly the covering identity. Pinned by
+    /// `is_covering_over_the_full_set_holds_unconditionally`.
+    ///
+    /// Concatenation-monotone contract: appending positions to a
+    /// covering slice preserves coverage (a superset of a variant-hit
+    /// slice hits every variant the sub-slice hits). Pinned by
+    /// `is_covering_over_the_doubled_full_set_holds_unconditionally`.
+    ///
+    /// Composition identity: for every slice `items`,
+    /// `T::is_covering(items)` iff
+    /// `T::count_distinct(items) == T::CARDINALITY` — the surjectivity
+    /// predicate is the USIZE-return count reaching the substrate-
+    /// carried upper bound. Pinned by
+    /// `is_covering_composes_through_count_distinct_equals_cardinality_across_every_triple`.
+    ///
+    /// Length lower bound: `T::is_covering(items)` implies
+    /// `items.len() >= T::CARDINALITY` on every slice — coverage
+    /// requires at least `T::CARDINALITY`-many positions because the
+    /// distinct count is bounded above by the slice length. The
+    /// contrapositive: `items.len() < T::CARDINALITY` implies
+    /// `!T::is_covering(items)`. Pinned by
+    /// `is_covering_implies_slice_length_is_at_least_cardinality_across_every_triple`.
+    ///
+    /// Reversal-invariance: `T::is_covering(items)` equals
+    /// `T::is_covering(items.iter().rev().copied().collect::<Vec<_>>())`
+    /// — reversing a slice preserves its multiset of variant identities,
+    /// and coverage is a function of that multiset alone. Pinned by
+    /// `is_covering_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the predicate is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_distinct`] projection and the
+    /// [`Self::CARDINALITY`] constant. The composition uses one
+    /// equality check on the usize-return count, so the sweep inherits
+    /// [`Self::count_distinct`]'s O(n(n-1)/2) cost on slice arity `n`
+    /// — allocation-free, no `PartialEq`/`Eq`/`Hash` supertrait bound
+    /// (the trait's minimal `Sized + Copy + 'static` supertrait pair
+    /// stays untouched), no bitset-shape carrier.
+    ///
+    /// Future consumers that compose against [`Self::is_covering`]:
+    /// a `tatara-check` predicate `(check-phases-cover-all …)` verifying
+    /// that a `WorkloadPhase` sequence hits every phase at least once
+    /// at plan time — catching a spec that would silently omit a phase;
+    /// an LSP diagnostic on a Lisp-author-written closed-set field that
+    /// warns when the value multiset does not cover the ambient set
+    /// (`":severities [:warn :info]"` on a 3-variant severity enum
+    /// omits `:crit`); a Sekiban audit-trail metric labeled by
+    /// coverage of a classification poset (a "did we visit every
+    /// classification?" gauge across a window); a
+    /// `tatara-lisp::macro_expand::Expander` hygiene pass that
+    /// verifies a template's generated identifier set spans a required
+    /// closed vocabulary. Each binds to ONE typed N-ary surjectivity
+    /// predicate on the trait rather than re-deriving
+    /// `T::count_distinct(items) == T::CARDINALITY` inline per
+    /// callsite.
+    ///
+    /// Compounding benefits the future
+    /// `ClosedSet::is_permutation_of_all` lift on the "does this slice
+    /// visit every variant exactly once?" corner of the equivalence-
+    /// partition surface: `is_permutation_of_all` is a typed
+    /// CONSEQUENCE of
+    /// `T::is_pairwise_distinct(items) && T::is_covering(items)`
+    /// (equivalently `items.len() == T::CARDINALITY && T::is_covering(items)`),
+    /// so once THIS lift lands the sibling predicate is a two-primitive
+    /// conjunction rather than a fresh inline sweep. The (covering,
+    /// distinct, permutation) triangle then closes at three typed
+    /// primitives on the same equivalence-partition surface.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// surjectivity predicate becomes a TYPE-level primitive on the
+    /// closed-set trait rather than a per-consumer inline
+    /// `T::count_distinct(items) == T::CARDINALITY` composition at
+    /// every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the covering axis was an unnamed inline composition
+    /// recurring at every prospective downstream "did we hit every
+    /// variant?" site pre-lift. Naming it makes the predicate a TYPED
+    /// CONSEQUENCE of the substrate's total-ordering discriminator
+    /// ([`Self::index_of`] via [`Self::count_distinct`]) compared
+    /// against the trait-level cardinality constant. THEORY.md §VI.1
+    /// — generation over composition; the covering predicate emerges
+    /// from the composition of ONE substrate primitive
+    /// ([`Self::count_distinct`]) with the trait-level constant
+    /// ([`Self::CARDINALITY`]) via a single `==` on `usize`, not as a
+    /// per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `Forall_incl : forall (l m : list A),
+    /// (forall x, In x l -> In x m) -> incl l m` predicate that
+    /// captures the "every member of `l` occurs in `m`" surjectivity
+    /// relation between two lists; Idris's `Elem : (x : a) -> Vect n a
+    /// -> Type` combined with the "for-every-variant" universal
+    /// quantifier over a typed sum's constructor set surfaces the
+    /// same predicate structurally at the type level; Rust's own
+    /// `items.iter().collect::<HashSet<_>>().len() == T::CARDINALITY`
+    /// binds the predicate through an allocating set materialization.
+    /// Julia's `issetequal(unique(v), T)` on a typed vector; NumPy's
+    /// `np.array_equal(np.sort(np.unique(a)), T)` idiom. Translation
+    /// through pleme-io primitives: the N-ary surjectivity predicate
+    /// on the closed-set trait binds through the substrate's
+    /// [`Self::count_distinct`] projection reaching the trait-level
+    /// [`Self::CARDINALITY`] constant at the (ordering-agnostic)
+    /// corner of the equivalence-partition surface — no new dep, no
+    /// supertrait bound (the [`Self::count_distinct`] projection
+    /// replaces the `Eq`/`Hash` bound the standard-library signatures
+    /// demand), no set-shape carrier, no allocation.
+    fn is_covering(items: &[Self]) -> bool {
+        <Self as ClosedSet>::count_distinct(items) == <Self as ClosedSet>::CARDINALITY
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -36970,6 +37125,291 @@ mod tests {
                         <StubKind as ClosedSet>::count_distinct(&reversed),
                         "T::count_distinct({forward:?}) diverged from T::count_distinct({reversed:?}) — the distinct-count projection MUST be a fixpoint of slice reversal"
                     );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_covering_returns_false_on_the_empty_slice_across_every_non_degenerate_kind() {
+        // EMPTY-SLICE CONTRACT (N-ary surjectivity predicate):
+        // `T::is_covering(&[])` iff `T::CARDINALITY == 0` — the
+        // empty slice hits zero variants, so it covers only the
+        // degenerate closed set with zero variants. Every non-
+        // degenerate implementor (StubKind at cardinality 3, and
+        // every substrate closed-set enum at cardinality >= 1)
+        // rejects the empty slice. Sibling posture to
+        // `count_distinct_returns_zero_on_the_empty_slice_across_every_kind`
+        // one column of the (return-shape) axis over: the usize-
+        // return count reports its lower-bound fixpoint `0` at
+        // the empty-slice endpoint, and the bool-return
+        // surjectivity predicate rejects there whenever the
+        // ambient cardinality is positive.
+        let empty: &[StubKind] = &[];
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 1) };
+        assert!(!<StubKind as ClosedSet>::is_covering(empty));
+    }
+
+    #[test]
+    fn is_covering_returns_false_on_every_singleton_when_cardinality_is_at_least_two() {
+        // SINGLETON CONTRACT: `T::is_covering(&[v])` iff
+        // `T::CARDINALITY == 1` — a singleton hits ONE variant,
+        // so it covers only closed sets whose full set is a
+        // singleton. StubKind at cardinality 3 rejects every
+        // singleton. Sibling posture to
+        // `count_distinct_returns_one_on_every_singleton_slice_across_every_variant`
+        // one column of the (return-shape) axis over: the usize-
+        // return count collapses to `1` on every singleton, and
+        // the bool-return surjectivity predicate rejects there
+        // whenever the ambient cardinality is strictly greater
+        // than 1.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert!(
+                !<StubKind as ClosedSet>::is_covering(&singleton),
+                "T::is_covering({singleton:?}) accepted a singleton on a cardinality-{cardinality} closed set — the surjectivity predicate cannot hold when the slice hits strictly fewer variants than the ambient set carries",
+                cardinality = <StubKind as ClosedSet>::CARDINALITY,
+            );
+        }
+    }
+
+    #[test]
+    fn is_covering_over_the_full_set_holds_unconditionally() {
+        // FULL-SET CONTRACT: `T::is_covering(<T as ClosedSet>::ALL)`
+        // is `true` UNCONDITIONALLY — the closed-set well-formedness
+        // invariant `assert_closed_set_well_formed`'s clause (3)
+        // pins labels (and hence variants) as pairwise distinct,
+        // so `T::count_distinct(<T as ClosedSet>::ALL) ==
+        // T::CARDINALITY`, which is exactly the covering identity.
+        // Sibling posture to
+        // `is_pairwise_distinct_over_the_full_set_holds_unconditionally`
+        // and `count_distinct_over_the_full_set_equals_cardinality`
+        // one column of the (return-shape) axis over: every
+        // projection on the equivalence-partition surface reaches
+        // its full-set fixpoint (`true` on the bool-return arms,
+        // `T::CARDINALITY` on the usize-return arm) on the ambient
+        // set `T::ALL`.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert!(
+            <StubKind as ClosedSet>::is_covering(all),
+            "T::is_covering on the full set rejected — the closed-set well-formedness pairwise-distinctness invariant plus count_distinct(ALL) == CARDINALITY would be violated"
+        );
+    }
+
+    #[test]
+    fn is_covering_over_the_doubled_full_set_holds_unconditionally() {
+        // CONCATENATION-MONOTONE CONTRACT: appending positions to
+        // a covering slice preserves coverage. Concretely, the
+        // doubled full set `[ALL[0], …, ALL[n-1], ALL[0], …,
+        // ALL[n-1]]` covers because the first half already covers
+        // and additional positions cannot remove distinct-count
+        // hits. Catches a future override whose body accidentally
+        // demands `items.len() == T::CARDINALITY` rather than
+        // `T::count_distinct(items) == T::CARDINALITY` (that
+        // override would reject the doubled full set because its
+        // length is `2 * T::CARDINALITY`).
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert!(
+            <StubKind as ClosedSet>::is_covering(&doubled),
+            "T::is_covering on the doubled full set rejected — the surjectivity predicate MUST be concatenation-monotone (appending positions to a covering slice preserves coverage)"
+        );
+    }
+
+    #[test]
+    fn is_covering_composes_through_count_distinct_equals_cardinality_across_every_triple() {
+        // COMPOSITION IDENTITY: for every slice `items`,
+        // `T::is_covering(items) ==
+        // (T::count_distinct(items) == T::CARDINALITY)`. The
+        // equality binds by construction from the method's body
+        // but the sweep catches a future override whose body
+        // diverges from the canonical composition. Sibling
+        // posture to
+        // `is_constant_agrees_with_ascending_and_descending_conjunction_across_every_triple`
+        // one equivalence-partition-surface projection over: the
+        // BOOL-return endpoint is the composition of one
+        // substrate primitive (`count_distinct`) with the trait-
+        // level cardinality constant via `==` on `usize`, not a
+        // fresh substrate primitive.
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::is_covering(empty),
+            <StubKind as ClosedSet>::count_distinct(empty) == cardinality,
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_covering(&pair),
+                    <StubKind as ClosedSet>::count_distinct(&pair) == cardinality,
+                    "T::is_covering({pair:?}) diverged from T::count_distinct({pair:?}) == T::CARDINALITY — the composition identity was violated"
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_covering(&triple),
+                        <StubKind as ClosedSet>::count_distinct(&triple) == cardinality,
+                        "T::is_covering({triple:?}) diverged from T::count_distinct({triple:?}) == T::CARDINALITY — the composition identity was violated"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_covering_implies_slice_length_is_at_least_cardinality_across_every_triple() {
+        // LENGTH LOWER BOUND: `T::is_covering(items)` implies
+        // `items.len() >= T::CARDINALITY` on every slice — coverage
+        // requires visiting `T::CARDINALITY`-many distinct variants,
+        // and the distinct count is bounded above by the slice
+        // length. Contrapositive: `items.len() < T::CARDINALITY`
+        // implies `!T::is_covering(items)` — the sub-cardinality
+        // slice cannot hit every variant. Sweeps every length-2
+        // and length-3 slice on a cardinality-3 stub, where every
+        // length-2 slice rejects (2 < 3) and every length-3 slice
+        // accepts iff it is pairwise-distinct.
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                if <StubKind as ClosedSet>::is_covering(&pair) {
+                    assert!(
+                        pair.len() >= cardinality,
+                        "T::is_covering({pair:?}) accepted a slice of length {len} < T::CARDINALITY = {cardinality} — the length lower bound was violated",
+                        len = pair.len(),
+                    );
+                }
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    if <StubKind as ClosedSet>::is_covering(&triple) {
+                        assert!(
+                            triple.len() >= cardinality,
+                            "T::is_covering({triple:?}) accepted a slice of length {len} < T::CARDINALITY = {cardinality} — the length lower bound was violated",
+                            len = triple.len(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_covering_is_invariant_under_ordering_axis_across_every_triple() {
+        // ORDERING-AXIS INVARIANCE CONTRACT: coverage is
+        // intrinsically ordering-agnostic — a slice's coverage
+        // status is a property of the multiset of its element
+        // identities, not of the ordering the substrate uses to
+        // compare them. The predicate composes on
+        // `<Self as ClosedSet>::count_distinct` (already pinned
+        // ordering-agnostic) compared against the trait-level
+        // cardinality constant, so no separate `sorted_is_covering`
+        // peer is needed. Sibling posture to
+        // `count_distinct_is_invariant_under_ordering_axis_across_every_triple`
+        // one column of the (return-shape) axis over: every
+        // projection on the equivalence-partition surface is an
+        // ordering-agnostic fixpoint of the (declaration, lex)
+        // reordering.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    if <StubKind as ClosedSet>::is_pairwise_distinct(&triple) {
+                        assert!(
+                            <StubKind as ClosedSet>::is_covering(&triple),
+                            "T::is_covering({triple:?}) rejected a pairwise-distinct triple on a cardinality-{cardinality} closed set — a pairwise-distinct slice of length T::CARDINALITY MUST cover the ambient set",
+                            cardinality = <StubKind as ClosedSet>::CARDINALITY,
+                        );
+                    }
+                    if <StubKind as ClosedSet>::is_constant(&triple) {
+                        assert!(
+                            !<StubKind as ClosedSet>::is_covering(&triple),
+                            "T::is_covering({triple:?}) accepted a constant triple on a cardinality-{cardinality} closed set — a constant slice hits ONE variant, so it cannot cover a cardinality >= 2 ambient set",
+                            cardinality = <StubKind as ClosedSet>::CARDINALITY,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_covering_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::is_covering(items) == T::is_covering(reversed items)`
+        // on every slice — reversing a slice preserves its
+        // multiset of variant identities, and coverage is a
+        // function of that multiset alone. Sibling posture to
+        // `count_distinct_is_invariant_under_slice_reversal_across_every_triple`,
+        // `is_pairwise_distinct_is_invariant_under_slice_reversal_across_every_triple`,
+        // and `is_constant_is_invariant_under_slice_reversal_across_every_triple`
+        // one column of the (return-shape) axis over: every
+        // projection on the equivalence-partition surface is a
+        // FIXPOINT of slice reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_covering(&forward),
+                        <StubKind as ClosedSet>::is_covering(&reversed),
+                        "T::is_covering({forward:?}) diverged from T::is_covering({reversed:?}) — the surjectivity predicate MUST be a fixpoint of slice reversal"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_covering_conjunction_with_is_pairwise_distinct_implies_slice_length_equals_cardinality_across_every_triple(
+    ) {
+        // PERMUTATION-OF-ALL CONTRACT (compounding lead): the
+        // conjunction `T::is_covering(items) &&
+        // T::is_pairwise_distinct(items)` implies `items.len() ==
+        // T::CARDINALITY` on every slice — a pairwise-distinct
+        // slice has `count_distinct == items.len()`, and a
+        // covering slice has `count_distinct == T::CARDINALITY`,
+        // so the two together force `items.len() ==
+        // T::CARDINALITY`. This test pins the compounding lead a
+        // future run's `ClosedSet::is_permutation_of_all` lift
+        // (`is_pairwise_distinct(items) && is_covering(items)`)
+        // will bind against — the "visits every variant exactly
+        // once" corner of the equivalence-partition surface.
+        // Sweeps every length-2 and length-3 slice; on a
+        // cardinality-3 stub, only pairwise-distinct length-3
+        // slices satisfy both predicates jointly, and each such
+        // slice has length exactly 3.
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                if <StubKind as ClosedSet>::is_covering(&pair)
+                    && <StubKind as ClosedSet>::is_pairwise_distinct(&pair)
+                {
+                    assert_eq!(
+                        pair.len(),
+                        cardinality,
+                        "(is_covering ∧ is_pairwise_distinct) accepted {pair:?} but its length {len} diverged from T::CARDINALITY = {cardinality}",
+                        len = pair.len(),
+                    );
+                }
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    if <StubKind as ClosedSet>::is_covering(&triple)
+                        && <StubKind as ClosedSet>::is_pairwise_distinct(&triple)
+                    {
+                        assert_eq!(
+                            triple.len(),
+                            cardinality,
+                            "(is_covering ∧ is_pairwise_distinct) accepted {triple:?} but its length {len} diverged from T::CARDINALITY = {cardinality}",
+                            len = triple.len(),
+                        );
+                    }
                 }
             }
         }

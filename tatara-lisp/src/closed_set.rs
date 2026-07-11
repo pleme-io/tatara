@@ -12618,6 +12618,326 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::count_missing(items) > 0
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
+    /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
+    /// keeping every variant that OCCURS at least once in `items`
+    /// and dropping every variant that does NOT. The VEC-RETURN
+    /// PRESENT-ARM opener on the equivalence-partition surface,
+    /// positioned as the concrete WITNESS behind the just-lifted
+    /// bool-return [`Self::is_covering`] predicate (which reports
+    /// whether the hit-set reaches full cardinality) and the
+    /// usize-return [`Self::count_distinct`] projection (which
+    /// reports the hit-set's cardinality alone). Sibling posture to
+    /// [`Self::missing_variants`] one column of the (partition-arm)
+    /// axis over: this projection materializes the PRESENT arm as
+    /// a `Vec<Self>` witness; [`Self::missing_variants`]
+    /// materializes the ABSENT arm as a `Vec<Self>` witness. The
+    /// (present, absent) × (bool, usize, Vec) 2×3 = 6-corner
+    /// partition-arm × return-shape face on the equivalence-
+    /// partition surface now opens the Vec-return column at BOTH
+    /// partition arms.
+    ///
+    /// Declaration-order contract: the returned `Vec<Self>` walks
+    /// [`Self::ALL`] in declaration order and keeps every variant
+    /// whose [`Self::index_of`] matches SOME position of `items` —
+    /// so the output is ALWAYS a SUBSEQUENCE of [`Self::ALL`] with
+    /// each variant appearing AT MOST ONCE. The projection is
+    /// intrinsically DEDUPED against the ambient closed set's
+    /// well-formedness clause (3) pairwise-distinctness invariant.
+    /// Pinned by
+    /// `present_variants_preserves_declaration_order_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::present_variants(items).len() == T::count_distinct(items)`
+    /// — the Vec-return present-arm projection's length matches the
+    /// usize-return present-arm count exactly. Pinned by
+    /// `present_variants_length_equals_count_distinct_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the hit-
+    /// set membership predicate is a function of that multiset
+    /// alone. The OUTPUT ordering is fixed by [`Self::ALL`]'s
+    /// declaration order regardless of the input ordering. Pinned
+    /// by `present_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::present_variants(&[])` is the
+    /// empty `Vec` on every implementor — the empty slice hits
+    /// zero variants, so no variant of [`Self::ALL`] passes the
+    /// membership filter. Sibling posture to
+    /// `is_covering_returns_false_on_the_empty_slice_across_every_non_degenerate_kind`
+    /// at the OPPOSITE return-shape column: the bool-return
+    /// projection reports `false` (present-arm predicate fails);
+    /// this Vec-return projection reports `[]` (present-arm
+    /// witness is empty). Pinned by
+    /// `present_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::present_variants(&[v])` is `vec![v]`
+    /// for every variant `v` — a singleton hits exactly one
+    /// variant, so the filter keeps exactly that variant.
+    ///
+    /// Full-set contract:
+    /// `T::present_variants(<T as ClosedSet>::ALL) == <T as
+    /// ClosedSet>::ALL.to_vec()` UNCONDITIONALLY — the closed-set
+    /// well-formedness invariant [`assert_closed_set_well_formed`]'s
+    /// clause (3) pins variants as pairwise distinct, so every
+    /// variant of [`Self::ALL`] hits itself in the input, and the
+    /// filter keeps every variant in the same declaration order.
+    /// Pinned by
+    /// `present_variants_over_the_full_set_equals_all_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::present_variants(&<T as ClosedSet>::ALL.iter().chain(<T as
+    /// ClosedSet>::ALL.iter()).copied().collect::<Vec<_>>()) == <T
+    /// as ClosedSet>::ALL.to_vec()` UNCONDITIONALLY — the doubled
+    /// full set hits every variant (twice), and the projection's
+    /// intrinsic dedup against [`Self::ALL`] folds the doubled
+    /// multiset into the singleton hit-set. Pinned by
+    /// `present_variants_over_the_doubled_full_set_equals_all_across_every_kind`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// the substrate's [`Self::index_of`] projection — the
+    /// discriminator between two variants is their position in
+    /// [`Self::ALL`], which closed-set well-formedness clause (3)
+    /// pins as a bijection. The composition uses
+    /// `<Self as ClosedSet>::ALL.iter().copied().filter(…).collect()`
+    /// with an inner `items.iter().any(…)` membership sweep, so
+    /// the total sweep is O(T::CARDINALITY * n) on slice arity
+    /// `n` — allocating exactly the hit-set on the output side,
+    /// no `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's
+    /// minimal `Sized + Copy + 'static` supertrait pair stays
+    /// untouched), no bitset-shape carrier.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::present_variants`]: a `tatara-check` predicate
+    /// `(check-phases-report-hits …)` that emits the concrete
+    /// list of `WorkloadPhase` variants a rollout window visited
+    /// (not just their count); an LSP diagnostic on a Lisp-author-
+    /// written closed-set field that renders the hit-set as an
+    /// author-facing completion hint (`":severities [:info :warn]
+    /// — hit: [info, warn]"`); a Sekiban audit-trail projection
+    /// that carries the concrete hit-set of a classification poset
+    /// window as its per-window witness (not just the coverage
+    /// count); a `tatara-lisp::macro_expand::Expander` hygiene
+    /// pass that reports the exact set of generated identifiers a
+    /// template hit (turning the pass-level coverage predicate
+    /// into a fine-grained diagnostic without a second sweep).
+    /// Each binds to ONE typed N-ary present-witness projection on
+    /// the trait rather than re-deriving the ALL-filter-by-
+    /// membership sweep inline per callsite.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// present-witness projection becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `T::ALL.iter().copied().filter(|v| items.contains(v)).collect()`
+    /// composition at every downstream generic site. THEORY.md
+    /// §V.1 — knowable platform; the (present-Vec) corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "which variants did we actually hit?" site pre-
+    /// lift. Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the substrate's total-ordering discriminator
+    /// ([`Self::index_of`]) projected via the standard-library
+    /// filter-then-collect combinator. THEORY.md §VI.1 —
+    /// generation over composition; the present-witness projection
+    /// emerges from the composition of ONE substrate primitive
+    /// ([`Self::index_of`]) with an `iter().copied().filter(…).collect()`
+    /// combinator, not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `filter (fun v => existsb (Nat.eqb
+    /// (index v)) items) all` idiom composing a filter with an
+    /// existential membership predicate on a decidable-equality
+    /// carrier; Idris's `filter (\v => any (\w => index v == index w)
+    /// items) all` on a `Vect n a`; Rust's own
+    /// `T::ALL.iter().copied().filter(|v| items.contains(v)).collect()`
+    /// idiom binds through a per-position linear scan on `Self:
+    /// PartialEq`; Julia's `intersect(all, unique(items))` allocating
+    /// two sides; Haskell's `Data.List.intersect all items`
+    /// composition; NumPy's `np.intersect1d(all, items)` idiom.
+    /// Translation through pleme-io primitives: the N-ary present-
+    /// witness projection on the closed-set trait binds through the
+    /// substrate's [`Self::index_of`] projection via the standard-
+    /// library filter combinator — no new dep, no supertrait bound
+    /// (the [`Self::index_of`] projection replaces the `Eq`/`Hash`
+    /// bound the standard-library signatures demand), no set-shape
+    /// carrier.
+    fn present_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|v| {
+                items
+                    .iter()
+                    .any(|w| <Self as ClosedSet>::index_of(*v) == <Self as ClosedSet>::index_of(*w))
+            })
+            .collect()
+    }
+
+    /// The N-ARY ORDERING-AGNOSTIC "missing variants" projection —
+    /// the `Vec<Self>` DECLARATION-ORDER miss-set of [`Self::ALL`],
+    /// keeping every variant that does NOT occur in `items` and
+    /// dropping every variant that DOES. The VEC-RETURN ABSENT-ARM
+    /// closer on the (present, absent) partition-arm axis over the
+    /// Vec-return column of the equivalence-partition surface,
+    /// positioned as the direct DE MORGAN dual of
+    /// [`Self::present_variants`] and as the concrete WITNESS
+    /// behind the just-lifted bool-return [`Self::is_missing_any`]
+    /// predicate (which reports whether the miss-set is non-empty)
+    /// and the usize-return [`Self::count_missing`] projection
+    /// (which reports the miss-set's cardinality alone).
+    ///
+    /// De Morgan complement identity: for every slice `items`, the
+    /// concatenation of [`Self::present_variants`] and
+    /// [`Self::missing_variants`] (each walking [`Self::ALL`] in
+    /// declaration order) forms a PARTITION of [`Self::ALL`] — the
+    /// two Vecs are DISJOINT and their union preserves both the
+    /// declaration-order sub-sequence property AND [`Self::ALL`]'s
+    /// full membership. Pinned by
+    /// `present_variants_and_missing_variants_are_disjoint_across_every_triple`
+    /// and
+    /// `present_variants_interleaved_with_missing_variants_recovers_all_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::missing_variants(items).len() == T::count_missing(items)`
+    /// — the Vec-return absent-arm projection's length matches the
+    /// usize-return absent-arm count exactly. Pinned by
+    /// `missing_variants_length_equals_count_missing_across_every_triple`.
+    ///
+    /// Bool-projection identities: for every slice `items`,
+    /// * `T::missing_variants(items).is_empty()` iff
+    ///   `T::is_covering(items)` — the miss-set is empty iff the
+    ///   present-arm predicate holds;
+    /// * `!T::missing_variants(items).is_empty()` iff
+    ///   `T::is_missing_any(items)` — the miss-set is non-empty
+    ///   iff the absent-arm predicate holds.
+    ///
+    /// Both identities pin the bool-return endpoints as typed
+    /// projections of the Vec-return miss-set. Pinned by
+    /// `missing_variants_is_empty_iff_is_covering_holds_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the miss-
+    /// set membership predicate is a function of that multiset
+    /// alone. The OUTPUT ordering is fixed by [`Self::ALL`]'s
+    /// declaration order regardless of the input ordering. Pinned
+    /// by `missing_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract:
+    /// `T::missing_variants(&[]) == <T as ClosedSet>::ALL.to_vec()`
+    /// UNCONDITIONALLY — the empty slice hits zero variants, so
+    /// EVERY variant of [`Self::ALL`] passes the "not present"
+    /// filter. Sibling posture to
+    /// `is_missing_any_returns_true_on_the_empty_slice_across_every_non_degenerate_kind`
+    /// at the OPPOSITE return-shape column: the bool-return
+    /// projection reports `true` (absent-arm predicate holds);
+    /// this Vec-return projection reports the full ambient set
+    /// (absent-arm witness is maximal). Pinned by
+    /// `missing_variants_over_the_empty_slice_equals_all_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::missing_variants(<T as ClosedSet>::ALL)` is the empty
+    /// `Vec` UNCONDITIONALLY — the closed-set well-formedness
+    /// invariant [`assert_closed_set_well_formed`]'s clause (3)
+    /// pins variants as pairwise distinct, so every variant of
+    /// [`Self::ALL`] hits itself in the input, and no variant
+    /// passes the "not present" filter. Pinned by
+    /// `missing_variants_over_the_full_set_returns_the_empty_vec_across_every_kind`.
+    ///
+    /// Doubled-full-set contract: `T::missing_variants` returns the
+    /// empty `Vec` on the doubled full set UNCONDITIONALLY —
+    /// appending positions to a covering slice cannot ADD a
+    /// missing variant. Pinned by
+    /// `missing_variants_over_the_doubled_full_set_returns_the_empty_vec_across_every_kind`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// the substrate's [`Self::index_of`] projection — the same
+    /// discriminator [`Self::present_variants`] binds against,
+    /// negated at the membership predicate. The composition uses
+    /// `<Self as ClosedSet>::ALL.iter().copied().filter(…).collect()`
+    /// with an inner `!items.iter().any(…)` NON-membership sweep,
+    /// so the total sweep is O(T::CARDINALITY * n) on slice arity
+    /// `n` — allocating exactly the miss-set on the output side,
+    /// no `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's
+    /// minimal `Sized + Copy + 'static` supertrait pair stays
+    /// untouched), no bitset-shape carrier.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::missing_variants`]: a `tatara-check` predicate
+    /// `(check-phases-report-gaps …)` that emits the concrete
+    /// list of `WorkloadPhase` variants a rollout window OMITTED
+    /// (not just whether it missed any); an LSP diagnostic on a
+    /// Lisp-author-written closed-set field that renders the miss-
+    /// set as an author-facing completion hint (`":severities
+    /// [:info :warn] — missing: [error]"`); a Sekiban audit-trail
+    /// projection that carries the concrete gap-set of a
+    /// classification poset window as its per-window witness (not
+    /// just the count of gaps); a `tatara-lisp::macro_expand::Expander`
+    /// hygiene pass that reports the exact set of vocabulary
+    /// identifiers a template FAILED to bind. Each binds to ONE
+    /// typed N-ary miss-witness projection on the trait rather
+    /// than re-deriving the ALL-filter-by-NON-membership sweep
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the (present, absent) × (bool, usize,
+    /// Vec) 2×3 = 6-corner partition-arm × return-shape face on
+    /// the equivalence-partition surface now closes EXHAUSTIVELY
+    /// at six typed primitives — [`Self::is_covering`] +
+    /// [`Self::count_distinct`] + [`Self::present_variants`] on
+    /// the present arm, [`Self::is_missing_any`] +
+    /// [`Self::count_missing`] + THIS projection on the absent
+    /// arm. Post-lift the 6-corner face binds to six typed
+    /// substrate primitives with no unnamed inline residual on
+    /// any corner. The next natural lift on this surface — the
+    /// (declaration, lex) ordering axis: `sorted_present_variants` +
+    /// `sorted_missing_variants` peers walking [`Self::sorted_variants`]
+    /// instead of [`Self::ALL`], opening the lex-order arm of the
+    /// Vec-return column past the declaration-order arm THIS pair
+    /// just closed.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// miss-witness projection becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline
+    /// `T::ALL.iter().copied().filter(|v| !items.contains(v)).collect()`
+    /// composition at every downstream generic site. THEORY.md
+    /// §V.1 — knowable platform; the (absent-Vec) corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "which variants did we MISS?" site pre-lift.
+    /// Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the substrate's total-ordering discriminator
+    /// ([`Self::index_of`]) projected via the standard-library
+    /// filter combinator with a NEGATED membership predicate.
+    /// THEORY.md §VI.1 — generation over composition; the miss-
+    /// witness projection emerges from the composition of ONE
+    /// substrate primitive ([`Self::index_of`]) with an
+    /// `iter().copied().filter(!…).collect()` combinator, not as a
+    /// per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `filter (fun v => negb (existsb
+    /// (Nat.eqb (index v)) items)) all` idiom composing a filter
+    /// with a NEGATED existential membership predicate; Idris's
+    /// `filter (\v => not (any (\w => index v == index w) items))
+    /// all` on a `Vect n a`; Rust's own
+    /// `T::ALL.iter().copied().filter(|v| !items.contains(v)).collect()`
+    /// idiom; Julia's `setdiff(all, unique(items))`; Haskell's
+    /// `Data.List.\\ all items` composition; NumPy's
+    /// `np.setdiff1d(all, items)` idiom. Translation through pleme-
+    /// io primitives: the N-ary miss-witness projection on the
+    /// closed-set trait binds through the substrate's
+    /// [`Self::index_of`] projection via the standard-library
+    /// filter combinator with a NEGATED membership predicate — no
+    /// new dep, no supertrait bound, no set-shape carrier.
+    fn missing_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|v| {
+                !items
+                    .iter()
+                    .any(|w| <Self as ClosedSet>::index_of(*v) == <Self as ClosedSet>::index_of(*w))
+            })
+            .collect()
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -38772,6 +39092,372 @@ mod tests {
                         <StubKind as ClosedSet>::is_missing_any(&forward),
                         <StubKind as ClosedSet>::is_missing_any(&reversed),
                         "T::is_missing_any({forward:?}) diverged from T::is_missing_any({reversed:?}) — the any-missing projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::present_variants(&[])` is the
+        // empty `Vec` on every implementor — the empty slice hits
+        // zero variants, so no variant of `T::ALL` passes the
+        // membership filter. Sibling posture to
+        // `is_covering_returns_false_on_the_empty_slice_across_every_non_degenerate_kind`
+        // at the OPPOSITE return-shape column: the bool-return
+        // projection is `false`; this Vec-return projection is `[]`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::present_variants(empty),
+            Vec::<StubKind>::new()
+        );
+    }
+
+    #[test]
+    fn present_variants_returns_a_singleton_vec_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT: `T::present_variants(&[v])` is
+        // `vec![v]` for every variant `v` — a singleton hits
+        // exactly one variant, and the ALL-walking filter keeps
+        // exactly that variant in declaration order.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::present_variants(&singleton),
+                vec![v],
+                "T::present_variants({singleton:?}) diverged from vec![v] — a singleton must materialize exactly its sole variant as the hit-set",
+            );
+        }
+    }
+
+    #[test]
+    fn present_variants_over_the_full_set_equals_all_across_every_kind() {
+        // FULL-SET CONTRACT:
+        // `T::present_variants(<T as ClosedSet>::ALL) ==
+        // <T as ClosedSet>::ALL.to_vec()` UNCONDITIONALLY — the
+        // well-formedness pairwise-distinctness invariant pins
+        // every variant of `T::ALL` as hitting itself in the
+        // input, so the filter keeps every variant in the same
+        // declaration order.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(<StubKind as ClosedSet>::present_variants(all), all.to_vec());
+    }
+
+    #[test]
+    fn present_variants_over_the_doubled_full_set_equals_all_across_every_kind() {
+        // DEDUP-AGAINST-ALL CONTRACT: `T::present_variants` on the
+        // doubled full set MUST collapse the doubled multiset
+        // into the singleton hit-set `T::ALL` — the projection
+        // walks `T::ALL` and each variant is kept at most once.
+        // The doubled input hits every variant twice, and the
+        // filter still keeps each variant exactly once in
+        // declaration order.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::present_variants(&doubled),
+            <StubKind as ClosedSet>::ALL.to_vec(),
+        );
+    }
+
+    #[test]
+    fn present_variants_length_equals_count_distinct_across_every_triple() {
+        // CARDINALITY IDENTITY:
+        // `T::present_variants(items).len() ==
+        // T::count_distinct(items)` on every slice — the Vec-
+        // return present-arm projection's length matches the
+        // usize-return present-arm count exactly. Cross-checks the
+        // present-witness against the pre-existing present-count.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::present_variants(empty).len(),
+            <StubKind as ClosedSet>::count_distinct(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::present_variants(&triple).len(),
+                        <StubKind as ClosedSet>::count_distinct(&triple),
+                        "T::present_variants({triple:?}).len() diverged from T::count_distinct({triple:?}) — the (Vec-return, usize-return) present-arm cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_variants_preserves_declaration_order_across_every_triple() {
+        // DECLARATION-ORDER SUBSEQUENCE CONTRACT: the returned
+        // `Vec<Self>` is ALWAYS a subsequence of `T::ALL` (with
+        // each variant appearing at most once, in `T::ALL`'s
+        // declaration order). Verified by walking the returned
+        // Vec's `index_of` sequence and asserting strictly
+        // increasing.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::present_variants(&triple);
+                    let indices: Vec<usize> = present
+                        .iter()
+                        .copied()
+                        .map(<StubKind as ClosedSet>::index_of)
+                        .collect();
+                    assert!(
+                        indices.windows(2).all(|w| w[0] < w[1]),
+                        "T::present_variants({triple:?}) indices {indices:?} not strictly ascending — the declaration-order subsequence property was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::present_variants(items) ==
+        // T::present_variants(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and the hit-set membership predicate is a
+        // function of that multiset alone. The OUTPUT ordering is
+        // fixed by `T::ALL`'s declaration order regardless of the
+        // input ordering.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::present_variants(&forward),
+                        <StubKind as ClosedSet>::present_variants(&reversed),
+                        "T::present_variants({forward:?}) diverged from T::present_variants({reversed:?}) — the present-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn missing_variants_over_the_empty_slice_equals_all_across_every_kind() {
+        // EMPTY-SLICE CONTRACT:
+        // `T::missing_variants(&[]) ==
+        // <T as ClosedSet>::ALL.to_vec()` UNCONDITIONALLY — the
+        // empty slice hits zero variants, so EVERY variant of
+        // `T::ALL` passes the "not present" filter. Sibling
+        // posture to
+        // `is_missing_any_returns_true_on_the_empty_slice_across_every_non_degenerate_kind`
+        // at the OPPOSITE return-shape column: the bool-return
+        // projection is `true`; this Vec-return projection is the
+        // full ambient set.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::missing_variants(empty),
+            <StubKind as ClosedSet>::ALL.to_vec(),
+        );
+    }
+
+    #[test]
+    fn missing_variants_over_the_full_set_returns_the_empty_vec_across_every_kind() {
+        // FULL-SET CONTRACT:
+        // `T::missing_variants(<T as ClosedSet>::ALL)` is the
+        // empty `Vec` UNCONDITIONALLY — every variant of `T::ALL`
+        // hits itself in the input, so no variant passes the
+        // "not present" filter. Sibling posture to
+        // `is_missing_any_over_the_full_set_is_false_across_every_kind`
+        // at the OPPOSITE return-shape column.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::missing_variants(all),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn missing_variants_over_the_doubled_full_set_returns_the_empty_vec_across_every_kind() {
+        // CONCATENATION-MONOTONE CONTRACT: appending positions to a
+        // covering slice cannot ADD a missing variant. The doubled
+        // full set covers, so the miss-set stays empty.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::missing_variants(&doubled),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn missing_variants_length_equals_count_missing_across_every_triple() {
+        // CARDINALITY IDENTITY:
+        // `T::missing_variants(items).len() ==
+        // T::count_missing(items)` on every slice — the Vec-return
+        // absent-arm projection's length matches the usize-return
+        // absent-arm count exactly. Cross-checks the miss-witness
+        // against the pre-existing miss-count.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::missing_variants(empty).len(),
+            <StubKind as ClosedSet>::count_missing(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::missing_variants(&triple).len(),
+                        <StubKind as ClosedSet>::count_missing(&triple),
+                        "T::missing_variants({triple:?}).len() diverged from T::count_missing({triple:?}) — the (Vec-return, usize-return) absent-arm cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn missing_variants_preserves_declaration_order_across_every_triple() {
+        // DECLARATION-ORDER SUBSEQUENCE CONTRACT: the returned
+        // `Vec<Self>` is ALWAYS a subsequence of `T::ALL` (with
+        // each variant appearing at most once, in `T::ALL`'s
+        // declaration order). Verified by walking the returned
+        // Vec's `index_of` sequence and asserting strictly
+        // increasing.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let missing = <StubKind as ClosedSet>::missing_variants(&triple);
+                    let indices: Vec<usize> = missing
+                        .iter()
+                        .copied()
+                        .map(<StubKind as ClosedSet>::index_of)
+                        .collect();
+                    assert!(
+                        indices.windows(2).all(|w| w[0] < w[1]),
+                        "T::missing_variants({triple:?}) indices {indices:?} not strictly ascending — the declaration-order subsequence property was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn missing_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::missing_variants(items) ==
+        // T::missing_variants(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and the miss-set membership predicate is a
+        // function of that multiset alone.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::missing_variants(&forward),
+                        <StubKind as ClosedSet>::missing_variants(&reversed),
+                        "T::missing_variants({forward:?}) diverged from T::missing_variants({reversed:?}) — the miss-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_variants_and_missing_variants_are_disjoint_across_every_triple() {
+        // DE MORGAN COMPLEMENT CONTRACT: for every slice `items`,
+        // `T::present_variants(items)` and `T::missing_variants(items)`
+        // are DISJOINT — no variant appears in both. Verified by
+        // scanning every present-arm variant against every miss-
+        // arm variant on every length-3 triple.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::present_variants(&triple);
+                    let missing = <StubKind as ClosedSet>::missing_variants(&triple);
+                    for p in present.iter().copied() {
+                        for m in missing.iter().copied() {
+                            assert_ne!(
+                                <StubKind as ClosedSet>::index_of(p),
+                                <StubKind as ClosedSet>::index_of(m),
+                                "T::present_variants({triple:?}) and T::missing_variants({triple:?}) share variant {p:?} == {m:?} — the (present, absent) partition arms MUST be disjoint",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_variants_interleaved_with_missing_variants_recovers_all_across_every_triple() {
+        // DE MORGAN UNION CONTRACT: for every slice `items`, the
+        // union (via declaration-order interleave) of
+        // `T::present_variants(items)` and `T::missing_variants(items)`
+        // recovers `T::ALL` exactly. Verified by walking `T::ALL`
+        // in declaration order and asserting each variant appears
+        // in EXACTLY ONE of the two projections.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::present_variants(&triple);
+                    let missing = <StubKind as ClosedSet>::missing_variants(&triple);
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let in_present = present.iter().copied().any(|w| {
+                            <StubKind as ClosedSet>::index_of(v)
+                                == <StubKind as ClosedSet>::index_of(w)
+                        });
+                        let in_missing = missing.iter().copied().any(|w| {
+                            <StubKind as ClosedSet>::index_of(v)
+                                == <StubKind as ClosedSet>::index_of(w)
+                        });
+                        assert!(
+                            in_present ^ in_missing,
+                            "variant {v:?} appears in {} of the two projections for {triple:?} — expected EXACTLY ONE (present-XOR-absent)",
+                            u8::from(in_present) + u8::from(in_missing),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn missing_variants_is_empty_iff_is_covering_holds_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY:
+        // `T::missing_variants(items).is_empty() ==
+        // T::is_covering(items)` on every slice — the miss-set is
+        // empty iff the present-arm predicate holds. Sibling
+        // dual: `!T::missing_variants(items).is_empty() ==
+        // T::is_missing_any(items)` — the miss-set is non-empty
+        // iff the absent-arm predicate holds.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::missing_variants(empty).is_empty(),
+            <StubKind as ClosedSet>::is_covering(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::missing_variants(&triple).is_empty(),
+                        <StubKind as ClosedSet>::is_covering(&triple),
+                        "T::missing_variants({triple:?}).is_empty() diverged from T::is_covering({triple:?}) — the (Vec-return, bool-return) miss-set-emptiness identity was violated",
+                    );
+                    assert_eq!(
+                        !<StubKind as ClosedSet>::missing_variants(&triple).is_empty(),
+                        <StubKind as ClosedSet>::is_missing_any(&triple),
+                        "!T::missing_variants({triple:?}).is_empty() diverged from T::is_missing_any({triple:?}) — the (Vec-return, bool-return) miss-set-non-emptiness identity was violated",
                     );
                 }
             }

@@ -11523,6 +11523,181 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::is_ascending(items) && <Self as ClosedSet>::is_descending(items)
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "pairwise distinct" predicate —
+    /// `true` iff every ordered pair of positions `(i, j)` with `i < j`
+    /// in `items` satisfies `items[i] != items[j]` (compared via
+    /// [`Self::index_of`]'s total-ordering discriminator), `false` on
+    /// the first pair of positions whose variants coincide. The
+    /// DISTINCTNESS-axis opener on the closed-set surface — dual to
+    /// [`Self::is_constant`] on the (constant, distinct) axis of the
+    /// N-ary element-equivalence face — while [`Self::is_constant`]
+    /// narrows to slices where every ordered pair AGREES, this
+    /// predicate widens to slices where every ordered pair DIFFERS.
+    ///
+    /// Ordering-axis invariance: the predicate is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES on
+    /// element equality because the total-ordering discriminator
+    /// [`Self::index_of`] is a bijection into `[0, T::CARDINALITY)`,
+    /// so "variants coincide" is the same condition under EVERY
+    /// ordering. Sibling posture to
+    /// [`Self::is_constant`]'s ordering-axis invariance: both
+    /// endpoints of the (constant, distinct) equivalence-partition
+    /// axis are direction- AND ordering-agnostic; no separate
+    /// `sorted_is_pairwise_distinct` peer is needed. Pinned by
+    /// `is_pairwise_distinct_is_invariant_under_ordering_axis_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::is_pairwise_distinct(&[])` is `true`
+    /// on every implementor — the outer sweep is vacuously `true` on
+    /// the empty slice by empty quantification over positions. Pinned
+    /// by `is_pairwise_distinct_returns_true_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::is_pairwise_distinct(&[v])` is `true`
+    /// for every variant `v` — the inner sweep is vacuously `true` on
+    /// every singleton slice because no strictly-greater position
+    /// exists to pair against. Pinned by
+    /// `is_pairwise_distinct_returns_true_on_every_singleton_slice_across_every_variant`.
+    ///
+    /// Two-distinct-variant contract: `T::is_pairwise_distinct(&[a, b])`
+    /// is `true` for every ordered pair `(a, b)` with `a != b` — the
+    /// single pair `(0, 1)` sits at distinct variants, so the sweep
+    /// accepts. Pinned by
+    /// `is_pairwise_distinct_returns_true_on_every_two_distinct_variant_slice`.
+    ///
+    /// Repetition-rejection contract: `T::is_pairwise_distinct(items)`
+    /// is `false` on every slice of arity ≥ 2 containing ANY two
+    /// positions with the same variant — the pair `(i, j)` at those
+    /// positions violates the outer-`all` short-circuit. Pinned by
+    /// `is_pairwise_distinct_returns_false_on_any_slice_with_a_repeated_variant`.
+    ///
+    /// Full-set contract: `T::is_pairwise_distinct(<T as ClosedSet>::ALL)`
+    /// holds unconditionally on every implementor — the closed-set
+    /// well-formedness invariant [`assert_closed_set_well_formed`]'s
+    /// clause (3) pins labels as pairwise distinct, and [`Self::label`]
+    /// is a bijection between variants and labels, so the variants
+    /// themselves are pairwise distinct by construction. Complements
+    /// [`Self::is_constant`]'s full-set contract at the OPPOSITE corner
+    /// of the (constant, distinct) equivalence-partition axis — the
+    /// full set is distinct unconditionally while it is constant iff
+    /// cardinality ≤ 1. Pinned by
+    /// `is_pairwise_distinct_over_the_full_set_holds_unconditionally`.
+    ///
+    /// Constant-vs-distinct partition: for every slice of arity ≥ 2,
+    /// `T::is_constant(items)` and `T::is_pairwise_distinct(items)`
+    /// are mutually exclusive — a constant slice past arity 1 has
+    /// two equal positions, and a pairwise-distinct slice has none.
+    /// They are NOT jointly exhaustive: a slice `[a, b, a]` on distinct
+    /// `a` and `b` is neither constant nor pairwise distinct. The
+    /// (constant, distinct) axis carves out the two extremes of the
+    /// N-ary element-equivalence surface without covering the
+    /// mixed-repetition interior. Pinned by
+    /// `is_pairwise_distinct_and_is_constant_are_mutually_exclusive_past_arity_one`.
+    ///
+    /// Strict-monotonic-implication contract:
+    /// `T::is_strictly_monotonic(items) ⇒ T::is_pairwise_distinct(items)`
+    /// on every slice — the strict pairwise-precedence primitive's
+    /// irreflexivity axiom forces adjacent positions to sit at
+    /// distinct variants, and the strict monotonicity property
+    /// propagates that irreflexivity across every non-adjacent pair
+    /// via transitivity of the strict order (a strictly-monotonic
+    /// slice's variants sit at strictly-increasing or
+    /// strictly-decreasing positions in [`Self::ALL`], so no two
+    /// positions coincide). The converse fails past arity 2: the
+    /// permutation `[Alpha, Gamma, Beta]` is pairwise distinct but
+    /// neither strictly ascending nor strictly descending under
+    /// declaration order. Pinned by
+    /// `is_strictly_monotonic_implies_is_pairwise_distinct_across_every_triple`.
+    ///
+    /// Reversal-invariance: `T::is_pairwise_distinct(items) ==
+    /// T::is_pairwise_distinct(items.iter().rev().copied().collect::<Vec<_>>())`
+    /// — reversing a slice preserves its pairwise-distinctness because
+    /// element equality is invariant under position permutation. Pinned
+    /// by `is_pairwise_distinct_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the predicate is a typed CONSEQUENCE of the
+    /// substrate's [`Self::index_of`] projection — the discriminator
+    /// between two variants is their position in [`Self::ALL`], which
+    /// closed-set well-formedness clause (3) pins as a bijection. The
+    /// composition uses standard-library `.iter().enumerate().all(…)`
+    /// with an inner `.iter().all(…)` over positions strictly greater
+    /// than the outer position, so the sweep is O(n(n-1)/2) on slice
+    /// arity `n` — allocation-free, no `PartialEq` supertrait bound
+    /// (the trait's minimal `Sized + Copy + 'static` supertrait pair
+    /// stays untouched), no bitset-shape carrier (a bitmap over
+    /// [`Self::CARDINALITY`] positions would improve to O(n) but
+    /// couple the surface to a compile-time cardinality bound; the
+    /// pairwise sweep is simpler and stays within the trait's minimal
+    /// supertrait surface).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::is_pairwise_distinct`]: a `tatara-check` predicate
+    /// `(check-phases-pairwise-distinct …)` verifying a `WorkloadPhase`
+    /// sequence has no repeated phase at plan time (catching a spec
+    /// that would silently re-enter the same phase and violate the
+    /// substrate's "each phase appears at most once" invariant); an
+    /// LSP diagnostic verifying a Lisp-author-written closed-set field
+    /// contains no repeated variant across a batched authoring surface
+    /// (`:severities [:info :warn :info]` flags the duplicate); a
+    /// Sekiban audit-trail metric verifying a convergence-classification
+    /// trajectory visits each classification AT MOST ONCE across a
+    /// window (proof of the trajectory's monotone progression through
+    /// the classification poset); a `tatara-lisp::macro_expand::Expander`
+    /// hygiene pass that rejects a template whose generated identifier
+    /// set contains a repeated symbol (a hygiene violation the pass
+    /// otherwise catches only downstream through a name-collision
+    /// diagnostic). Each binds to ONE typed N-ary distinctness
+    /// predicate on the trait rather than re-deriving the pairwise
+    /// sweep inline per callsite.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// distinctness predicate becomes a TYPE-level primitive on the
+    /// closed-set trait rather than a per-consumer inline nested
+    /// `for` loop at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the N-ary distinctness axis was an unnamed
+    /// inline composition recurring at every prospective downstream
+    /// "does-this-slice-repeat-a-variant" site pre-lift. Naming it
+    /// on the trait makes the predicate a TYPED CONSEQUENCE of the
+    /// substrate's total-ordering discriminator ([`Self::index_of`])
+    /// projected through the standard-library `.iter().enumerate().all(…)`
+    /// combinator.
+    /// THEORY.md §VI.1 — generation over composition; the pairwise-
+    /// distinctness predicate emerges from the composition of ONE
+    /// substrate primitive ([`Self::index_of`]) with the standard-
+    /// library `.iter().enumerate().all(…)` combinator rather than
+    /// as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(check-duplicates lst)`
+    /// standard-library primitive that projects a slice through an
+    /// optional key extractor and reports the first duplicate; Julia's
+    /// `allunique(v)` (v1.8+) built-in that names the same predicate
+    /// through a dedicated primitive rather than an inline `Set(v)`
+    /// materialization; Python's `len(set(items)) == len(items)`
+    /// composition on hashable iterables; Idris's `NoDup : Vect n a
+    /// -> Type` witness of a duplicate-free vector via a
+    /// per-position position-differentiation proof carrier that
+    /// encodes the same "all distinct" property structurally at the
+    /// type level. Rust's `HashSet<_>::insert` returning `bool` (`true`
+    /// on fresh insert, `false` on duplicate) binds the same predicate
+    /// through an allocating set materialization. Haskell's
+    /// `Data.List.nub` composed with `length` comparison surfaces the
+    /// same shape on any `Eq`-instance. MLIR's `constant_index_set`
+    /// verification pass surfaces the same predicate on typed index
+    /// operands. Translation through pleme-io primitives: the N-ary
+    /// distinctness predicate on the closed-set trait binds through
+    /// the substrate's total-ordering discriminator [`Self::index_of`]
+    /// projected via the standard-library pairwise-`all` combinator
+    /// at the (ordering-agnostic, non-strict) corner of the
+    /// direction-arm-combination surface — no new dep, no supertrait
+    /// bound (the `index_of` projection replaces the `Eq`/`Hash`
+    /// bound the standard-library signatures demand), no set-shape
+    /// carrier, no allocation.
+    fn is_pairwise_distinct(items: &[Self]) -> bool {
+        items.iter().enumerate().all(|(i, a)| {
+            items[i + 1..]
+                .iter()
+                .all(|b| <Self as ClosedSet>::index_of(*a) != <Self as ClosedSet>::index_of(*b))
+        })
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -36060,5 +36235,270 @@ mod tests {
             all.len() <= 1,
             "T::is_constant on the full set diverged from the cardinality gate"
         );
+    }
+
+    #[test]
+    fn is_pairwise_distinct_returns_true_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (N-ary distinctness predicate):
+        // `T::is_pairwise_distinct(&[])` is `true` — the outer sweep
+        // is vacuously `true` on the empty slice by empty
+        // quantification over positions. Sibling posture to
+        // `is_constant_returns_true_on_the_empty_slice_across_every_kind`
+        // one endpoint of the (constant, distinct) equivalence-partition
+        // axis over — both endpoints share the empty-slice fixpoint.
+        let empty: &[StubKind] = &[];
+        assert!(<StubKind as ClosedSet>::is_pairwise_distinct(empty));
+    }
+
+    #[test]
+    fn is_pairwise_distinct_returns_true_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT: `T::is_pairwise_distinct(&[v])` is `true`
+        // for every variant `v` — the inner sweep is vacuously `true`
+        // on every singleton slice because no strictly-greater
+        // position exists to pair against. Sibling posture to
+        // `is_constant_returns_true_on_every_singleton_slice_across_every_variant`
+        // on the (constant, distinct) equivalence-partition axis —
+        // singletons are BOTH constant AND pairwise distinct because
+        // both predicates fold vacuously on the zero-adjacent-pair
+        // shape.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert!(<StubKind as ClosedSet>::is_pairwise_distinct(&singleton));
+        }
+    }
+
+    #[test]
+    fn is_pairwise_distinct_returns_true_on_every_two_distinct_variant_slice() {
+        // TWO-DISTINCT-VARIANT CONTRACT: `T::is_pairwise_distinct(&[a, b])`
+        // is `true` for every ordered pair `(a, b)` with `a != b` —
+        // the single pair `(0, 1)` sits at distinct variants, so the
+        // sweep accepts. Complements
+        // `is_constant_returns_false_on_any_slice_with_two_distinct_variants`
+        // at the opposite endpoint of the (constant, distinct)
+        // equivalence-partition axis: the two-distinct-variant slice
+        // rejects on the constant side and accepts on the distinct
+        // side.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if a == b {
+                    continue;
+                }
+                let two = [a, b];
+                assert!(
+                    <StubKind as ClosedSet>::is_pairwise_distinct(&two),
+                    "T::is_pairwise_distinct({two:?}) rejected a two-distinct-variant slice",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_pairwise_distinct_returns_false_on_any_slice_with_a_repeated_variant() {
+        // REPETITION-REJECTION CONTRACT:
+        // `T::is_pairwise_distinct(items)` is `false` on every slice
+        // of arity ≥ 2 containing ANY two positions with the same
+        // variant. Sweeping the arity-2 doubled slices, the arity-3
+        // leading-double, trailing-double, and split-double shapes
+        // pins the outer-sweep short-circuit contract on every
+        // repetition topology across the full triple domain of every
+        // operand pair. Catches a future override whose body binds
+        // the outer sweep against the WRONG index projection (e.g.
+        // reading a per-variant tag that collides on distinct variants).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let doubled = [a, a];
+            assert!(
+                !<StubKind as ClosedSet>::is_pairwise_distinct(&doubled),
+                "T::is_pairwise_distinct({doubled:?}) accepted a doubled-variant slice",
+            );
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if a == b {
+                    continue;
+                }
+                let leading_double = [a, a, b];
+                let trailing_double = [b, a, a];
+                let split_double = [a, b, a];
+                assert!(
+                    !<StubKind as ClosedSet>::is_pairwise_distinct(&leading_double),
+                    "T::is_pairwise_distinct({leading_double:?}) accepted a leading-double slice",
+                );
+                assert!(
+                    !<StubKind as ClosedSet>::is_pairwise_distinct(&trailing_double),
+                    "T::is_pairwise_distinct({trailing_double:?}) accepted a trailing-double slice",
+                );
+                assert!(
+                    !<StubKind as ClosedSet>::is_pairwise_distinct(&split_double),
+                    "T::is_pairwise_distinct({split_double:?}) accepted a split-double slice",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_pairwise_distinct_over_the_full_set_holds_unconditionally() {
+        // FULL-SET CONTRACT: `T::is_pairwise_distinct(<T as ClosedSet>::ALL)`
+        // holds UNCONDITIONALLY on every implementor — the closed-set
+        // well-formedness invariant `assert_closed_set_well_formed`'s
+        // clause (3) pins labels as pairwise distinct, and `T::label`
+        // is a bijection between variants and labels, so the variants
+        // themselves are pairwise distinct by construction. Complements
+        // `is_constant_over_the_full_set_holds_iff_cardinality_is_zero_or_one`
+        // at the OPPOSITE corner of the (constant, distinct)
+        // equivalence-partition axis: the full set is distinct
+        // unconditionally while it is constant iff cardinality ≤ 1.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert!(
+            <StubKind as ClosedSet>::is_pairwise_distinct(all),
+            "T::is_pairwise_distinct on the full set rejected — the closed-set well-formedness pairwise-distinctness invariant would be violated"
+        );
+    }
+
+    #[test]
+    fn is_pairwise_distinct_and_is_constant_are_mutually_exclusive_past_arity_one() {
+        // MUTUAL-EXCLUSION CONTRACT: for every slice of arity ≥ 2,
+        // `T::is_constant(items) ∧ T::is_pairwise_distinct(items)` is
+        // `false` — a constant slice past arity 1 has two equal
+        // positions, and a pairwise-distinct slice has none, so the
+        // two predicates cannot jointly hold. The pair CARVES OUT the
+        // two extremes of the N-ary element-equivalence surface: the
+        // "everything equal" arm at one endpoint, the "nothing equal"
+        // arm at the other. They are NOT jointly exhaustive: the
+        // triple `[a, b, a]` on distinct `a` and `b` is neither
+        // constant (positions 0 and 1 differ) nor pairwise distinct
+        // (positions 0 and 2 coincide). Sweeping every length-2 and
+        // length-3 slice pins the mutual-exclusion contract across
+        // the full triple domain of every operand pair.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                assert!(
+                    !(<StubKind as ClosedSet>::is_constant(&pair)
+                        && <StubKind as ClosedSet>::is_pairwise_distinct(&pair)),
+                    "T::is_constant({pair:?}) AND T::is_pairwise_distinct({pair:?}) both accepted — the (constant, distinct) axis endpoints must be mutually exclusive past arity 1"
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert!(
+                        !(<StubKind as ClosedSet>::is_constant(&triple)
+                            && <StubKind as ClosedSet>::is_pairwise_distinct(&triple)),
+                        "T::is_constant({triple:?}) AND T::is_pairwise_distinct({triple:?}) both accepted — the (constant, distinct) axis endpoints must be mutually exclusive past arity 1"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_pairwise_distinct_is_invariant_under_ordering_axis_across_every_triple() {
+        // ORDERING-AXIS INVARIANCE CONTRACT: element equality is
+        // intrinsically ordering-agnostic — a slice's
+        // pairwise-distinctness is a property of the multiset of its
+        // element identities, not of the ordering the substrate uses
+        // to compare them. Concretely, `T::is_pairwise_distinct(items)`
+        // is `true` iff the sorted-by-`index_of` slice is strictly
+        // ascending (which under a total order is the same iff the
+        // sorted-by-`sorted_index_of` slice is strictly ascending —
+        // BOTH orderings agree on the underlying "no repeats" shape).
+        // The sweep exercises the ordering-agnostic property via the
+        // strict-monotonic-implication: since
+        // `T::is_strictly_ascending(items) ⇒ T::is_pairwise_distinct(items)`
+        // AND `T::is_sorted_strictly_ascending(items) ⇒
+        // T::is_pairwise_distinct(items)`, any slice accepted by
+        // EITHER strict-monotone predicate is accepted by the
+        // distinctness predicate — the predicate cannot depend on the
+        // ordering axis without breaking one of the two implications.
+        // Sibling posture to
+        // `is_constant_is_invariant_under_ordering_axis_across_every_triple`
+        // one endpoint of the (constant, distinct) equivalence-partition
+        // axis over — both endpoints are ordering-agnostic by
+        // construction.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    if <StubKind as ClosedSet>::is_strictly_ascending(&triple) {
+                        assert!(
+                            <StubKind as ClosedSet>::is_pairwise_distinct(&triple),
+                            "T::is_pairwise_distinct({triple:?}) rejected a strictly-ascending slice — declaration-strict-ascending ⇒ pairwise-distinct"
+                        );
+                    }
+                    if <StubKind as ClosedSet>::is_sorted_strictly_ascending(&triple) {
+                        assert!(
+                            <StubKind as ClosedSet>::is_pairwise_distinct(&triple),
+                            "T::is_pairwise_distinct({triple:?}) rejected a lex-strictly-ascending slice — lex-strict-ascending ⇒ pairwise-distinct"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_pairwise_distinct_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::is_pairwise_distinct(items) ==
+        // T::is_pairwise_distinct(reversed items)` on every slice —
+        // reversing a slice preserves its pairwise-distinctness because
+        // element equality is invariant under position permutation.
+        // The pairwise sweep is symmetric under the position exchange
+        // that slice reversal induces (each unordered position pair
+        // `{i, j}` is preserved), so the predicate is a FIXPOINT of
+        // the reversal permutation. Sweeping every length-3 triple and
+        // its reversal pins the fixpoint contract across the full
+        // triple domain of every operand pair. Sibling posture to
+        // `is_constant_is_invariant_under_slice_reversal_across_every_triple`
+        // one endpoint of the (constant, distinct) equivalence-partition
+        // axis over — both endpoints are FIXPOINTS of slice reversal
+        // (element equality is symmetric under position permutation
+        // on BOTH the "everything equal" and the "nothing equal"
+        // arms).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_pairwise_distinct(&forward),
+                        <StubKind as ClosedSet>::is_pairwise_distinct(&reversed),
+                        "T::is_pairwise_distinct({forward:?}) diverged from T::is_pairwise_distinct({reversed:?}) — the pairwise-distinctness predicate MUST be a fixpoint of slice reversal"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_strictly_monotonic_implies_is_pairwise_distinct_across_every_triple() {
+        // STRICT-MONOTONIC-IMPLICATION CONTRACT:
+        // `T::is_strictly_monotonic(items) ⇒
+        // T::is_pairwise_distinct(items)` on every slice — the strict
+        // pairwise-precedence primitive's irreflexivity axiom forces
+        // adjacent positions to sit at distinct variants, and the
+        // strict monotonicity property propagates that irreflexivity
+        // across every non-adjacent pair via transitivity of the
+        // strict order (a strictly-monotonic slice's variants sit at
+        // strictly-increasing or strictly-decreasing positions in
+        // `T::ALL`, so no two positions coincide). The converse fails
+        // past arity 2: the permutation `[Alpha, Gamma, Beta]` is
+        // pairwise distinct but neither strictly ascending nor
+        // strictly descending under declaration order. Sweeping every
+        // length-3 triple pins the one-way implication contract
+        // across the full triple domain of every operand pair. Sibling
+        // posture to `is_strictly_monotonic_is_false_on_any_slice_with_adjacent_equal_elements`
+        // one arity axis over on the same strict-monotonicity face:
+        // the strict predicate rejects adjacent equality, so a
+        // strictly-monotonic slice is a fortiori pairwise distinct.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    if <StubKind as ClosedSet>::is_strictly_monotonic(&triple) {
+                        assert!(
+                            <StubKind as ClosedSet>::is_pairwise_distinct(&triple),
+                            "T::is_pairwise_distinct({triple:?}) rejected a strictly-monotonic slice — strict-monotonic ⇒ pairwise-distinct"
+                        );
+                    }
+                }
+            }
+        }
     }
 }

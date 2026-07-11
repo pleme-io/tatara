@@ -11698,6 +11698,191 @@ pub trait ClosedSet: Sized + Copy + 'static {
         })
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "distinct count" projection —
+    /// the `usize` cardinality of the SET of variant identities that
+    /// occur in `items`, computed as the count of positions whose
+    /// variant does not appear at any strictly-lesser position (a
+    /// "first-occurrence" sweep keyed on [`Self::index_of`]). The
+    /// USIZE-RETURN opener on the (return-shape) column of the
+    /// N-ary element-equivalence surface past the pre-existing
+    /// bool-return endpoints [`Self::is_constant`] (all elements
+    /// AGREE) and [`Self::is_pairwise_distinct`] (all elements
+    /// DIFFER) — while both bool-return endpoints answer a YES/NO
+    /// question about the extremes of the equivalence-partition
+    /// axis, this projection reports the EXACT distinctness
+    /// cardinality of the multiset the slice underlies, folding
+    /// both endpoints into two special values of ONE numerical
+    /// invariant. Not a fresh substrate primitive on the index axis
+    /// — the count emerges from the [`Self::index_of`] bijection
+    /// applied position-by-position with a strictly-lesser-position
+    /// dedup sweep, so the return value is a typed CONSEQUENCE of
+    /// the substrate's total-ordering discriminator.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES
+    /// on element equality because the total-ordering discriminator
+    /// [`Self::index_of`] is a bijection into `[0, T::CARDINALITY)`,
+    /// so "variants coincide" is the same condition under EVERY
+    /// ordering. Sibling posture to
+    /// [`Self::is_constant`] + [`Self::is_pairwise_distinct`]'s
+    /// ordering-axis invariance: every projection on the
+    /// equivalence-partition surface is direction- AND ordering-
+    /// agnostic; no separate `sorted_count_distinct` peer is needed.
+    /// Pinned by
+    /// `count_distinct_is_invariant_under_ordering_axis_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::count_distinct(&[])` is `0` on
+    /// every implementor — the outer filter sweep is vacuously
+    /// empty on the empty slice, and `.count()` on an empty
+    /// iterator is `0`. Pinned by
+    /// `count_distinct_returns_zero_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::count_distinct(&[v])` is `1` for
+    /// every variant `v` — the sole position `(0, v)` has an empty
+    /// strictly-lesser-position prefix, so the `.any(…)` inner
+    /// sweep returns `false`, the `!` negation flips it to `true`,
+    /// and the outer `.count()` on the singleton passing-iterator
+    /// yields `1`. Pinned by
+    /// `count_distinct_returns_one_on_every_singleton_slice_across_every_variant`.
+    ///
+    /// Constant-slice contract: `T::count_distinct(items)` is `1`
+    /// on every non-empty slice whose every position sits at the
+    /// SAME variant — position `0` passes the filter (empty prefix),
+    /// and every subsequent position rejects it (the outer position
+    /// sees itself in the strictly-lesser-position prefix). Pinned
+    /// by `count_distinct_equals_one_on_every_non_empty_constant_slice`.
+    ///
+    /// Full-set contract: `T::count_distinct(<T as ClosedSet>::ALL)`
+    /// is `T::CARDINALITY` — the closed-set well-formedness
+    /// invariant [`assert_closed_set_well_formed`]'s clause (3)
+    /// pins labels (and hence variants) as pairwise distinct, so
+    /// EVERY position of `<T as ClosedSet>::ALL` passes the
+    /// first-occurrence filter, and the outer `.count()` yields the
+    /// arity `T::CARDINALITY`. Pinned by
+    /// `count_distinct_over_the_full_set_equals_cardinality`.
+    ///
+    /// Upper bound: `T::count_distinct(items) <= items.len()` on
+    /// every slice — a filter never accepts more positions than it
+    /// visits. Tighter upper bound: `T::count_distinct(items) <=
+    /// T::CARDINALITY` on every slice — the closed set carries
+    /// exactly `T::CARDINALITY` variant identities, so the distinct
+    /// count cannot exceed the cardinality of the ambient set.
+    /// Pinned by
+    /// `count_distinct_is_bounded_above_by_min_of_slice_length_and_cardinality_across_every_triple`.
+    ///
+    /// Bool-projection identities: for every slice `items`,
+    /// * `T::is_pairwise_distinct(items)` iff
+    ///   `T::count_distinct(items) == items.len()` — the pairwise-
+    ///   distinctness predicate is the USIZE-return count reaching
+    ///   its per-slice upper bound; and
+    /// * `T::is_constant(items)` iff `items.is_empty() ||
+    ///   T::count_distinct(items) == 1` — the constant-slice
+    ///   predicate is the USIZE-return count collapsing to `1` on
+    ///   every non-empty slice (the empty slice is BOTH constant
+    ///   and distinct-count-zero, so the disjunction is required
+    ///   at the empty-slice endpoint).
+    ///
+    /// Both identities pin the bool-return endpoints as typed
+    /// projections of the USIZE-return count. Pinned by
+    /// `count_distinct_equals_slice_length_iff_is_pairwise_distinct_holds`
+    /// and
+    /// `count_distinct_equals_one_iff_slice_is_non_empty_and_is_constant`.
+    ///
+    /// Reversal-invariance: `T::count_distinct(items) ==
+    /// T::count_distinct(items.iter().rev().copied().collect::<Vec<_>>())`
+    /// — reversing a slice preserves its multiset of variant
+    /// identities, and the distinct count is a function of that
+    /// multiset alone. Pinned by
+    /// `count_distinct_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// the substrate's [`Self::index_of`] projection — the
+    /// discriminator between two variants is their position in
+    /// [`Self::ALL`], which closed-set well-formedness clause (3)
+    /// pins as a bijection. The composition uses standard-library
+    /// `.iter().enumerate().filter(…).count()` with the same
+    /// pairwise-position sweep [`Self::is_pairwise_distinct`]
+    /// binds against, so the sweep is O(n(n-1)/2) on slice arity
+    /// `n` — allocation-free, no `PartialEq` supertrait bound
+    /// (the trait's minimal `Sized + Copy + 'static` supertrait
+    /// pair stays untouched), no bitset-shape carrier (a bitmap
+    /// over [`Self::CARDINALITY`] positions would improve to
+    /// O(n) but couple the surface to a compile-time cardinality
+    /// bound; the pairwise sweep is simpler and stays within the
+    /// trait's minimal supertrait surface).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::count_distinct`]: a `tatara-check` predicate
+    /// `(check-phases-cover-cardinality …)` verifying a
+    /// `WorkloadPhase` sequence's distinct-count matches its
+    /// nominal size at plan time; an LSP diagnostic that renders
+    /// a batched authoring surface's per-field distinctness
+    /// cardinality as a completion hint (`":severities [:info :info
+    /// :warn] — 2 distinct of 3"`); a Sekiban audit-trail metric
+    /// labeled by the distinct-count of the trajectory across a
+    /// window (a "coverage" measure of the classification poset);
+    /// a `tatara-lisp::macro_expand::Expander` hygiene pass that
+    /// reports the exact number of distinct generated identifiers
+    /// (turning the pass-level pairwise-distinctness predicate
+    /// into a fine-grained diagnostic without a second sweep);
+    /// the substrate's own `WorkloadPhase` trajectory-cardinality
+    /// gauge projecting through `phase.count_distinct` to expose
+    /// the "how many phases did we actually visit" measure. Each
+    /// binds to ONE typed N-ary distinct-count projection on the
+    /// trait rather than re-deriving the first-occurrence sweep
+    /// inline per callsite.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// distinct-count projection becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// dedup sweep at every downstream generic site. THEORY.md
+    /// §V.1 — knowable platform; the N-ary distinct-count axis
+    /// was an unnamed inline composition recurring at every
+    /// prospective downstream "how many distinct variants does
+    /// this slice hit" site pre-lift. Naming it on the trait
+    /// makes the projection a TYPED CONSEQUENCE of the
+    /// substrate's total-ordering discriminator
+    /// ([`Self::index_of`]) projected through the standard-
+    /// library `.iter().enumerate().filter(…).count()` combinator.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// distinct-count projection emerges from the composition of
+    /// ONE substrate primitive ([`Self::index_of`]) with the
+    /// standard-library first-occurrence filter combinator rather
+    /// than as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(length (remove-duplicates
+    /// lst))` composition on any list; Julia's `length(unique(v))`
+    /// composition on any iterable; NumPy's
+    /// `len(np.unique(a))` idiom on typed arrays; Python's
+    /// `len(set(items))` on hashable iterables; Idris's
+    /// `card : (v : Vect n a) -> Nat` that names the same
+    /// projection through a dedicated primitive on typed vectors.
+    /// Rust's `items.iter().collect::<HashSet<_>>().len()` binds
+    /// the same projection through an allocating set
+    /// materialization. MLIR's `constant_index_set` verification
+    /// pass surfaces the same projection on typed index operands
+    /// as a per-operand distinct-count check. Translation through
+    /// pleme-io primitives: the N-ary distinct-count projection
+    /// on the closed-set trait binds through the substrate's
+    /// total-ordering discriminator [`Self::index_of`] projected
+    /// via the standard-library first-occurrence-`filter`-then-
+    /// `count` combinator at the (ordering-agnostic, non-strict)
+    /// corner of the equivalence-partition surface — no new dep,
+    /// no supertrait bound (the `index_of` projection replaces the
+    /// `Eq`/`Hash` bound the standard-library signatures demand),
+    /// no set-shape carrier, no allocation.
+    fn count_distinct(items: &[Self]) -> usize {
+        items
+            .iter()
+            .enumerate()
+            .filter(|(i, a)| {
+                !items[..*i].iter().any(|b| {
+                    <Self as ClosedSet>::index_of(**a) == <Self as ClosedSet>::index_of(*b)
+                })
+            })
+            .count()
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -36497,6 +36682,294 @@ mod tests {
                             "T::is_pairwise_distinct({triple:?}) rejected a strictly-monotonic slice — strict-monotonic ⇒ pairwise-distinct"
                         );
                     }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_distinct_returns_zero_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (N-ary distinct-count projection):
+        // `T::count_distinct(&[])` is `0` — the outer filter sweep
+        // is vacuously empty on the empty slice, and `.count()` on
+        // an empty iterator is `0`. Sibling posture to
+        // `is_pairwise_distinct_returns_true_on_the_empty_slice_across_every_kind`
+        // one column of the (return-shape) axis over: the bool-
+        // return distinctness predicate accepts on the empty slice
+        // by vacuous quantification, and the usize-return
+        // distinct-count projection reports its lower-bound
+        // fixpoint `0` at the same endpoint.
+        let empty: &[StubKind] = &[];
+        assert_eq!(<StubKind as ClosedSet>::count_distinct(empty), 0);
+    }
+
+    #[test]
+    fn count_distinct_returns_one_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT: `T::count_distinct(&[v])` is `1` for
+        // every variant `v` — the sole position `(0, v)` has an
+        // empty strictly-lesser-position prefix, so the inner
+        // `.any(…)` returns `false`, the `!` negation flips it to
+        // `true`, and the outer `.count()` on the singleton
+        // passing-iterator yields `1`. Sibling posture to
+        // `is_pairwise_distinct_returns_true_on_every_singleton_slice_across_every_variant`
+        // and
+        // `is_constant_returns_true_on_every_singleton_slice_across_every_variant`
+        // one column of the (return-shape) axis over: every
+        // singleton slice sits at the shared fixpoint of BOTH
+        // bool-return endpoints AND collapses to distinct-count
+        // `1` on the usize-return projection.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::count_distinct(&singleton),
+                1,
+                "T::count_distinct({singleton:?}) diverged from the singleton-slice fixpoint `1`",
+            );
+        }
+    }
+
+    #[test]
+    fn count_distinct_equals_one_on_every_non_empty_constant_slice() {
+        // CONSTANT-SLICE CONTRACT: `T::count_distinct(items)` is
+        // `1` on every non-empty slice whose every position sits
+        // at the SAME variant — position `0` passes the filter
+        // (empty prefix), and every subsequent position sees
+        // itself in the strictly-lesser-position prefix and
+        // rejects. Sweeping the doubled and tripled slices across
+        // every variant pins the constant-slice contract. Catches
+        // a future override whose body accidentally counts every
+        // OCCURRENCE of a variant rather than every DISTINCT
+        // variant (that override would report `items.len()`
+        // instead of `1` on a doubled slice).
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let doubled = [v, v];
+            let tripled = [v, v, v];
+            assert_eq!(
+                <StubKind as ClosedSet>::count_distinct(&doubled),
+                1,
+                "T::count_distinct({doubled:?}) diverged from the doubled-constant-slice fixpoint `1`",
+            );
+            assert_eq!(
+                <StubKind as ClosedSet>::count_distinct(&tripled),
+                1,
+                "T::count_distinct({tripled:?}) diverged from the tripled-constant-slice fixpoint `1`",
+            );
+        }
+    }
+
+    #[test]
+    fn count_distinct_over_the_full_set_equals_cardinality() {
+        // FULL-SET CONTRACT: `T::count_distinct(<T as ClosedSet>::ALL)`
+        // is `T::CARDINALITY` — the closed-set well-formedness
+        // invariant `assert_closed_set_well_formed`'s clause (3)
+        // pins labels (and hence variants) as pairwise distinct,
+        // so EVERY position of `<T as ClosedSet>::ALL` passes the
+        // first-occurrence filter and the outer `.count()` yields
+        // the full arity. Complements
+        // `is_pairwise_distinct_over_the_full_set_holds_unconditionally`
+        // at the USIZE-return corner of the same equivalence-
+        // partition column: the bool-return predicate accepts,
+        // and the usize-return projection collapses to the
+        // cardinality invariant.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::count_distinct(all),
+            <StubKind as ClosedSet>::CARDINALITY,
+            "T::count_distinct on the full set diverged from T::CARDINALITY — the closed-set well-formedness pairwise-distinctness invariant would be violated"
+        );
+    }
+
+    #[test]
+    fn count_distinct_equals_slice_length_iff_is_pairwise_distinct_holds() {
+        // BOOL-PROJECTION IDENTITY (distinct arm): for every slice
+        // `items`, `T::count_distinct(items) == items.len()` iff
+        // `T::is_pairwise_distinct(items)` — the pairwise-
+        // distinctness predicate is the USIZE-return count
+        // reaching its per-slice upper bound (a filter accepts
+        // every position iff no position is a repeat of a strictly-
+        // lesser one, which is exactly the pairwise-distinctness
+        // property). Sweeping every length-2 pair and length-3
+        // triple pins the identity across the full domain of every
+        // operand tuple. Pins the bool-return endpoint at the
+        // "distinct" arm as a typed projection of the usize-return
+        // count.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                assert_eq!(
+                    <StubKind as ClosedSet>::count_distinct(&pair) == pair.len(),
+                    <StubKind as ClosedSet>::is_pairwise_distinct(&pair),
+                    "T::count_distinct({pair:?}) == pair.len() diverged from T::is_pairwise_distinct({pair:?}) — the (distinct-count == slice-length) identity is the pairwise-distinctness bool-projection"
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_distinct(&triple) == triple.len(),
+                        <StubKind as ClosedSet>::is_pairwise_distinct(&triple),
+                        "T::count_distinct({triple:?}) == triple.len() diverged from T::is_pairwise_distinct({triple:?}) — the (distinct-count == slice-length) identity is the pairwise-distinctness bool-projection"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_distinct_equals_one_iff_slice_is_non_empty_and_is_constant() {
+        // BOOL-PROJECTION IDENTITY (constant arm): for every slice
+        // `items`, `T::count_distinct(items) == 1` iff `items` is
+        // non-empty AND `T::is_constant(items)` — the constant-
+        // slice predicate is the USIZE-return count collapsing to
+        // `1` on every non-empty slice (the empty slice is BOTH
+        // constant by vacuous outer quantification AND
+        // distinct-count-zero, so the disjunction at the empty-
+        // slice endpoint is required). Sweeping every length-2
+        // pair and length-3 triple pins the identity across the
+        // full domain of every operand tuple. Pins the bool-return
+        // endpoint at the "constant" arm as a typed projection of
+        // the usize-return count.
+        let empty: &[StubKind] = &[];
+        assert_eq!(<StubKind as ClosedSet>::count_distinct(empty), 0);
+        assert!(<StubKind as ClosedSet>::is_constant(empty));
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                let non_empty_and_constant =
+                    !pair.is_empty() && <StubKind as ClosedSet>::is_constant(&pair);
+                assert_eq!(
+                    <StubKind as ClosedSet>::count_distinct(&pair) == 1,
+                    non_empty_and_constant,
+                    "T::count_distinct({pair:?}) == 1 diverged from (!is_empty ∧ is_constant) — the (distinct-count == 1) identity is the constant-slice bool-projection on the non-empty domain"
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let non_empty_and_constant =
+                        !triple.is_empty() && <StubKind as ClosedSet>::is_constant(&triple);
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_distinct(&triple) == 1,
+                        non_empty_and_constant,
+                        "T::count_distinct({triple:?}) == 1 diverged from (!is_empty ∧ is_constant) — the (distinct-count == 1) identity is the constant-slice bool-projection on the non-empty domain"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_distinct_is_bounded_above_by_min_of_slice_length_and_cardinality_across_every_triple()
+    {
+        // UPPER-BOUND CONTRACT: `T::count_distinct(items) <=
+        // min(items.len(), T::CARDINALITY)` on every slice — a
+        // filter never accepts more positions than it visits (so
+        // the count is at most `items.len()`), AND the closed set
+        // carries exactly `T::CARDINALITY` variant identities (so
+        // the count is at most `T::CARDINALITY`). Sweeping every
+        // length-2 pair and length-3 triple pins the bound across
+        // the full domain of every operand tuple. Catches a
+        // future override whose body accidentally over-counts (a
+        // bug where the first-occurrence filter is inverted, for
+        // instance, would produce `items.len() -
+        // distinct_count(items)`, which violates both bounds).
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        let empty: &[StubKind] = &[];
+        assert!(<StubKind as ClosedSet>::count_distinct(empty) <= empty.len().min(cardinality));
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [a];
+            assert!(
+                <StubKind as ClosedSet>::count_distinct(&singleton)
+                    <= singleton.len().min(cardinality)
+            );
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                assert!(
+                    <StubKind as ClosedSet>::count_distinct(&pair) <= pair.len().min(cardinality),
+                    "T::count_distinct({pair:?}) exceeded min(pair.len(), T::CARDINALITY)"
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert!(
+                        <StubKind as ClosedSet>::count_distinct(&triple)
+                            <= triple.len().min(cardinality),
+                        "T::count_distinct({triple:?}) exceeded min(triple.len(), T::CARDINALITY)"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_distinct_is_invariant_under_ordering_axis_across_every_triple() {
+        // ORDERING-AXIS INVARIANCE CONTRACT: element equality is
+        // intrinsically ordering-agnostic — a slice's distinct-
+        // count is a property of the multiset of its element
+        // identities, not of the ordering the substrate uses to
+        // compare them. The projection composes on
+        // `<Self as ClosedSet>::index_of`, which is a bijection
+        // into `[0, T::CARDINALITY)`; and equality on that
+        // discriminator is invariant under any reordering of
+        // `T::ALL`. Sibling posture to
+        // `is_pairwise_distinct_is_invariant_under_ordering_axis_across_every_triple`
+        // one column of the (return-shape) axis over: both
+        // bool-return AND usize-return projections on the
+        // equivalence-partition axis are ordering-agnostic
+        // fixpoints of the (declaration, lex) reordering. Sweeps
+        // over every triple and cross-checks the count against
+        // the `is_pairwise_distinct` / `is_constant`
+        // bool-projections, which the just-lifted usize-return
+        // projection subsumes.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    if <StubKind as ClosedSet>::is_pairwise_distinct(&triple) {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::count_distinct(&triple),
+                            triple.len(),
+                            "T::count_distinct({triple:?}) diverged from triple.len() on a pairwise-distinct slice — the ordering-agnostic distinctness projection was violated"
+                        );
+                    }
+                    if <StubKind as ClosedSet>::is_constant(&triple) {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::count_distinct(&triple),
+                            1,
+                            "T::count_distinct({triple:?}) diverged from 1 on a constant slice — the ordering-agnostic constant projection was violated"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_distinct_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::count_distinct(items) ==
+        // T::count_distinct(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and the distinct count is a function of
+        // that multiset alone. The first-occurrence filter's
+        // acceptance set is DIFFERENT under the reversal (position
+        // `0` of the reversed slice is at variant `items[n-1]`, so
+        // the filter accepts a different set of positions), but
+        // its CARDINALITY is preserved — the count of first
+        // occurrences equals the count of distinct multiset
+        // members regardless of iteration direction. Sibling
+        // posture to
+        // `is_pairwise_distinct_is_invariant_under_slice_reversal_across_every_triple`
+        // and
+        // `is_constant_is_invariant_under_slice_reversal_across_every_triple`
+        // one column of the (return-shape) axis over: every
+        // projection on the equivalence-partition surface is a
+        // FIXPOINT of slice reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_distinct(&forward),
+                        <StubKind as ClosedSet>::count_distinct(&reversed),
+                        "T::count_distinct({forward:?}) diverged from T::count_distinct({reversed:?}) — the distinct-count projection MUST be a fixpoint of slice reversal"
+                    );
                 }
             }
         }

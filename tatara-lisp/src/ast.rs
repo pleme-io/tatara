@@ -413,6 +413,171 @@ const _: () = assert_u8_array_pairwise_distinct(&QuoteForm::HASH_DISCRIMINATORS)
 const _: () = assert_u8_array_pairwise_distinct(&crate::error::StructuralKind::HASH_DISCRIMINATORS);
 const _: () = assert_u8_array_pairwise_distinct(&crate::error::UnquoteForm::HASH_DISCRIMINATORS);
 
+/// Compile-time contract verifier — panics at const evaluation time if
+/// any two entries of `arr` share their LEFT `char` column OR their
+/// RIGHT `char` column, i.e. binds the `[(char, char); N]` array as a
+/// BIJECTION on the substrate's escape-table product-vocabulary.
+///
+/// Product-element sibling to the scalar-element trio
+/// ([`assert_char_array_pairwise_distinct`],
+/// [`assert_str_array_pairwise_distinct`], and
+/// [`assert_u8_array_pairwise_distinct`]) on the (element-type) axis:
+/// where the three scalar-element helpers close every family-wide
+/// SINGLE-column array declared on the substrate's closed-set outer
+/// algebras (`Sexp` / `Atom` / `AtomKind` / `QuoteForm` /
+/// `StructuralKind` / `UnquoteForm` on the reader-boundary + label +
+/// prefix + tag + cache-key vocabularies), this closes the substrate's
+/// family-wide TWO-column `[(char, char); N]` bijection tables at
+/// compile time. A `[(char, char); N]` array is a bijection iff BOTH
+/// column projections are pairwise-distinct (LEFT-column injectivity
+/// witnesses that `source → decoded` is a well-defined function on
+/// distinct sources; RIGHT-column injectivity witnesses that
+/// `decoded → source` inverts unambiguously) — since |LEFT| = |RIGHT| =
+/// N is finite, the conjunction of the two injectivities IS bijectivity
+/// on the paired substrate vocabulary.
+///
+/// The invariant is load-bearing for the Str-payload escape-table
+/// tokenization boundary. [`Atom::NAMED_ESCAPE_TABLE`] (`[(char, char);
+/// 3]`, the three pattern-DISTINCT-from-value named-escape rows —
+/// `'n' → '\n'`, `'t' → '\t'`, `'r' → '\r'`) is the paired algebra
+/// [`Atom::decode_str_escape`]'s three named arms dispatch through; a
+/// LEFT-column collision would silently route two escape sequences
+/// through the first-matching decoded byte (e.g. a drift of
+/// `TAB_ESCAPE_SOURCE` to `'n'` would collapse `\t` and `\n` at the
+/// same source arm), and a RIGHT-column collision would collapse two
+/// distinct decoded bytes onto ONE (e.g. a drift of `TAB_ESCAPE_DECODED`
+/// to `'\n'` would emit `\n` on BOTH `\t` and `\n` in the tokenized
+/// payload). [`Atom::ESCAPE_TABLE`] (`[(char, char); 5]`, the
+/// composite paired SPAN over the three named + two self-escape rows)
+/// binds the SAME bijection at the composite level; a LEFT-column
+/// collision AT THE COMPOSITE would witness cross-sub-vocabulary
+/// aliasing (a named-escape source colliding with a self-escape
+/// source, e.g. `'n'` = `Self::STR_DELIMITER`), and a RIGHT-column
+/// collision would witness the same at the DECODED axis. Every future
+/// family-wide `[(char, char); N]` paired substrate array participates
+/// in the SAME compile-time guarantee via one `const _` line.
+///
+/// Pre-lift each of these two bijection tables carried its
+/// column-wise pairwise-distinctness contract at TWO runtime tests
+/// (`atom_named_escape_table_sources_pairwise_distinct` +
+/// `atom_named_escape_table_decoded_pairwise_distinct` on the
+/// NAMED_ESCAPE_TABLE arm; the composite `atom_escape_table_
+/// sources_and_decoded_columns_pairwise_distinct` on the ESCAPE_TABLE
+/// arm); post-lift the CONJOINED bijectivity contract binds at `cargo
+/// check` time — the const-eval panic surfaces the collision at
+/// COMPILE time, one invocation stage earlier, catching regressions
+/// on `cargo build` / `cargo clippy` runs that skip the test suite.
+///
+/// Adding a new family-wide `[(char, char); N]` paired array to the
+/// substrate: pair the declaration with `const _: () =
+/// assert_char_pair_array_bijective(&Self::FOO_TABLE);` co-located
+/// after the declaration and the BIJECTION contract binds at compile
+/// time. The rustc-forced arity `[(char, char); N]` composes with this
+/// const-eval sweep so cardinality AND left-column injectivity AND
+/// right-column injectivity are ALL compile-time theorems on the SAME
+/// array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP tokenizer
+/// that constructs a `[(char, char); N]` at runtime and wants to
+/// verify bijectivity before consuming it — and the two panic sites
+/// (LEFT-column collision, RIGHT-column collision) surface normally in
+/// that path with column-provenance-preserving panic messages
+/// (pinned by
+/// `assert_char_pair_array_bijective_panics_at_runtime_on_left_
+/// column_collision` +
+/// `assert_char_pair_array_bijective_panics_at_runtime_on_right_
+/// column_collision`).
+///
+/// Column-provenance in the panic message is load-bearing: downstream
+/// diagnostics (`cargo check` const-eval error output, test-suite
+/// failure reports) route the drift back to the failed COLUMN (LEFT
+/// source vs. RIGHT decoded) by string search — a bijection failure
+/// on a `[(char, char); N]` table names WHICH column collapsed,
+/// halving the search space for the operator debugging the drift.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide bijectivity
+///   contract on the `(char, char)` paired escape-table vocabulary
+///   becomes a TYPE-LEVEL theorem the substrate carries per paired-
+///   array declaration rather than a two-runtime-test pair the
+///   developer must remember to write per array (one per column).
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   bijection proof at declaration site AND the outer-dispatch
+///   match-arm exhaustiveness at [`Atom::decode_str_escape`]'s five
+///   arms regenerate through the SAME `const _` witness.
+/// - THEORY.md §VI.1 — generation over composition; the two-column
+///   const-eval sweep IS the generative shape. Every new closed-set
+///   paired-array vocabulary adds ONE `const _` line to get the
+///   bijection theorem rather than re-deriving TWO per-column
+///   iterator sweeps at runtime.
+pub const fn assert_char_pair_array_bijective<const N: usize>(arr: &[(char, char); N]) {
+    let mut i = 0;
+    while i < N {
+        let mut j = i + 1;
+        while j < N {
+            if arr[i].0 as u32 == arr[j].0 as u32 {
+                panic!(
+                    "assert_char_pair_array_bijective: LEFT column of \
+                     family-wide `[(char, char); N]` paired substrate \
+                     array carries a duplicate SOURCE char across two \
+                     positions — the substrate's LEFT-column pairwise-\
+                     distinctness contract (source-column injectivity, \
+                     i.e. `source → decoded` is a well-defined \
+                     function on distinct sources) is broken; every \
+                     consumer that pattern-matches the array's SOURCE \
+                     column as DISJOINT arms (Atom::decode_str_escape \
+                     escape-source outer dispatch, ESCAPE_SOURCES \
+                     column-dual SPAN projection) relies on this \
+                     invariant"
+                );
+            }
+            if arr[i].1 as u32 == arr[j].1 as u32 {
+                panic!(
+                    "assert_char_pair_array_bijective: RIGHT column of \
+                     family-wide `[(char, char); N]` paired substrate \
+                     array carries a duplicate DECODED char across two \
+                     positions — the substrate's RIGHT-column \
+                     pairwise-distinctness contract (decoded-column \
+                     injectivity, i.e. `source → decoded` inverts \
+                     unambiguously through `decoded → source` on the \
+                     finite paired vocabulary) is broken; every \
+                     consumer that enumerates the array's DECODED \
+                     column as a disjoint alphabet (ESCAPE_DECODED \
+                     column-dual SPAN projection, escape-family \
+                     decoded-byte enumeration) relies on this \
+                     invariant"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+// Compile-time bijectivity witnesses — one `const _: () =
+// assert_char_pair_array_bijective(&…)` per family-wide `[(char, char);
+// N]` paired escape-table array on the substrate's Str-payload
+// tokenization boundary. Each invocation is const-evaluated at `cargo
+// check` time; a regression that silently collided two entries at
+// EITHER the LEFT source column OR the RIGHT decoded column fails the
+// build rather than the test suite. Sibling to the runtime
+// `_pairwise_distinct` tests at `ast::tests` (`atom_named_escape_
+// table_sources_pairwise_distinct`, `atom_named_escape_table_decoded_
+// pairwise_distinct`, `atom_escape_table_sources_and_decoded_columns_
+// pairwise_distinct`) — the two enforce the same theorem at TWO
+// stages of the toolchain, so a build that skips tests still catches
+// the regression here, and a build that runs tests catches it a
+// second time as a safety net if the const-eval sweep is ever
+// silently dropped. Peer to the seven `assert_char_array_pairwise_
+// distinct` + thirteen `assert_str_array_pairwise_distinct` + four
+// `assert_u8_array_pairwise_distinct` witnesses above on the
+// (element-type) axis: the three scalar-element helpers close every
+// family-wide SINGLE-column array; this product-element helper closes
+// the family-wide TWO-column paired escape-table arrays.
+const _: () = assert_char_pair_array_bijective(&Atom::NAMED_ESCAPE_TABLE);
+const _: () = assert_char_pair_array_bijective(&Atom::ESCAPE_TABLE);
+
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
 // serde_json serialization that would otherwise dominate cache overhead on
@@ -27205,6 +27370,209 @@ mod tests {
             "assert_u8_array_pairwise_distinct panic message \
              {msg:?} must name the helper for provenance-preserving \
              failure diagnostics",
+        );
+    }
+
+    // ── `assert_char_pair_array_bijective` — the product-element
+    // sibling of the three scalar-element `assert_{char,str,u8}_array_
+    // pairwise_distinct` compile-time contract verifiers, restricted
+    // to the `(char, char)` product element type at the paired
+    // escape-table substrate vocabulary (`Atom::NAMED_ESCAPE_TABLE`,
+    // `Atom::ESCAPE_TABLE`). The runtime test surface here matches
+    // the scalar-sibling shape (accept-empty, accept-singleton,
+    // accept-every-family-wide-substrate-array, reject-left-column-
+    // collision, reject-right-column-collision, reject-non-adjacent,
+    // reject-terminal, panic-message-provenance-left, panic-message-
+    // provenance-right) split across BOTH columns so a regression that
+    // silently weakens the helper on EITHER column (e.g. dropping ONE
+    // of the two `if arr[i].{0,1} == arr[j].{0,1}` checks, or
+    // conflating the two `panic!` calls into one column-anonymous
+    // message) is caught by the helper's OWN test surface rather than
+    // only surfacing as a false-positive on some future
+    // `[(char, char); N]`-typed paired array's bijection pin.
+
+    #[test]
+    fn assert_char_pair_array_bijective_accepts_the_empty_array() {
+        // Empty array — vacuously bijective (no pair to collide on
+        // EITHER column). The compile-time `const _: () =
+        // assert_char_pair_array_bijective(&EMPTY);` would land on
+        // this arm, so the runtime call MUST return normally.
+        assert_char_pair_array_bijective::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_bijective_accepts_singleton_arrays() {
+        // Singleton array — vacuously bijective (only one pair, so
+        // no cross-pair collision is possible on EITHER column even
+        // if the two components alias each other WITHIN the pair —
+        // that's not a bijection failure, it's the pattern-equals-
+        // value SELF-escape shape at `SELF_ESCAPE_TABLE`'s two rows).
+        // Cross-arity coverage on the `[(char, char); 1]` corner of
+        // the const-N generic.
+        assert_char_pair_array_bijective(&[('a', 'b')]);
+        assert_char_pair_array_bijective(&[('x', 'x')]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_bijective_accepts_every_family_wide_substrate_array() {
+        // Runtime cross-check that the SAME two paired arrays the
+        // module-level `const _: () = ...` witnesses cover at COMPILE
+        // time are bijective. A regression that removes ONE of the
+        // `const _` witnesses would still leave THIS runtime pin as a
+        // safety net; the const witness fires FIRST at `cargo check`,
+        // this runtime pin catches the collision at `cargo test`. The
+        // pair enforces the theorem at TWO stages of the toolchain.
+        assert_char_pair_array_bijective(&Atom::NAMED_ESCAPE_TABLE);
+        assert_char_pair_array_bijective(&Atom::ESCAPE_TABLE);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_bijective: LEFT column")]
+    fn assert_char_pair_array_bijective_panics_at_runtime_on_left_column_collision() {
+        // NEGATIVE PIN — LEFT-column corner: a two-element array
+        // whose two SOURCE chars alias (regardless of whether the two
+        // DECODED chars alias) MUST panic at runtime with the LEFT-
+        // column-named message. Pins the helper's OWN LEFT-column
+        // reject-arm — a regression that silently returned without
+        // panicking on a source-column duplicate would slip through
+        // the compile-time witnesses' failure mode too. The two
+        // distinct DECODED chars witness that the RIGHT column is
+        // INTACT — the panic MUST fire specifically on the LEFT-
+        // column disjointness failure.
+        assert_char_pair_array_bijective(&[('a', 'x'), ('a', 'y')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_bijective: RIGHT column")]
+    fn assert_char_pair_array_bijective_panics_at_runtime_on_right_column_collision() {
+        // NEGATIVE PIN — RIGHT-column corner: a two-element array
+        // whose two DECODED chars alias (with distinct SOURCE chars
+        // so the LEFT column is intact) MUST panic at runtime with
+        // the RIGHT-column-named message. Column-provenance in the
+        // panic message is load-bearing: downstream diagnostics
+        // route the drift back to the failed COLUMN (LEFT vs.
+        // RIGHT) by string search — the two panic sites MUST NOT
+        // collapse into one column-anonymous message.
+        assert_char_pair_array_bijective(&[('a', 'x'), ('b', 'x')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_bijective")]
+    fn assert_char_pair_array_bijective_panics_at_runtime_on_non_adjacent_collision() {
+        // NEGATIVE PIN — non-adjacent corner: the collision fires on
+        // ANY (i, j) pair with i < j, not just the adjacent (0, 1)
+        // corner. Pins the nested-loop shape of the helper — a
+        // regression that walked ONLY the adjacent pairs (i.e., swept
+        // `while i + 1 < N { if arr[i].0 == arr[i+1].0 { panic } … }`)
+        // would silently accept the non-adjacent collision at
+        // positions 0 and 2 tested here (a LEFT-column collision
+        // `'a'` at [0].0 and [2].0, with `'b'` at [1].0 breaking
+        // adjacency).
+        assert_char_pair_array_bijective(&[('a', 'x'), ('b', 'y'), ('a', 'z')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_bijective")]
+    fn assert_char_pair_array_bijective_panics_at_runtime_on_terminal_collision() {
+        // NEGATIVE PIN — terminal corner: the collision at the LAST
+        // pair (positions N-2 and N-1) MUST also fire. Pins the outer
+        // `while i < N` bound — a regression that walked `while i <
+        // N - 1` (dropping the last row) would silently accept a
+        // collision at the tail. Uses a RIGHT-column collision at
+        // the terminal pair to also exercise the second (RIGHT)
+        // panic arm's terminal-index reachability, symmetric to the
+        // LEFT-column non-adjacent pin above.
+        assert_char_pair_array_bijective(&[
+            ('a', 'w'),
+            ('b', 'x'),
+            ('c', 'y'),
+            ('d', 'z'),
+            ('e', 'z'),
+        ]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_bijective_panic_message_names_the_helper_and_left_column() {
+        // PANIC-MESSAGE PROVENANCE PIN — LEFT-column arm: the panic
+        // message MUST begin with the helper's own name AND identify
+        // the failed COLUMN as "LEFT column" so downstream diagnostics
+        // route the drift back to (a) the helper by string search on
+        // `"assert_char_pair_array_bijective"` and (b) the column by
+        // string search on `"LEFT column"`. Sibling posture to the
+        // scalar-sibling `_panic_message_names_the_helper` tests
+        // (which name only the helper); the column-provenance
+        // extension is load-bearing on the paired-array vocabulary
+        // where a bijection failure has TWO distinguishable failure
+        // modes (source-column non-injective vs. decoded-column
+        // non-injective).
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_bijective(&[('a', 'x'), ('a', 'y')]);
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_bijective must panic on a LEFT-\
+             column duplicate — the reject-collision arm is the \
+             point of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_bijective panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_pair_array_bijective"),
+            "assert_char_pair_array_bijective LEFT-column panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("LEFT column"),
+            "assert_char_pair_array_bijective LEFT-column panic \
+             message {msg:?} must name the failed COLUMN (\"LEFT \
+             column\") for column-provenance-preserving failure \
+             diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_bijective_panic_message_names_the_helper_and_right_column() {
+        // PANIC-MESSAGE PROVENANCE PIN — RIGHT-column arm: the panic
+        // message MUST begin with the helper's own name AND identify
+        // the failed COLUMN as "RIGHT column". Column-symmetric
+        // sibling of the LEFT-column pin above — a regression that
+        // silently unified the two panic sites into ONE column-
+        // anonymous message would collapse THIS pin's RIGHT-column
+        // substring assertion.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_bijective(&[('a', 'x'), ('b', 'x')]);
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_bijective must panic on a RIGHT-\
+             column duplicate — the reject-collision arm is the \
+             point of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_bijective panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_pair_array_bijective"),
+            "assert_char_pair_array_bijective RIGHT-column panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("RIGHT column"),
+            "assert_char_pair_array_bijective RIGHT-column panic \
+             message {msg:?} must name the failed COLUMN (\"RIGHT \
+             column\") for column-provenance-preserving failure \
+             diagnostics",
         );
     }
 }

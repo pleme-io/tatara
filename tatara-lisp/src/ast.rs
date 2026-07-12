@@ -782,6 +782,213 @@ const _: () = assert_u8_array_covers_inclusive_range::<2, 5, 6>(
     &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
 );
 
+/// Compile-time contract verifier — panics at const evaluation time if
+/// the distinct-values set of `arr` does not equal exactly the distinct-
+/// values set of `set` on the substrate's `u8` cache-key vocabulary.
+/// Binds TWO conjunct clauses at ONE `const _` line:
+///   1. OUT-OF-SET: every entry in `arr` appears in `set` — no byte
+///      outside the target finite partition. A regression that drifts
+///      ONE entry to a byte NOT in the set (e.g. lifts a fresh entry at
+///      `3u8` on a `{0, 2}` array) fails-loudly at const-eval.
+///   2. SET-BYTE-MISSING: every byte in `set` appears at least once in
+///      `arr` — no byte inside the target finite partition missing. A
+///      regression that silently unifies two entries onto ONE byte,
+///      leaving another set byte unreached (e.g. drops the `Nil` arm's
+///      `0u8` from `StructuralKind::HASH_DISCRIMINATORS` in favour of
+///      a redundant `2u8`), fails-loudly at const-eval too.
+///
+/// Generalises [`assert_u8_array_covers_inclusive_range`] along the
+/// (contiguity) axis: where the range helper closes the SURJECTIVITY
+/// axis at the contiguous corner (the target partition is an inclusive
+/// `[LO, HI]` range), this finite-set helper closes the SURJECTIVITY
+/// axis at the arbitrary-finite-set corner (the target partition is
+/// any `[u8; M]` — contiguous, gapped, singleton, or scattered). The
+/// contiguous-range helper stays as the tighter idiom for arrays whose
+/// distinct-value set happens to be a contiguous inclusive range; this
+/// finite-set helper binds the arrays whose distinct-value set is
+/// NON-contiguous and therefore cannot be expressed as `[LO..=HI]`.
+///
+/// The invariant is load-bearing for the outer-`Sexp` cache-key
+/// algebra's SPAN across the structural-residual sub-carve.
+/// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`] (`[u8; 2]`
+/// covering `{0, 2}` with a gap at `1u8` where the atomic-carve outer
+/// marker lives) is the archetype non-contiguous case — its
+/// distinct-value set is a two-element finite set that is NOT a
+/// contiguous inclusive range, so the range helper cannot bind. This
+/// finite-set helper binds the structural-residual sub-carve's
+/// surjectivity contract at compile time despite the intentional
+/// gap: a regression that drops the `Nil` arm's `0u8` (or the `List`
+/// arm's `2u8`) — or lifts a fresh `1u8` colliding with the outer-
+/// carve atomic marker byte — fails the build. Every future family-
+/// wide `[u8; N]` array whose distinct-value set is an intentionally-
+/// closed FINITE (possibly non-contiguous) partition participates in
+/// the SAME compile-time guarantee via one `const _` line.
+///
+/// Adding a new family-wide `[u8; N]` finite-set-covering array to
+/// the substrate: pair the declaration with `const _: () =
+/// assert_u8_array_covers_finite_set::<N, M>(&Self::FOO_ARRAY,
+/// &[…the M target-set bytes…]);` co-located after the array's
+/// declaration and the finite-set-coverage contract binds at compile
+/// time. The rustc-forced arity `[u8; N]` composes with this
+/// const-eval sweep so cardinality AND every-entry-in-set AND
+/// every-set-byte-reached are ALL compile-time theorems on the SAME
+/// array. Prefer the tighter [`assert_u8_array_covers_inclusive_range`]
+/// when the target set IS a contiguous inclusive range — this helper
+/// is the fallback for the non-contiguous corner.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_u8_array_covers_finite_set_panics_at_runtime_on_
+/// out_of_set_entry` + `assert_u8_array_covers_finite_set_panics_at_
+/// runtime_on_missing_set_byte`. Both panic sites carry axis-provenance
+/// strings ("OUT-OF-SET" vs. "SET-BYTE-MISSING") so downstream
+/// diagnostics (`cargo check` const-eval error output, test-suite
+/// failure reports) route the drift back to the failed axis by string
+/// search — halving the search space for the operator debugging the
+/// drift. The two axis-provenance strings are chosen DISTINCT from
+/// the sibling [`assert_u8_array_covers_inclusive_range`]'s
+/// ("OUT-OF-RANGE" vs. "MISSING") so a diagnostic that names the
+/// failed axis routes UNAMBIGUOUSLY to the failed HELPER too.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide finite-set-
+///   coverage contract on the `u8` cache-key vocabulary becomes a
+///   TYPE-LEVEL theorem the substrate carries per array declaration
+///   rather than a runtime test the developer must remember to write
+///   per non-contiguous partition.
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key partition is the `intent_hash` composition axis —
+///   binding the finite-set-covering arrays on the typed algebra makes
+///   attestation-key drift a compile error rather than a silent
+///   BLAKE3 mis-hash on any consumer keyed on `Hash for Sexp`. A
+///   regression that drops a byte from the structural-residual
+///   sub-carve (or drifts an entry into the atomic-carve gap at `1u8`)
+///   fails the build before it can silently invalidate a cached
+///   expansion or a Sekiban audit-trail metric keyed on the outer
+///   discriminator space.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   set-membership + set-coverage sweep IS the generative shape.
+///   Every new closed-set discriminator array whose distinct-value set
+///   is an intentionally-closed finite (possibly non-contiguous)
+///   partition adds ONE `const _` line to get the finite-set-coverage
+///   theorem rather than re-deriving two per-array runtime iterator
+///   sweeps (one for the set-membership bound, one for the set-
+///   coverage completeness).
+///
+/// Contiguity-axis sibling posture to
+/// [`assert_u8_array_covers_inclusive_range`]: the two helpers close
+/// the SURJECTIVITY axis of the substrate's typed `u8` array
+/// vocabulary at the TWO complementary corners of the (contiguity)
+/// axis. Combined with the four pre-existing const-fn contract
+/// verifiers ([`assert_char_array_pairwise_distinct`],
+/// [`assert_str_array_pairwise_distinct`],
+/// [`assert_u8_array_pairwise_distinct`],
+/// [`assert_char_pair_array_bijective`]) closing the INJECTIVITY axis,
+/// the substrate now carries a complete `(injectivity, surjectivity)`
+/// compile-time cache-key contract lattice: every family-wide `[u8; N]`
+/// discriminator array binds AT LEAST ONE axis, and the four
+/// intentionally-injective + range-covering arrays
+/// (`AtomKind`, `QuoteForm`, `UnquoteForm` HASH_DISCRIMINATORS +
+/// `SexpShape::HASH_DISCRIMINATORS` on the range-only arm) bind BOTH
+/// axes.
+pub const fn assert_u8_array_covers_finite_set<const N: usize, const M: usize>(
+    arr: &[u8; N],
+    set: &[u8; M],
+) {
+    let mut i = 0;
+    while i < N {
+        let mut j = 0;
+        let mut found = false;
+        while j < M {
+            if arr[i] == set[j] {
+                found = true;
+                break;
+            }
+            j += 1;
+        }
+        if !found {
+            panic!(
+                "assert_u8_array_covers_finite_set: family-wide u8 \
+                 array carries an OUT-OF-SET entry at some position — \
+                 the entry's byte is absent from the target finite \
+                 partition `set`. The substrate's SET-MEMBERSHIP \
+                 contract on the array is broken; every consumer that \
+                 expects the array's entries to partition an outer \
+                 cache-key space (Hash for Sexp's outer discriminator \
+                 space, StructuralKind's non-contiguous sub-carving of \
+                 `{{0, 2}}` around the atomic-carve gap at `1u8`) \
+                 relies on the entries staying within the target set",
+            );
+        }
+        i += 1;
+    }
+    let mut j = 0;
+    while j < M {
+        let mut k = 0;
+        let mut found = false;
+        while k < N {
+            if arr[k] == set[j] {
+                found = true;
+                break;
+            }
+            k += 1;
+        }
+        if !found {
+            panic!(
+                "assert_u8_array_covers_finite_set: family-wide u8 \
+                 array is SET-BYTE-MISSING a byte from the target \
+                 finite partition `set` — every byte in the set must \
+                 appear at least once in the array. The substrate's \
+                 FULL-COVERAGE contract on the array is broken; every \
+                 consumer that expects the array's distinct-value set \
+                 to span the target finite partition (StructuralKind's \
+                 `{{0, 2}}` two-arm sub-carve, any future non-\
+                 contiguous partition-span contract) relies on every \
+                 set byte being reached",
+            );
+        }
+        j += 1;
+    }
+}
+
+// Compile-time finite-set-coverage witnesses — one `const _: () =
+// assert_u8_array_covers_finite_set::<N, M>(&…, &[…])` per family-wide
+// `[u8; N]` hash-discriminator array on the substrate's closed-set
+// outer algebras whose distinct-value set is an intentionally-closed
+// FINITE partition that is NOT a contiguous inclusive range (arrays
+// whose distinct-value set IS a contiguous inclusive range bind the
+// tighter `assert_u8_array_covers_inclusive_range` sibling above
+// instead). Each invocation is const-evaluated at `cargo check` time;
+// a regression that silently drifts an entry into a byte outside the
+// target set OR silently drops a set byte from the distinct-value set
+// fails the build rather than the test suite. Sibling to the runtime
+// `_span_*` / `_covers_*` tests at `error.rs`'s tests module — the two
+// enforce the same theorem at TWO stages of the toolchain, so a build
+// that skips tests still catches the regression here, and a build that
+// runs tests catches it a second time as a safety net if the
+// const-eval sweep is ever silently dropped. Contiguity-axis peer to
+// the four `assert_u8_array_covers_inclusive_range` witnesses above:
+// those close the contiguous-range corner of the SURJECTIVITY axis at
+// the four range-covering HASH_DISCRIMINATORS arrays; this closes the
+// non-contiguous-finite-set corner at the ONE non-contiguous-covering
+// array. `StructuralKind::HASH_DISCRIMINATORS` (`[u8; 2]` covering
+// `{0, 2}` with the load-bearing gap at `1u8` where the atomic-carve
+// outer marker byte lives) is the archetype non-contiguous case; the
+// gap at `1u8` is INTENTIONAL — it encodes the outer-`Sexp` carve
+// where atomic payloads route through the atomic-carve marker byte
+// rather than through the structural-residual sub-carve. Binding this
+// witness makes the (StructuralKind sub-carve, atomic-carve marker
+// byte) disjointness a compile-time theorem: a regression that lifted
+// a fresh `1u8` entry into `StructuralKind::HASH_DISCRIMINATORS` would
+// silently collide with `AtomKind::OUTER_HASH_DISCRIMINATOR = 1u8` on
+// the outer-`Sexp` cache-key partition and fail the build here
+// rather than surfacing as a silent BLAKE3 mis-hash on any consumer
+// keyed on `Hash for Sexp`.
+const _: () = assert_u8_array_covers_finite_set::<2, 2>(
+    &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+    &[0u8, 2u8],
+);
+
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
 // serde_json serialization that would otherwise dominate cache overhead on
@@ -27980,6 +28187,243 @@ mod tests {
             "assert_u8_array_covers_inclusive_range FULL-COVERAGE panic \
              message {msg:?} must name the failed AXIS (\"MISSING\") \
              for axis-provenance-preserving failure diagnostics",
+        );
+    }
+
+    // ── `assert_u8_array_covers_finite_set` — the non-contiguous-
+    // finite-set peer of `assert_u8_array_covers_inclusive_range` on
+    // the (contiguity) axis of the substrate's SURJECTIVITY-axis
+    // coverage helpers. Where the sibling range-coverage helper closes
+    // the contiguous corner of the target-partition axis at four
+    // range-covering `[u8; N]` HASH_DISCRIMINATORS arrays, this helper
+    // closes the non-contiguous corner at
+    // `StructuralKind::HASH_DISCRIMINATORS` (`[u8; 2]` covering
+    // `{0, 2}` with a load-bearing gap at `1u8` where the atomic-
+    // carve outer marker lives). The runtime test surface matches
+    // the sibling-helpers' shape (accept-singleton, accept-with-
+    // duplicates, accept-every-family-wide-substrate-array, reject-
+    // out-of-set, reject-set-byte-missing, panic-message-provenance
+    // on the OUT-OF-SET axis, panic-message-provenance on the SET-
+    // BYTE-MISSING axis) split across BOTH axes so a regression that
+    // silently weakens the helper on EITHER axis (e.g. dropping the
+    // `found` guard on the set-membership sweep, or dropping the
+    // outer `while j < M` set-coverage sweep entirely) is caught by
+    // the helper's OWN test surface rather than only surfacing as a
+    // false-positive on some future finite-set-covering `[u8; N]`
+    // array's coverage pin.
+
+    #[test]
+    fn assert_u8_array_covers_finite_set_accepts_the_singleton_set() {
+        // Singleton set `{K}` at the `[u8; 1]` × `[u8; 1]` corner —
+        // vacuously covering (the one entry MUST equal the one set
+        // byte). Cross-arity coverage on the trivial-set corner of
+        // the const-M generic; simultaneously pins BOTH axes (OUT-OF-
+        // SET: `K in {K}`; SET-BYTE-MISSING: `K` appears in the
+        // singleton array) at the smallest witness.
+        assert_u8_array_covers_finite_set::<1, 1>(&[7u8], &[7u8]);
+        assert_u8_array_covers_finite_set::<1, 1>(&[0u8], &[0u8]);
+        assert_u8_array_covers_finite_set::<1, 1>(&[255u8], &[255u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_covers_finite_set_accepts_arrays_with_duplicates() {
+        // KEY LOAD-BEARING PIN: duplicates in the entries are ACCEPTED
+        // — the finite-set-coverage contract is non-injective on the
+        // ENTRIES axis, only requires each SET byte to appear. This
+        // is the exact property that distinguishes this helper from
+        // its `assert_u8_array_pairwise_distinct` sibling and lets
+        // any future array with a load-bearing collapse bind a
+        // compile-time coverage witness despite failing distinctness.
+        // A regression that added a pairwise-distinct guard on the
+        // entries axis (accidentally merging the two sibling
+        // helpers' contracts) would fail-loudly here.
+        assert_u8_array_covers_finite_set::<4, 3>(&[0u8, 1u8, 1u8, 2u8], &[0u8, 1u8, 2u8]);
+        assert_u8_array_covers_finite_set::<7, 3>(
+            &[0u8, 1u8, 1u8, 1u8, 1u8, 1u8, 2u8],
+            &[0u8, 1u8, 2u8],
+        );
+    }
+
+    #[test]
+    fn assert_u8_array_covers_finite_set_accepts_the_non_contiguous_partition() {
+        // KEY LOAD-BEARING PIN: a non-contiguous target set `{0, 2}`
+        // (with a gap at `1u8`) is ACCEPTED — a two-element array
+        // hitting exactly those two bytes binds the finite-set-
+        // coverage contract even though NO contiguous `[LO..=HI]`
+        // range describes the target partition. This is the exact
+        // property that distinguishes this helper from its
+        // `assert_u8_array_covers_inclusive_range` sibling on the
+        // (contiguity) axis and lets
+        // `StructuralKind::HASH_DISCRIMINATORS`'s `{0, 2}` gap-
+        // partition bind a compile-time coverage witness where the
+        // range sibling cannot. A regression that narrowed the
+        // helper's target-set semantics to contiguous ranges only
+        // (e.g. re-derived the `while cur <= HI` sweep instead of
+        // the per-set-byte membership sweep) would fail-loudly here.
+        assert_u8_array_covers_finite_set::<2, 2>(&[0u8, 2u8], &[0u8, 2u8]);
+        assert_u8_array_covers_finite_set::<3, 3>(&[0u8, 2u8, 5u8], &[0u8, 2u8, 5u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_covers_finite_set_accepts_every_family_wide_substrate_array() {
+        // Runtime cross-check that the SAME array the module-level
+        // `const _: () = ...` witness covers at COMPILE time is
+        // finite-set-covering. A regression that removes the
+        // `const _` witness would still leave THIS runtime pin as a
+        // safety net; the const witness fires FIRST at `cargo check`,
+        // this runtime pin catches the drift at `cargo test`. The
+        // pair enforces the theorem at TWO stages of the toolchain.
+        // Sibling posture to
+        // `assert_u8_array_covers_inclusive_range_accepts_every_
+        // family_wide_substrate_array` at the contiguous-range peer.
+        assert_u8_array_covers_finite_set::<2, 2>(
+            &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+            &[0u8, 2u8],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-SET")]
+    fn assert_u8_array_covers_finite_set_panics_at_runtime_on_out_of_set_entry() {
+        // NEGATIVE PIN — SET-MEMBERSHIP corner: an entry NOT in the
+        // target set MUST panic at runtime with the OUT-OF-SET-named
+        // message. Pins the helper's OWN reject-out-of-set arm — a
+        // regression that silently returned without panicking on an
+        // entry outside the target set would slip through the
+        // compile-time witnesses' failure mode too. The two set
+        // bytes `{0, 2}` witness that the FULL-COVERAGE axis is
+        // INTACT — the panic MUST fire specifically on the SET-
+        // MEMBERSHIP disjointness failure at the drift entry `3u8`.
+        assert_u8_array_covers_finite_set::<3, 2>(&[0u8, 2u8, 3u8], &[0u8, 2u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-SET")]
+    fn assert_u8_array_covers_finite_set_panics_on_gap_byte_drift() {
+        // NEGATIVE PIN — GAP-BYTE corner: an entry that drifts INTO
+        // the intentional gap of a non-contiguous target set MUST
+        // panic — this is the exact regression the archetype
+        // `StructuralKind::HASH_DISCRIMINATORS` witness catches. A
+        // regression that lifted a fresh `1u8` entry into the
+        // `{0, 2}`-partitioned array would silently collide with
+        // `AtomKind::OUTER_HASH_DISCRIMINATOR = 1u8` on the outer-
+        // `Sexp` cache-key partition; this pin binds that failure
+        // mode as an OUT-OF-SET rejection at the const-eval site.
+        assert_u8_array_covers_finite_set::<3, 2>(&[0u8, 1u8, 2u8], &[0u8, 2u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SET-BYTE-MISSING")]
+    fn assert_u8_array_covers_finite_set_panics_at_runtime_on_missing_set_byte() {
+        // NEGATIVE PIN — FULL-COVERAGE corner: a set byte NOT
+        // reached by any entry MUST panic at runtime with the SET-
+        // BYTE-MISSING-named message. Pins the helper's OWN reject-
+        // incomplete-coverage arm — a regression that silently
+        // returned without panicking on an incomplete-coverage array
+        // (e.g. dropping the outer `while j < M` sweep entirely, or
+        // narrowing it to `while j < M - 1`) would slip through the
+        // compile-time witnesses' failure mode too. The two entries
+        // stay within `{0, 2, 5}` (satisfying OUT-OF-SET) but skip
+        // the middle byte `2u8` — the panic MUST fire specifically
+        // on the FULL-COVERAGE axis, not on the SET-MEMBERSHIP axis.
+        assert_u8_array_covers_finite_set::<2, 3>(&[0u8, 5u8], &[0u8, 2u8, 5u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_covers_finite_set_panic_message_names_the_helper_and_out_of_set_axis() {
+        // PANIC-MESSAGE PROVENANCE PIN — OUT-OF-SET arm: the panic
+        // message MUST begin with the helper's own name AND identify
+        // the failed AXIS as "OUT-OF-SET" so downstream diagnostics
+        // route the drift back to (a) the helper by string search on
+        // `"assert_u8_array_covers_finite_set"` and (b) the axis by
+        // string search on `"OUT-OF-SET"`. Sibling posture to
+        // `assert_u8_array_covers_inclusive_range_panic_message_
+        // names_the_helper_and_range_bound_axis` on the contiguous-
+        // range peer's RANGE-BOUND arm — both bind the (helper,
+        // failed-axis) provenance pair at ONE test per axis. The
+        // axis-provenance strings ("OUT-OF-SET" here vs. "OUT-OF-
+        // RANGE" on the range sibling) are chosen DISTINCT so a
+        // diagnostic that names the failed axis routes UNAMBIGUOUSLY
+        // to the failed HELPER too — a regression that unified the
+        // two helpers' axis-provenance strings would collapse either
+        // this substring assertion or the sibling helper's.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_covers_finite_set::<3, 2>(&[0u8, 2u8, 3u8], &[0u8, 2u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_covers_finite_set must panic on an out-\
+             of-set entry — the reject-out-of-set arm is one of the \
+             two failure modes of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_covers_finite_set panic payload must \
+                 be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_covers_finite_set"),
+            "assert_u8_array_covers_finite_set OUT-OF-SET panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("OUT-OF-SET"),
+            "assert_u8_array_covers_finite_set OUT-OF-SET panic \
+             message {msg:?} must name the failed AXIS (\"OUT-OF-\
+             SET\") for axis-provenance-preserving failure \
+             diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_u8_array_covers_finite_set_panic_message_names_the_helper_and_missing_set_byte_axis()
+    {
+        // PANIC-MESSAGE PROVENANCE PIN — SET-BYTE-MISSING arm: the
+        // panic message MUST begin with the helper's own name AND
+        // identify the failed AXIS as "SET-BYTE-MISSING" so
+        // downstream diagnostics route the drift back to (a) the
+        // helper by string search and (b) the axis by string search
+        // on `"SET-BYTE-MISSING"`. Axis-symmetric sibling of the
+        // OUT-OF-SET panic-message provenance pin above — a
+        // regression that silently unified the two panic sites into
+        // ONE axis-anonymous message would collapse EITHER this
+        // pin's `"SET-BYTE-MISSING"` substring assertion OR the
+        // sibling pin's `"OUT-OF-SET"` substring assertion. The
+        // axis-provenance string ("SET-BYTE-MISSING" here vs.
+        // "MISSING" on the range sibling) is chosen DISTINCT so a
+        // diagnostic that names the failed axis routes UNAMBIGUOUSLY
+        // to the failed HELPER too.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_covers_finite_set::<2, 3>(&[0u8, 5u8], &[0u8, 2u8, 5u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_covers_finite_set must panic on a \
+             missing set byte — the reject-incomplete-coverage arm \
+             is one of the two failure modes of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_covers_finite_set panic payload must \
+                 be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_covers_finite_set"),
+            "assert_u8_array_covers_finite_set SET-BYTE-MISSING panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("SET-BYTE-MISSING"),
+            "assert_u8_array_covers_finite_set SET-BYTE-MISSING panic \
+             message {msg:?} must name the failed AXIS (\"SET-BYTE-\
+             MISSING\") for axis-provenance-preserving failure \
+             diagnostics",
         );
     }
 }

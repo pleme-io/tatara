@@ -391,9 +391,11 @@ pub const fn assert_u8_array_pairwise_distinct<const N: usize>(arr: &[u8; N]) {
 // Compile-time pairwise-distinctness witnesses — one `const _: () =
 // assert_u8_array_pairwise_distinct(&…)` per family-wide `[u8; N]`
 // hash-discriminator array on the substrate's closed-set outer
-// algebras. Each invocation is const-evaluated at `cargo check`
-// time; a regression that silently collides two entries fails the
-// build rather than the test suite. Sibling to the runtime
+// algebras WHOSE INJECTIVITY CONTRACT DOES NOT BIND THROUGH THE
+// COMPOUND `assert_u8_array_permutes_inclusive_range` HELPER BELOW.
+// Each invocation is const-evaluated at `cargo check` time; a
+// regression that silently collides two entries fails the build
+// rather than the test suite. Sibling to the runtime
 // `_hash_discriminators_pairwise_distinct` tests at `ast.rs` +
 // `error.rs`'s tests modules — the two enforce the same theorem at
 // TWO stages of the toolchain, so a build that skips tests still
@@ -407,11 +409,19 @@ pub const fn assert_u8_array_pairwise_distinct<const N: usize>(arr: &[u8; N]) {
 // vocabularies; `u8` covers the outer-Sexp cache-key discriminator
 // vocabulary. `SexpShape::HASH_DISCRIMINATORS` is intentionally
 // omitted per the intentionally-non-injective twelve-shape → seven-
-// byte collapse rule documented on the helper above.
-const _: () = assert_u8_array_pairwise_distinct(&AtomKind::HASH_DISCRIMINATORS);
-const _: () = assert_u8_array_pairwise_distinct(&QuoteForm::HASH_DISCRIMINATORS);
+// byte collapse rule documented on the helper above. The three
+// permutation-shaped sub-carvings (`AtomKind::HASH_DISCRIMINATORS`,
+// `QuoteForm::HASH_DISCRIMINATORS`,
+// `UnquoteForm::HASH_DISCRIMINATORS`) bind INJECTIVITY through the
+// stronger compound `assert_u8_array_permutes_inclusive_range`
+// helper below (which composes injectivity ∧ surjectivity-onto-range
+// ∧ arity-cardinality-match at ONE `const _` line per array) — only
+// `StructuralKind::HASH_DISCRIMINATORS` remains here because its
+// distinct-value set `{0, 2}` is NON-contiguous (gap at `1u8` where
+// the atomic-carve outer marker lives), so it binds
+// SURJECTIVITY through the `assert_u8_array_covers_finite_set`
+// non-contiguous corner rather than the permutation compound helper.
 const _: () = assert_u8_array_pairwise_distinct(&crate::error::StructuralKind::HASH_DISCRIMINATORS);
-const _: () = assert_u8_array_pairwise_distinct(&crate::error::UnquoteForm::HASH_DISCRIMINATORS);
 
 /// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` share their LEFT `char` column OR their
@@ -742,44 +752,40 @@ pub const fn assert_u8_array_covers_inclusive_range<const N: usize, const LO: u8
 // assert_u8_array_covers_inclusive_range::<N, LO, HI>(&…)` per
 // family-wide `[u8; N]` hash-discriminator array on the substrate's
 // closed-set outer algebras whose distinct-value set is an
-// intentionally-closed inclusive range. Each invocation is
-// const-evaluated at `cargo check` time; a regression that silently
-// drifts an entry above HI, below LO, OR silently drops a range byte
-// from the distinct-value set fails the build rather than the test
-// suite. Sibling to the runtime `_span_outer_partition_*` /
-// `_covers_*` tests at `error.rs`'s tests module — the two enforce
-// the same theorem at TWO stages of the toolchain, so a build that
-// skips tests still catches the regression here, and a build that
-// runs tests catches it a second time as a safety net if the
-// const-eval sweep is ever silently dropped. Peer to the four
-// `assert_u8_array_pairwise_distinct` witnesses above on the (axis)
-// axis: those close the INJECTIVITY (pairwise-distinctness) axis of
-// the substrate's typed `u8` array vocabulary at the four
-// intentionally-injective HASH_DISCRIMINATORS arrays; this closes the
-// SURJECTIVITY-onto-a-range axis at the four intentionally-covering
-// HASH_DISCRIMINATORS arrays. `SexpShape::HASH_DISCRIMINATORS` sits
-// at the intersection of the TWO axes' complementary loads — its
-// twelve-shape → seven-byte collapse means DISTINCTNESS DOES NOT
-// hold (the six atomic-shape arms all collapse to `1u8`) yet
-// range-coverage of `{0..=6}` DOES hold (every outer byte reached).
-// The four sub-carvings' arrays sit at the injective corner of the
-// same lattice: they are BOTH pairwise-distinct AND cover an
-// inclusive range (`AtomKind::HASH_DISCRIMINATORS` covers `{0..=5}`,
-// `QuoteForm::HASH_DISCRIMINATORS` covers `{3..=6}`,
-// `UnquoteForm::HASH_DISCRIMINATORS` covers `{5..=6}`), so they bind
-// witnesses on BOTH axes. `StructuralKind::HASH_DISCRIMINATORS`
-// covers the non-inclusive-range partition `{0, 2}` (gap at `1u8`
-// where the atomic-carve outer marker lives, per the outer-`Sexp`
-// carve semantics) — intentionally OMITTED from this range-coverage
-// sweep since its distinct-value set is not a contiguous inclusive
-// range.
+// intentionally-closed inclusive range AND WHOSE JOINT (INJECTIVITY,
+// SURJECTIVITY, ARITY) CONTRACT DOES NOT BIND THROUGH THE STRONGER
+// COMPOUND `assert_u8_array_permutes_inclusive_range` HELPER BELOW.
+// Each invocation is const-evaluated at `cargo check` time; a
+// regression that silently drifts an entry above HI, below LO, OR
+// silently drops a range byte from the distinct-value set fails the
+// build rather than the test suite. Sibling to the runtime
+// `_span_outer_partition_*` / `_covers_*` tests at `error.rs`'s
+// tests module — the two enforce the same theorem at TWO stages of
+// the toolchain, so a build that skips tests still catches the
+// regression here, and a build that runs tests catches it a second
+// time as a safety net if the const-eval sweep is ever silently
+// dropped. The three permutation-shaped sub-carvings
+// (`AtomKind::HASH_DISCRIMINATORS`, `QuoteForm::HASH_DISCRIMINATORS`,
+// `UnquoteForm::HASH_DISCRIMINATORS`) bind SURJECTIVITY-onto-a-range
+// through the stronger compound `assert_u8_array_permutes_inclusive_
+// range` helper below — the compound helper composes injectivity ∧
+// surjectivity ∧ arity-cardinality-match at ONE `const _` line per
+// array, halving the per-array witness surface at strictly stronger
+// contract strength. Only `SexpShape::HASH_DISCRIMINATORS` remains
+// on this single-axis SURJECTIVITY sweep because its intentionally-
+// non-injective twelve-shape → seven-byte collapse means DISTINCTNESS
+// DOES NOT hold (the six atomic-shape arms all collapse to `1u8`)
+// yet range-coverage of `{0..=6}` DOES hold (every outer byte
+// reached) — it CANNOT bind a permutation contract on any range
+// corner. `StructuralKind::HASH_DISCRIMINATORS` covers the non-
+// inclusive-range partition `{0, 2}` (gap at `1u8` where the
+// atomic-carve outer marker lives, per the outer-`Sexp` carve
+// semantics) — intentionally OMITTED from this range-coverage sweep
+// since its distinct-value set is not a contiguous inclusive range;
+// it binds SURJECTIVITY through the sibling non-contiguous-corner
+// helper `assert_u8_array_covers_finite_set` below.
 const _: () = assert_u8_array_covers_inclusive_range::<12, 0, 6>(
     &crate::error::SexpShape::HASH_DISCRIMINATORS,
-);
-const _: () = assert_u8_array_covers_inclusive_range::<6, 0, 5>(&AtomKind::HASH_DISCRIMINATORS);
-const _: () = assert_u8_array_covers_inclusive_range::<4, 3, 6>(&QuoteForm::HASH_DISCRIMINATORS);
-const _: () = assert_u8_array_covers_inclusive_range::<2, 5, 6>(
-    &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
 );
 
 /// Compile-time contract verifier — panics at const evaluation time if
@@ -987,6 +993,254 @@ pub const fn assert_u8_array_covers_finite_set<const N: usize, const M: usize>(
 const _: () = assert_u8_array_covers_finite_set::<2, 2>(
     &crate::error::StructuralKind::HASH_DISCRIMINATORS,
     &[0u8, 2u8],
+);
+
+/// Compile-time contract verifier — panics at const evaluation time if
+/// `arr` is not a PERMUTATION of the inclusive integer range `[LO..=HI]`
+/// on the substrate's `u8` cache-key vocabulary. Binds THREE conjunct
+/// clauses at ONE `const _` line:
+///   1. ARITY-MISMATCH: `N` MUST equal `HI - LO + 1` — a bijection
+///      between `[0..N)` and `[LO..=HI]` forces the cardinality equality
+///      by pigeonhole. A regression that adds a spurious duplicate entry
+///      to a HASH_DISCRIMINATORS array (bumping `N` past the range's
+///      cardinality) fails-loudly at this arm with the ARITY-MISMATCH-
+///      provenance panic message. Delegated to no sibling — this arm is
+///      the compound helper's unique contribution.
+///   2. Range-membership: every entry in `arr` lies in `[LO, HI]` —
+///      delegated to [`assert_u8_array_covers_inclusive_range`] (which
+///      ALSO sweeps the FULL-COVERAGE axis; both axes bind through the
+///      one delegation call).
+///   3. Pairwise-distinctness: every pair of entries is distinct —
+///      delegated to [`assert_u8_array_pairwise_distinct`].
+///
+/// (1) ∧ (2) ∧ (3) jointly imply the array's entries EXACTLY partition
+/// the range: `N` distinct entries chosen from a range of cardinality
+/// `N` MUST equal the entire range by pigeonhole. The single compound
+/// invocation therefore binds the same theorem as the pair
+/// `assert_u8_array_pairwise_distinct(&arr) + assert_u8_array_covers_
+/// inclusive_range::<N, LO, HI>(&arr)` PLUS the arity-mismatch check
+/// (1) that neither weak sibling carries alone — a strictly stronger
+/// contract at HALF the per-array witness-line surface.
+///
+/// Compression: pre-lift, each of the three intentionally-permutation-
+/// shaped HASH_DISCRIMINATORS arrays ([`AtomKind::HASH_DISCRIMINATORS`],
+/// [`QuoteForm::HASH_DISCRIMINATORS`],
+/// [`crate::error::UnquoteForm::HASH_DISCRIMINATORS`]) bound its
+/// permutation contract at TWO `const _` lines (one
+/// `assert_u8_array_pairwise_distinct` for INJECTIVITY, one
+/// `assert_u8_array_covers_inclusive_range` for SURJECTIVITY-onto-a-
+/// range) — six witness lines total across the three arrays. Post-lift
+/// each array binds the same theorem PLUS the arity-mismatch check at
+/// ONE `const _` line — three witness lines total, a 2:1 compression.
+/// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`] stays on the
+/// weak-pair contract because its distinct-value set `{0, 2}` is
+/// NON-contiguous (gap at `1u8` where the atomic-carve outer marker
+/// lives) — the non-contiguous corner binds through
+/// `assert_u8_array_pairwise_distinct` + `assert_u8_array_covers_
+/// finite_set` instead, awaiting a future `assert_u8_array_permutes_
+/// finite_set` compound helper on the non-contiguous corner of the
+/// (contiguity) axis. [`crate::error::SexpShape::HASH_DISCRIMINATORS`]
+/// stays on the range-coverage-only contract because its twelve-shape →
+/// seven-byte collapse means INJECTIVITY DOES NOT hold — so it CANNOT
+/// bind a permutation contract on any range corner.
+///
+/// The invariant is load-bearing for the three permutation-shaped
+/// sub-carvings' outer-`Sexp` cache-key partition binding. Each of the
+/// three arrays MUST bijectively permute its assigned range corner of
+/// `{0..=6}` so `Hash for Sexp`'s outer discriminator hash sequence
+/// stays injective on each sub-partition: [`AtomKind::HASH_DISCRIMINATORS`]
+/// permutes `{0..=5}` on the nested atomic-payload carve inside `Hash
+/// for Atom`; [`QuoteForm::HASH_DISCRIMINATORS`] permutes `{3..=6}` on
+/// the quote-family arms of `Hash for Sexp`; UnquoteForm permutes
+/// `{5..=6}` on the substitution-subset of the quote-family. A
+/// regression that silently unified two arm's cache-key bytes on ANY
+/// of the three arrays — OR lifted a fresh N+1 entry drifting `N` above
+/// the range's cardinality — would silently invalidate every cached
+/// `Sexp` participating in `Expander::cache`. The compound witness
+/// catches all three drift modes at COMPILE time.
+///
+/// Adding a new family-wide `[u8; N]` permutation-of-range array to
+/// the substrate: pair the declaration with `const _: () =
+/// assert_u8_array_permutes_inclusive_range::<N, LO, HI>(&Self::
+/// FOO_ARRAY);` co-located after the array's declaration and the
+/// permutation contract binds at compile time. The rustc-forced arity
+/// `[u8; N]` composes with this const-eval sweep so cardinality AND
+/// arity-cardinality-match AND range-membership AND pairwise-
+/// distinctness AND (by pigeonhole) full range-coverage are ALL
+/// compile-time theorems on the SAME array from ONE `const _` line.
+/// Prefer this compound helper over the weak-pair pattern for any
+/// array whose distinct-value set is intentionally EXACTLY a
+/// contiguous inclusive range with the array acting as a permutation
+/// of it — the two weak helpers stay as the fallback for arrays with
+/// LOOSER contracts (e.g. `SexpShape::HASH_DISCRIMINATORS`'s
+/// intentionally-non-injective twelve → seven collapse binds only the
+/// coverage weak sibling).
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by the four negative
+/// runtime pins (`_panics_at_runtime_on_arity_below_cardinality`,
+/// `_panics_at_runtime_on_arity_above_cardinality`,
+/// `_panics_at_runtime_on_duplicate`,
+/// `_panics_at_runtime_on_out_of_range`) that jointly exercise each of
+/// the three failure arms.
+///
+/// The ARITY-MISMATCH panic site carries an axis-provenance string
+/// ("ARITY-MISMATCH") chosen DISTINCT from every sibling helper's axis
+/// strings ("OUT-OF-RANGE" / "MISSING" on the range-coverage helper;
+/// "OUT-OF-SET" / "SET-BYTE-MISSING" on the finite-set-coverage
+/// helper) so downstream diagnostics that name the failed axis route
+/// UNAMBIGUOUSLY to (a) this compound helper, and (b) the specific
+/// arm — a permutation-shaped drift that fails ARITY-MISMATCH is
+/// distinct from a range-coverage-drift that fails OUT-OF-RANGE or
+/// MISSING at the delegated coverage helper. The two delegated helpers
+/// each panic with THEIR OWN provenance strings so drift on the
+/// range-membership or pairwise-distinctness arm surfaces with the
+/// respective sibling helper's message body.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide permutation-
+///   of-range contract on the `u8` cache-key vocabulary becomes a
+///   TYPE-LEVEL theorem the substrate carries per array declaration
+///   at ONE `const _` line rather than at TWO per-axis `const _` lines
+///   the developer must remember to keep in lockstep across every
+///   permutation-shaped HASH_DISCRIMINATORS array.
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key partition is the `intent_hash` composition axis —
+///   binding the permutation-shaped sub-carvings' arrays on the typed
+///   algebra makes cardinality drift a compile error rather than a
+///   silent `Hash for Sexp` mis-hash on a caller keyed on a
+///   permutation-shaped sub-carve.
+/// - THEORY.md §VI.1 — generation over composition; the compound
+///   arity-check + range-coverage + pairwise-distinctness sweep IS
+///   the generative shape. Every new closed-set discriminator array
+///   whose distinct-value set is an intentionally-closed contiguous
+///   inclusive range with the array acting as a permutation of it
+///   adds ONE `const _` line to get the permutation theorem rather
+///   than re-deriving TWO per-axis `const _` lines (one for
+///   injectivity, one for surjectivity) that would silently drift out
+///   of lockstep if one was updated without the other.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   compound permutation proof at declaration site AND the three
+///   consumer sites (nested atomic-payload carve inside `Hash for
+///   Atom`, quote-family arms of `Hash for Sexp`, substitution-subset
+///   of the quote-family) regenerate through the SAME `const _`
+///   witness at each of the three permutation-shaped arrays.
+///
+/// Compound sibling posture to the constituent weak helpers on the
+/// (axis-count) axis:
+/// [`assert_u8_array_pairwise_distinct`] closes the SINGLE-axis
+/// INJECTIVITY corner; [`assert_u8_array_covers_inclusive_range`]
+/// closes the SINGLE-axis SURJECTIVITY-onto-range corner; this
+/// compound helper closes the DOUBLE-axis (INJECTIVITY ∧ SURJECTIVITY
+/// ∧ ARITY) corner on the range side of the (contiguity) axis. The
+/// non-contiguous compound corner (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY
+/// on a finite non-contiguous set) is a future lift's target — the
+/// only pre-existing arm that would bind is
+/// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`], currently
+/// held by the two-weak-witness pattern.
+pub const fn assert_u8_array_permutes_inclusive_range<
+    const N: usize,
+    const LO: u8,
+    const HI: u8,
+>(
+    arr: &[u8; N],
+) {
+    // Arity check FIRST — pigeonhole forces `N == HI - LO + 1` on a
+    // bijection between `[0..N)` and `[LO..=HI]`. Placing this arm
+    // FIRST gives cleaner provenance: a drift that grows the array
+    // past the range cardinality would ALSO fail either the
+    // out-of-range arm (if the extra entry lies outside `[LO, HI]`)
+    // OR the pairwise-distinct arm (if it duplicates within range),
+    // but the ARITY-MISMATCH-named panic message routes the operator
+    // to the CARDINALITY axis directly rather than to a downstream
+    // symptom on either weak-axis helper.
+    let expected_cardinality = (HI - LO) as usize + 1;
+    if N != expected_cardinality {
+        panic!(
+            "assert_u8_array_permutes_inclusive_range: family-wide u8 \
+             array's ARITY-MISMATCH — the compile-time array cardinality \
+             `N` does not equal the target inclusive range's cardinality \
+             `HI - LO + 1`. A bijection between `[0..N)` and `[LO..=HI]` \
+             forces `N == HI - LO + 1` by pigeonhole — an array whose \
+             arity drifts above the range's cardinality CANNOT stay both \
+             pairwise-distinct AND within the range (extras must \
+             duplicate OR fall outside), and one whose arity drifts \
+             below CANNOT reach every range byte. The substrate's \
+             PERMUTATION contract on the array is broken at the ARITY \
+             axis; every consumer that expects the array's entries to \
+             bijectively permute the target range (AtomKind / QuoteForm \
+             / UnquoteForm sub-carving spaces on their permutation-\
+             shaped range corners on Hash for Sexp's outer discriminator \
+             partition) relies on this cardinality equality"
+        );
+    }
+    // Delegate pairwise-distinctness to the sibling injectivity
+    // helper SECOND (before the range-coverage delegation). Order
+    // matters for provenance-preservation on the failure modes: with
+    // `N == HI - LO + 1` (post-arity-check), a duplicate entry
+    // pigeonhole-forces a missing range byte AND vice-versa — the
+    // two axes are logically equivalent given arity-cardinality
+    // match. Placing pairwise-distinct BEFORE covers-range routes a
+    // duplicate to the sibling's `"duplicate"`-named panic on the
+    // INJECTIVITY axis (rather than to the covers-range sibling's
+    // `"MISSING"`-named panic on the SURJECTIVITY axis which would
+    // fire downstream on the pigeonhole-forced coverage failure).
+    // Choosing INJECTIVITY-provenance as the primary duplicate-
+    // surfacing arm matches operator expectations: a "duplicate
+    // entry" diagnosis names the CAUSE (two entries alias) rather
+    // than a downstream SYMPTOM (a range byte is unreached because
+    // its slot is duplicated).
+    assert_u8_array_pairwise_distinct(arr);
+    // Delegate range-membership + full-range-coverage to the sibling
+    // covers-range helper THIRD. Given the two prior arms
+    // (arity-cardinality-match + pairwise-distinct), the covers-
+    // range helper's SECOND (`"MISSING"`) arm becomes unreachable
+    // by pigeonhole: `N` distinct entries chosen from a range of
+    // cardinality `N` MUST equal the range. Only the FIRST
+    // (`"OUT-OF-RANGE"`) arm surfaces in practice — a drift that
+    // lifts an entry outside `[LO, HI]` while staying pairwise-
+    // distinct panics with the sibling's `"OUT-OF-RANGE"` provenance.
+    // The delegated coverage sweep at the second arm is kept for
+    // DEFENSE-IN-DEPTH: a regression that silently dropped the
+    // pairwise-distinct delegation above would leave a duplicate
+    // uncaught by the compound helper's OWN body, but the covers-
+    // range sibling's MISSING check would then catch it as a
+    // safety-net symptom.
+    assert_u8_array_covers_inclusive_range::<N, LO, HI>(arr);
+}
+
+// Compile-time permutation-of-range witnesses — one `const _: () =
+// assert_u8_array_permutes_inclusive_range::<N, LO, HI>(&…)` per
+// family-wide `[u8; N]` hash-discriminator array on the substrate's
+// closed-set outer algebras whose distinct-value set is an
+// intentionally-closed contiguous inclusive range with the array
+// acting as a permutation of it. Each invocation is const-evaluated
+// at `cargo check` time; a regression that silently drifts the
+// array's cardinality above the range's cardinality OR silently
+// collides two entries OR silently drifts an entry outside the range
+// fails the build rather than the test suite. Compression peer to
+// the pre-existing `assert_u8_array_pairwise_distinct` +
+// `assert_u8_array_covers_inclusive_range` weak-witness pair on the
+// (axis-count) axis: those bind the SAME three arrays' invariants at
+// TWO `const _` lines per array (six lines total across the three
+// arrays); this compound helper binds the same theorem PLUS the
+// arity-cardinality-equality contract at ONE `const _` line per
+// array (three lines total across the three arrays) — a 2:1
+// compression at strictly stronger contract strength.
+// `StructuralKind::HASH_DISCRIMINATORS` stays on the weak-pair
+// (pairwise-distinct + covers-finite-set) pattern because its
+// distinct-value set `{0, 2}` is NON-contiguous (gap at `1u8` where
+// the atomic-carve outer marker lives) — the non-contiguous corner
+// binds through a future `assert_u8_array_permutes_finite_set`
+// compound helper on the non-contiguous corner of the (contiguity)
+// axis. `SexpShape::HASH_DISCRIMINATORS` stays on the range-
+// coverage-only pattern because its intentionally-non-injective
+// twelve-shape → seven-byte collapse means INJECTIVITY does not hold
+// — it CANNOT bind a permutation contract on any range corner.
+const _: () = assert_u8_array_permutes_inclusive_range::<6, 0, 5>(&AtomKind::HASH_DISCRIMINATORS);
+const _: () = assert_u8_array_permutes_inclusive_range::<4, 3, 6>(&QuoteForm::HASH_DISCRIMINATORS);
+const _: () = assert_u8_array_permutes_inclusive_range::<2, 5, 6>(
+    &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
 );
 
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
@@ -28424,6 +28678,198 @@ mod tests {
              message {msg:?} must name the failed AXIS (\"SET-BYTE-\
              MISSING\") for axis-provenance-preserving failure \
              diagnostics",
+        );
+    }
+
+    // ── `assert_u8_array_permutes_inclusive_range` — the compound
+    // (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) permutation-of-range
+    // verifier that collapses the pre-existing weak-witness pair
+    // (`assert_u8_array_pairwise_distinct` +
+    // `assert_u8_array_covers_inclusive_range`) into ONE `const _`
+    // line per array on the three permutation-shaped
+    // HASH_DISCRIMINATORS arrays (`AtomKind`, `QuoteForm`,
+    // `UnquoteForm`). The runtime test surface matches the sibling-
+    // helpers' shape (accept-singleton, accept-every-family-wide-
+    // substrate-array, reject-arity-below-cardinality, reject-
+    // arity-above-cardinality, reject-duplicate, reject-out-of-range,
+    // panic-message-provenance on the ARITY-MISMATCH axis, panic-
+    // message-provenance on the DELEGATED range-coverage axis,
+    // panic-message-provenance on the DELEGATED pairwise-distinct
+    // axis) split across the THREE failure arms so a regression that
+    // silently weakens the helper on ANY arm (e.g. dropping the arity
+    // check, dropping the range-coverage delegation, or dropping the
+    // pairwise-distinct delegation) is caught by the helper's OWN
+    // test surface rather than only surfacing as a false-positive on
+    // some future permutation-shaped `[u8; N]` array's compound pin.
+
+    #[test]
+    fn assert_u8_array_permutes_inclusive_range_accepts_the_singleton_range() {
+        // Singleton range `{K..=K}` at the `[u8; 1]` corner — a
+        // singleton array `[K]` is vacuously a permutation of `{K}`.
+        // Cross-arity coverage on the trivial-range corner of the
+        // const-N generic; simultaneously pins ALL THREE arms
+        // (ARITY: `1 == 1`; RANGE-MEMBERSHIP: `K in [K, K]`;
+        // PAIRWISE-DISTINCT: vacuously true on a singleton) at the
+        // smallest witness. Sibling posture to
+        // `assert_u8_array_covers_inclusive_range_accepts_the_
+        // singleton_range` on the delegated range-coverage helper.
+        assert_u8_array_permutes_inclusive_range::<1, 7, 7>(&[7u8]);
+        assert_u8_array_permutes_inclusive_range::<1, 0, 0>(&[0u8]);
+        assert_u8_array_permutes_inclusive_range::<1, 255, 255>(&[255u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_permutes_inclusive_range_accepts_every_family_wide_permutation_array() {
+        // Runtime cross-check that the SAME three permutation-shaped
+        // HASH_DISCRIMINATORS arrays the module-level `const _: () =
+        // ...` witnesses cover at COMPILE time are permutations of
+        // their target ranges. A regression that removes ONE of the
+        // `const _` witnesses would still leave THIS runtime pin as
+        // a safety net; the const witness fires FIRST at `cargo
+        // check`, this runtime pin catches the drift at `cargo test`.
+        // The pair enforces the theorem at TWO stages of the
+        // toolchain. Sibling posture to
+        // `assert_u8_array_covers_inclusive_range_accepts_every_
+        // family_wide_substrate_array` on the delegated range-
+        // coverage helper; where that pin sweeps FOUR arrays
+        // (`SexpShape` + `AtomKind` + `QuoteForm` + `UnquoteForm`)
+        // on the single-axis SURJECTIVITY corner, this pin sweeps
+        // the THREE permutation-shaped arrays on the compound
+        // (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) corner —
+        // `SexpShape::HASH_DISCRIMINATORS` is intentionally OMITTED
+        // per the twelve-shape → seven-byte collapse rule
+        // (DISTINCTNESS does not hold; it binds SURJECTIVITY-only
+        // on the sibling helper).
+        assert_u8_array_permutes_inclusive_range::<6, 0, 5>(&AtomKind::HASH_DISCRIMINATORS);
+        assert_u8_array_permutes_inclusive_range::<4, 3, 6>(&QuoteForm::HASH_DISCRIMINATORS);
+        assert_u8_array_permutes_inclusive_range::<2, 5, 6>(
+            &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "ARITY-MISMATCH")]
+    fn assert_u8_array_permutes_inclusive_range_panics_at_runtime_on_arity_below_cardinality() {
+        // NEGATIVE PIN — ARITY-MISMATCH below-cardinality corner: an
+        // array of arity `N < HI - LO + 1` MUST panic at runtime with
+        // the ARITY-MISMATCH-named message. Pins the compound
+        // helper's OWN reject-below-cardinality arm — a regression
+        // that silently dropped the arity-check gate would let this
+        // array reach the delegated `assert_u8_array_covers_
+        // inclusive_range` call, which would then panic with the
+        // sibling helper's `"MISSING"` message on the range byte
+        // absent from the too-short array — masking the ARITY-
+        // provenance behind the coverage-provenance downstream.
+        assert_u8_array_permutes_inclusive_range::<2, 0, 2>(&[0u8, 2u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "ARITY-MISMATCH")]
+    fn assert_u8_array_permutes_inclusive_range_panics_at_runtime_on_arity_above_cardinality() {
+        // NEGATIVE PIN — ARITY-MISMATCH above-cardinality corner: an
+        // array of arity `N > HI - LO + 1` MUST panic at runtime with
+        // the ARITY-MISMATCH-named message. Symmetric sibling to the
+        // below-cardinality pin — a regression that dropped the
+        // arity-check gate would let this array reach the delegated
+        // `assert_u8_array_pairwise_distinct` call, which would then
+        // panic with the sibling helper's generic-duplicate message
+        // on the pigeonhole-forced collision, masking the ARITY-
+        // provenance behind the pairwise-distinct-provenance
+        // downstream. The three entries stay within `[0, 1]` and are
+        // pairwise-distinct on the first two positions, so the arity
+        // check is the ONLY axis that can distinguish this from a
+        // valid permutation.
+        assert_u8_array_permutes_inclusive_range::<3, 0, 1>(&[0u8, 1u8, 0u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate")]
+    fn assert_u8_array_permutes_inclusive_range_panics_at_runtime_on_duplicate() {
+        // NEGATIVE PIN — PAIRWISE-DISTINCT arm: an array whose arity
+        // matches the range cardinality but which contains a
+        // duplicate entry (necessarily missing a range byte by
+        // pigeonhole) MUST panic at runtime. Pins the delegated
+        // `assert_u8_array_pairwise_distinct` arm — a regression
+        // that silently dropped the delegation would leave the
+        // duplicate uncaught. Note: the panic message here surfaces
+        // from the SIBLING helper (containing `"duplicate"`) rather
+        // than a compound-helper-namespaced string, per the
+        // delegation-based body design; the compound helper's OWN
+        // name still appears in the const-eval panic trace for a
+        // caller debugging a `cargo check` failure.
+        assert_u8_array_permutes_inclusive_range::<3, 0, 2>(&[0u8, 1u8, 1u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-RANGE")]
+    fn assert_u8_array_permutes_inclusive_range_panics_at_runtime_on_out_of_range() {
+        // NEGATIVE PIN — RANGE-MEMBERSHIP arm: an array whose arity
+        // matches the range cardinality but which contains an
+        // out-of-range entry MUST panic at runtime with the
+        // delegated `assert_u8_array_covers_inclusive_range`'s
+        // `"OUT-OF-RANGE"` axis-provenance message. Pins the
+        // delegated range-membership arm — a regression that
+        // silently dropped the delegation would leave the
+        // out-of-range entry uncaught. The three entries `[0, 1, 3]`
+        // exhaust the arity of `[0..=2]` (3 entries for a 3-byte
+        // range) but include `3u8` outside the target range;
+        // pairwise-distinct is satisfied so this array can ONLY be
+        // rejected on the range-membership axis.
+        assert_u8_array_permutes_inclusive_range::<3, 0, 2>(&[0u8, 1u8, 3u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_permutes_inclusive_range_panic_message_names_the_helper_and_arity_mismatch_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — ARITY-MISMATCH arm: the
+        // panic message MUST begin with the compound helper's own
+        // name AND identify the failed AXIS as "ARITY-MISMATCH" so
+        // downstream diagnostics route the drift back to (a) THIS
+        // compound helper by string search on
+        // `"assert_u8_array_permutes_inclusive_range"` and (b) the
+        // ARITY axis by string search on `"ARITY-MISMATCH"`. This
+        // string is chosen DISTINCT from every sibling helper's axis
+        // strings ("OUT-OF-RANGE" / "MISSING" on the range-coverage
+        // helper; "OUT-OF-SET" / "SET-BYTE-MISSING" on the finite-
+        // set-coverage helper) so a drift's axis-provenance routes
+        // UNAMBIGUOUSLY to (helper, axis) even in the presence of
+        // the multiple sibling helpers. Sibling posture to
+        // `assert_u8_array_covers_inclusive_range_panic_message_
+        // names_the_helper_and_range_bound_axis` on the range-
+        // coverage helper — both bind the (helper, failed-axis)
+        // provenance pair at ONE test per axis.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_permutes_inclusive_range::<2, 0, 2>(&[0u8, 2u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_permutes_inclusive_range must panic on \
+             an arity-cardinality mismatch — the reject-arity-\
+             mismatch arm is one of the three failure modes of the \
+             compound helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_permutes_inclusive_range panic \
+                 payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_permutes_inclusive_range"),
+            "assert_u8_array_permutes_inclusive_range ARITY-MISMATCH \
+             panic message {msg:?} must name the helper for \
+             provenance-preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("ARITY-MISMATCH"),
+            "assert_u8_array_permutes_inclusive_range ARITY-MISMATCH \
+             panic message {msg:?} must name the failed AXIS \
+             (\"ARITY-MISMATCH\") for axis-provenance-preserving \
+             failure diagnostics — the string is chosen DISTINCT \
+             from every sibling helper's axis strings so downstream \
+             diagnostics route UNAMBIGUOUSLY to this compound \
+             helper's arity arm",
         );
     }
 }

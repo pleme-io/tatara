@@ -578,6 +578,210 @@ pub const fn assert_char_pair_array_bijective<const N: usize>(arr: &[(char, char
 const _: () = assert_char_pair_array_bijective(&Atom::NAMED_ESCAPE_TABLE);
 const _: () = assert_char_pair_array_bijective(&Atom::ESCAPE_TABLE);
 
+/// Compile-time contract verifier — panics at const evaluation time if
+/// the distinct-values set of `arr` does not equal exactly the inclusive
+/// range `{LO..=HI}` on the substrate's `u8` cache-key vocabulary. Binds
+/// TWO conjunct clauses at ONE `const _` line:
+///   1. RANGE-BOUND: every entry lies within `[LO, HI]` — no byte
+///      outside the target partition. A regression that drifts ONE
+///      entry above `HI` or below `LO` (e.g. lifts a fresh entry at
+///      `7u8` on a `{0..=6}` array) fails-loudly at const-eval.
+///   2. FULL-COVERAGE: every byte in `[LO..=HI]` appears at least once
+///      in `arr` — no byte inside the target partition missing. A
+///      regression that silently unifies two entries onto ONE byte,
+///      leaving another byte in the range unreached (e.g. drops the
+///      `Nil` arm's `0u8` from `SexpShape::HASH_DISCRIMINATORS` in
+///      favour of a redundant `1u8`), fails-loudly at const-eval too.
+///
+/// The RANGE-COVERAGE contract is a NON-INJECTIVE peer of the
+/// pre-existing pairwise-DISTINCTNESS contract
+/// ([`assert_u8_array_pairwise_distinct`]) on the SAME `u8` cache-key
+/// vocabulary: where distinctness is the INJECTIVITY axis (every entry
+/// unique), range-coverage is the SURJECTIVITY-onto-a-range axis (every
+/// range byte reached, entries CAN duplicate). Applied to arrays where
+/// duplicates are load-bearing by construction — [`SexpShape::
+/// HASH_DISCRIMINATORS`](crate::error::SexpShape::HASH_DISCRIMINATORS)
+/// (`[u8; 12]` covering `{0..=6}` with SIX atomic-shape arms all
+/// collapsing to the outer Atom marker byte `1u8`) is the archetype
+/// case, intentionally omitted from the distinctness sweep per the
+/// twelve-shape → seven-byte collapse rule documented on the
+/// pairwise-distinct helper above; this range-coverage helper binds
+/// the outer-partition contract at compile time despite the six-fold
+/// collapse.
+///
+/// The invariant is load-bearing for the outer-`Sexp` cache-key
+/// algebra's SPAN across the shape-level projection surface. The
+/// twelve-arm sweep of `SexpShape::HASH_DISCRIMINATORS` MUST cover
+/// exactly the outer discriminator space `{0..=6}` — no byte outside
+/// (a `7u8` drift would introduce an unreachable cache slot for
+/// [`crate::macro_expand::Expander::cache`]), no byte inside missing
+/// (a `2u8` drop would silently unhash every `Sexp::List(_)` through
+/// whatever cache slot the drift routes to). Every future family-wide
+/// `[u8; N]` array whose distinct-value set is an intentionally-
+/// closed inclusive range participates in the SAME compile-time
+/// guarantee via one `const _` line.
+///
+/// Adding a new family-wide `[u8; N]` range-covering array to the
+/// substrate: pair the declaration with `const _: () =
+/// assert_u8_array_covers_inclusive_range::<N, LO, HI>(&Self::FOO_
+/// ARRAY);` co-located after the array's declaration and the range-
+/// coverage contract binds at compile time. The rustc-forced arity
+/// `[u8; N]` composes with this const-eval sweep so cardinality AND
+/// range-bound AND full-coverage are ALL compile-time theorems on the
+/// SAME array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_u8_array_covers_inclusive_range_panics_at_runtime_on_
+/// out_of_range_entry` + `assert_u8_array_covers_inclusive_range_
+/// panics_at_runtime_on_missing_range_byte`. Both panic sites carry
+/// axis-provenance strings so downstream diagnostics (`cargo check`
+/// const-eval error output, test-suite failure reports) route the
+/// drift back to the failed axis (RANGE-BOUND vs. FULL-COVERAGE) by
+/// string search — halving the search space for the operator
+/// debugging the drift.
+///
+/// Cross-argument constraint: `LO <= HI` is required — a caller who
+/// passes `LO > HI` fails-loudly at the first `LO..=HI` sweep step
+/// (the `while cur <= HI` guard rejects immediately) with a
+/// well-defined "empty range" outcome that is nonetheless surfaced as
+/// a full-coverage failure since `arr` must then be empty (`N == 0`).
+/// The three-parameter shape `(N, LO, HI)` composes rustc's forced
+/// arity `[u8; N]` with the two const-parameter bounds so ALL THREE
+/// invariants (cardinality, min-bound, max-bound) are compile-time
+/// theorems on the SAME `const _` line.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide range-
+///   coverage contract on the `u8` cache-key vocabulary becomes a
+///   TYPE-LEVEL theorem the substrate carries per array declaration
+///   rather than a runtime test the developer must remember to write
+///   per array (one range-bound sweep + one full-coverage sweep).
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key partition is the `intent_hash` composition axis —
+///   binding the range-coverage arrays on the typed algebra makes
+///   attestation-key drift a compile error rather than a silent
+///   BLAKE3 mis-hash on any consumer keyed on `Hash for Sexp`. A
+///   regression that drops a byte from the outer partition (or adds
+///   an out-of-range byte) fails the build before it can silently
+///   invalidate a cached expansion or a Sekiban audit-trail metric
+///   keyed on the outer discriminator space.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   range-and-coverage sweep IS the generative shape. Every new
+///   closed-set discriminator array whose distinct-value set is an
+///   intentionally-closed inclusive range adds ONE `const _` line to
+///   get the range-coverage theorem rather than re-deriving two
+///   per-array runtime iterator sweeps (one for the range bound, one
+///   for the coverage completeness).
+///
+/// Element-type sibling posture to the four pre-existing const-fn
+/// contract verifiers ([`assert_char_array_pairwise_distinct`],
+/// [`assert_str_array_pairwise_distinct`],
+/// [`assert_u8_array_pairwise_distinct`],
+/// [`assert_char_pair_array_bijective`]): where the four
+/// distinctness/bijectivity helpers close the INJECTIVITY axis of the
+/// substrate's typed-array vocabulary, this range-coverage helper
+/// opens the SURJECTIVITY-onto-a-range axis on the SAME `u8` cache-key
+/// element type — extending the family-wide contract-verifier surface
+/// past the closed-set distinctness axis onto the closed-set covering
+/// axis.
+pub const fn assert_u8_array_covers_inclusive_range<const N: usize, const LO: u8, const HI: u8>(
+    arr: &[u8; N],
+) {
+    let mut i = 0;
+    while i < N {
+        if arr[i] < LO || arr[i] > HI {
+            panic!(
+                "assert_u8_array_covers_inclusive_range: family-wide \
+                 u8 array carries an OUT-OF-RANGE entry at some \
+                 position — the entry's byte lies outside the target \
+                 inclusive range `[LO, HI]`. The substrate's RANGE-\
+                 BOUND contract on the array is broken; every \
+                 consumer that expects the array's entries to \
+                 partition an outer cache-key space (Hash for Sexp's \
+                 outer discriminator space, StructuralKind / \
+                 AtomKind / QuoteForm sub-carving spaces) relies on \
+                 the entries staying within the target range",
+            );
+        }
+        i += 1;
+    }
+    let mut cur = LO;
+    loop {
+        let mut k = 0;
+        let mut found = false;
+        while k < N {
+            if arr[k] == cur {
+                found = true;
+                break;
+            }
+            k += 1;
+        }
+        if !found {
+            panic!(
+                "assert_u8_array_covers_inclusive_range: family-wide \
+                 u8 array is MISSING a byte from the target inclusive \
+                 range `[LO, HI]` — every byte in the range must \
+                 appear at least once in the array. The substrate's \
+                 FULL-COVERAGE contract on the array is broken; every \
+                 consumer that expects the array's distinct-value set \
+                 to span the target range (SexpShape's twelve-shape → \
+                 seven-byte outer collapse across `{{0..=6}}`, the \
+                 sub-carvings' partition-span contracts) relies on \
+                 every range byte being reached",
+            );
+        }
+        if cur == HI {
+            break;
+        }
+        cur += 1;
+    }
+}
+
+// Compile-time range-coverage witnesses — one `const _: () =
+// assert_u8_array_covers_inclusive_range::<N, LO, HI>(&…)` per
+// family-wide `[u8; N]` hash-discriminator array on the substrate's
+// closed-set outer algebras whose distinct-value set is an
+// intentionally-closed inclusive range. Each invocation is
+// const-evaluated at `cargo check` time; a regression that silently
+// drifts an entry above HI, below LO, OR silently drops a range byte
+// from the distinct-value set fails the build rather than the test
+// suite. Sibling to the runtime `_span_outer_partition_*` /
+// `_covers_*` tests at `error.rs`'s tests module — the two enforce
+// the same theorem at TWO stages of the toolchain, so a build that
+// skips tests still catches the regression here, and a build that
+// runs tests catches it a second time as a safety net if the
+// const-eval sweep is ever silently dropped. Peer to the four
+// `assert_u8_array_pairwise_distinct` witnesses above on the (axis)
+// axis: those close the INJECTIVITY (pairwise-distinctness) axis of
+// the substrate's typed `u8` array vocabulary at the four
+// intentionally-injective HASH_DISCRIMINATORS arrays; this closes the
+// SURJECTIVITY-onto-a-range axis at the four intentionally-covering
+// HASH_DISCRIMINATORS arrays. `SexpShape::HASH_DISCRIMINATORS` sits
+// at the intersection of the TWO axes' complementary loads — its
+// twelve-shape → seven-byte collapse means DISTINCTNESS DOES NOT
+// hold (the six atomic-shape arms all collapse to `1u8`) yet
+// range-coverage of `{0..=6}` DOES hold (every outer byte reached).
+// The four sub-carvings' arrays sit at the injective corner of the
+// same lattice: they are BOTH pairwise-distinct AND cover an
+// inclusive range (`AtomKind::HASH_DISCRIMINATORS` covers `{0..=5}`,
+// `QuoteForm::HASH_DISCRIMINATORS` covers `{3..=6}`,
+// `UnquoteForm::HASH_DISCRIMINATORS` covers `{5..=6}`), so they bind
+// witnesses on BOTH axes. `StructuralKind::HASH_DISCRIMINATORS`
+// covers the non-inclusive-range partition `{0, 2}` (gap at `1u8`
+// where the atomic-carve outer marker lives, per the outer-`Sexp`
+// carve semantics) — intentionally OMITTED from this range-coverage
+// sweep since its distinct-value set is not a contiguous inclusive
+// range.
+const _: () = assert_u8_array_covers_inclusive_range::<12, 0, 6>(
+    &crate::error::SexpShape::HASH_DISCRIMINATORS,
+);
+const _: () = assert_u8_array_covers_inclusive_range::<6, 0, 5>(&AtomKind::HASH_DISCRIMINATORS);
+const _: () = assert_u8_array_covers_inclusive_range::<4, 3, 6>(&QuoteForm::HASH_DISCRIMINATORS);
+const _: () = assert_u8_array_covers_inclusive_range::<2, 5, 6>(
+    &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+);
+
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
 // serde_json serialization that would otherwise dominate cache overhead on
@@ -27573,6 +27777,209 @@ mod tests {
              message {msg:?} must name the failed COLUMN (\"RIGHT \
              column\") for column-provenance-preserving failure \
              diagnostics",
+        );
+    }
+
+    // ── `assert_u8_array_covers_inclusive_range` — the SURJECTIVITY-
+    // onto-a-range peer of `assert_u8_array_pairwise_distinct`'s
+    // INJECTIVITY axis on the SAME `u8` cache-key element type. Where
+    // the four sibling distinctness/bijectivity helpers close the
+    // pairwise-DISTINCTNESS axis of the substrate's typed-array
+    // vocabulary, this range-coverage helper opens the SURJECTIVITY-
+    // onto-a-range axis at four family-wide `[u8; N]` arrays whose
+    // distinct-value sets are intentionally-closed inclusive ranges
+    // (`AtomKind::HASH_DISCRIMINATORS` covers `{0..=5}`, `QuoteForm::
+    // HASH_DISCRIMINATORS` covers `{3..=6}`, `UnquoteForm::HASH_
+    // DISCRIMINATORS` covers `{5..=6}`, `SexpShape::HASH_DISCRIMINATORS`
+    // covers `{0..=6}` with a load-bearing six-fold collapse at `1u8`).
+    // The runtime test surface matches the sibling-helpers' shape
+    // (accept-singleton, accept-with-duplicates, accept-every-family-
+    // wide-substrate-array, reject-above-HI, reject-below-LO, reject-
+    // missing-range-byte, panic-message-provenance on the RANGE-BOUND
+    // axis, panic-message-provenance on the FULL-COVERAGE axis) split
+    // across BOTH axes so a regression that silently weakens the
+    // helper on EITHER axis (e.g. dropping the `arr[i] < LO || arr[i]
+    // > HI` guard, or dropping the `while cur <= HI` full-coverage
+    // sweep) is caught by the helper's OWN test surface rather than
+    // only surfacing as a false-positive on some future range-
+    // covering `[u8; N]` array's coverage pin.
+
+    #[test]
+    fn assert_u8_array_covers_inclusive_range_accepts_the_singleton_range() {
+        // Singleton range `{K..=K}` at the `[u8; 1]` corner —
+        // vacuously covering (the one entry MUST equal the one range
+        // byte). Cross-arity coverage on the trivial-range corner of
+        // the const-N generic; simultaneously pins BOTH axes (RANGE-
+        // BOUND: `K in [K, K]`; FULL-COVERAGE: `K` appears in the
+        // singleton array) at the smallest witness.
+        assert_u8_array_covers_inclusive_range::<1, 7, 7>(&[7u8]);
+        assert_u8_array_covers_inclusive_range::<1, 0, 0>(&[0u8]);
+        assert_u8_array_covers_inclusive_range::<1, 255, 255>(&[255u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_covers_inclusive_range_accepts_arrays_with_duplicates() {
+        // KEY LOAD-BEARING PIN: duplicates in the entries are ACCEPTED
+        // — the range-coverage contract is non-injective on the
+        // ENTRIES axis, only requires each RANGE byte to appear. This
+        // is the exact property that distinguishes this helper from
+        // its `assert_u8_array_pairwise_distinct` sibling and lets
+        // `SexpShape::HASH_DISCRIMINATORS`'s six-fold collapse at
+        // `1u8` bind a compile-time coverage witness despite failing
+        // distinctness. A regression that added a pairwise-distinct
+        // guard on the entries axis (accidentally merging the two
+        // sibling helpers' contracts) would fail-loudly here.
+        assert_u8_array_covers_inclusive_range::<4, 0, 2>(&[0u8, 1u8, 1u8, 2u8]);
+        assert_u8_array_covers_inclusive_range::<7, 0, 2>(&[0u8, 1u8, 1u8, 1u8, 1u8, 1u8, 2u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_covers_inclusive_range_accepts_every_family_wide_substrate_array() {
+        // Runtime cross-check that the SAME four range-covering arrays
+        // the module-level `const _: () = ...` witnesses cover at
+        // COMPILE time are range-covering. A regression that removes
+        // ONE of the `const _` witnesses would still leave THIS
+        // runtime pin as a safety net; the const witness fires FIRST
+        // at `cargo check`, this runtime pin catches the drift at
+        // `cargo test`. The pair enforces the theorem at TWO stages of
+        // the toolchain. Sibling posture to
+        // `assert_char_pair_array_bijective_accepts_every_family_wide_
+        // substrate_array` at the paired-array vocabulary.
+        assert_u8_array_covers_inclusive_range::<12, 0, 6>(
+            &crate::error::SexpShape::HASH_DISCRIMINATORS,
+        );
+        assert_u8_array_covers_inclusive_range::<6, 0, 5>(&AtomKind::HASH_DISCRIMINATORS);
+        assert_u8_array_covers_inclusive_range::<4, 3, 6>(&QuoteForm::HASH_DISCRIMINATORS);
+        assert_u8_array_covers_inclusive_range::<2, 5, 6>(
+            &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-RANGE")]
+    fn assert_u8_array_covers_inclusive_range_panics_at_runtime_on_entry_above_hi() {
+        // NEGATIVE PIN — RANGE-BOUND above-HI corner: an entry
+        // `HI + 1` MUST panic at runtime with the RANGE-BOUND-named
+        // message. Pins the helper's OWN reject-above-HI arm — a
+        // regression that silently returned without panicking on an
+        // out-of-range entry above the upper bound would slip through
+        // the compile-time witnesses' failure mode too.
+        assert_u8_array_covers_inclusive_range::<3, 0, 2>(&[0u8, 1u8, 3u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-RANGE")]
+    fn assert_u8_array_covers_inclusive_range_panics_at_runtime_on_entry_below_lo() {
+        // NEGATIVE PIN — RANGE-BOUND below-LO corner: an entry
+        // `LO - 1` MUST panic at runtime with the RANGE-BOUND-named
+        // message. Symmetric sibling to the above-HI pin — a
+        // regression that dropped the `arr[i] < LO` half of the
+        // OR-disjunction guard (leaving only the `arr[i] > HI` half)
+        // would silently accept below-LO entries.
+        assert_u8_array_covers_inclusive_range::<3, 1, 3>(&[0u8, 1u8, 2u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "MISSING")]
+    fn assert_u8_array_covers_inclusive_range_panics_at_runtime_on_missing_range_byte() {
+        // NEGATIVE PIN — FULL-COVERAGE corner: a range byte NOT
+        // reached by any entry MUST panic at runtime with the FULL-
+        // COVERAGE-named message. Pins the helper's OWN reject-
+        // incomplete-coverage arm — a regression that silently
+        // returned without panicking on an incomplete-coverage array
+        // (e.g. dropping the `while cur <= HI` sweep entirely, or
+        // narrowing it to `while cur < HI`) would slip through the
+        // compile-time witnesses' failure mode too. The three entries
+        // stay within `[0, 3]` (satisfying RANGE-BOUND) but skip the
+        // middle byte `2u8` — the panic MUST fire specifically on
+        // the FULL-COVERAGE axis, not on the RANGE-BOUND axis.
+        assert_u8_array_covers_inclusive_range::<3, 0, 3>(&[0u8, 1u8, 3u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_covers_inclusive_range_panic_message_names_the_helper_and_range_bound_axis()
+    {
+        // PANIC-MESSAGE PROVENANCE PIN — RANGE-BOUND arm: the panic
+        // message MUST begin with the helper's own name AND identify
+        // the failed AXIS as "OUT-OF-RANGE" so downstream diagnostics
+        // route the drift back to (a) the helper by string search on
+        // `"assert_u8_array_covers_inclusive_range"` and (b) the axis
+        // by string search on `"OUT-OF-RANGE"`. Sibling posture to
+        // `assert_char_pair_array_bijective_panic_message_names_the_
+        // helper_and_left_column` on the paired-array bijectivity
+        // helper's LEFT-column arm — both bind the (helper, failed-
+        // axis) provenance pair at ONE test per axis.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_covers_inclusive_range::<3, 0, 2>(&[0u8, 1u8, 3u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_covers_inclusive_range must panic on an \
+             out-of-range entry — the reject-out-of-range arm is one \
+             of the two failure modes of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_covers_inclusive_range panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_covers_inclusive_range"),
+            "assert_u8_array_covers_inclusive_range RANGE-BOUND panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("OUT-OF-RANGE"),
+            "assert_u8_array_covers_inclusive_range RANGE-BOUND panic \
+             message {msg:?} must name the failed AXIS (\"OUT-OF-\
+             RANGE\") for axis-provenance-preserving failure \
+             diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_u8_array_covers_inclusive_range_panic_message_names_the_helper_and_full_coverage_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — FULL-COVERAGE arm: the panic
+        // message MUST begin with the helper's own name AND identify
+        // the failed AXIS as "MISSING" so downstream diagnostics route
+        // the drift back to (a) the helper by string search and (b)
+        // the axis by string search on `"MISSING"`. Axis-symmetric
+        // sibling of the RANGE-BOUND panic-message provenance pin
+        // above — a regression that silently unified the two panic
+        // sites into ONE axis-anonymous message would collapse EITHER
+        // this pin's `"MISSING"` substring assertion OR the sibling
+        // pin's `"OUT-OF-RANGE"` substring assertion.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_covers_inclusive_range::<3, 0, 3>(&[0u8, 1u8, 3u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_covers_inclusive_range must panic on a \
+             missing range byte — the reject-incomplete-coverage arm \
+             is one of the two failure modes of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_covers_inclusive_range panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_covers_inclusive_range"),
+            "assert_u8_array_covers_inclusive_range FULL-COVERAGE panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("MISSING"),
+            "assert_u8_array_covers_inclusive_range FULL-COVERAGE panic \
+             message {msg:?} must name the failed AXIS (\"MISSING\") \
+             for axis-provenance-preserving failure diagnostics",
         );
     }
 }

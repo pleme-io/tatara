@@ -797,6 +797,157 @@ const _: () = assert_u8_array_covers_inclusive_range::<12, 0, 6>(
     &crate::error::SexpShape::HASH_DISCRIMINATORS,
 );
 
+/// Compile-time WELL-FORMEDNESS contract verifier on a caller-provided
+/// TARGET-SET spec `set` — panics at const evaluation time (or at
+/// runtime for dynamic callers) with the axis-provenance-named
+/// `"SET-NOT-PAIRWISE-DISTINCT"` message iff `set` carries a duplicate
+/// entry across two positions.
+///
+/// Closes the pre-existing caller-side WELL-FORMEDNESS gap on the
+/// finite-set corner of the substrate's `u8` cache-key contract
+/// lattice: pre-lift, both [`assert_u8_array_covers_finite_set`] and
+/// [`assert_u8_array_permutes_finite_set`] documented (but did NOT
+/// enforce) the pairwise-distinctness of the caller-provided target
+/// `set` spec as a well-formedness *precondition* — a malformed set
+/// (e.g. `[0u8, 2u8, 2u8]` at `M = 3`) silently passed BOTH covers-
+/// helper arms on any `arr` that partitioned the DISTINCT-value subset
+/// `{0, 2}` (post-lift `assert_u8_array_covers_finite_set` calls into
+/// this helper as its FIRST arm; a malformed set now fails-loudly at
+/// const-eval with a SET-side panic message BEFORE the OUT-OF-SET /
+/// SET-BYTE-MISSING arms fire). The pigeonhole invariants both
+/// downstream covers/permutes helpers rely on (`N == M` in the
+/// permutation helper forces exact-set-partitioning) assume `set`
+/// is well-formed AS a mathematical finite set; this helper turns
+/// that assumption into a compile-time theorem the substrate
+/// carries per call site rather than a docstring-level responsibility
+/// the operator must remember to keep in lockstep across every
+/// finite-set-covering call site.
+///
+/// Element-type sibling posture to [`assert_u8_array_pairwise_distinct`]:
+/// the ARRAY sibling closes pairwise-distinctness on the ARRAY side of
+/// the finite-set-coverage / permutation-of-finite-set compound
+/// contracts (`arr` MUST be pairwise-distinct for the SURJECTIVITY
+/// arm of the permutation helper to imply full-set-coverage by
+/// pigeonhole); this SET sibling closes pairwise-distinctness on the
+/// caller-provided TARGET-SET spec side (the SET spec MUST itself be
+/// pairwise-distinct as a mathematical set — a `[u8; M]` literal that
+/// silently duplicates a byte is not really a set of cardinality `M`
+/// but of cardinality `< M`, and every downstream pigeonhole argument
+/// gets a phantom-`M` inflating the arity check). The two helpers
+/// together close BOTH sides of the pairwise-distinctness axis on
+/// the finite-set-coverage compound tier: `arr` (the array under
+/// verification) AND `set` (the caller-provided target-set spec).
+///
+/// The invariant is load-bearing for `StructuralKind::HASH_DISCRIMINATORS`'
+/// permutation-of-finite-set witness at
+/// [`assert_u8_array_permutes_finite_set`]'s module-level `const _`
+/// invocation — the caller passes `&[0u8, 2u8]` as the target-set
+/// spec; a regression at the CALL SITE that silently duplicated a
+/// byte (e.g. `&[0u8, 0u8]` or `&[2u8, 2u8]`) would render the
+/// permutation contract unsound: the pigeonhole `N == M` arity check
+/// would still hold on the substrate's `[u8; 2]` array but the
+/// intended set-cardinality is really `1`, so a permutation of
+/// `{0, 2}` (via `arr = [0u8, 2u8]`) would silently mis-verify as
+/// a permutation of `{0}` or `{2}`. Post-lift the well-formedness
+/// check at the top of the compound helper's delegation chain
+/// catches the SET-side drift at const-eval time with a message
+/// routing operator attention to the CALLER'S SPEC rather than to
+/// a downstream symptom.
+///
+/// Panic-message provenance: the axis-name string
+/// `"SET-NOT-PAIRWISE-DISTINCT"` is chosen DISTINCT from every
+/// sibling helper's axis-provenance vocabulary (`"duplicate"` on
+/// [`assert_u8_array_pairwise_distinct`]'s ARRAY-side sweep;
+/// `"OUT-OF-RANGE"` / `"MISSING"` on
+/// [`assert_u8_array_covers_inclusive_range`];
+/// `"OUT-OF-SET"` / `"SET-BYTE-MISSING"` on
+/// [`assert_u8_array_covers_finite_set`];
+/// `"ARITY-MISMATCH"` on the two compound `_permutes_*` helpers)
+/// so a diagnostic that names the failed axis routes UNAMBIGUOUSLY
+/// to (a) this specific SET-side well-formedness helper, and (b)
+/// the CALLER'S TARGET-SET SPEC as the drift site rather than the
+/// downstream `arr` under verification. The two-element prefix
+/// `"SET-"` is shared with the sibling covers-finite-set arm's
+/// `"SET-BYTE-MISSING"` — both are SET-side drifts, disambiguated
+/// by the trailing `"NOT-PAIRWISE-DISTINCT"` vs. `"BYTE-MISSING"`
+/// noun to disambiguate the specific SET-side axis.
+///
+/// Adding a new family-wide `[u8; N]` finite-set-covering array to
+/// the substrate: no new call site needed at this level — every
+/// invocation of [`assert_u8_array_covers_finite_set`] or
+/// [`assert_u8_array_permutes_finite_set`] delegates through this
+/// helper as its FIRST arm, so the well-formedness contract on the
+/// caller-provided target-set spec binds at compile time as a side-
+/// effect of the primary covers/permutes contract. Callers CAN also
+/// invoke this helper directly at runtime to verify a dynamically-
+/// constructed target-set spec's well-formedness before passing it
+/// into the covers/permutes helpers — pinned by the negative
+/// runtime pins (`_panics_at_runtime_on_binary_collision`,
+/// `_panics_at_runtime_on_non_adjacent_collision`,
+/// `_panics_at_runtime_on_terminal_collision`).
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the caller-side target-set
+///   well-formedness contract becomes a TYPE-LEVEL theorem the
+///   substrate carries per call site rather than a docstring-level
+///   responsibility the developer must remember to keep in lockstep
+///   with every downstream covers/permutes invocation.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   set-well-formedness proof at the CALLER's site AND the covers/
+///   permutes helpers' downstream pigeonhole arguments regenerate
+///   through the SAME `const _` witness at each call site.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   set-pairwise-distinct sweep IS the generative shape. Every
+///   downstream call to `assert_u8_array_covers_finite_set` or
+///   `assert_u8_array_permutes_finite_set` now composes the set-
+///   well-formedness precondition through the delegation chain
+///   rather than the developer re-deriving a per-call-site
+///   pairwise-distinct sweep on the target-set literal.
+///
+/// Compound sibling posture to the constituent
+/// [`assert_u8_array_pairwise_distinct`] on the (verifier-target-
+/// side) axis: the two helpers close the pairwise-distinctness axis
+/// on the TWO complementary sides of the finite-set-coverage
+/// compound tier — ARRAY side (`arr` in the covers/permutes
+/// helpers) and SET side (`set` in the covers/permutes helpers).
+/// Every intentionally-closed finite-set-covering `[u8; N]` array
+/// on the substrate now binds pairwise-distinctness on BOTH the
+/// ARRAY under verification AND the caller-provided target-set
+/// spec at compile time.
+pub const fn assert_u8_finite_set_pairwise_distinct<const M: usize>(set: &[u8; M]) {
+    let mut i = 0;
+    while i < M {
+        let mut j = i + 1;
+        while j < M {
+            if set[i] == set[j] {
+                panic!(
+                    "assert_u8_finite_set_pairwise_distinct: SET-NOT-\
+                     PAIRWISE-DISTINCT — the caller-provided target \
+                     FINITE-SET spec `set` for a downstream `assert_u8_\
+                     array_covers_finite_set` / `assert_u8_array_\
+                     permutes_finite_set` invocation carries a DUPLICATE \
+                     entry across two positions. A mathematical finite \
+                     set carries each element at most once, so a `[u8; \
+                     M]` literal with `M` positions but fewer than `M` \
+                     DISTINCT values is not a well-formed finite set of \
+                     cardinality `M` — every downstream pigeonhole \
+                     argument (`N == M` arity check in the permutation \
+                     helper; SET-BYTE-MISSING coverage arm in the \
+                     covers helper) gets a PHANTOM-`M` inflating the \
+                     effective cardinality and silently mis-verifies \
+                     the intended finite-set-coverage / permutation \
+                     contract. Fix at the SET-DECLARATION site (the \
+                     `&[...]` literal passed as the `set` argument, NOT \
+                     the `arr` argument being verified) by removing the \
+                     duplicate byte from the target-set spec"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
 /// Compile-time contract verifier — panics at const evaluation time if
 /// the distinct-values set of `arr` does not equal exactly the distinct-
 /// values set of `set` on the substrate's `u8` cache-key vocabulary.
@@ -910,6 +1061,19 @@ pub const fn assert_u8_array_covers_finite_set<const N: usize, const M: usize>(
     arr: &[u8; N],
     set: &[u8; M],
 ) {
+    // Delegate target-set well-formedness to the sibling SET-side
+    // pairwise-distinctness helper FIRST. Placed BEFORE the OUT-OF-SET
+    // and SET-BYTE-MISSING sweeps below because a malformed `set`
+    // (e.g. `[0u8, 2u8, 2u8]`) inflates the effective cardinality
+    // used by the SET-BYTE-MISSING sweep with a PHANTOM-`M` and
+    // silently mis-verifies the intended finite-set-coverage contract.
+    // Routes drift on the CALLER'S TARGET-SET SPEC to the SET-side
+    // well-formedness axis rather than to a downstream OUT-OF-SET /
+    // SET-BYTE-MISSING symptom on `arr`. A well-formed `set` passes
+    // this arm as a no-op — the sweep is const-eval-elidable and
+    // costs zero at rustc-time on a substrate with only one such
+    // call site.
+    assert_u8_finite_set_pairwise_distinct(set);
     let mut i = 0;
     while i < N {
         let mut j = 0;
@@ -1239,31 +1403,44 @@ pub const fn assert_u8_array_permutes_inclusive_range<
 /// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`], whose
 /// distinct-value set `{0, 2}` is intentionally NON-contiguous with a
 /// gap at `1u8` where the atomic-carve outer marker
-/// [`AtomKind::OUTER_HASH_DISCRIMINATOR`] lives). Binds THREE conjunct
+/// [`AtomKind::OUTER_HASH_DISCRIMINATOR`] lives). Binds FOUR conjunct
 /// clauses at ONE `const _` line:
 ///
-///   1. ARITY-MISMATCH: `N` MUST equal `M` — a bijection between
-///      `[0..N)` and the target set `set` (whose cardinality equals
-///      `M` assuming `set` itself is pairwise-distinct — a well-
-///      formedness responsibility on the caller-provided target spec)
+///   1. SET-NOT-PAIRWISE-DISTINCT: the caller-provided TARGET-SET
+///      spec `set` MUST itself be pairwise-distinct — a mathematical
+///      finite set of cardinality `M` cannot carry a duplicate entry.
+///      Post-lift the pre-lift caveat "assuming `set` is itself
+///      pairwise-distinct — a well-formedness responsibility on the
+///      caller-provided target spec" is now a compile-time theorem
+///      the substrate carries per call site rather than a docstring-
+///      level responsibility the operator must remember to keep in
+///      lockstep with every downstream covers/permutes invocation.
+///      Delegated to [`assert_u8_finite_set_pairwise_distinct`] at
+///      the TOP of the delegation chain (before the ARITY arm below
+///      because a malformed `set` renders the pigeonhole invariants
+///      the ARITY arm relies on unsound with a PHANTOM-`M`).
+///   2. ARITY-MISMATCH: `N` MUST equal `M` — a bijection between
+///      `[0..N)` and the target set `set` (whose cardinality now
+///      provably equals `M` post-clause-1's well-formedness check)
 ///      forces the cardinality equality by pigeonhole. A regression
 ///      that adds a spurious duplicate entry to a HASH_DISCRIMINATORS
 ///      array (bumping `N` past the set's cardinality) fails-loudly at
 ///      this arm with the ARITY-MISMATCH-provenance panic message.
 ///      Delegated to no sibling — this arm is the compound helper's
 ///      unique contribution.
-///   2. Pairwise-distinctness: every pair of entries is distinct —
+///   3. Pairwise-distinctness: every pair of entries is distinct —
 ///      delegated to [`assert_u8_array_pairwise_distinct`].
-///   3. Set-membership + full-set-coverage: every entry lies in `set`
+///   4. Set-membership + full-set-coverage: every entry lies in `set`
 ///      AND every set byte is reached — delegated to
 ///      [`assert_u8_array_covers_finite_set`] (which sweeps BOTH the
-///      SET-MEMBERSHIP and FULL-COVERAGE arms; both bind through the
-///      one delegation call).
+///      SET-MEMBERSHIP and FULL-COVERAGE arms, AND re-runs clause 1's
+///      SET-WELL-FORMEDNESS delegation as defense-in-depth; all three
+///      bind through the one delegation call).
 ///
-/// (1) ∧ (2) ∧ (3) jointly imply the array's entries EXACTLY partition
-/// the set: `N == M` distinct entries chosen from a set of cardinality
-/// `M` MUST equal the set by pigeonhole (assuming `set` is itself
-/// pairwise-distinct). The single compound invocation therefore binds
+/// (1) ∧ (2) ∧ (3) ∧ (4) jointly imply the array's entries EXACTLY
+/// partition the set: `N == M` distinct entries chosen from a set of
+/// cardinality `M` (proven-well-formed by clause 1) MUST equal the set
+/// by pigeonhole. The single compound invocation therefore binds
 /// the same theorem as the pair `assert_u8_array_pairwise_distinct(
 /// &arr) + assert_u8_array_covers_finite_set::<N, M>(&arr, &set)` PLUS
 /// the arity-mismatch check (1) that neither weak sibling carries
@@ -1404,11 +1581,35 @@ pub const fn assert_u8_array_permutes_finite_set<const N: usize, const M: usize>
     arr: &[u8; N],
     set: &[u8; M],
 ) {
-    // ARITY-MISMATCH check FIRST — pigeonhole forces `N == M` on a
-    // bijection between `[0..N)` and `set` (assuming `set` is itself
-    // pairwise-distinct — a well-formedness responsibility on the
-    // caller-provided target spec). Placing this arm FIRST gives
-    // cleaner provenance: a drift that grows the array past the set
+    // Delegate target-set well-formedness to the sibling SET-side
+    // pairwise-distinctness helper FIRST — even BEFORE the ARITY
+    // check below. A malformed `set` (e.g. `[0u8, 2u8, 2u8]` at
+    // `M = 3`) with a duplicate entry inflates the effective
+    // cardinality with a PHANTOM-`M` and renders the pigeonhole
+    // invariants unsound: an `arr` of arity `N == M` that is
+    // pairwise-distinct and within-set would silently mis-verify
+    // as a permutation of a cardinality-`M` set when it is really
+    // covering a cardinality-`< M` set. Placing this arm FIRST
+    // routes drift on the CALLER'S TARGET-SET SPEC to the SET-side
+    // well-formedness axis rather than to a downstream ARITY-
+    // MISMATCH / duplicate / OUT-OF-SET symptom on `arr` (three
+    // of which would surface DEPENDING on how the caller's mistake
+    // interacts with the `arr` under verification, producing
+    // inconsistent operator diagnostics for the SAME underlying
+    // root cause). The helper's own body re-runs this check via
+    // the delegated `assert_u8_array_covers_finite_set` call at
+    // the third arm below as defense-in-depth against a regression
+    // that silently dropped this delegation at the top; the two
+    // calls jointly bind the SET-side well-formedness contract at
+    // TWO stages of the compound helper's delegation chain.
+    assert_u8_finite_set_pairwise_distinct(set);
+    // ARITY-MISMATCH check SECOND — pigeonhole forces `N == M` on a
+    // bijection between `[0..N)` and `set` (given the SET-side
+    // well-formedness delegated above; the pre-lift docstring's
+    // "assuming `set` is itself pairwise-distinct" caveat is now a
+    // compile-time theorem the substrate carries per call site).
+    // Placing this arm HERE (after well-formedness) gives cleaner
+    // provenance: a drift that grows the array past the set
     // cardinality would ALSO fail either the pairwise-distinct arm
     // (if the extra entry duplicates a within-set byte) OR the
     // covers-finite-set arm's `"OUT-OF-SET"` axis (if the extra
@@ -1421,9 +1622,10 @@ pub const fn assert_u8_array_permutes_finite_set<const N: usize, const M: usize>
              ARITY-MISMATCH — the compile-time array cardinality `N` \
              does not equal the target finite set's cardinality `M`. A \
              bijection between `[0..N)` and the target set forces `N \
-             == M` by pigeonhole (assuming `set` is itself pairwise-\
-             distinct — a well-formedness responsibility on the \
-             caller-provided target spec) — an array whose arity \
+             == M` by pigeonhole (given `set`'s well-formedness \
+             delegated to `assert_u8_finite_set_pairwise_distinct` \
+             at the top of this helper before the ARITY arm) — an \
+             array whose arity \
              drifts above the set's cardinality CANNOT stay both \
              pairwise-distinct AND within the set (extras must \
              duplicate OR fall outside), and one whose arity drifts \
@@ -29264,6 +29466,229 @@ mod tests {
              MISSING\") for axis-provenance-preserving failure \
              diagnostics",
         );
+    }
+
+    // ── `assert_u8_finite_set_pairwise_distinct` — the caller-side
+    // SET-WELL-FORMEDNESS verifier that closes the pre-lift docstring-
+    // level "assuming `set` is itself pairwise-distinct" caveat on
+    // both `assert_u8_array_covers_finite_set` and
+    // `assert_u8_array_permutes_finite_set` into a compile-time
+    // theorem the substrate carries per call site. The runtime test
+    // surface pins each of the helper's arms (accept-empty, accept-
+    // singleton, accept-every-family-wide-substrate-target-set,
+    // reject-binary-collision, reject-non-adjacent-collision, reject-
+    // terminal-collision, panic-message-provenance on the SET-NOT-
+    // PAIRWISE-DISTINCT axis, negative pins on BOTH downstream
+    // covers/permutes helpers exercising the SET-side delegation
+    // chain) so a regression that silently weakened the helper on
+    // ANY arm is caught by the helper's OWN test surface rather than
+    // only surfacing as a false-positive on some future finite-set-
+    // covering `[u8; N]` array's compound pin.
+
+    #[test]
+    fn assert_u8_finite_set_pairwise_distinct_accepts_the_empty_set() {
+        // Empty set `{}` at the `[u8; 0]` corner — vacuously pairwise-
+        // distinct (no `(i, j)` pair with `i < j` exists to test).
+        // Cross-arity coverage on the trivial corner of the const-M
+        // generic; a regression that fired on an empty set (e.g. by
+        // computing `M - 1` and wrapping to `usize::MAX`) would
+        // fail-loudly here. Turbofish binding required because there's
+        // no other cue for the `M` const parameter on the empty array
+        // literal.
+        assert_u8_finite_set_pairwise_distinct::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_u8_finite_set_pairwise_distinct_accepts_singleton_sets() {
+        // Singleton set `{K}` at the `[u8; 1]` corner — vacuously
+        // pairwise-distinct (no `(i, j)` pair with `i < j` exists).
+        // Cross-value coverage on the singleton corner at THREE byte
+        // widths (`0u8`, `7u8`, `255u8`) to pin the helper's SINGLETON
+        // arm across the whole `u8` domain.
+        assert_u8_finite_set_pairwise_distinct(&[0u8]);
+        assert_u8_finite_set_pairwise_distinct(&[7u8]);
+        assert_u8_finite_set_pairwise_distinct(&[255u8]);
+    }
+
+    #[test]
+    fn assert_u8_finite_set_pairwise_distinct_accepts_every_family_wide_target_set() {
+        // Runtime cross-check that the ONE target-SET spec the
+        // substrate's `const _` witness (at
+        // `assert_u8_array_permutes_finite_set::<2, 2>(
+        // &StructuralKind::HASH_DISCRIMINATORS, &[0u8, 2u8])`)
+        // passes through this helper's SET-side delegation at
+        // compile time is ALSO well-formed at runtime. The pair
+        // enforces the theorem at TWO stages of the toolchain: the
+        // const witness fires FIRST at `cargo check` (through the
+        // delegated call chain), this runtime pin catches the drift
+        // at `cargo test` as a safety net. Sibling posture to
+        // `assert_u8_array_covers_finite_set_accepts_every_family_
+        // wide_substrate_array` — the two pins together verify the
+        // (ARRAY, SET) pair at BOTH sides of the finite-set-coverage
+        // compound contract.
+        assert_u8_finite_set_pairwise_distinct(&[0u8, 2u8]);
+    }
+
+    #[test]
+    fn assert_u8_finite_set_pairwise_distinct_accepts_the_structural_kind_hash_discriminators() {
+        // Runtime cross-check that
+        // `StructuralKind::HASH_DISCRIMINATORS` itself is pairwise-
+        // distinct WHEN VIEWED AS A TARGET-SET SPEC (i.e. this
+        // helper accepts arrays that would themselves be valid
+        // target-set specs). While the SUBSTRATE'S primary call
+        // site passes the caller-provided `&[0u8, 2u8]` literal as
+        // the target-set spec (with `StructuralKind::HASH_
+        // DISCRIMINATORS` as the ARRAY under verification), the two
+        // arrays HAPPEN to have byte-equal contents by design (the
+        // ARRAY is a permutation of the target SET); a regression
+        // that silently unified two `StructuralKind` arms' cache-
+        // key bytes would fail-loudly here on the ARRAY-as-SET
+        // interpretation TOO, providing a redundant safety net past
+        // the primary compound witness at the module level.
+        assert_u8_finite_set_pairwise_distinct(&crate::error::StructuralKind::HASH_DISCRIMINATORS);
+    }
+
+    #[test]
+    #[should_panic(expected = "SET-NOT-PAIRWISE-DISTINCT")]
+    fn assert_u8_finite_set_pairwise_distinct_panics_at_runtime_on_binary_collision() {
+        // NEGATIVE PIN — binary-collision corner: the smallest
+        // duplicate-carrying set `[K, K]` MUST panic at runtime with
+        // the SET-NOT-PAIRWISE-DISTINCT-named message. Pins the
+        // helper's OWN reject arm — a regression that silently
+        // returned without panicking on an adjacent duplicate would
+        // slip through the compile-time witnesses' failure mode too.
+        assert_u8_finite_set_pairwise_distinct(&[42u8, 42u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SET-NOT-PAIRWISE-DISTINCT")]
+    fn assert_u8_finite_set_pairwise_distinct_panics_at_runtime_on_non_adjacent_collision() {
+        // NEGATIVE PIN — non-adjacent-collision corner: a duplicate
+        // separated by ONE intervening element MUST panic — pins
+        // that the `(i, j)` pair-walk sweeps the FULL upper-triangle
+        // rather than only adjacent pairs. A regression that
+        // narrowed the inner `while j < M` loop to `j == i + 1`
+        // would silently accept this set. Positions `(0, 2)` witness
+        // a non-adjacent collision through the middle `2u8`
+        // separator.
+        assert_u8_finite_set_pairwise_distinct(&[1u8, 2u8, 1u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SET-NOT-PAIRWISE-DISTINCT")]
+    fn assert_u8_finite_set_pairwise_distinct_panics_at_runtime_on_terminal_collision() {
+        // NEGATIVE PIN — terminal-collision corner: a duplicate at
+        // the LAST two positions MUST panic — pins that the outer
+        // `while i < M` loop reaches `i = M - 2` (else the terminal
+        // duplicate at positions `(M - 2, M - 1)` would slip
+        // through). A regression that narrowed the outer sweep to
+        // `while i < M - 1` (off-by-one on the OUTER bound) would
+        // silently accept this set.
+        assert_u8_finite_set_pairwise_distinct(&[0u8, 1u8, 2u8, 3u8, 3u8]);
+    }
+
+    #[test]
+    fn assert_u8_finite_set_pairwise_distinct_panic_message_names_the_helper_and_set_axis() {
+        // PANIC-MESSAGE PROVENANCE PIN — SET-NOT-PAIRWISE-DISTINCT
+        // arm: the panic message MUST begin with the helper's own
+        // name AND identify the failed AXIS as "SET-NOT-PAIRWISE-
+        // DISTINCT" so downstream diagnostics route the drift back
+        // to (a) the helper by string search on `"assert_u8_finite_
+        // set_pairwise_distinct"` and (b) the axis by string search
+        // on `"SET-NOT-PAIRWISE-DISTINCT"`. Sibling posture to
+        // `assert_u8_array_covers_finite_set_panic_message_names_
+        // the_helper_and_out_of_set_axis` on the ARRAY-side covers
+        // helper's OUT-OF-SET arm — both bind the (helper, failed-
+        // axis) provenance pair at ONE test per axis. The axis-
+        // provenance string "SET-NOT-PAIRWISE-DISTINCT" is chosen
+        // DISTINCT from EVERY sibling helper's axis vocabulary
+        // (`"duplicate"` on the ARRAY-side pairwise-distinct
+        // sibling; `"OUT-OF-SET"` / `"SET-BYTE-MISSING"` on the
+        // covers-finite-set sibling; `"OUT-OF-RANGE"` / `"MISSING"`
+        // on the covers-inclusive-range sibling; `"ARITY-MISMATCH"`
+        // on both `_permutes_*` compound helpers) so a diagnostic
+        // that names the failed axis routes UNAMBIGUOUSLY to (a)
+        // this specific SET-side helper, (b) the CALLER'S TARGET-
+        // SET SPEC as the drift site rather than the downstream
+        // `arr` under verification.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_finite_set_pairwise_distinct(&[42u8, 42u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_finite_set_pairwise_distinct must panic on a \
+             malformed target-set spec — the reject-duplicate arm \
+             is the sole failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_finite_set_pairwise_distinct panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_finite_set_pairwise_distinct"),
+            "assert_u8_finite_set_pairwise_distinct panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+        assert!(
+            msg.contains("SET-NOT-PAIRWISE-DISTINCT"),
+            "assert_u8_finite_set_pairwise_distinct panic message \
+             {msg:?} must name the failed AXIS (\"SET-NOT-PAIRWISE-\
+             DISTINCT\") for axis-provenance-preserving failure \
+             diagnostics",
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "SET-NOT-PAIRWISE-DISTINCT")]
+    fn assert_u8_array_covers_finite_set_panics_on_malformed_target_set_spec() {
+        // NEGATIVE PIN — DELEGATED SET-side well-formedness: a
+        // malformed target-set spec `[0, 2, 2]` fed into the
+        // ARRAY-side covers-finite-set helper MUST panic on the
+        // DELEGATED SET-NOT-PAIRWISE-DISTINCT arm BEFORE the OUT-
+        // OF-SET / SET-BYTE-MISSING arms fire. Pins the
+        // delegation chain: a regression that dropped the
+        // `assert_u8_finite_set_pairwise_distinct(set)` call at
+        // the top of `assert_u8_array_covers_finite_set` would
+        // silently accept a malformed set and produce a false-
+        // positive verdict on any `arr` covering the DISTINCT-
+        // value subset (`arr = [0, 2, 2]` here matches BOTH the
+        // OUT-OF-SET and SET-BYTE-MISSING sweeps because every
+        // entry appears in `set` and every set byte appears in
+        // `arr`, so without the SET-well-formedness delegation
+        // the intended cardinality-3 contract would silently
+        // verify against a really-cardinality-2 set). The
+        // `SET-NOT-PAIRWISE-DISTINCT` axis-provenance string
+        // routes the operator to the CALLER'S SPEC.
+        assert_u8_array_covers_finite_set::<3, 3>(&[0u8, 2u8, 2u8], &[0u8, 2u8, 2u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SET-NOT-PAIRWISE-DISTINCT")]
+    fn assert_u8_array_permutes_finite_set_panics_on_malformed_target_set_spec() {
+        // NEGATIVE PIN — DELEGATED SET-side well-formedness on
+        // the COMPOUND helper: a malformed target-set spec `[0, 2,
+        // 2]` fed into `assert_u8_array_permutes_finite_set` MUST
+        // panic on the DELEGATED SET-NOT-PAIRWISE-DISTINCT arm
+        // BEFORE the ARITY-MISMATCH / pairwise-distinct-on-arr /
+        // covers-finite-set arms fire. Pins the delegation chain at
+        // the compound helper's ENTRY point: a regression that
+        // dropped the `assert_u8_finite_set_pairwise_distinct(set)`
+        // call at the top of the compound helper would silently
+        // route a malformed set through the ARITY check (`N == M`
+        // holds on the substrate's cardinality-3 pair, since BOTH
+        // the array and the phantom-3 set have cardinality `3` at
+        // the type level even though the SET really has DISTINCT-
+        // cardinality `2`) and produce a false-positive permutation
+        // verdict. The `SET-NOT-PAIRWISE-DISTINCT` panic here MUST
+        // fire BEFORE the sibling `ARITY-MISMATCH` panic on the
+        // same input (both arms would fire independently but
+        // ordering routes the operator to the CALLER'S SPEC first,
+        // not to a downstream arithmetic symptom).
+        assert_u8_array_permutes_finite_set::<3, 3>(&[0u8, 2u8, 5u8], &[0u8, 2u8, 2u8]);
     }
 
     // ── `assert_u8_array_permutes_inclusive_range` — the compound

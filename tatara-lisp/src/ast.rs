@@ -388,40 +388,49 @@ pub const fn assert_u8_array_pairwise_distinct<const N: usize>(arr: &[u8; N]) {
     }
 }
 
-// Compile-time pairwise-distinctness witnesses — one `const _: () =
-// assert_u8_array_pairwise_distinct(&…)` per family-wide `[u8; N]`
-// hash-discriminator array on the substrate's closed-set outer
-// algebras WHOSE INJECTIVITY CONTRACT DOES NOT BIND THROUGH THE
-// COMPOUND `assert_u8_array_permutes_inclusive_range` HELPER BELOW.
-// Each invocation is const-evaluated at `cargo check` time; a
-// regression that silently collides two entries fails the build
-// rather than the test suite. Sibling to the runtime
-// `_hash_discriminators_pairwise_distinct` tests at `ast.rs` +
-// `error.rs`'s tests modules — the two enforce the same theorem at
-// TWO stages of the toolchain, so a build that skips tests still
-// catches the regression here, and a build that runs tests catches
-// it a second time as a safety net if the const-eval sweep is ever
-// silently dropped. Peer to the seven `assert_char_array_pairwise_
+// Compile-time pairwise-distinctness on family-wide `[u8; N]` hash-
+// discriminator arrays no longer surfaces at this level as DIRECT
+// witnesses — every family-wide `[u8; N]` HASH_DISCRIMINATORS array
+// whose INJECTIVITY contract binds now does so through ONE of the two
+// stronger COMPOUND (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) permutation
+// helpers defined below (`assert_u8_array_permutes_inclusive_range` on
+// the CONTIGUOUS-INCLUSIVE-RANGE corner of the (contiguity) axis at
+// `AtomKind::HASH_DISCRIMINATORS` / `QuoteForm::HASH_DISCRIMINATORS` /
+// `UnquoteForm::HASH_DISCRIMINATORS`; `assert_u8_array_permutes_
+// finite_set` on the NON-CONTIGUOUS-FINITE-SET corner at
+// `StructuralKind::HASH_DISCRIMINATORS`), each of which delegates
+// through this pairwise-distinct helper for the INJECTIVITY arm — the
+// helper is now purely a delegation target. `SexpShape::HASH_
+// DISCRIMINATORS` is intentionally OMITTED from BOTH compound helpers
+// per the intentionally-non-injective twelve-shape → seven-byte
+// collapse rule documented on the helper above — INJECTIVITY does not
+// hold, so no permutation contract can bind on any contiguity corner
+// (its SURJECTIVITY-only contract binds through the single-axis
+// `assert_u8_array_covers_inclusive_range` sibling further below).
+//
+// Adding a new family-wide `[u8; N]` permutation-shaped HASH_
+// DISCRIMINATORS array: prefer the compound helpers below
+// (`_permutes_inclusive_range` for the contiguous-range corner or
+// `_permutes_finite_set` for the non-contiguous-finite-set corner)
+// which bind INJECTIVITY ∧ SURJECTIVITY ∧ ARITY at ONE `const _` line;
+// fall back to a DIRECT `const _: () = assert_u8_array_pairwise_
+// distinct(&Self::FOO_ARRAY);` witness at this level ONLY for an array
+// that is intentionally injective but whose distinct-value set is
+// NEITHER a contiguous inclusive range NOR a known finite set (a
+// hypothetical looser-contract case not currently exercised by any
+// substrate array). Sibling to the runtime `_hash_discriminators_
+// pairwise_distinct` tests at `ast.rs` + `error.rs`'s tests modules —
+// those enforce the same theorem at `cargo test` time through direct
+// runtime calls to this helper, so the theorem is still bound at
+// TWO stages of the toolchain (compile time through the delegated
+// path inside the compound helpers, test time through the direct
+// runtime calls). Peer to the seven `assert_char_array_pairwise_
 // distinct` witnesses AND the thirteen `assert_str_array_pairwise_
 // distinct` witnesses above on the (element-type) axis: `char`
 // covers the reader-boundary vocabulary; `&'static str` covers the
 // closed-set outer-algebras' label / prefix / tag / literal
-// vocabularies; `u8` covers the outer-Sexp cache-key discriminator
-// vocabulary. `SexpShape::HASH_DISCRIMINATORS` is intentionally
-// omitted per the intentionally-non-injective twelve-shape → seven-
-// byte collapse rule documented on the helper above. The three
-// permutation-shaped sub-carvings (`AtomKind::HASH_DISCRIMINATORS`,
-// `QuoteForm::HASH_DISCRIMINATORS`,
-// `UnquoteForm::HASH_DISCRIMINATORS`) bind INJECTIVITY through the
-// stronger compound `assert_u8_array_permutes_inclusive_range`
-// helper below (which composes injectivity ∧ surjectivity-onto-range
-// ∧ arity-cardinality-match at ONE `const _` line per array) — only
-// `StructuralKind::HASH_DISCRIMINATORS` remains here because its
-// distinct-value set `{0, 2}` is NON-contiguous (gap at `1u8` where
-// the atomic-carve outer marker lives), so it binds
-// SURJECTIVITY through the `assert_u8_array_covers_finite_set`
-// non-contiguous corner rather than the permutation compound helper.
-const _: () = assert_u8_array_pairwise_distinct(&crate::error::StructuralKind::HASH_DISCRIMINATORS);
+// vocabularies; `u8` (via the compound helpers below) covers the
+// outer-`Sexp` cache-key discriminator vocabulary.
 
 /// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` share their LEFT `char` column OR their
@@ -957,43 +966,49 @@ pub const fn assert_u8_array_covers_finite_set<const N: usize, const M: usize>(
     }
 }
 
-// Compile-time finite-set-coverage witnesses — one `const _: () =
-// assert_u8_array_covers_finite_set::<N, M>(&…, &[…])` per family-wide
-// `[u8; N]` hash-discriminator array on the substrate's closed-set
-// outer algebras whose distinct-value set is an intentionally-closed
-// FINITE partition that is NOT a contiguous inclusive range (arrays
-// whose distinct-value set IS a contiguous inclusive range bind the
-// tighter `assert_u8_array_covers_inclusive_range` sibling above
-// instead). Each invocation is const-evaluated at `cargo check` time;
-// a regression that silently drifts an entry into a byte outside the
-// target set OR silently drops a set byte from the distinct-value set
-// fails the build rather than the test suite. Sibling to the runtime
-// `_span_*` / `_covers_*` tests at `error.rs`'s tests module — the two
-// enforce the same theorem at TWO stages of the toolchain, so a build
-// that skips tests still catches the regression here, and a build that
-// runs tests catches it a second time as a safety net if the
-// const-eval sweep is ever silently dropped. Contiguity-axis peer to
-// the four `assert_u8_array_covers_inclusive_range` witnesses above:
-// those close the contiguous-range corner of the SURJECTIVITY axis at
-// the four range-covering HASH_DISCRIMINATORS arrays; this closes the
-// non-contiguous-finite-set corner at the ONE non-contiguous-covering
-// array. `StructuralKind::HASH_DISCRIMINATORS` (`[u8; 2]` covering
-// `{0, 2}` with the load-bearing gap at `1u8` where the atomic-carve
-// outer marker byte lives) is the archetype non-contiguous case; the
-// gap at `1u8` is INTENTIONAL — it encodes the outer-`Sexp` carve
-// where atomic payloads route through the atomic-carve marker byte
-// rather than through the structural-residual sub-carve. Binding this
-// witness makes the (StructuralKind sub-carve, atomic-carve marker
-// byte) disjointness a compile-time theorem: a regression that lifted
-// a fresh `1u8` entry into `StructuralKind::HASH_DISCRIMINATORS` would
-// silently collide with `AtomKind::OUTER_HASH_DISCRIMINATOR = 1u8` on
-// the outer-`Sexp` cache-key partition and fail the build here
-// rather than surfacing as a silent BLAKE3 mis-hash on any consumer
-// keyed on `Hash for Sexp`.
-const _: () = assert_u8_array_covers_finite_set::<2, 2>(
-    &crate::error::StructuralKind::HASH_DISCRIMINATORS,
-    &[0u8, 2u8],
-);
+// Compile-time finite-set-coverage on family-wide `[u8; N]` hash-
+// discriminator arrays no longer surfaces at this level as DIRECT
+// witnesses — the ONE family-wide `[u8; N]` HASH_DISCRIMINATORS array
+// whose distinct-value set is an intentionally-closed non-contiguous
+// finite partition (`StructuralKind::HASH_DISCRIMINATORS` (`[u8; 2]`)
+// covering `{0, 2}` with the load-bearing gap at `1u8` where the
+// atomic-carve outer marker byte lives) now binds SURJECTIVITY through
+// the stronger COMPOUND (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY)
+// `assert_u8_array_permutes_finite_set` helper defined below, which
+// delegates through THIS helper for the SET-MEMBERSHIP + FULL-
+// COVERAGE arms — the helper is now purely a delegation target.
+// Binding the compound witness makes the (StructuralKind sub-carve,
+// atomic-carve marker byte) disjointness a compile-time theorem: a
+// regression that lifted a fresh `1u8` entry into
+// `StructuralKind::HASH_DISCRIMINATORS` would silently collide with
+// `AtomKind::OUTER_HASH_DISCRIMINATOR = 1u8` on the outer-`Sexp`
+// cache-key partition and fail the build at the compound helper's
+// delegation call to THIS helper's `"OUT-OF-SET"` arm rather than
+// surfacing as a silent BLAKE3 mis-hash on any consumer keyed on
+// `Hash for Sexp`.
+//
+// Adding a new family-wide `[u8; N]` non-contiguous-finite-set-covering
+// HASH_DISCRIMINATORS array: prefer the compound
+// `assert_u8_array_permutes_finite_set` helper below which binds
+// INJECTIVITY ∧ SURJECTIVITY ∧ ARITY at ONE `const _` line if the
+// array is a PERMUTATION of the target set; fall back to a DIRECT
+// `const _: () = assert_u8_array_covers_finite_set::<N, M>(&Self::
+// FOO_ARRAY, &[…set…]);` witness at this level ONLY for an array with
+// a LOOSER contract (e.g. an intentionally-non-injective mapping onto
+// the target set — no substrate array currently exercises this
+// posture). Sibling to the runtime `_span_*` / `_covers_*` tests at
+// `error.rs`'s tests module — those enforce the same theorem at
+// `cargo test` time through direct runtime calls to this helper, so
+// the theorem is still bound at TWO stages of the toolchain (compile
+// time through the delegated path inside the compound helper, test
+// time through the direct runtime calls). Contiguity-axis peer to the
+// four `assert_u8_array_covers_inclusive_range` witnesses above:
+// those close the contiguous-range corner of the SURJECTIVITY-only
+// axis at the four range-covering HASH_DISCRIMINATORS arrays;
+// `StructuralKind::HASH_DISCRIMINATORS` was the sole array closing the
+// non-contiguous-finite-set corner of the SURJECTIVITY-only axis, and
+// now instead binds through the stronger compound helper's
+// non-contiguous corner.
 
 /// Compile-time contract verifier — panics at const evaluation time if
 /// `arr` is not a PERMUTATION of the inclusive integer range `[LO..=HI]`
@@ -1208,6 +1223,290 @@ pub const fn assert_u8_array_permutes_inclusive_range<
     // safety-net symptom.
     assert_u8_array_covers_inclusive_range::<N, LO, HI>(arr);
 }
+
+/// Compile-time contract verifier — panics at const evaluation time if
+/// `arr` is not a PERMUTATION of the caller-supplied FINITE SET `set`
+/// on the substrate's `u8` cache-key vocabulary. NON-CONTIGUOUS-FINITE-
+/// SET peer of the pre-existing [`assert_u8_array_permutes_inclusive_range`]
+/// sibling on the (contiguity) axis of the substrate's compound
+/// (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) permutation verifiers: where
+/// the sibling closes the CONTIGUOUS-INCLUSIVE-RANGE corner (at the
+/// three permutation-shaped range-covering HASH_DISCRIMINATORS arrays
+/// [`AtomKind::HASH_DISCRIMINATORS`] / [`QuoteForm::HASH_DISCRIMINATORS`]
+/// / [`crate::error::UnquoteForm::HASH_DISCRIMINATORS`]), this closes
+/// the NON-CONTIGUOUS-FINITE-SET corner (at the one permutation-shaped
+/// non-contiguous-covering HASH_DISCRIMINATORS array
+/// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`], whose
+/// distinct-value set `{0, 2}` is intentionally NON-contiguous with a
+/// gap at `1u8` where the atomic-carve outer marker
+/// [`AtomKind::OUTER_HASH_DISCRIMINATOR`] lives). Binds THREE conjunct
+/// clauses at ONE `const _` line:
+///
+///   1. ARITY-MISMATCH: `N` MUST equal `M` — a bijection between
+///      `[0..N)` and the target set `set` (whose cardinality equals
+///      `M` assuming `set` itself is pairwise-distinct — a well-
+///      formedness responsibility on the caller-provided target spec)
+///      forces the cardinality equality by pigeonhole. A regression
+///      that adds a spurious duplicate entry to a HASH_DISCRIMINATORS
+///      array (bumping `N` past the set's cardinality) fails-loudly at
+///      this arm with the ARITY-MISMATCH-provenance panic message.
+///      Delegated to no sibling — this arm is the compound helper's
+///      unique contribution.
+///   2. Pairwise-distinctness: every pair of entries is distinct —
+///      delegated to [`assert_u8_array_pairwise_distinct`].
+///   3. Set-membership + full-set-coverage: every entry lies in `set`
+///      AND every set byte is reached — delegated to
+///      [`assert_u8_array_covers_finite_set`] (which sweeps BOTH the
+///      SET-MEMBERSHIP and FULL-COVERAGE arms; both bind through the
+///      one delegation call).
+///
+/// (1) ∧ (2) ∧ (3) jointly imply the array's entries EXACTLY partition
+/// the set: `N == M` distinct entries chosen from a set of cardinality
+/// `M` MUST equal the set by pigeonhole (assuming `set` is itself
+/// pairwise-distinct). The single compound invocation therefore binds
+/// the same theorem as the pair `assert_u8_array_pairwise_distinct(
+/// &arr) + assert_u8_array_covers_finite_set::<N, M>(&arr, &set)` PLUS
+/// the arity-mismatch check (1) that neither weak sibling carries
+/// alone — a strictly stronger contract at HALF the per-array
+/// witness-line surface.
+///
+/// Compression: pre-lift,
+/// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`] (`[u8; 2]`
+/// permuting the non-contiguous partition `{0, 2}`) bound its
+/// permutation-of-finite-set contract at TWO `const _` lines (one
+/// `assert_u8_array_pairwise_distinct` for INJECTIVITY, one
+/// `assert_u8_array_covers_finite_set` for SURJECTIVITY-onto-set) —
+/// two scattered per-axis witness lines that would silently drift out
+/// of lockstep if one was updated without the other. Post-lift the
+/// array binds the same theorem PLUS the arity-mismatch check at ONE
+/// `const _` line — a 2:1 compression at strictly stronger contract
+/// strength, symmetric to the sibling
+/// [`assert_u8_array_permutes_inclusive_range`]'s 2:1 compression on
+/// the three range-covering permutation-shaped arrays. Together the
+/// two compound helpers close the WHOLE compound tier of the
+/// substrate's `u8` array vocabulary: `StructuralKind` (on the non-
+/// contiguous corner) plus `AtomKind` / `QuoteForm` / `UnquoteForm`
+/// (on the contiguous corner) — four permutation-shaped arrays across
+/// both contiguity postures now bind their compound
+/// (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) permutation contract at ONE
+/// `const _` line each. [`crate::error::SexpShape::HASH_DISCRIMINATORS`]
+/// stays on the range-coverage-only single-axis sibling helper because
+/// its intentionally-non-injective twelve-shape → seven-byte collapse
+/// means INJECTIVITY does not hold — it CANNOT bind a permutation
+/// contract on any contiguity corner.
+///
+/// The invariant is load-bearing for `StructuralKind`'s non-contiguous
+/// sub-carve `{0, 2}` on the outer-`Sexp` cache-key partition:
+/// `Sexp::Nil` and `Sexp::List(_)` MUST map bijectively to `{0u8, 2u8}`
+/// so `Hash for Sexp`'s outer discriminator hash sequence stays
+/// injective on the structural-residual sub-partition. The intentional
+/// gap at `1u8` — where the atomic-carve outer marker
+/// [`AtomKind::OUTER_HASH_DISCRIMINATOR`] lives — is EXACTLY the
+/// reason StructuralKind CANNOT bind through the sibling
+/// [`assert_u8_array_permutes_inclusive_range`] helper (its distinct-
+/// value set is not a contiguous inclusive range). This compound
+/// helper is the non-contiguous corner where StructuralKind's compound
+/// contract binds at ONE line. A regression that silently unified two
+/// StructuralKind arms' cache-key bytes (a duplicate on the
+/// INJECTIVITY arm), OR lifted a fresh entry into the atomic-carve
+/// gap at `1u8` (a drift on the SET-MEMBERSHIP arm), OR dropped an
+/// entry making the set non-covering (a drift on the SET-BYTE-MISSING
+/// arm), OR bumped `N` past the set cardinality (a drift on the ARITY
+/// arm), would silently invalidate every cached `Sexp::List(_)` /
+/// `Sexp::Nil` participating in `Expander::cache` — pre-lift these
+/// four modes were caught only at runtime by the sibling helpers'
+/// runtime tests + the pre-lift weak `const _` pair, post-lift the
+/// compound `const _` witness catches all four drift modes at COMPILE
+/// time at ONE line.
+///
+/// Adding a new family-wide `[u8; N]` permutation-of-finite-set array
+/// to the substrate: pair the declaration with `const _: () =
+/// assert_u8_array_permutes_finite_set::<N, M>(&Self::FOO_ARRAY,
+/// &[…set…]);` co-located after the array's declaration and the
+/// permutation-of-finite-set contract binds at compile time. The
+/// rustc-forced arity `[u8; N]` composes with this const-eval sweep so
+/// cardinality AND arity-cardinality-match AND set-membership AND
+/// pairwise-distinctness AND (by pigeonhole) full set-coverage are
+/// ALL compile-time theorems on the SAME array from ONE `const _`
+/// line. Prefer this compound helper over the weak-pair pattern for
+/// any array whose distinct-value set is intentionally EXACTLY the
+/// given finite set with the array acting as a permutation of it —
+/// the two weak helpers stay as the fallback for arrays with LOOSER
+/// contracts. Prefer the tighter
+/// [`assert_u8_array_permutes_inclusive_range`] sibling when the
+/// target finite set IS a contiguous inclusive range — this helper is
+/// the fallback for the non-contiguous corner.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by the four
+/// negative runtime pins
+/// (`_panics_at_runtime_on_arity_below_cardinality`,
+/// `_panics_at_runtime_on_arity_above_cardinality`,
+/// `_panics_at_runtime_on_duplicate`,
+/// `_panics_at_runtime_on_out_of_set`) that jointly exercise each of
+/// the three failure arms.
+///
+/// The ARITY-MISMATCH panic site carries the same axis-provenance
+/// string `"ARITY-MISMATCH"` as the sibling
+/// [`assert_u8_array_permutes_inclusive_range`]'s ARITY arm — the two
+/// compound permutation helpers SHARE the arity axis-name because the
+/// axis is the SAME (a cardinality-equality contract), but the HELPER
+/// name in the panic message routes UNAMBIGUOUSLY to the SPECIFIC
+/// contiguity corner (`"assert_u8_array_permutes_finite_set"` vs.
+/// `"assert_u8_array_permutes_inclusive_range"`) — string search on
+/// the axis PLUS the helper name jointly disambiguates the failed
+/// (helper, axis) pair. The two delegated helpers each panic with
+/// THEIR OWN provenance strings so drift on the pairwise-distinctness
+/// or set-coverage arm surfaces with the respective sibling helper's
+/// message body (`"duplicate"` on the INJECTIVITY axis; `"OUT-OF-SET"`
+/// / `"SET-BYTE-MISSING"` on the SURJECTIVITY axis).
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide permutation-
+///   of-finite-set contract on the `u8` cache-key vocabulary becomes
+///   a TYPE-LEVEL theorem the substrate carries per array declaration
+///   at ONE `const _` line rather than at TWO per-axis `const _` lines
+///   the developer must remember to keep in lockstep across every
+///   permutation-of-finite-set-shaped HASH_DISCRIMINATORS array.
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key partition is the `intent_hash` composition axis —
+///   binding the non-contiguous permutation-shaped sub-carvings'
+///   arrays on the typed algebra makes cardinality drift a compile
+///   error rather than a silent `Hash for Sexp` mis-hash on a caller
+///   keyed on a non-contiguous permutation-shaped sub-carve.
+/// - THEORY.md §VI.1 — generation over composition; the compound
+///   arity-check + set-coverage + pairwise-distinctness sweep IS the
+///   generative shape. Every new closed-set discriminator array whose
+///   distinct-value set is an intentionally-closed non-contiguous
+///   finite partition with the array acting as a permutation of it
+///   adds ONE `const _` line to get the permutation theorem rather
+///   than re-deriving TWO per-axis `const _` lines (one for
+///   injectivity, one for surjectivity) that would silently drift out
+///   of lockstep if one was updated without the other.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   compound permutation-of-finite-set proof at declaration site AND
+///   the consumer site (`StructuralKind` sub-carve inside
+///   `Hash for Sexp` on `Sexp::Nil` / `Sexp::List(_)`) regenerate
+///   through the SAME `const _` witness.
+///
+/// Compound sibling posture on the (contiguity) axis:
+/// [`assert_u8_array_permutes_inclusive_range`] closes the CONTIGUOUS-
+/// INCLUSIVE-RANGE corner (three arrays); this helper closes the
+/// NON-CONTIGUOUS-FINITE-SET corner (one array). The two together
+/// close the whole (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) compound tier
+/// of the substrate's `u8` array vocabulary on both contiguity
+/// postures — every intentionally-closed permutation-shaped `[u8; N]`
+/// HASH_DISCRIMINATORS array on the substrate now binds its compound
+/// permutation contract at ONE `const _` line regardless of whether
+/// the target is a contiguous inclusive range or an arbitrary
+/// non-contiguous finite set.
+pub const fn assert_u8_array_permutes_finite_set<const N: usize, const M: usize>(
+    arr: &[u8; N],
+    set: &[u8; M],
+) {
+    // ARITY-MISMATCH check FIRST — pigeonhole forces `N == M` on a
+    // bijection between `[0..N)` and `set` (assuming `set` is itself
+    // pairwise-distinct — a well-formedness responsibility on the
+    // caller-provided target spec). Placing this arm FIRST gives
+    // cleaner provenance: a drift that grows the array past the set
+    // cardinality would ALSO fail either the pairwise-distinct arm
+    // (if the extra entry duplicates a within-set byte) OR the
+    // covers-finite-set arm's `"OUT-OF-SET"` axis (if the extra
+    // entry lies outside `set`), but the ARITY-MISMATCH-named panic
+    // message routes the operator to the CARDINALITY axis directly
+    // rather than to a downstream symptom on either weak-axis helper.
+    if N != M {
+        panic!(
+            "assert_u8_array_permutes_finite_set: family-wide u8 array's \
+             ARITY-MISMATCH — the compile-time array cardinality `N` \
+             does not equal the target finite set's cardinality `M`. A \
+             bijection between `[0..N)` and the target set forces `N \
+             == M` by pigeonhole (assuming `set` is itself pairwise-\
+             distinct — a well-formedness responsibility on the \
+             caller-provided target spec) — an array whose arity \
+             drifts above the set's cardinality CANNOT stay both \
+             pairwise-distinct AND within the set (extras must \
+             duplicate OR fall outside), and one whose arity drifts \
+             below CANNOT reach every set byte. The substrate's \
+             PERMUTATION-of-FINITE-SET contract on the array is broken \
+             at the ARITY axis; every consumer that expects the \
+             array's entries to bijectively permute the target set \
+             (StructuralKind's `{{0, 2}}` non-contiguous sub-carving \
+             on Hash for Sexp's outer discriminator partition around \
+             the atomic-carve gap at `1u8`) relies on this cardinality \
+             equality"
+        );
+    }
+    // Delegate pairwise-distinctness to the sibling injectivity
+    // helper SECOND (before the finite-set-coverage delegation). Order
+    // matters for provenance-preservation on the failure modes: with
+    // `N == M` (post-arity-check) and `set` well-formed, a duplicate
+    // entry in `arr` pigeonhole-forces a missing set byte AND vice-
+    // versa — the two axes are logically equivalent given arity-
+    // cardinality-match. Placing pairwise-distinct BEFORE covers-
+    // finite-set routes a duplicate to the sibling's `"duplicate"`-
+    // named panic on the INJECTIVITY axis (rather than to the
+    // covers-finite-set sibling's `"SET-BYTE-MISSING"`-named panic
+    // on the SURJECTIVITY axis which would fire downstream on the
+    // pigeonhole-forced coverage failure). Matches the sibling
+    // `assert_u8_array_permutes_inclusive_range`'s ordering: name
+    // the CAUSE (duplicate) rather than the pigeonhole-forced
+    // downstream SYMPTOM (SET-BYTE-MISSING).
+    assert_u8_array_pairwise_distinct(arr);
+    // Delegate set-membership + full-set-coverage to the sibling
+    // covers-finite-set helper THIRD. Given the two prior arms
+    // (arity-cardinality-match + pairwise-distinct on `arr`), the
+    // covers-finite-set helper's SECOND (`"SET-BYTE-MISSING"`) arm
+    // becomes unreachable by pigeonhole assuming `set` is well-
+    // formed: `N == M` distinct entries chosen from a set of
+    // cardinality `M` MUST equal the set. Only the FIRST
+    // (`"OUT-OF-SET"`) arm surfaces in practice — a drift that lifts
+    // an entry outside `set` while staying pairwise-distinct panics
+    // with the sibling's `"OUT-OF-SET"` provenance. The delegated
+    // coverage sweep at the second arm is kept for DEFENSE-IN-DEPTH:
+    // a regression that silently dropped the pairwise-distinct
+    // delegation above would leave a duplicate uncaught by the
+    // compound helper's OWN body, but the covers-finite-set
+    // sibling's `"SET-BYTE-MISSING"` check would then catch it as a
+    // safety-net symptom.
+    assert_u8_array_covers_finite_set::<N, M>(arr, set);
+}
+
+// Compile-time permutation-of-finite-set witness — one `const _: () =
+// assert_u8_array_permutes_finite_set::<N, M>(&…, &[…])` per family-
+// wide `[u8; N]` hash-discriminator array on the substrate's closed-
+// set outer algebras whose distinct-value set is an intentionally-
+// closed non-contiguous finite partition with the array acting as a
+// permutation of it. Each invocation is const-evaluated at `cargo
+// check` time; a regression that silently drifts the array's
+// cardinality away from the set's cardinality OR silently collides
+// two entries OR silently drifts an entry outside the set (including
+// the archetype drift into the intentional gap at `1u8`) fails the
+// build rather than the test suite. Compression peer to the pre-lift
+// `assert_u8_array_pairwise_distinct` + `assert_u8_array_covers_
+// finite_set` weak-witness pair on the (axis-count) axis: those bound
+// `StructuralKind::HASH_DISCRIMINATORS`' invariants at TWO `const _`
+// lines (one per axis); this compound helper binds the same theorem
+// PLUS the arity-cardinality-equality contract at ONE `const _`
+// line — a 2:1 compression at strictly stronger contract strength.
+// Contiguity-axis peer to the three `assert_u8_array_permutes_
+// inclusive_range` witnesses above: those close the contiguous-
+// inclusive-range corner of the compound tier at the three
+// permutation-shaped range-covering HASH_DISCRIMINATORS arrays
+// (`AtomKind`, `QuoteForm`, `UnquoteForm`); this closes the non-
+// contiguous-finite-set corner at the ONE non-contiguous-covering
+// permutation-shaped array (`StructuralKind`). Together the two
+// compound helpers close the WHOLE compound (INJECTIVITY ∧
+// SURJECTIVITY ∧ ARITY) tier of the substrate's `u8` array vocabulary
+// on both contiguity postures — every intentionally-closed
+// permutation-shaped `[u8; N]` HASH_DISCRIMINATORS array on the
+// substrate now binds its compound permutation contract at ONE
+// `const _` line regardless of whether the target is a contiguous
+// inclusive range or an arbitrary non-contiguous finite set.
+const _: () = assert_u8_array_permutes_finite_set::<2, 2>(
+    &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+    &[0u8, 2u8],
+);
 
 /// Compile-time compound (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) JOINT
 /// permutation-of-inclusive-range verifier for a `(scalar, [u8; M], [u8; N])`
@@ -29156,6 +29455,254 @@ mod tests {
              from every sibling helper's axis strings so downstream \
              diagnostics route UNAMBIGUOUSLY to this compound \
              helper's arity arm",
+        );
+    }
+
+    // ── `assert_u8_array_permutes_finite_set` — the compound
+    // (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) permutation-of-finite-set
+    // verifier on the NON-CONTIGUOUS-FINITE-SET corner of the
+    // (contiguity) axis peer to the pre-existing
+    // `assert_u8_array_permutes_inclusive_range` (contiguous-
+    // inclusive-range corner) sibling. Ships `StructuralKind::HASH_
+    // DISCRIMINATORS` from the pre-lift weak-witness pair
+    // (`assert_u8_array_pairwise_distinct` + `assert_u8_array_covers_
+    // finite_set`) into the compound tier at ONE `const _` line while
+    // adding the arity-cardinality-equality contract that neither
+    // weak sibling carries alone. The runtime test surface mirrors
+    // the sibling `assert_u8_array_permutes_inclusive_range` compound
+    // helper's shape (accept-singleton-set, accept-every-family-wide-
+    // substrate-array, reject-arity-below-cardinality, reject-arity-
+    // above-cardinality, reject-duplicate, reject-out-of-set, panic-
+    // message-provenance on the ARITY-MISMATCH axis) split across the
+    // three failure arms so a regression that silently weakens the
+    // helper on ANY arm (e.g. dropping the arity check, dropping the
+    // covers-finite-set delegation, or dropping the pairwise-distinct
+    // delegation) is caught by the helper's OWN test surface rather
+    // than only surfacing as a false-positive on some future
+    // permutation-of-finite-set-shaped `[u8; N]` array's compound pin.
+
+    #[test]
+    fn assert_u8_array_permutes_finite_set_accepts_the_singleton_set() {
+        // Singleton set `{K}` at the `[u8; 1]` corner — a singleton
+        // array `[K]` is vacuously a permutation of `{K}`. Cross-arity
+        // coverage on the trivial-set corner of the const-N generic;
+        // simultaneously pins ALL THREE arms (ARITY: `1 == 1`; SET-
+        // MEMBERSHIP: `K in {K}`; PAIRWISE-DISTINCT: vacuously true on
+        // a singleton) at the smallest witness. Sibling posture to
+        // `assert_u8_array_permutes_inclusive_range_accepts_the_
+        // singleton_range` on the contiguous-range corner peer.
+        assert_u8_array_permutes_finite_set::<1, 1>(&[7u8], &[7u8]);
+        assert_u8_array_permutes_finite_set::<1, 1>(&[0u8], &[0u8]);
+        assert_u8_array_permutes_finite_set::<1, 1>(&[255u8], &[255u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_permutes_finite_set_accepts_every_family_wide_permutation_of_finite_set_array(
+    ) {
+        // Runtime cross-check that the SAME
+        // `StructuralKind::HASH_DISCRIMINATORS` array the module-level
+        // `const _: () = ...` witness covers at COMPILE time is a
+        // permutation of the non-contiguous target set `{0, 2}`. A
+        // regression that removes the `const _` witness would still
+        // leave THIS runtime pin as a safety net; the const witness
+        // fires FIRST at `cargo check`, this runtime pin catches the
+        // drift at `cargo test`. The pair enforces the theorem at TWO
+        // stages of the toolchain. Sibling posture to
+        // `assert_u8_array_permutes_inclusive_range_accepts_every_
+        // family_wide_permutation_array` on the contiguous-range
+        // corner: where that pin sweeps THREE range-covering arrays
+        // (`AtomKind` + `QuoteForm` + `UnquoteForm`), this pin binds
+        // the ONE non-contiguous-covering permutation-shaped array
+        // (`StructuralKind`). Together the two runtime pins close the
+        // whole compound tier of the substrate's `[u8; N]`
+        // HASH_DISCRIMINATORS vocabulary at runtime symmetrically to
+        // the compile-time compound witnesses.
+        assert_u8_array_permutes_finite_set::<2, 2>(
+            &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+            &[0u8, 2u8],
+        );
+    }
+
+    #[test]
+    fn assert_u8_array_permutes_finite_set_accepts_a_synthetic_non_contiguous_partition() {
+        // POSITIVE — a synthetic `[u8; 3]` permutation of the non-
+        // contiguous partition `{0, 2, 5}` (two gaps: at `{1}` and at
+        // `{3, 4}`). Isolates the helper's INJECTIVITY-∧-SURJECTIVITY-
+        // ∧-ARITY verdict from the substrate constants: a green here
+        // plus a red on any of the negative pins below constrains the
+        // helper's behavior structurally on the non-contiguous corner,
+        // independent of the substrate's specific byte layout. Sibling
+        // posture to `assert_u8_array_covers_finite_set_accepts_the_
+        // non_contiguous_partition` on the single-axis SURJECTIVITY
+        // sibling — where that pin binds the (SET-MEMBERSHIP + FULL-
+        // COVERAGE) axes on a non-contiguous set, THIS pin binds the
+        // compound (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) contract on
+        // the same shape.
+        assert_u8_array_permutes_finite_set::<3, 3>(&[0u8, 2u8, 5u8], &[0u8, 2u8, 5u8]);
+        assert_u8_array_permutes_finite_set::<3, 3>(&[5u8, 0u8, 2u8], &[0u8, 2u8, 5u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "ARITY-MISMATCH")]
+    fn assert_u8_array_permutes_finite_set_panics_at_runtime_on_arity_below_cardinality() {
+        // NEGATIVE PIN — ARITY-MISMATCH below-cardinality corner: an
+        // array of arity `N < M` MUST panic at runtime with the ARITY-
+        // MISMATCH-named message. Pins the compound helper's OWN
+        // reject-below-cardinality arm — a regression that silently
+        // dropped the arity-check gate would let this array reach the
+        // delegated `assert_u8_array_covers_finite_set` call, which
+        // would then panic with the sibling helper's `"SET-BYTE-
+        // MISSING"` message on the set byte absent from the too-short
+        // array — masking the ARITY-provenance behind the coverage-
+        // provenance downstream. The array `[0]` covers set byte `0`
+        // but is missing set byte `2`. Sibling posture to
+        // `assert_u8_array_permutes_inclusive_range_panics_at_runtime_
+        // on_arity_below_cardinality` on the contiguous-range corner.
+        assert_u8_array_permutes_finite_set::<1, 2>(&[0u8], &[0u8, 2u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "ARITY-MISMATCH")]
+    fn assert_u8_array_permutes_finite_set_panics_at_runtime_on_arity_above_cardinality() {
+        // NEGATIVE PIN — ARITY-MISMATCH above-cardinality corner: an
+        // array of arity `N > M` MUST panic at runtime with the
+        // ARITY-MISMATCH-named message. Symmetric sibling to the
+        // below-cardinality pin — a regression that dropped the arity-
+        // check gate would let this array reach the delegated
+        // `assert_u8_array_pairwise_distinct` call, which would then
+        // panic with the sibling helper's generic-duplicate message on
+        // the pigeonhole-forced collision, masking the ARITY-
+        // provenance behind the pairwise-distinct-provenance
+        // downstream. The three entries `[0, 2, 0]` stay within
+        // `{0, 2}` (satisfying SET-MEMBERSHIP) but WOULD fail
+        // pairwise-distinct downstream on the duplicate `0u8` —
+        // however, the ARITY-check FIRES FIRST so the panic message
+        // routes to the ARITY axis with the compound helper's own
+        // name.
+        assert_u8_array_permutes_finite_set::<3, 2>(&[0u8, 2u8, 0u8], &[0u8, 2u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate")]
+    fn assert_u8_array_permutes_finite_set_panics_at_runtime_on_duplicate() {
+        // NEGATIVE PIN — PAIRWISE-DISTINCT arm: an array whose arity
+        // matches the set cardinality but which contains a duplicate
+        // entry (necessarily missing a set byte by pigeonhole) MUST
+        // panic at runtime. Pins the delegated
+        // `assert_u8_array_pairwise_distinct` arm — a regression that
+        // silently dropped the delegation would leave the duplicate
+        // uncaught. Note: the panic message here surfaces from the
+        // SIBLING helper (containing `"duplicate"`) rather than a
+        // compound-helper-namespaced string, per the delegation-based
+        // body design; the compound helper's OWN name still appears
+        // in the const-eval panic trace for a caller debugging a
+        // `cargo check` failure. Sibling posture to
+        // `assert_u8_array_permutes_inclusive_range_panics_at_runtime_
+        // on_duplicate` on the contiguous-range corner.
+        assert_u8_array_permutes_finite_set::<3, 3>(&[0u8, 2u8, 2u8], &[0u8, 2u8, 5u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-SET")]
+    fn assert_u8_array_permutes_finite_set_panics_at_runtime_on_out_of_set() {
+        // NEGATIVE PIN — SET-MEMBERSHIP arm: an array whose arity
+        // matches the set cardinality but which contains an entry
+        // outside the target set MUST panic at runtime with the
+        // delegated `assert_u8_array_covers_finite_set`'s `"OUT-OF-
+        // SET"` axis-provenance message. Pins the delegated set-
+        // membership arm — a regression that silently dropped the
+        // delegation would leave the out-of-set entry uncaught. The
+        // three entries `[0, 2, 3]` exhaust the arity of `{0, 2, 5}`
+        // (3 entries for a 3-byte set) but include `3u8` outside the
+        // target set; pairwise-distinct is satisfied so this array
+        // can ONLY be rejected on the set-membership axis. Sibling
+        // posture to `assert_u8_array_permutes_inclusive_range_panics_
+        // at_runtime_on_out_of_range` on the contiguous-range corner
+        // (`"OUT-OF-SET"` here vs. `"OUT-OF-RANGE"` there — chosen
+        // DISTINCT so downstream diagnostics route UNAMBIGUOUSLY to
+        // the failed contiguity corner).
+        assert_u8_array_permutes_finite_set::<3, 3>(&[0u8, 2u8, 3u8], &[0u8, 2u8, 5u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-SET")]
+    fn assert_u8_array_permutes_finite_set_panics_on_gap_byte_drift() {
+        // NEGATIVE PIN — ARCHETYPE GAP-BYTE corner: an entry that
+        // drifts INTO the intentional gap of a non-contiguous target
+        // set MUST panic — this is the exact regression the archetype
+        // `StructuralKind::HASH_DISCRIMINATORS` witness catches. A
+        // regression that lifted a fresh `1u8` entry into the
+        // `{0, 2}`-partitioned array would silently collide with
+        // `AtomKind::OUTER_HASH_DISCRIMINATOR = 1u8` on the outer-
+        // `Sexp` cache-key partition; this pin binds that failure mode
+        // as an OUT-OF-SET rejection at the delegated covers-finite-
+        // set arm's panic site. Sibling posture to `assert_u8_array_
+        // covers_finite_set_panics_on_gap_byte_drift` at the single-
+        // axis SURJECTIVITY sibling — where that pin binds the gap-
+        // byte-drift failure at the (SET-MEMBERSHIP) axis alone, THIS
+        // pin binds the SAME drift on the compound (INJECTIVITY ∧
+        // SURJECTIVITY ∧ ARITY) contract. The four-entry witness
+        // `[0, 1, 2, 5]` stays pairwise-distinct and matches the set
+        // cardinality of `{0, 2, 1, 5}` but the middle `1u8` — if the
+        // set were `{0, 2, 5}` and `[0, 1, 2]` were the array — would
+        // fire the OUT-OF-SET arm; here the arity is aligned to test
+        // the middle-gap drift with `1u8` in `arr` but NOT in `set`.
+        assert_u8_array_permutes_finite_set::<3, 3>(&[0u8, 1u8, 2u8], &[0u8, 2u8, 5u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_permutes_finite_set_panic_message_names_the_helper_and_arity_mismatch_axis()
+    {
+        // PANIC-MESSAGE PROVENANCE PIN — ARITY-MISMATCH arm: the panic
+        // message MUST begin with the compound helper's own name AND
+        // identify the failed AXIS as "ARITY-MISMATCH" so downstream
+        // diagnostics route the drift back to (a) THIS compound helper
+        // by string search on
+        // `"assert_u8_array_permutes_finite_set"` and (b) the ARITY
+        // axis by string search on `"ARITY-MISMATCH"`. The
+        // "ARITY-MISMATCH" axis-name is SHARED with the contiguous-
+        // range sibling `assert_u8_array_permutes_inclusive_range`
+        // (both compound permutation helpers share the arity axis),
+        // but the HELPER-name distinguishes the two: string search on
+        // (`"assert_u8_array_permutes_finite_set"`, `"ARITY-MISMATCH"`)
+        // routes UNAMBIGUOUSLY to the (non-contiguous corner, arity
+        // arm) pair. Sibling posture to
+        // `assert_u8_array_permutes_inclusive_range_panic_message_
+        // names_the_helper_and_arity_mismatch_axis` on the contiguous-
+        // range corner — both bind the (helper, failed-axis)
+        // provenance pair at ONE test per axis.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_permutes_finite_set::<1, 2>(&[0u8], &[0u8, 2u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_permutes_finite_set must panic on an \
+             arity-cardinality mismatch — the reject-arity-mismatch \
+             arm is one of the three failure modes of the compound \
+             helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_permutes_finite_set panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_permutes_finite_set"),
+            "assert_u8_array_permutes_finite_set ARITY-MISMATCH panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics — the HELPER-name is the \
+             axis-name-tie-breaker between this helper and the \
+             contiguous-range sibling which SHARES the \
+             \"ARITY-MISMATCH\" axis-provenance string",
+        );
+        assert!(
+            msg.contains("ARITY-MISMATCH"),
+            "assert_u8_array_permutes_finite_set ARITY-MISMATCH panic \
+             message {msg:?} must name the failed AXIS \
+             (\"ARITY-MISMATCH\") for axis-provenance-preserving \
+             failure diagnostics",
         );
     }
 

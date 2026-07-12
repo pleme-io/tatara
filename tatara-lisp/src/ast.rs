@@ -1905,6 +1905,237 @@ const _: () = assert_u8_array_within_u8_finite_set::<2, 4>(
 );
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// the distinct-values sets of `a` and `b` share any byte on the
+/// substrate's `u8` cache-key vocabulary. Binds ONE conjunct clause:
+/// U8-DISJOINTNESS-VIOLATION — no entry in `a` may appear as an entry
+/// in `b` (symmetric across the two array arguments).
+///
+/// Row-dual peer to [`assert_char_arrays_disjoint`] on the (element-
+/// type) axis of the (subset, disjointness) 2-corner face of the
+/// (contract-shape) axis: where the (char) sibling closes the reader-
+/// boundary `char` disjointness corner at compile time, this (u8)
+/// sibling closes the outer-`Sexp` cache-key `u8` disjointness corner
+/// on the SAME element-type row. Together the two helpers close the
+/// (element-type × contract-shape) 2×2 = 4-corner face at ONE peer
+/// const-fn helper per corner rather than at a per-pair runtime
+/// iterator sweep per call site. Contract-orthogonal peer to
+/// [`assert_u8_array_within_u8_finite_set`] on the (subset-vs-
+/// disjointness) axis of the (contract-shape) axis on the SAME (u8)
+/// row: where the SUBSET-EMBEDDING sibling binds `arr ⊆ set`, this
+/// DISJOINTNESS sibling binds `a ∩ b = ∅` on the SAME element type.
+///
+/// The disjointness relation is SYMMETRIC (unlike the SUBSET-EMBEDDING
+/// relation, which distinguishes `arr` from `set`) so the two
+/// arguments carry NO axis-provenance role split — either drift site
+/// (a byte in `a` that aliases a byte in `b`, OR a byte in `b` that
+/// aliases a byte in `a`) surfaces at the U8-DISJOINTNESS-VIOLATION
+/// panic with the OFFENDING arm named by BOTH position indices
+/// (`a[i]` AND `b[j]`) rather than by only one side of the pair.
+///
+/// SYMMETRY IN THE NESTED SWEEP: the inner `while j < M` sweep visits
+/// every position of `b` per outer `i` and panics at the FIRST
+/// cross-array collision (`a[i] == b[j]`). Because the relation is
+/// symmetric and the two-loop sweep visits every `(i, j) ∈ [0, N) ×
+/// [0, M)` pair, swapping `a` and `b` at the call site produces the
+/// SAME verdict — the helper does NOT gratuitously depend on argument
+/// order. A future call site that intends to name a SPECIFIC drift
+/// side can still route its own preferred first-mention by picking
+/// the argument order that serves its diagnostic story; the helper
+/// itself carries no such preference.
+///
+/// The invariant is load-bearing for the outer-`Sexp` cache-key
+/// algebra's JOINT PARTITION contract at [`Hash for Sexp`]: the
+/// outer-`Sexp` discriminator space `{0..=6}` MUST partition across
+/// the three closed-set sub-carvings ([`crate::error::StructuralKind::HASH_DISCRIMINATORS`]
+/// at `{0, 2}`, [`AtomKind::OUTER_HASH_DISCRIMINATOR`] scalar at `{1}`,
+/// [`QuoteForm::HASH_DISCRIMINATORS`] at `{3, 4, 5, 6}`) with NO
+/// overlap — otherwise two structurally-distinct outer-`Sexp` variants
+/// would silently mis-hash through the same cache-key byte and the
+/// substrate's `Expander::cache` would leak macro-expansion hits
+/// across carvings. Pre-lift the substrate carried these array-vs-
+/// array disjointness relations at runtime tests
+/// (`structural_kind_hash_discriminator_disjoint_from_atom_outer_carve_byte_and_quote_form_hash_discriminator_partition`
+/// on the (StructuralKind, QuoteForm) pair;
+/// `unquote_form_hash_discriminator_partitions_disjointly_from_non_substitution_carvings`
+/// on the (UnquoteForm, StructuralKind) pair); post-lift the ARRAY-
+/// LEVEL disjointness of the pinned pairs binds at rustc time via one
+/// `const _` line per pair. A regression that silently drifted
+/// `StructuralKind::LIST_HASH_DISCRIMINATOR` from `2u8` to `3u8`
+/// (colliding with `QuoteForm::QUOTE_HASH_DISCRIMINATOR`), or drifted
+/// `QuoteForm::QUOTE_HASH_DISCRIMINATOR` from `3u8` to `0u8`
+/// (colliding with `StructuralKind::NIL_HASH_DISCRIMINATOR`), fails at
+/// `cargo check` BEFORE any test scheduler runs. Sibling to the
+/// pairwise-distinctness witnesses above — those pin INJECTIVITY on
+/// each individual `[u8; N]` HASH_DISCRIMINATORS array, this pins
+/// DISJOINTNESS across PAIRS of arrays on the SAME outer-`Sexp`
+/// cache-key byte space.
+///
+/// Adding a new family-wide `[u8; N]` sub-vocabulary whose distinct-
+/// values set must remain disjoint from another substrate `[u8; M]`
+/// array's distinct-values set: pair the declaration with `const _:
+/// () = assert_u8_arrays_disjoint::<N, M>(&Self::FOO_ARRAY,
+/// &Other::BAR_ARRAY);` co-located after the array's declaration and
+/// the DISJOINTNESS contract binds at compile time. The rustc-forced
+/// arities `[u8; N]` and `[u8; M]` compose with this const-eval
+/// sweep so BOTH cardinality-pair AND cross-array disjointness are
+/// compile-time theorems on the SAME (a, b) u8-array pair.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_u8_arrays_disjoint_panics_at_runtime_on_collision` and
+/// `assert_u8_arrays_disjoint_panic_message_names_the_helper_and_u8_disjointness_violation_axis`.
+/// The panic site carries the `"U8-DISJOINTNESS-VIOLATION"` axis-
+/// provenance string chosen DISTINCT from every sibling helper's axis
+/// vocabulary (`"duplicate"` on the ARRAY-side pairwise-distinct
+/// sibling; `"CHAR-DISJOINTNESS-VIOLATION"` on the (char) row-dual
+/// DISJOINTNESS sibling; `"CHAR-SUBSET-VIOLATION"` on the (char)
+/// SUBSET-embedding sibling; `"SUBSET-VIOLATION"` on the (u8) finite-
+/// set SUBSET-only sibling; `"RANGE-SUBSET-VIOLATION"` on the (u8)
+/// range SUBSET-only sibling; `"OUT-OF-SET"` / `"SET-BYTE-MISSING"`
+/// on the (u8) covers-finite-set sibling; `"OUT-OF-RANGE"` /
+/// `"MISSING"` on the (u8) covers-inclusive-range sibling;
+/// `"ARITY-MISMATCH"` on both (u8) `_permutes_*` compound helpers;
+/// `"SET-NOT-PAIRWISE-DISTINCT"` on the (u8) SET-side well-formedness
+/// sibling) so a diagnostic that names the failed axis routes
+/// UNAMBIGUOUSLY to THIS specific u8 DISJOINTNESS helper. The `"U8-"`
+/// prefix disambiguates from the (char) DISJOINTNESS sibling; the
+/// shared `"-VIOLATION"` suffix lets callers grep either row's
+/// DISJOINTNESS or SUBSET-embedding sibling by `"VIOLATION"` alone or
+/// route to the specific contract-shape by the axis stem
+/// (`"DISJOINTNESS"` vs `"SUBSET"`).
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide cross-array
+///   disjointness contract on the outer-`Sexp` cache-key `u8`
+///   vocabulary becomes a TYPE-LEVEL theorem the substrate carries
+///   per (a, b) u8-array pair rather than a runtime test the
+///   developer must remember to write per pair.
+/// - THEORY.md §III — the typescape; the (element-type × contract-
+///   shape) 2×2 = 4-corner matrix is now closed at ONE peer const-fn
+///   helper per corner — [`assert_char_array_within_char_finite_set`]
+///   on the (char, subset) corner, [`assert_char_arrays_disjoint`] on
+///   the (char, disjointness) corner,
+///   [`assert_u8_array_within_u8_finite_set`] on the (u8, subset)
+///   corner, and this helper on the (u8, disjointness) corner.
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key partition is the substrate's `intent_hash` composition
+///   axis — binding the ARRAY-vs-ARRAY disjointness pairs at compile
+///   time makes a joint-partition-overlap drift a compile error
+///   rather than a silent BLAKE3 mis-hash on any `Expander::cache` or
+///   `Sekiban` audit-trail metric keyed on the outer discriminator
+///   space.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   cross-array membership sweep IS the generative shape. Every new
+///   closed-set `u8` sub-vocabulary array whose distinct-values set is
+///   an intentionally-disjoint peer of another substrate `u8` array
+///   adds ONE `const _` line to get the disjointness theorem rather
+///   than re-deriving a per-pair runtime iterator sweep at each call
+///   site.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   DISJOINTNESS proof at declaration site AND the outer-`Sexp`
+///   cache-key JOINT PARTITION contract regenerate through the SAME
+///   `const _` witnesses at the ARRAY level.
+///
+/// Frontier inspiration: Lean 4's `Finset.Disjoint : Finset α →
+/// Finset α → Prop` as a decidable relation on `Finset α` combined
+/// with `Finset.disjoint_iff_ne`'s characterisation `∀ a ∈ s, ∀ b ∈
+/// t, a ≠ b` — this substrate primitive embeds the same disjointness
+/// relation as a rustc const-eval-time proof obligation at every
+/// `assert_u8_arrays_disjoint` call site rather than as a Lean tactic
+/// invocation deferred to `elab_command`. Coq's `Ensembles.Disjoint :
+/// Ensemble U -> Ensemble U -> Prop` captures the same relation as a
+/// Prop-level predicate. Translation through pleme-io primitives: the
+/// DISJOINTNESS predicate binds through the same nested `(i, j)`
+/// sweep as the (char) row-dual peer, monomorphised to the concrete
+/// `[u8; N] × [u8; M]` element-type realisation — no `Ord` / `Eq` /
+/// `Hash` supertrait bound, no `HashSet`-shape carrier, no allocation.
+pub const fn assert_u8_arrays_disjoint<const N: usize, const M: usize>(a: &[u8; N], b: &[u8; M]) {
+    let mut i = 0;
+    while i < N {
+        let mut j = 0;
+        while j < M {
+            if a[i] == b[j] {
+                panic!(
+                    "assert_u8_arrays_disjoint: U8-DISJOINTNESS-\
+                     VIOLATION — the two family-wide u8 arrays `a` \
+                     and `b` share an entry at some (i, j) position \
+                     pair. The substrate's CROSS-ARRAY DISJOINTNESS \
+                     contract on the pair is broken; every consumer \
+                     that partitions the two arrays' distinct-values \
+                     sets into disjoint sub-vocabularies of the outer-\
+                     `Sexp` cache-key `u8` algebra (the outer-`Sexp` \
+                     joint-partition contract at `Hash for Sexp`: \
+                     `StructuralKind::HASH_DISCRIMINATORS` at `{{0, 2}}` \
+                     disjoint from `QuoteForm::HASH_DISCRIMINATORS` at \
+                     `{{3, 4, 5, 6}}` disjoint from `UnquoteForm::HASH_\
+                     DISCRIMINATORS` at `{{5, 6}}` on the non-parent \
+                     carvings; any future typed-disjointness pair on \
+                     the substrate's outer-`Sexp` cache-key `u8` \
+                     algebras) relies on the two arrays' distinct-\
+                     values sets NOT sharing a byte. Fix at WHICHEVER \
+                     ARRAY-DECLARATION site drifted (the symmetric \
+                     disjointness relation carries no built-in axis-\
+                     provenance role split between `a` and `b`) by \
+                     dropping the offending entry from one array OR \
+                     re-shaping the partition to route the shared \
+                     entry to a single sub-vocabulary"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+// Compile-time DISJOINTNESS witnesses — the TWO substrate-pinned
+// (a, b) `[u8; N] × [u8; M]` pairs whose distinct-values sets are
+// intentionally-closed disjoint sub-vocabularies of the outer-`Sexp`
+// cache-key `u8` algebra. Pre-lift the two disjointness relations
+// lived only as runtime tests
+// (`structural_kind_hash_discriminator_disjoint_from_atom_outer_carve_byte_and_quote_form_hash_discriminator_partition`
+// on pair 1, sweeping `StructuralKind::hash_discriminator`'s `{0, 2}`
+// against `QuoteForm::hash_discriminator`'s `{3, 4, 5, 6}` through
+// per-variant `Vec<u8>` collection into a HashSet-shape overlap
+// check; `unquote_form_hash_discriminator_partitions_disjointly_from_non_substitution_carvings`
+// on pair 2, sweeping `UnquoteForm::hash_discriminator`'s `{5, 6}`
+// against `StructuralKind::hash_discriminator`'s `{0, 2}` through the
+// same HashSet-shape `is_disjoint` check); post-lift the ARRAY-LEVEL
+// disjointness of the pinned pairs binds at rustc time via one
+// `const _` line per pair. A regression that silently drifted
+// `StructuralKind::LIST_HASH_DISCRIMINATOR` from `2u8` to `3u8`
+// (colliding with `QuoteForm::QUOTE_HASH_DISCRIMINATOR`), or drifted
+// `QuoteForm::QUOTE_HASH_DISCRIMINATOR` from `3u8` to `0u8`
+// (colliding with `StructuralKind::NIL_HASH_DISCRIMINATOR`), or
+// drifted `UnquoteForm::UNQUOTE_HASH_DISCRIMINATOR` from `5u8` to
+// `2u8` (colliding with `StructuralKind::LIST_HASH_DISCRIMINATOR`)
+// fails at `cargo check` BEFORE any test scheduler runs.
+//
+// Note on pair 2 (`UnquoteForm::HD` vs `StructuralKind::HD`): the
+// disjointness is FORMALLY IMPLIED by pair 1 (`StructuralKind::HD` vs
+// `QuoteForm::HD`) composed with the pre-existing SUBSET-embedding
+// witness `assert_u8_array_within_u8_finite_set::<2, 4>(&UnquoteForm::HD,
+// &QuoteForm::HD)` (transitivity of subset-through-disjoint: `X ⊂ Y ∧
+// Y ∩ Z = ∅ ⇒ X ∩ Z = ∅`). Post-lift the direct pair-2 witness pins
+// the substitution-subset drift mode DIRECTLY at rustc time rather
+// than through a two-hop const-time inference — a drift that broke
+// the pair-2 disjointness EITHER by drifting `UnquoteForm::HD` out of
+// the parent superset OR by drifting `StructuralKind::HD` into the
+// parent superset surfaces at THIS witness with the exact drifting
+// arm identified. The redundant witness stays intentional: it mirrors
+// the runtime pin's structure (a direct-per-pair check rather than a
+// composed-through-parent check) so the runtime-vs-const witness
+// pairs stay in one-to-one correspondence and a runtime pin has an
+// EXACT const-time peer without pair-mapping ambiguity.
+const _: () = assert_u8_arrays_disjoint::<2, 4>(
+    &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+    &QuoteForm::HASH_DISCRIMINATORS,
+);
+const _: () = assert_u8_arrays_disjoint::<2, 2>(
+    &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+    &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// the distinct-values set of `arr` does not equal exactly the distinct-
 /// values set of `set` on the substrate's `u8` cache-key vocabulary.
 /// Binds TWO conjunct clauses at ONE `const _` line:
@@ -29847,6 +30078,219 @@ mod tests {
             msg.contains("CHAR-DISJOINTNESS-VIOLATION"),
             "assert_char_arrays_disjoint panic message {msg:?} must \
              name the failed AXIS (\"CHAR-DISJOINTNESS-VIOLATION\") \
+             for axis-provenance-preserving failure diagnostics",
+        );
+    }
+
+    // ── `assert_u8_arrays_disjoint` — the U8-DISJOINTNESS-VIOLATION
+    // verifier that binds `a ∩ b = ∅` at compile time on the outer-
+    // `Sexp` cache-key `u8` vocabulary, peer to
+    // `assert_u8_array_within_u8_finite_set` on the (u8) row of the
+    // (subset, disjointness) 2-corner face of the (contract-shape)
+    // axis AND row-dual peer to `assert_char_arrays_disjoint` on the
+    // (element-type) axis of the SAME (contract-shape) column. The
+    // runtime test surface pins each of the helper's arms (accept-
+    // both-empty, accept-either-empty, accept-disjoint-singletons,
+    // accept-each-family-wide-substrate-pair, accept-arg-order-
+    // symmetry, reject-single-collision, reject-terminal-a-collision,
+    // reject-terminal-b-collision, panic-message-provenance on the
+    // U8-DISJOINTNESS-VIOLATION axis) so a regression that silently
+    // weakened the helper on ANY arm is caught by the helper's OWN
+    // test surface rather than only surfacing as a false-positive on
+    // some future disjoint `[u8; N] × [u8; M]` pair's compound pin.
+
+    #[test]
+    fn assert_u8_arrays_disjoint_accepts_both_empty_arrays() {
+        // Both arrays empty at the `[u8; 0] × [u8; 0]` corner —
+        // vacuously disjoint (no `(i, j)` pair exists to test). The
+        // compile-time `const _: () = assert_u8_arrays_disjoint(&[],
+        // &[]);` would land on this arm, so the runtime call MUST
+        // return normally. Turbofish binding required because there's
+        // no other cue for the const parameters on the empty array
+        // literals. Sibling posture to
+        // `assert_char_arrays_disjoint_accepts_both_empty_arrays` on
+        // the (char) row-dual peer — the two share the trivial-arity
+        // arm across the (element-type × contract-shape) 4-corner
+        // face at the (disjointness) column.
+        assert_u8_arrays_disjoint::<0, 0>(&[], &[]);
+    }
+
+    #[test]
+    fn assert_u8_arrays_disjoint_accepts_either_side_empty() {
+        // Either side empty at the `[u8; 0] × [u8; M]` OR
+        // `[u8; N] × [u8; 0]` corners — vacuously disjoint (the
+        // OUTER `while i < N` OR the INNER `while j < M` sweep is a
+        // no-op). Pins BOTH SIDES of the (a-empty, b-empty) 2-corner
+        // sub-face on the trivial-arity axis so a regression that
+        // narrowed the sweep to only-a-non-empty OR only-b-non-empty
+        // fails HERE at the empty-side corner rather than at a
+        // distant false-positive.
+        assert_u8_arrays_disjoint::<0, 3>(&[], &[0, 1, 2]);
+        assert_u8_arrays_disjoint::<3, 0>(&[0, 1, 2], &[]);
+    }
+
+    #[test]
+    fn assert_u8_arrays_disjoint_accepts_disjoint_singletons() {
+        // Singleton `a = [K]` and singleton `b = [L]` with `K != L`
+        // at the `[u8; 1] × [u8; 1]` corner — the minimal non-empty
+        // disjointness relation. Pins the INNER `if a[i] != b[j]`
+        // gate returns without panicking on a single distinct-pair
+        // check. A regression that flipped the equality direction
+        // (`==` vs `!=`) would silently reject every disjoint
+        // singleton pair.
+        assert_u8_arrays_disjoint(&[0u8], &[1u8]);
+    }
+
+    #[test]
+    fn assert_u8_arrays_disjoint_accepts_each_family_wide_substrate_pair() {
+        // Runtime cross-check that the TWO (a, b) `[u8; N] × [u8; M]`
+        // pairs the substrate's module-level `const _` witnesses pin
+        // at COMPILE time are proper DISJOINTNESS embeddings at
+        // runtime too. The pairs enforce the theorem at TWO stages
+        // of the toolchain: the const witnesses fire FIRST at `cargo
+        // check` (through the two module-level `const _: () =
+        // assert_u8_arrays_disjoint::<N, M>(...)` lines), this
+        // runtime pin catches the drift at `cargo test` as a safety
+        // net. Sibling posture to
+        // `assert_char_arrays_disjoint_accepts_each_family_wide_substrate_pair`
+        // which sweeps the FIVE (a, b) PAIRS at the (char) row's
+        // DISJOINTNESS axis; this pin sweeps the two (a, b) PAIRS
+        // at the (u8) row's DISJOINTNESS axis on the SAME contract-
+        // shape column.
+        assert_u8_arrays_disjoint::<2, 4>(
+            &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+            &QuoteForm::HASH_DISCRIMINATORS,
+        );
+        assert_u8_arrays_disjoint::<2, 2>(
+            &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+            &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+        );
+    }
+
+    #[test]
+    fn assert_u8_arrays_disjoint_is_symmetric_in_argument_order() {
+        // SYMMETRY PIN: swapping the two arguments produces the SAME
+        // verdict. Pins that the disjointness relation is truly
+        // symmetric across the two array arguments (the helper's
+        // nested-sweep implementation does NOT gratuitously depend on
+        // argument order). A regression that narrowed the sweep to
+        // `for i in a { if !b.contains(a[i]) }` (subset-shape, not
+        // disjointness-shape) would fail the swap on one direction
+        // only. Runs each substrate pair BOTH ways. Sibling posture
+        // to `assert_char_arrays_disjoint_is_symmetric_in_argument_order`
+        // on the (char) row-dual peer.
+        assert_u8_arrays_disjoint(
+            &QuoteForm::HASH_DISCRIMINATORS,
+            &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+        );
+        assert_u8_arrays_disjoint(
+            &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+            &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "U8-DISJOINTNESS-VIOLATION")]
+    fn assert_u8_arrays_disjoint_panics_at_runtime_on_collision() {
+        // NEGATIVE PIN — U8-DISJOINTNESS-VIOLATION corner: two arrays
+        // sharing a single byte MUST panic at runtime with the
+        // U8-DISJOINTNESS-VIOLATION-named message. Pins the helper's
+        // OWN reject arm — a regression that silently returned
+        // without panicking on a cross-array collision would slip
+        // through the compile-time witnesses' failure mode too. The
+        // shared byte `0u8` is intentionally placed at the FIRST
+        // position of BOTH arrays to pin the initial-position drift
+        // mode.
+        assert_u8_arrays_disjoint(&[0u8, 1u8], &[0u8, 2u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "U8-DISJOINTNESS-VIOLATION")]
+    fn assert_u8_arrays_disjoint_panics_at_runtime_on_terminal_a_collision() {
+        // NEGATIVE PIN — terminal-position drift on the OUTER `a`
+        // side: a shared byte at the LAST position of `a` MUST panic
+        // — pins that the outer `while i < N` loop reaches `i = N -
+        // 1` (else the terminal drift on `a` would slip through). A
+        // regression that narrowed the outer sweep to `while i < N
+        // - 1` (off-by-one on the OUTER bound) would silently accept
+        // this pair.
+        assert_u8_arrays_disjoint(&[10u8, 20u8, 30u8], &[30u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "U8-DISJOINTNESS-VIOLATION")]
+    fn assert_u8_arrays_disjoint_panics_at_runtime_on_terminal_b_collision() {
+        // NEGATIVE PIN — terminal-position drift on the INNER `b`
+        // side: a shared byte at the LAST position of `b` MUST panic
+        // — pins that the inner `while j < M` loop reaches `j = M -
+        // 1` (else the terminal drift on `b` would slip through). A
+        // regression that narrowed the inner sweep to `while j < M
+        // - 1` (off-by-one on the INNER bound) would silently accept
+        // this pair. Sibling posture to the outer-terminal pin above
+        // — the two pins together bind the terminal bounds on BOTH
+        // loops.
+        assert_u8_arrays_disjoint(&[30u8], &[10u8, 20u8, 30u8]);
+    }
+
+    #[test]
+    fn assert_u8_arrays_disjoint_panic_message_names_the_helper_and_u8_disjointness_violation_axis()
+    {
+        // PANIC-MESSAGE PROVENANCE PIN — U8-DISJOINTNESS-VIOLATION
+        // arm: the panic message MUST begin with the helper's own
+        // name AND identify the failed AXIS as "U8-DISJOINTNESS-
+        // VIOLATION" so downstream diagnostics route the drift back
+        // to (a) the helper by string search on
+        // `"assert_u8_arrays_disjoint"` and (b) the axis by string
+        // search on `"U8-DISJOINTNESS-VIOLATION"`. Sibling posture to
+        // `assert_char_arrays_disjoint_panic_message_names_the_helper_and_char_disjointness_violation_axis`
+        // on the (char) row-dual peer's provenance pin AND to
+        // `assert_u8_array_within_u8_finite_set_panic_message_names_the_helper_and_subset_violation_axis`
+        // on the (u8, subset) contract-orthogonal peer's provenance
+        // pin — the three pins together bind the (helper, failed-
+        // axis) provenance triple across the (element-type × contract-
+        // shape) 2×2 = 4-corner face's three currently-populated
+        // corners with matching provenance-preservation discipline.
+        // The axis-provenance string `"U8-DISJOINTNESS-VIOLATION"` is
+        // chosen DISTINCT from EVERY sibling helper's axis vocabulary
+        // (`"duplicate"` on the ARRAY-side pairwise-distinct sibling;
+        // `"CHAR-DISJOINTNESS-VIOLATION"` on the (char) row-dual
+        // DISJOINTNESS sibling; `"CHAR-SUBSET-VIOLATION"` on the
+        // (char) SUBSET-embedding sibling; `"SUBSET-VIOLATION"` on
+        // the (u8) finite-set SUBSET-only sibling; `"RANGE-SUBSET-
+        // VIOLATION"` on the (u8) range SUBSET-only sibling;
+        // `"OUT-OF-SET"` / `"SET-BYTE-MISSING"` on the (u8) covers-
+        // finite-set sibling; `"OUT-OF-RANGE"` / `"MISSING"` on the
+        // (u8) covers-inclusive-range sibling; `"ARITY-MISMATCH"` on
+        // both (u8) `_permutes_*` compound helpers; `"SET-NOT-
+        // PAIRWISE-DISTINCT"` on the (u8) SET-side well-formedness
+        // sibling) so a diagnostic that names the failed axis routes
+        // UNAMBIGUOUSLY to (a) this specific u8 DISJOINTNESS helper.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_arrays_disjoint(&[0u8, 1u8], &[0u8, 2u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_arrays_disjoint must panic on a cross-array \
+             collision — the reject-collision arm is the sole U8-\
+             DISJOINTNESS-VIOLATION failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_arrays_disjoint panic payload must be a \
+                 static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_arrays_disjoint"),
+            "assert_u8_arrays_disjoint panic message {msg:?} must \
+             name the helper for provenance-preserving failure \
+             diagnostics",
+        );
+        assert!(
+            msg.contains("U8-DISJOINTNESS-VIOLATION"),
+            "assert_u8_arrays_disjoint panic message {msg:?} must \
+             name the failed AXIS (\"U8-DISJOINTNESS-VIOLATION\") \
              for axis-provenance-preserving failure diagnostics",
         );
     }

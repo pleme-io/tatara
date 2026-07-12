@@ -13482,6 +13482,243 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY LEX-ORDER "present labels" projection — the
+    /// `Vec<&'static str>` label rendering of
+    /// [`Self::sorted_present_variants`] under [`Self::label`]. Every
+    /// label `s` in the returned vector is the canonical
+    /// [`Self::label`] rendering of some variant present in `items`;
+    /// the lex order of [`Self::sorted_present_variants`] is preserved
+    /// verbatim. The LEX-ORDER peer of [`Self::present_labels`] on the
+    /// (declaration, lex) ordering axis of the label-return column of
+    /// the equivalence-partition surface — opens the lex arm past the
+    /// declaration arm the sibling [`Self::present_labels`] closed.
+    ///
+    /// Sibling posture to [`Self::sorted_present_variants`] one return-
+    /// shape axis over on the (`Vec<Self>` typed-variant witness,
+    /// `Vec<&'static str>` label witness) partition of the lex-order
+    /// arm of the equivalence-partition surface — the typed-variant
+    /// arm materializes each hit slot as `Self`, this method labels
+    /// each slot under [`Self::label`]. The two projections share the
+    /// (present) partition arm AND the lex-order ordering; they differ
+    /// only on the return-shape column, where the typed-variant arm
+    /// returns the carrier and the label arm returns the rendering.
+    ///
+    /// Cross-arm permutation identity: for every slice `items`,
+    /// `T::sorted_present_labels(items)` is a PERMUTATION of
+    /// `T::present_labels(items)` — the two projections label the SAME
+    /// hit-set under [`Self::label`] (both containing every variant
+    /// exactly once), so the multiset of labels in the two returned
+    /// Vecs coincides though the ordering differs. Pinned by
+    /// `sorted_present_labels_is_a_permutation_of_present_labels_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::sorted_present_labels(items).len() ==
+    /// T::count_distinct(items)` — the lex-order label-Vec-return
+    /// present-arm projection's length matches the usize-return
+    /// present-arm count exactly, and matches the declaration-order
+    /// label-Vec-return present-arm length one ordering axis over.
+    /// Pinned by
+    /// `sorted_present_labels_length_equals_count_distinct_across_every_triple`.
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::sorted_present_labels(items) ==
+    /// T::sorted_present_variants(items).into_iter().map(T::label).collect()`
+    /// — the lex-order label-Vec projection binds through the
+    /// substrate's [`Self::sorted_present_variants`] Vec-return
+    /// primitive composed with the per-slot [`Self::label`] projection.
+    /// Pinned by
+    /// `sorted_present_labels_equals_sorted_present_variants_mapped_under_label_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities. The OUTPUT
+    /// ordering is fixed by [`Self::sorted_variants`]'s lex order
+    /// regardless of the input ordering. Pinned by
+    /// `sorted_present_labels_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_present_labels(&[])` is the
+    /// empty `Vec` UNCONDITIONALLY. Full-set contract:
+    /// `T::sorted_present_labels(<T as ClosedSet>::ALL) ==
+    /// T::sorted_labels()` — the full-set hit-set lex-order labels
+    /// equal the substrate's lex-order label listing exactly. Both
+    /// pinned across every kind.
+    ///
+    /// Future consumers — a `tatara-check` predicate `(check-phases-
+    /// touched-labels-sorted …)` that renders the concrete list of
+    /// `WorkloadPhase` labels a rollout window HIT in lex order (author-
+    /// stable regardless of `ALL`-array layout drift); an LSP
+    /// completion pin that renders the present labels in lex order as
+    /// an author-facing "already-selected" hint; a Sekiban audit-trail
+    /// projection that carries the concrete hit-label set of a
+    /// classification poset window in canonical lex order as its per-
+    /// window witness. Each binds to ONE typed N-ary lex-order hit-
+    /// witness label projection on the trait rather than re-deriving
+    /// the `sorted_present_variants + label + map + collect` four-
+    /// primitive composition inline per callsite.
+    ///
+    /// Compounding closure: the (partition-arm × return-shape ×
+    /// ordering) 2×4×2 = 16-corner face on the equivalence-partition
+    /// surface now opens the lex arm of the label-return column at the
+    /// (present, label, lex) corner alongside the pre-existing
+    /// (present, label, declaration) corner at
+    /// [`Self::present_labels`], the (present, Vec-variant, declaration)
+    /// corner at [`Self::present_variants`], the (present, Vec-variant,
+    /// lex) corner at [`Self::sorted_present_variants`]; the sibling
+    /// [`Self::sorted_missing_labels`] peer closes the (absent, label,
+    /// lex) corner, exhaustively closing the (label-return × ordering)
+    /// 2×2 = 4-corner face on the label-return column of the
+    /// equivalence-partition surface.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order hit-label projection becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline
+    /// `T::sorted_present_variants(items).into_iter().map(T::label).collect()`
+    /// four-primitive composition at every downstream generic site.
+    /// THEORY.md §V.1 — knowable platform; the (present-Vec-label, lex-
+    /// order) corner was an unnamed inline composition recurring at
+    /// every prospective downstream "which labels did we HIT, in lex
+    /// order?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the lex-order hit-label projection emerges from
+    /// the composition of TWO substrate primitives
+    /// ([`Self::sorted_present_variants`] + [`Self::label`]) via
+    /// `Iterator::map` + `Iterator::collect`, not as a per-implementor
+    /// hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(map T-label (sort (filter
+    /// (lambda (v) (member v items)) (enum->list T)) #:key T-label))`
+    /// composing the hit-set filter, a lex sort, and a `map` under
+    /// `label`; Haskell's `map label . sortOn label . filter (\`elem\`
+    /// items)`; Julia's `[label(v) for v in sort(intersect(all, items),
+    /// by=label)]`. Translation through pleme-io primitives: a pure
+    /// default method mapping the trait's existing
+    /// [`Self::sorted_present_variants`] Vec-return primitive under the
+    /// per-slot [`Self::label`] projection — no new dep, no supertrait
+    /// bound, no set-shape carrier.
+    fn sorted_present_labels(items: &[Self]) -> ::std::vec::Vec<&'static str> {
+        <Self as ClosedSet>::sorted_present_variants(items)
+            .into_iter()
+            .map(<Self as ClosedSet>::label)
+            .collect()
+    }
+
+    /// The N-ARY LEX-ORDER "missing labels" projection — the
+    /// `Vec<&'static str>` label rendering of
+    /// [`Self::sorted_missing_variants`] under [`Self::label`]. Every
+    /// label `s` in the returned vector is the canonical
+    /// [`Self::label`] rendering of some variant ABSENT from `items`;
+    /// the lex order of [`Self::sorted_missing_variants`] is preserved
+    /// verbatim. The DE MORGAN dual of [`Self::sorted_present_labels`]
+    /// one partition-arm axis over on the lex-order arm of the label-
+    /// return column of the equivalence-partition surface, and the
+    /// LEX-ORDER peer of [`Self::missing_labels`] on the (declaration,
+    /// lex) ordering axis.
+    ///
+    /// De Morgan complement identity: for every slice `items`, the
+    /// concatenation of [`Self::sorted_present_labels`] and
+    /// [`Self::sorted_missing_labels`] (each walking
+    /// [`Self::sorted_variants`] in lex order under [`Self::label`])
+    /// forms a PARTITION of [`Self::sorted_labels`] — the two Vecs are
+    /// DISJOINT and their union preserves both the lex-order sub-
+    /// sequence property AND [`Self::sorted_labels`]'s full membership.
+    /// Pinned by
+    /// `sorted_present_labels_and_sorted_missing_labels_are_disjoint_across_every_triple`
+    /// and
+    /// `sorted_present_labels_interleaved_with_sorted_missing_labels_recovers_sorted_labels_across_every_triple`.
+    ///
+    /// Cross-arm permutation identity: for every slice `items`,
+    /// `T::sorted_missing_labels(items)` is a PERMUTATION of
+    /// `T::missing_labels(items)` — the two projections label the SAME
+    /// miss-set under [`Self::label`]. Pinned by
+    /// `sorted_missing_labels_is_a_permutation_of_missing_labels_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::sorted_missing_labels(items).len() ==
+    /// T::count_missing(items)` — the lex-order label-Vec-return
+    /// absent-arm projection's length matches the usize-return absent-
+    /// arm count exactly.
+    ///
+    /// Bool-projection identity: for every slice `items`,
+    /// `T::sorted_missing_labels(items).is_empty()` iff
+    /// `T::is_covering(items)` — the miss-set lex-order label list is
+    /// empty iff the present-arm predicate holds. Pinned by
+    /// `sorted_missing_labels_is_empty_iff_is_covering_holds_across_every_triple`.
+    /// The bool-projection is INVARIANT under the (declaration, lex)
+    /// axis — same bool bytes on both arms — because `Self::is_covering`
+    /// is a function of the miss-set's cardinality alone.
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::sorted_missing_labels(items) ==
+    /// T::sorted_missing_variants(items).into_iter().map(T::label).collect()`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities. The OUTPUT
+    /// ordering is fixed by [`Self::sorted_variants`]'s lex order.
+    ///
+    /// Empty-slice contract:
+    /// `T::sorted_missing_labels(&[]) == T::sorted_labels()`
+    /// UNCONDITIONALLY — the empty slice hits zero variants, so every
+    /// variant passes the "not present" filter and contributes its
+    /// label in lex order. Full-set contract:
+    /// `T::sorted_missing_labels(<T as ClosedSet>::ALL)` is the empty
+    /// `Vec` UNCONDITIONALLY.
+    ///
+    /// Future consumers — a `tatara-check` predicate `(check-phases-
+    /// omitted-labels-sorted …)` that renders the concrete list of
+    /// `WorkloadPhase` labels a rollout window MISSED in canonical lex
+    /// order (author-stable regardless of `ALL`-array layout drift);
+    /// an LSP diagnostic on a Lisp-author-written closed-set field
+    /// that renders the miss-set in lex order as an author-facing
+    /// completion hint; a Sekiban audit-trail projection that carries
+    /// the concrete gap-label set of a classification poset window in
+    /// canonical lex order as its per-window witness; a `tatara-lisp::
+    /// macro_expand::Expander` hygiene pass that reports the exact set
+    /// of vocabulary identifiers a template FAILED to bind by name in
+    /// canonical lex order. Each binds to ONE typed N-ary lex-order
+    /// miss-witness label projection on the trait rather than re-
+    /// deriving the `sorted_missing_variants + label + map + collect`
+    /// four-primitive composition inline per callsite.
+    ///
+    /// Compounding closure: the (partition-arm × return-shape ×
+    /// ordering) 2×4×2 = 16-corner face on the equivalence-partition
+    /// surface EXHAUSTIVELY CLOSES the (label-return × ordering) 4-
+    /// corner face on the label-return column — [`Self::present_labels`]
+    /// on (present, decl); [`Self::missing_labels`] on (absent, decl);
+    /// [`Self::sorted_present_labels`] on (present, lex); THIS
+    /// projection on (absent, lex). Past the exhaustively-closed 4-
+    /// corner Vec-variant × ordering face on the same 16-corner face.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order miss-label projection becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline
+    /// `T::sorted_missing_variants(items).into_iter().map(T::label).collect()`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (absent-Vec-label, lex-order) corner was
+    /// an unnamed inline composition recurring at every prospective
+    /// downstream "which labels did we MISS, in lex order?" site pre-
+    /// lift. THEORY.md §VI.1 — generation over composition; the lex-
+    /// order miss-label projection emerges from the composition of TWO
+    /// substrate primitives ([`Self::sorted_missing_variants`] +
+    /// [`Self::label`]) via `Iterator::map` + `Iterator::collect`, not
+    /// as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(map T-label (sort (filter
+    /// (lambda (v) (not (member v items))) (enum->list T)) #:key
+    /// T-label))`; NumPy's `np.setdiff1d(all, items)` (lex-sorted by
+    /// default on ASCII-labeled closed sets, matching this projection's
+    /// output ordering); Haskell's `map label . sortOn label . (all \\)`
+    /// on the `Bounded + Enum + Show` type-class trio. Translation
+    /// through pleme-io primitives: a pure default method mapping the
+    /// trait's existing [`Self::sorted_missing_variants`] Vec-return
+    /// primitive under the per-slot [`Self::label`] projection — no
+    /// new dep, no supertrait bound, no set-shape carrier.
+    fn sorted_missing_labels(items: &[Self]) -> ::std::vec::Vec<&'static str> {
+        <Self as ClosedSet>::sorted_missing_variants(items)
+            .into_iter()
+            .map(<Self as ClosedSet>::label)
+            .collect()
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -40833,5 +41070,404 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn sorted_present_labels_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::sorted_present_labels(&[])` is the
+        // empty `Vec` on every implementor — the empty slice hits
+        // zero variants, so no label passes the membership filter.
+        // Sibling posture to
+        // `sorted_present_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`
+        // one return-shape column over on the lex-order arm of the
+        // equivalence-partition surface.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_present_labels(empty),
+            Vec::<&'static str>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_present_labels_over_the_full_set_equals_sorted_labels_across_every_kind() {
+        // FULL-SET CONTRACT:
+        // `T::sorted_present_labels(<T as ClosedSet>::ALL) ==
+        // T::sorted_labels()` UNCONDITIONALLY — the pairwise-
+        // distinctness invariant pins every variant of `T::ALL` as
+        // hitting itself, so every label survives the filter and the
+        // returned Vec matches the canonical lex-order label listing.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_present_labels(all),
+            <StubKind as ClosedSet>::sorted_labels(),
+        );
+    }
+
+    #[test]
+    fn sorted_present_labels_length_equals_count_distinct_across_every_triple() {
+        // CARDINALITY IDENTITY:
+        // `T::sorted_present_labels(items).len() ==
+        // T::count_distinct(items)` on every slice — the lex-order
+        // label-Vec-return present-arm projection's length matches
+        // the usize-return present-arm count exactly.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_present_labels(&triple).len(),
+                        <StubKind as ClosedSet>::count_distinct(&triple),
+                        "T::sorted_present_labels({triple:?}).len() diverged from T::count_distinct({triple:?}) — the (lex-order Vec-label-return, usize-return) present-arm cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_equals_sorted_present_variants_mapped_under_label_across_every_triple()
+    {
+        // COMPOSITION LAW: for every slice `items`,
+        // `T::sorted_present_labels(items) ==
+        // T::sorted_present_variants(items).into_iter().map(T::label).collect()`
+        // — the lex-order label-Vec projection binds through the
+        // substrate's `T::sorted_present_variants` Vec-return primitive
+        // composed with the per-slot `T::label` projection.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: Vec<&'static str> =
+                        <StubKind as ClosedSet>::sorted_present_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::label)
+                            .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_present_labels(&triple),
+                        expected,
+                        "T::sorted_present_labels({triple:?}) diverged from T::sorted_present_variants({triple:?}).into_iter().map(T::label).collect() — the lex-order label-column composition law was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_present_labels(items) ==
+        // T::sorted_present_labels(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities. The OUTPUT ordering is fixed by
+        // `T::sorted_variants`'s lex order.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_present_labels(&forward),
+                        <StubKind as ClosedSet>::sorted_present_labels(&reversed),
+                        "T::sorted_present_labels({forward:?}) diverged from T::sorted_present_labels({reversed:?}) — the lex-order label-column hit-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_is_a_permutation_of_present_labels_across_every_triple() {
+        // CROSS-ARM PERMUTATION IDENTITY (present arm): for every
+        // slice `items`, `T::sorted_present_labels(items)` and
+        // `T::present_labels(items)` are PERMUTATIONS of each other
+        // — the two projections label the SAME hit-set, so the
+        // multiset of labels in the two returned Vecs coincides
+        // though the ordering differs. Sibling posture to
+        // `sorted_present_variants_is_a_permutation_of_present_variants_across_every_triple`
+        // one return-shape column over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut decl = <StubKind as ClosedSet>::present_labels(&triple);
+                    let mut lex = <StubKind as ClosedSet>::sorted_present_labels(&triple);
+                    decl.sort_unstable();
+                    lex.sort_unstable();
+                    assert_eq!(
+                        decl, lex,
+                        "T::sorted_present_labels({triple:?}) is not a permutation of T::present_labels({triple:?}) — the (declaration, lex) label-column arms must label the SAME hit-set on the equivalence-partition surface",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_over_the_empty_slice_equals_sorted_labels_across_every_kind() {
+        // EMPTY-SLICE CONTRACT:
+        // `T::sorted_missing_labels(&[]) == T::sorted_labels()`
+        // UNCONDITIONALLY — the empty slice hits zero variants, so
+        // EVERY label of `T::sorted_variants` passes the "not present"
+        // filter and contributes to the miss-set label list in lex
+        // order.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_missing_labels(empty),
+            <StubKind as ClosedSet>::sorted_labels(),
+        );
+    }
+
+    #[test]
+    fn sorted_missing_labels_over_the_full_set_returns_the_empty_vec_across_every_kind() {
+        // FULL-SET CONTRACT:
+        // `T::sorted_missing_labels(<T as ClosedSet>::ALL)` is the
+        // empty `Vec` UNCONDITIONALLY — every variant of `T::ALL`
+        // hits itself in the input, so no variant passes the "not
+        // present" filter and no label contributes.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_missing_labels(all),
+            Vec::<&'static str>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_missing_labels_length_equals_count_missing_across_every_triple() {
+        // CARDINALITY IDENTITY:
+        // `T::sorted_missing_labels(items).len() ==
+        // T::count_missing(items)` on every slice — the lex-order
+        // label-Vec-return absent-arm projection's length matches
+        // the usize-return absent-arm count exactly.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_labels(&triple).len(),
+                        <StubKind as ClosedSet>::count_missing(&triple),
+                        "T::sorted_missing_labels({triple:?}).len() diverged from T::count_missing({triple:?}) — the (lex-order Vec-label-return, usize-return) absent-arm cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_equals_sorted_missing_variants_mapped_under_label_across_every_triple()
+    {
+        // COMPOSITION LAW: for every slice `items`,
+        // `T::sorted_missing_labels(items) ==
+        // T::sorted_missing_variants(items).into_iter().map(T::label).collect()`
+        // — the lex-order label-Vec projection binds through the
+        // substrate's `T::sorted_missing_variants` Vec-return primitive
+        // composed with the per-slot `T::label` projection.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: Vec<&'static str> =
+                        <StubKind as ClosedSet>::sorted_missing_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::label)
+                            .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_labels(&triple),
+                        expected,
+                        "T::sorted_missing_labels({triple:?}) diverged from T::sorted_missing_variants({triple:?}).into_iter().map(T::label).collect() — the lex-order label-column composition law was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_missing_labels(items) ==
+        // T::sorted_missing_labels(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities. The OUTPUT ordering is fixed by
+        // `T::sorted_variants`'s lex order.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_labels(&forward),
+                        <StubKind as ClosedSet>::sorted_missing_labels(&reversed),
+                        "T::sorted_missing_labels({forward:?}) diverged from T::sorted_missing_labels({reversed:?}) — the lex-order label-column miss-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_is_empty_iff_is_covering_holds_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY: for every slice `items`,
+        // `T::sorted_missing_labels(items).is_empty()` iff
+        // `T::is_covering(items)` — the lex-order miss-set label list
+        // is empty iff the covering predicate holds. The bool-
+        // projection is INVARIANT under the (declaration, lex) axis —
+        // `is_covering` is a function of the miss-set's cardinality
+        // alone, so both arms agree on the bool bytes.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_labels(&triple).is_empty(),
+                        <StubKind as ClosedSet>::is_covering(&triple),
+                        "T::sorted_missing_labels({triple:?}).is_empty() diverged from T::is_covering({triple:?}) — the (lex-order Vec-label-return absent-arm, bool-return present-arm) De Morgan identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_is_a_permutation_of_missing_labels_across_every_triple() {
+        // CROSS-ARM PERMUTATION IDENTITY (absent arm): for every
+        // slice `items`, `T::sorted_missing_labels(items)` and
+        // `T::missing_labels(items)` are PERMUTATIONS of each other
+        // — the two projections label the SAME miss-set, so the
+        // multiset of labels in the two returned Vecs coincides
+        // though the ordering differs.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut decl = <StubKind as ClosedSet>::missing_labels(&triple);
+                    let mut lex = <StubKind as ClosedSet>::sorted_missing_labels(&triple);
+                    decl.sort_unstable();
+                    lex.sort_unstable();
+                    assert_eq!(
+                        decl, lex,
+                        "T::sorted_missing_labels({triple:?}) is not a permutation of T::missing_labels({triple:?}) — the (declaration, lex) label-column arms must label the SAME miss-set on the equivalence-partition surface",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_and_sorted_missing_labels_are_disjoint_across_every_triple() {
+        // DE MORGAN DISJOINTNESS CONTRACT: for every slice `items`,
+        // the (lex-order present-label, lex-order missing-label)
+        // Vecs share NO label — the two projections partition
+        // `T::sorted_labels()` into disjoint subsets.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::sorted_present_labels(&triple);
+                    let missing = <StubKind as ClosedSet>::sorted_missing_labels(&triple);
+                    for s in &present {
+                        assert!(
+                            !missing.contains(s),
+                            "T::sorted_present_labels({triple:?}) and T::sorted_missing_labels({triple:?}) share label {s:?} — the (present, absent) lex-order label-column partition-arm disjointness was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_interleaved_with_sorted_missing_labels_recovers_sorted_labels_across_every_triple(
+    ) {
+        // DE MORGAN COMPLEMENT CONTRACT: for every slice `items`,
+        // the multiset-union of `T::sorted_present_labels(items)`
+        // and `T::sorted_missing_labels(items)` equals
+        // `T::sorted_labels()` as a multiset — the two projections
+        // together recover every label of `T::sorted_variants`
+        // exactly once. Verified by concatenating + sorting +
+        // comparing against sorted `T::sorted_labels()`.
+        let mut expected: Vec<&'static str> = <StubKind as ClosedSet>::sorted_labels();
+        expected.sort_unstable();
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut union: Vec<&'static str> =
+                        <StubKind as ClosedSet>::sorted_present_labels(&triple);
+                    union.extend(<StubKind as ClosedSet>::sorted_missing_labels(&triple));
+                    union.sort_unstable();
+                    assert_eq!(
+                        union, expected,
+                        "T::sorted_present_labels({triple:?}) ⊔ T::sorted_missing_labels({triple:?}) diverged from T::sorted_labels() as multisets — the (present, absent) lex-order label-column partition-arm complementarity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_and_sorted_missing_labels_normalize_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order label-column surface
+        // — `T::sorted_present_labels(items)` and
+        // `T::sorted_missing_labels(items)` MUST normalize an
+        // arbitrary declaration order into ASCII lexicographic label
+        // order, regardless of the implementor's `ALL`-array layout.
+        // A regression that returns `T::present_labels(items)` /
+        // `T::missing_labels(items)` verbatim (without composing
+        // through the lex-order Vec-variant peers) would pass every
+        // StubKind pin above (because StubKind's declaration order
+        // aligns with lex order) but silently bifurcate the lex-order
+        // label surface for any implementor whose declaration order
+        // differs from byte-wise sort order. Pinning the sort
+        // discipline here with a deliberately-out-of-order stub
+        // catches that drift on the label-column arm directly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseLabelStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseLabelStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseLabelStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse label stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseLabelStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse label stub kind";
+            type Unknown = UnknownReverseLabelStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseLabelStubKind(s.to_owned())
+            }
+        }
+        // Declaration order labels: gamma, beta, alpha — the present-
+        // arm's declaration-order label projection preserves layout.
+        let all = <ReverseLabelStubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <ReverseLabelStubKind as ClosedSet>::present_labels(all),
+            vec!["gamma", "beta", "alpha"],
+            "present_labels over the full set must preserve declaration order — gamma, beta, alpha",
+        );
+        // Lex order labels: alpha, beta, gamma — the lex-order label
+        // arm normalizes regardless of ALL-array declaration layout.
+        assert_eq!(
+            <ReverseLabelStubKind as ClosedSet>::sorted_present_labels(all),
+            vec!["alpha", "beta", "gamma"],
+            "sorted_present_labels over the full set must normalize to lex order — alpha, beta, gamma — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Empty slice → miss-set is the full lex-order label list.
+        let empty: &[ReverseLabelStubKind] = &[];
+        assert_eq!(
+            <ReverseLabelStubKind as ClosedSet>::sorted_missing_labels(empty),
+            vec!["alpha", "beta", "gamma"],
+            "sorted_missing_labels over the empty slice must return the full label list in lex order — alpha, beta, gamma — regardless of the implementor's ALL-array declaration layout",
+        );
     }
 }

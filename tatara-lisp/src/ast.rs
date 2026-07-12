@@ -15,6 +15,112 @@ use std::fmt;
 use std::fmt::Write as _;
 use std::hash::{Hash, Hasher};
 
+/// Compile-time contract verifier — panics at const evaluation time if
+/// any two entries of `arr` alias byte-for-byte.
+///
+/// Lifts the "each family-wide `[char; N]` on the substrate's reader-
+/// boundary vocabulary is pairwise distinct" invariant from a runtime
+/// pin-per-array (`sexp_non_whitespace_bare_atom_terminators_are_
+/// pairwise_distinct`, `sexp_list_delimiters_pairwise_distinct`,
+/// `sexp_comment_delimiters_pairwise_distinct`, `quote_form_leads_
+/// pairwise_distinct`, `atom_self_escape_table_pairwise_distinct`,
+/// `atom_escape_sources_pairwise_distinct`, `atom_escape_decoded_
+/// pairwise_distinct`) into a COMPILE-TIME theorem the substrate
+/// carries at every array declaration via a co-located `const _: () =
+/// assert_char_array_pairwise_distinct(&Self::FOO_ARRAY);` witness.
+///
+/// The invariant is load-bearing for every consumer that pattern-
+/// matches the array's entries as DISJOINT arms — the reader's outer-
+/// dispatch cascade in `crate::reader::tokenize` matches on the four
+/// [`Sexp::LIST_OPEN`] / [`Sexp::LIST_CLOSE`] / [`Atom::STR_DELIMITER`]
+/// / [`Sexp::COMMENT_LEAD`] arms (a duplicate here would break the
+/// `match c { … }` exhaustiveness); [`Atom::decode_str_escape`]'s
+/// escape table matches on the FIVE [`Atom::ESCAPE_SOURCES`] arms
+/// (a duplicate here would silently shadow the second arm);
+/// [`QuoteForm::from_lead_char`] matches on the THREE [`QuoteForm::LEADS`]
+/// arms (a duplicate here would break the three-way outer-dispatch);
+/// and every future family-wide `[char; N]` on the substrate that
+/// participates in a `match`-arm partition benefits from the SAME
+/// compile-time guarantee via one `const _` line.
+///
+/// Pre-lift each array carried its pairwise-distinctness contract at
+/// ONE runtime test (`cargo test`-triggered): a regression that
+/// silently collided two entries would compile cleanly and fail only
+/// at test run. Post-lift the contract binds at `cargo check` time —
+/// the const-eval panic surfaces the collision at COMPILE time, one
+/// invocation stage earlier, catching regressions on `cargo build` /
+/// `cargo clippy` runs that skip the test suite.
+///
+/// Adding a new family-wide `[char; N]` array to the substrate: pair
+/// the declaration with `const _: () = assert_char_array_pairwise_
+/// distinct(&Self::FOO_ARRAY);` co-located immediately after the
+/// array's declaration and the distinctness contract is enforced at
+/// compile time. The rustc-forced arity `[char; N]` composes with
+/// this const-eval sweep so BOTH cardinality AND injectivity are
+/// compile-time theorems on the SAME array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP tokenizer
+/// that constructs a `[char; N]` at runtime and wants to verify
+/// pairwise distinctness before consuming it — and the panic surfaces
+/// normally in that path (pinned by `assert_char_array_pairwise_
+/// distinct_panics_at_runtime_on_collision`).
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide distinctness
+///   contract becomes a TYPE-LEVEL theorem the substrate carries per
+///   array declaration rather than a runtime test the developer must
+///   remember to write per array.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   sweep IS the generative shape. Every new closed-set char array
+///   adds ONE `const _` line to get the distinctness theorem rather
+///   than re-deriving a `HashSet::insert` loop test per array.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   distinctness proof at declaration site AND the outer-dispatch
+///   match-arm exhaustiveness the consumer relies on regenerate
+///   through the SAME `const _` witness.
+pub const fn assert_char_array_pairwise_distinct<const N: usize>(arr: &[char; N]) {
+    let mut i = 0;
+    while i < N {
+        let mut j = i + 1;
+        while j < N {
+            if arr[i] as u32 == arr[j] as u32 {
+                panic!(
+                    "assert_char_array_pairwise_distinct: family-wide \
+                     char array carries a duplicate entry across two \
+                     positions — the substrate's pairwise-distinctness \
+                     contract on the array is broken; every consumer \
+                     that pattern-matches the array's entries as \
+                     DISJOINT arms (reader outer-dispatch, escape-table \
+                     decode, quote-family lead dispatch) relies on this \
+                     invariant"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+// Compile-time pairwise-distinctness witnesses — one `const _: () =
+// assert_char_array_pairwise_distinct(&…)` per family-wide `[char; N]`
+// char array on the substrate's reader-boundary vocabulary. Each
+// invocation is const-evaluated at `cargo check` time; a regression
+// that silently collides two entries fails the build rather than the
+// test suite. Sibling to the runtime `_pairwise_distinct` tests at
+// `ast.rs`'s tests module — the two enforce the same theorem at TWO
+// stages of the toolchain, so a build that skips tests still catches
+// the regression here, and a build that runs tests catches it a
+// second time as a safety net if the const-eval sweep is ever
+// silently dropped.
+const _: () = assert_char_array_pairwise_distinct(&Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS);
+const _: () = assert_char_array_pairwise_distinct(&Sexp::LIST_DELIMITERS);
+const _: () = assert_char_array_pairwise_distinct(&Sexp::COMMENT_DELIMITERS);
+const _: () = assert_char_array_pairwise_distinct(&QuoteForm::LEADS);
+const _: () = assert_char_array_pairwise_distinct(&Atom::SELF_ESCAPE_TABLE);
+const _: () = assert_char_array_pairwise_distinct(&Atom::ESCAPE_SOURCES);
+const _: () = assert_char_array_pairwise_distinct(&Atom::ESCAPE_DECODED);
+
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
 // serde_json serialization that would otherwise dominate cache overhead on
@@ -26339,5 +26445,124 @@ mod tests {
                  ARRAY-driven composition law",
             );
         }
+    }
+
+    // ── `assert_char_array_pairwise_distinct` — the const-fn compile-
+    // time pairwise-distinctness contract lifter. Sibling posture to
+    // the runtime `_pairwise_distinct` tests: those pin the property
+    // at test-run time on each individual array; these pins bind the
+    // lift's OWN contract (accept-distinct, reject-collision, runtime-
+    // callability, cross-array coverage) so a regression that silently
+    // weakens the helper (e.g. flipping `!=` to `==`, dropping the
+    // inner `j` loop, or returning early on collision) is caught by
+    // the helper's OWN test surface rather than only surfacing as a
+    // false-positive on some future array's distinctness pin.
+
+    #[test]
+    fn assert_char_array_pairwise_distinct_accepts_the_empty_array() {
+        // Empty array — vacuously pairwise distinct (no pair to
+        // collide). The compile-time `const _: () = assert_char_array_
+        // pairwise_distinct(&EMPTY);` would land on this arm, so the
+        // runtime call MUST return normally.
+        assert_char_array_pairwise_distinct::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_char_array_pairwise_distinct_accepts_singleton_arrays() {
+        // Singleton array — vacuously pairwise distinct (only one
+        // element, no pair). Cross-arity coverage on the `[char; 1]`
+        // corner of the const-N generic.
+        assert_char_array_pairwise_distinct(&['a']);
+        assert_char_array_pairwise_distinct(&[Sexp::LIST_OPEN]);
+    }
+
+    #[test]
+    fn assert_char_array_pairwise_distinct_accepts_every_family_wide_substrate_array() {
+        // Runtime cross-check that the SAME seven arrays the module-
+        // level `const _: () = ...` witnesses cover at COMPILE time
+        // are pairwise distinct. A regression that removes ONE of the
+        // `const _` witnesses would still leave THIS runtime pin as a
+        // safety net; the const witness fires FIRST at `cargo check`,
+        // this runtime pin catches the collision at `cargo test`. The
+        // pair enforces the theorem at TWO stages of the toolchain.
+        assert_char_array_pairwise_distinct(&Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS);
+        assert_char_array_pairwise_distinct(&Sexp::LIST_DELIMITERS);
+        assert_char_array_pairwise_distinct(&Sexp::COMMENT_DELIMITERS);
+        assert_char_array_pairwise_distinct(&QuoteForm::LEADS);
+        assert_char_array_pairwise_distinct(&Atom::SELF_ESCAPE_TABLE);
+        assert_char_array_pairwise_distinct(&Atom::ESCAPE_SOURCES);
+        assert_char_array_pairwise_distinct(&Atom::ESCAPE_DECODED);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_array_pairwise_distinct")]
+    fn assert_char_array_pairwise_distinct_panics_at_runtime_on_binary_collision() {
+        // NEGATIVE PIN — binary corner: a two-element array carrying
+        // the same char twice MUST panic at runtime (the const-eval
+        // panic surfaces normally when the function is invoked from
+        // a runtime context, not just a `const _` context). Pins the
+        // helper's OWN reject-collision arm — a regression that
+        // silently returns without panicking on a duplicate would
+        // slip through the compile-time witnesses' failure mode too.
+        assert_char_array_pairwise_distinct(&['x', 'x']);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_array_pairwise_distinct")]
+    fn assert_char_array_pairwise_distinct_panics_at_runtime_on_non_adjacent_collision() {
+        // NEGATIVE PIN — non-adjacent corner: the collision fires on
+        // ANY (i, j) pair with i < j, not just the adjacent (0, 1)
+        // corner. Pins the nested-loop shape of the helper — a
+        // regression that walked ONLY the adjacent pairs (i.e., swept
+        // `while i + 1 < N { if arr[i] == arr[i+1] { panic } … }`)
+        // would silently accept `['a', 'b', 'a']` (non-adjacent
+        // collision at positions 0 and 2), missing the contract.
+        assert_char_array_pairwise_distinct(&['a', 'b', 'a']);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_array_pairwise_distinct")]
+    fn assert_char_array_pairwise_distinct_panics_at_runtime_on_terminal_collision() {
+        // NEGATIVE PIN — terminal corner: the collision at the LAST
+        // pair (positions N-2 and N-1) MUST also fire. Pins the outer
+        // `while i < N` bound — a regression that walked `while i <
+        // N - 1` (dropping the last row) would silently accept a
+        // collision at the tail.
+        assert_char_array_pairwise_distinct(&['a', 'b', 'c', 'd', 'd']);
+    }
+
+    #[test]
+    fn assert_char_array_pairwise_distinct_panic_message_names_the_helper() {
+        // PANIC-MESSAGE PROVENANCE PIN: the panic message MUST begin
+        // with the helper's own name so downstream diagnostics
+        // (`cargo check` const-eval error output, test-suite failure
+        // reports) route the drift back to the helper by string
+        // search — the family-wide contract's failure mode surfaces
+        // as an identifiable panic-message prefix rather than as an
+        // opaque const-eval error. Sibling posture to the runtime
+        // pairwise-distinctness tests that name the ARRAY in their
+        // failure message; this pin names the HELPER.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_array_pairwise_distinct(&['x', 'x']);
+        });
+        let payload = outcome.expect_err(
+            "assert_char_array_pairwise_distinct must panic on a \
+             duplicate — the reject-collision arm is the point of the \
+             helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_array_pairwise_distinct panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_array_pairwise_distinct"),
+            "assert_char_array_pairwise_distinct panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
     }
 }

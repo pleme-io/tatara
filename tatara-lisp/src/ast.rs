@@ -740,6 +740,238 @@ const _: () = assert_str_array_pairwise_distinct(&QuoteForm::IAC_FORGE_TAGS);
 const _: () = assert_str_array_pairwise_distinct(&QuoteForm::LABELS);
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of `a` aliases any entry of `b` byte-for-byte through
+/// [`str::as_bytes`].
+///
+/// Row-dual peer to [`assert_char_arrays_disjoint`] and
+/// [`assert_u8_arrays_disjoint`] on the (element-type) axis of the
+/// (element-type × contract-shape) matrix at the (disjointness)
+/// column: where the (char) sibling closes the reader-boundary char
+/// DISJOINTNESS corner and the (u8) sibling closes the outer-`Sexp`
+/// cache-key `u8` DISJOINTNESS corner at compile time, this (`&'static
+/// str`) sibling closes the outer-algebras' family-wide `[&'static
+/// str; N]` label / prefix / tag / literal DISJOINTNESS corner on the
+/// SAME contract-shape column. Together with the pre-existing
+/// [`assert_char_arrays_disjoint`] + [`assert_u8_arrays_disjoint`]
+/// row-siblings the three helpers close the (element-type ∈
+/// {char, u8, &'static str} × contract-shape ∈ {disjointness})
+/// 3-corner row of the DISJOINTNESS column at ONE peer const-fn helper
+/// per element-type. Contract-orthogonal peer to
+/// [`assert_str_array_pairwise_distinct`] on the (INJECTIVITY,
+/// DISJOINTNESS) axis of the (contract-shape) column on the SAME
+/// (`&'static str`) row: where the pairwise-distinctness sibling binds
+/// INTRA-array `∀ i ≠ j : arr[i] ≠ arr[j]`, this DISJOINTNESS sibling
+/// binds INTER-array `∀ i, j : a[i] ≠ b[j]` — the two together give
+/// every `&'static str` sub-vocabulary on the substrate BOTH intra-
+/// array injectivity AND inter-array disjointness at compile time.
+///
+/// The invariant is load-bearing for every consumer that partitions
+/// the two arrays' distinct-values sets into disjoint sub-vocabularies
+/// of a shared outer surface —
+/// [`QuoteForm::PREFIXES`] (`["'", "\`", ",", ",@"]` — reader-boundary
+/// prefix tokens the tokenizer scans in [`crate::reader::tokenize`])
+/// is intentionally-closed disjoint from
+/// [`QuoteForm::LABELS`] (`["quote", "quasiquote", "unquote",
+/// "unquote-splice"]` — human-diagnostic labels the error module
+/// projects through [`QuoteForm::label`]) so a reader-boundary token
+/// never aliases a diagnostic label spelling; the SAME `QuoteForm::
+/// PREFIXES` array is disjoint from
+/// [`QuoteForm::IAC_FORGE_TAGS`] (`["quote", "quasiquote", "unquote",
+/// "unquote-splicing"]` — canonical iac-forge interop symbol heads the
+/// [`crate::interop`] round-trip pins through
+/// [`QuoteForm::from_iac_forge_tag`]) so the reader-boundary vocabulary
+/// stays clean of the canonical-form serialization vocabulary; the
+/// SAME `QuoteForm::PREFIXES` array is disjoint from
+/// [`AtomKind::LABELS`] (`["symbol", "keyword", "string", "int",
+/// "float", "bool"]` — atomic-payload kind labels) so a reader-boundary
+/// prefix never aliases an atom-kind diagnostic label; AND
+/// [`AtomKind::LABELS`] is intentionally-closed disjoint from
+/// [`QuoteForm::LABELS`] so a diagnostic that identifies "the token is
+/// an atom of kind X" never aliases "the token is a quote form of
+/// kind Y". Every future `[&'static str; N]` pair on the substrate
+/// whose distinct-values sets must remain disjoint sub-vocabularies of
+/// a shared outer surface participates in the SAME compile-time
+/// guarantee via one `const _` line per pair.
+///
+/// Pre-lift the four disjointness relations lived only as runtime
+/// tests (`quote_form_prefixes_disjoint_from_quote_form_labels`,
+/// `quote_form_prefixes_disjoint_from_iac_forge_tags`,
+/// `quote_form_prefixes_disjoint_from_atom_kind_labels`,
+/// `atom_kind_labels_disjoint_from_quote_form_labels`) or implicitly
+/// through the outer-algebra's non-aliasing composition rule; post-
+/// lift the ARRAY-LEVEL disjointness of the four pinned pairs binds at
+/// rustc time via one `const _` line per pair. A regression that
+/// silently renamed one of `QuoteForm::PREFIXES`'s entries to a string
+/// that aliased a `QuoteForm::LABELS` / `QuoteForm::IAC_FORGE_TAGS` /
+/// `AtomKind::LABELS` entry (or vice versa) fails at `cargo check`
+/// BEFORE any test scheduler runs.
+///
+/// Adding a new `[&'static str; N]` sub-vocabulary whose distinct-
+/// values set must remain disjoint from another substrate `[&'static
+/// str; M]` array's distinct-values set: pair the declaration with
+/// `const _: () = assert_str_arrays_disjoint::<N, M>(&Self::FOO_ARRAY,
+/// &Other::BAR_ARRAY);` co-located after the array's declaration and
+/// the DISJOINTNESS contract binds at compile time. The rustc-forced
+/// arities `[&'static str; N]` and `[&'static str; M]` compose with
+/// this const-eval sweep so BOTH cardinality-pair AND cross-array
+/// disjointness are compile-time theorems on the SAME (a, b) str-array
+/// pair.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_str_arrays_disjoint_panics_at_runtime_on_collision` and
+/// `assert_str_arrays_disjoint_panic_message_names_the_helper_and_str_disjointness_violation_axis`.
+/// The panic site carries the `"STR-DISJOINTNESS-VIOLATION"` axis-
+/// provenance string chosen DISTINCT from every sibling helper's axis
+/// vocabulary (`"duplicate"` on the ARRAY-side pairwise-distinct
+/// sibling; `"CHAR-DISJOINTNESS-VIOLATION"` on the (char) row-dual
+/// DISJOINTNESS sibling; `"U8-DISJOINTNESS-VIOLATION"` on the (u8)
+/// row-dual DISJOINTNESS sibling; `"CHAR-SUBSET-VIOLATION"` on the
+/// (char) SUBSET-embedding sibling; `"SUBSET-VIOLATION"` on the (u8)
+/// finite-set SUBSET-only sibling; `"RANGE-SUBSET-VIOLATION"` on the
+/// (u8) range SUBSET-only sibling; `"OUT-OF-SET"` / `"SET-BYTE-
+/// MISSING"` on the (u8) covers-finite-set sibling; `"OUT-OF-RANGE"` /
+/// `"MISSING"` on the (u8) covers-inclusive-range sibling; `"ARITY-
+/// MISMATCH"` on both (u8) `_permutes_*` compound helpers; `"SET-NOT-
+/// PAIRWISE-DISTINCT"` on the (u8) SET-side well-formedness sibling)
+/// so a diagnostic that names the failed axis routes UNAMBIGUOUSLY to
+/// THIS specific `&'static str` DISJOINTNESS helper. The `"STR-"`
+/// prefix disambiguates from the (char) + (u8) row-dual DISJOINTNESS
+/// siblings; the shared `"-DISJOINTNESS-VIOLATION"` suffix lets
+/// callers grep any row's DISJOINTNESS sibling by
+/// `"DISJOINTNESS-VIOLATION"` alone.
+///
+/// Byte-equality reuse: the helper delegates to the same module-
+/// private [`str_bytes_equal`] const-fn helper the sibling
+/// [`assert_str_array_pairwise_distinct`] uses — a single canonical
+/// site for `&'static str` byte-equality in const context, so a future
+/// toolchain stabilising `const fn str::eq` collapses BOTH callers at
+/// ONE edit rather than two.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide cross-array
+///   disjointness contract on the substrate's `&'static str`
+///   vocabulary becomes a TYPE-LEVEL theorem the substrate carries per
+///   (a, b) str-array pair rather than a runtime test the developer
+///   must remember to write per pair.
+/// - THEORY.md §III — the typescape; the (element-type × contract-
+///   shape) matrix now carries the DISJOINTNESS corner on THREE rows
+///   ({char, u8, `&'static str`}) at ONE peer const-fn helper per row.
+///   The (element-type ∈ {char, u8, `&'static str`}) × (contract-shape
+///   ∈ {pairwise-distinctness (INJECTIVITY), disjointness}) 3×2 =
+///   6-corner face on the array-pair-contract prism is now closed at
+///   SIX peer const-fn helpers.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   cross-array byte-membership sweep IS the generative shape. Every
+///   new `[&'static str; N]` sub-vocabulary array whose distinct-
+///   values set is an intentionally-disjoint peer of another substrate
+///   `[&'static str; M]` array adds ONE `const _` line to get the
+///   disjointness theorem rather than re-deriving a per-pair runtime
+///   iterator sweep at each call site.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   DISJOINTNESS proof at declaration site AND the outer-algebra's
+///   arm-set partition contract (`QuoteForm::PREFIXES` on the reader-
+///   boundary token surface vs. `QuoteForm::LABELS` on the human-
+///   diagnostic label surface, etc.) regenerate through the SAME
+///   `const _` witnesses at the ARRAY level.
+///
+/// Frontier inspiration: Lean 4's `Finset.disjoint_iff` unfolded to
+/// `∀ a ∈ s, ∀ b ∈ t, a ≠ b` at the concrete two-array
+/// `[&'static str; N] × [&'static str; M]` monomorphic realisation.
+/// The (char, u8, `&'static str`) row triple mirrors Lean's
+/// polymorphic `[DecidableEq α] → Finset α → Finset α → Prop`
+/// realised at the three concrete element-type instantiations the
+/// substrate closes at compile time.
+pub const fn assert_str_arrays_disjoint<const N: usize, const M: usize>(
+    a: &[&'static str; N],
+    b: &[&'static str; M],
+) {
+    let mut i = 0;
+    while i < N {
+        let mut j = 0;
+        while j < M {
+            if str_bytes_equal(a[i], b[j]) {
+                panic!(
+                    "assert_str_arrays_disjoint: STR-DISJOINTNESS-\
+                     VIOLATION — the two family-wide &'static str \
+                     arrays `a` and `b` share an entry at some (i, j) \
+                     position pair. The substrate's CROSS-ARRAY \
+                     DISJOINTNESS contract on the pair is broken; \
+                     every consumer that partitions the two arrays' \
+                     distinct-values sets into disjoint sub-\
+                     vocabularies of a shared outer surface (the \
+                     reader-boundary prefix vocabulary at \
+                     `QuoteForm::PREFIXES` vs the human-diagnostic \
+                     label vocabulary at `QuoteForm::LABELS`; the \
+                     reader-boundary prefix vocabulary vs the \
+                     canonical iac-forge tag vocabulary at \
+                     `QuoteForm::IAC_FORGE_TAGS`; the reader-boundary \
+                     prefix vocabulary vs the atomic-kind label \
+                     vocabulary at `AtomKind::LABELS`; the atomic-kind \
+                     label vocabulary vs the quote-family label \
+                     vocabulary; any future typed-disjointness pair on \
+                     the substrate's `&'static str` sub-vocabularies) \
+                     relies on the two arrays' distinct-values sets \
+                     NOT sharing an entry. Fix at WHICHEVER ARRAY-\
+                     DECLARATION site drifted (the symmetric \
+                     disjointness relation carries no built-in axis-\
+                     provenance role split between `a` and `b`) by \
+                     renaming the offending entry on one array OR re-\
+                     shaping the partition to route the shared entry \
+                     to a single sub-vocabulary"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+// Compile-time DISJOINTNESS witnesses — the FOUR substrate-pinned
+// (a, b) `[&'static str; N] × [&'static str; M]` pairs whose distinct-
+// values sets are intentionally-closed disjoint sub-vocabularies of a
+// shared outer surface. Pre-lift the four disjointness relations lived
+// only as runtime tests (or implicitly through the outer-algebra's
+// non-aliasing composition rule); post-lift the ARRAY-LEVEL
+// disjointness of the four pinned pairs binds at rustc time via one
+// `const _` line per pair. A regression that silently renamed
+// `QuoteForm::QUOTE_PREFIX` (`"'"`) to `"quote"` (aliasing
+// `QuoteForm::QUOTE_LABEL` and `QuoteForm::QUOTE_IAC_FORGE_TAG`),
+// renamed `AtomKind::SYMBOL_LABEL` (`"symbol"`) to `"quote"` (aliasing
+// `QuoteForm::QUOTE_LABEL`), or drifted any entry of one array to
+// bytes shared with an entry of a disjoint peer array fails at
+// `cargo check` BEFORE any test scheduler runs. Sibling to the FIVE
+// `assert_char_arrays_disjoint` witnesses and the TWO
+// `assert_u8_arrays_disjoint` witnesses above on the (element-type)
+// axis: `char` covers the reader-boundary char sub-vocabularies;
+// `u8` covers the outer-`Sexp` cache-key discriminator sub-
+// vocabularies; `&'static str` covers the outer-algebras' family-wide
+// label / prefix / tag vocabularies.
+//
+// The four pinned pairs are (all under the shared `&'static str`
+// element-type):
+//   1. `QuoteForm::PREFIXES` ∩ `QuoteForm::LABELS`         = ∅
+//   2. `QuoteForm::PREFIXES` ∩ `QuoteForm::IAC_FORGE_TAGS` = ∅
+//   3. `QuoteForm::PREFIXES` ∩ `AtomKind::LABELS`          = ∅
+//   4. `AtomKind::LABELS`    ∩ `QuoteForm::LABELS`         = ∅
+//
+// Note on the intentionally-NOT-pinned pair
+// (`QuoteForm::LABELS`, `QuoteForm::IAC_FORGE_TAGS`): the two
+// deliberately OVERLAP on three of four arms (`"quote"`, `"quasiquote"`,
+// `"unquote"`) because both surfaces spell those three quote-family
+// heads with the Common-Lisp-canonical name — `QuoteForm::LABELS` for
+// diagnostics, `QuoteForm::IAC_FORGE_TAGS` for canonical serialization.
+// Only the fourth arm differs (`QuoteForm::UNQUOTE_SPLICE_LABEL` at
+// `"unquote-splice"` vs `QuoteForm::UNQUOTE_SPLICE_IAC_FORGE_TAG` at
+// `"unquote-splicing"`) so the pair is NOT disjoint and would fail
+// this witness. Pinning it here would be a category error — the
+// overlap is load-bearing, not accidental.
+const _: () = assert_str_arrays_disjoint::<4, 4>(&QuoteForm::PREFIXES, &QuoteForm::LABELS);
+const _: () = assert_str_arrays_disjoint::<4, 4>(&QuoteForm::PREFIXES, &QuoteForm::IAC_FORGE_TAGS);
+const _: () = assert_str_arrays_disjoint::<4, 6>(&QuoteForm::PREFIXES, &AtomKind::LABELS);
+const _: () = assert_str_arrays_disjoint::<6, 4>(&AtomKind::LABELS, &QuoteForm::LABELS);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` alias byte-for-byte.
 ///
 /// Column-dual peer to [`assert_char_array_pairwise_distinct`] and
@@ -30507,6 +30739,248 @@ mod tests {
             QuoteForm::QUOTE_PREFIX,
             QuoteForm::QUASIQUOTE_PREFIX,
         ));
+    }
+
+    // ── `assert_str_arrays_disjoint` — the `&'static str` element-
+    // type sibling of `assert_char_arrays_disjoint` and
+    // `assert_u8_arrays_disjoint`. Sibling posture: same runtime-test
+    // surface (accept-both-empty, accept-either-side-empty, accept-
+    // disjoint-singletons, accept-every-family-wide-substrate-pair,
+    // symmetric-in-argument-order, reject-cross-collision, reject-
+    // terminal-a-collision, reject-terminal-b-collision, panic-message-
+    // provenance) restricted to the `&'static str` element type. A
+    // regression that silently weakens the helper (e.g. flipping
+    // `str_bytes_equal` polarity, dropping the outer OR inner sweep,
+    // or returning early on collision) is caught by the helper's OWN
+    // test surface rather than only surfacing as a false-positive on
+    // some future disjoint `[&'static str; N] × [&'static str; M]`
+    // pair's compound pin.
+
+    #[test]
+    fn assert_str_arrays_disjoint_accepts_both_empty_arrays() {
+        // Both arrays empty at the `[&'static str; 0] × [&'static str; 0]`
+        // corner — vacuously disjoint (no `(i, j)` pair exists to
+        // test). The compile-time `const _: () =
+        // assert_str_arrays_disjoint(&[], &[]);` would land on this
+        // arm, so the runtime call MUST return normally. Turbofish
+        // binding required because there's no other cue for the const
+        // parameters on the empty array literals. Sibling posture to
+        // `assert_char_arrays_disjoint_accepts_both_empty_arrays` and
+        // `assert_u8_arrays_disjoint_accepts_both_empty_arrays` on
+        // the (char) and (u8) row-dual peers — the three share the
+        // trivial-arity arm across the (element-type × contract-shape)
+        // 3-row × (disjointness)-column face.
+        assert_str_arrays_disjoint::<0, 0>(&[], &[]);
+    }
+
+    #[test]
+    fn assert_str_arrays_disjoint_accepts_either_side_empty() {
+        // Either side empty at the `[&'static str; 0] × [&'static str; M]`
+        // OR `[&'static str; N] × [&'static str; 0]` corners —
+        // vacuously disjoint (the OUTER `while i < N` OR the INNER
+        // `while j < M` sweep is a no-op). Pins BOTH SIDES of the
+        // (a-empty, b-empty) 2-corner sub-face on the trivial-arity
+        // axis so a regression that narrowed the sweep to only-a-non-
+        // empty OR only-b-non-empty fails HERE at the empty-side
+        // corner rather than at a distant false-positive.
+        assert_str_arrays_disjoint::<0, 3>(&[], &["a", "b", "c"]);
+        assert_str_arrays_disjoint::<3, 0>(&["a", "b", "c"], &[]);
+    }
+
+    #[test]
+    fn assert_str_arrays_disjoint_accepts_disjoint_singletons() {
+        // Singleton `a = [K]` and singleton `b = [L]` with `K != L`
+        // at the `[&'static str; 1] × [&'static str; 1]` corner — the
+        // minimal non-empty disjointness relation. Pins the INNER
+        // `if str_bytes_equal(a[i], b[j])` gate returns without
+        // panicking on a single distinct-pair check. A regression
+        // that flipped the equality direction (`!=` vs `==` on the
+        // byte-equality delegate) would silently reject every
+        // disjoint singleton pair.
+        assert_str_arrays_disjoint(&["a"], &["b"]);
+    }
+
+    #[test]
+    fn assert_str_arrays_disjoint_accepts_each_family_wide_substrate_pair() {
+        // Runtime cross-check that the FOUR (a, b) `[&'static str; N]
+        // × [&'static str; M]` pairs the substrate's module-level
+        // `const _` witnesses pin at COMPILE time are proper
+        // DISJOINTNESS embeddings at runtime too. The pairs enforce
+        // the theorem at TWO stages of the toolchain: the const
+        // witnesses fire FIRST at `cargo check` (through the four
+        // module-level `const _: () = assert_str_arrays_disjoint::
+        // <N, M>(...)` lines), this runtime pin catches the drift at
+        // `cargo test` as a safety net. Sibling posture to
+        // `assert_char_arrays_disjoint_accepts_each_family_wide_substrate_pair`
+        // which sweeps the FIVE (a, b) PAIRS at the (char) row and
+        // `assert_u8_arrays_disjoint_accepts_each_family_wide_substrate_pair`
+        // which sweeps the TWO (a, b) PAIRS at the (u8) row; this
+        // pin sweeps the four (a, b) PAIRS at the (`&'static str`)
+        // row on the SAME contract-shape column.
+        assert_str_arrays_disjoint::<4, 4>(&QuoteForm::PREFIXES, &QuoteForm::LABELS);
+        assert_str_arrays_disjoint::<4, 4>(&QuoteForm::PREFIXES, &QuoteForm::IAC_FORGE_TAGS);
+        assert_str_arrays_disjoint::<4, 6>(&QuoteForm::PREFIXES, &AtomKind::LABELS);
+        assert_str_arrays_disjoint::<6, 4>(&AtomKind::LABELS, &QuoteForm::LABELS);
+    }
+
+    #[test]
+    fn assert_str_arrays_disjoint_is_symmetric_in_argument_order() {
+        // SYMMETRY PIN: swapping the two arguments produces the SAME
+        // verdict. Pins that the disjointness relation is truly
+        // symmetric across the two array arguments (the helper's
+        // nested-sweep implementation does NOT gratuitously depend on
+        // argument order). A regression that narrowed the sweep to
+        // `for i in a { if !b.contains(a[i]) }` (subset-shape, not
+        // disjointness-shape) would fail the swap on one direction
+        // only. Runs each substrate pair BOTH ways. Sibling posture
+        // to `assert_char_arrays_disjoint_is_symmetric_in_argument_order`
+        // on the (char) row-dual peer and
+        // `assert_u8_arrays_disjoint_is_symmetric_in_argument_order`
+        // on the (u8) row-dual peer.
+        assert_str_arrays_disjoint(&QuoteForm::LABELS, &QuoteForm::PREFIXES);
+        assert_str_arrays_disjoint(&QuoteForm::IAC_FORGE_TAGS, &QuoteForm::PREFIXES);
+        assert_str_arrays_disjoint(&AtomKind::LABELS, &QuoteForm::PREFIXES);
+        assert_str_arrays_disjoint(&QuoteForm::LABELS, &AtomKind::LABELS);
+    }
+
+    #[test]
+    #[should_panic(expected = "STR-DISJOINTNESS-VIOLATION")]
+    fn assert_str_arrays_disjoint_panics_at_runtime_on_collision() {
+        // NEGATIVE PIN — STR-DISJOINTNESS-VIOLATION corner: two arrays
+        // sharing a single string MUST panic at runtime with the
+        // STR-DISJOINTNESS-VIOLATION-named message. Pins the helper's
+        // OWN reject arm — a regression that silently returned
+        // without panicking on a cross-array collision would slip
+        // through the compile-time witnesses' failure mode too. The
+        // shared string `"dup"` is intentionally placed at the FIRST
+        // position of BOTH arrays to pin the initial-position drift
+        // mode.
+        assert_str_arrays_disjoint(&["dup", "x"], &["dup", "y"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "STR-DISJOINTNESS-VIOLATION")]
+    fn assert_str_arrays_disjoint_panics_at_runtime_on_terminal_a_collision() {
+        // NEGATIVE PIN — terminal-position drift on the OUTER `a`
+        // side: a shared string at the LAST position of `a` MUST
+        // panic — pins that the outer `while i < N` loop reaches
+        // `i = N - 1` (else the terminal drift on `a` would slip
+        // through). A regression that narrowed the outer sweep to
+        // `while i < N - 1` (off-by-one on the OUTER bound) would
+        // silently accept this pair.
+        assert_str_arrays_disjoint(&["a", "b", "shared"], &["shared"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "STR-DISJOINTNESS-VIOLATION")]
+    fn assert_str_arrays_disjoint_panics_at_runtime_on_terminal_b_collision() {
+        // NEGATIVE PIN — terminal-position drift on the INNER `b`
+        // side: a shared string at the LAST position of `b` MUST
+        // panic — pins that the inner `while j < M` loop reaches
+        // `j = M - 1` (else the terminal drift on `b` would slip
+        // through). A regression that narrowed the inner sweep to
+        // `while j < M - 1` (off-by-one on the INNER bound) would
+        // silently accept this pair. Sibling posture to the outer-
+        // terminal pin above — the two pins together bind the
+        // terminal bounds on BOTH loops.
+        assert_str_arrays_disjoint(&["shared"], &["a", "b", "shared"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "STR-DISJOINTNESS-VIOLATION")]
+    fn assert_str_arrays_disjoint_panics_at_runtime_on_length_zero_collision() {
+        // NEGATIVE PIN — the byte-length gate at `str_bytes_equal`
+        // must classify TWO empty strings across the (a, b) boundary
+        // as equal too (both are the zero-length byte sequence). A
+        // regression that treated `""` as never-colliding across the
+        // arrays would silently accept the empty-string collision.
+        // Delegated to the SAME `str_bytes_equal` helper the
+        // pairwise-distinct sibling uses — this pin exercises the
+        // cross-array direction of the same zero-length arm.
+        assert_str_arrays_disjoint(&[""], &[""]);
+    }
+
+    #[test]
+    fn assert_str_arrays_disjoint_accepts_prefix_pair_without_collision() {
+        // POSITIVE-ORTHOGONAL PIN — the byte-length gate at
+        // `str_bytes_equal` across the (a, b) boundary: two arrays
+        // where entries of one are strict prefixes of entries of the
+        // other but no full-length equal pair exists must be flagged
+        // as DISJOINT. A regression that dropped the
+        // `a.len() != b.len()` gate (e.g. by comparing bytes only up
+        // to the shorter length) would silently reject
+        // `(["ab"], ["abc"])` as a collision. Sibling to the (str,
+        // pairwise-distinct) sibling's `_accepts_prefix_pair_without_
+        // collision` pin — the two share the byte-length-gate
+        // theorem across (intra-array, inter-array) row-dual peers.
+        assert_str_arrays_disjoint(&["ab"], &["abc"]);
+        assert_str_arrays_disjoint(&["abc"], &["ab"]);
+        assert_str_arrays_disjoint(&[""], &["a"]);
+    }
+
+    #[test]
+    fn assert_str_arrays_disjoint_panic_message_names_the_helper_and_str_disjointness_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — STR-DISJOINTNESS-VIOLATION
+        // arm: the panic message MUST begin with the helper's own
+        // name AND identify the failed AXIS as "STR-DISJOINTNESS-
+        // VIOLATION" so downstream diagnostics route the drift back
+        // to (a) the helper by string search on
+        // `"assert_str_arrays_disjoint"` and (b) the axis by string
+        // search on `"STR-DISJOINTNESS-VIOLATION"`. Sibling posture
+        // to `assert_char_arrays_disjoint_panic_message_names_the_helper_and_char_disjointness_violation_axis`
+        // on the (char) row-dual peer's provenance pin AND to
+        // `assert_u8_arrays_disjoint_panic_message_names_the_helper_and_u8_disjointness_violation_axis`
+        // on the (u8) row-dual peer's provenance pin — the three
+        // pins together bind the (helper, failed-axis) provenance
+        // triple across the (element-type ∈ {char, u8, `&'static
+        // str`}) × (disjointness)-column 3-row face with matching
+        // provenance-preservation discipline. The axis-provenance
+        // string `"STR-DISJOINTNESS-VIOLATION"` is chosen DISTINCT
+        // from EVERY sibling helper's axis vocabulary (`"duplicate"`
+        // on the (str) ARRAY-side pairwise-distinct sibling;
+        // `"CHAR-DISJOINTNESS-VIOLATION"` on the (char) row-dual
+        // DISJOINTNESS sibling; `"U8-DISJOINTNESS-VIOLATION"` on
+        // the (u8) row-dual DISJOINTNESS sibling; `"CHAR-SUBSET-
+        // VIOLATION"` on the (char) SUBSET-embedding sibling;
+        // `"SUBSET-VIOLATION"` on the (u8) finite-set SUBSET-only
+        // sibling; `"RANGE-SUBSET-VIOLATION"` on the (u8) range
+        // SUBSET-only sibling; `"OUT-OF-SET"` / `"SET-BYTE-MISSING"`
+        // on the (u8) covers-finite-set sibling; `"OUT-OF-RANGE"` /
+        // `"MISSING"` on the (u8) covers-inclusive-range sibling;
+        // `"ARITY-MISMATCH"` on both (u8) `_permutes_*` compound
+        // helpers; `"SET-NOT-PAIRWISE-DISTINCT"` on the (u8) SET-side
+        // well-formedness sibling) so a diagnostic that names the
+        // failed axis routes UNAMBIGUOUSLY to (a) this specific
+        // `&'static str` DISJOINTNESS helper.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_arrays_disjoint(&["dup", "x"], &["dup", "y"]);
+        });
+        let payload = outcome.expect_err(
+            "assert_str_arrays_disjoint must panic on a cross-array \
+             collision — the reject-collision arm is the sole STR-\
+             DISJOINTNESS-VIOLATION failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_str_arrays_disjoint panic payload must be a \
+                 static &str or String",
+            );
+        assert!(
+            msg.contains("assert_str_arrays_disjoint"),
+            "assert_str_arrays_disjoint panic message {msg:?} must \
+             name the helper for provenance-preserving failure \
+             diagnostics",
+        );
+        assert!(
+            msg.contains("STR-DISJOINTNESS-VIOLATION"),
+            "assert_str_arrays_disjoint panic message {msg:?} must \
+             name the failed AXIS (\"STR-DISJOINTNESS-VIOLATION\") \
+             for axis-provenance-preserving failure diagnostics",
+        );
     }
 
     // ── `assert_u8_array_pairwise_distinct` — the `u8` element-type

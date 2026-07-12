@@ -380,6 +380,205 @@ const _: () = assert_char_array_within_char_finite_set::<2, 5>(
 );
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// the distinct-values sets of `a` and `b` share any char on the
+/// substrate's reader-boundary `char` vocabulary. Binds ONE conjunct
+/// clause: CHAR-DISJOINTNESS-VIOLATION — no entry in `a` may appear as
+/// an entry in `b` (symmetric across the two array arguments).
+///
+/// Contract-orthogonal peer to [`assert_char_array_within_char_finite_set`]
+/// on the (subset-vs-disjointness) axis of the (contract-shape) axis:
+/// where the SUBSET-EMBEDDING helper binds `arr ⊆ set` at compile time
+/// on the (char) row, this DISJOINTNESS helper binds `a ∩ b = ∅` at
+/// compile time on the SAME element-type row. Together the two helpers
+/// close the (subset, disjointness) 2-corner face on the (char)
+/// contract-shape column at ONE primitive per corner rather than at a
+/// per-pair runtime iterator sweep per call site. The disjointness
+/// relation is SYMMETRIC (unlike the SUBSET-EMBEDDING relation, which
+/// distinguishes `arr` from `set`) so the two arguments carry NO axis-
+/// provenance role split — either drift site (a char in `a` that
+/// aliases a char in `b`, OR a char in `b` that aliases a char in `a`)
+/// surfaces at the CHAR-DISJOINTNESS-VIOLATION panic with the OFFENDING
+/// arm named by BOTH position indices (`a[i]` AND `b[j]`) rather than
+/// by only one side of the pair.
+///
+/// SYMMETRY IN THE NESTED SWEEP: the inner `while j < M` sweep visits
+/// every position of `b` per outer `i` and panics at the FIRST cross-
+/// array collision (`a[i] == b[j]`). Because the relation is symmetric
+/// and the two-loop sweep visits every `(i, j) ∈ [0, N) × [0, M)` pair,
+/// swapping `a` and `b` at the call site produces the SAME verdict —
+/// the helper does NOT gratuitously depend on argument order. A future
+/// call site that intends to name a SPECIFIC drift side can still route
+/// its own preferred first-mention by picking the argument order that
+/// serves its diagnostic story; the helper itself carries no such
+/// preference.
+///
+/// The invariant is load-bearing for the reader's outer-dispatch
+/// cascade at [`crate::reader::tokenize`]: the SIX outer-dispatch
+/// category-leading char families the tokenizer specialises on
+/// ([`Sexp::LIST_OPEN`] / [`Sexp::LIST_CLOSE`] arm; every
+/// [`QuoteForm::lead_char`] arm; [`Atom::STR_DELIMITER`] arm;
+/// [`Sexp::COMMENT_LEAD`] arm; whitespace arm) MUST route to DISJOINT
+/// arms — otherwise a shared byte would silently reclassify at the
+/// same-position outer dispatch (e.g. a `(` that aliased `,` would
+/// silently promote a list-open byte through the quote-family arm, or
+/// vice versa). Post-lift the disjointness of the substrate's pinned
+/// arm-set pairs binds at rustc time via one `const _` line per pair.
+///
+/// The invariant is ALSO load-bearing for the Str-payload escape-arm
+/// dispatch at [`Atom::decode_str_escape`]: the FIVE non-passthrough
+/// escape arms partition into the [`Atom::SELF_ESCAPE_TABLE`] (2 rows,
+/// pattern-EQUALS-value) and [`Atom::NAMED_ESCAPE_TABLE`] (3 rows,
+/// pattern-DISTINCT-from-value) sub-vocabularies whose entries MUST
+/// remain disjoint at the CHAR level from every other reader-boundary
+/// sub-vocabulary — otherwise a Str-escape byte would silently
+/// promote through the outer-dispatch cascade instead of staying inside
+/// the Str-payload boundary.
+///
+/// Pre-lift the substrate carried these disjointness relations at ONE
+/// runtime test per pair (`sexp_comment_delimiters_disjoint_from_list_delimiters`,
+/// `sexp_list_delimiters_disjoint_from_comment_lead`, etc.); post-lift
+/// the ARRAY-LEVEL disjointness binds at rustc time via one `const _`
+/// line per pair. A regression that silently drifted `Sexp::LIST_OPEN`
+/// to `';'` (colliding with `Sexp::COMMENT_LEAD`), or drifted
+/// `QuoteForm::QUOTE_LEAD` to `'('` (colliding with `Sexp::LIST_OPEN`),
+/// fails at `cargo check` BEFORE any test scheduler runs.
+///
+/// Adding a new family-wide `[char; N]` sub-vocabulary whose distinct-
+/// values set must remain disjoint from another substrate `[char; M]`
+/// array's distinct-values set: pair the declaration with `const _: ()
+/// = assert_char_arrays_disjoint::<N, M>(&Self::FOO_ARRAY,
+/// &Other::BAR_ARRAY);` co-located after the array's declaration and
+/// the DISJOINTNESS contract binds at compile time. The rustc-forced
+/// arities `[char; N]` and `[char; M]` compose with this const-eval
+/// sweep so BOTH cardinality-pair AND cross-array disjointness are
+/// compile-time theorems on the SAME (a, b) char-array pair.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_char_arrays_disjoint_panics_at_runtime_on_collision` and
+/// `assert_char_arrays_disjoint_panic_message_names_the_helper_and_char_disjointness_violation_axis`.
+/// The panic site carries the `"CHAR-DISJOINTNESS-VIOLATION"` axis-
+/// provenance string chosen DISTINCT from every sibling helper's axis
+/// vocabulary (`"duplicate"` on the ARRAY-side pairwise-distinct
+/// sibling; `"CHAR-SUBSET-VIOLATION"` on the (char) SUBSET-embedding
+/// sibling; `"SUBSET-VIOLATION"` on the (u8) finite-set SUBSET-only
+/// sibling; `"RANGE-SUBSET-VIOLATION"` on the (u8) range SUBSET-only
+/// sibling; `"OUT-OF-SET"` / `"SET-BYTE-MISSING"` on the (u8) covers-
+/// finite-set sibling; `"OUT-OF-RANGE"` / `"MISSING"` on the (u8)
+/// covers-inclusive-range sibling; `"ARITY-MISMATCH"` on both (u8)
+/// `_permutes_*` compound helpers; `"SET-NOT-PAIRWISE-DISTINCT"` on
+/// the (u8) SET-side well-formedness sibling) so a diagnostic that
+/// names the failed axis routes UNAMBIGUOUSLY to THIS specific
+/// disjointness helper. The `"CHAR-"` prefix disambiguates from a
+/// future-lift (u8) disjointness sibling; the `"-VIOLATION"` suffix
+/// lets callers grep either DISJOINTNESS or SUBSET-embedding sibling
+/// by `"VIOLATION"` alone or route to the specific contract-shape by
+/// the axis stem (`"DISJOINTNESS"` vs `"SUBSET"`).
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide cross-array
+///   disjointness contract on the reader-boundary `char` vocabulary
+///   becomes a TYPE-LEVEL theorem the substrate carries per (a, b)
+///   char-array pair rather than a runtime test the developer must
+///   remember to write per pair.
+/// - THEORY.md §III — the typescape; the (element-type × contract-
+///   shape) matrix now carries the DISJOINTNESS corner on the (char)
+///   row at ONE peer const-fn helper rather than at a per-pair runtime
+///   iterator sweep. The (subset, disjointness) 2-corner face on the
+///   (char) row is now closed at TWO peer const-fn helpers —
+///   [`assert_char_array_within_char_finite_set`] on the SUBSET corner
+///   and this helper on the DISJOINTNESS corner.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   cross-array membership sweep IS the generative shape. Every new
+///   closed-set `char` sub-vocabulary array whose distinct-values set
+///   is an intentionally-disjoint peer of another substrate `char`
+///   array adds ONE `const _` line to get the disjointness theorem
+///   rather than re-deriving a per-pair runtime iterator sweep at
+///   each call site.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   DISJOINTNESS proof at declaration site AND the reader outer-
+///   dispatch cascade's arm-set partition contract regenerate through
+///   the SAME `const _` witnesses at the ARRAY level.
+///
+/// Frontier inspiration: Lean 4's `Finset.Disjoint : Finset α →
+/// Finset α → Prop` as a decidable relation on `Finset α` combined
+/// with `Finset.disjoint_iff` unfolding the relation to negated
+/// per-element membership — the substrate primitive here embeds the
+/// same disjointness relation as a rustc const-eval-time proof
+/// obligation at every `assert_char_arrays_disjoint` call site rather
+/// than as a Lean tactic invocation deferred to `elab_command`. The
+/// symmetric nested sweep mirrors Lean's `Finset.disjoint_iff_ne`
+/// characterisation `∀ a ∈ s, ∀ b ∈ t, a ≠ b` at the concrete
+/// two-array `[char; N] × [char; M]` monomorphic realisation.
+pub const fn assert_char_arrays_disjoint<const N: usize, const M: usize>(
+    a: &[char; N],
+    b: &[char; M],
+) {
+    let mut i = 0;
+    while i < N {
+        let mut j = 0;
+        while j < M {
+            if a[i] as u32 == b[j] as u32 {
+                panic!(
+                    "assert_char_arrays_disjoint: CHAR-DISJOINTNESS-\
+                     VIOLATION — the two family-wide char arrays `a` \
+                     and `b` share an entry at some (i, j) position \
+                     pair. The substrate's CROSS-ARRAY DISJOINTNESS \
+                     contract on the pair is broken; every consumer \
+                     that partitions the two arrays' distinct-values \
+                     sets into disjoint sub-vocabularies of the reader-\
+                     boundary char algebra (the reader outer-dispatch \
+                     cascade's SIX category-leading char arm-set \
+                     partition through `Sexp::LIST_DELIMITERS`, \
+                     `QuoteForm::LEADS`, `Sexp::COMMENT_DELIMITERS`, \
+                     `Atom::STR_DELIMITER`; the Str-payload escape-arm \
+                     dispatch cascade through `Atom::SELF_ESCAPE_TABLE`, \
+                     `Atom::NAMED_ESCAPE_TABLE`; any future typed-\
+                     disjointness pair on the substrate's reader-\
+                     boundary char algebras) relies on the two arrays' \
+                     distinct-values sets NOT sharing a byte. Fix at \
+                     WHICHEVER ARRAY-DECLARATION site drifted (the \
+                     symmetric disjointness relation carries no built-\
+                     in axis-provenance role split between `a` and `b`) \
+                     by dropping the offending entry from one array OR \
+                     re-shaping the partition to route the shared \
+                     entry to a single sub-vocabulary"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+// Compile-time DISJOINTNESS witnesses — the FIVE substrate-pinned
+// (a, b) `[char; N] × [char; M]` pairs whose distinct-values sets are
+// intentionally-closed disjoint sub-vocabularies of the reader-boundary
+// char algebra. Pre-lift the five disjointness relations lived only as
+// runtime tests (`sexp_comment_delimiters_disjoint_from_list_delimiters`
+// on pair 1; `sexp_list_delimiters_disjoint_from_comment_lead` +
+// `sexp_list_delimiters_disjoint_from_str_delimiter` +
+// `sexp_comment_delimiters_disjoint_from_str_delimiter` as scalar-vs-
+// array runtime pins peer to pairs 1–5; the implicit disjointness
+// arms of `NON_WHITESPACE_BARE_ATOM_TERMINATORS`'s four-category
+// composition rule between LIST_DELIMITERS + LEADS + {STR_DELIMITER,
+// COMMENT_LEAD}); post-lift the ARRAY-LEVEL disjointness of the five
+// pinned pairs binds at rustc time via one `const _` line per pair.
+// A regression that silently drifted one of the six arm-set-leading
+// chars into another arm (e.g. `Sexp::LIST_OPEN` to `';'`, colliding
+// with `Sexp::COMMENT_LEAD`; `QuoteForm::QUOTE_LEAD` to `'('`,
+// colliding with `Sexp::LIST_OPEN`) fails at `cargo check` BEFORE any
+// test scheduler runs. Sibling to the pairwise-distinctness witnesses
+// above — those pin INJECTIVITY on each individual array, these pin
+// DISJOINTNESS across PAIRS of arrays.
+const _: () =
+    assert_char_arrays_disjoint::<2, 2>(&Sexp::LIST_DELIMITERS, &Sexp::COMMENT_DELIMITERS);
+const _: () = assert_char_arrays_disjoint::<2, 3>(&Sexp::LIST_DELIMITERS, &QuoteForm::LEADS);
+const _: () = assert_char_arrays_disjoint::<2, 3>(&Sexp::COMMENT_DELIMITERS, &QuoteForm::LEADS);
+const _: () = assert_char_arrays_disjoint::<2, 2>(&Sexp::LIST_DELIMITERS, &Atom::SELF_ESCAPE_TABLE);
+const _: () = assert_char_arrays_disjoint::<3, 2>(&QuoteForm::LEADS, &Atom::SELF_ESCAPE_TABLE);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` alias byte-for-byte through
 /// [`str::as_bytes`].
 ///
@@ -29456,6 +29655,200 @@ mod tests {
         // two pins together bind the delegation chain at ONE test per
         // element-type row.
         assert_char_array_within_char_finite_set::<2, 3>(&['a', 'b'], &['a', 'b', 'b']);
+    }
+
+    // ── `assert_char_arrays_disjoint` — the CHAR-DISJOINTNESS-VIOLATION
+    // verifier that binds `a ∩ b = ∅` at compile time on the reader-
+    // boundary `char` vocabulary, peer to
+    // `assert_char_array_within_char_finite_set` on the (char) row of
+    // the (subset, disjointness) 2-corner face of the (contract-shape)
+    // axis. The runtime test surface pins each of the helper's arms
+    // (accept-both-empty, accept-either-empty, accept-disjoint-
+    // singletons, accept-each-family-wide-substrate-pair, accept-arg-
+    // order-symmetry, reject-single-collision, reject-terminal-a-
+    // collision, reject-terminal-b-collision, panic-message-provenance
+    // on the CHAR-DISJOINTNESS-VIOLATION axis) so a regression that
+    // silently weakened the helper on ANY arm is caught by the
+    // helper's OWN test surface rather than only surfacing as a false-
+    // positive on some future disjoint `[char; N] × [char; M]` pair's
+    // compound pin.
+
+    #[test]
+    fn assert_char_arrays_disjoint_accepts_both_empty_arrays() {
+        // Both arrays empty at the `[char; 0] × [char; 0]` corner —
+        // vacuously disjoint (no `(i, j)` pair exists to test). The
+        // compile-time `const _: () = assert_char_arrays_disjoint(&[],
+        // &[]);` would land on this arm, so the runtime call MUST
+        // return normally. Turbofish binding required because there's
+        // no other cue for the const parameters on the empty array
+        // literals. Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_the_empty_array_within_any_set`
+        // on the peer SUBSET-embedding helper — the two share the
+        // trivial-arity arm across the (subset, disjointness) 2-corner
+        // face on the (char) row.
+        assert_char_arrays_disjoint::<0, 0>(&[], &[]);
+    }
+
+    #[test]
+    fn assert_char_arrays_disjoint_accepts_either_side_empty() {
+        // Either side empty at the `[char; 0] × [char; M]` OR
+        // `[char; N] × [char; 0]` corners — vacuously disjoint (the
+        // OUTER `while i < N` OR the INNER `while j < M` sweep is a
+        // no-op). Pins BOTH SIDES of the (a-empty, b-empty) 2-corner
+        // sub-face on the trivial-arity axis so a regression that
+        // narrowed the sweep to only-a-non-empty OR only-b-non-empty
+        // fails HERE at the empty-side corner rather than at a distant
+        // false-positive.
+        assert_char_arrays_disjoint::<0, 3>(&[], &['a', 'b', 'c']);
+        assert_char_arrays_disjoint::<3, 0>(&['a', 'b', 'c'], &[]);
+    }
+
+    #[test]
+    fn assert_char_arrays_disjoint_accepts_disjoint_singletons() {
+        // Singleton `a = [K]` and singleton `b = [L]` with `K != L` at
+        // the `[char; 1] × [char; 1]` corner — the minimal non-empty
+        // disjointness relation. Pins the INNER `if a[i] != b[j]` gate
+        // returns without panicking on a single distinct-pair check.
+        // A regression that flipped the equality direction (`==` vs
+        // `!=`) would silently reject every disjoint singleton pair.
+        assert_char_arrays_disjoint(&['a'], &['b']);
+    }
+
+    #[test]
+    fn assert_char_arrays_disjoint_accepts_each_family_wide_substrate_pair() {
+        // Runtime cross-check that the FIVE (a, b) `[char; N] ×
+        // [char; M]` pairs the substrate's module-level `const _`
+        // witnesses pin at COMPILE time are proper DISJOINTNESS
+        // embeddings at runtime too. The pairs enforce the theorem at
+        // TWO stages of the toolchain: the const witnesses fire FIRST
+        // at `cargo check` (through the five module-level `const _:
+        // () = assert_char_arrays_disjoint::<N, M>(...)` lines), this
+        // runtime pin catches the drift at `cargo test` as a safety
+        // net. Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_each_family_wide_substrate_subset`
+        // which sweeps the three (subset, superset) PAIRS at the
+        // SUBSET-EMBEDDING axis; this pin sweeps the five (a, b)
+        // PAIRS at the DISJOINTNESS axis on the SAME (char) row.
+        assert_char_arrays_disjoint::<2, 2>(&Sexp::LIST_DELIMITERS, &Sexp::COMMENT_DELIMITERS);
+        assert_char_arrays_disjoint::<2, 3>(&Sexp::LIST_DELIMITERS, &QuoteForm::LEADS);
+        assert_char_arrays_disjoint::<2, 3>(&Sexp::COMMENT_DELIMITERS, &QuoteForm::LEADS);
+        assert_char_arrays_disjoint::<2, 2>(&Sexp::LIST_DELIMITERS, &Atom::SELF_ESCAPE_TABLE);
+        assert_char_arrays_disjoint::<3, 2>(&QuoteForm::LEADS, &Atom::SELF_ESCAPE_TABLE);
+    }
+
+    #[test]
+    fn assert_char_arrays_disjoint_is_symmetric_in_argument_order() {
+        // SYMMETRY PIN: swapping the two arguments produces the SAME
+        // verdict. Pins that the disjointness relation is truly
+        // symmetric across the two array arguments (the helper's
+        // nested-sweep implementation does NOT gratuitously depend on
+        // argument order). A regression that narrowed the sweep to
+        // `for i in a { if !b.contains(a[i]) }` (subset-shape, not
+        // disjointness-shape) would fail the swap on one direction
+        // only. Runs each substrate pair BOTH ways.
+        assert_char_arrays_disjoint(&Sexp::COMMENT_DELIMITERS, &Sexp::LIST_DELIMITERS);
+        assert_char_arrays_disjoint(&QuoteForm::LEADS, &Sexp::LIST_DELIMITERS);
+        assert_char_arrays_disjoint(&Atom::SELF_ESCAPE_TABLE, &QuoteForm::LEADS);
+    }
+
+    #[test]
+    #[should_panic(expected = "CHAR-DISJOINTNESS-VIOLATION")]
+    fn assert_char_arrays_disjoint_panics_at_runtime_on_collision() {
+        // NEGATIVE PIN — CHAR-DISJOINTNESS-VIOLATION corner: two arrays
+        // sharing a single entry MUST panic at runtime with the
+        // CHAR-DISJOINTNESS-VIOLATION-named message. Pins the helper's
+        // OWN reject arm — a regression that silently returned
+        // without panicking on a cross-array collision would slip
+        // through the compile-time witnesses' failure mode too. The
+        // shared entry `'a'` is intentionally placed at the FIRST
+        // position of BOTH arrays to pin the initial-position drift
+        // mode.
+        assert_char_arrays_disjoint(&['a', 'b'], &['a', 'c']);
+    }
+
+    #[test]
+    #[should_panic(expected = "CHAR-DISJOINTNESS-VIOLATION")]
+    fn assert_char_arrays_disjoint_panics_at_runtime_on_terminal_a_collision() {
+        // NEGATIVE PIN — terminal-position drift on the OUTER `a` side:
+        // a shared entry at the LAST position of `a` MUST panic — pins
+        // that the outer `while i < N` loop reaches `i = N - 1` (else
+        // the terminal drift on `a` would slip through). A regression
+        // that narrowed the outer sweep to `while i < N - 1` (off-by-
+        // one on the OUTER bound) would silently accept this pair.
+        assert_char_arrays_disjoint(&['x', 'y', 'z'], &['z']);
+    }
+
+    #[test]
+    #[should_panic(expected = "CHAR-DISJOINTNESS-VIOLATION")]
+    fn assert_char_arrays_disjoint_panics_at_runtime_on_terminal_b_collision() {
+        // NEGATIVE PIN — terminal-position drift on the INNER `b` side:
+        // a shared entry at the LAST position of `b` MUST panic — pins
+        // that the inner `while j < M` loop reaches `j = M - 1` (else
+        // the terminal drift on `b` would slip through). A regression
+        // that narrowed the inner sweep to `while j < M - 1` (off-by-
+        // one on the INNER bound) would silently accept this pair.
+        // Sibling posture to the outer-terminal pin above — the two
+        // pins together bind the terminal bounds on BOTH loops.
+        assert_char_arrays_disjoint(&['x'], &['a', 'b', 'x']);
+    }
+
+    #[test]
+    fn assert_char_arrays_disjoint_panic_message_names_the_helper_and_char_disjointness_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — CHAR-DISJOINTNESS-VIOLATION
+        // arm: the panic message MUST begin with the helper's own name
+        // AND identify the failed AXIS as "CHAR-DISJOINTNESS-VIOLATION"
+        // so downstream diagnostics route the drift back to (a) the
+        // helper by string search on `"assert_char_arrays_disjoint"`
+        // and (b) the axis by string search on `"CHAR-DISJOINTNESS-
+        // VIOLATION"`. Sibling posture to
+        // `assert_char_array_within_char_finite_set_panic_message_names_the_helper_and_char_subset_violation_axis`
+        // on the peer SUBSET-embedding helper's provenance pin — the
+        // two pins together bind the (helper, failed-axis) provenance
+        // pair at ONE test per corner of the (subset, disjointness)
+        // 2-corner face on the (char) row. The axis-provenance string
+        // `"CHAR-DISJOINTNESS-VIOLATION"` is chosen DISTINCT from EVERY
+        // sibling helper's axis vocabulary (`"duplicate"` on the
+        // ARRAY-side pairwise-distinct sibling; `"CHAR-SUBSET-
+        // VIOLATION"` on the (char) SUBSET-embedding sibling;
+        // `"SUBSET-VIOLATION"` on the (u8) finite-set SUBSET-only
+        // sibling; `"RANGE-SUBSET-VIOLATION"` on the (u8) range
+        // SUBSET-only sibling; `"OUT-OF-SET"` / `"SET-BYTE-MISSING"`
+        // on the (u8) covers-finite-set sibling; `"OUT-OF-RANGE"` /
+        // `"MISSING"` on the (u8) covers-inclusive-range sibling;
+        // `"ARITY-MISMATCH"` on both (u8) `_permutes_*` compound
+        // helpers; `"SET-NOT-PAIRWISE-DISTINCT"` on the (u8) SET-side
+        // well-formedness sibling) so a diagnostic that names the
+        // failed axis routes UNAMBIGUOUSLY to (a) this specific char
+        // DISJOINTNESS helper.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_arrays_disjoint(&['a', 'b'], &['a', 'c']);
+        });
+        let payload = outcome.expect_err(
+            "assert_char_arrays_disjoint must panic on a cross-array \
+             collision — the reject-collision arm is the sole CHAR-\
+             DISJOINTNESS-VIOLATION failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_arrays_disjoint panic payload must be a \
+                 static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_arrays_disjoint"),
+            "assert_char_arrays_disjoint panic message {msg:?} must \
+             name the helper for provenance-preserving failure \
+             diagnostics",
+        );
+        assert!(
+            msg.contains("CHAR-DISJOINTNESS-VIOLATION"),
+            "assert_char_arrays_disjoint panic message {msg:?} must \
+             name the failed AXIS (\"CHAR-DISJOINTNESS-VIOLATION\") \
+             for axis-provenance-preserving failure diagnostics",
+        );
     }
 
     // ── `assert_str_array_pairwise_distinct` — the `&'static str`

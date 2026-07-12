@@ -797,6 +797,259 @@ const _: () = assert_u8_array_covers_inclusive_range::<12, 0, 6>(
     &crate::error::SexpShape::HASH_DISCRIMINATORS,
 );
 
+/// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of `arr` falls OUTSIDE the inclusive range `[LO, HI]` on
+/// the substrate's `u8` cache-key vocabulary. Binds ONE conjunct clause
+/// at ONE `const _` line:
+///
+/// * RANGE-SUBSET-VIOLATION: every entry in `arr` lies in `[LO..=HI]` —
+///   the array's distinct-value set is a SUBSET of the target inclusive
+///   range. A regression that drifts ONE entry to a byte OUTSIDE the
+///   range (e.g. lifts a `[u8; 2]` sub-carve of the outer-`Sexp` cache-
+///   key `[0..=6]` partition to `[0u8, 7u8]`, drifting past the outer-
+///   discriminator space's upper endpoint) fails-loudly at const-eval.
+///
+/// Contract-strength peer to [`assert_u8_array_covers_inclusive_range`]
+/// on the (equality-vs-subset) axis: where `_covers_inclusive_range`
+/// binds `arr`'s distinct-value set FULLY COVERS `[LO..=HI]` (every
+/// entry is in the range AND every range byte is reached — the RANGE-
+/// BOUND arm ∧ the FULL-COVERAGE arm), this helper binds ONLY the
+/// RANGE-BOUND arm read in isolation (`arr ⊆ [LO..=HI]` without the
+/// FULL-COVERAGE clause) — a strictly WEAKER contract for arrays
+/// intentionally covering only a PROPER SUBSET of the target range.
+///
+/// Contiguity-axis peer to [`assert_u8_array_within_u8_finite_set`]:
+/// where the finite-set SUBSET-only sibling binds `arr ⊆ set` at the
+/// non-contiguous-finite-set corner (`set` is any `[u8; M]` —
+/// contiguous, gapped, singleton, or scattered), this helper binds
+/// `arr ⊆ [LO..=HI]` at the contiguous-range corner (target super-
+/// set is a contiguous inclusive range parameterised by the `LO/HI`
+/// const generics rather than a runtime-provided literal array). The
+/// two helpers together close the (equality-vs-subset) × (contiguity)
+/// 2×2 = 4-corner face of the substrate's `u8` array vocabulary at
+/// compile time: (equality, contiguous) at
+/// [`assert_u8_array_covers_inclusive_range`], (equality, finite-
+/// set) at [`assert_u8_array_covers_finite_set`], (subset,
+/// contiguous) at THIS helper, (subset, finite-set) at
+/// [`assert_u8_array_within_u8_finite_set`]. Prefer the tighter
+/// [`assert_u8_array_covers_inclusive_range`] when the array's
+/// distinct-value set intentionally EQUALS the target range; this
+/// helper is for the strictly-weaker SUBSET corner where `arr`
+/// covers only a PROPER SUBSET of `[LO..=HI]`. Prefer
+/// [`assert_u8_array_within_u8_finite_set`] when the target super-
+/// set is NON-contiguous — this range-based helper cannot express
+/// gaps within the target.
+///
+/// The invariant is load-bearing for the substrate's OUTER-`Sexp`
+/// cache-key partition-embedding contract on the ONE outer discri-
+/// minator array whose parent-range embedding is NOT ALREADY compile-
+/// time-enforced through a tighter contract:
+/// [`crate::error::StructuralKind::HASH_DISCRIMINATORS`] (`[u8; 2]`
+/// = `[0, 2]`, the non-contiguous two-of-seven structural-residual
+/// sub-carving covering `{0, 2}` with a gap at `1u8` where the
+/// atomic-carve outer marker lives) MUST be a SUBSET of `[0..=6]`
+/// (the outer-`Sexp` cache-key discriminator space defined by
+/// [`crate::error::SexpShape::HASH_DISCRIMINATORS`]'s twelve-shape
+/// → seven-byte collapse). Pre-lift the array bound SURJECTIVITY
+/// through
+/// `assert_u8_array_permutes_finite_set::<2, 2>(&StructuralKind::HASH_DISCRIMINATORS, &[0u8, 2u8])`
+/// — this compound witness binds a permutation of the FINITE-SET
+/// `{0, 2}` but leaves the OUTER-RANGE embedding UNCONSTRAINED at
+/// compile time. A coordinated regression that drifted BOTH
+/// `StructuralKind::LIST_HASH_DISCRIMINATOR` from `2u8` to (say)
+/// `8u8` AND updated the finite-set literal from `&[0u8, 2u8]` to
+/// `&[0u8, 8u8]` in lockstep at the `_permutes_finite_set` call site
+/// would pass the finite-set-permutation witness (the drifted pair
+/// is a permutation of the drifted set) but VIOLATE the outer-
+/// `[0..=6]` partition semantic — `8u8` falls OUTSIDE the twelve-
+/// shape SexpShape hash arm's reach. Post-lift the ARRAY-LEVEL
+/// RANGE-SUBSET witness catches the coordinated finite-set drift
+/// at const-eval time; the panic message routes operator attention
+/// to the ARRAY-DECLARATION site as the drift origin. The runtime
+/// per-role scalar alias-chain pins in `error.rs`'s test module
+/// survive as sibling checks (a distinct failure mode: a drift
+/// that KEPT the byte within `[0..=6]` but ROUTED to the wrong
+/// per-role outer marker still passes the ARRAY-level range-
+/// subset check but fails the per-role scalar pin) — together the
+/// two pins bind the outer-partition embedding at TWO stages of
+/// the toolchain.
+///
+/// The three OTHER family-wide outer-`Sexp` discriminator arrays
+/// (`SexpShape`, `QuoteForm`, `UnquoteForm`) are intentionally
+/// OMITTED from this range-SUBSET sweep because their outer-
+/// `[0..=6]` embedding is ALREADY compile-time-enforced through
+/// TIGHTER contracts on their respective sub-ranges:
+/// [`crate::error::SexpShape::HASH_DISCRIMINATORS`] covers `[0..=6]`
+/// exactly via [`assert_u8_array_covers_inclusive_range::<12, 0, 6>`]
+/// (equality tighter than subset — the covers witness implies the
+/// subset witness); [`QuoteForm::HASH_DISCRIMINATORS`] permutes
+/// `[3..=6]` via [`assert_u8_array_permutes_inclusive_range::<4, 3, 6>`]
+/// (a permutation of `[3..=6]` — which is a subset of `[0..=6]` by
+/// numeric inclusion — implies `⊆ [0..=6]`);
+/// [`crate::error::UnquoteForm::HASH_DISCRIMINATORS`] permutes
+/// `[5..=6]` via [`assert_u8_array_permutes_inclusive_range::<2, 5, 6>`]
+/// (same, doubly transitive through QuoteForm's parent-range
+/// containment). Adding redundant SUBSET-of-`[0..=6]` witnesses on
+/// those three would double-bind claims strictly weaker than what
+/// the tighter permutes / covers contracts already prove.
+///
+/// Every future family-wide `[u8; N]` typed-range-subset carving on
+/// the substrate's closed-set outer algebras whose target-superset
+/// IS a contiguous inclusive range (e.g. any further intentionally-
+/// closed sub-carving of the `[0..=6]` outer-`Sexp` partition whose
+/// distinct-value set is intentionally NON-CONTIGUOUS within the
+/// target range) participates in the SAME compile-time guarantee
+/// via one `const _` line.
+///
+/// Adding a new family-wide `[u8; N]` range-embedded array to the
+/// substrate: pair the declaration with `const _: () =
+/// assert_u8_array_within_inclusive_range::<N, LO, HI>(&Self::
+/// FOO_ARRAY);` co-located after the array's declaration and the
+/// RANGE-SUBSET contract binds at compile time. The rustc-forced
+/// arity `[u8; N]` composes with this const-eval sweep so both
+/// cardinality-N AND every-entry-in-range are compile-time theorems
+/// on the SAME array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_u8_array_within_inclusive_range_panics_at_runtime_on_entry_above_hi`,
+/// `assert_u8_array_within_inclusive_range_panics_at_runtime_on_entry_below_lo`,
+/// `assert_u8_array_within_inclusive_range_panics_at_runtime_on_terminal_out_of_range_entry`,
+/// and
+/// `assert_u8_array_within_inclusive_range_panic_message_names_the_helper_and_range_subset_violation_axis`.
+/// The panic site carries the axis-provenance string
+/// `"RANGE-SUBSET-VIOLATION"` chosen DISTINCT from every sibling
+/// helper's axis vocabulary (`"duplicate"` on the ARRAY-side pairwise-
+/// distinct sibling; `"OUT-OF-SET"` / `"SET-BYTE-MISSING"` on the
+/// covers-finite-set sibling; `"OUT-OF-RANGE"` / `"MISSING"` on the
+/// covers-inclusive-range sibling; `"SUBSET-VIOLATION"` on the finite-
+/// set SUBSET-only sibling; `"ARITY-MISMATCH"` on both `_permutes_*`
+/// compound helpers; `"SET-NOT-PAIRWISE-DISTINCT"` on the SET-side
+/// well-formedness sibling) so a diagnostic that names the failed
+/// axis routes UNAMBIGUOUSLY to THIS specific range SUBSET-embedding
+/// helper. The `"RANGE-"` prefix disambiguates from the finite-set
+/// peer's bare `"SUBSET-VIOLATION"`; the `"-VIOLATION"` suffix is
+/// shared with the finite-set peer so callers can grep either
+/// SUBSET-embedding sibling by `"VIOLATION"` alone or route to the
+/// specific contiguity corner by the `"RANGE-"` / bare-`"SUBSET-"`
+/// disambiguator prefix.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide range-
+///   subset-embedding contract on the `u8` cache-key vocabulary
+///   becomes a TYPE-LEVEL theorem the substrate carries per
+///   (array, range) pair rather than a transitively-implied claim
+///   the developer must trust to hold across sibling witnesses
+///   drifting in lockstep.
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key `[0..=6]` partition is the `intent_hash` composition
+///   axis — binding the range-subset embedding on the typed algebra
+///   makes a coordinated drift outside the parent range a compile
+///   error rather than a silent BLAKE3 mis-hash on any
+///   `Expander::cache` consumer keyed on the sub-carving.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   range-membership-only sweep IS the generative shape. Every new
+///   closed-set discriminator array whose distinct-value set is an
+///   intentional SUBSET of a contiguous inclusive range on the
+///   substrate adds ONE `const _` line to get the range-subset-
+///   embedding theorem rather than re-deriving a per-embedding
+///   runtime iterator sweep at each call site.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+///   the RANGE-SUBSET embedding proof at declaration site AND the
+///   parent [`assert_u8_array_covers_inclusive_range`] proof on the
+///   parent-range-covering array regenerate through the SAME
+///   `const _` witness at the SUBSET-embedded array level.
+///
+/// Frontier inspiration: Lean 4's `Set.Icc` (closed interval) combined
+/// with `Set.subset_Icc_iff` giving the equivalence `s ⊆ Icc a b ↔
+/// ∀ x ∈ s, a ≤ x ∧ x ≤ b` — the substrate primitive here embeds
+/// the same interval-subset relation as a rustc const-eval-time proof
+/// obligation at every `assert_u8_array_within_inclusive_range` call
+/// site rather than as a Lean tactic invocation deferred to
+/// `elab_command`. TLA+'s `\A x \in S : LO <= x /\ x <= HI` first-
+/// class quantified-interval-subset relation composes similarly at
+/// TLC model-checking time. Coq's `Included A (Ensembles.Included U
+/// (fun x => LO <= x <= HI))` predicate encodes the same per-element
+/// containment. Translation through pleme-io primitives: the RANGE-
+/// SUBSET embedding predicate binds through ONE forward sweep
+/// (`LO ≤ arr[i] ≤ HI`) at const-eval time on a rustc-forced-arity
+/// `[u8; N]` × two `u8` const generics — no `Ord` / `Eq` / `Hash`
+/// supertrait bound, no allocation, no set carrier.
+///
+/// # Panics
+///
+/// Panics if any `arr[i]` satisfies `arr[i] < LO || arr[i] > HI`.
+pub const fn assert_u8_array_within_inclusive_range<const N: usize, const LO: u8, const HI: u8>(
+    arr: &[u8; N],
+) {
+    let mut i = 0;
+    while i < N {
+        if arr[i] < LO || arr[i] > HI {
+            panic!(
+                "assert_u8_array_within_inclusive_range: RANGE-\
+                 SUBSET-VIOLATION — the family-wide u8 array `arr` \
+                 carries an entry at some position whose byte falls \
+                 OUTSIDE the target inclusive range `[LO, HI]`. The \
+                 substrate's RANGE-SUBSET-EMBEDDING contract on the \
+                 array is broken; every consumer that expects the \
+                 array's distinct-value set to embed within the \
+                 target inclusive range (`StructuralKind::HASH_\
+                 DISCRIMINATORS ⊂ [0..=6]` on the outer-`Sexp` \
+                 cache-key partition; any future typed-range-subset \
+                 embedding on the substrate's closed-set outer \
+                 algebras) relies on every array entry staying \
+                 inside the target range. Fix at the ARRAY-\
+                 DECLARATION site (the `arr` under verification, \
+                 NOT the `LO`/`HI` const parameters specifying the \
+                 target range) by dropping the offending entry OR \
+                 by widening `[LO..=HI]` to cover it — the choice \
+                 depends on whether the drift is an unintended \
+                 overshoot outside the parent range or an \
+                 intentional extension of the range vocabulary"
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time RANGE-SUBSET-embedding witness — the ONE family-wide
+// `[u8; N]` HASH_DISCRIMINATORS array on the substrate whose distinct-
+// value set is an intentionally-closed PROPER SUBSET of a contiguous
+// inclusive range NOT ALREADY BOUND by a TIGHTER `_covers_inclusive_
+// range` / `_permutes_inclusive_range` witness on a sub-range:
+// `StructuralKind::HASH_DISCRIMINATORS` (`[u8; 2]` = `[0, 2]`, the
+// non-contiguous two-of-seven structural-residual sub-carving covering
+// `{0, 2}` with a gap at `1u8` where the atomic-carve outer marker
+// lives) MUST be a SUBSET of `[0..=6]` (the outer-`Sexp` cache-key
+// discriminator space defined by `SexpShape::HASH_DISCRIMINATORS`'s
+// twelve-shape → seven-byte collapse). Pre-lift the array bound
+// SURJECTIVITY through `assert_u8_array_permutes_finite_set::<2, 2>(
+// &StructuralKind::HASH_DISCRIMINATORS, &[0u8, 2u8])` (module-level
+// `const _` further down in this file) — this compound witness binds
+// a permutation of the FINITE-SET `{0, 2}` but leaves the OUTER-RANGE
+// embedding UNCONSTRAINED at compile time. A coordinated regression
+// that drifted BOTH `StructuralKind::LIST_HASH_DISCRIMINATOR` from
+// `2u8` to (say) `8u8` AND updated the finite-set literal from
+// `&[0u8, 2u8]` to `&[0u8, 8u8]` at the `_permutes_finite_set` call
+// site would pass the finite-set-permutation witness (the drifted
+// pair is a permutation of the drifted set) but VIOLATE the outer-
+// `Sexp` `[0..=6]` partition semantic every `Hash for Sexp` consumer
+// relies on. Post-lift this ARRAY-LEVEL RANGE-SUBSET witness catches
+// the coordinated finite-set drift at const-eval time — the panic
+// message routes operator attention to the ARRAY-DECLARATION site
+// as the drift origin. The three OTHER family-wide outer-`Sexp`
+// discriminator arrays (`SexpShape`, `QuoteForm`, `UnquoteForm`) are
+// intentionally OMITTED from this range-SUBSET sweep because their
+// outer-`[0..=6]` embedding is ALREADY compile-time-enforced through
+// TIGHTER contracts on their respective sub-ranges (SexpShape covers
+// `[0..=6]` exactly; QuoteForm permutes `[3..=6]`; UnquoteForm
+// permutes `[5..=6]`) — adding redundant SUBSET-of-`[0..=6]`
+// witnesses on those three would double-bind claims strictly weaker
+// than what the tighter permutes / covers contracts already prove.
+const _: () = assert_u8_array_within_inclusive_range::<2, 0, 6>(
+    &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+);
+
 /// Compile-time WELL-FORMEDNESS contract verifier on a caller-provided
 /// TARGET-SET spec `set` — panics at const evaluation time (or at
 /// runtime for dynamic callers) with the axis-provenance-named
@@ -30155,6 +30408,211 @@ mod tests {
         // formedness arm at the top of ALL THREE finite-set-family
         // ARRAY-side helpers.
         assert_u8_array_within_u8_finite_set::<2, 3>(&[3u8, 4u8], &[3u8, 4u8, 4u8]);
+    }
+
+    // ── `assert_u8_array_within_inclusive_range` — the RANGE-MEMBERSHIP-
+    // ONLY subset-embedding verifier that binds `arr ⊆ [LO..=HI]` at
+    // compile time (WITHOUT the additional `[LO..=HI] ⊆ arr's entries`
+    // full-coverage clause the sibling `_covers_inclusive_range` binds).
+    // Contiguity-axis peer to `_within_u8_finite_set` on the (contiguity)
+    // axis of the substrate's SUBSET-only verifiers. The runtime test
+    // surface pins each of the helper's arms (accept-empty, accept-
+    // singleton-in-range, accept-arr-equals-range-endpoints, accept-the-
+    // family-wide structural-residual substrate embedding, accept-with-
+    // duplicates, reject-above-HI-entry, reject-below-LO-entry, reject-
+    // terminal-out-of-range-entry, panic-message-provenance on the
+    // RANGE-SUBSET-VIOLATION axis) so a regression that silently weakens
+    // the helper on ANY arm is caught by the helper's OWN test surface
+    // rather than only surfacing as a false-positive on some future
+    // range-subset-embedded `[u8; N]` array's compound pin.
+
+    #[test]
+    fn assert_u8_array_within_inclusive_range_accepts_the_empty_array_within_any_range() {
+        // Empty array `arr = []` at the `[u8; 0]` corner — vacuously a
+        // subset of every inclusive range (no `i` position exists to
+        // test). Cross-range coverage on the trivial ARRAY corner of
+        // the const-N generic across three witness-range widths
+        // (singleton, small, whole-`u8`-space) to pin the helper's
+        // OUTER-sweep arm across the whole (`N == 0` × `[LO..=HI]`)
+        // axis. Turbofish binding required because there's no other
+        // cue for the const parameters on the empty array literal.
+        assert_u8_array_within_inclusive_range::<0, 0, 0>(&[]);
+        assert_u8_array_within_inclusive_range::<0, 0, 6>(&[]);
+        assert_u8_array_within_inclusive_range::<0, 0, 255>(&[]);
+    }
+
+    #[test]
+    fn assert_u8_array_within_inclusive_range_accepts_singleton_array_when_byte_in_range() {
+        // Singleton array `arr = [K]` at the `[u8; 1]` corner MUST pass
+        // when `K in [LO..=HI]`. Cross-position coverage: the byte can
+        // sit at the LO endpoint, an INTERIOR position, or the HI
+        // endpoint — pins the OUTER-sweep's OR-disjunction guard
+        // handles all three cases without gratuitously narrowing to
+        // strict-inequality on either endpoint. A regression that
+        // narrowed the guard to `arr[i] <= LO || arr[i] >= HI` (strict
+        // endpoint exclusion) would silently reject singleton arrays
+        // hitting the endpoints — this test catches BOTH endpoint
+        // regressions in ONE forward sweep.
+        assert_u8_array_within_inclusive_range::<1, 0, 6>(&[0u8]);
+        assert_u8_array_within_inclusive_range::<1, 0, 6>(&[3u8]);
+        assert_u8_array_within_inclusive_range::<1, 0, 6>(&[6u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_within_inclusive_range_accepts_singleton_range_when_byte_equals_endpoint() {
+        // Degenerate singleton-range corner `[K..=K]` where LO == HI —
+        // the ONLY accepting arrays are those whose every entry equals
+        // `K`. Pins the helper does NOT gratuitously reject the LO ==
+        // HI degenerate case (a regression that narrowed `LO <= HI` to
+        // `LO < HI` at some downstream bounds check would surface here
+        // if this helper ever grew such a check; today it does not,
+        // and this test locks it out).
+        assert_u8_array_within_inclusive_range::<1, 42, 42>(&[42u8]);
+        assert_u8_array_within_inclusive_range::<3, 42, 42>(&[42u8, 42u8, 42u8]);
+        assert_u8_array_within_inclusive_range::<1, 0, 0>(&[0u8]);
+        assert_u8_array_within_inclusive_range::<1, 255, 255>(&[255u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_within_inclusive_range_accepts_arrays_with_duplicates() {
+        // Peer corner to `_covers_inclusive_range`: this helper permits
+        // duplicates in `arr` because RANGE-membership is a DISTINCT-
+        // value predicate — `[3, 3, 5]` embeds in `[0..=6]` even
+        // though the array is not pairwise-distinct. Pins that the
+        // helper does NOT gratuitously require INJECTIVITY on `arr`
+        // (the injectivity axis is a DIFFERENT compile-time contract
+        // bound by `assert_u8_array_pairwise_distinct`; combining both
+        // binds BOTH axes). Sibling posture to
+        // `assert_u8_array_within_u8_finite_set_accepts_repeated_array_entries_in_set`
+        // on the finite-set peer.
+        assert_u8_array_within_inclusive_range::<3, 0, 6>(&[3u8, 3u8, 5u8]);
+        assert_u8_array_within_inclusive_range::<4, 0, 6>(&[0u8, 0u8, 6u8, 6u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_within_inclusive_range_accepts_the_structural_residual_subset_embedding() {
+        // Runtime cross-check that the ONE (array, range) pair the
+        // substrate's module-level `const _` witness pins at COMPILE
+        // time is a PROPER SUBSET embedding at runtime too. The pair
+        // enforces the theorem at TWO stages of the toolchain: the
+        // const witness fires FIRST at `cargo check` (through the
+        // module-level `const _: () = assert_u8_array_within_inclusive_
+        // range::<2, 0, 6>(&StructuralKind::HASH_DISCRIMINATORS)`
+        // line), this runtime pin catches the drift at `cargo test`
+        // as a safety net. Sibling posture to
+        // `assert_u8_array_within_u8_finite_set_accepts_the_substitution_subset_embedding`
+        // on the finite-set-subset peer's substrate cross-check —
+        // both pin the substrate's ONE-witness embedding at BOTH
+        // stages of the toolchain.
+        assert_u8_array_within_inclusive_range::<2, 0, 6>(
+            &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "RANGE-SUBSET-VIOLATION")]
+    fn assert_u8_array_within_inclusive_range_panics_at_runtime_on_entry_above_hi() {
+        // NEGATIVE PIN — above-HI overshoot corner: an array carrying
+        // a single entry `HI + 1` MUST panic at runtime with the
+        // RANGE-SUBSET-VIOLATION-named message. Pins the helper's OWN
+        // reject-above-HI arm — a regression that silently returned
+        // without panicking on an out-of-range entry above the upper
+        // bound would slip through the compile-time witness's failure
+        // mode too. The offending byte `7u8` is intentionally chosen
+        // ONE PAST the outer-`Sexp` partition's upper endpoint (`6u8`)
+        // to pin the OVERSHOOT drift mode against the substrate's
+        // load-bearing partition.
+        assert_u8_array_within_inclusive_range::<2, 0, 6>(&[0u8, 7u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "RANGE-SUBSET-VIOLATION")]
+    fn assert_u8_array_within_inclusive_range_panics_at_runtime_on_entry_below_lo() {
+        // NEGATIVE PIN — below-LO undershoot corner symmetric to the
+        // OVERSHOOT drift mode above: an offending byte BELOW the
+        // range's minimum (`LO = 3u8`; this array carries a `0u8`
+        // entry NOT in the range) MUST panic. Pins that the helper's
+        // OR-disjunction guard does NOT drop the `arr[i] < LO` half
+        // (leaving only the `arr[i] > HI` half) — a regression that
+        // silently accepted below-LO entries would surface here.
+        assert_u8_array_within_inclusive_range::<2, 3, 6>(&[0u8, 5u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "RANGE-SUBSET-VIOLATION")]
+    fn assert_u8_array_within_inclusive_range_panics_at_runtime_on_terminal_out_of_range_entry() {
+        // NEGATIVE PIN — terminal-position drift: an out-of-range
+        // entry at the LAST array position MUST panic — pins that the
+        // outer `while i < N` loop reaches `i = N - 1` (else the
+        // terminal drift would slip through). A regression that
+        // narrowed the outer sweep to `while i < N - 1` (off-by-one on
+        // the OUTER bound) would silently accept this array. Sibling
+        // posture to
+        // `assert_u8_array_within_u8_finite_set_panics_at_runtime_on_terminal_out_of_set_entry`
+        // on the finite-set-subset peer's terminal-position pin —
+        // both bind the outer-sweep terminal bound at the ONE array-
+        // side outer loop the helper carries.
+        assert_u8_array_within_inclusive_range::<4, 0, 6>(&[0u8, 3u8, 6u8, 7u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_within_inclusive_range_panic_message_names_the_helper_and_range_subset_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — RANGE-SUBSET-VIOLATION arm:
+        // the panic message MUST begin with the helper's own name AND
+        // identify the failed AXIS as "RANGE-SUBSET-VIOLATION" so
+        // downstream diagnostics route the drift back to (a) the
+        // helper by string search on
+        // `"assert_u8_array_within_inclusive_range"` and (b) the axis
+        // by string search on `"RANGE-SUBSET-VIOLATION"`. Sibling
+        // posture to
+        // `assert_u8_array_within_u8_finite_set_panic_message_names_the_helper_and_subset_violation_axis`
+        // on the finite-set-subset peer's provenance pin — the two
+        // pins together bind the (helper, failed-axis) provenance
+        // pair at ONE test per SUBSET helper on the (contiguity)
+        // 2×2 face. The axis-provenance string
+        // `"RANGE-SUBSET-VIOLATION"` is chosen DISTINCT from EVERY
+        // sibling helper's axis vocabulary (`"duplicate"` on the
+        // ARRAY-side pairwise-distinct sibling; `"OUT-OF-SET"` /
+        // `"SET-BYTE-MISSING"` on the covers-finite-set sibling;
+        // `"OUT-OF-RANGE"` / `"MISSING"` on the covers-inclusive-
+        // range sibling; `"SUBSET-VIOLATION"` on the finite-set
+        // SUBSET-only sibling; `"ARITY-MISMATCH"` on both
+        // `_permutes_*` compound helpers; `"SET-NOT-PAIRWISE-
+        // DISTINCT"` on the SET-side well-formedness sibling) so a
+        // diagnostic that names the failed axis routes UNAMBIGUOUSLY
+        // to (a) this specific range SUBSET-embedding helper, (b)
+        // the `arr` argument as the drift site rather than the
+        // `LO`/`HI` const parameters specifying the target range.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_within_inclusive_range::<2, 0, 6>(&[0u8, 7u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_within_inclusive_range must panic on an \
+             out-of-range entry — the reject-out-of-range arm is the \
+             sole RANGE-SUBSET-VIOLATION failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_within_inclusive_range panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_within_inclusive_range"),
+            "assert_u8_array_within_inclusive_range panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+        assert!(
+            msg.contains("RANGE-SUBSET-VIOLATION"),
+            "assert_u8_array_within_inclusive_range panic message \
+             {msg:?} must name the failed AXIS (\"RANGE-SUBSET-\
+             VIOLATION\") for axis-provenance-preserving failure \
+             diagnostics",
+        );
     }
 
     // ── `assert_u8_array_permutes_inclusive_range` — the compound

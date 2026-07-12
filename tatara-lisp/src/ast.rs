@@ -949,6 +949,249 @@ pub const fn assert_u8_finite_set_pairwise_distinct<const M: usize>(set: &[u8; M
 }
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of `arr` is NOT a member of `set` on the substrate's `u8`
+/// cache-key vocabulary. Binds ONE conjunct clause at ONE `const _`
+/// line:
+///
+/// * SUBSET-VIOLATION: every entry in `arr` appears in `set` — the
+///   array's distinct-value set is a SUBSET of the target finite
+///   partition `set`. A regression that drifts ONE entry to a byte
+///   NOT in the set (e.g. lifts a fresh `7u8` entry into
+///   `UnquoteForm::HASH_DISCRIMINATORS`, drifting the two-of-four
+///   substitution-subset carving OUTSIDE its parent superset
+///   `QuoteForm::HASH_DISCRIMINATORS = [3, 4, 5, 6]`) fails-loudly
+///   at const-eval.
+///
+/// SET-side well-formedness delegation: [`assert_u8_finite_set_pairwise_distinct`]
+/// is called at the top of the helper — a malformed `set` (e.g.
+/// `[0u8, 2u8, 2u8]`) is not a well-formed finite set of cardinality
+/// `M` and would silently mis-verify the intended subset contract on
+/// any `arr` embedded in the DISTINCT-value subset. Placed FIRST so
+/// drift on the CALLER'S TARGET-SET SPEC routes to the SET-side
+/// well-formedness axis rather than to a downstream SUBSET-VIOLATION
+/// symptom on `arr`. A well-formed `set` passes this arm as a no-op —
+/// const-eval-elidable at rustc-time on the substrate call site.
+///
+/// Contract-strength peer to [`assert_u8_array_covers_finite_set`] on
+/// the (equality-vs-subset) axis: where `_covers_finite_set` binds
+/// arr's distinct-value set EQUALS `set` (arr's entries ⊆ set AND
+/// set ⊆ arr's entries — the OUT-OF-SET arm ∧ the SET-BYTE-MISSING
+/// arm), this helper binds ONLY arr ⊆ set (the OUT-OF-SET arm read
+/// in isolation without the SET-BYTE-MISSING arm) — a strictly
+/// WEAKER contract for arrays that intentionally cover only a
+/// PROPER SUBSET of the target partition rather than the whole
+/// partition. The RANGE analog of this SUBSET-only helper is the
+/// RANGE-BOUND arm of [`assert_u8_array_covers_inclusive_range`]
+/// read in isolation (arr ⊆ `[LO..=HI]` without the FULL-COVERAGE
+/// clause) — no substrate call site currently exercises the range
+/// analog on its own because every substrate range-family array
+/// either fully covers its assigned range (the three permutation-
+/// shaped `_permutes_inclusive_range` arrays: `AtomKind`,
+/// `QuoteForm`, `UnquoteForm`) or fully covers it non-injectively
+/// (`SexpShape::HASH_DISCRIMINATORS`). The finite-set analog of this
+/// SUBSET-only helper is exactly the primitive this lift adds.
+///
+/// The invariant is load-bearing for the outer-`Sexp` cache-key
+/// algebra's SUBSTITUTION-SUBSET embedding.
+/// [`crate::error::UnquoteForm::HASH_DISCRIMINATORS`] (`[u8; 2]` —
+/// the two-of-four substitution-subset carving covering `Unquote`
+/// / `UnquoteSplice`) MUST be a SUBSET of
+/// [`QuoteForm::HASH_DISCRIMINATORS`] (`[u8; 4]` — the four-arm
+/// quote-family superset carving covering `Quote` / `Quasiquote` /
+/// `Unquote` / `UnquoteSplice`). Pre-lift the subset embedding was
+/// pinned ONLY at runtime via
+/// `unquote_form_per_role_hash_discriminators_alias_quote_form_per_role_hash_discriminators_byte_for_byte`
+/// (in `error.rs`, checking per-role scalar byte-equality between
+/// the two `pub(crate) const UnquoteForm::*_HASH_DISCRIMINATOR`
+/// constants and their `QuoteForm::*_HASH_DISCRIMINATOR`
+/// namesakes) — the theorem held only after `cargo test` scheduled
+/// the pin. Post-lift the ARRAY-LEVEL subset containment binds at
+/// rustc time — a regression that re-inlined either UnquoteForm
+/// per-role alias to a fresh literal byte NOT in the QuoteForm
+/// superset (e.g. `7u8`) fails at `cargo check` BEFORE any test
+/// scheduler runs. The runtime per-role scalar alias-chain pin
+/// survives as a sibling check (a distinct failure mode: a drift
+/// that KEPT the byte in the superset but ROUTED the alias to the
+/// WRONG QuoteForm arm still passes the ARRAY-level subset check
+/// but fails the scalar per-role pin) — together the two pins
+/// bind the substitution-subset embedding at TWO stages of the
+/// toolchain, const-time on the ARRAYS and test-time on the per-
+/// role scalar aliases.
+///
+/// Every future family-wide `[u8; N]` typed-subset carving on the
+/// substrate's closed-set outer algebras (a hypothetical
+/// name-punctuation-subset of a keyword vocabulary, a strict
+/// numeric-vs-string atomic-payload subset of `AtomKind`, or any
+/// further sub-carving of the `{0..=6}` outer-`Sexp` cache-key
+/// partition) participates in the SAME compile-time guarantee via
+/// one `const _` line.
+///
+/// Adding a new family-wide `[u8; N]` subset-embedded array to the
+/// substrate: pair the declaration with `const _: () =
+/// assert_u8_array_within_u8_finite_set::<N, M>(&Self::FOO_ARRAY,
+/// &Other::SUPERSET_ARRAY);` co-located after the array's
+/// declaration and the SUBSET contract binds at compile time. The
+/// rustc-forced arities `[u8; N]` and `[u8; M]` compose with this
+/// const-eval sweep so BOTH cardinality-pair AND every-entry-in-
+/// superset are compile-time theorems on the SAME (subset, superset)
+/// array pair. Prefer [`assert_u8_array_covers_finite_set`] when
+/// the array's distinct-value set is intentionally EQUAL to the
+/// target partition; this helper is for the strictly-weaker SUBSET
+/// corner where `arr` covers only a PROPER SUBSET of `set`.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_u8_array_within_u8_finite_set_panics_at_runtime_on_out_of_set_entry`
+/// and
+/// `assert_u8_array_within_u8_finite_set_panic_message_names_the_helper_and_subset_violation_axis`.
+/// The panic site carries the `"SUBSET-VIOLATION"` axis-provenance
+/// string chosen DISTINCT from every sibling helper's axis
+/// vocabulary (`"duplicate"` on the ARRAY-side pairwise-distinct
+/// sibling; `"OUT-OF-SET"` / `"SET-BYTE-MISSING"` on the
+/// covers-finite-set sibling; `"OUT-OF-RANGE"` / `"MISSING"` on
+/// the covers-inclusive-range sibling; `"ARITY-MISMATCH"` on both
+/// `_permutes_*` compound helpers; `"SET-NOT-PAIRWISE-DISTINCT"`
+/// on the SET-side well-formedness sibling) so a diagnostic that
+/// names the failed axis routes UNAMBIGUOUSLY to THIS specific
+/// SUBSET-embedding helper.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide subset-
+///   embedding contract on the `u8` cache-key vocabulary becomes a
+///   TYPE-LEVEL theorem the substrate carries per (subset, superset)
+///   array pair rather than a runtime test the developer must
+///   remember to write per embedding.
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key partition is the `intent_hash` composition axis —
+///   binding the subset-embedding arrays on the typed algebra
+///   makes a substitution-subset drift outside the parent superset
+///   a compile error rather than a silent BLAKE3 mis-hash on any
+///   `Expander::cache` consumer keyed on the subset carving.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   set-membership-only sweep IS the generative shape. Every new
+///   closed-set discriminator array whose distinct-value set is an
+///   intentional SUBSET of another substrate array adds ONE
+///   `const _` line to get the subset-embedding theorem rather
+///   than re-deriving a per-embedding runtime iterator sweep at
+///   each call site.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+///   the SUBSET-embedding proof at declaration site AND the per-
+///   role scalar alias-chain composition through
+///   `UnquoteForm::V_HASH_DISCRIMINATOR = QuoteForm::V_HASH_DISCRIMINATOR`
+///   regenerate through the SAME `const _` witness at the ARRAY
+///   level.
+///
+/// Frontier inspiration: Lean 4's `Finset.instHasSubsetFinset :
+/// (⊆) : Finset α → Finset α → Prop` as a decidable relation on
+/// `Finset α` combined with `Finset.subset_iff` unfolding the
+/// relation to per-element membership — the substrate primitive
+/// here embeds the same subset relation as a rustc const-eval-time
+/// proof obligation at every `assert_u8_array_within_u8_finite_set`
+/// call site rather than as a Lean tactic invocation deferred to
+/// `elab_command`. TLA+'s `S \subseteq T` first-class relation on
+/// specification sets composes similarly at TLC model-checking
+/// time. Coq's `Ensembles.Included : Ensemble U -> Ensemble U ->
+/// Prop` capturing the same per-element containment predicate.
+/// Translation through pleme-io primitives: the SUBSET-embedding
+/// predicate binds through ONE forward sweep (`arr[i] in set`) at
+/// const-eval time on a rustc-forced-arity `[u8; N]` × `[u8; M]`
+/// pair — no `Ord` / `Eq` / `Hash` supertrait bound, no
+/// `HashSet`-shape carrier, no allocation. The delegation-first
+/// ordering (SET-well-formedness before SUBSET-VIOLATION) matches
+/// Lean's `Finset`-forward reasoning: prove the SET is well-formed
+/// AS a finite set, then reason about arrays embedded in it.
+pub const fn assert_u8_array_within_u8_finite_set<const N: usize, const M: usize>(
+    arr: &[u8; N],
+    set: &[u8; M],
+) {
+    // Delegate target-set well-formedness to the sibling SET-side
+    // pairwise-distinctness helper FIRST. Placed BEFORE the SUBSET-
+    // VIOLATION sweep below because a malformed `set` (e.g. `[0u8,
+    // 2u8, 2u8]`) is not a well-formed finite set of cardinality
+    // `M` and silently mis-verifies the intended subset contract on
+    // any `arr` embedded in the DISTINCT-value subset. Routes drift
+    // on the CALLER'S TARGET-SET SPEC to the SET-side well-formedness
+    // axis rather than to a downstream SUBSET-VIOLATION symptom on
+    // `arr`. A well-formed `set` passes this arm as a no-op — the
+    // sweep is const-eval-elidable and costs zero at rustc-time on
+    // the one substrate call site.
+    assert_u8_finite_set_pairwise_distinct(set);
+    let mut i = 0;
+    while i < N {
+        let mut j = 0;
+        let mut found = false;
+        while j < M {
+            if arr[i] == set[j] {
+                found = true;
+                break;
+            }
+            j += 1;
+        }
+        if !found {
+            panic!(
+                "assert_u8_array_within_u8_finite_set: SUBSET-\
+                 VIOLATION — the family-wide u8 array `arr` carries \
+                 an entry at some position whose byte is NOT a \
+                 member of the target finite superset partition \
+                 `set`. The substrate's SUBSET-EMBEDDING contract \
+                 on the array is broken; every consumer that \
+                 expects the array's distinct-value set to be a \
+                 subset of the target finite partition \
+                 (`UnquoteForm::HASH_DISCRIMINATORS ⊂ \
+                 QuoteForm::HASH_DISCRIMINATORS` on the outer-\
+                 `Sexp` cache-key substitution-subset carving; any \
+                 future typed-subset embedding on the substrate's \
+                 closed-set outer algebras) relies on every array \
+                 entry staying within the target superset. Fix at \
+                 the ARRAY-DECLARATION site (the `arr` under \
+                 verification, NOT the `set` argument specifying \
+                 the target superset) by dropping the offending \
+                 entry OR by extending `set` to cover it — the \
+                 choice depends on whether the drift is an \
+                 unintended overshoot outside the parent superset \
+                 or an intentional extension of the superset \
+                 vocabulary"
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time SUBSET-embedding witness — the ONE family-wide
+// `[u8; N]` HASH_DISCRIMINATORS array on the substrate whose
+// distinct-value set is an intentionally-closed PROPER SUBSET of
+// another substrate array's distinct-value set:
+// `UnquoteForm::HASH_DISCRIMINATORS` (`[u8; 2]` = `[5, 6]`, the
+// two-of-four substitution-subset carving covering
+// `Unquote` / `UnquoteSplice`) MUST be a SUBSET of
+// `QuoteForm::HASH_DISCRIMINATORS` (`[u8; 4]` = `[3, 4, 5, 6]`, the
+// four-arm quote-family superset carving covering
+// `Quote` / `Quasiquote` / `Unquote` / `UnquoteSplice`). Pre-lift
+// the subset embedding was pinned ONLY at runtime via the per-role
+// alias-chain check
+// `unquote_form_per_role_hash_discriminators_alias_quote_form_per_role_hash_discriminators_byte_for_byte`
+// (in `error.rs`, checking scalar-per-role byte-equality between
+// the two `UnquoteForm::*_HASH_DISCRIMINATOR` constants and their
+// `QuoteForm::*_HASH_DISCRIMINATOR` namesakes). Post-lift the
+// ARRAY-LEVEL subset embedding binds at rustc time via ONE
+// `const _` witness on the two arrays directly; a drift that
+// re-inlined either UnquoteForm alias to a fresh literal byte NOT
+// in the QuoteForm superset (e.g. `7u8`) would fail at `cargo
+// check` BEFORE any test scheduler runs. The runtime per-role
+// alias-chain pin survives as a sibling check for the scalar
+// aliases (a distinct failure mode: a drift that KEPT the byte in
+// the superset but ROUTED the alias to the WRONG QuoteForm arm
+// still passes the ARRAY-level subset check but fails the scalar
+// per-role pin); together with this const witness the
+// substitution-subset embedding theorem is enforced at BOTH stages
+// of the toolchain — const-time on the ARRAYS, test-time on the
+// scalar per-role aliases.
+const _: () = assert_u8_array_within_u8_finite_set::<2, 4>(
+    &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+    &QuoteForm::HASH_DISCRIMINATORS,
+);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// the distinct-values set of `arr` does not equal exactly the distinct-
 /// values set of `set` on the substrate's `u8` cache-key vocabulary.
 /// Binds TWO conjunct clauses at ONE `const _` line:
@@ -29689,6 +29932,229 @@ mod tests {
         // ordering routes the operator to the CALLER'S SPEC first,
         // not to a downstream arithmetic symptom).
         assert_u8_array_permutes_finite_set::<3, 3>(&[0u8, 2u8, 5u8], &[0u8, 2u8, 2u8]);
+    }
+
+    // ── `assert_u8_array_within_u8_finite_set` — the SET-MEMBERSHIP-
+    // ONLY subset-embedding verifier that binds `arr ⊆ set` at compile
+    // time (WITHOUT the additional `set ⊆ arr's entries` full-coverage
+    // clause the sibling `_covers_finite_set` binds). The runtime test
+    // surface pins each of the helper's arms (accept-empty, accept-
+    // singleton-in-set, accept-arr-equals-set, accept-the-family-wide
+    // substitution-subset substrate embedding, reject-single-out-of-
+    // set-entry, reject-terminal-out-of-set-entry, panic-message-
+    // provenance on the SUBSET-VIOLATION axis, negative pin on the
+    // DELEGATED SET-side well-formedness arm) so a regression that
+    // silently weakened the helper on ANY arm is caught by the
+    // helper's OWN test surface rather than only surfacing as a
+    // false-positive on some future subset-embedded `[u8; N]` array's
+    // compound pin.
+
+    #[test]
+    fn assert_u8_array_within_u8_finite_set_accepts_the_empty_array_within_any_set() {
+        // Empty array `arr = []` at the `[u8; 0]` corner — vacuously
+        // a subset of every set (no `i` position exists to test). Cross-
+        // arity coverage on the trivial ARRAY corner of the const-N
+        // generic across three witness-set widths (empty, singleton,
+        // multi-element) to pin the helper's OUTER-sweep arm across
+        // the whole (`N == 0` × `M`) axis. Turbofish binding required
+        // because there's no other cue for the const parameters on
+        // the empty array literal.
+        assert_u8_array_within_u8_finite_set::<0, 0>(&[], &[]);
+        assert_u8_array_within_u8_finite_set::<0, 1>(&[], &[42u8]);
+        assert_u8_array_within_u8_finite_set::<0, 4>(&[], &[3u8, 4u8, 5u8, 6u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_within_u8_finite_set_accepts_singleton_array_when_byte_in_set() {
+        // Singleton array `arr = [K]` at the `[u8; 1]` corner MUST
+        // pass when `K ∈ set`. Cross-position coverage: the byte can
+        // sit at the FIRST, MIDDLE, or LAST position of the `set` —
+        // pins the INNER `while j < M` sweep terminates at the
+        // first-match position rather than always at position `0`
+        // OR always at position `M - 1`. A regression that narrowed
+        // the inner sweep to `j == 0` would silently reject singleton
+        // arrays hitting non-first set positions.
+        assert_u8_array_within_u8_finite_set::<1, 4>(&[3u8], &[3u8, 4u8, 5u8, 6u8]);
+        assert_u8_array_within_u8_finite_set::<1, 4>(&[5u8], &[3u8, 4u8, 5u8, 6u8]);
+        assert_u8_array_within_u8_finite_set::<1, 4>(&[6u8], &[3u8, 4u8, 5u8, 6u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_within_u8_finite_set_accepts_arr_equals_set() {
+        // Boundary corner where `arr` and `set` cover byte-for-byte
+        // identical distinct-value sets — the SUBSET relation degenerates
+        // to EQUALITY. Pins that the helper does NOT gratuitously
+        // require the SUBSET to be PROPER (strict): equal-multisets
+        // pass the SUBSET check. Sibling posture to the covers-finite-
+        // set peer whose SET-BYTE-MISSING arm would ALSO accept this
+        // input — the two helpers agree on the EQUAL-SETS corner
+        // while disagreeing on the PROPER-SUBSET corner (only this
+        // helper accepts proper subsets; the covers helper rejects
+        // them at the SET-BYTE-MISSING arm).
+        assert_u8_array_within_u8_finite_set(&[3u8, 4u8, 5u8, 6u8], &[3u8, 4u8, 5u8, 6u8]);
+        assert_u8_array_within_u8_finite_set(&[0u8, 2u8], &[0u8, 2u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_within_u8_finite_set_accepts_the_substitution_subset_embedding() {
+        // Runtime cross-check that the ONE (subset, superset) pair
+        // the substrate's module-level `const _` witness pins at
+        // COMPILE time is a PROPER SUBSET embedding at runtime too.
+        // The pair enforces the theorem at TWO stages of the
+        // toolchain: the const witness fires FIRST at `cargo check`
+        // (through the module-level `const _: () = assert_u8_array_
+        // within_u8_finite_set::<2, 4>(...)` line), this runtime pin
+        // catches the drift at `cargo test` as a safety net. Sibling
+        // posture to
+        // `assert_u8_finite_set_pairwise_distinct_accepts_every_family_wide_target_set`
+        // (which runtime-checks the SAME `QuoteForm::HASH_DISCRIMINATORS`
+        // superset viewed as a SET-side well-formedness input) — the
+        // two pins together verify the (UnquoteForm subset, QuoteForm
+        // superset) pair at BOTH sides of the subset-embedding
+        // contract.
+        assert_u8_array_within_u8_finite_set::<2, 4>(
+            &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+            &QuoteForm::HASH_DISCRIMINATORS,
+        );
+    }
+
+    #[test]
+    fn assert_u8_array_within_u8_finite_set_accepts_repeated_array_entries_in_set() {
+        // Peer corner to `_covers_finite_set`: this helper permits
+        // duplicates in `arr` because SUBSET-membership is a
+        // DISTINCT-value predicate — `[3, 3, 5]` is a subset of
+        // `{3, 4, 5, 6}` even though the array is not pairwise-
+        // distinct. Pins that the helper does NOT gratuitously
+        // require INJECTIVITY on `arr` (the injectivity axis is a
+        // DIFFERENT compile-time contract bound by
+        // `assert_u8_array_pairwise_distinct`; combining both binds
+        // BOTH axes). Sibling posture to
+        // `assert_u8_array_covers_inclusive_range` which ALSO
+        // permits array duplicates on its RANGE-BOUND arm.
+        assert_u8_array_within_u8_finite_set(&[3u8, 3u8, 5u8], &[3u8, 4u8, 5u8, 6u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SUBSET-VIOLATION")]
+    fn assert_u8_array_within_u8_finite_set_panics_at_runtime_on_out_of_set_entry() {
+        // NEGATIVE PIN — SUBSET-VIOLATION corner: an array carrying
+        // a single entry NOT in the target set MUST panic at runtime
+        // with the SUBSET-VIOLATION-named message. Pins the helper's
+        // OWN reject arm — a regression that silently returned
+        // without panicking on an out-of-set entry would slip through
+        // the compile-time witness's failure mode too. The offending
+        // byte `7u8` is intentionally chosen ONE PAST the superset's
+        // maximum (`QuoteForm::HASH_DISCRIMINATORS`'s upper endpoint
+        // is `6u8`) to pin the OVERSHOOT drift mode.
+        assert_u8_array_within_u8_finite_set(&[5u8, 7u8], &[3u8, 4u8, 5u8, 6u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SUBSET-VIOLATION")]
+    fn assert_u8_array_within_u8_finite_set_panics_at_runtime_on_terminal_out_of_set_entry() {
+        // NEGATIVE PIN — terminal-position drift: an out-of-set entry
+        // at the LAST array position MUST panic — pins that the outer
+        // `while i < N` loop reaches `i = N - 1` (else the terminal
+        // drift would slip through). A regression that narrowed the
+        // outer sweep to `while i < N - 1` (off-by-one on the OUTER
+        // bound) would silently accept this array.
+        assert_u8_array_within_u8_finite_set(&[3u8, 4u8, 5u8, 6u8, 7u8], &[3u8, 4u8, 5u8, 6u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SUBSET-VIOLATION")]
+    fn assert_u8_array_within_u8_finite_set_panics_at_runtime_on_undershoot_out_of_set_entry() {
+        // NEGATIVE PIN — undershoot drift mode complementary to the
+        // OVERSHOOT drift mode `_panics_at_runtime_on_out_of_set_entry`
+        // above: an offending byte BELOW the superset's minimum
+        // (`QuoteForm::HASH_DISCRIMINATORS`'s lower endpoint is `3u8`;
+        // this array carries a `0u8` entry NOT in the set) MUST panic.
+        // Pins that the helper's SET-MEMBERSHIP sweep does NOT
+        // silently accept bytes UNDER the target set's minimum on
+        // some misapplied range-min assumption — the helper binds a
+        // FINITE-SET subset relation, not a RANGE subset relation.
+        assert_u8_array_within_u8_finite_set(&[0u8, 5u8], &[3u8, 4u8, 5u8, 6u8]);
+    }
+
+    #[test]
+    fn assert_u8_array_within_u8_finite_set_panic_message_names_the_helper_and_subset_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — SUBSET-VIOLATION arm: the
+        // panic message MUST begin with the helper's own name AND
+        // identify the failed AXIS as "SUBSET-VIOLATION" so
+        // downstream diagnostics route the drift back to (a) the
+        // helper by string search on
+        // `"assert_u8_array_within_u8_finite_set"` and (b) the axis
+        // by string search on `"SUBSET-VIOLATION"`. Sibling posture
+        // to
+        // `assert_u8_finite_set_pairwise_distinct_panic_message_names_the_helper_and_set_axis`
+        // on the SET-side well-formedness sibling and
+        // `assert_u8_array_covers_finite_set_panic_message_names_the_helper_and_out_of_set_axis`
+        // on the ARRAY-side covers helper — all three bind the
+        // (helper, failed-axis) provenance pair at ONE test per
+        // helper. The axis-provenance string "SUBSET-VIOLATION" is
+        // chosen DISTINCT from EVERY sibling helper's axis
+        // vocabulary (`"duplicate"` on the ARRAY-side pairwise-
+        // distinct sibling; `"OUT-OF-SET"` / `"SET-BYTE-MISSING"`
+        // on the covers-finite-set sibling; `"OUT-OF-RANGE"` /
+        // `"MISSING"` on the covers-inclusive-range sibling;
+        // `"ARITY-MISMATCH"` on both `_permutes_*` compound helpers;
+        // `"SET-NOT-PAIRWISE-DISTINCT"` on the SET-side well-
+        // formedness sibling) so a diagnostic that names the failed
+        // axis routes UNAMBIGUOUSLY to (a) this specific SUBSET-
+        // embedding helper, (b) the `arr` argument as the drift
+        // site rather than the `set` argument specifying the target
+        // superset.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_within_u8_finite_set(&[5u8, 7u8], &[3u8, 4u8, 5u8, 6u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_within_u8_finite_set must panic on an \
+             out-of-set entry — the reject-out-of-set arm is the \
+             sole SUBSET-VIOLATION failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_within_u8_finite_set panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_within_u8_finite_set"),
+            "assert_u8_array_within_u8_finite_set panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+        assert!(
+            msg.contains("SUBSET-VIOLATION"),
+            "assert_u8_array_within_u8_finite_set panic message \
+             {msg:?} must name the failed AXIS (\"SUBSET-VIOLATION\") \
+             for axis-provenance-preserving failure diagnostics",
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "SET-NOT-PAIRWISE-DISTINCT")]
+    fn assert_u8_array_within_u8_finite_set_panics_on_malformed_target_set_spec() {
+        // NEGATIVE PIN — DELEGATED SET-side well-formedness: a
+        // malformed target-set spec `[3, 4, 4]` fed into the ARRAY-
+        // side within helper MUST panic on the DELEGATED SET-NOT-
+        // PAIRWISE-DISTINCT arm BEFORE the SUBSET-VIOLATION arm
+        // fires. Pins the delegation chain: a regression that
+        // dropped the `assert_u8_finite_set_pairwise_distinct(set)`
+        // call at the top of `assert_u8_array_within_u8_finite_set`
+        // would silently accept a malformed set and produce a
+        // false-positive verdict on any `arr` embedded in the
+        // DISTINCT-value subset. Sibling posture to
+        // `assert_u8_array_covers_finite_set_panics_on_malformed_target_set_spec`
+        // and
+        // `assert_u8_array_permutes_finite_set_panics_on_malformed_target_set_spec`
+        // — the three DELEGATED tests pin the SET-side well-
+        // formedness arm at the top of ALL THREE finite-set-family
+        // ARRAY-side helpers.
+        assert_u8_array_within_u8_finite_set::<2, 3>(&[3u8, 4u8], &[3u8, 4u8, 4u8]);
     }
 
     // ── `assert_u8_array_permutes_inclusive_range` — the compound

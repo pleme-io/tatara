@@ -1209,6 +1209,235 @@ pub const fn assert_u8_array_permutes_inclusive_range<
     assert_u8_array_covers_inclusive_range::<N, LO, HI>(arr);
 }
 
+/// Compile-time compound (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) JOINT
+/// permutation-of-inclusive-range verifier for a `(scalar, [u8; M], [u8; N])`
+/// triple — the (`scalar-plus-two-arrays`) corner of the (carving-shape)
+/// axis peer to [`assert_u8_array_permutes_inclusive_range`]'s
+/// (`single-array`) corner. Panics at const-eval time (or at runtime for
+/// dynamic callers) with an axis-provenance-named message iff the joint
+/// union `{scalar} ∪ arr_a ∪ arr_b` fails ANY of:
+///
+///   1. ARITY-MISMATCH — `1 + M + N != HI - LO + 1`. A joint bijection
+///      between `[0..1+M+N)` and `[LO..=HI]` forces the cardinality
+///      equality by pigeonhole. Placed FIRST so the panic message routes
+///      the operator directly to the CARDINALITY axis rather than to a
+///      downstream range-membership or count-exactly-once symptom.
+///   2. SCALAR-OUT-OF-RANGE — `scalar < LO || scalar > HI`.
+///   3. FIRST-ARRAY-OUT-OF-RANGE — any `arr_a[i] < LO || arr_a[i] > HI`.
+///   4. SECOND-ARRAY-OUT-OF-RANGE — any `arr_b[j] < LO || arr_b[j] > HI`.
+///   5. JOINT-MISSING — some byte in `[LO..=HI]` occurs ZERO times across
+///      `{scalar} ∪ arr_a ∪ arr_b`. Given post-arity + post-in-range, this
+///      is equivalent to JOINT-duplicate on some OTHER range byte by
+///      pigeonhole, but the message routes to the SURJECTIVITY axis for
+///      the specific missing byte.
+///   6. JOINT-duplicate — some byte in `[LO..=HI]` occurs TWO or more times
+///      across `{scalar} ∪ arr_a ∪ arr_b` (either cross-carving between
+///      scalar and one array, cross-carving between the two arrays, OR
+///      intra-carving inside a single array). Given post-arity +
+///      post-in-range, this is equivalent to JOINT-MISSING on some other
+///      range byte by pigeonhole, but the message routes to the
+///      INJECTIVITY axis for the specific duplicated byte.
+///
+/// Arms 5 and 6 fuse into ONE `sweep [LO..=HI] and count exactly once` loop
+/// — a byte with `count == 0` witnesses the SURJECTIVITY failure, a byte
+/// with `count >= 2` witnesses the INJECTIVITY failure. The two logical
+/// axes are equivalent given post-arity + post-in-range but the fused
+/// sweep routes provenance to whichever byte violates first, matching the
+/// (`"MISSING"` / `"duplicate"`) provenance vocabulary the sibling helpers
+/// [`assert_u8_array_covers_inclusive_range`] and
+/// [`assert_u8_array_pairwise_distinct`] use on the SINGLE-array corner.
+///
+/// Compression peer to a hypothetical decomposition through the three
+/// pre-existing single-array helpers (`assert_u8_array_pairwise_distinct`
+/// each on `[scalar]`/`arr_a`/`arr_b` + `assert_u8_array_covers_
+/// inclusive_range` on the concatenation) on the (axis-count) axis: those
+/// would need explicit concatenation at rustc time (impossible without
+/// runtime `Vec`) OR three per-array + one joint-distinctness call
+/// (four+ `const _` lines PLUS threading the joint check through a bespoke
+/// primitive); this compound helper binds the SAME joint theorem PLUS the
+/// scalar-plus-two-arrays cardinality-equality contract at ONE `const _`
+/// line — the compression is 4:1 at strictly stronger contract strength on
+/// the (scalar + two arrays) shape corner. Sibling posture on the
+/// (carving-shape) axis of the substrate-primitive matrix:
+///   * (single-array, permutes-range) — [`assert_u8_array_permutes_inclusive_range`]
+///   * (scalar-plus-two-arrays, permutes-range) — THIS helper.
+///
+/// The load-bearing invariant this helper pins: the outer-`Sexp` cache-key
+/// discriminator space `{0..=6}` partitions across the SUBSTRATE'S THREE
+/// carvings — [`AtomKind::OUTER_HASH_DISCRIMINATOR`] (scalar `1u8` for
+/// `Sexp::Atom(_)`), [`crate::error::StructuralKind::HASH_DISCRIMINATORS`]
+/// (`[u8; 2]` at `{0, 2}` for `Sexp::Nil`/`Sexp::List(_)`),
+/// [`QuoteForm::HASH_DISCRIMINATORS`] (`[u8; 4]` at `{3, 4, 5, 6}` for the
+/// four quote-family variants). Post-lift the JOINT permutation binds at
+/// rustc time via ONE `const _` witness; a drift at ANY of the three
+/// carvings (renumbered atomic marker, extra `StructuralKind` variant with
+/// a byte outside `{0, 2}`, collision between `QuoteForm` and the atomic
+/// marker) becomes a compile error rather than a `sexp_shape_hash_
+/// discriminator_partitions_by_three_way_carving_disjointly` /
+/// `structural_kind_hash_discriminator_disjoint_from_atom_outer_carve_
+/// byte_and_quote_form_hash_discriminator_partition` runtime-test
+/// regression.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// proofs; the joint carving's compound permutation contract composes
+/// through the three sub-algebras' `HASH_DISCRIMINATOR`s and the const-fn
+/// contract preserves the joint permutation-of-range proof across `rustc`
+/// invocations byte-for-byte. THEORY.md §III — the typescape; the joint-
+/// partition property becomes a TYPE-level theorem on the substrate rather
+/// than a per-carving test-time invariant. THEORY.md §V.3 — three-pillar
+/// attestation; the outer-`Sexp` cache-key partition is the substrate's
+/// outer `Sexp` `intent_hash` composition axis — binding the joint
+/// permutation at rustc time makes attestation-key drift a compile error
+/// rather than a silent BLAKE3 mis-hash.
+pub const fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range<
+    const M: usize,
+    const N: usize,
+    const LO: u8,
+    const HI: u8,
+>(
+    scalar: u8,
+    arr_a: &[u8; M],
+    arr_b: &[u8; N],
+) {
+    // ARITY-MISMATCH check FIRST — pigeonhole forces `1 + M + N ==
+    // HI - LO + 1` on a joint bijection between `[0..1+M+N)` and
+    // `[LO..=HI]`. Placing this arm FIRST gives cleaner provenance:
+    // a drift that grows the joint cardinality past the range
+    // cardinality would ALSO fail either the out-of-range arm OR
+    // the joint-duplicate arm, but the ARITY-MISMATCH-named panic
+    // routes the operator to the CARDINALITY axis directly rather
+    // than to a downstream symptom on the other axes.
+    let expected_cardinality = (HI - LO) as usize + 1;
+    if 1 + M + N != expected_cardinality {
+        panic!(
+            "assert_scalar_plus_two_u8_arrays_permute_inclusive_range: \
+             family-wide (scalar, [u8; M], [u8; N]) triple's ARITY-\
+             MISMATCH — the compile-time joint cardinality `1 + M + N` \
+             does not equal the target inclusive range's cardinality \
+             `HI - LO + 1`. A joint bijection between `[0..1+M+N)` and \
+             `[LO..=HI]` forces `1 + M + N == HI - LO + 1` by pigeonhole \
+             — a joint carving whose cardinality drifts above the \
+             range's CANNOT stay both jointly-pairwise-distinct AND \
+             within the range (extras must duplicate OR fall outside), \
+             and one whose cardinality drifts below CANNOT reach every \
+             range byte. The substrate's JOINT PERMUTATION contract on \
+             the outer-`Sexp` cache-key partition (AtomKind's outer \
+             marker + StructuralKind + QuoteForm carvings jointly \
+             covering `{{0..=6}}`) is broken at the ARITY axis; every \
+             consumer that expects the joint carving to bijectively \
+             permute the target range (Hash for Sexp's outer \
+             discriminator partition, the three-carving-plus-atom-\
+             marker joint disjointness contract) relies on this \
+             cardinality equality"
+        );
+    }
+    // SCALAR-OUT-OF-RANGE arm.
+    if scalar < LO || scalar > HI {
+        panic!(
+            "assert_scalar_plus_two_u8_arrays_permute_inclusive_range: \
+             family-wide (scalar, [u8; M], [u8; N]) triple's scalar \
+             carries an OUT-OF-RANGE byte — the scalar lies outside \
+             the target inclusive range `[LO, HI]`. The substrate's \
+             RANGE-BOUND contract on the joint carving is broken at \
+             the scalar carving's arm; every consumer that expects the \
+             scalar-plus-two-arrays joint image to partition an outer \
+             cache-key space (Hash for Sexp's outer discriminator \
+             `{{0..=6}}`) relies on the scalar staying within the \
+             target range"
+        );
+    }
+    // FIRST-ARRAY-OUT-OF-RANGE arm.
+    let mut i = 0;
+    while i < M {
+        if arr_a[i] < LO || arr_a[i] > HI {
+            panic!(
+                "assert_scalar_plus_two_u8_arrays_permute_inclusive_range: \
+                 family-wide (scalar, [u8; M], [u8; N]) triple's first \
+                 array carries an OUT-OF-RANGE entry at some position — \
+                 the entry's byte lies outside the target inclusive \
+                 range `[LO, HI]`. The substrate's RANGE-BOUND contract \
+                 on the joint carving is broken at the first-array \
+                 carving's arm",
+            );
+        }
+        i += 1;
+    }
+    // SECOND-ARRAY-OUT-OF-RANGE arm.
+    let mut j = 0;
+    while j < N {
+        if arr_b[j] < LO || arr_b[j] > HI {
+            panic!(
+                "assert_scalar_plus_two_u8_arrays_permute_inclusive_range: \
+                 family-wide (scalar, [u8; M], [u8; N]) triple's second \
+                 array carries an OUT-OF-RANGE entry at some position — \
+                 the entry's byte lies outside the target inclusive \
+                 range `[LO, HI]`. The substrate's RANGE-BOUND contract \
+                 on the joint carving is broken at the second-array \
+                 carving's arm",
+            );
+        }
+        j += 1;
+    }
+    // JOINT-DISTINCTNESS ∧ JOINT-SURJECTIVITY fused via sweep-and-count.
+    // Given post-arity + post-in-range, the two logical axes are
+    // equivalent by pigeonhole but the fused sweep routes provenance to
+    // whichever byte violates first with the sibling helpers'
+    // (`"MISSING"` / `"duplicate"`) vocabulary preserved.
+    let mut b = LO;
+    loop {
+        let mut count: u32 = 0;
+        if scalar == b {
+            count += 1;
+        }
+        let mut i = 0;
+        while i < M {
+            if arr_a[i] == b {
+                count += 1;
+            }
+            i += 1;
+        }
+        let mut j = 0;
+        while j < N {
+            if arr_b[j] == b {
+                count += 1;
+            }
+            j += 1;
+        }
+        if count == 0 {
+            panic!(
+                "assert_scalar_plus_two_u8_arrays_permute_inclusive_range: \
+                 family-wide (scalar, [u8; M], [u8; N]) triple is JOINT-\
+                 MISSING a byte from the target inclusive range \
+                 `[LO, HI]` — every byte in the range must appear at \
+                 least once across the joint union `{{scalar}} ∪ arr_a \
+                 ∪ arr_b`. The substrate's JOINT FULL-COVERAGE contract \
+                 on the outer-`Sexp` cache-key partition is broken; the \
+                 SURJECTIVITY axis of the joint permutation fails on \
+                 the specific missing range byte",
+            );
+        }
+        if count >= 2 {
+            panic!(
+                "assert_scalar_plus_two_u8_arrays_permute_inclusive_range: \
+                 family-wide (scalar, [u8; M], [u8; N]) triple carries a \
+                 JOINT duplicate byte — some byte in `[LO, HI]` appears \
+                 TWO or more times across the joint union `{{scalar}} ∪ \
+                 arr_a ∪ arr_b` (either cross-carving between scalar and \
+                 an array, cross-carving between the two arrays, OR \
+                 intra-carving inside a single array). The substrate's \
+                 JOINT PAIRWISE-DISTINCTNESS contract on the outer-\
+                 `Sexp` cache-key partition is broken; the INJECTIVITY \
+                 axis of the joint permutation fails on the specific \
+                 duplicated range byte",
+            );
+        }
+        if b == HI {
+            break;
+        }
+        b += 1;
+    }
+}
+
 // Compile-time permutation-of-range witnesses — one `const _: () =
 // assert_u8_array_permutes_inclusive_range::<N, LO, HI>(&…)` per
 // family-wide `[u8; N]` hash-discriminator array on the substrate's
@@ -1241,6 +1470,63 @@ const _: () = assert_u8_array_permutes_inclusive_range::<6, 0, 5>(&AtomKind::HAS
 const _: () = assert_u8_array_permutes_inclusive_range::<4, 3, 6>(&QuoteForm::HASH_DISCRIMINATORS);
 const _: () = assert_u8_array_permutes_inclusive_range::<2, 5, 6>(
     &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+);
+
+// Compile-time JOINT permutation-of-range witness — the ONE
+// `(scalar, [u8; M], [u8; N])` triple across the substrate whose
+// joint carving permutes the OUTER-`Sexp` cache-key discriminator
+// range `{0..=6}` byte-for-byte. `AtomKind::OUTER_HASH_DISCRIMINATOR
+// = 1u8` (the scalar arm on the atomic-carve marker byte for
+// `Sexp::Atom(_)`) merges with `StructuralKind::HASH_DISCRIMINATORS
+// = [0, 2]` (the structural-residual carving covering `Sexp::Nil`
+// and `Sexp::List(_)` — NON-contiguous inside its own range because
+// the `1u8` slot between `0` and `2` is reserved for the atomic-
+// carve marker; this is EXACTLY the reason `StructuralKind::HASH_
+// DISCRIMINATORS` stays on the weak-witness pair per the sibling
+// comment above and does NOT bind through the single-array
+// permutation helper) and `QuoteForm::HASH_DISCRIMINATORS = [3, 4,
+// 5, 6]` (the quote-family carving covering `Sexp::Quote(_)` /
+// `Sexp::Quasiquote(_)` / `Sexp::Unquote(_)` / `Sexp::UnquoteSplice
+// (_)`, a permutation on its own range) to jointly cover the WHOLE
+// outer-`Sexp` cache-key partition `{0..=6}`. Pre-lift this joint
+// bijection was pinned ONLY at runtime via
+// `structural_kind_hash_discriminator_disjoint_from_atom_outer_
+// carve_byte_and_quote_form_hash_discriminator_partition` (in
+// `error.rs`, sweeping the disjointness of the three carvings' byte
+// spaces + full-range coverage via `BTreeSet`s) and
+// `sexp_shape_hash_discriminator_partitions_by_three_way_carving_
+// disjointly` (in `error.rs`, sweeping the shape-level `hash_
+// discriminator` image partition via the three carvings'
+// `as_atom_kind` / `as_quote_form` / `as_structural_kind`
+// projections) — the theorem held only after `cargo test`
+// scheduled the two tests. Post-lift the JOINT permutation binds at
+// rustc time via ONE `const _` witness on the substrate CONSTANTS
+// directly; a drift at ANY of the three carvings (renumbered atomic
+// marker, an extra `StructuralKind` variant with a byte outside
+// `{0, 2}`, a collision between `QuoteForm` and the atomic marker,
+// an arity drift in either array) fails at `cargo check` BEFORE any
+// test scheduler runs. The two runtime pins survive as sibling
+// checks for the shape-level projection methods (a distinct failure
+// mode from a drift in the constants themselves); together with
+// this const witness the joint outer-`Sexp` partition theorem is
+// enforced at BOTH stages of the toolchain — const-time on the
+// CONSTANTS, test-time on the METHODS.
+//
+// The scalar-plus-two-arrays joint carving is the FIRST substrate
+// primitive that binds a bijection across a NON-uniform tuple shape
+// (a `u8` PLUS a `[u8; 2]` PLUS a `[u8; 4]`) — the pre-existing
+// single-array `assert_u8_array_permutes_inclusive_range` witnesses
+// above bind ONE-array permutations; a hypothetical decomposition
+// through three single-array calls (one per carving) CANNOT bind
+// the joint bijection without either concatenating the three
+// carvings at rustc time (impossible without a runtime `Vec`) or
+// threading joint-distinctness through a bespoke primitive
+// separately (four+ `const _` lines total). The compound helper
+// binds the joint theorem at ONE line.
+const _: () = assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0, 6>(
+    AtomKind::OUTER_HASH_DISCRIMINATOR,
+    &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+    &QuoteForm::HASH_DISCRIMINATORS,
 );
 
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
@@ -28870,6 +29156,241 @@ mod tests {
              from every sibling helper's axis strings so downstream \
              diagnostics route UNAMBIGUOUSLY to this compound \
              helper's arity arm",
+        );
+    }
+
+    // ── `assert_scalar_plus_two_u8_arrays_permute_inclusive_range` —
+    // the compound JOINT (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY)
+    // permutation-of-range verifier on the (scalar-plus-two-arrays)
+    // corner of the (carving-shape) axis peer to the pre-existing
+    // (single-array) corner. The runtime test surface matches the
+    // sibling `assert_u8_array_permutes_inclusive_range` compound
+    // helper's shape (accept-canonical-outer-Sexp-partition, accept-
+    // synthetic-valid-partition, reject-arity-below-cardinality,
+    // reject-arity-above-cardinality, reject-scalar-out-of-range,
+    // reject-first-array-out-of-range, reject-second-array-out-of-
+    // range, reject-cross-carving-duplicate, reject-intra-carving-
+    // duplicate, panic-message-provenance on the JOINT ARITY-
+    // MISMATCH axis, panic-message-provenance on the JOINT SCALAR-
+    // OUT-OF-RANGE axis) split across the six failure arms so a
+    // regression that silently weakens the helper on ANY arm is
+    // caught by the helper's OWN test surface rather than only
+    // surfacing as a false-positive on some future permutation-
+    // shaped joint carving's compound pin.
+
+    #[test]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_accepts_canonical_outer_sexp_partition(
+    ) {
+        // Runtime cross-check that the SAME joint carving the
+        // module-level `const _: () = ...` witness covers at COMPILE
+        // time is a permutation of the outer-`Sexp` cache-key
+        // discriminator range `{0..=6}`. A regression that removes
+        // the `const _` witness would still leave THIS runtime pin as
+        // a safety net; the const witness fires FIRST at `cargo
+        // check`, this runtime pin catches the drift at `cargo test`.
+        // The pair enforces the joint theorem at TWO stages of the
+        // toolchain. Sibling posture to
+        // `assert_u8_array_permutes_inclusive_range_accepts_every_
+        // family_wide_permutation_array` on the (single-array)
+        // corner — where that pin sweeps THREE arrays on the
+        // single-array corner, THIS pin binds the ONE joint carving
+        // on the (scalar-plus-two-arrays) corner.
+        assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0, 6>(
+            AtomKind::OUTER_HASH_DISCRIMINATOR,
+            &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+            &QuoteForm::HASH_DISCRIMINATORS,
+        );
+    }
+
+    #[test]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_accepts_synthetic_valid_partition()
+    {
+        // POSITIVE — a valid `(scalar, [u8; 2], [u8; 4])` permutation
+        // of `{0..=6}` byte-identical in shape to the outer-`Sexp`
+        // partition but with the scalar at `1u8` remapped through
+        // literals rather than the substrate constant. Isolates the
+        // helper's INJECTIVITY-∧-SURJECTIVITY-∧-ARITY verdict from
+        // the substrate constants: a green here plus a red on any
+        // of the negative pins below constrains the helper's
+        // behavior structurally, independent of the substrate's
+        // specific byte layout.
+        assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0, 6>(
+            1u8,
+            &[0u8, 2u8],
+            &[3u8, 4u8, 5u8, 6u8],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "ARITY-MISMATCH")]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_panics_at_runtime_on_arity_below_cardinality(
+    ) {
+        // NEGATIVE PIN — ARITY-MISMATCH below-cardinality corner: a
+        // joint carving of arity `1 + M + N < HI - LO + 1` MUST
+        // panic at runtime with the ARITY-MISMATCH-named message.
+        // Pins the helper's OWN reject-below-cardinality arm — a
+        // regression that silently dropped the arity-check gate
+        // would let this triple reach the sweep-and-count loop,
+        // which would then panic with `"MISSING"` on the range byte
+        // absent from the too-short joint carving — masking the
+        // JOINT ARITY-provenance behind the JOINT SURJECTIVITY-
+        // provenance downstream. Sibling posture to
+        // `assert_u8_array_permutes_inclusive_range_panics_at_
+        // runtime_on_arity_below_cardinality` on the (single-array)
+        // corner.
+        assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 3, 0, 6>(
+            1u8,
+            &[0u8, 2u8],
+            &[3u8, 4u8, 5u8],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "ARITY-MISMATCH")]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_panics_at_runtime_on_arity_above_cardinality(
+    ) {
+        // NEGATIVE PIN — ARITY-MISMATCH above-cardinality corner:
+        // symmetric sibling to the below-cardinality pin. `1 + 2 + 3
+        // = 6` slots for a `{0..=2}` range of cardinality 3 — the
+        // arity check fires FIRST before the sweep-and-count would
+        // catch the joint duplicates on `0`/`1`/`2`. Pins that the
+        // ARITY-provenance surfaces even when downstream axes would
+        // ALSO reject.
+        assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 3, 0, 2>(
+            0u8,
+            &[1u8, 2u8],
+            &[0u8, 1u8, 2u8],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-RANGE")]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_panics_at_runtime_on_scalar_out_of_range(
+    ) {
+        // NEGATIVE PIN — SCALAR OUT-OF-RANGE arm: a joint carving
+        // whose arity matches the range cardinality but whose SCALAR
+        // lies outside `[LO, HI]` MUST panic at runtime. Pins the
+        // helper's scalar-carving arm distinct from the array
+        // carvings' out-of-range arms — a regression that skipped
+        // the scalar check but kept the array checks would leave
+        // this drift uncaught.
+        assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0, 6>(
+            7u8,
+            &[0u8, 2u8],
+            &[3u8, 4u8, 5u8, 6u8],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-RANGE")]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_panics_at_runtime_on_first_array_out_of_range(
+    ) {
+        // NEGATIVE PIN — FIRST-ARRAY OUT-OF-RANGE arm: a joint
+        // carving whose arity + scalar are valid but whose FIRST
+        // ARRAY carries an out-of-range entry MUST panic at runtime.
+        // The `1u8` slot the scalar occupies is left absent from
+        // the first array; the entry `7u8` lies outside `[0, 6]`.
+        assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0, 6>(
+            1u8,
+            &[0u8, 7u8],
+            &[3u8, 4u8, 5u8, 6u8],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "OUT-OF-RANGE")]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_panics_at_runtime_on_second_array_out_of_range(
+    ) {
+        // NEGATIVE PIN — SECOND-ARRAY OUT-OF-RANGE arm: symmetric
+        // sibling to the first-array pin. The entry `9u8` in the
+        // second array lies outside `[0, 6]`; all other arms are
+        // green.
+        assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0, 6>(
+            1u8,
+            &[0u8, 2u8],
+            &[3u8, 4u8, 5u8, 9u8],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate")]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_panics_at_runtime_on_cross_carving_duplicate(
+    ) {
+        // NEGATIVE PIN — JOINT-duplicate arm (cross-carving): the
+        // byte `1u8` appears in BOTH the scalar carving AND the
+        // first array. Arity matches, all bytes are in-range, but
+        // JOINT INJECTIVITY fails — the duplicate byte occurs at
+        // `count == 2` in the sweep-and-count loop, masking the
+        // pigeonhole-forced JOINT-MISSING at byte `2u8` behind the
+        // duplicate arm's message. Pins the cross-carving collision
+        // detection between the scalar arm and a downstream array
+        // arm.
+        assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0, 6>(
+            1u8,
+            &[0u8, 1u8],
+            &[3u8, 4u8, 5u8, 6u8],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate")]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_panics_at_runtime_on_intra_carving_duplicate(
+    ) {
+        // NEGATIVE PIN — JOINT-duplicate arm (intra-carving): the
+        // byte `0u8` appears TWICE inside the first array. Arity
+        // matches, all bytes are in-range, but JOINT INJECTIVITY
+        // fails — the sweep-and-count discipline treats intra- and
+        // cross-carving collisions with the SAME mechanism, so this
+        // failure mode surfaces on the same `"duplicate"` axis-
+        // provenance message as the cross-carving pin.
+        assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0, 6>(
+            1u8,
+            &[0u8, 0u8],
+            &[3u8, 4u8, 5u8, 6u8],
+        );
+    }
+
+    #[test]
+    fn assert_scalar_plus_two_u8_arrays_permute_inclusive_range_panic_message_names_the_helper_and_arity_mismatch_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — ARITY-MISMATCH arm: the
+        // panic message MUST begin with the compound helper's own
+        // name AND identify the failed AXIS as "ARITY-MISMATCH".
+        // Sibling posture to `assert_u8_array_permutes_inclusive_
+        // range_panic_message_names_the_helper_and_arity_mismatch_
+        // axis` on the (single-array) corner — both bind the
+        // (helper, failed-axis) provenance pair.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 3, 0, 6>(
+                1u8,
+                &[0u8, 2u8],
+                &[3u8, 4u8, 5u8],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_scalar_plus_two_u8_arrays_permute_inclusive_range \
+             must panic on an arity-cardinality mismatch",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_scalar_plus_two_u8_arrays_permute_inclusive_range \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_scalar_plus_two_u8_arrays_permute_inclusive_range"),
+            "assert_scalar_plus_two_u8_arrays_permute_inclusive_range \
+             ARITY-MISMATCH panic message {msg:?} must name the helper \
+             for provenance-preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("ARITY-MISMATCH"),
+            "assert_scalar_plus_two_u8_arrays_permute_inclusive_range \
+             ARITY-MISMATCH panic message {msg:?} must name the failed \
+             AXIS (\"ARITY-MISMATCH\") for axis-provenance-preserving \
+             failure diagnostics",
         );
     }
 }

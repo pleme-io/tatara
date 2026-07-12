@@ -972,6 +972,239 @@ const _: () = assert_str_arrays_disjoint::<4, 6>(&QuoteForm::PREFIXES, &AtomKind
 const _: () = assert_str_arrays_disjoint::<6, 4>(&AtomKind::LABELS, &QuoteForm::LABELS);
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of `arr` is NOT a member of `set` (byte-for-byte through
+/// [`str::as_bytes`]).
+///
+/// Row-dual peer to [`assert_char_array_within_char_finite_set`] and
+/// [`assert_u8_array_within_u8_finite_set`] on the (element-type) axis
+/// of the (element-type × contract-shape) matrix at the (subset-
+/// embedding) column: where the (char) sibling closes the reader-
+/// boundary `[char; N] ⊆ [char; M]` corner and the (u8) sibling closes
+/// the outer-`Sexp` cache-key `[u8; N] ⊆ [u8; M]` finite-set embedding
+/// corner at compile time, this (`&'static str`) sibling closes the
+/// outer-algebras' family-wide `[&'static str; N] ⊆ [&'static str; M]`
+/// label / prefix / tag SUB-VOCABULARY carving corner. Together with
+/// the pre-existing [`assert_char_array_within_char_finite_set`] +
+/// [`assert_u8_array_within_u8_finite_set`] row-siblings the three
+/// helpers close the (element-type ∈ {char, u8, &'static str} ×
+/// contract-shape ∈ {subset-embedding}) 3-corner row of the SUBSET-
+/// EMBEDDING column at ONE peer const-fn helper per element-type.
+/// Contract-orthogonal peer to [`assert_str_array_pairwise_distinct`]
+/// and [`assert_str_arrays_disjoint`] on the (INJECTIVITY,
+/// DISJOINTNESS, SUBSET-EMBEDDING) axis of the (contract-shape) column
+/// on the SAME (`&'static str`) row: where the pairwise-distinctness
+/// sibling binds INTRA-array `∀ i ≠ j : arr[i] ≠ arr[j]` and the
+/// disjointness sibling binds INTER-array `∀ i, j : a[i] ≠ b[j]`, this
+/// SUBSET-EMBEDDING sibling binds ORIENTED-INTER-array `∀ i : ∃ j :
+/// arr[i] = set[j]` — the three together give every `&'static str`
+/// sub-vocabulary on the substrate INTRA-array injectivity AND INTER-
+/// array disjointness (symmetric) AND INTER-array subset embedding
+/// (oriented) at compile time.
+///
+/// The invariant is load-bearing for every consumer that carves a
+/// SUB-vocabulary of a shared OUTER `&'static str` vocabulary:
+/// [`AtomKind::LABELS`] (`[&; 6]`, `["symbol", "keyword", "string",
+/// "int", "float", "bool"]` — the atomic-payload kind labels) is an
+/// intentionally-closed proper subset of
+/// [`crate::error::SexpShape::LABELS`] (`[&; 12]`, the twelve outer-
+/// `Sexp` shape labels; six atomic + two structural + four quote-
+/// family) so every atom-kind diagnostic label stays inside the outer-
+/// shape label vocabulary; [`QuoteForm::LABELS`] (`[&; 4]`, `["quote",
+/// "quasiquote", "unquote", "unquote-splice"]` — the quote-family
+/// labels) is likewise a proper subset of the SAME
+/// [`crate::error::SexpShape::LABELS`] so every quote-family diagnostic
+/// stays inside the outer-shape vocabulary; and
+/// [`crate::error::StructuralKind::LABELS`] (`[&; 2]`, `["nil",
+/// "list"]` — the structural-shape labels) is the third proper subset
+/// of the SAME twelve-arm superset. Union together `AtomKind::LABELS`
+/// (6) + `QuoteForm::LABELS` (4) + `StructuralKind::LABELS` (2) = 12
+/// = `SexpShape::LABELS.len()` closes a NON-CONTIGUOUS PARTITION of
+/// the outer twelve-arm vocabulary at compile time; the three
+/// SUBSET-EMBEDDING witnesses PLUS the pre-existing pairwise-
+/// distinctness witnesses PLUS the pre-existing (AtomKind, QuoteForm)
+/// disjointness witness compose to a full partition proof. Every
+/// future `[&'static str; N]` sub-vocabulary on the substrate whose
+/// distinct-values set must remain embedded in a shared outer surface
+/// (a new tokenizer keyword vocabulary embedded in an outer prefix
+/// vocabulary; a new diagnostic label vocabulary embedded in an outer
+/// error-family label vocabulary; a new algebra whose display / label
+/// / prefix arrays must remain sub-vocabularies of the closed-set
+/// outer algebras' `&'static str` surface) gets the subset-embedding
+/// theorem at ONE `const _` line rather than a per-pair runtime
+/// iterator sweep.
+///
+/// SET-side well-formedness is DELEGATED to the sibling ARRAY-side
+/// pairwise-distinctness helper ([`assert_str_array_pairwise_distinct`])
+/// via a co-located call at the TOP of the sweep — a malformed `set`
+/// (e.g. `["a", "a", "b"]`) is NOT a well-formed finite set of
+/// cardinality `M` and silently mis-verifies the intended subset
+/// contract on any `arr` embedded in the DISTINCT-value subset. The
+/// delegated arm routes drift on the CALLER'S TARGET-SET SPEC to the
+/// SET-side well-formedness axis rather than to a downstream STR-
+/// SUBSET-VIOLATION symptom on `arr`. A well-formed `set` passes this
+/// arm as a no-op — the sweep is const-eval-elidable and costs zero
+/// at rustc-time on the substrate call sites. The (str) row does NOT
+/// carry a separate `assert_str_finite_set_pairwise_distinct` alias
+/// (the (u8) row's `assert_u8_finite_set_pairwise_distinct` is the
+/// only SET-side well-formedness peer on the substrate); the
+/// delegation reuses the ARRAY-side helper directly, matching the
+/// (char) row's (`assert_char_array_within_char_finite_set` →
+/// `assert_char_array_pairwise_distinct`) delegation shape.
+///
+/// Pre-lift the three subset embeddings lived as prose in the parent
+/// arrays' partition-rule docstrings (the `SexpShape::LABELS` twelve-
+/// arm decomposition into atomic / structural / quote-family sub-
+/// vocabularies) and as runtime `_pairwise_distinct` cross-checks on
+/// the tests submodule — the ARRAY-LEVEL embedding was not itself
+/// pinned. Post-lift the three witnesses bind at rustc time via one
+/// `const _` line per pair; a regression that silently re-inlined
+/// either the SUBSET side (dropping `AtomKind::SYMBOL_LABEL`'s
+/// `SexpShape::SYMBOL_LABEL` alias to a fresh distinct byte spelling)
+/// or the SUPERSET side (dropping `SexpShape::SYMBOL_LABEL` and
+/// leaving `AtomKind::SYMBOL_LABEL` as a stale copy of `"symbol"`)
+/// fails at `cargo check` BEFORE any test scheduler runs.
+///
+/// Adding a new family-wide `[&'static str; N]` sub-vocabulary whose
+/// distinct-values set must remain embedded in another substrate
+/// `[&'static str; M]` array's distinct-values set: pair the
+/// declaration with `const _: () = assert_str_array_within_str_finite_
+/// set::<N, M>(&Self::FOO_ARRAY, &Other::BAR_ARRAY);` co-located after
+/// the array's declaration and the SUBSET-EMBEDDING contract binds at
+/// compile time. The rustc-forced arities `[&'static str; N]` and
+/// `[&'static str; M]` compose with this const-eval sweep so BOTH
+/// cardinality-pair AND cross-array subset embedding are compile-time
+/// theorems on the SAME (arr, set) str-array pair.
+///
+/// Delegates to the existing module-private [`str_bytes_equal`] const-
+/// fn helper so a future toolchain stabilising `const fn str::eq`
+/// collapses ALL THREE (str)-row helpers ((str, pairwise-distinct),
+/// (str, disjointness), (str, subset-embedding)) through ONE edit.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_str_array_within_str_finite_set_panics_at_runtime_on_out_of_set_entry`
+/// and
+/// `assert_str_array_within_str_finite_set_panic_message_names_the_helper_and_str_subset_violation_axis`.
+/// The panic site carries the `"STR-SUBSET-VIOLATION"` axis-provenance
+/// string chosen DISTINCT from every sibling helper's axis vocabulary
+/// (`"duplicate"` on the ARRAY-side pairwise-distinct sibling; `"STR-
+/// DISJOINTNESS-VIOLATION"` on the (str) row DISJOINTNESS sibling;
+/// `"CHAR-SUBSET-VIOLATION"` on the (char) row-dual SUBSET sibling;
+/// `"SUBSET-VIOLATION"` on the (u8) row-dual finite-set SUBSET-only
+/// sibling; `"RANGE-SUBSET-VIOLATION"` on the (u8) range SUBSET-only
+/// sibling; `"CHAR-DISJOINTNESS-VIOLATION"` / `"U8-DISJOINTNESS-
+/// VIOLATION"` on the (char) / (u8) row-dual DISJOINTNESS siblings;
+/// `"OUT-OF-SET"` / `"SET-BYTE-MISSING"` on the (u8) covers-finite-
+/// set sibling; `"OUT-OF-RANGE"` / `"MISSING"` on the (u8) covers-
+/// inclusive-range sibling; `"ARITY-MISMATCH"` on both (u8)
+/// `_permutes_*` compound helpers; `"SET-NOT-PAIRWISE-DISTINCT"` on
+/// the (u8) SET-side well-formedness sibling) so a diagnostic that
+/// names the failed axis routes UNAMBIGUOUSLY to (a) this specific
+/// `&'static str` SUBSET-embedding helper, (b) the `arr` argument as
+/// the drift site rather than the `set` argument specifying the
+/// target superset. The `"STR-"` prefix disambiguates from the
+/// (char) + (u8) row-dual peers; the shared `"-SUBSET-VIOLATION"`
+/// suffix lets callers grep any row's SUBSET-embedding sibling by
+/// the shared `"SUBSET-VIOLATION"` suffix alone.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide cross-array
+///   subset-embedding contract on `&'static str` sub-vocabularies
+///   becomes a TYPE-LEVEL theorem the substrate carries per (arr,
+///   set) str-array pair rather than a runtime test the developer
+///   must remember to write per pair.
+/// - THEORY.md §III — the typescape; the (element-type × contract-
+///   shape) matrix now carries the SUBSET-EMBEDDING corner on THREE
+///   rows at ONE peer const-fn helper per row. The (subset,
+///   disjointness) 2-corner face on the (`&'static str`) row is now
+///   closed at TWO peer const-fn helpers —
+///   [`assert_str_arrays_disjoint`] on the DISJOINTNESS corner and
+///   this helper on the SUBSET corner.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   cross-array membership sweep IS the generative shape. Every new
+///   closed-set `&'static str` sub-vocabulary array whose distinct-
+///   values set is an intentionally-embedded proper subset of another
+///   substrate `&'static str` array adds ONE `const _` line to get
+///   the subset-embedding theorem rather than re-deriving a per-pair
+///   runtime iterator sweep at each call site.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   SUBSET-EMBEDDING proof at declaration site AND the outer-
+///   algebra's twelve-arm shape-label partition contract regenerate
+///   through the SAME `const _` witnesses at the ARRAY level.
+///
+/// Frontier inspiration: Lean 4's `Finset.subset_iff : s ⊆ t ↔ ∀ a ∈
+/// s, a ∈ t` unfolded at the concrete `[&'static str; N] ⊆ [&'static
+/// str; M]` monomorphic realisation — the substrate primitive here
+/// embeds the same subset relation as a rustc const-eval-time proof
+/// obligation at every `assert_str_array_within_str_finite_set` call
+/// site rather than as a Lean tactic invocation deferred to
+/// `elab_command`. The (char, u8, `&'static str`) row triple mirrors
+/// Lean's polymorphic `[DecidableEq α] → Finset α → Finset α → Prop`
+/// realised at three concrete element-type instantiations the
+/// substrate closes at compile time.
+pub const fn assert_str_array_within_str_finite_set<const N: usize, const M: usize>(
+    arr: &[&'static str; N],
+    set: &[&'static str; M],
+) {
+    // Delegate target-set well-formedness to the sibling ARRAY-side
+    // pairwise-distinctness helper FIRST. Placed BEFORE the STR-
+    // SUBSET-VIOLATION sweep below because a malformed `set` (e.g.
+    // `["a", "a", "b"]`) is not a well-formed finite set of
+    // cardinality `M` and silently mis-verifies the intended subset
+    // contract on any `arr` embedded in the DISTINCT-value subset.
+    // Routes drift on the CALLER'S TARGET-SET SPEC to the SET-side
+    // well-formedness axis (via the sibling's own panic-name prefix)
+    // rather than to a downstream STR-SUBSET-VIOLATION symptom on
+    // `arr`. A well-formed `set` passes this arm as a no-op — the
+    // sweep is const-eval-elidable and costs zero at rustc-time on
+    // the substrate call sites.
+    assert_str_array_pairwise_distinct(set);
+    let mut i = 0;
+    while i < N {
+        let mut j = 0;
+        let mut found = false;
+        while j < M {
+            if str_bytes_equal(arr[i], set[j]) {
+                found = true;
+                break;
+            }
+            j += 1;
+        }
+        if !found {
+            panic!(
+                "assert_str_array_within_str_finite_set: STR-SUBSET-\
+                 VIOLATION — the family-wide &'static str array `arr` \
+                 carries an entry at some position whose bytes are \
+                 NOT a member of the target finite superset partition \
+                 `set`. The substrate's SUBSET-EMBEDDING contract on \
+                 the array is broken; every consumer that expects the \
+                 array's distinct-value set to be a subset of the \
+                 target finite partition (`AtomKind::LABELS ⊂ \
+                 SexpShape::LABELS` on the atomic-payload sub-\
+                 vocabulary carve of the twelve-arm outer-shape label \
+                 vocabulary; `QuoteForm::LABELS ⊂ SexpShape::LABELS` \
+                 on the quote-family sub-vocabulary carve of the SAME \
+                 twelve-arm outer-shape label vocabulary; \
+                 `StructuralKind::LABELS ⊂ SexpShape::LABELS` on the \
+                 structural sub-vocabulary carve of the SAME twelve-\
+                 arm outer-shape label vocabulary; any future typed-\
+                 subset embedding on the substrate's `&'static str` \
+                 sub-vocabularies) relies on every array entry \
+                 staying within the target superset. Fix at the \
+                 ARRAY-DECLARATION site (the `arr` under \
+                 verification, NOT the `set` argument specifying the \
+                 target superset) by dropping the offending entry OR \
+                 by extending `set` to cover it — the choice depends \
+                 on whether the drift is an unintended overshoot \
+                 outside the parent superset or an intentional \
+                 extension of the superset vocabulary"
+            );
+        }
+        i += 1;
+    }
+}
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` alias byte-for-byte.
 ///
 /// Column-dual peer to [`assert_char_array_pairwise_distinct`] and
@@ -30981,6 +31214,290 @@ mod tests {
              name the failed AXIS (\"STR-DISJOINTNESS-VIOLATION\") \
              for axis-provenance-preserving failure diagnostics",
         );
+    }
+
+    // ── `assert_str_array_within_str_finite_set` — the `&'static str`
+    // element-type sibling of `assert_char_array_within_char_finite_
+    // set` and `assert_u8_array_within_u8_finite_set` on the (element-
+    // type) axis of the (element-type × contract-shape) matrix at the
+    // (subset-embedding) column. Sibling posture: same runtime-test
+    // surface (accept-empty, accept-singleton, accept-arr-equals-set,
+    // accept-each-family-wide-substrate-subset, accept-repeated-array-
+    // entries, reject-out-of-set, reject-terminal-out-of-set, panic-
+    // message-provenance, delegated-set-well-formedness) restricted to
+    // the `&'static str` element type. A regression that silently
+    // weakens the helper (e.g. flipping the found flag, dropping the
+    // outer `i` loop, or short-circuiting on the first-position match)
+    // is caught by the helper's OWN test surface rather than only
+    // surfacing as a false-positive on some future `[&'static str; N]`
+    // sub-vocabulary array's subset-embedding pin.
+
+    #[test]
+    fn assert_str_array_within_str_finite_set_accepts_the_empty_array_within_any_set() {
+        // Empty array `arr = []` at the `[&'static str; 0]` corner —
+        // vacuously a subset of every set (no `i` position exists to
+        // test). Cross-arity coverage on the trivial ARRAY corner of
+        // the const-N generic across three witness-set widths (empty,
+        // singleton, multi-element) to pin the helper's OUTER-sweep
+        // arm across the whole (`N == 0` × `M`) axis. Turbofish
+        // binding required because there's no other cue for the const
+        // parameters on the empty array literal. Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_the_empty_array_within_any_set`
+        // and `assert_u8_array_within_u8_finite_set_accepts_the_empty_array_within_any_set`
+        // on the (char) + (u8) row-dual peers of the SUBSET-EMBEDDING
+        // helper — the three share the trivial-arity arm across the
+        // element-type column.
+        assert_str_array_within_str_finite_set::<0, 0>(&[], &[]);
+        assert_str_array_within_str_finite_set::<0, 1>(&[], &["x"]);
+        assert_str_array_within_str_finite_set::<0, 3>(&[], &["a", "b", "c"]);
+    }
+
+    #[test]
+    fn assert_str_array_within_str_finite_set_accepts_singleton_array_when_str_in_set() {
+        // Singleton array `arr = [K]` at the `[&'static str; 1]`
+        // corner MUST pass when `K ∈ set`. Cross-position coverage:
+        // the str can sit at the FIRST, MIDDLE, or LAST position of
+        // the `set` — pins the INNER `while j < M` sweep terminates
+        // at the first-match position rather than always at position
+        // `0` OR always at position `M - 1`. A regression that
+        // narrowed the inner sweep to `j == 0` would silently reject
+        // singleton arrays hitting non-first set positions.
+        assert_str_array_within_str_finite_set::<1, 3>(&["a"], &["a", "b", "c"]);
+        assert_str_array_within_str_finite_set::<1, 3>(&["b"], &["a", "b", "c"]);
+        assert_str_array_within_str_finite_set::<1, 3>(&["c"], &["a", "b", "c"]);
+    }
+
+    #[test]
+    fn assert_str_array_within_str_finite_set_accepts_arr_equals_set() {
+        // Boundary corner where `arr` and `set` cover byte-for-byte
+        // identical distinct-value sets — the SUBSET relation
+        // degenerates to EQUALITY. Pins that the helper does NOT
+        // gratuitously require the SUBSET to be PROPER (strict):
+        // equal-multisets pass the SUBSET check. Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_arr_equals_set`
+        // and `assert_u8_array_within_u8_finite_set_accepts_arr_equals_set`
+        // on the (char) + (u8) row-dual peers of the SUBSET-EMBEDDING
+        // helper — the three share the EQUAL-SETS corner across the
+        // element-type column.
+        assert_str_array_within_str_finite_set(&["a", "b"], &["a", "b"]);
+        assert_str_array_within_str_finite_set(&[Atom::TRUE_LITERAL], &[Atom::TRUE_LITERAL]);
+    }
+
+    #[test]
+    fn assert_str_array_within_str_finite_set_accepts_each_family_wide_substrate_subset() {
+        // Runtime cross-check that the THREE (subset, superset) pairs
+        // the substrate's module-level `const _` witnesses at
+        // `error.rs` pin at COMPILE time are PROPER SUBSET embeddings
+        // at runtime too. The pairs enforce the theorem at TWO stages
+        // of the toolchain: the const witnesses fire FIRST at `cargo
+        // check` (through the three module-level `const _: () =
+        // crate::ast::assert_str_array_within_str_finite_set::<N, M>
+        // (...)` lines in `error.rs`), this runtime pin catches the
+        // drift at `cargo test` as a safety net. Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_each_family_wide_substrate_subset`
+        // and `assert_str_array_pairwise_distinct_accepts_every_family_wide_substrate_array`
+        // — the first sweeps the (char) subset pairs at the SUBSET-
+        // EMBEDDING axis; the second sweeps the (str) five arrays at
+        // the INJECTIVITY axis; this pin sweeps the (str) three
+        // (subset, superset) PAIRS at the SUBSET-EMBEDDING axis.
+        // Cardinality composition: 6 + 4 + 2 = 12 =
+        // `SexpShape::LABELS.len()` — the three subsets partition the
+        // outer twelve-arm vocabulary (composed with the pre-existing
+        // pairwise-disjointness witness of `AtomKind::LABELS ∩
+        // QuoteForm::LABELS`).
+        assert_str_array_within_str_finite_set::<6, 12>(&AtomKind::LABELS, &SexpShape::LABELS);
+        assert_str_array_within_str_finite_set::<4, 12>(&QuoteForm::LABELS, &SexpShape::LABELS);
+        assert_str_array_within_str_finite_set::<2, 12>(
+            &StructuralKind::LABELS,
+            &SexpShape::LABELS,
+        );
+    }
+
+    #[test]
+    fn assert_str_array_within_str_finite_set_accepts_repeated_array_entries_in_set() {
+        // Peer corner to a (future-lift) `_covers_str_finite_set`:
+        // this helper permits duplicates in `arr` because SUBSET-
+        // membership is a DISTINCT-value predicate — `["a", "a", "b"]`
+        // is a subset of `{"a", "b", "c"}` even though the array is
+        // not pairwise-distinct. Pins that the helper does NOT
+        // gratuitously require INJECTIVITY on `arr` (the injectivity
+        // axis is a DIFFERENT compile-time contract bound by
+        // `assert_str_array_pairwise_distinct`; combining both binds
+        // BOTH axes). Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_repeated_array_entries_in_set`
+        // and `assert_u8_array_within_u8_finite_set_accepts_repeated_array_entries_in_set`
+        // on the (char) + (u8) row-dual peers of the SUBSET-EMBEDDING
+        // helper.
+        assert_str_array_within_str_finite_set(&["a", "a", "b"], &["a", "b", "c"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "STR-SUBSET-VIOLATION")]
+    fn assert_str_array_within_str_finite_set_panics_at_runtime_on_out_of_set_entry() {
+        // NEGATIVE PIN — STR-SUBSET-VIOLATION corner: an array
+        // carrying a single entry NOT in the target set MUST panic
+        // at runtime with the STR-SUBSET-VIOLATION-named message.
+        // Pins the helper's OWN reject arm — a regression that
+        // silently returned without panicking on an out-of-set entry
+        // would slip through the compile-time witnesses' failure mode
+        // too. The offending str `"z"` is intentionally chosen
+        // OUTSIDE the target set to pin the OUT-OF-SET drift mode.
+        assert_str_array_within_str_finite_set(&["a", "z"], &["a", "b", "c"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "STR-SUBSET-VIOLATION")]
+    fn assert_str_array_within_str_finite_set_panics_at_runtime_on_terminal_out_of_set_entry() {
+        // NEGATIVE PIN — terminal-position drift: an out-of-set entry
+        // at the LAST array position MUST panic — pins that the
+        // outer `while i < N` loop reaches `i = N - 1` (else the
+        // terminal drift would slip through). A regression that
+        // narrowed the outer sweep to `while i < N - 1` (off-by-one
+        // on the OUTER bound) would silently accept this array.
+        // Sibling posture to
+        // `assert_char_array_within_char_finite_set_panics_at_runtime_on_terminal_out_of_set_entry`
+        // and `assert_u8_array_within_u8_finite_set_panics_at_runtime_on_terminal_out_of_set_entry`
+        // on the (char) + (u8) row-dual peers' terminal-position
+        // pins — all three bind the outer-sweep terminal bound at
+        // the ONE array-side outer loop the helper carries.
+        assert_str_array_within_str_finite_set(&["a", "b", "c", "z"], &["a", "b", "c"]);
+    }
+
+    #[test]
+    fn assert_str_array_within_str_finite_set_rejects_length_prefix_shorter_than_set_entry() {
+        // Byte-length gate corner: an `arr` entry that shares a
+        // strict-prefix with a `set` entry but is BYTE-SHORTER than
+        // that `set` entry MUST fail the subset check (prefix ≠
+        // equal-bytes at the `str_bytes_equal` byte-length gate).
+        // Pins the cross-array direction of the SAME byte-length
+        // gate the pairwise-distinct sibling's test surface
+        // (`assert_str_array_pairwise_distinct_rejects_length_zero_collision`,
+        // `assert_str_array_pairwise_distinct_accepts_prefix_pair_without_collision`)
+        // pins on the intra-array direction. Cross-array prefix
+        // mismatch → out-of-set → STR-SUBSET-VIOLATION panic.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_within_str_finite_set(&["quo"], &["quote", "quasiquote"]);
+        });
+        outcome.expect_err(
+            "assert_str_array_within_str_finite_set must panic on a \
+             STRICT-PREFIX-only entry outside the target set — the \
+             byte-length gate at str_bytes_equal separates \
+             `\"quo\"` from `\"quote\"` at the length-check arm before \
+             any byte comparison, routing to the STR-SUBSET-VIOLATION \
+             out-of-set panic",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_within_str_finite_set_accepts_length_zero_entry_in_length_zero_set() {
+        // BYTE-LENGTH-ZERO corner: the empty-string entry `""` in
+        // `arr` MUST match the empty-string entry `""` in `set` at
+        // the byte-length gate (both length 0). Pins the LOWER
+        // boundary of the byte-length axis on the cross-array
+        // direction of the SAME byte-length gate. A regression that
+        // gated `str_bytes_equal` on `a.len() > 0` (rather than
+        // `a.len() == b.len()`) would silently reject this pair.
+        assert_str_array_within_str_finite_set(&[""], &[""]);
+    }
+
+    #[test]
+    fn assert_str_array_within_str_finite_set_panic_message_names_the_helper_and_str_subset_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — STR-SUBSET-VIOLATION arm:
+        // the panic message MUST begin with the helper's own name AND
+        // identify the failed AXIS as "STR-SUBSET-VIOLATION" so
+        // downstream diagnostics route the drift back to (a) the
+        // helper by string search on
+        // `"assert_str_array_within_str_finite_set"` and (b) the axis
+        // by string search on `"STR-SUBSET-VIOLATION"`. Sibling
+        // posture to
+        // `assert_char_array_within_char_finite_set_panic_message_names_the_helper_and_char_subset_violation_axis`
+        // on the (char) row-dual peer's provenance pin AND to
+        // `assert_u8_array_within_u8_finite_set_panic_message_names_the_helper_and_subset_violation_axis`
+        // on the (u8) row-dual peer's provenance pin — the three
+        // pins together bind the (helper, failed-axis) provenance
+        // triple across the (element-type ∈ {char, u8, `&'static
+        // str`}) × (subset-embedding)-column 3-row face with matching
+        // provenance-preservation discipline. The axis-provenance
+        // string `"STR-SUBSET-VIOLATION"` is chosen DISTINCT from
+        // EVERY sibling helper's axis vocabulary (`"duplicate"` on
+        // the (str) ARRAY-side pairwise-distinct sibling; `"STR-
+        // DISJOINTNESS-VIOLATION"` on the (str) row DISJOINTNESS
+        // sibling; `"CHAR-SUBSET-VIOLATION"` on the (char) row-dual
+        // SUBSET sibling; `"SUBSET-VIOLATION"` on the (u8) finite-
+        // set SUBSET-only sibling; `"RANGE-SUBSET-VIOLATION"` on the
+        // (u8) range SUBSET-only sibling; `"CHAR-DISJOINTNESS-
+        // VIOLATION"` / `"U8-DISJOINTNESS-VIOLATION"` on the (char)
+        // / (u8) row-dual DISJOINTNESS siblings; `"OUT-OF-SET"` /
+        // `"SET-BYTE-MISSING"` on the (u8) covers-finite-set
+        // sibling; `"OUT-OF-RANGE"` / `"MISSING"` on the (u8)
+        // covers-inclusive-range sibling; `"ARITY-MISMATCH"` on both
+        // (u8) `_permutes_*` compound helpers; `"SET-NOT-PAIRWISE-
+        // DISTINCT"` on the (u8) SET-side well-formedness sibling)
+        // so a diagnostic that names the failed axis routes
+        // UNAMBIGUOUSLY to (a) this specific `&'static str` SUBSET-
+        // embedding helper, (b) the `arr` argument as the drift site
+        // rather than the `set` argument specifying the target
+        // superset.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_within_str_finite_set(&["a", "z"], &["a", "b", "c"]);
+        });
+        let payload = outcome.expect_err(
+            "assert_str_array_within_str_finite_set must panic on an \
+             out-of-set entry — the reject-out-of-set arm is the \
+             sole STR-SUBSET-VIOLATION failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_str_array_within_str_finite_set panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_str_array_within_str_finite_set"),
+            "assert_str_array_within_str_finite_set panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+        assert!(
+            msg.contains("STR-SUBSET-VIOLATION"),
+            "assert_str_array_within_str_finite_set panic message \
+             {msg:?} must name the failed AXIS (\"STR-SUBSET-\
+             VIOLATION\") for axis-provenance-preserving failure \
+             diagnostics",
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_pairwise_distinct")]
+    fn assert_str_array_within_str_finite_set_panics_on_malformed_target_set_spec() {
+        // NEGATIVE PIN — DELEGATED SET-side well-formedness: a
+        // malformed target-set spec `["a", "a", "b"]` fed into the
+        // ARRAY-side within helper MUST panic on the DELEGATED
+        // pairwise-distinct arm BEFORE the STR-SUBSET-VIOLATION arm
+        // fires. Pins the delegation chain: a regression that
+        // dropped the `assert_str_array_pairwise_distinct(set)` call
+        // at the top of `assert_str_array_within_str_finite_set`
+        // would silently accept a malformed set and produce a false-
+        // positive verdict on any `arr` embedded in the DISTINCT-
+        // value subset. The panic message here surfaces from the
+        // SIBLING helper (containing the ARRAY-side helper's
+        // `"assert_str_array_pairwise_distinct"` panic-name prefix
+        // rather than a bespoke `"SET-NOT-PAIRWISE-DISTINCT"` axis
+        // string) because the (str) row does NOT yet carry a
+        // separate `assert_str_finite_set_pairwise_distinct` alias —
+        // the delegation reuses the ARRAY-side helper directly per
+        // the design choice documented on the SET-side-well-
+        // formedness section of the helper's docstring. Sibling
+        // posture to
+        // `assert_char_array_within_char_finite_set_panics_on_malformed_target_set_spec`
+        // and `assert_u8_array_within_u8_finite_set_panics_on_malformed_target_set_spec`
+        // on the (char) + (u8) row-dual peers' delegated-SET-well-
+        // formedness pins — the three pins together bind the
+        // delegation chain at ONE test per element-type row.
+        assert_str_array_within_str_finite_set::<2, 3>(&["a", "b"], &["a", "b", "b"]);
     }
 
     // ── `assert_u8_array_pairwise_distinct` — the `u8` element-type

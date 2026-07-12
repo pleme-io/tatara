@@ -83,6 +83,68 @@ const _: () = crate::ast::assert_str_array_pairwise_distinct(&ExpectedKwargShape
 const _: () = crate::ast::assert_str_array_pairwise_distinct(&SexpShape::LABELS);
 const _: () = crate::ast::assert_str_array_pairwise_distinct(&StructuralKind::LABELS);
 
+// Compile-time SUBSET-embedding witnesses — the THREE family-wide
+// `[&'static str; N]` sub-vocabularies of the substrate's twelve-arm
+// outer-shape label vocabulary at `SexpShape::LABELS` whose distinct-
+// value set is an intentionally-closed PROPER SUBSET of the outer
+// twelve-arm `[&'static str; 12]` superset. Pre-lift the three subset
+// relations lived only as prose in the outer array's twelve-arm
+// partition-rule docstring plus runtime per-role alias-chain checks
+// (each per-role `<TYPE>::<ROLE>_LABEL` on the three sub-vocabulary
+// algebras (`AtomKind`, `QuoteForm`, `StructuralKind`) aliases the
+// namesake `SexpShape::<ROLE>_LABEL` on the outer algebra); post-lift
+// the ARRAY-LEVEL subset embedding of the three pinned pairs binds at
+// rustc time via ONE `const _` line per pair. A regression that
+// silently re-inlined either the SUBSET side (e.g. dropping
+// `AtomKind::SYMBOL_LABEL`'s `SexpShape::SYMBOL_LABEL` alias to a
+// fresh distinct byte spelling `"sym"` — the array would still be
+// pairwise-distinct AND still disjoint from `QuoteForm::LABELS`, but
+// the subset embedding into `SexpShape::LABELS` would break) or the
+// SUPERSET side (e.g. dropping `SexpShape::SYMBOL_LABEL` and leaving
+// `AtomKind::SYMBOL_LABEL` as a stale copy of `"symbol"` outside the
+// outer vocabulary) fails at `cargo check` BEFORE any test scheduler
+// runs. Sibling to the FIVE `assert_str_array_pairwise_distinct`
+// witnesses on `ast.rs` and the THIRTEEN `assert_str_array_pairwise_
+// distinct` witnesses above on the (contract-shape ∈ {pairwise-
+// distinctness}) column: those pin INJECTIVITY on each individual
+// array; these pin SUBSET containment ORIENTED across PAIRS of arrays
+// on the (contract-shape ∈ {subset-embedding}) column.
+//
+// The three pinned pairs are (all under the shared `&'static str`
+// element-type):
+//   1. `AtomKind::LABELS`       ⊂ `SexpShape::LABELS` (6-in-12 arms —
+//      atomic-payload kind labels; symbol / keyword / string / int /
+//      float / bool).
+//   2. `QuoteForm::LABELS`      ⊂ `SexpShape::LABELS` (4-in-12 arms —
+//      quote-family labels; quote / quasiquote / unquote / unquote-
+//      splice).
+//   3. `StructuralKind::LABELS` ⊂ `SexpShape::LABELS` (2-in-12 arms —
+//      structural-shape labels; nil / list).
+//
+// Cardinality composition: 6 + 4 + 2 = 12 = `SexpShape::LABELS.len()`
+// closes a NON-CONTIGUOUS PARTITION of the outer twelve-arm
+// vocabulary at compile time when composed with the pre-existing
+// (`AtomKind::LABELS`, `QuoteForm::LABELS`) disjointness witness on
+// `ast.rs`. A future run should lift the remaining pairwise-
+// disjointness witnesses on the partition
+// (`(AtomKind::LABELS, StructuralKind::LABELS)`,
+// `(QuoteForm::LABELS, StructuralKind::LABELS)`) — with those in
+// place the partition proof is complete at compile time and
+// SexpShape::LABELS becomes provably-a-disjoint-union of the three
+// sub-vocabulary arrays.
+const _: () = crate::ast::assert_str_array_within_str_finite_set::<6, 12>(
+    &crate::ast::AtomKind::LABELS,
+    &SexpShape::LABELS,
+);
+const _: () = crate::ast::assert_str_array_within_str_finite_set::<4, 12>(
+    &crate::ast::QuoteForm::LABELS,
+    &SexpShape::LABELS,
+);
+const _: () = crate::ast::assert_str_array_within_str_finite_set::<2, 12>(
+    &StructuralKind::LABELS,
+    &SexpShape::LABELS,
+);
+
 #[derive(Debug, Error)]
 pub enum LispError {
     #[error("unexpected character {0:?} at position {1}")]

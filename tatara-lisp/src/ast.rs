@@ -279,6 +279,140 @@ const _: () = assert_str_array_pairwise_distinct(&QuoteForm::PREFIXES);
 const _: () = assert_str_array_pairwise_distinct(&QuoteForm::IAC_FORGE_TAGS);
 const _: () = assert_str_array_pairwise_distinct(&QuoteForm::LABELS);
 
+/// Compile-time contract verifier — panics at const evaluation time if
+/// any two entries of `arr` alias byte-for-byte.
+///
+/// Column-dual peer to [`assert_char_array_pairwise_distinct`] and
+/// [`assert_str_array_pairwise_distinct`] on the (element-type) axis:
+/// where the `char` sibling closes the reader-boundary `[char; N]`
+/// vocabulary at compile time and the `&'static str` sibling closes
+/// the outer-algebras' family-wide label / prefix / tag / literal
+/// vocabularies, this closes the substrate's family-wide `[u8; N]`
+/// cache-key discriminator vocabulary. The three helpers together
+/// lift EVERY `pub const` scalar-family-wide array declared on the
+/// substrate's closed-set outer algebras (`Sexp` / `Atom` /
+/// `AtomKind` / `QuoteForm` / `StructuralKind` / `UnquoteForm`) into
+/// a COMPILE-TIME pairwise-distinctness theorem — a regression that
+/// silently collides two entries fails the build at `cargo check`
+/// time, one invocation stage earlier than the test-run pin.
+///
+/// The invariant is load-bearing for the outer-`Sexp` cache-key
+/// algebra: every consumer that pattern-matches the array's entries
+/// as DISJOINT arms of a hash-discriminator projection —
+/// [`AtomKind::hash_discriminator`]'s six-arm `{0..=5}` byte partition
+/// under [`Hash for Atom`](crate::ast::Atom); [`QuoteForm::hash_discriminator`]'s
+/// four-arm `{3, 4, 5, 6}` byte partition under
+/// [`Hash for Sexp`](crate::ast::Sexp); [`crate::error::StructuralKind::hash_discriminator`]'s
+/// two-arm `{0, 2}` byte partition under the outer-`Sexp` cache-key
+/// algebra's structural-residual carve; AND
+/// [`crate::error::UnquoteForm::hash_discriminator`]'s two-arm byte
+/// partition on the substitution-subset carving — relies on this
+/// invariant. A duplicate here would silently collide two DISTINCT
+/// variants at the SAME cache-key byte, breaking the `Expander::cache`
+/// keying on `(macro_name, args)` hash and mis-hashing every cached
+/// expansion across the collided variants.
+///
+/// Pre-lift each of these four arrays carried its pairwise-
+/// distinctness contract at a runtime test
+/// (`atom_kind_hash_discriminators_pairwise_distinct`,
+/// `quote_form_hash_discriminators_pairwise_distinct`,
+/// `structural_kind_hash_discriminators_pairwise_distinct`,
+/// `unquote_form_hash_discriminators_pairwise_distinct`); post-lift
+/// the pairwise-distinctness contract binds at `cargo check` time,
+/// one invocation stage earlier, catching regressions on `cargo
+/// build` / `cargo clippy` runs that skip the test suite.
+///
+/// NB: [`crate::error::SexpShape::HASH_DISCRIMINATORS`] (`[u8; 12]`)
+/// is INTENTIONALLY excluded from this compile-time sweep — the
+/// twelve outer shapes DELIBERATELY collapse onto only SEVEN outer
+/// cache-key bytes `{0..=6}` (the six atomic shapes all map to `1`
+/// per the outer-Sexp `Atom` marker byte, per the collapse rule
+/// documented on [`AtomKind::OUTER_HASH_DISCRIMINATOR`]). A
+/// pairwise-distinctness pin there would fire correctly, matching
+/// the load-bearing non-injectivity that closes the twelve-arm
+/// shape space onto the seven-arm outer-Sexp cache-key space.
+///
+/// Adding a new family-wide `[u8; N]` array to the substrate: pair
+/// the declaration with `const _: () = assert_u8_array_pairwise_
+/// distinct(&Self::FOO_ARRAY);` co-located after the array's
+/// declaration and the distinctness contract is enforced at
+/// compile time. The rustc-forced arity `[u8; N]` composes with
+/// this const-eval sweep so BOTH cardinality AND injectivity are
+/// compile-time theorems on the SAME array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_u8_array_pairwise_distinct_panics_at_runtime_on_binary_
+/// collision`. Unlike [`assert_str_array_pairwise_distinct`] this
+/// helper needs no auxiliary byte-equality helper: `u8` supports
+/// `==` directly in const-fn context, collapsing the triangular
+/// pair sweep to a two-loop shape without an inner byte walk.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide
+///   distinctness contract on the `u8` cache-key vocabulary becomes
+///   a TYPE-LEVEL theorem the substrate carries per array
+///   declaration rather than a runtime test the developer must
+///   remember to write per array.
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key partition is the `intent_hash` composition axis —
+///   binding the discriminator arrays on the typed algebra makes
+///   attestation-key drift a compile error rather than a silent
+///   BLAKE3 mis-hash on any consumer keyed on `Hash for Sexp`.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   sweep IS the generative shape. Every new closed-set
+///   discriminator array adds ONE `const _` line to get the
+///   distinctness theorem rather than re-deriving a per-array
+///   runtime iterator sweep.
+pub const fn assert_u8_array_pairwise_distinct<const N: usize>(arr: &[u8; N]) {
+    let mut i = 0;
+    while i < N {
+        let mut j = i + 1;
+        while j < N {
+            if arr[i] == arr[j] {
+                panic!(
+                    "assert_u8_array_pairwise_distinct: family-wide \
+                     u8 array carries a duplicate entry across two \
+                     positions — the substrate's pairwise-\
+                     distinctness contract on the array is broken; \
+                     every consumer that pattern-matches the array's \
+                     entries as DISJOINT arms (Atom / Sexp cache-key \
+                     hash-discriminator projection, structural-\
+                     residual / quote-family / substitution-subset \
+                     byte partition) relies on this invariant",
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+// Compile-time pairwise-distinctness witnesses — one `const _: () =
+// assert_u8_array_pairwise_distinct(&…)` per family-wide `[u8; N]`
+// hash-discriminator array on the substrate's closed-set outer
+// algebras. Each invocation is const-evaluated at `cargo check`
+// time; a regression that silently collides two entries fails the
+// build rather than the test suite. Sibling to the runtime
+// `_hash_discriminators_pairwise_distinct` tests at `ast.rs` +
+// `error.rs`'s tests modules — the two enforce the same theorem at
+// TWO stages of the toolchain, so a build that skips tests still
+// catches the regression here, and a build that runs tests catches
+// it a second time as a safety net if the const-eval sweep is ever
+// silently dropped. Peer to the seven `assert_char_array_pairwise_
+// distinct` witnesses AND the thirteen `assert_str_array_pairwise_
+// distinct` witnesses above on the (element-type) axis: `char`
+// covers the reader-boundary vocabulary; `&'static str` covers the
+// closed-set outer-algebras' label / prefix / tag / literal
+// vocabularies; `u8` covers the outer-Sexp cache-key discriminator
+// vocabulary. `SexpShape::HASH_DISCRIMINATORS` is intentionally
+// omitted per the intentionally-non-injective twelve-shape → seven-
+// byte collapse rule documented on the helper above.
+const _: () = assert_u8_array_pairwise_distinct(&AtomKind::HASH_DISCRIMINATORS);
+const _: () = assert_u8_array_pairwise_distinct(&QuoteForm::HASH_DISCRIMINATORS);
+const _: () = assert_u8_array_pairwise_distinct(&crate::error::StructuralKind::HASH_DISCRIMINATORS);
+const _: () = assert_u8_array_pairwise_distinct(&crate::error::UnquoteForm::HASH_DISCRIMINATORS);
+
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
 // serde_json serialization that would otherwise dominate cache overhead on
@@ -26936,5 +27070,141 @@ mod tests {
             QuoteForm::QUOTE_PREFIX,
             QuoteForm::QUASIQUOTE_PREFIX,
         ));
+    }
+
+    // ── `assert_u8_array_pairwise_distinct` — the `u8` element-type
+    // sibling of `assert_char_array_pairwise_distinct` and
+    // `assert_str_array_pairwise_distinct`. Sibling posture: same
+    // runtime-test surface (accept-empty, accept-singleton, accept-
+    // every-family-wide-substrate-array, reject-binary, reject-non-
+    // adjacent, reject-terminal, panic-message-provenance) restricted
+    // to the `u8` element type. A regression that silently weakens the
+    // helper (e.g. flipping `==` to `!=`, dropping the inner `j` loop,
+    // or returning early on collision) is caught by the helper's OWN
+    // test surface rather than only surfacing as a false-positive on
+    // some future `[u8; N]`-typed discriminator array's distinctness pin.
+
+    #[test]
+    fn assert_u8_array_pairwise_distinct_accepts_the_empty_array() {
+        // Empty array — vacuously pairwise distinct (no pair to
+        // collide). The compile-time `const _: () =
+        // assert_u8_array_pairwise_distinct(&EMPTY);` would land on
+        // this arm, so the runtime call MUST return normally.
+        assert_u8_array_pairwise_distinct::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_u8_array_pairwise_distinct_accepts_singleton_arrays() {
+        // Singleton array — vacuously pairwise distinct (only one
+        // element, no pair). Cross-arity coverage on the `[u8; 1]`
+        // corner of the const-N generic.
+        assert_u8_array_pairwise_distinct(&[0u8]);
+        assert_u8_array_pairwise_distinct(&[AtomKind::SYMBOL_HASH_DISCRIMINATOR]);
+    }
+
+    #[test]
+    fn assert_u8_array_pairwise_distinct_accepts_every_family_wide_substrate_array() {
+        // Runtime cross-check that the SAME four arrays the module-
+        // level `const _: () = ...` witnesses cover at COMPILE time
+        // are pairwise distinct. A regression that removes ONE of
+        // the `const _` witnesses would still leave THIS runtime pin
+        // as a safety net; the const witness fires FIRST at `cargo
+        // check`, this runtime pin catches the collision at `cargo
+        // test`. The pair enforces the theorem at TWO stages of the
+        // toolchain. `SexpShape::HASH_DISCRIMINATORS` is excluded
+        // per the intentionally-non-injective twelve-shape → seven-
+        // byte collapse rule documented on the helper.
+        assert_u8_array_pairwise_distinct(&AtomKind::HASH_DISCRIMINATORS);
+        assert_u8_array_pairwise_distinct(&QuoteForm::HASH_DISCRIMINATORS);
+        assert_u8_array_pairwise_distinct(&crate::error::StructuralKind::HASH_DISCRIMINATORS);
+        assert_u8_array_pairwise_distinct(&crate::error::UnquoteForm::HASH_DISCRIMINATORS);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_u8_array_pairwise_distinct")]
+    fn assert_u8_array_pairwise_distinct_panics_at_runtime_on_binary_collision() {
+        // NEGATIVE PIN — binary corner: a two-element array carrying
+        // the same byte twice MUST panic at runtime (the const-eval
+        // panic surfaces normally when the function is invoked from a
+        // runtime context, not just a `const _` context). Pins the
+        // helper's OWN reject-collision arm — a regression that
+        // silently returned without panicking on a duplicate would
+        // slip through the compile-time witnesses' failure mode too.
+        assert_u8_array_pairwise_distinct(&[0u8, 0u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_u8_array_pairwise_distinct")]
+    fn assert_u8_array_pairwise_distinct_panics_at_runtime_on_non_adjacent_collision() {
+        // NEGATIVE PIN — non-adjacent corner: the collision fires on
+        // ANY (i, j) pair with i < j, not just the adjacent (0, 1)
+        // corner. Pins the nested-loop shape of the helper — a
+        // regression that walked ONLY the adjacent pairs (i.e., swept
+        // `while i + 1 < N { if arr[i] == arr[i+1] { panic } … }`)
+        // would silently accept `[0, 1, 0]` (non-adjacent collision
+        // at positions 0 and 2), missing the contract.
+        assert_u8_array_pairwise_distinct(&[0u8, 1u8, 0u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_u8_array_pairwise_distinct")]
+    fn assert_u8_array_pairwise_distinct_panics_at_runtime_on_terminal_collision() {
+        // NEGATIVE PIN — terminal corner: the collision at the LAST
+        // pair (positions N-2 and N-1) MUST also fire. Pins the outer
+        // `while i < N` bound — a regression that walked `while i <
+        // N - 1` (dropping the last row) would silently accept a
+        // collision at the tail.
+        assert_u8_array_pairwise_distinct(&[0u8, 1u8, 2u8, 3u8, 3u8]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_u8_array_pairwise_distinct")]
+    fn assert_u8_array_pairwise_distinct_panics_at_runtime_on_boundary_byte_collision() {
+        // NEGATIVE PIN — u8-domain boundary corner: the reject-arm
+        // fires equivalently at the two u8-domain endpoints (`0x00`,
+        // `0xff`). Pins the element-type-native `==` on `u8` — a
+        // regression that widened the comparison via `as u32` (from
+        // an over-mechanical copy of the char sibling's shape) or
+        // via a signed-cast (`as i8` collapsing `0xff` to `-1`)
+        // would still fire on the `0x00` corner AND on the
+        // `0xff` corner because both survive any widening; a truly
+        // load-bearing regression here would silently drop the
+        // comparison altogether.
+        assert_u8_array_pairwise_distinct(&[0xffu8, 0xffu8]);
+    }
+
+    #[test]
+    fn assert_u8_array_pairwise_distinct_panic_message_names_the_helper() {
+        // PANIC-MESSAGE PROVENANCE PIN: the panic message MUST begin
+        // with the helper's own name so downstream diagnostics
+        // (`cargo check` const-eval error output, test-suite failure
+        // reports) route the drift back to the helper by string
+        // search — the family-wide contract's failure mode surfaces
+        // as an identifiable panic-message prefix rather than as an
+        // opaque const-eval error. Sibling posture to the runtime
+        // pairwise-distinctness tests that name the ARRAY in their
+        // failure message; this pin names the HELPER.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_pairwise_distinct(&[7u8, 7u8]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_pairwise_distinct must panic on a \
+             duplicate — the reject-collision arm is the point of \
+             the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_pairwise_distinct panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_pairwise_distinct"),
+            "assert_u8_array_pairwise_distinct panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
     }
 }

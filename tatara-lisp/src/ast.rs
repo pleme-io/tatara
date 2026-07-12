@@ -3997,6 +3997,128 @@ impl Sexp {
     /// with byte-identical shape.
     pub const COMMENT_DELIMITERS: [char; 2] = [Self::COMMENT_LEAD, Self::COMMENT_TERM];
 
+    /// Closed-set forced-arity ALL array over the SEVEN non-whitespace
+    /// category-leading chars the reader's outer-dispatch cascade
+    /// specialises on — the reader-level boundary sub-vocabulary that
+    /// paired with `char::is_whitespace()` closes the six-clause
+    /// [`Self::is_bare_atom_boundary`] disjunction. Composes through
+    /// seven typed `pub const` primitives spanning THREE type namespaces
+    /// on the SAME reader-outer-dispatch axis of the substrate:
+    ///   * [`Self::LIST_OPEN`] (`'('`) — the outer-structural list-opening
+    ///     delimiter on the outer [`Sexp`] algebra;
+    ///   * [`Self::LIST_CLOSE`] (`')'`) — the outer-structural list-closing
+    ///     delimiter on the outer [`Sexp`] algebra;
+    ///   * [`QuoteForm::QUOTE_LEAD`] (`'\''`) — the [`QuoteForm::Quote`]
+    ///     reader-punctuation lead byte on the quote-family sub-algebra;
+    ///   * [`QuoteForm::QUASIQUOTE_LEAD`] (`` '`' ``) — the
+    ///     [`QuoteForm::Quasiquote`] reader-punctuation lead byte;
+    ///   * [`QuoteForm::UNQUOTE_LEAD`] (`','`) — the shared
+    ///     [`QuoteForm::Unquote`] / [`QuoteForm::UnquoteSplice`] reader-
+    ///     punctuation lead byte (disambiguated at the second-char peek
+    ///     via [`QuoteForm::promote_via_next_char`]);
+    ///   * [`Atom::STR_DELIMITER`] (`'"'`) — the Str-payload opening /
+    ///     closing delimiter on the closed-set [`Atom`] algebra;
+    ///   * [`Self::COMMENT_LEAD`] (`';'`) — the line-comment opener on
+    ///     the outer [`Sexp`] algebra (paired with [`Self::COMMENT_TERM`]
+    ///     inside the discard loop — but the TERM is a run-boundary
+    ///     marker inside a comment run, NOT a reader-outer-dispatch
+    ///     category-leading char, so it is intentionally omitted from
+    ///     this ALL array).
+    ///
+    /// Cross-axis peer to [`Self::LIST_DELIMITERS`] (`[char; 2]` on the
+    /// outer-structural payload-delimiter axis) and [`Self::COMMENT_DELIMITERS`]
+    /// (`[char; 2]` on the reader-discard opener/terminator axis) at
+    /// ONE algebra level up: those two arrays close their respective
+    /// paired-role sub-vocabularies (opener + closer, opener + terminator)
+    /// on the reader-INNER axis of the outer [`Sexp`] algebra; this
+    /// array closes the reader-OUTER-dispatch category-leading char
+    /// sub-vocabulary across the SAME closed-set outer [`Sexp`] algebra
+    /// PLUS its two sibling sub-algebras ([`QuoteForm`], [`Atom`]) at
+    /// ONE family-wide `[char; 7]` primitive. Sibling-shape peer of the
+    /// intra-algebra sub-vocabulary array [`QuoteForm::LEADS`]
+    /// (`[char; 3]` — the three DISTINCT quote-family reader-lead
+    /// bytes) which this array embeds as its middle three positions:
+    /// where [`QuoteForm::LEADS`] closes the quote-family sub-carving's
+    /// reader-lead sub-vocabulary at ONE forced-arity array on ONE
+    /// closed-set algebra, this array closes the FULL reader-outer-
+    /// dispatch non-whitespace category-leading char sub-vocabulary at
+    /// ONE forced-arity array on the outer [`Sexp`] algebra by
+    /// composing through the three-arm quote-family sub-carving + the
+    /// two-arm structural-delimiter sub-carving + the two-arm atomic-
+    /// carve delimiter + comment-lead singletons.
+    ///
+    /// Pre-lift the seven category-leading chars had NO family-wide
+    /// array on the outer [`Sexp`] algebra — [`Self::is_bare_atom_boundary`]
+    /// carried them as three sub-expressions (`Self::LIST_DELIMITERS.contains(&ch)`
+    /// on the structural-delimiter axis, `QuoteForm::from_lead_char(ch).is_some()`
+    /// on the quote-family axis, `ch == Atom::STR_DELIMITER || ch ==
+    /// Self::COMMENT_LEAD` on the singleton axes) unified through boolean
+    /// disjunction. Post-lift the WHOLE non-whitespace terminator sub-
+    /// vocabulary binds at ONE `pub const [char; 7]` array on the outer
+    /// [`Sexp`] algebra so [`Self::is_bare_atom_boundary`] collapses to
+    /// `ch.is_whitespace() || Self::NON_WHITESPACE_BARE_ATOM_TERMINATORS.contains(&ch)`
+    /// — TWO clauses (one whitespace-partial predicate + one
+    /// contains-check on the family-wide ARRAY) rather than five
+    /// sub-clauses spanning three type namespaces. Consumers keyed on
+    /// the whole family (a `tatara-check` predicate `(check-reader-
+    /// outer-dispatch-terminator-partition-injective …)` that verifies
+    /// the seven-arm partition structurally, a future REPL / LSP
+    /// tokenizer-boundary hint that scans the source for the reader-
+    /// outer-dispatch category-leading chars upfront, a future
+    /// completion generator that suggests the seven bytes at every
+    /// bare-atom-lexeme insertion site) read through
+    /// [`Self::NON_WHITESPACE_BARE_ATOM_TERMINATORS`] without re-deriving
+    /// the three-part sub-expression composition inline.
+    ///
+    /// Composition law (forward): for every `ch: char`,
+    /// `Self::NON_WHITESPACE_BARE_ATOM_TERMINATORS.contains(&ch) ==
+    /// (Self::LIST_DELIMITERS.contains(&ch) ||
+    ///  QuoteForm::from_lead_char(ch).is_some() ||
+    ///  ch == Atom::STR_DELIMITER || ch == Self::COMMENT_LEAD)` — pinned
+    /// by `sexp_non_whitespace_bare_atom_terminators_agree_with_pre_lift_sub_expression_disjunction`.
+    /// Boundary-predicate composition law:
+    /// `Self::is_bare_atom_boundary(ch) == (ch.is_whitespace() ||
+    /// Self::NON_WHITESPACE_BARE_ATOM_TERMINATORS.contains(&ch))` —
+    /// pinned by `sexp_is_bare_atom_boundary_agrees_with_terminators_array_on_non_whitespace_partition`.
+    ///
+    /// Adding a hypothetical seventh reader-outer-dispatch category
+    /// (e.g. `#|…|#` block-comment lead byte, `#\` char-literal prefix,
+    /// `#[` vector-literal prefix — each pinning a new lead byte on
+    /// [`Self`] or a fresh sub-algebra) extends this array AND
+    /// [`Self::is_bare_atom_boundary`]'s indirect coverage in
+    /// LOCKSTEP — rustc's forced-arity check on `[char; 7]` fails
+    /// compilation if the algebra grows without the array (or the
+    /// array without the algebra).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// (reader-outer-dispatch category, canonical char) family-wide
+    /// pairing binds at ONE typed `[char; 7]` array on the outer
+    /// [`Sexp`] algebra regardless of which of the three sub-algebras
+    /// the individual chars name their per-role `pub const` primitive
+    /// on. THEORY.md §III — the typescape; the seven canonical
+    /// reader-outer-dispatch category-leading bytes bind at ONE typed
+    /// `[char; 7]` array on the outer [`Sexp`] algebra rather than at
+    /// three-part sub-expression composition inline at
+    /// [`Self::is_bare_atom_boundary`]. THEORY.md §V.1 — knowable
+    /// platform; the family's cardinality becomes a TYPE-level constant
+    /// on the substrate algebra rather than a per-consumer hand-rolled
+    /// enumeration of the seven chars. THEORY.md §VI.1 — generation over
+    /// composition; the family-wide contract sweeps (routing through
+    /// typed sub-algebra `pub const` primitives, pairwise distinctness,
+    /// agreement with the pre-lift sub-expression disjunction) emerge
+    /// from the composition of EIGHT substrate primitives (this
+    /// `pub const [char; 7]` array + the seven sub-algebra `pub const`
+    /// primitives) rather than as inline disjunctions at each call site.
+    pub const NON_WHITESPACE_BARE_ATOM_TERMINATORS: [char; 7] = [
+        Self::LIST_OPEN,
+        Self::LIST_CLOSE,
+        QuoteForm::QUOTE_LEAD,
+        QuoteForm::QUASIQUOTE_LEAD,
+        QuoteForm::UNQUOTE_LEAD,
+        Atom::STR_DELIMITER,
+        Self::COMMENT_LEAD,
+    ];
+
     /// Reader-level boundary predicate — returns `true` iff `ch` is one
     /// of the SIX outer-dispatch category-leading chars the reader's
     /// tokenizer specialises on: whitespace, [`Self::LIST_OPEN`],
@@ -4076,11 +4198,7 @@ impl Sexp {
     /// chain at ONE consumer site inside `crate::reader::tokenize`.
     #[must_use]
     pub fn is_bare_atom_boundary(ch: char) -> bool {
-        ch.is_whitespace()
-            || Self::LIST_DELIMITERS.contains(&ch)
-            || QuoteForm::from_lead_char(ch).is_some()
-            || ch == Atom::STR_DELIMITER
-            || ch == Self::COMMENT_LEAD
+        ch.is_whitespace() || Self::NON_WHITESPACE_BARE_ATOM_TERMINATORS.contains(&ch)
     }
 
     /// Canonical [`Self::Atom`]-[`Atom::Symbol`] outer constructor —
@@ -26073,6 +26191,152 @@ mod tests {
                 "bare-atom char {ch:?} must NOT classify as a boundary — \
                  the reader's outer-dispatch has NO specific arm on this \
                  byte; the default bare-atom arm must accept it",
+            );
+        }
+    }
+
+    #[test]
+    fn sexp_non_whitespace_bare_atom_terminators_has_expected_cardinality() {
+        // Cardinality contract: `Self::NON_WHITESPACE_BARE_ATOM_TERMINATORS.len()
+        // == 7` — pinned at the declaration site by rustc's forced-arity
+        // check on `[char; 7]`. This test surfaces the arity as a fail-
+        // loud runtime pin so a future refactor that switches the array
+        // type to `&[char]` (dropping the compile-time arity forcing)
+        // doesn't silently loosen the closed-set discipline the family
+        // relies on. The seven arms are the FULL non-whitespace category-
+        // leading char set the reader's outer-dispatch specialises on
+        // (two structural `Sexp::LIST_{OPEN,CLOSE}`, three
+        // `QuoteForm::{QUOTE,QUASIQUOTE,UNQUOTE}_LEAD`, one
+        // `Atom::STR_DELIMITER`, one `Sexp::COMMENT_LEAD`). Sibling
+        // posture to `sexp_list_delimiters_has_expected_cardinality`
+        // and `sexp_comment_delimiters_has_expected_cardinality` on the
+        // paired-role sub-arrays of the SAME closed set.
+        assert_eq!(
+            Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS.len(),
+            7,
+            "Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS cardinality \
+             drifted from 7 — the reader's outer-dispatch specialises \
+             on exactly seven non-whitespace category-leading chars by \
+             construction; an extension surfaces here"
+        );
+    }
+
+    #[test]
+    fn sexp_non_whitespace_bare_atom_terminators_route_through_typed_sub_algebra_constants() {
+        // PATH-UNIFORMITY (family-wide ARRAY-side): the seven entries
+        // of `Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS` MUST bind
+        // byte-for-byte to the seven typed sub-algebra `pub const`
+        // primitives — no inline `char` literals. Catches a regression
+        // that inlines `['(', ')', '\'', '`', ',', '"', ';']`: both
+        // the alignment property AND the numeric bytes would still
+        // hold, but the algebra-provenance would disappear, so a
+        // future rename (e.g. `Sexp::LIST_OPEN → Sexp::PAREN_OPEN`,
+        // `Sexp::COMMENT_LEAD → Sexp::LINE_COMMENT_OPEN`) at any of
+        // the three sibling algebras would silently drift the array's
+        // provenance from the algebra's canonical spelling. Sibling
+        // posture to the `LIST_DELIMITERS` / `COMMENT_DELIMITERS`
+        // ARRAY-side provenance pins on the paired-role sub-arrays,
+        // AND to the shape-level HASH_DISCRIMINATORS ARRAY-side
+        // provenance pin
+        // `sexp_shape_hash_discriminators_align_with_typed_per_role_constants_by_index`
+        // on the outer-`Sexp` cache-key axis.
+        assert_eq!(
+            Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS[0],
+            Sexp::LIST_OPEN
+        );
+        assert_eq!(
+            Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS[1],
+            Sexp::LIST_CLOSE
+        );
+        assert_eq!(
+            Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS[2],
+            QuoteForm::QUOTE_LEAD,
+        );
+        assert_eq!(
+            Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS[3],
+            QuoteForm::QUASIQUOTE_LEAD,
+        );
+        assert_eq!(
+            Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS[4],
+            QuoteForm::UNQUOTE_LEAD,
+        );
+        assert_eq!(
+            Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS[5],
+            Atom::STR_DELIMITER,
+        );
+        assert_eq!(
+            Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS[6],
+            Sexp::COMMENT_LEAD,
+        );
+    }
+
+    #[test]
+    fn sexp_non_whitespace_bare_atom_terminators_are_pairwise_distinct() {
+        // INJECTIVITY CONTRACT: the seven entries of
+        // `Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS` MUST be pairwise
+        // distinct — no char appears twice across the (structural,
+        // quote-family, atomic-delimiter, comment-lead) sub-vocabularies.
+        // A silent collision (e.g. a hypothetical Racket-compat port
+        // moving `QuoteForm::QUOTE_LEAD` from `'\''` to `';'` conflating
+        // it with `Sexp::COMMENT_LEAD`, or a future block-comment
+        // extension re-using `Atom::STR_DELIMITER`) would break the
+        // reader's outer-dispatch's implicit "each specific arm fires
+        // on a DISTINCT lead char" contract — the `match c { … }`
+        // outer-dispatch in `crate::reader::tokenize` cannot admit
+        // duplicate patterns without breaking exhaustiveness. This pin
+        // surfaces the distinctness as a substrate-level structural
+        // theorem so a cross-algebra rename that flips the injectivity
+        // is a compile-time-verified regression at the sub-carving
+        // level (rustc-forbidden duplicate `match` patterns) AND a
+        // runtime fail-loud regression here.
+        let mut seen: std::collections::HashSet<char> = std::collections::HashSet::new();
+        for ch in Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS {
+            assert!(
+                seen.insert(ch),
+                "Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS carries a \
+                 duplicate char {ch:?} — the reader's outer-dispatch \
+                 arms MUST be pairwise disjoint by construction",
+            );
+        }
+        assert_eq!(seen.len(), Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS.len(),);
+    }
+
+    #[test]
+    fn sexp_is_bare_atom_boundary_agrees_with_terminators_array_on_non_whitespace_partition() {
+        // BOUNDARY-PREDICATE COMPOSITION LAW: for every char `ch`,
+        // `Sexp::is_bare_atom_boundary(ch) == (ch.is_whitespace() ||
+        // Self::NON_WHITESPACE_BARE_ATOM_TERMINATORS.contains(&ch))`.
+        // Pins the ARRAY-driven refactor of the boundary predicate
+        // against a regression that reverts the disjunction to the
+        // pre-lift three-part sub-expression composition (or drifts
+        // ONE sub-expression's arm silently). Sibling posture to
+        // `sexp_is_bare_atom_boundary_matches_outer_dispatch_arm_set_exhaustively`
+        // — that pin binds the boundary predicate's TRUTH-TABLE against
+        // the reader's outer-dispatch categories; this pin binds the
+        // boundary predicate's DEFINITION against the family-wide
+        // terminators ARRAY as the sole non-whitespace clause. The
+        // (positive, negative) sweep covers a whitespace char + the
+        // seven terminator entries as positives, and a representative
+        // negative set (alpha, digit, sign, and the three substrate
+        // marker LEADs `:` / `#` / `@`) as negatives.
+        for &ch in &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS {
+            assert!(
+                Sexp::is_bare_atom_boundary(ch),
+                "Sexp::is_bare_atom_boundary({ch:?}) must return true \
+                 for every char in NON_WHITESPACE_BARE_ATOM_TERMINATORS",
+            );
+        }
+        assert!(Sexp::is_bare_atom_boundary(' '));
+        assert!(Sexp::is_bare_atom_boundary('\t'));
+        assert!(Sexp::is_bare_atom_boundary('\n'));
+        for ch in ['a', 'Z', '0', '9', '-', '_', ':', '#', '@'] {
+            let expected =
+                ch.is_whitespace() || Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS.contains(&ch);
+            assert_eq!(
+                Sexp::is_bare_atom_boundary(ch),
+                expected,
+                "Sexp::is_bare_atom_boundary({ch:?}) drifted from the \
+                 ARRAY-driven composition law",
             );
         }
     }

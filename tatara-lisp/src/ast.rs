@@ -121,6 +121,164 @@ const _: () = assert_char_array_pairwise_distinct(&Atom::SELF_ESCAPE_TABLE);
 const _: () = assert_char_array_pairwise_distinct(&Atom::ESCAPE_SOURCES);
 const _: () = assert_char_array_pairwise_distinct(&Atom::ESCAPE_DECODED);
 
+/// Compile-time contract verifier — panics at const evaluation time if
+/// any two entries of `arr` alias byte-for-byte through
+/// [`str::as_bytes`].
+///
+/// Column-dual peer to [`assert_char_array_pairwise_distinct`] on the
+/// (element-type) axis: where the `char` sibling closes the reader-
+/// boundary `[char; N]` vocabulary at compile time, this closes the
+/// substrate's family-wide `[&'static str; N]` vocabulary at compile
+/// time. The two helpers together lift EVERY `pub const` scalar-
+/// family-wide array declared on the substrate's closed-set outer
+/// algebras (`Sexp` / `Atom` / `AtomKind` / `QuoteForm`) into a
+/// COMPILE-TIME pairwise-distinctness theorem — a regression that
+/// silently collides two entries fails the build at `cargo check`
+/// time, one invocation stage earlier than the test-run pin.
+///
+/// The invariant is load-bearing for every consumer that pattern-
+/// matches the array's entries as DISJOINT arms —
+/// [`Atom::bool_literal`]'s two-arm projection through
+/// [`Atom::BOOL_LITERALS`] (a duplicate here would silently shadow
+/// the second arm's `#f` spelling at the same-index projection);
+/// [`AtomKind::label`]'s six-arm projection through
+/// [`AtomKind::LABELS`] (a duplicate here would collapse two
+/// distinct atomic-payload variants onto the same diagnostic
+/// label, breaking every downstream label-driven partition on
+/// the closed-set AtomKind algebra); [`QuoteForm::prefix`]'s
+/// four-arm projection over [`QuoteForm::PREFIXES`] (a duplicate
+/// here would silently collapse two distinct quote-family
+/// variants onto the same reader-prefix `&'static str`);
+/// [`QuoteForm::iac_forge_tag`]'s four-arm projection through
+/// [`QuoteForm::IAC_FORGE_TAGS`] (a duplicate here would silently
+/// collapse two distinct quote-family variants onto the same
+/// canonical-form tag, breaking the iac-forge interop round-trip
+/// through [`QuoteForm::from_iac_forge_tag`]); AND
+/// [`QuoteForm::label`]'s four-arm projection through
+/// [`QuoteForm::LABELS`] (a duplicate here would collapse two
+/// distinct quote-family variants onto the same diagnostic
+/// label). Every future family-wide `[&'static str; N]` on the
+/// substrate that participates in a `match`-arm partition or a
+/// same-index alias-chain benefits from the SAME compile-time
+/// guarantee via one `const _` line.
+///
+/// Pre-lift each array carried its pairwise-distinctness contract
+/// EITHER at a runtime test (`atom_bool_literals_pairwise_distinct`,
+/// `atom_kind_labels_pairwise_distinct`, `quote_form_prefixes_
+/// pairwise_distinct`, `quote_form_iac_forge_tags_pairwise_distinct`,
+/// `quote_form_labels_pairwise_distinct`) OR implicitly through the
+/// same-index alias-chain composition law's runtime pin; post-lift
+/// the pairwise-distinctness contract binds at `cargo check` time,
+/// one invocation stage earlier, catching regressions on `cargo
+/// build` / `cargo clippy` runs that skip the test suite.
+///
+/// Adding a new family-wide `[&'static str; N]` array to the
+/// substrate: pair the declaration with `const _: () = assert_str_
+/// array_pairwise_distinct(&Self::FOO_ARRAY);` co-located immediately
+/// after the array's declaration and the distinctness contract is
+/// enforced at compile time. The rustc-forced arity `[&'static str;
+/// N]` composes with this const-eval sweep so BOTH cardinality AND
+/// injectivity are compile-time theorems on the SAME array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP
+/// autocomplete surface that constructs a `[&'static str; N]` at
+/// runtime from a user-supplied vocabulary AND wants to verify
+/// pairwise distinctness before consuming it — and the panic
+/// surfaces normally in that path (pinned by
+/// `assert_str_array_pairwise_distinct_panics_at_runtime_on_binary_
+/// collision`).
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide
+///   distinctness contract on the `&'static str`-typed vocabulary
+///   becomes a TYPE-LEVEL theorem the substrate carries per array
+///   declaration rather than a runtime test the developer must
+///   remember to write per array.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   sweep IS the generative shape. Every new closed-set string
+///   array adds ONE `const _` line to get the distinctness theorem
+///   rather than re-deriving a per-array runtime iterator sweep.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+///   the distinctness proof at declaration site AND the same-index
+///   alias-chain composition the consumer relies on regenerate
+///   through the SAME `const _` witness.
+pub const fn assert_str_array_pairwise_distinct<const N: usize>(arr: &[&'static str; N]) {
+    let mut i = 0;
+    while i < N {
+        let mut j = i + 1;
+        while j < N {
+            if str_bytes_equal(arr[i], arr[j]) {
+                panic!(
+                    "assert_str_array_pairwise_distinct: family-wide \
+                     &'static str array carries a duplicate entry \
+                     across two positions — the substrate's pairwise-\
+                     distinctness contract on the array is broken; \
+                     every consumer that pattern-matches the array's \
+                     entries as DISJOINT arms (bool-literal dispatch, \
+                     atomic-kind label decode, quote-family prefix \
+                     decode, iac-forge tag decode, quote-family label \
+                     projection) relies on this invariant"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+/// Const-fn byte-equality helper for `assert_str_array_pairwise_
+/// distinct` — compares two `&'static str`s byte-for-byte through
+/// their [`str::as_bytes`] projections. Lifted as a co-located
+/// module-private helper rather than an inline sweep so the outer
+/// helper's triangular `(i, j)` pair-walk mirrors the shape of
+/// [`assert_char_array_pairwise_distinct`] at the outer method
+/// axis without an inline byte-loop obscuring the `(i, j)` sweep.
+///
+/// The equality relation this helper computes is EXACTLY
+/// [`str::eq`] (i.e. byte-for-byte length + content equality on
+/// the underlying UTF-8 bytes), just re-derived in a const-eval
+/// friendly shape since `str::eq` / `<[u8]>::eq` are not (yet)
+/// callable from `const fn` context on the substrate's toolchain.
+/// A future toolchain that stabilises `const fn str::eq` collapses
+/// this helper to a one-line `str::eq(a, b)` delegation.
+const fn str_bytes_equal(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut k = 0;
+    while k < a.len() {
+        if a[k] != b[k] {
+            return false;
+        }
+        k += 1;
+    }
+    true
+}
+
+// Compile-time pairwise-distinctness witnesses — one `const _: () =
+// assert_str_array_pairwise_distinct(&…)` per family-wide `[&'static
+// str; N]` array on the substrate's closed-set outer algebras. Each
+// invocation is const-evaluated at `cargo check` time; a regression
+// that silently collides two entries fails the build rather than the
+// test suite. Sibling to the runtime `_pairwise_distinct` tests at
+// `ast.rs`'s tests module — the two enforce the same theorem at TWO
+// stages of the toolchain, so a build that skips tests still catches
+// the regression here, and a build that runs tests catches it a
+// second time as a safety net if the const-eval sweep is ever
+// silently dropped. Peer to the seven `assert_char_array_pairwise_
+// distinct` witnesses above on the (element-type) axis: `char` covers
+// the reader-boundary vocabulary; `&'static str` covers the closed-
+// set outer-algebras' family-wide label / prefix / tag / literal
+// vocabularies.
+const _: () = assert_str_array_pairwise_distinct(&Atom::BOOL_LITERALS);
+const _: () = assert_str_array_pairwise_distinct(&AtomKind::LABELS);
+const _: () = assert_str_array_pairwise_distinct(&QuoteForm::PREFIXES);
+const _: () = assert_str_array_pairwise_distinct(&QuoteForm::IAC_FORGE_TAGS);
+const _: () = assert_str_array_pairwise_distinct(&QuoteForm::LABELS);
+
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
 // serde_json serialization that would otherwise dominate cache overhead on
@@ -26564,5 +26722,219 @@ mod tests {
              {msg:?} must name the helper for provenance-preserving \
              failure diagnostics",
         );
+    }
+
+    // ── `assert_str_array_pairwise_distinct` — the `&'static str`
+    // element-type sibling of `assert_char_array_pairwise_distinct`.
+    // Sibling posture: same runtime-test surface (accept-empty,
+    // accept-singleton, accept-every-family-wide-substrate-array,
+    // reject-binary, reject-non-adjacent, reject-terminal, panic-
+    // message-provenance) restricted to the `&'static str` element
+    // type. A regression that silently weakens the helper (e.g.
+    // dropping the byte-length gate, flipping `!=` to `==`, or
+    // returning early on collision) is caught by the helper's OWN
+    // test surface rather than only surfacing as a false-positive
+    // on some future string-typed array's distinctness pin.
+
+    #[test]
+    fn assert_str_array_pairwise_distinct_accepts_the_empty_array() {
+        // Empty array — vacuously pairwise distinct (no pair to
+        // collide). The compile-time `const _: () =
+        // assert_str_array_pairwise_distinct(&EMPTY);` would land on
+        // this arm, so the runtime call MUST return normally.
+        assert_str_array_pairwise_distinct::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_str_array_pairwise_distinct_accepts_singleton_arrays() {
+        // Singleton array — vacuously pairwise distinct (only one
+        // element, no pair). Cross-arity coverage on the
+        // `[&'static str; 1]` corner of the const-N generic.
+        assert_str_array_pairwise_distinct(&["a"]);
+        assert_str_array_pairwise_distinct(&[Atom::TRUE_LITERAL]);
+    }
+
+    #[test]
+    fn assert_str_array_pairwise_distinct_accepts_every_family_wide_substrate_array() {
+        // Runtime cross-check that the SAME five arrays the module-
+        // level `const _: () = ...` witnesses cover at COMPILE time
+        // are pairwise distinct. A regression that removes ONE of
+        // the `const _` witnesses would still leave THIS runtime pin
+        // as a safety net; the const witness fires FIRST at `cargo
+        // check`, this runtime pin catches the collision at `cargo
+        // test`. The pair enforces the theorem at TWO stages of the
+        // toolchain.
+        assert_str_array_pairwise_distinct(&Atom::BOOL_LITERALS);
+        assert_str_array_pairwise_distinct(&AtomKind::LABELS);
+        assert_str_array_pairwise_distinct(&QuoteForm::PREFIXES);
+        assert_str_array_pairwise_distinct(&QuoteForm::IAC_FORGE_TAGS);
+        assert_str_array_pairwise_distinct(&QuoteForm::LABELS);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_pairwise_distinct")]
+    fn assert_str_array_pairwise_distinct_panics_at_runtime_on_binary_collision() {
+        // NEGATIVE PIN — binary corner: a two-element array carrying
+        // the same string twice MUST panic at runtime (the const-eval
+        // panic surfaces normally when the function is invoked from a
+        // runtime context, not just a `const _` context). Pins the
+        // helper's OWN reject-collision arm — a regression that
+        // silently returned without panicking on a duplicate would
+        // slip through the compile-time witnesses' failure mode too.
+        assert_str_array_pairwise_distinct(&["dup", "dup"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_pairwise_distinct")]
+    fn assert_str_array_pairwise_distinct_panics_at_runtime_on_non_adjacent_collision() {
+        // NEGATIVE PIN — non-adjacent corner: the collision fires on
+        // ANY (i, j) pair with i < j, not just the adjacent (0, 1)
+        // corner. Pins the nested-loop shape of the helper — a
+        // regression that walked ONLY the adjacent pairs (i.e., swept
+        // `while i + 1 < N { if arr[i] == arr[i+1] { panic } … }`)
+        // would silently accept `["a", "b", "a"]` (non-adjacent
+        // collision at positions 0 and 2), missing the contract.
+        assert_str_array_pairwise_distinct(&["a", "b", "a"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_pairwise_distinct")]
+    fn assert_str_array_pairwise_distinct_panics_at_runtime_on_terminal_collision() {
+        // NEGATIVE PIN — terminal corner: the collision at the LAST
+        // pair (positions N-2 and N-1) MUST also fire. Pins the outer
+        // `while i < N` bound — a regression that walked `while i <
+        // N - 1` (dropping the last row) would silently accept a
+        // collision at the tail.
+        assert_str_array_pairwise_distinct(&["a", "b", "c", "d", "d"]);
+    }
+
+    #[test]
+    fn assert_str_array_pairwise_distinct_rejects_length_zero_collision() {
+        // POSITIVE-ORTHOGONAL PIN — the byte-length gate at
+        // `str_bytes_equal`: two empty strings must be flagged as
+        // EQUAL (both are the zero-length byte sequence). A
+        // regression that mishandled `a.len() == 0 && b.len() == 0`
+        // (e.g. by returning `false` when both lengths are 0, or by
+        // panicking on the zero-length index) would silently accept
+        // a `["", ""]` duplicate. Pins the vacuous-length corner of
+        // the byte-equality helper via the outer helper's runtime
+        // panic surface.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_pairwise_distinct(&["", ""]);
+        });
+        outcome.expect_err(
+            "assert_str_array_pairwise_distinct must panic on a \
+             duplicate at the zero-length string corner — the \
+             `str_bytes_equal` helper's `a.len() == b.len()` gate \
+             holds vacuously at length 0, so the byte-walk falls \
+             through to a positive equality verdict",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_pairwise_distinct_accepts_prefix_pair_without_collision() {
+        // POSITIVE-ORTHOGONAL PIN — the byte-length gate at
+        // `str_bytes_equal`: two strings where one is a strict
+        // prefix of the other must be flagged as DISTINCT. A
+        // regression that dropped the `a.len() != b.len()` gate
+        // (e.g. by comparing bytes only up to the shorter length)
+        // would silently accept `["ab", "abc"]` as equal. This pin
+        // fires the outer helper on a prefix pair; the runtime call
+        // MUST return normally.
+        assert_str_array_pairwise_distinct(&["ab", "abc"]);
+        assert_str_array_pairwise_distinct(&["", "a"]);
+    }
+
+    #[test]
+    fn assert_str_array_pairwise_distinct_panic_message_names_the_helper() {
+        // PANIC-MESSAGE PROVENANCE PIN: the panic message MUST begin
+        // with the helper's own name so downstream diagnostics
+        // (`cargo check` const-eval error output, test-suite failure
+        // reports) route the drift back to the helper by string
+        // search — the family-wide contract's failure mode surfaces
+        // as an identifiable panic-message prefix rather than as an
+        // opaque const-eval error. Sibling posture to the runtime
+        // pairwise-distinctness tests that name the ARRAY in their
+        // failure message; this pin names the HELPER.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_pairwise_distinct(&["x", "x"]);
+        });
+        let payload = outcome.expect_err(
+            "assert_str_array_pairwise_distinct must panic on a \
+             duplicate — the reject-collision arm is the point of \
+             the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_str_array_pairwise_distinct panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_str_array_pairwise_distinct"),
+            "assert_str_array_pairwise_distinct panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+    }
+
+    #[test]
+    fn str_bytes_equal_accepts_the_empty_pair() {
+        // Direct pin on `str_bytes_equal`'s zero-length corner —
+        // both inputs are the empty byte sequence, so the helper
+        // MUST return `true`. Verifies the `a.len() == b.len()`
+        // gate does not spuriously reject at `len == 0`.
+        assert!(str_bytes_equal("", ""));
+    }
+
+    #[test]
+    fn str_bytes_equal_rejects_the_prefix_pair() {
+        // Direct pin on `str_bytes_equal`'s length-gate: a strict
+        // prefix pair MUST be rejected. Guards against a regression
+        // that dropped the length gate and compared bytes only up
+        // to the shorter length.
+        assert!(!str_bytes_equal("ab", "abc"));
+        assert!(!str_bytes_equal("abc", "ab"));
+    }
+
+    #[test]
+    fn str_bytes_equal_accepts_the_identical_pair() {
+        // Direct pin on `str_bytes_equal`'s positive-match arm —
+        // two identical strings MUST be flagged as equal at every
+        // canonical shape the substrate carries (bool literal,
+        // atomic-kind label, quote-family prefix). Sibling posture
+        // to the `_accepts_every_family_wide_substrate_array` pin
+        // on the outer helper: this pin fires the inner helper on
+        // the SAME string values that back the outer witnesses'
+        // per-array entries.
+        assert!(str_bytes_equal(Atom::TRUE_LITERAL, Atom::TRUE_LITERAL));
+        assert!(str_bytes_equal(
+            AtomKind::SYMBOL_LABEL,
+            AtomKind::SYMBOL_LABEL,
+        ));
+        assert!(str_bytes_equal(
+            QuoteForm::QUOTE_PREFIX,
+            QuoteForm::QUOTE_PREFIX,
+        ));
+    }
+
+    #[test]
+    fn str_bytes_equal_rejects_the_distinct_pair() {
+        // Direct pin on `str_bytes_equal`'s reject-arm — two
+        // distinct family-wide substrate strings MUST be flagged
+        // as unequal. Guards against a regression that returned
+        // `true` unconditionally (which would silently pass every
+        // caller through the collision arm).
+        assert!(!str_bytes_equal(Atom::TRUE_LITERAL, Atom::FALSE_LITERAL,));
+        assert!(!str_bytes_equal(
+            AtomKind::SYMBOL_LABEL,
+            AtomKind::KEYWORD_LABEL,
+        ));
+        assert!(!str_bytes_equal(
+            QuoteForm::QUOTE_PREFIX,
+            QuoteForm::QUASIQUOTE_PREFIX,
+        ));
     }
 }

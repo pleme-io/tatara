@@ -2,6 +2,87 @@ use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, LispError>;
 
+// Compile-time pairwise-distinctness witnesses — one `const _: () =
+// crate::ast::assert_str_array_pairwise_distinct(&…)` per family-wide
+// `[&'static str; N]` array on this module's closed-set diagnostic /
+// classification algebras. Each invocation is const-evaluated at
+// `cargo check` time; a regression that silently collides two entries
+// on any of these arrays fails the build rather than the test suite.
+//
+// Sibling to the runtime `_pairwise_distinct` tests (`compiler_spec_
+// io_stage_labels_pairwise_distinct`, `macro_def_head_keywords_
+// pairwise_distinct`, `unquote_form_markers_pairwise_distinct`,
+// `unquote_form_iac_forge_tags_pairwise_distinct`,
+// `unquote_form_labels_pairwise_distinct`, `kwarg_path_kind_labels_
+// pairwise_distinct`, `expected_kwarg_shape_labels_pairwise_distinct`,
+// `sexp_shape_labels_pairwise_distinct`,
+// `structural_kind_labels_pairwise_distinct`) plus the runtime cross-
+// check `assert_str_array_pairwise_distinct_accepts_every_family_
+// wide_error_module_array` on this module's tests submodule — the
+// three surfaces enforce the SAME theorem at THREE stages of the
+// toolchain (compile-time `const _` sweep, per-array runtime pin,
+// runtime cross-check), so a build that skips tests still catches
+// the regression here, and a build that runs tests catches it a
+// second and third time as safety nets if the const-eval sweep is
+// ever silently dropped.
+//
+// Column-dual peer to the FIVE `assert_str_array_pairwise_distinct`
+// witnesses on `ast.rs`'s closed-set outer algebras
+// (`Atom::BOOL_LITERALS`, `AtomKind::LABELS`, `QuoteForm::PREFIXES`,
+// `QuoteForm::IAC_FORGE_TAGS`, `QuoteForm::LABELS`) on the
+// (declaration-file) axis: `ast.rs` covers the reader / atomic-
+// payload / quote-family vocabulary; `error.rs` covers the
+// diagnostic / classification / typed-entry-rejection vocabulary
+// across NINE closed-set algebras (`CompilerSpecIoStage`,
+// `TemplateInvariantKind` (STATIC + DYNAMIC subsets),
+// `MacroDefHead`, `OptionalParamMalformedReason` (STATIC + DYNAMIC
+// subsets), `UnquoteForm` (three per-role vocabularies —
+// MARKERS / IAC_FORGE_TAGS / LABELS), `KwargPathKind`,
+// `ExpectedKwargShape`, `SexpShape`, `StructuralKind`) — the two
+// files together lift ALL EIGHTEEN family-wide `[&'static str; N]`
+// arrays declared on `tatara-lisp`'s closed-set outer algebras into
+// a COMPILE-TIME pairwise-distinctness theorem.
+//
+// `CompilerSpecIoStage::OPERATIONS` (`[&'static str; 4]` at
+// line 1744) is DELIBERATELY excluded from this block: it is a
+// variant-aligned projection whose four entries are
+// `[REALIZE_TO_DISK, REALIZE_TO_DISK, LOAD_FROM_DISK, LOAD_FROM_DISK]`
+// (the first two arms and the last two arms collapse onto the
+// per-operation labels), so the array is INTENTIONALLY non-distinct.
+// Enrolling it in this block would fail const-eval; the intended
+// invariant on `OPERATIONS` is "variant-index alignment with
+// `CompilerSpecIoStage::ALL`", not injectivity — different theorem,
+// different helper.
+//
+// Adding a new family-wide `[&'static str; N]` array to this module:
+// add ONE co-located `const _: () = crate::ast::assert_str_array_
+// pairwise_distinct(&<TYPE>::<ARRAY>);` line in this block AND ONE
+// runtime call in the cross-check test on the tests submodule. A
+// regression that silently collided two entries on the new array
+// would fail `cargo check` at the module-level `const _` line
+// before the test suite runs. Rustc's forced-arity `[&'static str;
+// N]` composes with this const-eval sweep so BOTH cardinality AND
+// injectivity are compile-time theorems on the SAME array
+// declaration.
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&CompilerSpecIoStage::LABELS);
+const _: () =
+    crate::ast::assert_str_array_pairwise_distinct(&TemplateInvariantKind::STATIC_MESSAGES);
+const _: () =
+    crate::ast::assert_str_array_pairwise_distinct(&TemplateInvariantKind::DYNAMIC_DESCRIPTORS);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&MacroDefHead::KEYWORDS);
+const _: () =
+    crate::ast::assert_str_array_pairwise_distinct(&OptionalParamMalformedReason::STATIC_LABELS);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(
+    &OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS,
+);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&UnquoteForm::MARKERS);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&UnquoteForm::IAC_FORGE_TAGS);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&UnquoteForm::LABELS);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&KwargPathKind::LABELS);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&ExpectedKwargShape::LABELS);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&SexpShape::LABELS);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&StructuralKind::LABELS);
+
 #[derive(Debug, Error)]
 pub enum LispError {
     #[error("unexpected character {0:?} at position {1}")]
@@ -8255,8 +8336,8 @@ mod tests {
         rest_param_trailing_tokens_suffix, unknown_among_suffix, unknown_domain_keyword_suffix,
         unknown_kwarg_suffix, CompilerSpecIoStage, ExpectedKwargShape, KwargPath, KwargPathKind,
         LispError, MacroDefHead, OptionalParamMalformedReason, SexpShape, SexpWitness,
-        StructuralKind, UnknownExpectedKwargShape, UnknownKwargPathKind, UnknownMacroDefHead,
-        UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
+        StructuralKind, TemplateInvariantKind, UnknownExpectedKwargShape, UnknownKwargPathKind,
+        UnknownMacroDefHead, UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
     };
 
     #[test]
@@ -20507,5 +20588,83 @@ mod tests {
             SexpShape::ALL.len(),
             "SexpShape::prefix's image + kernel must partition SexpShape::ALL exactly",
         );
+    }
+
+    /// Runtime cross-check for the 13 module-level `const _: () =
+    /// crate::ast::assert_str_array_pairwise_distinct(&…)` witnesses
+    /// declared at the top of `error.rs`. Runs the same const-fn
+    /// helper on every family-wide `[&'static str; N]` array on this
+    /// module's closed-set diagnostic / classification algebras at
+    /// `cargo test` time — the runtime path pairs the compile-time
+    /// path so a build that runs tests catches the regression a
+    /// second time as a safety net if the const-eval sweep is ever
+    /// silently dropped.
+    ///
+    /// Sibling to
+    /// `assert_str_array_pairwise_distinct_accepts_every_family_
+    /// wide_substrate_array` on `ast.rs`'s tests module — that
+    /// pair covers the FIVE family-wide `[&'static str; N]` arrays
+    /// on `ast.rs`'s closed-set outer algebras (`Atom::BOOL_LITERALS`,
+    /// `AtomKind::LABELS`, `QuoteForm::PREFIXES`,
+    /// `QuoteForm::IAC_FORGE_TAGS`, `QuoteForm::LABELS`); this test
+    /// covers the THIRTEEN peer arrays on `error.rs`'s closed-set
+    /// diagnostic / classification algebras. Together the two tests
+    /// runtime-verify every ONE of the workspace-wide EIGHTEEN
+    /// pairwise-distinct family-wide `[&'static str; N]` arrays
+    /// through the SAME `assert_str_array_pairwise_distinct` const-
+    /// fn primitive.
+    ///
+    /// `CompilerSpecIoStage::OPERATIONS` (`[&'static str; 4]`) is
+    /// intentionally omitted — it is a variant-aligned projection
+    /// with two-fold duplicated entries (`[REALIZE_TO_DISK,
+    /// REALIZE_TO_DISK, LOAD_FROM_DISK, LOAD_FROM_DISK]`), so
+    /// enrolling it here would panic; the intended invariant on
+    /// `OPERATIONS` is "variant-index alignment with
+    /// `CompilerSpecIoStage::ALL`", a distinct theorem covered by
+    /// its own tests.
+    #[test]
+    fn assert_str_array_pairwise_distinct_accepts_every_family_wide_error_module_array() {
+        use crate::ast::assert_str_array_pairwise_distinct;
+        assert_str_array_pairwise_distinct(&CompilerSpecIoStage::LABELS);
+        assert_str_array_pairwise_distinct(&TemplateInvariantKind::STATIC_MESSAGES);
+        assert_str_array_pairwise_distinct(&TemplateInvariantKind::DYNAMIC_DESCRIPTORS);
+        assert_str_array_pairwise_distinct(&MacroDefHead::KEYWORDS);
+        assert_str_array_pairwise_distinct(&OptionalParamMalformedReason::STATIC_LABELS);
+        assert_str_array_pairwise_distinct(&OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS);
+        assert_str_array_pairwise_distinct(&UnquoteForm::MARKERS);
+        assert_str_array_pairwise_distinct(&UnquoteForm::IAC_FORGE_TAGS);
+        assert_str_array_pairwise_distinct(&UnquoteForm::LABELS);
+        assert_str_array_pairwise_distinct(&KwargPathKind::LABELS);
+        assert_str_array_pairwise_distinct(&ExpectedKwargShape::LABELS);
+        assert_str_array_pairwise_distinct(&SexpShape::LABELS);
+        assert_str_array_pairwise_distinct(&StructuralKind::LABELS);
+    }
+
+    /// Confirm `CompilerSpecIoStage::OPERATIONS` — the ONE family-
+    /// wide `[&'static str; N]` array on this module that is
+    /// DELIBERATELY excluded from the compile-time pairwise-
+    /// distinctness witness block above — panics on the same helper
+    /// (`crate::ast::assert_str_array_pairwise_distinct`) at
+    /// runtime. Two positional pairs collide byte-for-byte on this
+    /// array by design: positions 0+1 (both
+    /// `Self::REALIZE_TO_DISK_OPERATION` = `"realize_to_disk"`) AND
+    /// positions 2+3 (both `Self::LOAD_FROM_DISK_OPERATION` =
+    /// `"load_from_disk"`), and the array's intended invariant is
+    /// variant-index alignment with `Self::ALL`, not injectivity.
+    ///
+    /// This test doubles as a documented boundary marker — if a
+    /// future refactor DID sharpen `OPERATIONS` to a distinct set
+    /// (e.g. by carving the two-per-operation collapse into a
+    /// separate `[&'static str; 2]` array), enrolling the sharpened
+    /// array in the `const _` block above would then be legal, and
+    /// this test would need updating to match. Pinning the "is
+    /// intentionally non-distinct" property here surfaces that
+    /// refactor at test time rather than leaving it as a silent
+    /// module-level tribal-knowledge assumption.
+    #[test]
+    #[should_panic(expected = "assert_str_array_pairwise_distinct")]
+    fn assert_str_array_pairwise_distinct_panics_on_compiler_spec_io_stage_operations() {
+        use crate::ast::assert_str_array_pairwise_distinct;
+        assert_str_array_pairwise_distinct(&CompilerSpecIoStage::OPERATIONS);
     }
 }

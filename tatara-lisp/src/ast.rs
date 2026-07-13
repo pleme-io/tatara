@@ -2242,6 +2242,213 @@ pub const fn assert_char_pair_array_pairwise_distinct<const N: usize>(arr: &[(ch
 const _: () = assert_char_pair_array_pairwise_distinct(&Atom::NAMED_ESCAPE_TABLE);
 const _: () = assert_char_pair_array_pairwise_distinct(&Atom::ESCAPE_TABLE);
 
+/// Compile-time contract verifier — panics at const evaluation time
+/// if either column-projection of the family-wide `[(char, char); N]`
+/// paired substrate array `pairs` diverges byte-for-byte from its
+/// declared peer scalar `[char; N]` array. Binds a JOINT
+/// (LEFT_col == left) ∧ (RIGHT_col == right) POSITIONWISE-EQUALITY
+/// contract at ONE `const _` line on the (char, char) product-element
+/// row of the (element-type × contract-shape) matrix at the
+/// (column-projection-equality) column — a NEW column opened past the
+/// (INJECTIVITY, SUBSET-EMBEDDING, DISJOINTNESS) triple the four
+/// sibling helpers close ([`assert_char_pair_array_bijective`] +
+/// [`assert_char_pair_array_pairwise_distinct`] on INJECTIVITY,
+/// [`assert_char_pair_array_within_char_pair_finite_set`] on SUBSET-
+/// EMBEDDING, [`assert_char_pair_arrays_disjoint`] on DISJOINTNESS).
+///
+/// Rust's forced `[T; N]` cardinality composes with the const-eval
+/// sweep to pin THREE clauses at ONE `const _` line:
+///   1. ARITY: `pairs.len() == left.len() == right.len() == N` — a
+///      regression that drifts EITHER peer scalar array's arity away
+///      from the paired array's `N` fails-loudly at type-check time
+///      (before const eval), so the two clauses BELOW walk a
+///      length-parallel sweep unconditionally.
+///   2. LEFT-COLUMN-EQUALITY: `pairs[i].0 == left[i]` for every
+///      `i ∈ 0..N` — a regression that drifts ONE paired-table LEFT
+///      entry away from the peer scalar SOURCE array (e.g. renames
+///      `NEWLINE_ESCAPE_SOURCE` to `LINEFEED_ESCAPE_SOURCE` and
+///      updates ONLY the pair entry without updating the scalar
+///      declaration, OR vice versa) fails-loudly at const eval.
+///   3. RIGHT-COLUMN-EQUALITY: `pairs[i].1 == right[i]` for every
+///      `i ∈ 0..N` — same posture on the RIGHT / DECODED column.
+///
+/// Currently applied to the (`ESCAPE_TABLE`, `ESCAPE_SOURCES`,
+/// `ESCAPE_DECODED`) triple where the paired array is CONSTRUCTED
+/// from `NAMED_ESCAPE_TABLE` + `SELF_ESCAPE_TABLE` (see
+/// [`Atom::ESCAPE_TABLE`]'s definition) and the two peer scalar
+/// arrays are DECLARED INDEPENDENTLY as
+/// [`Atom::ESCAPE_SOURCES`](Atom::ESCAPE_SOURCES) +
+/// [`Atom::ESCAPE_DECODED`](Atom::ESCAPE_DECODED). Pre-lift the
+/// three-way column bond ("`ESCAPE_TABLE`'s LEFT column IS
+/// `ESCAPE_SOURCES` AND RIGHT column IS `ESCAPE_DECODED`") lived
+/// as PROSE in the peer arrays' docstrings ("the SPAN of the two
+/// peer sub-vocabulary source columns") plus as a runtime test that
+/// zipped the three arrays; post-lift the bond binds at `cargo
+/// check` time — a regression that renames a source or decoded byte
+/// on ONE of the three arrays without updating the other two fails
+/// the build rather than the test suite. The const-eval panic
+/// surfaces the column-divergence at COMPILE time, one invocation
+/// stage earlier, catching regressions on `cargo build` /
+/// `cargo clippy` runs that skip the test suite.
+///
+/// Contract-shape peer to the four sibling paired-array verifiers
+/// on the (char, char) row: where the sibling
+/// [`assert_char_pair_array_bijective`] closes the INJECTIVITY axis
+/// (LEFT-column ∧ RIGHT-column pairwise-distinct, INDEPENDENTLY),
+/// [`assert_char_pair_array_pairwise_distinct`] closes the WEAKER
+/// CONJOINED-tuple INJECTIVITY axis, [`assert_char_pair_array_
+/// within_char_pair_finite_set`] closes the SUBSET-EMBEDDING axis,
+/// and [`assert_char_pair_arrays_disjoint`] closes the DISJOINTNESS
+/// axis, THIS helper opens the fifth (column-projection-EQUALITY)
+/// axis — the (LEFT column == left) ∧ (RIGHT column == right) JOINT
+/// clause that bonds a paired vocabulary to TWO peer scalar
+/// vocabularies. Compound-JOINT posture parallels the pre-existing
+/// [`assert_scalar_plus_two_u8_arrays_permute_inclusive_range`] on
+/// the (u8) row (three-array joint contract at one witness line);
+/// unlike the permutation posture there, this helper's joint
+/// contract is POSITIONWISE-EQUALITY (order-sensitive) rather than
+/// set-EQUALITY.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP
+/// tokenizer that constructs a paired escape table + two peer
+/// scalar columns at runtime and wants to verify column-projection
+/// equality before consuming them — and the two panic sites (LEFT-
+/// column divergence, RIGHT-column divergence) surface normally in
+/// that path with column-provenance-preserving panic messages
+/// (pinned by the two `_panics_at_runtime_on_left_head_divergence`
+/// and `_panics_at_runtime_on_right_head_divergence` tests plus
+/// their middle-position and tail-position peers). The two axis-
+/// provenance strings `"LEFT-COLUMN-DIVERGENCE"` and
+/// `"RIGHT-COLUMN-DIVERGENCE"` are chosen DISTINCT from every
+/// sibling helper's axis vocabulary (`"LEFT column"` and
+/// `"RIGHT column"` on the paired-array BIJECTIVITY sibling name the
+/// COLUMN but the failure MODE is `duplicate SOURCE / DECODED char`;
+/// this helper's failure MODE is `divergence from peer scalar
+/// array`) so a diagnostic that names the failed axis routes
+/// UNAMBIGUOUSLY to (a) this specific paired-array COLUMN-
+/// PROJECTION-EQUALITY helper, (b) the failed COLUMN by the
+/// `"LEFT-"` and `"RIGHT-"` prefix.
+///
+/// Adding a new family-wide `[(char, char); N]` paired array
+/// declared alongside TWO peer scalar `[char; N]` arrays whose
+/// LEFT + RIGHT columns are meant to project to the peer arrays'
+/// contents: pair the declarations with `const _: () =
+/// assert_char_pair_array_columns_equal_char_arrays(&Self::FOO_
+/// TABLE, &Self::FOO_LEFT, &Self::FOO_RIGHT);` and the three-way
+/// column bond binds at compile time WITHOUT a runtime zip loop.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the three-way column bond
+///   on the paired-array + peer-scalar-columns vocabulary becomes
+///   a TYPE-LEVEL theorem the substrate carries per declaration
+///   triple rather than a runtime zip loop the developer must
+///   remember to write per triple.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+///   the column-projection-equality proof at declaration site AND
+///   the peer-array outer-dispatch consumers regenerate through
+///   the SAME `const _` witness.
+/// - THEORY.md §VI.1 — generation over composition; the two-column
+///   positionwise-equality sweep IS the generative shape. Every
+///   new closed-set paired-array declared alongside peer scalar
+///   columns adds ONE `const _` line to get the three-way bond
+///   theorem rather than re-deriving a runtime zip loop per triple.
+pub const fn assert_char_pair_array_columns_equal_char_arrays<const N: usize>(
+    pairs: &[(char, char); N],
+    left: &[char; N],
+    right: &[char; N],
+) {
+    let mut i = 0;
+    while i < N {
+        if pairs[i].0 as u32 != left[i] as u32 {
+            panic!(
+                "assert_char_pair_array_columns_equal_char_arrays: \
+                 LEFT-COLUMN-DIVERGENCE — family-wide `[(char, \
+                 char); N]` paired substrate array's LEFT column \
+                 projection carries an entry at some position that \
+                 does NOT byte-for-byte equal the peer scalar \
+                 `[char; N]` array's entry at the SAME position. \
+                 The substrate's LEFT-column POSITIONWISE-EQUALITY \
+                 contract on the (paired, peer-scalar) column-\
+                 projection bond is broken; every consumer that \
+                 reads the paired array's LEFT column and the peer \
+                 scalar SOURCE array as INTERCHANGEABLE (any \
+                 outer-tokenizer `Sexp` dispatch that pattern-\
+                 matches on `Atom::ESCAPE_SOURCES` while a peer \
+                 attestation code path reads `Atom::ESCAPE_TABLE`'s \
+                 LEFT column, any future `[char; N]` peer-column \
+                 dual projection that assumes the two are equal at \
+                 every position) relies on this invariant. Fix at \
+                 one of the THREE declaration sites (`pairs`, \
+                 `left`, or the peer scalar RIGHT column's \
+                 declaration if the drift is a cross-column rename) \
+                 by reconciling the entry across the three arrays. \
+                 The LEFT-column-divergence gate distinguishes THIS \
+                 helper from the sibling `assert_char_pair_array_\
+                 bijective` (which surfaces LEFT-column DUPLICATE-\
+                 SOURCE failures, not LEFT-column-vs-peer-scalar \
+                 DIVERGENCE failures) and from the sibling `assert_\
+                 char_pair_array_within_char_pair_finite_set` \
+                 (which surfaces CONJOINED-tuple SUBSET-VIOLATION \
+                 failures, not per-column POSITIONWISE-EQUALITY \
+                 failures)"
+            );
+        }
+        if pairs[i].1 as u32 != right[i] as u32 {
+            panic!(
+                "assert_char_pair_array_columns_equal_char_arrays: \
+                 RIGHT-COLUMN-DIVERGENCE — family-wide `[(char, \
+                 char); N]` paired substrate array's RIGHT column \
+                 projection carries an entry at some position that \
+                 does NOT byte-for-byte equal the peer scalar \
+                 `[char; N]` array's entry at the SAME position. \
+                 The substrate's RIGHT-column POSITIONWISE-EQUALITY \
+                 contract on the (paired, peer-scalar) column-\
+                 projection bond is broken; every consumer that \
+                 reads the paired array's RIGHT column and the peer \
+                 scalar DECODED array as INTERCHANGEABLE (any \
+                 outer-tokenizer `Sexp` dispatch that pattern-\
+                 matches on `Atom::ESCAPE_DECODED` while a peer \
+                 attestation code path reads `Atom::ESCAPE_TABLE`'s \
+                 RIGHT column, any future `[char; N]` peer-column \
+                 dual projection that assumes the two are equal at \
+                 every position) relies on this invariant. Fix at \
+                 one of the THREE declaration sites (`pairs`, \
+                 `right`, or the peer scalar LEFT column's \
+                 declaration if the drift is a cross-column rename) \
+                 by reconciling the entry across the three arrays"
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time column-projection-EQUALITY witness — one `const _: ()
+// = assert_char_pair_array_columns_equal_char_arrays(&…, &…, &…)`
+// binding the (ESCAPE_TABLE, ESCAPE_SOURCES, ESCAPE_DECODED) three-
+// way column bond on the substrate's Str-payload escape-table
+// vocabulary. `Atom::ESCAPE_TABLE` (`[(char, char); 5]`) is
+// CONSTRUCTED from `NAMED_ESCAPE_TABLE[0..=2]` + two SELF-diagonal
+// pairs `(SELF_ESCAPE_TABLE[0], SELF_ESCAPE_TABLE[0])` +
+// `(SELF_ESCAPE_TABLE[1], SELF_ESCAPE_TABLE[1])`, whose LEFT +
+// RIGHT column projections match `Atom::ESCAPE_SOURCES` +
+// `Atom::ESCAPE_DECODED` position-for-position by declaration
+// intent — this const-eval witness binds that intent as a compile-
+// time theorem so a regression that renames a source or decoded
+// byte on ONE of the three arrays without updating the other two
+// fails the build. Sibling to the `_pairwise_distinct` + `_bijective`
+// witnesses above on the SAME paired array — the FOUR const-eval
+// sweeps enforce complementary axes of the same substrate table at
+// FOUR stages of the toolchain, so a build that skips tests still
+// catches column-projection drift here, and a build that runs tests
+// catches it a second time as a safety net if the const-eval sweep
+// is ever silently dropped.
+const _: () = assert_char_pair_array_columns_equal_char_arrays(
+    &Atom::ESCAPE_TABLE,
+    &Atom::ESCAPE_SOURCES,
+    &Atom::ESCAPE_DECODED,
+);
+
 /// Compile-time contract verifier — panics at const evaluation time if
 /// the distinct-values set of `arr` does not equal exactly the inclusive
 /// range `{LO..=HI}` on the substrate's `u8` cache-key vocabulary. Binds
@@ -32752,6 +32959,265 @@ mod tests {
              {msg:?} must name the failed AXIS (\"CHAR-PAIR-TUPLE-\
              COLLISION\") for axis-provenance-preserving failure \
              diagnostics",
+        );
+    }
+
+    // ── `assert_char_pair_array_columns_equal_char_arrays` — the
+    // `(char, char)` product-element COLUMN-PROJECTION-EQUALITY
+    // verifier that binds a JOINT (LEFT_col == left) ∧ (RIGHT_col ==
+    // right) POSITIONWISE-EQUALITY contract at compile time on the
+    // (paired-array, peer-scalar-LEFT, peer-scalar-RIGHT) three-way
+    // column bond. Opens the (column-projection-equality) column on
+    // the (char, char) row of the (element-type × contract-shape)
+    // matrix past the pre-existing (INJECTIVITY, SUBSET-EMBEDDING,
+    // DISJOINTNESS) triple. Runtime test surface pins each of the
+    // helper's arms (accept-empty, accept-singleton-equal, accept-
+    // multi-element-equal, accept-family-wide-substrate-triple on
+    // the pinned (`ESCAPE_TABLE`, `ESCAPE_SOURCES`, `ESCAPE_DECODED`)
+    // triple, reject-LEFT-divergence at head / middle / tail, reject-
+    // RIGHT-divergence at head / middle / tail, panic-message-
+    // provenance on BOTH the LEFT-COLUMN-DIVERGENCE and RIGHT-
+    // COLUMN-DIVERGENCE axes) so a regression that silently weakened
+    // the helper on ANY arm is caught by the helper's OWN test
+    // surface rather than only surfacing as a false-positive on some
+    // future column-bonded `[(char, char); N]` array's compound pin.
+
+    #[test]
+    fn assert_char_pair_array_columns_equal_char_arrays_accepts_the_empty_triple() {
+        // Empty arrays `pairs = []`, `left = []`, `right = []` at
+        // the `[(char, char); 0]` + two `[char; 0]` corner —
+        // vacuously column-equal (no `i` position exists to test).
+        // Pins the outer `while i < N` guard's short-circuit on
+        // `N == 0`. Turbofish binding required because there's no
+        // other cue for the const parameter on the three empty
+        // array literals.
+        assert_char_pair_array_columns_equal_char_arrays::<0>(&[], &[], &[]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_equal_char_arrays_accepts_a_singleton_triple() {
+        // Singleton triple `pairs = [('a', 'x')]`, `left = ['a']`,
+        // `right = ['x']` — the smallest non-trivial well-formed
+        // case. Both column-projections match position-for-position.
+        assert_char_pair_array_columns_equal_char_arrays(&[('a', 'x')], &['a'], &['x']);
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_equal_char_arrays_accepts_a_multi_element_triple() {
+        // Three-element triple with three BYTE-FOR-BYTE-EQUAL
+        // column projections — pins the inner loop's `i += 1`
+        // advancement and the sweep's coverage of BOTH clauses at
+        // EACH position (a regression that returned early after
+        // position 0 would silently accept a mismatch at position
+        // 1 or 2).
+        assert_char_pair_array_columns_equal_char_arrays(
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+            &['a', 'b', 'c'],
+            &['x', 'y', 'z'],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_equal_char_arrays_accepts_the_family_wide_substrate_triple() {
+        // Positive pin on the family-wide (`ESCAPE_TABLE`,
+        // `ESCAPE_SOURCES`, `ESCAPE_DECODED`) triple this helper is
+        // applied to at compile time via the module-level `const _:`
+        // witness. Runtime pin as a second-stage safety net if the
+        // const-eval sweep is ever silently dropped. Sibling posture
+        // to the `_bijective` + `_pairwise_distinct` family-wide pins
+        // on the same paired array — the three pins bind
+        // complementary axes of the same substrate table.
+        assert_char_pair_array_columns_equal_char_arrays(
+            &Atom::ESCAPE_TABLE,
+            &Atom::ESCAPE_SOURCES,
+            &Atom::ESCAPE_DECODED,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_equal_char_arrays")]
+    fn assert_char_pair_array_columns_equal_char_arrays_panics_at_runtime_on_left_head_divergence()
+    {
+        // NEGATIVE PIN — LEFT-column head-position (i == 0) corner:
+        // `pairs[0].0 = 'a'` diverges from `left[0] = 'z'` on the
+        // FIRST position. Pins the LEFT arm firing at the head — a
+        // regression that started the sweep at `i = 1` would
+        // silently accept a head-position divergence.
+        assert_char_pair_array_columns_equal_char_arrays(
+            &[('a', 'x'), ('b', 'y')],
+            &['z', 'b'],
+            &['x', 'y'],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_equal_char_arrays")]
+    fn assert_char_pair_array_columns_equal_char_arrays_panics_at_runtime_on_left_middle_divergence(
+    ) {
+        // NEGATIVE PIN — LEFT-column middle-position (i == 1)
+        // corner: divergence fires on ANY interior position, not
+        // just the head. Pins the loop-shape of the LEFT arm — a
+        // regression that walked ONLY the head would silently
+        // accept the middle-position divergence at position 1.
+        assert_char_pair_array_columns_equal_char_arrays(
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+            &['a', 'q', 'c'],
+            &['x', 'y', 'z'],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_equal_char_arrays")]
+    fn assert_char_pair_array_columns_equal_char_arrays_panics_at_runtime_on_left_tail_divergence()
+    {
+        // NEGATIVE PIN — LEFT-column tail-position (i == N-1)
+        // corner: divergence at the LAST position MUST also fire.
+        // Pins the outer `while i < N` bound — a regression that
+        // walked `while i < N - 1` (dropping the last row) would
+        // silently accept a tail LEFT-column divergence.
+        assert_char_pair_array_columns_equal_char_arrays(
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+            &['a', 'b', 'q'],
+            &['x', 'y', 'z'],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_equal_char_arrays")]
+    fn assert_char_pair_array_columns_equal_char_arrays_panics_at_runtime_on_right_head_divergence()
+    {
+        // NEGATIVE PIN — RIGHT-column head-position (i == 0) corner:
+        // symmetric to the LEFT arm at the head — pins the RIGHT
+        // arm firing at position 0 with the LEFT arm satisfied.
+        assert_char_pair_array_columns_equal_char_arrays(
+            &[('a', 'x'), ('b', 'y')],
+            &['a', 'b'],
+            &['q', 'y'],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_equal_char_arrays")]
+    fn assert_char_pair_array_columns_equal_char_arrays_panics_at_runtime_on_right_middle_divergence(
+    ) {
+        // NEGATIVE PIN — RIGHT-column middle-position (i == 1)
+        // corner: symmetric to the LEFT-middle arm — pins the
+        // RIGHT arm firing at an interior position with the LEFT
+        // arm satisfied at every position.
+        assert_char_pair_array_columns_equal_char_arrays(
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+            &['a', 'b', 'c'],
+            &['x', 'q', 'z'],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_equal_char_arrays")]
+    fn assert_char_pair_array_columns_equal_char_arrays_panics_at_runtime_on_right_tail_divergence()
+    {
+        // NEGATIVE PIN — RIGHT-column tail-position (i == N-1)
+        // corner: symmetric to the LEFT-tail arm — pins the outer
+        // sweep bound on the RIGHT arm with the LEFT arm satisfied.
+        assert_char_pair_array_columns_equal_char_arrays(
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+            &['a', 'b', 'c'],
+            &['x', 'y', 'q'],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_equal_char_arrays_panic_message_names_the_helper_and_left_column_divergence_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — LEFT-COLUMN-DIVERGENCE
+        // arm: the panic message MUST begin with the helper's own
+        // name AND identify the failed AXIS as "LEFT-COLUMN-
+        // DIVERGENCE" so downstream diagnostics route the drift
+        // back to (a) the helper by string search on
+        // `"assert_char_pair_array_columns_equal_char_arrays"` and
+        // (b) the axis by string search on
+        // `"LEFT-COLUMN-DIVERGENCE"`. The axis-provenance string
+        // is chosen DISTINCT from every sibling helper's axis
+        // vocabulary — a diagnostic that names the failed axis
+        // routes UNAMBIGUOUSLY to this specific paired-array
+        // COLUMN-PROJECTION-EQUALITY helper's LEFT arm.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_columns_equal_char_arrays(
+                &[('a', 'x'), ('b', 'y')],
+                &['z', 'b'],
+                &['x', 'y'],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_columns_equal_char_arrays must \
+             panic on a LEFT-column POSITIONWISE-EQUALITY divergence",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_columns_equal_char_arrays \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_pair_array_columns_equal_char_arrays"),
+            "assert_char_pair_array_columns_equal_char_arrays panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("LEFT-COLUMN-DIVERGENCE"),
+            "assert_char_pair_array_columns_equal_char_arrays panic \
+             message {msg:?} must name the failed AXIS (\"LEFT-\
+             COLUMN-DIVERGENCE\") for axis-provenance-preserving \
+             failure diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_equal_char_arrays_panic_message_names_the_helper_and_right_column_divergence_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — RIGHT-COLUMN-DIVERGENCE
+        // arm: symmetric to the LEFT-column-divergence provenance
+        // pin. The panic message MUST begin with the helper's own
+        // name AND identify the failed AXIS as "RIGHT-COLUMN-
+        // DIVERGENCE" — the two axis-provenance strings
+        // (`"LEFT-COLUMN-DIVERGENCE"` + `"RIGHT-COLUMN-DIVERGENCE"`)
+        // partition the helper's failure modes into TWO disjoint
+        // arms so a diagnostic that names the axis routes
+        // UNAMBIGUOUSLY to the specific COLUMN that diverged.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_columns_equal_char_arrays(
+                &[('a', 'x'), ('b', 'y')],
+                &['a', 'b'],
+                &['q', 'y'],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_columns_equal_char_arrays must \
+             panic on a RIGHT-column POSITIONWISE-EQUALITY \
+             divergence",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_columns_equal_char_arrays \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_pair_array_columns_equal_char_arrays"),
+            "assert_char_pair_array_columns_equal_char_arrays panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("RIGHT-COLUMN-DIVERGENCE"),
+            "assert_char_pair_array_columns_equal_char_arrays panic \
+             message {msg:?} must name the failed AXIS (\"RIGHT-\
+             COLUMN-DIVERGENCE\") for axis-provenance-preserving \
+             failure diagnostics",
         );
     }
 

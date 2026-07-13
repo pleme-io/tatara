@@ -562,21 +562,57 @@ pub const fn assert_char_arrays_disjoint<const N: usize, const M: usize>(
 // array runtime pins peer to pairs 1–5; the implicit disjointness
 // arms of `NON_WHITESPACE_BARE_ATOM_TERMINATORS`'s four-category
 // composition rule between LIST_DELIMITERS + LEADS + {STR_DELIMITER,
-// COMMENT_LEAD}); post-lift the ARRAY-LEVEL disjointness of the five
+// COMMENT_LEAD}); post-lift the ARRAY-LEVEL disjointness of the six
 // pinned pairs binds at rustc time via one `const _` line per pair.
-// A regression that silently drifted one of the six arm-set-leading
+// A regression that silently drifted one of the eight arm-set-leading
 // chars into another arm (e.g. `Sexp::LIST_OPEN` to `';'`, colliding
 // with `Sexp::COMMENT_LEAD`; `QuoteForm::QUOTE_LEAD` to `'('`,
-// colliding with `Sexp::LIST_OPEN`) fails at `cargo check` BEFORE any
-// test scheduler runs. Sibling to the pairwise-distinctness witnesses
-// above — those pin INJECTIVITY on each individual array, these pin
-// DISJOINTNESS across PAIRS of arrays.
+// colliding with `Sexp::LIST_OPEN`; `Atom::STR_DELIMITER` to `';'`,
+// colliding with `Sexp::COMMENT_LEAD`; `Atom::STR_ESCAPE_LEAD` to
+// `'\n'`, colliding with `Sexp::COMMENT_TERM`) fails at `cargo check`
+// BEFORE any test scheduler runs. Sibling to the pairwise-distinctness
+// witnesses above — those pin INJECTIVITY on each individual array,
+// these pin DISJOINTNESS across PAIRS of arrays.
+//
+// The six pinned pairs jointly close the C(4, 2) = 6 pairwise-
+// disjoint face on the four-array reader-boundary set
+// `{Sexp::LIST_DELIMITERS, Sexp::COMMENT_DELIMITERS, QuoteForm::LEADS,
+// Atom::SELF_ESCAPE_TABLE}` EXHAUSTIVELY — the same closure shape as
+// the three-way `SexpShape::LABELS` partition proof in `error.rs`
+// (which pins C(3, 2) = 3 pairs on the `AtomKind::LABELS`,
+// `QuoteForm::LABELS`, `StructuralKind::LABELS` sub-vocabulary triple)
+// scaled up to the four-array reader-boundary partition. Composed
+// with the six ARRAY-side pairwise-distinctness `const _:` witnesses
+// above, the substrate carries a full DISJOINT-UNION theorem on the
+// reader-boundary partition
+//   `LIST_DELIMITERS ⊕ COMMENT_DELIMITERS ⊕ QuoteForm::LEADS ⊕
+//    Atom::SELF_ESCAPE_TABLE`
+// (with cardinality 2 + 2 + 3 + 2 = 9) as a rustc-time proof
+// obligation, closing the eight-arm reader-boundary vocabulary
+// partition at compile time.
 const _: () =
     assert_char_arrays_disjoint::<2, 2>(&Sexp::LIST_DELIMITERS, &Sexp::COMMENT_DELIMITERS);
 const _: () = assert_char_arrays_disjoint::<2, 3>(&Sexp::LIST_DELIMITERS, &QuoteForm::LEADS);
 const _: () = assert_char_arrays_disjoint::<2, 3>(&Sexp::COMMENT_DELIMITERS, &QuoteForm::LEADS);
 const _: () = assert_char_arrays_disjoint::<2, 2>(&Sexp::LIST_DELIMITERS, &Atom::SELF_ESCAPE_TABLE);
 const _: () = assert_char_arrays_disjoint::<3, 2>(&QuoteForm::LEADS, &Atom::SELF_ESCAPE_TABLE);
+// The sixth (Sexp::COMMENT_DELIMITERS × Atom::SELF_ESCAPE_TABLE) pair
+// pins that the comment-boundary vocabulary `{COMMENT_LEAD (`;`),
+// COMMENT_TERM (`\n`)}` and the string self-escape vocabulary
+// `{STR_DELIMITER (`"`), STR_ESCAPE_LEAD (`\\`)}` remain byte-
+// disjoint. Load-bearing because a regression that renamed
+// `Sexp::COMMENT_LEAD` from `';'` to `'"'` would make `'"'` both a
+// string opener AND a comment starter (silently swallowing every
+// string literal into a comment run at the reader's outer dispatch
+// cascade), and a regression that renamed `Atom::STR_ESCAPE_LEAD`
+// from `'\\'` to `'\n'` would silently mis-terminate every string
+// literal at the first newline (drifting the reader-boundary
+// vocabulary into overlap with the comment-boundary vocabulary).
+// Closes the sixth (C, S) corner of the C(4, 2) = 6-pair
+// pairwise-disjoint face on the four-array reader-boundary set
+// EXHAUSTIVELY.
+const _: () =
+    assert_char_arrays_disjoint::<2, 2>(&Sexp::COMMENT_DELIMITERS, &Atom::SELF_ESCAPE_TABLE);
 
 /// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` alias byte-for-byte through

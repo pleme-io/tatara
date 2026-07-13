@@ -955,6 +955,20 @@ pub const fn assert_str_arrays_disjoint<const N: usize, const M: usize>(
 //   3. `QuoteForm::PREFIXES` ∩ `AtomKind::LABELS`          = ∅
 //   4. `AtomKind::LABELS`    ∩ `QuoteForm::LABELS`         = ∅
 //
+// The TWO remaining disjointness pairs on the twelve-arm
+// `SexpShape::LABELS` partition triple
+// (`AtomKind::LABELS`, `QuoteForm::LABELS`, `StructuralKind::LABELS`)
+// — namely (`AtomKind::LABELS`, `StructuralKind::LABELS`) and
+// (`QuoteForm::LABELS`, `StructuralKind::LABELS`) — are pinned as
+// peer `const _` lines in `error.rs` (the file where the
+// `StructuralKind` host type lives). Split by host-file, unified in
+// theorem: together with pair 4 above they cover every pair on the
+// three-element sub-vocabulary triple (C(3, 2) = 3), closing the
+// DISJOINT-UNION proof
+//   `SexpShape::LABELS ≡ AtomKind::LABELS ⊕ QuoteForm::LABELS ⊕
+//    StructuralKind::LABELS`
+// at compile time.
+//
 // Note on the intentionally-NOT-pinned pair
 // (`QuoteForm::LABELS`, `QuoteForm::IAC_FORGE_TAGS`): the two
 // deliberately OVERLAP on three of four arms (`"quote"`, `"quasiquote"`,

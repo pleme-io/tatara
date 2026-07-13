@@ -123,15 +123,24 @@ const _: () = crate::ast::assert_str_array_pairwise_distinct(&StructuralKind::LA
 //
 // Cardinality composition: 6 + 4 + 2 = 12 = `SexpShape::LABELS.len()`
 // closes a NON-CONTIGUOUS PARTITION of the outer twelve-arm
-// vocabulary at compile time when composed with the pre-existing
-// (`AtomKind::LABELS`, `QuoteForm::LABELS`) disjointness witness on
-// `ast.rs`. A future run should lift the remaining pairwise-
-// disjointness witnesses on the partition
-// (`(AtomKind::LABELS, StructuralKind::LABELS)`,
-// `(QuoteForm::LABELS, StructuralKind::LABELS)`) — with those in
-// place the partition proof is complete at compile time and
-// SexpShape::LABELS becomes provably-a-disjoint-union of the three
-// sub-vocabulary arrays.
+// vocabulary at compile time when composed with the THREE pairwise-
+// disjointness witnesses on the sub-vocabulary triple: one lives on
+// `ast.rs` at the (`AtomKind::LABELS`, `QuoteForm::LABELS`) pair (the
+// two sub-vocabularies whose HOST TYPES both live in `ast.rs`), the
+// two peers below at the two (`_, StructuralKind::LABELS`) pairs
+// (each with ONE sub-vocabulary hosted here in `error.rs`). Together
+// with the pre-existing pairwise-distinctness witnesses on each of
+// the four arrays, the three subset-embedding witnesses on the three
+// sub-vocabulary → superset pairs, AND the three pairwise-disjointness
+// witnesses on the three sub-vocabulary × sub-vocabulary pairs, the
+// substrate now carries a COMPLETE COMPILE-TIME PROOF that
+// `SexpShape::LABELS` is a DISJOINT UNION of the three sub-vocabulary
+// arrays — every rearrangement of the twelve outer-shape labels
+// across the four algebras is either (a) a legal partition rebalance
+// (which passes every witness) or (b) drift that breaks at least one
+// of INJECTIVITY / SUBSET-EMBEDDING / PAIRWISE-DISJOINTNESS on at
+// least one array or pair, failing `cargo check` before any test
+// scheduler runs.
 const _: () = crate::ast::assert_str_array_within_str_finite_set::<6, 12>(
     &crate::ast::AtomKind::LABELS,
     &SexpShape::LABELS,
@@ -143,6 +152,51 @@ const _: () = crate::ast::assert_str_array_within_str_finite_set::<4, 12>(
 const _: () = crate::ast::assert_str_array_within_str_finite_set::<2, 12>(
     &StructuralKind::LABELS,
     &SexpShape::LABELS,
+);
+
+// Compile-time DISJOINTNESS witnesses closing the twelve-arm
+// `SexpShape::LABELS` partition proof — the TWO remaining sub-
+// vocabulary × sub-vocabulary pairs on the partition triple
+// (`AtomKind::LABELS`, `QuoteForm::LABELS`, `StructuralKind::LABELS`)
+// whose two hosts split across `ast.rs` and `error.rs` (the third
+// pair `(AtomKind::LABELS, QuoteForm::LABELS)`, whose two hosts both
+// live in `ast.rs`, is pinned there). Pre-lift the two disjointness
+// relations lived only as prose in the outer partition-rule
+// docstring plus the runtime `sexp_shape_labels_are_disjoint_union`
+// cross-check; post-lift the ARRAY-LEVEL disjointness of the two
+// pinned pairs binds at rustc time via ONE `const _` line per pair.
+// A regression that silently renamed `StructuralKind::NIL_LABEL`
+// (`"nil"`) to `"symbol"` (aliasing `AtomKind::SYMBOL_LABEL`),
+// renamed `StructuralKind::LIST_LABEL` (`"list"`) to `"quote"`
+// (aliasing `QuoteForm::QUOTE_LABEL`), or drifted either entry of
+// `StructuralKind::LABELS` to bytes shared with an entry of the
+// atomic-kind or quote-family peer sub-vocabulary fails at
+// `cargo check` BEFORE any test scheduler runs. Sibling to the FOUR
+// `assert_str_arrays_disjoint` witnesses in `ast.rs`.
+//
+// The two pinned pairs are (all under the shared `&'static str`
+// element-type):
+//   1. `AtomKind::LABELS`  ∩ `StructuralKind::LABELS` = ∅
+//   2. `QuoteForm::LABELS` ∩ `StructuralKind::LABELS` = ∅
+//
+// Composed with the ast.rs-pinned
+// (`AtomKind::LABELS`, `QuoteForm::LABELS`) disjointness witness,
+// the THREE pairwise-disjointness witnesses cover every pair on the
+// three-element sub-vocabulary triple (C(3, 2) = 3 pairs). Together
+// with the three pairwise-distinctness INTRA-array witnesses AND the
+// three SUBSET-embedding witnesses above, the substrate now carries
+// the full DISJOINT-UNION theorem
+//   `SexpShape::LABELS ≡ AtomKind::LABELS ⊕ QuoteForm::LABELS ⊕
+//    StructuralKind::LABELS`
+// as a rustc-time proof obligation, closing the twelve-arm outer
+// vocabulary partition at compile time.
+const _: () = crate::ast::assert_str_arrays_disjoint::<6, 2>(
+    &crate::ast::AtomKind::LABELS,
+    &StructuralKind::LABELS,
+);
+const _: () = crate::ast::assert_str_arrays_disjoint::<4, 2>(
+    &crate::ast::QuoteForm::LABELS,
+    &StructuralKind::LABELS,
 );
 
 #[derive(Debug, Error)]
@@ -20728,5 +20782,95 @@ mod tests {
     fn assert_str_array_pairwise_distinct_panics_on_compiler_spec_io_stage_operations() {
         use crate::ast::assert_str_array_pairwise_distinct;
         assert_str_array_pairwise_distinct(&CompilerSpecIoStage::OPERATIONS);
+    }
+
+    /// Runtime cross-check that the TWO
+    /// (`_`, `StructuralKind::LABELS`) disjointness pairs the
+    /// module-level `const _: () = crate::ast::assert_str_arrays_
+    /// disjoint::<N, 2>(...)` witnesses pin at COMPILE time are
+    /// proper DISJOINTNESS embeddings at runtime too. Peer to
+    /// `assert_str_arrays_disjoint_accepts_each_family_wide_
+    /// substrate_pair` in `ast.rs` (which sweeps the FOUR pairs
+    /// whose two hosts both live in `ast.rs`): together the two
+    /// tests sweep all SIX substrate-pinned `&'static str`
+    /// disjointness pairs (`ast.rs` × 4 + `error.rs` × 2 = 6) at
+    /// runtime as a safety net. The compile-time `const _` sweep
+    /// fires FIRST at `cargo check`; this test catches drift again
+    /// at `cargo test` if the const-eval sweep is ever silently
+    /// dropped.
+    ///
+    /// Composed with the ast.rs-pinned
+    /// (`AtomKind::LABELS`, `QuoteForm::LABELS`) pair — the third
+    /// pair on the three-element sub-vocabulary triple — these two
+    /// checks close the DISJOINT-UNION theorem
+    /// `SexpShape::LABELS ≡ AtomKind::LABELS ⊕ QuoteForm::LABELS ⊕
+    /// StructuralKind::LABELS` at runtime as the sibling proof to
+    /// the three subset-embedding witnesses on the same triple.
+    #[test]
+    fn assert_str_arrays_disjoint_accepts_each_structural_kind_partition_pair() {
+        use crate::ast::assert_str_arrays_disjoint;
+        assert_str_arrays_disjoint::<6, 2>(&crate::ast::AtomKind::LABELS, &StructuralKind::LABELS);
+        assert_str_arrays_disjoint::<4, 2>(&crate::ast::QuoteForm::LABELS, &StructuralKind::LABELS);
+    }
+
+    /// Runtime DISJOINT-UNION theorem — the twelve-arm outer
+    /// `SexpShape::LABELS` array is byte-for-byte the union of the
+    /// three sub-vocabulary arrays (`AtomKind::LABELS` ∪
+    /// `QuoteForm::LABELS` ∪ `StructuralKind::LABELS`) up to
+    /// permutation, sweeping both directions of the SET-equality
+    /// obligation:
+    ///
+    ///   (⊆) every outer label appears in EXACTLY ONE sub-
+    ///        vocabulary (existence + uniqueness);
+    ///   (⊇) every sub-vocabulary label appears in the outer
+    ///        vocabulary (SUBSET-embedding, already pinned above at
+    ///        rustc time by the three `assert_str_array_within_str_
+    ///        finite_set` witnesses; swept here again as a runtime
+    ///        safety net).
+    ///
+    /// Cardinality composition (6 + 4 + 2 = 12) is enforced
+    /// STRUCTURALLY by rustc through the `[&'static str; N]` array
+    /// arities; this test pins the byte-level partition INDEPENDENT
+    /// of the sub-vocabulary array declarations, so a regression
+    /// that silently split a two-arm sub-vocabulary into
+    /// (`[&; 1]`, `[&; 1]`) while keeping the total at 12 would
+    /// still catch here even if the arity sum remained legal.
+    #[test]
+    fn sexp_shape_labels_is_disjoint_union_of_three_sub_vocabularies() {
+        for outer in SexpShape::LABELS.iter() {
+            let hits_atom = crate::ast::AtomKind::LABELS
+                .iter()
+                .filter(|s| s == &outer)
+                .count();
+            let hits_quote = crate::ast::QuoteForm::LABELS
+                .iter()
+                .filter(|s| s == &outer)
+                .count();
+            let hits_struct = StructuralKind::LABELS
+                .iter()
+                .filter(|s| s == &outer)
+                .count();
+            let total = hits_atom + hits_quote + hits_struct;
+            assert_eq!(
+                total, 1,
+                "outer SexpShape label {outer:?} must appear in EXACTLY ONE \
+                 sub-vocabulary (atom={hits_atom}, quote={hits_quote}, \
+                 struct={hits_struct}); the twelve-arm partition triple \
+                 (AtomKind::LABELS, QuoteForm::LABELS, StructuralKind::LABELS) \
+                 must be a DISJOINT UNION of SexpShape::LABELS"
+            );
+        }
+        for inner in crate::ast::AtomKind::LABELS
+            .iter()
+            .chain(crate::ast::QuoteForm::LABELS.iter())
+            .chain(StructuralKind::LABELS.iter())
+        {
+            assert!(
+                SexpShape::LABELS.iter().any(|s| s == inner),
+                "sub-vocabulary label {inner:?} must be embedded in the \
+                 outer SexpShape::LABELS vocabulary — the (⊇) direction \
+                 of the disjoint-union theorem"
+            );
+        }
     }
 }

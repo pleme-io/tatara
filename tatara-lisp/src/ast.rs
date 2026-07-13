@@ -1537,6 +1537,238 @@ const _: () = assert_char_pair_array_bijective(&Atom::NAMED_ESCAPE_TABLE);
 const _: () = assert_char_pair_array_bijective(&Atom::ESCAPE_TABLE);
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// the family-wide `[(char, char); N]` paired substrate array `arr`
+/// carries a pair at some position whose `(SOURCE, DECODED)` tuple is
+/// NOT a member of the target finite superset paired-array partition
+/// `set`. Binds ONE conjunct clause on the `(char, char)` product-
+/// element row of the (element-type × contract-shape) matrix at the
+/// (subset-embedding) column — CHAR-PAIR-SUBSET-VIOLATION — every
+/// entry of `arr` MUST be a byte-for-byte-equal `(char, char)` pair
+/// found somewhere in `set` (ORIENTED across the two arguments — the
+/// SUBSET side `arr` vs the SUPERSET side `set`). Pair equality is
+/// CONJOINED across BOTH columns: `arr[i] == set[j]` iff `arr[i].0 ==
+/// set[j].0 AND arr[i].1 == set[j].1` — a per-column membership check
+/// on either column alone would silently accept a pair whose LEFT
+/// column matches ONE set entry and RIGHT column matches a DIFFERENT
+/// set entry (a cross-row aliasing collision the CONJOINED-pair
+/// contract catches).
+///
+/// Delegates target-set well-formedness to the sibling
+/// [`assert_char_pair_array_bijective`] helper FIRST (peer to the
+/// (char, u8, `&'static str`) scalar rows' delegation to the SCALAR
+/// pairwise-distinct sibling — the well-formedness delegation lifts
+/// TO THE `(char, char)` row through the strongest well-formedness
+/// contract on the row, which is BIJECTIVITY on the paired array). A
+/// malformed `set` (e.g. `[('a', 'x'), ('a', 'y')]` — LEFT-column
+/// collision, or `[('a', 'x'), ('b', 'x')]` — RIGHT-column collision)
+/// routes to the SET-side BIJECTIVITY panic (via the sibling's own
+/// panic-name prefix) BEFORE the CHAR-PAIR-SUBSET-VIOLATION sweep
+/// silently mis-verifies against the distinct-value bijective subset.
+/// A well-formed `set` passes this arm as a no-op — the sweep is
+/// const-eval-elidable and costs zero at rustc-time on the substrate
+/// call sites.
+///
+/// The substrate binds the paired-array SUBSET theorem at ONE
+/// intentionally-closed `(char, char)` sub-vocabulary pair: [`Atom::
+/// NAMED_ESCAPE_TABLE`] (`[(char, char); 3]`, the three pattern-
+/// DISTINCT-from-value named-escape rows — `'n' → '\n'`, `'t' → '\t'`,
+/// `'r' → '\r'`) ⊂ [`Atom::ESCAPE_TABLE`] (`[(char, char); 5]`, the
+/// composite paired SPAN over the three named + two self-escape rows).
+/// Pre-lift the SUBSET relation lived only implicitly at the composite
+/// array's declaration site (`Self::NAMED_ESCAPE_TABLE[0]`,
+/// `Self::NAMED_ESCAPE_TABLE[1]`, `Self::NAMED_ESCAPE_TABLE[2]`
+/// indexing into the composite's first three positions); post-lift
+/// the ARRAY-LEVEL subset embedding binds at rustc time via ONE
+/// `const _` line. A regression that silently re-inlined either the
+/// SUBSET or the SUPERSET side of the relation to a fresh pair
+/// breaking the subset containment (e.g. dropping `NEWLINE` from
+/// `NAMED_ESCAPE_TABLE` while keeping it as a `Self::NAMED_ESCAPE_
+/// TABLE[0]` index in `ESCAPE_TABLE`; drifting `Self::TAB_ESCAPE_
+/// SOURCE` on the NAMED side to a fresh char not present at the
+/// composite's second position; re-shuffling the composite's first
+/// three positions to swap with the SELF-escape suffix bytes) fails
+/// at `cargo check` BEFORE any test scheduler runs.
+///
+/// Row-dual peer to
+/// [`assert_char_array_within_char_finite_set`] +
+/// [`assert_u8_array_within_u8_finite_set`] +
+/// [`assert_str_array_within_str_finite_set`] on the (element-type)
+/// axis of the SAME (subset-embedding) contract-shape column: where
+/// the three sibling helpers close the SCALAR (`char`, `u8`,
+/// `&'static str`) rows at ONE peer helper per row, this helper
+/// opens the PRODUCT-ELEMENT `(char, char)` row on the same column
+/// — extending the (element-type × contract-shape) matrix's
+/// (subset-embedding) column past the three scalar rows onto the
+/// paired-array row.
+///
+/// Contract-orthogonal peer to
+/// [`assert_char_pair_array_bijective`] on the (BIJECTIVITY,
+/// SUBSET-EMBEDDING) axis of the (contract-shape) column on the SAME
+/// `(char, char)` row: where the BIJECTIVITY sibling binds
+/// (LEFT-column INJECTIVITY ∧ RIGHT-column INJECTIVITY) on the SAME
+/// array, this SUBSET-EMBEDDING sibling binds (CONJOINED-pair
+/// membership) across TWO arrays. Together the two helpers close the
+/// (paired-array well-formedness, paired-array subset) 2-corner face
+/// on the `(char, char)` row.
+///
+/// Panic message carries the axis-provenance-named
+/// `"CHAR-PAIR-SUBSET-VIOLATION"` string chosen DISTINCT from every
+/// sibling helper's axis vocabulary (`"CHAR-SUBSET-VIOLATION"` on the
+/// (char) scalar row-dual SUBSET peer; `"SUBSET-VIOLATION"` on the
+/// (u8) row-dual finite-set SUBSET peer; `"STR-SUBSET-VIOLATION"` on
+/// the (`&'static str`) row-dual SUBSET peer; `"RANGE-SUBSET-
+/// VIOLATION"` on the (u8) range SUBSET peer; `"CHAR-DISJOINTNESS-
+/// VIOLATION"` / `"U8-DISJOINTNESS-VIOLATION"` / `"STR-DISJOINTNESS-
+/// VIOLATION"` on the DISJOINTNESS-column row peers; `"LEFT column"`
+/// / `"RIGHT column"` on the paired-array BIJECTIVITY sibling). The
+/// `"CHAR-PAIR-"` prefix disambiguates from the (char) SCALAR row-
+/// dual SUBSET peer; the shared `"-SUBSET-VIOLATION"` suffix lets
+/// callers grep any row's SUBSET-embedding sibling by the shared
+/// suffix alone.
+///
+/// Adding a new family-wide `[(char, char); N]` paired-array
+/// intentionally-closed SUBSET carving of another substrate
+/// `[(char, char); M]` paired array to the substrate: pair the
+/// declaration with `const _: () =
+/// assert_char_pair_array_within_char_pair_finite_set::<N, M>(
+/// &Self::FOO_SUB_TABLE, &Self::FOO_SUPER_TABLE);` co-located after
+/// the SUBSET-side declaration and the paired-array SUBSET-embedding
+/// contract binds at compile time. The rustc-forced arity
+/// `[(char, char); N] × [(char, char); M]` composes with this const-
+/// eval sweep so cardinality AND SUBSET-embedding are BOTH compile-
+/// time theorems on the SAME pair.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_char_pair_array_within_char_pair_finite_set_panics_at_
+/// runtime_on_out_of_set_entry` +
+/// `assert_char_pair_array_within_char_pair_finite_set_panic_message_
+/// names_the_helper_and_char_pair_subset_violation_axis`.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide paired-array
+///   SUBSET-embedding contract on `(char, char)` sub-vocabularies
+///   becomes a TYPE-LEVEL theorem the substrate carries per (arr,
+///   set) `[(char, char); N] × [(char, char); M]` pair rather than a
+///   runtime test per pair.
+/// - THEORY.md §III — the typescape; the (element-type × contract-
+///   shape) matrix's (SUBSET-EMBEDDING) column now carries the
+///   PRODUCT-ELEMENT `(char, char)` row alongside the three scalar
+///   rows at ONE peer const-fn helper per row.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   SUBSET-EMBEDDING proof at declaration site AND the outer-
+///   algebra's paired-array partition contract regenerate through
+///   the SAME `const _` witness at the ARRAY level.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   CONJOINED-pair membership sweep IS the generative shape — every
+///   new `(char, char)` sub-vocabulary paired array whose distinct-
+///   value set is an intentionally-closed subset of another substrate
+///   paired array adds ONE `const _` line.
+pub const fn assert_char_pair_array_within_char_pair_finite_set<const N: usize, const M: usize>(
+    arr: &[(char, char); N],
+    set: &[(char, char); M],
+) {
+    // Delegate target-set well-formedness to the sibling paired-
+    // array BIJECTIVITY helper FIRST. Placed BEFORE the CHAR-PAIR-
+    // SUBSET-VIOLATION sweep below because a malformed `set` (e.g.
+    // `[('a', 'x'), ('a', 'y')]` — LEFT-column collision; or
+    // `[('a', 'x'), ('b', 'x')]` — RIGHT-column collision) is not a
+    // well-formed finite bijective set of paired-cardinality `M` and
+    // silently mis-verifies the intended SUBSET contract on any
+    // `arr` embedded in the distinct-value bijective subset. Routes
+    // drift on the CALLER'S TARGET-SET SPEC to the SET-side
+    // well-formedness axis (via the sibling's own panic-name
+    // prefix) rather than to a downstream CHAR-PAIR-SUBSET-VIOLATION
+    // symptom on `arr`. A well-formed `set` passes this arm as a no-
+    // op — the sweep is const-eval-elidable and costs zero at
+    // rustc-time on the substrate call sites.
+    assert_char_pair_array_bijective(set);
+    let mut i = 0;
+    while i < N {
+        let mut j = 0;
+        let mut found = false;
+        while j < M {
+            // CONJOINED-pair equality — BOTH columns must match the
+            // SAME `set[j]` entry. A per-column membership check on
+            // either column alone (e.g. `arr[i].0 in set.map(|p|
+            // p.0)` AND separately `arr[i].1 in set.map(|p| p.1)`)
+            // would silently accept a cross-row aliasing collision
+            // where `arr[i].0 == set[j1].0` for some `j1` AND
+            // `arr[i].1 == set[j2].1` for some DIFFERENT `j2` while
+            // `arr[i]` itself is NOT in `set` (a pair the CONJOINED
+            // gate rejects).
+            if arr[i].0 as u32 == set[j].0 as u32 && arr[i].1 as u32 == set[j].1 as u32 {
+                found = true;
+                break;
+            }
+            j += 1;
+        }
+        if !found {
+            panic!(
+                "assert_char_pair_array_within_char_pair_finite_set: \
+                 CHAR-PAIR-SUBSET-VIOLATION — the family-wide \
+                 `[(char, char); N]` paired substrate array `arr` \
+                 carries a pair at some position whose (SOURCE, \
+                 DECODED) tuple is NOT a byte-for-byte-equal member \
+                 of the target finite superset paired-array \
+                 partition `set`. The substrate's paired-array \
+                 SUBSET-EMBEDDING contract on `arr` is broken; every \
+                 consumer that expects the paired array's distinct-\
+                 value set of `(SOURCE, DECODED)` tuples to be a \
+                 subset of the target finite superset paired \
+                 partition (`Atom::NAMED_ESCAPE_TABLE ⊂ Atom::\
+                 ESCAPE_TABLE` on the pattern-DISTINCT-from-value \
+                 sub-vocabulary axis of the paired escape-arm SPAN; \
+                 any future typed-paired-subset embedding on the \
+                 substrate's reader-boundary `(char, char)` \
+                 algebras) relies on every array pair staying within \
+                 the target paired superset. Fix at the SUBSET-side \
+                 ARRAY-DECLARATION site (the `arr` under \
+                 verification, NOT the `set` argument specifying the \
+                 target superset) by dropping the offending pair OR \
+                 by extending `set` to cover it — the choice depends \
+                 on whether the drift is an unintended overshoot \
+                 outside the parent superset or an intentional \
+                 extension of the superset paired vocabulary. The \
+                 CONJOINED-pair equality gate distinguishes THIS \
+                 helper from a per-column membership check that \
+                 would silently accept a cross-row aliasing pair \
+                 (`arr[i].0` matches ONE set entry's LEFT column \
+                 while `arr[i].1` matches a DIFFERENT set entry's \
+                 RIGHT column) — the CONJOINED gate rejects the \
+                 pair unless BOTH columns match the SAME `set[j]`"
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time SUBSET-embedding witness — the ONE intentionally-
+// closed `[(char, char); N] ⊂ [(char, char); M]` paired sub-
+// vocabulary carving on the substrate's Str-payload tokenization
+// boundary whose distinct-value set of `(SOURCE, DECODED)` tuples
+// is a subset of another family-wide paired substrate array's
+// distinct-value set. Pre-lift the SUBSET relation lived only
+// implicitly at the composite `Atom::ESCAPE_TABLE`'s declaration
+// site (`Self::NAMED_ESCAPE_TABLE[0]`, `Self::NAMED_ESCAPE_TABLE[1]`,
+// `Self::NAMED_ESCAPE_TABLE[2]` indexing into the composite's first
+// three positions). Post-lift the ARRAY-LEVEL subset embedding
+// binds at rustc time — a regression that silently re-inlined the
+// SUBSET or SUPERSET side of the relation to a fresh pair breaking
+// the subset containment fails at `cargo check` BEFORE any test
+// scheduler runs. Sibling to the pre-existing BIJECTIVITY witnesses
+// above — those pin (LEFT-column INJECTIVITY ∧ RIGHT-column
+// INJECTIVITY) on each individual paired array, this pins
+// CONJOINED-pair SUBSET containment across a PAIR of paired arrays.
+// Peer to the (char) + (u8) + (`&'static str`) scalar rows' SUBSET-
+// embedding witnesses above on the (element-type) axis of the SAME
+// (subset-embedding) contract-shape column.
+const _: () = assert_char_pair_array_within_char_pair_finite_set::<3, 5>(
+    &Atom::NAMED_ESCAPE_TABLE,
+    &Atom::ESCAPE_TABLE,
+);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// the distinct-values set of `arr` does not equal exactly the inclusive
 /// range `{LO..=HI}` on the substrate's `u8` cache-key vocabulary. Binds
 /// TWO conjunct clauses at ONE `const _` line:
@@ -31850,6 +32082,331 @@ mod tests {
              message {msg:?} must name the failed COLUMN (\"RIGHT \
              column\") for column-provenance-preserving failure \
              diagnostics",
+        );
+    }
+
+    // ── `assert_char_pair_array_within_char_pair_finite_set` — the
+    // `(char, char)` product-element SUBSET-EMBEDDING verifier that
+    // binds `arr ⊆ set` at compile time on the paired-array vocabulary
+    // via CONJOINED-pair equality, peer to the (char) + (u8) +
+    // (`&'static str`) scalar rows' SUBSET-EMBEDDING helpers on the
+    // (element-type × contract-shape) matrix at the (subset-embedding)
+    // column. The runtime test surface pins each of the helper's arms
+    // (accept-empty, accept-singleton-in-set at three positions,
+    // accept-arr-equals-set, accept-family-wide-substrate-subset on
+    // the pinned `NAMED_ESCAPE_TABLE ⊆ ESCAPE_TABLE` pair, accept-
+    // repeated-array-entries-in-set, reject-out-of-set-pair, reject-
+    // terminal-out-of-set-pair, reject-cross-row-alias, panic-message-
+    // provenance on the CHAR-PAIR-SUBSET-VIOLATION axis, negative pin
+    // on the DELEGATED SET-side BIJECTIVITY well-formedness arm at
+    // BOTH the LEFT-column and RIGHT-column collision corners) so a
+    // regression that silently weakened the helper on ANY arm is
+    // caught by the helper's OWN test surface rather than only
+    // surfacing as a false-positive on some future subset-embedded
+    // `[(char, char); N]` array's compound pin.
+
+    #[test]
+    fn assert_char_pair_array_within_char_pair_finite_set_accepts_the_empty_array_within_any_set() {
+        // Empty array `arr = []` at the `[(char, char); 0]` corner —
+        // vacuously a subset of every well-formed BIJECTIVE set (no
+        // `i` position exists to test). Cross-arity coverage on the
+        // trivial ARRAY corner of the const-N generic across three
+        // witness-set widths (empty, singleton, multi-entry) to pin
+        // the helper's OUTER-sweep arm across the whole (`N == 0` ×
+        // `M`) axis. Turbofish binding required because there's no
+        // other cue for the const parameters on the empty array
+        // literal. Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_the_empty_array_within_any_set`
+        // on the (char) scalar row-dual peer — the two share the
+        // trivial-arity arm across the (scalar, paired) element-type
+        // partition on the (subset-embedding) column.
+        assert_char_pair_array_within_char_pair_finite_set::<0, 0>(&[], &[]);
+        assert_char_pair_array_within_char_pair_finite_set::<0, 1>(&[], &[('a', 'x')]);
+        assert_char_pair_array_within_char_pair_finite_set::<0, 3>(
+            &[],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_within_char_pair_finite_set_accepts_singleton_array_when_pair_in_set()
+    {
+        // Singleton array `arr = [P]` at the `[(char, char); 1]`
+        // corner MUST pass when `P ∈ set` by CONJOINED-pair equality.
+        // Cross-position coverage: the pair can sit at the FIRST,
+        // MIDDLE, or LAST position of the `set` — pins the INNER
+        // `while j < M` sweep terminates at the first-match position
+        // rather than always at position `0` OR always at position
+        // `M - 1`. A regression that narrowed the inner sweep to
+        // `j == 0` would silently reject singleton arrays hitting
+        // non-first set positions. Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_singleton_array_when_char_in_set`
+        // on the (char) scalar row-dual peer — the two share the
+        // FIRST/MIDDLE/LAST sweep-position arm across the (scalar,
+        // paired) element-type partition.
+        assert_char_pair_array_within_char_pair_finite_set::<1, 3>(
+            &[('a', 'x')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+        assert_char_pair_array_within_char_pair_finite_set::<1, 3>(
+            &[('b', 'y')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+        assert_char_pair_array_within_char_pair_finite_set::<1, 3>(
+            &[('c', 'z')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_within_char_pair_finite_set_accepts_arr_equals_set() {
+        // Boundary corner where `arr` and `set` cover pair-for-pair
+        // identical distinct-value sets — the SUBSET relation
+        // degenerates to EQUALITY. Pins that the helper does NOT
+        // gratuitously require the SUBSET to be PROPER (strict):
+        // equal-multisets pass the SUBSET check. Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_arr_equals_set`
+        // on the (char) scalar row-dual peer.
+        assert_char_pair_array_within_char_pair_finite_set(&[('a', 'x')], &[('a', 'x')]);
+        assert_char_pair_array_within_char_pair_finite_set(
+            &[('a', 'x'), ('b', 'y')],
+            &[('a', 'x'), ('b', 'y')],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_within_char_pair_finite_set_accepts_the_family_wide_substrate_subset()
+    {
+        // Runtime cross-check that the ONE (subset, superset)
+        // paired-array pair the substrate's module-level `const _`
+        // witness pins at COMPILE time is a proper SUBSET embedding
+        // at runtime too. The pair enforces the theorem at TWO stages
+        // of the toolchain: the const witness fires FIRST at `cargo
+        // check` (through the module-level `const _: () =
+        // assert_char_pair_array_within_char_pair_finite_set::<3, 5>(...)`
+        // line), this runtime pin catches the drift at `cargo test`
+        // as a safety net. Sibling posture to
+        // `assert_char_pair_array_bijective_accepts_every_family_wide_substrate_array`
+        // which sweeps the two family-wide `[(char, char); N]` arrays
+        // at the paired-array INJECTIVITY axis; this pin sweeps the
+        // ONE (subset, superset) PAIR at the paired-array SUBSET-
+        // EMBEDDING axis. Together the two pins bind the (paired
+        // array, paired subset-embedding) 2-corner face on the
+        // `(char, char)` row of the (element-type × contract-shape)
+        // matrix.
+        assert_char_pair_array_within_char_pair_finite_set::<3, 5>(
+            &Atom::NAMED_ESCAPE_TABLE,
+            &Atom::ESCAPE_TABLE,
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_within_char_pair_finite_set_accepts_repeated_array_entries_in_set() {
+        // Peer corner to a (future-lift) `_covers_char_pair_finite_
+        // set`: this helper permits duplicates in `arr` because
+        // SUBSET-membership is a DISTINCT-value predicate — the
+        // pair-multiset `[('a', 'x'), ('a', 'x'), ('b', 'y')]` is a
+        // subset of the bijective set `{('a', 'x'), ('b', 'y'),
+        // ('c', 'z')}` even though the array is not pairwise-
+        // distinct. Pins that the helper does NOT gratuitously
+        // require BIJECTIVITY on `arr` (the BIJECTIVITY axis is a
+        // DIFFERENT compile-time contract bound by
+        // `assert_char_pair_array_bijective`; combining both binds
+        // BOTH axes). Sibling posture to
+        // `assert_char_array_within_char_finite_set_accepts_repeated_array_entries_in_set`
+        // on the (char) scalar row-dual peer.
+        assert_char_pair_array_within_char_pair_finite_set(
+            &[('a', 'x'), ('a', 'x'), ('b', 'y')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "CHAR-PAIR-SUBSET-VIOLATION")]
+    fn assert_char_pair_array_within_char_pair_finite_set_panics_at_runtime_on_out_of_set_pair() {
+        // NEGATIVE PIN — CHAR-PAIR-SUBSET-VIOLATION corner: an array
+        // carrying a single pair NOT in the target set MUST panic at
+        // runtime with the CHAR-PAIR-SUBSET-VIOLATION-named message.
+        // Pins the helper's OWN reject arm — a regression that
+        // silently returned without panicking on an out-of-set pair
+        // would slip through the compile-time witness's failure mode
+        // too. The offending pair `('z', 'w')` is intentionally
+        // chosen OUTSIDE the target set to pin the OUT-OF-SET drift
+        // mode.
+        assert_char_pair_array_within_char_pair_finite_set(
+            &[('a', 'x'), ('z', 'w')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "CHAR-PAIR-SUBSET-VIOLATION")]
+    fn assert_char_pair_array_within_char_pair_finite_set_panics_at_runtime_on_terminal_out_of_set_pair(
+    ) {
+        // NEGATIVE PIN — terminal-position drift: an out-of-set pair
+        // at the LAST array position MUST panic — pins that the
+        // outer `while i < N` loop reaches `i = N - 1` (else the
+        // terminal drift would slip through). A regression that
+        // narrowed the outer sweep to `while i < N - 1` (off-by-one
+        // on the OUTER bound) would silently accept this array.
+        // Sibling posture to
+        // `assert_char_array_within_char_finite_set_panics_at_runtime_on_terminal_out_of_set_entry`
+        // on the (char) scalar row-dual peer — both bind the outer-
+        // sweep terminal bound at the ONE array-side outer loop the
+        // helper carries.
+        assert_char_pair_array_within_char_pair_finite_set(
+            &[('a', 'x'), ('b', 'y'), ('c', 'z'), ('z', 'w')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "CHAR-PAIR-SUBSET-VIOLATION")]
+    fn assert_char_pair_array_within_char_pair_finite_set_panics_at_runtime_on_cross_row_alias_pair(
+    ) {
+        // KEY LOAD-BEARING NEGATIVE PIN — CONJOINED-pair equality
+        // gate corner: a pair whose LEFT column matches ONE set
+        // entry's LEFT column AND whose RIGHT column matches a
+        // DIFFERENT set entry's RIGHT column but the CONJOINED pair
+        // itself is NOT in the set MUST panic. This is the exact
+        // property that distinguishes the CONJOINED-pair SUBSET
+        // helper from a per-column-membership check: a regression
+        // that silently split the CONJOINED equality gate into TWO
+        // separate per-column membership sweeps (one over the LEFT
+        // column, one over the RIGHT column) would accept the pair
+        // `('a', 'y')` here (`'a'` appears in the set's LEFT column
+        // via `('a', 'x')`, `'y'` appears in the set's RIGHT column
+        // via `('b', 'y')`), but the CONJOINED pair `('a', 'y')` is
+        // NOT in the set. A drift from `&&` to `||` on the CONJOINED
+        // gate would silently accept this cross-row aliasing pair.
+        assert_char_pair_array_within_char_pair_finite_set(
+            &[('a', 'y')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_within_char_pair_finite_set_panic_message_names_the_helper_and_char_pair_subset_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — CHAR-PAIR-SUBSET-VIOLATION
+        // arm: the panic message MUST begin with the helper's own
+        // name AND identify the failed AXIS as "CHAR-PAIR-SUBSET-
+        // VIOLATION" so downstream diagnostics route the drift back
+        // to (a) the helper by string search on
+        // `"assert_char_pair_array_within_char_pair_finite_set"` and
+        // (b) the axis by string search on `"CHAR-PAIR-SUBSET-
+        // VIOLATION"`. Sibling posture to
+        // `assert_char_array_within_char_finite_set_panic_message_names_the_helper_and_char_subset_violation_axis`
+        // on the (char) scalar row-dual peer's provenance pin — the
+        // two pins together bind the (helper, failed-axis)
+        // provenance pair at ONE test per SUBSET helper on the
+        // (element-type × contract-shape) matrix's SUBSET column.
+        // The axis-provenance string `"CHAR-PAIR-SUBSET-VIOLATION"`
+        // is chosen DISTINCT from EVERY sibling helper's axis
+        // vocabulary (`"CHAR-SUBSET-VIOLATION"` on the (char) scalar
+        // row-dual SUBSET peer; `"SUBSET-VIOLATION"` on the (u8)
+        // scalar row-dual finite-set SUBSET peer; `"STR-SUBSET-
+        // VIOLATION"` on the (`&'static str`) scalar row-dual
+        // SUBSET peer; `"RANGE-SUBSET-VIOLATION"` on the (u8) range
+        // SUBSET peer; `"CHAR-DISJOINTNESS-VIOLATION"` / `"U8-
+        // DISJOINTNESS-VIOLATION"` / `"STR-DISJOINTNESS-VIOLATION"`
+        // on the DISJOINTNESS-column row peers; `"LEFT column"` /
+        // `"RIGHT column"` on the paired-array BIJECTIVITY sibling)
+        // so a diagnostic that names the failed axis routes
+        // UNAMBIGUOUSLY to (a) this specific paired-array SUBSET-
+        // embedding helper, (b) the `arr` argument as the drift
+        // site rather than the `set` argument specifying the target
+        // paired superset.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_within_char_pair_finite_set(
+                &[('a', 'x'), ('z', 'w')],
+                &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_within_char_pair_finite_set must \
+             panic on an out-of-set pair — the reject-out-of-set arm \
+             is the sole CHAR-PAIR-SUBSET-VIOLATION failure mode of \
+             the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_within_char_pair_finite_set \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_pair_array_within_char_pair_finite_set"),
+            "assert_char_pair_array_within_char_pair_finite_set \
+             panic message {msg:?} must name the helper for \
+             provenance-preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("CHAR-PAIR-SUBSET-VIOLATION"),
+            "assert_char_pair_array_within_char_pair_finite_set \
+             panic message {msg:?} must name the failed AXIS \
+             (\"CHAR-PAIR-SUBSET-VIOLATION\") for axis-provenance-\
+             preserving failure diagnostics",
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_bijective")]
+    fn assert_char_pair_array_within_char_pair_finite_set_panics_on_malformed_target_set_left_column_collision(
+    ) {
+        // NEGATIVE PIN — DELEGATED SET-side BIJECTIVITY well-
+        // formedness at the LEFT-column collision corner: a
+        // malformed target-set spec `[('a', 'x'), ('a', 'y')]`
+        // (LEFT-column duplicate `'a'`) fed into the ARRAY-side
+        // within helper MUST panic on the DELEGATED bijectivity arm
+        // BEFORE the CHAR-PAIR-SUBSET-VIOLATION arm fires. Pins the
+        // delegation chain: a regression that dropped the
+        // `assert_char_pair_array_bijective(set)` call at the top of
+        // `assert_char_pair_array_within_char_pair_finite_set` would
+        // silently accept a malformed set and produce a false-
+        // positive verdict on any `arr` embedded in the distinct-
+        // value bijective subset. The panic message here surfaces
+        // from the SIBLING helper (containing the paired-array
+        // BIJECTIVITY helper's `"assert_char_pair_array_bijective"`
+        // panic-name prefix rather than a bespoke `"SET-NOT-
+        // BIJECTIVE"` axis string) because the paired row's
+        // delegation reuses the ARRAY-side BIJECTIVITY helper
+        // directly per the design choice documented on the SET-side-
+        // well-formedness section of the helper's docstring. Sibling
+        // posture to
+        // `assert_char_array_within_char_finite_set_panics_on_malformed_target_set_spec`
+        // on the (char) scalar row-dual peer's delegated-SET-well-
+        // formedness pin. Peer corner to the RIGHT-column companion
+        // pin below.
+        assert_char_pair_array_within_char_pair_finite_set::<1, 2>(
+            &[('a', 'x')],
+            &[('a', 'x'), ('a', 'y')],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_bijective")]
+    fn assert_char_pair_array_within_char_pair_finite_set_panics_on_malformed_target_set_right_column_collision(
+    ) {
+        // NEGATIVE PIN — DELEGATED SET-side BIJECTIVITY well-
+        // formedness at the RIGHT-column collision corner: a
+        // malformed target-set spec `[('a', 'x'), ('b', 'x')]`
+        // (RIGHT-column duplicate `'x'`) fed into the ARRAY-side
+        // within helper MUST panic on the DELEGATED bijectivity arm
+        // BEFORE the CHAR-PAIR-SUBSET-VIOLATION arm fires. Column-
+        // symmetric sibling to the LEFT-column pin above — a
+        // regression that silently narrowed the delegated
+        // bijectivity sweep to only the LEFT column (dropping the
+        // RIGHT-column injectivity half) would slip a RIGHT-column-
+        // colliding set past the delegation while still binding a
+        // LEFT-column-colliding one. The two pins together bind the
+        // FULL bijectivity delegation across BOTH columns of the
+        // paired-array well-formedness contract.
+        assert_char_pair_array_within_char_pair_finite_set::<1, 2>(
+            &[('a', 'x')],
+            &[('a', 'x'), ('b', 'x')],
         );
     }
 

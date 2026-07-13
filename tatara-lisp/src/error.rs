@@ -199,6 +199,89 @@ const _: () = crate::ast::assert_str_arrays_disjoint::<4, 2>(
     &StructuralKind::LABELS,
 );
 
+// Compile-time SUBSET-embedding witnesses closing the `[&'static str;
+// N]` STR row of the (UnquoteForm ⊂ QuoteForm) 2-of-4 subset-carve
+// axis on the substrate's `str`-side vocabulary triple. Pre-lift the
+// three subset relations lived per-role at the SCALAR alias sites on
+// this module (`UnquoteForm::UNQUOTE_MARKER = crate::ast::QuoteForm::
+// UNQUOTE_PREFIX`, `UnquoteForm::SPLICE_MARKER = crate::ast::QuoteForm::
+// UNQUOTE_SPLICE_PREFIX`, `UnquoteForm::UNQUOTE_LABEL = crate::ast::
+// QuoteForm::UNQUOTE_LABEL`, `UnquoteForm::SPLICE_LABEL = crate::ast::
+// QuoteForm::UNQUOTE_SPLICE_LABEL`, `UnquoteForm::UNQUOTE_IAC_FORGE_
+// TAG = crate::ast::QuoteForm::UNQUOTE_IAC_FORGE_TAG`, `UnquoteForm::
+// SPLICE_IAC_FORGE_TAG = crate::ast::QuoteForm::UNQUOTE_SPLICE_IAC_
+// FORGE_TAG`) plus a runtime cross-check that iterated each subset
+// array and matched against the parent superset's array. The ARRAY-
+// LEVEL subset embedding of the three sibling vocabularies onto their
+// respective four-arm supersets was NOT bound at rustc const-eval time
+// — a regression that silently re-inlined the subset array with a
+// fresh literal drifted OUT of the alias-composition (e.g.
+// `UnquoteForm::LABELS: [&'static str; 2] = ["unquote", "splice"]`
+// with the second entry spelling `"splice"` instead of the aliased
+// `"unquote-splice"`) would still pass INJECTIVITY (the array remains
+// pairwise-distinct) AND still pass every DISJOINTNESS witness above
+// (the array's shared vocabulary with `AtomKind::LABELS` /
+// `StructuralKind::LABELS` doesn't gain a member) BUT would silently
+// break the `UnquoteForm::to_quote_form()` composition law consumers
+// route through — every `UnquoteForm::LABELS[i]` would fail its
+// composition round-trip through the parent superset's label
+// projection at runtime rather than at rustc time.
+//
+// The three pinned pairs are (all under the shared `&'static str`
+// element-type):
+//   1. `UnquoteForm::LABELS`         ⊂ `crate::ast::QuoteForm::LABELS`
+//      (2-in-4 arms — the two substitution-subset LABELS embed into
+//      the four-arm quote-family LABELS' vocabulary).
+//   2. `UnquoteForm::MARKERS`        ⊂ `crate::ast::QuoteForm::PREFIXES`
+//      (2-in-4 arms — the two substitution-subset reader-marker
+//      prefixes embed into the four-arm quote-family reader-prefix
+//      vocabulary).
+//   3. `UnquoteForm::IAC_FORGE_TAGS` ⊂ `crate::ast::QuoteForm::IAC_FORGE_TAGS`
+//      (2-in-4 arms — the two substitution-subset iac-forge canonical-
+//      form tag bytes embed into the four-arm quote-family iac-forge
+//      canonical-form tag vocabulary).
+//
+// Sibling to the pre-existing u8-row `assert_u8_array_within_u8_
+// finite_set::<2, 4>(&UnquoteForm::HASH_DISCRIMINATORS,
+// &QuoteForm::HASH_DISCRIMINATORS)` witness at `ast.rs`: together
+// the u8 + str rows close the (element-type × vocabulary-axis) 2×3 =
+// 6-corner face on the (UnquoteForm ⊂ QuoteForm) 2-of-4 subset-carve
+// column at compile time. A future fourth vocabulary axis (e.g. a
+// hypothetical `UnquoteForm::LEADS ⊂ QuoteForm::LEADS` on the
+// `[char; N]` element-type row) picks up ONE new `const _:` witness
+// through `assert_char_array_within_char_finite_set` with the same
+// posture — the 3-vocabulary str row extends mechanically to a fourth
+// (element-type × vocabulary-axis) column.
+//
+// Composition law with the sibling u8-row witness: for every `i ∈
+// [0, 2)`, all four projections stay in lockstep — `UnquoteForm::
+// LABELS[i] == QuoteForm::UNQUOTE_LABEL` or `QuoteForm::UNQUOTE_
+// SPLICE_LABEL` (at some `j ∈ [0, 4)`), and similarly for MARKERS
+// through PREFIXES, IAC_FORGE_TAGS through IAC_FORGE_TAGS, and (via
+// the pre-existing u8 witness) HASH_DISCRIMINATORS through HASH_
+// DISCRIMINATORS. The FOUR per-axis subset-embedding witnesses
+// jointly enforce the (UnquoteForm ⊂ QuoteForm) 2-of-4 subset-carve
+// on every vocabulary axis simultaneously; any single-axis regression
+// (a drifted marker byte, a drifted label spelling, a drifted iac-
+// forge tag, a drifted cache-key byte) fails cargo check on ONE of
+// the four witnesses BEFORE it reaches the runtime cross-check on
+// `unquote_form_v_marker_aliases_quote_form_v_prefix_bytes` /
+// `unquote_form_v_label_aliases_quote_form_v_label_bytes` /
+// `unquote_form_v_iac_forge_tag_aliases_quote_form_v_iac_forge_tag_
+// bytes`.
+const _: () = crate::ast::assert_str_array_within_str_finite_set::<2, 4>(
+    &UnquoteForm::LABELS,
+    &crate::ast::QuoteForm::LABELS,
+);
+const _: () = crate::ast::assert_str_array_within_str_finite_set::<2, 4>(
+    &UnquoteForm::MARKERS,
+    &crate::ast::QuoteForm::PREFIXES,
+);
+const _: () = crate::ast::assert_str_array_within_str_finite_set::<2, 4>(
+    &UnquoteForm::IAC_FORGE_TAGS,
+    &crate::ast::QuoteForm::IAC_FORGE_TAGS,
+);
+
 #[derive(Debug, Error)]
 pub enum LispError {
     #[error("unexpected character {0:?} at position {1}")]

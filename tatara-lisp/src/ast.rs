@@ -2047,6 +2047,202 @@ const _: () = assert_char_pair_arrays_disjoint::<3, 2>(
 );
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// the family-wide `[(char, char); N]` paired substrate array `arr`
+/// carries a pair at two distinct positions whose `(SOURCE, DECODED)`
+/// tuples are byte-for-byte equal. Binds ONE conjunct clause on the
+/// `(char, char)` product-element row of the (element-type × contract-
+/// shape) matrix at the (pairwise-distinctness) column — CHAR-PAIR-
+/// TUPLE-COLLISION — every position of `arr` MUST carry a
+/// CONJOINED-pair `(a, b)` byte-for-byte distinct from every other
+/// position's pair. Pair equality is CONJOINED across BOTH columns:
+/// `arr[i] == arr[j]` iff `arr[i].0 == arr[j].0 AND arr[i].1 ==
+/// arr[j].1` — a per-column pairwise-distinct check on either column
+/// alone would REJECT paired arrays whose columns share entries
+/// INDIVIDUALLY across rows even when no CONJOINED tuple aliases
+/// (a stricter contract than tuple-level pairwise-distinctness, which
+/// the sibling [`assert_char_pair_array_bijective`] closes as the
+/// (column-INDEPENDENT injectivity) axis on the SAME row).
+///
+/// Contract-strength peer to [`assert_char_pair_array_bijective`] on
+/// the (independent-column-injectivity vs tuple-injectivity) axis
+/// splitting the (char, char) row's INJECTIVITY column into TWO
+/// distinct sub-contracts. Bijectivity is strictly stronger — a
+/// bijective paired array (`assert_char_pair_array_bijective`) has
+/// LEFT-column pairwise-distinct AND RIGHT-column pairwise-distinct
+/// INDEPENDENTLY, which implies tuple-level pairwise-distinctness
+/// (if `a[i].0 == a[j].0` fails and `a[i].1 == a[j].1` fails
+/// independently, then the tuples cannot collide either). This
+/// helper enforces ONLY the CONJOINED-tuple distinctness — a strictly
+/// WEAKER contract that permits per-column aliasing across rows as
+/// long as no CONJOINED tuple aliases. Mirrors the sibling
+/// (char, char) row helpers' CONJOINED-pair gate posture:
+/// [`assert_char_pair_array_within_char_pair_finite_set`] and
+/// [`assert_char_pair_arrays_disjoint`] BOTH gate on
+/// CONJOINED-tuple equality; this helper closes the third
+/// CONJOINED-tuple sibling on the SAME (char, char) row.
+///
+/// Element-type row-parallel to the three SCALAR-element pairwise-
+/// distinctness sibling helpers on the (element-type) axis:
+/// [`assert_char_array_pairwise_distinct`] (the (char) scalar-element
+/// peer), [`assert_str_array_pairwise_distinct`] (the (`&'static str`)
+/// scalar-element peer), and [`assert_u8_array_pairwise_distinct`]
+/// (the (u8) scalar-element peer). Where the three scalar-element
+/// siblings close the INJECTIVITY column on the three SCALAR rows of
+/// the (element-type × contract-shape) matrix, this helper closes the
+/// TUPLE-level INJECTIVITY corner on the (char, char) PRODUCT-element
+/// row — the fourth row of the matrix's element-type axis. Together
+/// with [`assert_char_pair_array_bijective`] (the column-INDEPENDENT
+/// INJECTIVITY peer on the SAME row) the (char, char) row now closes
+/// BOTH INJECTIVITY sub-shapes at ONE const-fn helper each: the
+/// stronger column-independent axis at the bijective sibling; the
+/// weaker CONJOINED-tuple axis here.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP
+/// tokenizer that constructs a `[(char, char); N]` paired array at
+/// runtime and wants to verify tuple-level pairwise-distinctness
+/// before consuming it — and the panic surfaces normally in that
+/// path (pinned by
+/// `assert_char_pair_array_pairwise_distinct_panics_at_runtime_on_tuple_collision`
+/// and
+/// `assert_char_pair_array_pairwise_distinct_panic_message_names_the_helper_and_char_pair_tuple_collision_axis`).
+/// The panic message carries a CHAR-PAIR-TUPLE-COLLISION axis-
+/// provenance suffix so downstream diagnostics (`cargo check` const-
+/// eval error output, test-suite failure reports) route the drift
+/// back to THIS helper's tuple-level axis rather than to the
+/// sibling bijective helper's column-LABELED axis (LEFT-column vs
+/// RIGHT-column) — halving the search space for the operator
+/// debugging a drift that surfaces at the tuple axis but is invisible
+/// at either column axis alone.
+///
+/// Adding a new family-wide `[(char, char); N]` paired-array whose
+/// distinct-value tuple-set carries a pairwise-distinct-but-NOT-
+/// bijective contract: pair the declaration with `const _: () =
+/// assert_char_pair_array_pairwise_distinct(&Self::FOO_TABLE);` co-
+/// located after the array's declaration and the tuple-level
+/// distinctness contract binds at compile time. The rustc-forced
+/// arity `[(char, char); N]` composes with this const-eval sweep so
+/// cardinality AND tuple-level injectivity are compile-time theorems
+/// on the SAME array. A future consumer keyed on tuple-level
+/// (rather than column-level) distinctness — a hypothetical (short-
+/// form, canonical-form) alias table that permits many-to-one
+/// aliasing on either column but requires the paired short↔canonical
+/// tuples to be pairwise-distinct — reaches for THIS helper without
+/// composing through the strictly stronger bijective sibling.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide tuple-
+///   level pairwise-distinctness contract on the `(char, char)`
+///   paired substrate vocabulary becomes a TYPE-LEVEL theorem the
+///   substrate carries per paired-array declaration rather than a
+///   runtime test the developer must remember to write per array.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; a
+///   tuple-level distinctness proof at declaration site AND the
+///   tuple-level match-arm exhaustiveness at every consumer that
+///   enumerates the array's tuples as DISJOINT arms regenerate
+///   through the SAME `const _` witness.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   tuple-CONJOINED sweep IS the generative shape. Every new
+///   closed-set paired-array vocabulary whose distinct-value tuple-
+///   set is intentionally pairwise-distinct-at-the-tuple-level adds
+///   ONE `const _` line to get the tuple-level distinctness theorem
+///   rather than re-deriving a `HashSet::insert` loop test per array.
+///
+/// Frontier inspiration: Lean 4's `List.Nodup` on `List (α × β)` at
+/// the concrete monomorphic realisation `[(char, char); N]` with the
+/// CONJOINED-tuple `≠` decidable on product `(α × β)` reducing to
+/// `a ≠ b ∨ c ≠ d` on `(a, c) ≠ (b, d)` — the substrate primitive
+/// here embeds the same product-decidable pairwise-distinctness
+/// relation as a rustc const-eval-time proof obligation at every
+/// `assert_char_pair_array_pairwise_distinct` call site.
+pub const fn assert_char_pair_array_pairwise_distinct<const N: usize>(arr: &[(char, char); N]) {
+    let mut i = 0;
+    while i < N {
+        let mut j = i + 1;
+        while j < N {
+            // CONJOINED-tuple equality — BOTH columns must match the
+            // SAME `(arr[i], arr[j])` position pair. A per-column
+            // pairwise-distinct check on either column alone would
+            // REJECT paired arrays whose columns share entries
+            // INDIVIDUALLY across rows even when no CONJOINED tuple
+            // aliases (a stricter contract than tuple-level pairwise-
+            // distinctness, which the sibling
+            // `assert_char_pair_array_bijective` closes as the
+            // column-INDEPENDENT INJECTIVITY axis on the SAME row).
+            // The CONJOINED gate is the (char, char) row's WEAKER
+            // pairwise-distinctness axis — mirrors the sibling
+            // `assert_char_pair_arrays_disjoint` +
+            // `assert_char_pair_array_within_char_pair_finite_set`
+            // CONJOINED-tuple gates on the same row.
+            if arr[i].0 as u32 == arr[j].0 as u32 && arr[i].1 as u32 == arr[j].1 as u32 {
+                panic!(
+                    "assert_char_pair_array_pairwise_distinct: CHAR-\
+                     PAIR-TUPLE-COLLISION — family-wide `[(char, \
+                     char); N]` paired substrate array carries a \
+                     duplicate CONJOINED-tuple entry across two \
+                     positions (BOTH columns of `arr[i]` byte-for-\
+                     byte equal BOTH columns of `arr[j]`). The \
+                     substrate's TUPLE-level pairwise-distinctness \
+                     contract on the array is broken; every consumer \
+                     that pattern-matches the array's CONJOINED-\
+                     tuples as DISJOINT arms (any future \
+                     `match (a, b) {{ … }}` outer dispatch on a paired \
+                     vocabulary, any future tuple-keyed cache index \
+                     on a `[(char, char); N]` table) relies on this \
+                     invariant. Fix at the ARRAY-DECLARATION site by \
+                     dropping the duplicate tuple OR re-shaping the \
+                     partition to route the shared tuple to a single \
+                     position. The CONJOINED-tuple equality gate \
+                     distinguishes THIS helper from a per-column \
+                     pairwise-distinct check that would REJECT paired \
+                     arrays whose columns share entries INDIVIDUALLY \
+                     across rows even when no CONJOINED tuple aliases \
+                     — the CONJOINED gate is the (char, char) row's \
+                     WEAKER pairwise-distinctness axis, peer to the \
+                     stricter column-INDEPENDENT INJECTIVITY axis at \
+                     `assert_char_pair_array_bijective`"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+// Compile-time TUPLE-level pairwise-distinctness witnesses — one
+// `const _: () = assert_char_pair_array_pairwise_distinct(&…)` per
+// family-wide `[(char, char); N]` paired substrate array on the Str-
+// payload escape-table product-vocabulary. Each invocation is const-
+// evaluated at `cargo check` time; a regression that silently
+// collided TWO CONJOINED-tuples across positions fails the build
+// rather than the test suite. Sibling to the pre-existing paired-
+// array BIJECTIVITY witnesses above (which pin the strictly stronger
+// column-INDEPENDENT INJECTIVITY axis — LEFT-column ∧ RIGHT-column
+// pairwise-distinct per array); this helper pins the WEAKER
+// CONJOINED-tuple INJECTIVITY axis at the SAME two arrays. Both
+// axes are compile-time theorems on both arrays post-lift: bijective
+// binds the strictly stronger axis (implied on both existing
+// arrays); this helper binds the WEAKER tuple-level axis. Row-
+// parallel to the three SCALAR-element rows' pairwise-distinct
+// witnesses above on the (element-type) axis: (char) closes the
+// reader-boundary vocabulary; (`&'static str`) closes the closed-set
+// outer-algebras' label / prefix / tag / literal vocabularies; (u8)
+// closes the outer-`Sexp` cache-key discriminator vocabulary; and
+// this (char, char) product-element sibling closes the paired
+// escape-table vocabulary at the TUPLE-level. The dual-axis coverage
+// (bijective + pairwise-distinct-tuples) gives downstream consumers
+// TWO axis-provenance vocabularies to route regressions through: a
+// future consumer keyed on tuple-level (rather than column-level)
+// distinctness — a hypothetical (short-form, canonical-form) alias
+// table that permits many-to-one aliasing on either column but
+// requires paired short↔canonical tuples to be pairwise-distinct —
+// reaches for THIS helper's `CHAR-PAIR-TUPLE-COLLISION` panic
+// message rather than for the bijective sibling's column-LABELED
+// panic (LEFT-column collision vs RIGHT-column collision).
+const _: () = assert_char_pair_array_pairwise_distinct(&Atom::NAMED_ESCAPE_TABLE);
+const _: () = assert_char_pair_array_pairwise_distinct(&Atom::ESCAPE_TABLE);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// the distinct-values set of `arr` does not equal exactly the inclusive
 /// range `{LO..=HI}` on the substrate's `u8` cache-key vocabulary. Binds
 /// TWO conjunct clauses at ONE `const _` line:
@@ -32359,6 +32555,202 @@ mod tests {
             "assert_char_pair_array_bijective RIGHT-column panic \
              message {msg:?} must name the failed COLUMN (\"RIGHT \
              column\") for column-provenance-preserving failure \
+             diagnostics",
+        );
+    }
+
+    // ── `assert_char_pair_array_pairwise_distinct` — the (char, char)
+    // product-element TUPLE-level pairwise-distinctness verifier that
+    // binds `∀ i < j. arr[i] ≠ arr[j]` at compile time on the paired-
+    // array vocabulary via CONJOINED-tuple equality, WEAKER peer of
+    // `assert_char_pair_array_bijective`'s column-INDEPENDENT
+    // INJECTIVITY axis on the SAME (char, char) row of the
+    // (element-type × contract-shape) matrix. Both bijective ⇒
+    // pairwise-distinct-as-tuples witnesses hold on the substrate's
+    // two family-wide `[(char, char); N]` arrays (NAMED_ESCAPE_TABLE
+    // + ESCAPE_TABLE), so the runtime test surface pins ONLY the
+    // helper's OWN reject-arm (tuple-collision at three (adjacent,
+    // non-adjacent, terminal) positions) + accept-arms (empty,
+    // singletons, per-column-alias-with-distinct-tuples, family-wide
+    // substrate arrays) + panic-message-provenance on the CHAR-PAIR-
+    // TUPLE-COLLISION axis so a regression that silently weakened
+    // the helper on ANY arm is caught by the helper's OWN test
+    // surface rather than only surfacing as a false-positive on
+    // some future tuple-level pairwise-distinct-but-NOT-bijective
+    // `[(char, char); N]` array's compound pin.
+
+    #[test]
+    fn assert_char_pair_array_pairwise_distinct_accepts_the_empty_array() {
+        // Empty array `arr = []` at the `[(char, char); 0]` corner —
+        // vacuously pairwise-distinct at the tuple level (no (i, j)
+        // pair with i < j exists to test). Pins the outer `while i <
+        // N` guard's short-circuit on `N == 0` — a regression that
+        // panicked on the empty array would collapse this pin.
+        assert_char_pair_array_pairwise_distinct::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_pairwise_distinct_accepts_a_singleton_array() {
+        // Singleton array `arr = [(a, b)]` — vacuously pairwise-
+        // distinct at the tuple level (no `j > i == 0` position
+        // exists to compare against). Cross-corner coverage on the
+        // trivial-array face of the const-N generic past the empty
+        // corner, closing the two edge cases (N == 0, N == 1) at
+        // which the inner sweep is vacuous.
+        assert_char_pair_array_pairwise_distinct(&[('a', 'x')]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_pairwise_distinct_accepts_two_distinct_tuples() {
+        // Two-element array with two BYTE-FOR-BYTE-DISTINCT tuples —
+        // the smallest non-trivial well-formed case. Both column
+        // projections happen to be distinct too (`'a' ≠ 'b'` on the
+        // LEFT column, `'x' ≠ 'y'` on the RIGHT column) but the
+        // helper reads ONLY the CONJOINED-tuple gate, not the per-
+        // column gates — pinned in isolation from the sibling
+        // bijective helper's stricter column-independent axis.
+        assert_char_pair_array_pairwise_distinct(&[('a', 'x'), ('b', 'y')]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_pairwise_distinct_accepts_per_column_alias_when_conjoined_tuple_differs(
+    ) {
+        // Accept-corner load-bearing to the helper's DISTINCTION from
+        // the sibling `assert_char_pair_array_bijective`: a pair-
+        // array with LEFT-column collision (`'a'` at [0].0 and
+        // [1].0) but with DISTINCT RIGHT columns (`'x' ≠ 'y'`) has
+        // TWO CONJOINED-tuples `('a', 'x') ≠ ('a', 'y')` that DIFFER
+        // — this helper MUST accept it. The bijective sibling would
+        // REJECT this pair on its LEFT-column arm because
+        // bijectivity is per-column-INDEPENDENT. The two helpers'
+        // divergence here is THE point of opening the tuple-level
+        // INJECTIVITY axis as a distinct sub-shape past the column-
+        // INDEPENDENT INJECTIVITY axis.
+        assert_char_pair_array_pairwise_distinct(&[('a', 'x'), ('a', 'y')]);
+        // Symmetric RIGHT-column-alias corner with distinct LEFT
+        // columns — same accept posture on the OTHER column-alias
+        // sibling.
+        assert_char_pair_array_pairwise_distinct(&[('a', 'x'), ('b', 'x')]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_pairwise_distinct_accepts_the_family_wide_substrate_arrays() {
+        // Positive pin on the TWO family-wide `[(char, char); N]`
+        // paired arrays this helper is applied to at compile time
+        // via the module-level `const _:` witnesses: `NAMED_ESCAPE_
+        // TABLE` (`[(char, char); 3]`) and `ESCAPE_TABLE` (`[(char,
+        // char); 5]`). Both bijective ⇒ pairwise-distinct-as-tuples
+        // WITNESSES the compile-time `const _:` pass at runtime for
+        // a second-stage safety net if the const-eval sweep is ever
+        // silently dropped. Sibling posture to
+        // `assert_char_pair_array_bijective`'s
+        // `_accepts_the_family_wide_substrate_bijections` on the
+        // SAME two arrays — this pin binds the WEAKER tuple-level
+        // axis; that pin binds the STRONGER column-independent axis.
+        assert_char_pair_array_pairwise_distinct(&Atom::NAMED_ESCAPE_TABLE);
+        assert_char_pair_array_pairwise_distinct(&Atom::ESCAPE_TABLE);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_pairwise_distinct")]
+    fn assert_char_pair_array_pairwise_distinct_panics_at_runtime_on_adjacent_tuple_collision() {
+        // NEGATIVE PIN — adjacent (0, 1) corner: two adjacent
+        // CONJOINED-tuples byte-for-byte equal (BOTH columns match
+        // in lockstep) MUST panic at runtime. Pins the helper's OWN
+        // reject-arm — a regression that silently returned without
+        // panicking on a tuple duplicate would slip through the
+        // compile-time witnesses' failure mode too.
+        assert_char_pair_array_pairwise_distinct(&[('a', 'x'), ('a', 'x')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_pairwise_distinct")]
+    fn assert_char_pair_array_pairwise_distinct_panics_at_runtime_on_non_adjacent_tuple_collision()
+    {
+        // NEGATIVE PIN — non-adjacent (0, 2) corner: the collision
+        // fires on ANY (i, j) pair with i < j, not just the
+        // adjacent (0, 1) corner. Pins the nested-loop shape of the
+        // helper — a regression that walked ONLY the adjacent pairs
+        // (i.e., swept `while i + 1 < N { if arr[i] == arr[i+1] {
+        // panic } … }`) would silently accept the non-adjacent
+        // collision at positions 0 and 2 tested here (a tuple
+        // collision at ('a', 'x') across [0] and [2], with the
+        // distinct ('b', 'y') at [1] breaking adjacency). Sibling
+        // posture to `assert_char_pair_array_bijective_panics_at_
+        // runtime_on_non_adjacent_collision` on the column-
+        // independent axis — the loop-shape pin is row-parallel.
+        assert_char_pair_array_pairwise_distinct(&[('a', 'x'), ('b', 'y'), ('a', 'x')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_pairwise_distinct")]
+    fn assert_char_pair_array_pairwise_distinct_panics_at_runtime_on_terminal_tuple_collision() {
+        // NEGATIVE PIN — terminal corner: the collision at the LAST
+        // pair (positions N-2 and N-1) MUST also fire. Pins the
+        // outer `while i < N` bound — a regression that walked
+        // `while i < N - 1` (dropping the last row) would silently
+        // accept a collision at the tail. Uses a tuple collision at
+        // the terminal pair (`('e', 'z')` at [3] and [4]).
+        assert_char_pair_array_pairwise_distinct(&[
+            ('a', 'w'),
+            ('b', 'x'),
+            ('c', 'y'),
+            ('e', 'z'),
+            ('e', 'z'),
+        ]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_pairwise_distinct_panic_message_names_the_helper_and_char_pair_tuple_collision_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — CHAR-PAIR-TUPLE-COLLISION
+        // arm: the panic message MUST begin with the helper's own
+        // name AND identify the failed AXIS as "CHAR-PAIR-TUPLE-
+        // COLLISION" so downstream diagnostics route the drift back
+        // to (a) the helper by string search on
+        // `"assert_char_pair_array_pairwise_distinct"` and (b) the
+        // axis by string search on `"CHAR-PAIR-TUPLE-COLLISION"`.
+        // The axis-provenance string `"CHAR-PAIR-TUPLE-COLLISION"`
+        // is chosen DISTINCT from EVERY sibling helper's axis
+        // vocabulary (`"LEFT column"` / `"RIGHT column"` on the
+        // paired-array BIJECTIVITY sibling; `"CHAR-PAIR-SUBSET-
+        // VIOLATION"` on the paired-array SUBSET-embedding sibling;
+        // `"CHAR-PAIR-DISJOINTNESS-VIOLATION"` on the paired-array
+        // DISJOINTNESS sibling) so a diagnostic that names the
+        // failed axis routes UNAMBIGUOUSLY to (a) this specific
+        // paired-array TUPLE-LEVEL PAIRWISE-DISTINCTNESS helper,
+        // (b) the failed axis-shape by the `"TUPLE-COLLISION"`
+        // suffix stem distinguishing the CONJOINED-tuple axis from
+        // the column-INDEPENDENT axis names used by the bijective
+        // sibling.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_pairwise_distinct(&[('a', 'x'), ('a', 'x')]);
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_pairwise_distinct must panic on \
+             a CONJOINED-tuple duplicate — the reject-collision arm \
+             is the sole CHAR-PAIR-TUPLE-COLLISION failure mode of \
+             the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_pairwise_distinct panic \
+                 payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_pair_array_pairwise_distinct"),
+            "assert_char_pair_array_pairwise_distinct panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+        assert!(
+            msg.contains("CHAR-PAIR-TUPLE-COLLISION"),
+            "assert_char_pair_array_pairwise_distinct panic message \
+             {msg:?} must name the failed AXIS (\"CHAR-PAIR-TUPLE-\
+             COLLISION\") for axis-provenance-preserving failure \
              diagnostics",
         );
     }

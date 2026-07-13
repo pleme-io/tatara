@@ -2450,6 +2450,266 @@ const _: () = assert_char_pair_array_columns_equal_char_arrays(
 );
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// the family-wide `[(char, char); N]` paired substrate array `arr` is
+/// NOT byte-for-byte equal to the CONCATENATION of the peer paired
+/// array `head` (contributing the FIRST `K` positions of `arr`
+/// verbatim) followed by the DIAGONAL-EMBEDDING of the peer scalar
+/// `[char; M]` array `tail_diag` (contributing the REMAINING `M = N -
+/// K` positions as `(tail_diag[j], tail_diag[j])` at position `K + j`).
+/// Binds ONE compound (SEGMENTED-CONCATENATION × DIAGONAL-EMBEDDING)
+/// contract clause on the `(char, char)` product-element row of the
+/// (element-type × contract-shape) matrix at a fresh
+/// (concat-with-diagonal-tail) column — an ORDERING-SENSITIVE
+/// SEGMENTED-POSITIONWISE contract joining the pre-existing
+/// (pairwise-distinct), (bijective), (subset-embedding),
+/// (disjointness), and (column-projection-equality) columns on the
+/// SAME paired-array row.
+///
+/// Cardinality precondition: `K + M == N` — the caller passes the
+/// three const parameters explicitly (`N`, `K`, `M`), and the helper's
+/// FIRST arm fires at const-eval if the three fail to sum. A caller
+/// who supplies mismatched arities (e.g. `<5, 3, 3>` — `K + M == 6 ≠
+/// N == 5`) fails-loudly at the CARDINALITY-MISMATCH panic BEFORE the
+/// sweep begins, so a mistyped ARITY doesn't degenerate into a silent
+/// truncation of the paired array. Pinned by
+/// `assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_cardinality_mismatch`.
+///
+/// Failure axes — the helper partitions its rejection surface into
+/// FIVE disjoint arms, each with a DISTINCT axis-provenance prefix on
+/// the panic message so downstream diagnostics route the drift back
+/// to the specific SEGMENT and COLUMN that diverged:
+///   1. `CARDINALITY-MISMATCH` — `K + M != N`.
+///   2. `HEAD-SEGMENT-LEFT-DIVERGENCE` — some `i ∈ [0, K)` where
+///      `arr[i].0 != head[i].0`.
+///   3. `HEAD-SEGMENT-RIGHT-DIVERGENCE` — some `i ∈ [0, K)` where
+///      `arr[i].1 != head[i].1`.
+///   4. `DIAGONAL-TAIL-SEGMENT-LEFT-DIVERGENCE` — some `j ∈ [0, M)`
+///      where `arr[K + j].0 != tail_diag[j]`.
+///   5. `DIAGONAL-TAIL-SEGMENT-RIGHT-DIVERGENCE` — some `j ∈ [0, M)`
+///      where `arr[K + j].1 != tail_diag[j]`.
+///
+/// Applied to the substrate's ([`Atom::ESCAPE_TABLE`],
+/// [`Atom::NAMED_ESCAPE_TABLE`], [`Atom::SELF_ESCAPE_TABLE`]) triple
+/// at the module-level `const _: () = assert_char_pair_array_is_
+/// concatenation_of_char_pair_array_and_char_array_diagonal::<5, 3,
+/// 2>(&Atom::ESCAPE_TABLE, &Atom::NAMED_ESCAPE_TABLE,
+/// &Atom::SELF_ESCAPE_TABLE);` witness below the helper. Pre-lift,
+/// the identity `Atom::ESCAPE_TABLE == Atom::NAMED_ESCAPE_TABLE ++
+/// diagonal(Atom::SELF_ESCAPE_TABLE)` lived ONLY implicitly at
+/// `Atom::ESCAPE_TABLE`'s declaration site (positions `[0..3]`
+/// indexing `Self::NAMED_ESCAPE_TABLE[0]`, `[1]`, `[2]`; positions
+/// `[3..5]` materializing `(Self::SELF_ESCAPE_TABLE[0], Self::SELF_
+/// ESCAPE_TABLE[0])` + `(Self::SELF_ESCAPE_TABLE[1], Self::SELF_
+/// ESCAPE_TABLE[1])`). Post-lift, that identity binds at `cargo
+/// check` time — a regression that reorders `Atom::ESCAPE_TABLE`'s
+/// segments, drifts one entry across the three arrays, or changes
+/// the diagonal-embedding shape at the tail fails the build rather
+/// than the test suite. The five prior paired-array witnesses on
+/// `Atom::ESCAPE_TABLE` bind INDIVIDUAL axes (pairwise-distinct,
+/// bijective) OR CROSS-ROW column-projection bonds
+/// (columns-equal-peer-scalars), but NONE bind the SEGMENTED
+/// composite-construction identity that this helper closes.
+///
+/// Contract-strength peer to [`assert_char_pair_array_columns_equal_
+/// char_arrays`] on the (segmented-cross-row-bond vs full-cross-row-
+/// bond) axis: where the sibling binds the FULL two-column bond
+/// against TWO peer scalar arrays at EVERY position, this helper
+/// binds the SEGMENTED composite-construction bond against a peer
+/// PAIRED array (head) and a peer SCALAR array (diagonal tail) split
+/// at position `K`. The two helpers together close the
+/// (paired-vs-peer, cross-row-projection) 2-dimensional surface on
+/// the `(char, char)` row at ONE `const _` line per compound-bond
+/// theorem — the full-column peer binds every position at the
+/// (char, char) row of a paired array against TWO scalar peer
+/// vocabularies; THIS peer binds the head segment against a paired
+/// vocabulary and the diagonal tail against a scalar vocabulary
+/// (embedded diagonally). Row-parallel to the SCALAR-row helpers on
+/// the (element-type) axis — where those close INJECTIVITY /
+/// COVERING / PERMUTATION on the scalar rows, this closes the
+/// SEGMENTED-CONCATENATION corner on the PRODUCT-element row.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP
+/// tokenizer that constructs a `[(char, char); N]` paired array at
+/// runtime and wants to verify SEGMENTED-CONCATENATION structure
+/// before consuming it — and the panic surfaces normally in that
+/// path. Every panic site names the helper AND identifies the failed
+/// AXIS distinctly so downstream diagnostics route regressions back
+/// to (a) the helper by string search on
+/// `"assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"`
+/// and (b) the specific segment/column by axis-prefix.
+///
+/// Adding a new paired substrate array declared as CONCATENATION of a
+/// peer paired vocabulary with a DIAGONAL-embedded peer scalar
+/// vocabulary: pair the declaration with `const _: () = assert_char_
+/// pair_array_is_concatenation_of_char_pair_array_and_char_array_
+/// diagonal::<N, K, M>(&Self::FOO_TABLE, &Self::FOO_HEAD,
+/// &Self::FOO_DIAG_TAIL);` co-located after the composite's
+/// declaration and the compound identity binds at compile time
+/// WITHOUT a runtime concat-and-zip loop.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the SEGMENTED composite-
+///   construction identity becomes a TYPE-LEVEL theorem carried per
+///   declaration triple rather than a runtime concat-and-zip loop
+///   the developer must remember to write per triple.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+///   the (head-segment, diagonal-tail-segment) composition proof at
+///   declaration site AND the peer-vocabulary consumers regenerate
+///   through the SAME `const _` witness.
+/// - THEORY.md §VI.1 — generation over composition; the SEGMENTED
+///   concat-and-diagonal-embed sweep IS the generative shape. Every
+///   new paired-array declared as a segmented concat with a
+///   diagonal-embedded scalar tail adds ONE `const _` line to get
+///   the compound theorem.
+pub const fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal<
+    const N: usize,
+    const K: usize,
+    const M: usize,
+>(
+    arr: &[(char, char); N],
+    head: &[(char, char); K],
+    tail_diag: &[char; M],
+) {
+    if K + M != N {
+        panic!(
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal: \
+             CARDINALITY-MISMATCH — the three const parameters `N`, \
+             `K`, `M` must satisfy `K + M == N` so the peer paired \
+             `head` (contributing positions `[0..K)` of the composite \
+             `arr`) followed by the peer scalar `tail_diag` (embedded \
+             diagonally as `(tail_diag[j], tail_diag[j])` at positions \
+             `[K..N)`) exactly cover `arr`'s `N` positions. Fix at the \
+             `const _` witness's turbofish by reconciling the three \
+             arities against the composite's declared arity. The \
+             CARDINALITY-MISMATCH gate distinguishes THIS failure from \
+             every content-drift arm — a mistyped ARITY on the caller \
+             side fails HERE before any per-position sweep begins, so \
+             a subtle arity slip doesn't silently degenerate into a \
+             truncated segment sweep."
+        );
+    }
+    let mut i = 0;
+    while i < K {
+        if arr[i].0 as u32 != head[i].0 as u32 {
+            panic!(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal: \
+                 HEAD-SEGMENT-LEFT-DIVERGENCE — the composite paired \
+                 array `arr` carries a LEFT-column entry at some \
+                 position in `[0, K)` (the HEAD segment) that does NOT \
+                 byte-for-byte equal the peer paired `head` array's \
+                 LEFT-column entry at the SAME position. The \
+                 substrate's SEGMENTED-CONCATENATION contract on the \
+                 (composite, head-segment) HEAD-arm LEFT column is \
+                 broken; every consumer that reads `arr[0..K)` and the \
+                 peer `head` array as INTERCHANGEABLE (any outer-\
+                 dispatch pattern-matcher on the head sub-vocabulary \
+                 that expects the composite's HEAD segment to project \
+                 verbatim to the peer paired vocabulary's LEFT column) \
+                 relies on this invariant. Fix at one of the two \
+                 declaration sites (`arr[0..K)` or `head`) by \
+                 reconciling the entry across the two arrays."
+            );
+        }
+        if arr[i].1 as u32 != head[i].1 as u32 {
+            panic!(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal: \
+                 HEAD-SEGMENT-RIGHT-DIVERGENCE — the composite paired \
+                 array `arr` carries a RIGHT-column entry at some \
+                 position in `[0, K)` (the HEAD segment) that does NOT \
+                 byte-for-byte equal the peer paired `head` array's \
+                 RIGHT-column entry at the SAME position. The \
+                 substrate's SEGMENTED-CONCATENATION contract on the \
+                 (composite, head-segment) HEAD-arm RIGHT column is \
+                 broken; every consumer that reads the composite's \
+                 head-segment RIGHT column as INTERCHANGEABLE with the \
+                 peer paired vocabulary's RIGHT column relies on this \
+                 invariant. Fix at one of the two declaration sites \
+                 (`arr[0..K)` or `head`) by reconciling the entry."
+            );
+        }
+        i += 1;
+    }
+    let mut j = 0;
+    while j < M {
+        if arr[K + j].0 as u32 != tail_diag[j] as u32 {
+            panic!(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal: \
+                 DIAGONAL-TAIL-SEGMENT-LEFT-DIVERGENCE — the composite \
+                 paired array `arr` carries a LEFT-column entry at \
+                 some position in `[K, N)` (the DIAGONAL TAIL segment) \
+                 that does NOT byte-for-byte equal the peer scalar \
+                 `tail_diag` array's entry at the SAME diagonal-\
+                 embedded position. The substrate's DIAGONAL-EMBEDDING \
+                 contract on the (composite, tail-segment) TAIL-arm \
+                 LEFT column is broken; every consumer that reads \
+                 `arr[K..N)` and the peer scalar `tail_diag` array as \
+                 diagonally interchangeable (any outer-dispatch \
+                 pattern-matcher on the tail sub-vocabulary that \
+                 expects `arr[K + j]` to be `(tail_diag[j], \
+                 tail_diag[j])`) relies on this invariant. Fix at one \
+                 of the two declaration sites (`arr[K..N)` or \
+                 `tail_diag`) by reconciling the entry."
+            );
+        }
+        if arr[K + j].1 as u32 != tail_diag[j] as u32 {
+            panic!(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal: \
+                 DIAGONAL-TAIL-SEGMENT-RIGHT-DIVERGENCE — the \
+                 composite paired array `arr` carries a RIGHT-column \
+                 entry at some position in `[K, N)` (the DIAGONAL TAIL \
+                 segment) that does NOT byte-for-byte equal the peer \
+                 scalar `tail_diag` array's entry at the SAME \
+                 diagonal-embedded position. The substrate's DIAGONAL-\
+                 EMBEDDING contract on the (composite, tail-segment) \
+                 TAIL-arm RIGHT column is broken; every consumer that \
+                 reads the composite's tail-segment RIGHT column as \
+                 diagonally interchangeable with `tail_diag[j]` relies \
+                 on this invariant. Fix at one of the two declaration \
+                 sites (`arr[K..N)` or `tail_diag`) by reconciling the \
+                 entry."
+            );
+        }
+        j += 1;
+    }
+}
+
+// Compile-time SEGMENTED-CONCATENATION-with-DIAGONAL-TAIL witness —
+// one `const _: () = assert_char_pair_array_is_concatenation_of_char_
+// pair_array_and_char_array_diagonal::<5, 3, 2>(&…, &…, &…)` binding
+// the (`Atom::ESCAPE_TABLE`, `Atom::NAMED_ESCAPE_TABLE`,
+// `Atom::SELF_ESCAPE_TABLE`) three-way composite-construction bond on
+// the substrate's Str-payload escape-table vocabulary.
+// `Atom::ESCAPE_TABLE` (`[(char, char); 5]`) is CONSTRUCTED as
+// `NAMED_ESCAPE_TABLE[0..=2]` (the HEAD segment) followed by two
+// SELF-diagonal pairs `(SELF_ESCAPE_TABLE[0], SELF_ESCAPE_TABLE[0])` +
+// `(SELF_ESCAPE_TABLE[1], SELF_ESCAPE_TABLE[1])` (the DIAGONAL TAIL
+// segment). Pre-lift, the SEGMENTED composite identity lived ONLY as
+// an implicit declaration-site expression that a refactor could
+// silently drift by reordering the HEAD entries, drifting one entry
+// across the three arrays, or changing the diagonal-embedding shape
+// at the tail — the pre-existing `_within_char_pair_finite_set`,
+// `_arrays_disjoint`, `_bijective`, `_pairwise_distinct`, and
+// `_columns_equal_char_arrays` witnesses each bind ADJACENT axes but
+// NONE bind the composite-construction structural identity. Post-
+// lift, this const-eval witness binds that identity as a compile-
+// time theorem so a regression that renames a source or decoded byte
+// on ONE of the three arrays without updating the other two, OR
+// reorders the HEAD segment's positions, OR breaks the diagonal-
+// embedding at the TAIL, fails the build rather than the test suite.
+// SIXTH witness on the SAME paired array in complementary posture to
+// the FIVE prior const-eval sweeps — the SIX sweeps enforce
+// complementary axes of the same substrate table at SIX stages of
+// the toolchain, so a build that skips tests still catches
+// composite-construction drift here.
+const _: () =
+    assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<5, 3, 2>(
+        &Atom::ESCAPE_TABLE,
+        &Atom::NAMED_ESCAPE_TABLE,
+        &Atom::SELF_ESCAPE_TABLE,
+    );
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// the distinct-values set of `arr` does not equal exactly the inclusive
 /// range `{LO..=HI}` on the substrate's `u8` cache-key vocabulary. Binds
 /// TWO conjunct clauses at ONE `const _` line:
@@ -33217,6 +33477,497 @@ mod tests {
             "assert_char_pair_array_columns_equal_char_arrays panic \
              message {msg:?} must name the failed AXIS (\"RIGHT-\
              COLUMN-DIVERGENCE\") for axis-provenance-preserving \
+             failure diagnostics",
+        );
+    }
+
+    // ── `assert_char_pair_array_is_concatenation_of_char_pair_array_
+    // and_char_array_diagonal` — the `(char, char)` product-element
+    // SEGMENTED-CONCATENATION-with-DIAGONAL-TAIL verifier that binds
+    // the composite-construction identity `arr == head ++
+    // diagonal(tail_diag)` at compile time on a paired-array
+    // vocabulary composed from a peer paired HEAD + a peer scalar
+    // DIAGONAL TAIL. Peer to the `_columns_equal_char_arrays` cross-
+    // row-bond sibling — where the sibling binds the FULL column-
+    // projection bond across TWO peer scalar arrays at EVERY position,
+    // this helper binds the SEGMENTED composite-construction bond
+    // across a peer paired vocabulary (head) and a peer scalar
+    // vocabulary (diagonally embedded tail). The runtime test surface
+    // pins each of the helper's arms (accept-empty-triple, accept-
+    // head-only, accept-diagonal-tail-only, accept-mixed-small-triple,
+    // accept-family-wide-substrate-triple, reject-head-left-head-
+    // position, reject-head-left-tail-position, reject-head-right-
+    // head-position, reject-head-right-tail-position, reject-
+    // diagonal-tail-left-head-position, reject-diagonal-tail-left-
+    // tail-position, reject-diagonal-tail-right-head-position, reject-
+    // diagonal-tail-right-tail-position, reject-cardinality-mismatch
+    // on `K + M != N`, panic-message-provenance on FIVE distinct
+    // AXES) so a regression that silently weakened the helper on ANY
+    // arm is caught by the helper's OWN test surface rather than only
+    // surfacing as a false-positive on some future composite-
+    // constructed `[(char, char); N]` array's compound pin.
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_accepts_the_empty_triple(
+    ) {
+        // Empty arrays `arr = []`, `head = []`, `tail_diag = []` at
+        // the `[(char, char); 0]` + `[(char, char); 0]` + `[char; 0]`
+        // corner — vacuously composite (no position exists to test).
+        // Pins the outer sweep bounds' short-circuit on `N == K ==
+        // M == 0`. Turbofish binding required because there's no
+        // other cue for the const parameters on the three empty
+        // array literals.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<0, 0, 0>(
+            &[],
+            &[],
+            &[],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_accepts_head_only_triple(
+    ) {
+        // Head-only triple `arr = [('a','x')]`, `head = [('a','x')]`,
+        // `tail_diag = []` at the `M == 0` corner — the composite
+        // reduces to the peer paired HEAD verbatim, no diagonal-
+        // embedding. Pins the outer `while j < M` guard's short-
+        // circuit on empty tail. Turbofish binding required for the
+        // three const parameters.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<1, 1, 0>(
+            &[('a', 'x')],
+            &[('a', 'x')],
+            &[],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_accepts_diagonal_tail_only_triple(
+    ) {
+        // Diagonal-tail-only triple `arr = [('q','q')]`, `head = []`,
+        // `tail_diag = ['q']` at the `K == 0` corner — the composite
+        // reduces to the DIAGONAL-EMBEDDING of the peer scalar
+        // `tail_diag` verbatim, no head. Pins the outer `while i < K`
+        // guard's short-circuit on empty head. Turbofish binding
+        // required for the three const parameters.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<1, 0, 1>(
+            &[('q', 'q')],
+            &[],
+            &['q'],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_accepts_mixed_small_triple(
+    ) {
+        // Mixed small triple `arr = [('a','x'), ('q','q')]`, `head =
+        // [('a','x')]`, `tail_diag = ['q']` at the `K == 1, M == 1`
+        // corner — the smallest non-trivial case that exercises BOTH
+        // segments. Pins that BOTH sweeps advance and that BOTH arms
+        // cover their columns at their positions. A regression that
+        // silently walked ONLY the head OR ONLY the tail would
+        // silently accept a divergence on the un-swept segment.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<2, 1, 1>(
+            &[('a', 'x'), ('q', 'q')],
+            &[('a', 'x')],
+            &['q'],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_accepts_the_family_wide_substrate_triple(
+    ) {
+        // Positive pin on the family-wide (`Atom::ESCAPE_TABLE`,
+        // `Atom::NAMED_ESCAPE_TABLE`, `Atom::SELF_ESCAPE_TABLE`)
+        // triple this helper is applied to at compile time via the
+        // module-level `const _:` witness. Runtime pin as a second-
+        // stage safety net if the const-eval sweep is ever silently
+        // dropped. SIXTH witness posture on the same paired array in
+        // complementary posture to the FIVE prior sibling helper
+        // family-wide pins (`_pairwise_distinct`, `_bijective`,
+        // `_within_char_pair_finite_set`, `_arrays_disjoint`,
+        // `_columns_equal_char_arrays`) — the six pins bind six
+        // complementary axes of the same substrate table.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal(
+            &Atom::ESCAPE_TABLE,
+            &Atom::NAMED_ESCAPE_TABLE,
+            &Atom::SELF_ESCAPE_TABLE,
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+    )]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_head_left_head_position_divergence(
+    ) {
+        // NEGATIVE PIN — HEAD-SEGMENT LEFT-column head-position
+        // (i == 0) corner: `arr[0].0 = 'z'` diverges from `head[0].0
+        // = 'a'` on the FIRST head-segment position. Pins the HEAD-
+        // LEFT arm firing at the head — a regression that started
+        // the head sweep at `i = 1` would silently accept a head-
+        // position divergence.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<3, 2, 1>(
+            &[('z', 'x'), ('b', 'y'), ('q', 'q')],
+            &[('a', 'x'), ('b', 'y')],
+            &['q'],
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+    )]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_head_left_tail_position_divergence(
+    ) {
+        // NEGATIVE PIN — HEAD-SEGMENT LEFT-column tail-position
+        // (i == K-1) corner: divergence at the LAST head-segment
+        // position MUST also fire. Pins the outer head-sweep bound
+        // `while i < K` — a regression that walked `while i < K - 1`
+        // (dropping the last head row) would silently accept a tail-
+        // of-head LEFT-column divergence.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<3, 2, 1>(
+            &[('a', 'x'), ('z', 'y'), ('q', 'q')],
+            &[('a', 'x'), ('b', 'y')],
+            &['q'],
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+    )]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_head_right_head_position_divergence(
+    ) {
+        // NEGATIVE PIN — HEAD-SEGMENT RIGHT-column head-position
+        // (i == 0) corner: symmetric to the HEAD-LEFT arm at the
+        // head — pins the HEAD-RIGHT arm firing at position 0 with
+        // the HEAD-LEFT arm satisfied.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<3, 2, 1>(
+            &[('a', 'z'), ('b', 'y'), ('q', 'q')],
+            &[('a', 'x'), ('b', 'y')],
+            &['q'],
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+    )]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_head_right_tail_position_divergence(
+    ) {
+        // NEGATIVE PIN — HEAD-SEGMENT RIGHT-column tail-position
+        // (i == K-1) corner: symmetric to the HEAD-LEFT-tail arm —
+        // pins the outer head-sweep bound on the RIGHT arm with the
+        // LEFT arm satisfied at every position.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<3, 2, 1>(
+            &[('a', 'x'), ('b', 'z'), ('q', 'q')],
+            &[('a', 'x'), ('b', 'y')],
+            &['q'],
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+    )]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_diagonal_tail_left_head_position_divergence(
+    ) {
+        // NEGATIVE PIN — DIAGONAL-TAIL LEFT-column head-position
+        // (j == 0, arr[K + 0].0 diverges from `tail_diag[0]`) corner:
+        // pins the DIAGONAL-TAIL-LEFT arm firing at the tail segment's
+        // FIRST position — a regression that started the tail sweep
+        // at `j = 1` would silently accept a head-of-tail LEFT-column
+        // divergence.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<3, 1, 2>(
+            &[('a', 'x'), ('z', 'q'), ('r', 'r')],
+            &[('a', 'x')],
+            &['q', 'r'],
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+    )]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_diagonal_tail_left_tail_position_divergence(
+    ) {
+        // NEGATIVE PIN — DIAGONAL-TAIL LEFT-column tail-position
+        // (j == M-1, arr[N-1].0 diverges from `tail_diag[M-1]`)
+        // corner: pins the outer tail-sweep bound `while j < M` — a
+        // regression that walked `while j < M - 1` (dropping the last
+        // tail row) would silently accept a tail-of-tail LEFT-column
+        // divergence.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<3, 1, 2>(
+            &[('a', 'x'), ('q', 'q'), ('z', 'r')],
+            &[('a', 'x')],
+            &['q', 'r'],
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+    )]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_diagonal_tail_right_head_position_divergence(
+    ) {
+        // NEGATIVE PIN — DIAGONAL-TAIL RIGHT-column head-position
+        // (j == 0, arr[K + 0].1 diverges from `tail_diag[0]`) corner:
+        // symmetric to the DIAGONAL-TAIL-LEFT arm at the tail-head —
+        // pins the DIAGONAL-TAIL-RIGHT arm firing at the tail
+        // segment's FIRST position with the LEFT arm satisfied.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<3, 1, 2>(
+            &[('a', 'x'), ('q', 'z'), ('r', 'r')],
+            &[('a', 'x')],
+            &['q', 'r'],
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+    )]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_diagonal_tail_right_tail_position_divergence(
+    ) {
+        // NEGATIVE PIN — DIAGONAL-TAIL RIGHT-column tail-position
+        // (j == M-1, arr[N-1].1 diverges from `tail_diag[M-1]`)
+        // corner: symmetric to the DIAGONAL-TAIL-LEFT-tail arm —
+        // pins the outer tail-sweep bound on the RIGHT arm with the
+        // LEFT arm satisfied at every position.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<3, 1, 2>(
+            &[('a', 'x'), ('q', 'q'), ('r', 'z')],
+            &[('a', 'x')],
+            &['q', 'r'],
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+    )]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panics_at_runtime_on_cardinality_mismatch(
+    ) {
+        // NEGATIVE PIN — CARDINALITY-MISMATCH corner: `K + M != N`
+        // (here `K == 3, M == 3, N == 5` so `K + M == 6 != 5`) fires
+        // the CARDINALITY-MISMATCH panic BEFORE any per-position
+        // sweep begins. Pins the FIRST guard arm — a regression that
+        // silently omitted the arity check would OOB-panic instead
+        // OR silently truncate the tail sweep, both of which would
+        // corrupt the AXIS-provenance signal downstream diagnostics
+        // depend on.
+        assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<5, 3, 3>(
+            &[('a', 'x'), ('b', 'y'), ('c', 'z'), ('q', 'q'), ('r', 'r')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+            &['q', 'r', 's'],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panic_message_names_the_helper_and_head_left_divergence_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — HEAD-SEGMENT-LEFT-DIVERGENCE
+        // arm: the panic message MUST begin with the helper's own
+        // name AND identify the failed AXIS as "HEAD-SEGMENT-LEFT-
+        // DIVERGENCE" so downstream diagnostics route the drift back
+        // to (a) the helper by string search AND (b) the axis by
+        // string search on `"HEAD-SEGMENT-LEFT-DIVERGENCE"`.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<
+                3,
+                2,
+                1,
+            >(
+                &[('z', 'x'), ('b', 'y'), ('q', 'q')],
+                &[('a', 'x'), ('b', 'y')],
+                &['q'],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             must panic on a HEAD-SEGMENT LEFT-column divergence",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal"
+            ),
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             panic message {msg:?} must name the helper for \
+             provenance-preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("HEAD-SEGMENT-LEFT-DIVERGENCE"),
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             panic message {msg:?} must name the failed AXIS \
+             (\"HEAD-SEGMENT-LEFT-DIVERGENCE\") for axis-provenance-\
+             preserving failure diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panic_message_names_the_helper_and_head_right_divergence_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — HEAD-SEGMENT-RIGHT-
+        // DIVERGENCE arm: symmetric to the HEAD-LEFT arm's
+        // provenance pin.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<
+                3,
+                2,
+                1,
+            >(
+                &[('a', 'z'), ('b', 'y'), ('q', 'q')],
+                &[('a', 'x'), ('b', 'y')],
+                &['q'],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             must panic on a HEAD-SEGMENT RIGHT-column divergence",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("HEAD-SEGMENT-RIGHT-DIVERGENCE"),
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             panic message {msg:?} must name the failed AXIS \
+             (\"HEAD-SEGMENT-RIGHT-DIVERGENCE\") for axis-provenance-\
+             preserving failure diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panic_message_names_the_helper_and_diagonal_tail_left_divergence_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — DIAGONAL-TAIL-SEGMENT-LEFT-
+        // DIVERGENCE arm: partitions the failure vocabulary DISTINCT
+        // from the HEAD-SEGMENT-LEFT-DIVERGENCE arm — a diagnostic
+        // that reads the AXIS routes UNAMBIGUOUSLY to the TAIL
+        // segment's LEFT column rather than the HEAD segment's.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<
+                3,
+                1,
+                2,
+            >(
+                &[('a', 'x'), ('z', 'q'), ('r', 'r')],
+                &[('a', 'x')],
+                &['q', 'r'],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             must panic on a DIAGONAL-TAIL LEFT-column divergence",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("DIAGONAL-TAIL-SEGMENT-LEFT-DIVERGENCE"),
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             panic message {msg:?} must name the failed AXIS \
+             (\"DIAGONAL-TAIL-SEGMENT-LEFT-DIVERGENCE\") for axis-\
+             provenance-preserving failure diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panic_message_names_the_helper_and_diagonal_tail_right_divergence_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — DIAGONAL-TAIL-SEGMENT-RIGHT-
+        // DIVERGENCE arm: symmetric to the DIAGONAL-TAIL-LEFT arm's
+        // provenance pin. The FOUR positionwise axes together
+        // (HEAD-LEFT, HEAD-RIGHT, DIAGONAL-TAIL-LEFT, DIAGONAL-TAIL-
+        // RIGHT) partition the helper's positionwise failure surface
+        // into FOUR disjoint arms so a diagnostic reading the AXIS
+        // routes UNAMBIGUOUSLY to the specific (segment, column)
+        // corner that diverged.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<
+                3,
+                1,
+                2,
+            >(
+                &[('a', 'x'), ('q', 'z'), ('r', 'r')],
+                &[('a', 'x')],
+                &['q', 'r'],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             must panic on a DIAGONAL-TAIL RIGHT-column divergence",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("DIAGONAL-TAIL-SEGMENT-RIGHT-DIVERGENCE"),
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             panic message {msg:?} must name the failed AXIS \
+             (\"DIAGONAL-TAIL-SEGMENT-RIGHT-DIVERGENCE\") for axis-\
+             provenance-preserving failure diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal_panic_message_names_the_helper_and_cardinality_mismatch_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — CARDINALITY-MISMATCH arm:
+        // fires BEFORE any per-position sweep, at a distinct axis
+        // vocabulary. Pins the FIRST guard's provenance so a
+        // diagnostic reading the axis distinguishes ARITY drift
+        // (mistyped turbofish) from CONTENT drift (segment / column
+        // divergence).
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal::<
+                5,
+                3,
+                3,
+            >(
+                &[('a', 'x'), ('b', 'y'), ('c', 'z'), ('q', 'q'), ('r', 'r')],
+                &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+                &['q', 'r', 's'],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             must panic on a CARDINALITY-MISMATCH `K + M != N`",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("CARDINALITY-MISMATCH"),
+            "assert_char_pair_array_is_concatenation_of_char_pair_array_and_char_array_diagonal \
+             panic message {msg:?} must name the failed AXIS \
+             (\"CARDINALITY-MISMATCH\") for axis-provenance-preserving \
              failure diagnostics",
         );
     }

@@ -615,6 +615,305 @@ const _: () =
     assert_char_arrays_disjoint::<2, 2>(&Sexp::COMMENT_DELIMITERS, &Atom::SELF_ESCAPE_TABLE);
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// the sub-slice `full[START..START + M)` does NOT byte-equal the peer
+/// sub-array `sub[..]` positionwise (char-by-char).
+///
+/// Row-dual peer of [`assert_u8_array_slice_equals_u8_array`] on the
+/// (element-type) axis: where the `u8` sibling closes the outer-`Sexp`
+/// cache-key discriminator sub-carving vocabulary at compile time, this
+/// closes the substrate's reader-boundary `[char; N]` scalar-composed
+/// vocabulary at compile time. Opens the SUB-SLICE ARRAY-image column
+/// on the (char) row of the (element-type × contract-shape) matrix peer
+/// to the u8-row sibling's SUB-SLICE ARRAY-image column — the two
+/// helpers together lift EVERY positionwise-composition contract
+/// `arr[START..START + M) == sub[..]` on scalar-family-wide substrate
+/// arrays into a COMPILE-TIME theorem.
+///
+/// The FULL-ARRAY corner (`M == N`, `START == 0`) collapses to the
+/// pointwise identity `arr == [c_0, c_1, …, c_{N-1}]` binding BOTH
+/// (a) the per-position ORDER of the outer array's declaration (the
+/// CANONICAL variant-declaration order every reader-outer-dispatch
+/// consumer depends on) AND (b) each per-role `pub const *_LEAD` /
+/// `*_DELIMITER` / `*_ESCAPE_LEAD` / `*_ESCAPE_SOURCE` /
+/// `*_ESCAPE_DECODED` alias's canonical `char` value the outer
+/// array's slots re-export. Strictly STRONGER on the (contract-
+/// strength) axis than the sibling `_pairwise_distinct` witnesses at
+/// [`assert_char_array_pairwise_distinct`]: those bind each array's
+/// IMAGE SET via INJECTIVITY but are SILENT on which SLOT each char
+/// lands at — a regression that swapped [`Sexp::LIST_OPEN`] (`'('`) and
+/// [`Sexp::LIST_CLOSE`] (`')'`) (drifting [`Sexp::LIST_DELIMITERS`]
+/// from `['(', ')']` to `[')', '(']`) preserves the pairwise-
+/// distinctness witness (both chars still distinct) but silently
+/// misaligns every consumer indexing `LIST_DELIMITERS[0]` for the
+/// reader-open dispatch. THIS helper binds each slot's LITERAL char
+/// value at rustc time.
+///
+/// Consumer sites this helper closes at the FULL-ARRAY corner:
+/// * [`Sexp::LIST_DELIMITERS`] `== ['(', ')']` — the reader-outer-
+///   dispatch list-delimiter pair whose ordering matches
+///   [`Sexp::LIST_OPEN`] / [`Sexp::LIST_CLOSE`] declaration order.
+/// * [`Sexp::COMMENT_DELIMITERS`] `== [';', '\n']` — the outer-`Sexp`
+///   comment-boundary pair.
+/// * [`Atom::SELF_ESCAPE_TABLE`] `== ['"', '\\']` — the pattern-
+///   equals-value sub-vocabulary of the Str-escape closed set.
+/// * [`Atom::ESCAPE_SOURCES`] `== ['n', 't', 'r', '"', '\\']` — the
+///   FIVE non-passthrough SOURCE-column chars of
+///   [`Atom::decode_str_escape`] in canonical declaration order.
+/// * [`Atom::ESCAPE_DECODED`] `== ['\n', '\t', '\r', '"', '\\']` —
+///   the FIVE column-dual DECODED-column chars.
+/// * [`Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS`] `== ['(', ')',
+///   '\'', '`', ',', '"', ';']` — the SEVEN category-leading chars
+///   the reader's outer-dispatch cascade specialises on, spanning
+///   THREE type namespaces ([`Sexp`], [`Atom`], [`QuoteForm`]) in
+///   canonical outer-dispatch order.
+/// * [`QuoteForm::LEADS`] `== ['\'', '`', ',']` — the three quote-
+///   family reader-lead-chars in canonical variant-declaration order.
+/// * [`crate::error::UnquoteForm::LEADS`] `== [',']` — the shared-
+///   lead-char collapse of the two-of-four substitution subset (both
+///   `Unquote` and `UnquoteSplice` share the `,` lead byte and
+///   disambiguate on the peek-then-consume `@` second char).
+///
+/// Pre-lift each identity lived ONLY at the array's DECLARATION site
+/// (the per-slot initializer's identifier references resolve at
+/// substitution to the LITERAL char values); a regression that
+/// renamed [`Sexp::LIST_OPEN`] from `'('` to `'['` (a hypothetical
+/// Racket-compat port) would compile silently — the array's slot
+/// inherits the drifted char, every consumer indexing into
+/// `LIST_DELIMITERS[0]` continues to work with the drifted value, and
+/// only test-surface references to the LITERAL char `'('` would
+/// catch the drift at test runtime rather than at `cargo check` time.
+/// Post-lift the per-slot LITERAL char value binds at rustc time via
+/// ONE `const _` witness per array; the drift fails at `cargo check`
+/// BEFORE any test scheduler runs. Sibling to the pairwise-
+/// distinctness witnesses above [`assert_char_array_pairwise_distinct`]
+/// — those pin INJECTIVITY on each array; these pin per-slot ORDER
+/// against the CANONICAL literal-char listing.
+///
+/// The three axis-partitioned panic messages (`START-OUT-OF-BOUNDS`,
+/// `SLICE-LENGTH-OUT-OF-BOUNDS`, `CHAR-SLICE-EQUALS-ARRAY-VIOLATION`)
+/// mirror the u8 sibling's message vocabulary with the `CHAR-` prefix
+/// on the CONTENT-drift axis so callers grep either the (u8) row's
+/// plain `SLICE-EQUALS-ARRAY-VIOLATION` or the (char) row's
+/// `CHAR-SLICE-EQUALS-ARRAY-VIOLATION` axis-prefix by element-type.
+///
+/// Adding a new family-wide `[char; N]` array to the substrate whose
+/// declaration is a positionwise composition against named per-role
+/// `pub const` `char` constants: pair the declaration with `const _:
+/// () = assert_char_array_slice_equals_char_array::<N, N, 0>(
+/// &Self::FOO_ARRAY, &[literal chars; N]);` co-located after the
+/// array's declaration and the per-slot ORDER contract binds at
+/// compile time. The rustc-forced arity `[char; N]` composes with
+/// this const-eval sweep so BOTH cardinality AND per-slot canonical-
+/// char-value are compile-time theorems on the SAME array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP
+/// tokenizer that constructs a `[char; N]` at runtime and wants to
+/// verify positionwise composition against a peer sub-array before
+/// consuming it — and the panic surfaces normally in that path
+/// (pinned by
+/// `assert_char_array_slice_equals_char_array_panics_at_runtime_on_positionwise_drift`,
+/// `assert_char_array_slice_equals_char_array_panics_at_runtime_on_start_out_of_bounds`,
+/// `assert_char_array_slice_equals_char_array_panics_at_runtime_on_slice_length_out_of_bounds`,
+/// AND
+/// `assert_char_array_slice_equals_char_array_panic_message_names_the_helper_and_char_slice_equals_array_violation_axis`).
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide per-position
+///   ORDER contract on the `char`-typed vocabulary becomes a TYPE-
+///   LEVEL theorem the substrate carries per array declaration
+///   rather than a runtime iterator sweep the developer must
+///   remember to write per array.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   positionwise sweep IS the generative shape. Every new closed-
+///   set char array declared as a positionwise composition against
+///   named-scalar constants adds ONE `const _` line to get the
+///   per-slot ORDER theorem rather than re-deriving a runtime index-
+///   by-index `assert_eq!` block per array.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs;
+///   the per-slot-ORDER proof at declaration site AND the per-role
+///   `pub const` alias-chain composition every consumer relies on
+///   regenerate through the SAME `const _` witness.
+pub const fn assert_char_array_slice_equals_char_array<
+    const N: usize,
+    const M: usize,
+    const START: usize,
+>(
+    full: &[char; N],
+    sub: &[char; M],
+) {
+    if START > N {
+        panic!(
+            "assert_char_array_slice_equals_char_array: START-OUT-OF-\
+             BOUNDS — the const parameter `START` sits OUTSIDE the \
+             outer array's valid position range `[0..N]` (inclusive \
+             upper bound: `START == N` combined with `M == 0` is the \
+             LEGAL empty-slice-at-right-endpoint corner). Fix at the \
+             `const _` witness's turbofish by reconciling `START` \
+             against the outer array's declared arity `N`. The \
+             START-OUT-OF-BOUNDS gate fires FIRST — a mistyped \
+             `START` on the caller side fails HERE before the peer \
+             `SLICE-LENGTH-OUT-OF-BOUNDS` gate reads `N - START` \
+             (which would underflow `usize` had this gate not caught \
+             the slip), so a subtle bounds slip doesn't silently \
+             degenerate into a subtraction wrap-around OR a panic \
+             deeper in `full[START + i]` bounds-checking."
+        );
+    }
+    if M > N - START {
+        panic!(
+            "assert_char_array_slice_equals_char_array: SLICE-LENGTH-\
+             OUT-OF-BOUNDS — the peer sub-array's arity `M` exceeds \
+             the outer array's tail cardinality `N - START`, so the \
+             positionwise sweep `full[START + i]` for `i ∈ [0..M)` \
+             would overrun the outer array's valid position range \
+             `[0..N)` at some `i ∈ [N - START..M)`. Fix at the \
+             `const _` witness's turbofish by reconciling `M` against \
+             the outer array's tail cardinality `N - START` OR by \
+             narrowing `START` to leave a longer tail. The peer \
+             `START-OUT-OF-BOUNDS` gate above guarantees `START ≤ N` \
+             so `N - START` never underflows `usize` at this gate. \
+             The LEGAL exact-fit corner `M == N - START` (the sub-\
+             array reaches EXACTLY to the outer array's right \
+             endpoint) is accepted; the STRICT `M > N - START` slip \
+             is what this gate rejects."
+        );
+    }
+    let mut i = 0;
+    while i < M {
+        if full[START + i] as u32 != sub[i] as u32 {
+            panic!(
+                "assert_char_array_slice_equals_char_array: CHAR-\
+                 SLICE-EQUALS-ARRAY-VIOLATION — the outer `[char; N]` \
+                 array `full` carries a `char` at some position \
+                 `START + i` (for `i ∈ [0..M)`) that does NOT byte-\
+                 equal the peer `[char; M]` sub-array `sub` at the \
+                 offset-matched position `i`. The substrate's SLICE-\
+                 EQUALS-ARRAY positionwise-composition contract on the \
+                 sub-slice `full[START..START + M) == sub[..]` is \
+                 broken; every consumer that reads `full[START..START \
+                 + M)` as a positionwise-aligned copy of a peer literal-\
+                 char listing (the reader-outer-dispatch pair \
+                 `Sexp::LIST_DELIMITERS == [Sexp::LIST_OPEN, \
+                 Sexp::LIST_CLOSE]` at `[0..2)`; the comment-boundary \
+                 pair `Sexp::COMMENT_DELIMITERS == [Sexp::COMMENT_LEAD, \
+                 Sexp::COMMENT_TERM]` at `[0..2)`; the escape-self \
+                 pair `Atom::SELF_ESCAPE_TABLE == [Atom::STR_DELIMITER, \
+                 Atom::STR_ESCAPE_LEAD]` at `[0..2)`; the escape-\
+                 source column `Atom::ESCAPE_SOURCES == [n, t, r, \", \
+                 \\]` at `[0..5)`; the escape-decoded column \
+                 `Atom::ESCAPE_DECODED == [\\n, \\t, \\r, \", \\]` at \
+                 `[0..5)`; the reader-boundary category-leading \
+                 seven-char SPAN `Sexp::NON_WHITESPACE_BARE_ATOM_\
+                 TERMINATORS` at `[0..7)`; the quote-family lead-char \
+                 triple `QuoteForm::LEADS == [QuoteForm::QUOTE_LEAD, \
+                 QuoteForm::QUASIQUOTE_LEAD, QuoteForm::UNQUOTE_LEAD]` \
+                 at `[0..3)`; the substitution-subset singleton \
+                 `UnquoteForm::LEADS == [UnquoteForm::UNQUOTE_LEAD]` \
+                 at `[0..1)`; any future family-wide `[char; N]` sub-\
+                 slice byte-for-byte equal to a peer literal-char \
+                 listing) relies on this invariant. Fix at the ARRAY-\
+                 DECLARATION site (the drifted `full[START + i]` slot \
+                 inside the slice segment) OR at the peer per-role \
+                 `pub const *_LEAD` / `*_DELIMITER` / `*_ESCAPE_LEAD` \
+                 / `*_ESCAPE_SOURCE` / `*_ESCAPE_DECODED` alias's \
+                 declaration — the choice depends on whether the \
+                 drift is an unintended slot reorder in the outer \
+                 array's initializer OR in the per-role alias's \
+                 canonical `char` value."
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time FULL-ARRAY per-position ORDER pins — one `const _: () =
+// assert_char_array_slice_equals_char_array::<N, N, 0>(&…, &[literal
+// chars; N])` per family-wide `[char; N]` scalar-composed substrate
+// array on the reader-boundary closed-set outer algebras. Each
+// invocation exercises the [`assert_char_array_slice_equals_char_array`]
+// helper at its FULL-ARRAY corner (`M == N`, `START == 0`) — the
+// SLICE-EQUALS-ARRAY sweep collapses to the ALL-positions-equal-peer-
+// array pointwise identity `arr == [c_0, c_1, …, c_{N-1}]`. The peer
+// literal-char sub-array on the RHS pins BOTH (a) the per-position
+// ORDER of the outer array's declaration (the CANONICAL variant-
+// declaration order every reader-outer-dispatch consumer depends on)
+// AND (b) each per-role `pub const *_LEAD` / `*_DELIMITER` /
+// `*_ESCAPE_LEAD` / `*_ESCAPE_SOURCE` / `*_ESCAPE_DECODED` alias's
+// canonical `char` value the outer array's slots re-export. Strictly
+// STRONGER on the (contract-strength) axis than the sibling
+// `_pairwise_distinct` witnesses at lines 116..=122 above: those bind
+// each array's IMAGE SET via INJECTIVITY but are SILENT on which SLOT
+// each char lands at — a regression that swapped `Sexp::LIST_OPEN`
+// (`'('`) and `Sexp::LIST_CLOSE` (`')'`) (drifting
+// `Sexp::LIST_DELIMITERS` from `['(', ')']` to `[')', '(']`) preserves
+// the pairwise-distinctness witness (both chars still distinct) but
+// silently misaligns every consumer indexing `LIST_DELIMITERS[0]` for
+// the reader-open dispatch. Post-lift the ARRAY-LEVEL per-position
+// order binds at rustc time via ONE `const _` witness per array; a
+// drift at either the per-role `pub const` char OR the array
+// declaration's ordering fails at `cargo check` BEFORE any test
+// scheduler runs.
+//
+// Sibling posture to the FOUR-witness EXHAUSTIVE per-position sweep on
+// the FOUR sub-carving `[u8; N]` `HASH_DISCRIMINATORS` arrays in the
+// (u8) row's FULL-ARRAY per-position ORDER cluster below in this file.
+// Those four witnesses close the FOUR sub-carving arrays against their
+// LITERAL byte listing at the (u8) row's FULL-ARRAY corner; these
+// EIGHT witnesses close the EIGHT reader-boundary scalar-composed
+// arrays against their LITERAL char listing at the (char) row's FULL-
+// ARRAY corner. Together the twelve witnesses close the (element-
+// type × contract-shape) matrix's FULL-ARRAY per-position ORDER
+// column across BOTH the (u8) row (outer-`Sexp` cache-key
+// discriminator vocabulary) AND the (char) row (reader-boundary char
+// vocabulary) EXHAUSTIVELY at rustc time.
+//
+// The eight pinned arrays appear here in canonical (owning-algebra,
+// per-role-alias-count-ascending) order:
+// * `Sexp::LIST_DELIMITERS == ['(', ')']` — outer-`Sexp` list pair.
+// * `Sexp::COMMENT_DELIMITERS == [';', '\n']` — outer-`Sexp` comment
+//   boundary pair.
+// * `Atom::SELF_ESCAPE_TABLE == ['"', '\\']` — `Atom` escape-self
+//   pair (pattern-equals-value sub-vocabulary of the Str-escape
+//   closed set).
+// * `Atom::ESCAPE_SOURCES == ['n', 't', 'r', '"', '\\']` — `Atom`
+//   escape-source column (non-passthrough SOURCE-column chars).
+// * `Atom::ESCAPE_DECODED == ['\n', '\t', '\r', '"', '\\']` —
+//   `Atom` escape-decoded column (column-dual DECODED-column chars).
+// * `Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS == ['(', ')', '\'',
+//   '`', ',', '"', ';']` — outer-`Sexp` reader-boundary category-
+//   leading seven-char SPAN across THREE type namespaces ([`Sexp`],
+//   [`QuoteForm`], [`Atom`]).
+// * `QuoteForm::LEADS == ['\'', '`', ',']` — quote-family reader-
+//   lead-char triple.
+// * `UnquoteForm::LEADS == [',']` — substitution-subset shared-lead
+//   singleton (both `Unquote` and `UnquoteSplice` share the `,`
+//   lead byte and disambiguate on the peek-then-consume `@` second
+//   char).
+const _: () =
+    assert_char_array_slice_equals_char_array::<2, 2, 0>(&Sexp::LIST_DELIMITERS, &['(', ')']);
+const _: () =
+    assert_char_array_slice_equals_char_array::<2, 2, 0>(&Sexp::COMMENT_DELIMITERS, &[';', '\n']);
+const _: () =
+    assert_char_array_slice_equals_char_array::<2, 2, 0>(&Atom::SELF_ESCAPE_TABLE, &['"', '\\']);
+const _: () = assert_char_array_slice_equals_char_array::<5, 5, 0>(
+    &Atom::ESCAPE_SOURCES,
+    &['n', 't', 'r', '"', '\\'],
+);
+const _: () = assert_char_array_slice_equals_char_array::<5, 5, 0>(
+    &Atom::ESCAPE_DECODED,
+    &['\n', '\t', '\r', '"', '\\'],
+);
+const _: () = assert_char_array_slice_equals_char_array::<7, 7, 0>(
+    &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+    &['(', ')', '\'', '`', ',', '"', ';'],
+);
+const _: () =
+    assert_char_array_slice_equals_char_array::<3, 3, 0>(&QuoteForm::LEADS, &['\'', '`', ',']);
+const _: () =
+    assert_char_array_slice_equals_char_array::<1, 1, 0>(&crate::error::UnquoteForm::LEADS, &[',']);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` alias byte-for-byte through
 /// [`str::as_bytes`].
 ///
@@ -33487,6 +33786,272 @@ mod tests {
             "assert_char_arrays_disjoint panic message {msg:?} must \
              name the failed AXIS (\"CHAR-DISJOINTNESS-VIOLATION\") \
              for axis-provenance-preserving failure diagnostics",
+        );
+    }
+
+    // ── `assert_char_array_slice_equals_char_array` — the CHAR-SLICE-
+    // EQUALS-ARRAY-VIOLATION verifier that binds the sub-slice
+    // `full[START..START + M) == sub[..]` positionwise-composition
+    // contract at compile time on the substrate's reader-boundary
+    // `[char; N]` scalar-composed vocabulary, row-dual peer to
+    // `assert_u8_array_slice_equals_u8_array` on the (u8) row of the
+    // (element-type) axis of the SAME (SUB-SLICE ARRAY-image) column
+    // of the (element-type × contract-shape) matrix. The runtime test
+    // surface pins each of the helper's arms (accept-canonical-
+    // middle-slice, accept-empty-sub-array-at-three-start-positions,
+    // accept-full-array-degenerate-at-three-arities, accept-each-of-
+    // the-eight-family-wide-substrate-arrays, reject-positionwise-
+    // drift, reject-start-out-of-bounds, reject-slice-length-out-of-
+    // bounds, panic-message-provenance on the CHAR-SLICE-EQUALS-
+    // ARRAY-VIOLATION axis) so a regression that silently weakened
+    // the helper on ANY arm (e.g. flipping `!=` to `==` on the char
+    // comparison, dropping the `START` offset from the `full[START +
+    // i]` read, returning early past ANY bounds gate, or dropping the
+    // `as u32` char-to-scalar bridge that lets the const-eval sweep
+    // proceed byte-for-byte) is caught by the helper's OWN test
+    // surface rather than only surfacing as a false-positive on some
+    // future `[char; N]`-typed reader-boundary array's per-position
+    // ORDER pin.
+
+    #[test]
+    fn assert_char_array_slice_equals_char_array_accepts_a_canonical_middle_slice() {
+        // Canonical sub-slice `full[START..START + M) == sub[..]`
+        // inside a longer array `full` whose ENDPOINTS carry
+        // DIFFERENT chars than the peer sub-array. Pins the outer
+        // `while i < M` sweep reads `full[START + i]` at the OFFSET
+        // position (not `full[i]`) — a regression that dropped the
+        // `START` offset would compare `full[0..M)` against `sub[..]`
+        // and pass on `full[0]='z' != sub[0]='b'` silently or panic
+        // on the wrong axis. `START = 1` pins the sweep skips
+        // position `[0..START)` and reads only `[1..1+3) = [1..4)`.
+        assert_char_array_slice_equals_char_array::<7, 3, 1>(
+            &['z', 'b', 'c', 'd', 'z', 'z', 'z'],
+            &['b', 'c', 'd'],
+        );
+    }
+
+    #[test]
+    fn assert_char_array_slice_equals_char_array_accepts_the_empty_sub_array() {
+        // LEGAL degenerate: `M == 0` collapses the sub-array into an
+        // empty listing `[]`. The sweep never enters the loop body
+        // and the helper accepts. Cross-position coverage pins the
+        // empty-sub-array acceptance at THREE distinct `START`
+        // positions (`START == 0` at the left endpoint, `START == 3`
+        // in the interior, `START == N` at the right endpoint — the
+        // latter is the corner `START == N` combined with `M == 0`
+        // that the START-OUT-OF-BOUNDS gate's inclusive upper bound
+        // must accept). A regression that hard-coded `START < N` OR
+        // panicked on the `M == 0` corner is caught on ALL THREE
+        // arms.
+        assert_char_array_slice_equals_char_array::<5, 0, 0>(&['x', 'x', 'x', 'x', 'x'], &[]);
+        assert_char_array_slice_equals_char_array::<5, 0, 3>(&['x', 'x', 'x', 'x', 'x'], &[]);
+        assert_char_array_slice_equals_char_array::<5, 0, 5>(&['x', 'x', 'x', 'x', 'x'], &[]);
+    }
+
+    #[test]
+    fn assert_char_array_slice_equals_char_array_accepts_the_full_array_degenerate() {
+        // Full-array-covering slice `M == N, START == 0` collapses
+        // to the ALL-positions-equal-peer-array shape `full == sub`
+        // pointwise. Pins that the sweep proceeds through EVERY
+        // position of the outer array when `START = 0` and `M = N`.
+        // Cross-arity coverage on `N ∈ {1, 3, 7}` pins the sweep's
+        // terminal-position visit across the range of char arities
+        // the substrate's reader-boundary arrays span (`N = 1` for
+        // `UnquoteForm::LEADS`, `N = 2` for the delimiter/escape
+        // pairs, `N = 3` for `QuoteForm::LEADS`, `N = 5` for
+        // `ESCAPE_SOURCES` / `ESCAPE_DECODED`, `N = 7` for
+        // `NON_WHITESPACE_BARE_ATOM_TERMINATORS`).
+        assert_char_array_slice_equals_char_array::<1, 1, 0>(&[','], &[',']);
+        assert_char_array_slice_equals_char_array::<3, 3, 0>(&['\'', '`', ','], &['\'', '`', ',']);
+        assert_char_array_slice_equals_char_array::<7, 7, 0>(
+            &['(', ')', '\'', '`', ',', '"', ';'],
+            &['(', ')', '\'', '`', ',', '"', ';'],
+        );
+    }
+
+    #[test]
+    fn assert_char_array_slice_equals_char_array_accepts_each_family_wide_substrate_array() {
+        // Runtime cross-check that the EIGHT reader-boundary
+        // `[char; N]` scalar-composed substrate arrays each byte-
+        // equal their canonical literal-char listing pointwise at the
+        // FULL-ARRAY corner (`M == N`, `START == 0`). Runs the SAME
+        // helper the eight `const _` witnesses at line ~616 in this
+        // file run at rustc time — a runtime safety net enforcing
+        // the theorem at BOTH stages of the toolchain (const at
+        // `cargo check`, runtime at `cargo test`). A regression that
+        // renamed one of the per-role `*_LEAD` / `*_DELIMITER` /
+        // `*_ESCAPE_LEAD` / `*_ESCAPE_SOURCE` / `*_ESCAPE_DECODED`
+        // aliases (or drifted its literal char value at the
+        // declaration site, or reordered a slot in the outer array's
+        // initializer) fails HERE at the substrate callsite AND at
+        // the const witness above. Peer of
+        // `assert_u8_array_slice_equals_u8_array_accepts_sub_carving_hash_discriminators_per_position_order`
+        // on the (u8) row — that witness carries the FULL-ARRAY per-
+        // position ORDER theorem for the FOUR sub-carving
+        // `HASH_DISCRIMINATORS` arrays; this witness carries the same
+        // theorem for the EIGHT reader-boundary `char` arrays.
+        //
+        // The eight reader-boundary scalar-composed arrays appear
+        // here in canonical (owning-algebra, per-role-alias-count-
+        // ascending) order:
+        // * `Sexp::LIST_DELIMITERS == ['(', ')']` — the outer-`Sexp`
+        //   list-delimiter pair.
+        // * `Sexp::COMMENT_DELIMITERS == [';', '\n']` — the outer-
+        //   `Sexp` comment-boundary pair.
+        // * `Atom::SELF_ESCAPE_TABLE == ['"', '\\']` — the `Atom`
+        //   escape-self pair.
+        // * `Atom::ESCAPE_SOURCES == ['n', 't', 'r', '"', '\\']` —
+        //   the `Atom` escape-source column.
+        // * `Atom::ESCAPE_DECODED == ['\n', '\t', '\r', '"', '\\']`
+        //   — the `Atom` escape-decoded column.
+        // * `Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS == ['(',
+        //   ')', '\'', '`', ',', '"', ';']` — the outer-`Sexp`
+        //   reader-boundary category-leading seven-char SPAN.
+        // * `QuoteForm::LEADS == ['\'', '`', ',']` — the quote-
+        //   family reader-lead-char triple.
+        // * `UnquoteForm::LEADS == [',']` — the substitution-subset
+        //   shared-lead singleton.
+        assert_char_array_slice_equals_char_array::<2, 2, 0>(&Sexp::LIST_DELIMITERS, &['(', ')']);
+        assert_char_array_slice_equals_char_array::<2, 2, 0>(
+            &Sexp::COMMENT_DELIMITERS,
+            &[';', '\n'],
+        );
+        assert_char_array_slice_equals_char_array::<2, 2, 0>(
+            &Atom::SELF_ESCAPE_TABLE,
+            &['"', '\\'],
+        );
+        assert_char_array_slice_equals_char_array::<5, 5, 0>(
+            &Atom::ESCAPE_SOURCES,
+            &['n', 't', 'r', '"', '\\'],
+        );
+        assert_char_array_slice_equals_char_array::<5, 5, 0>(
+            &Atom::ESCAPE_DECODED,
+            &['\n', '\t', '\r', '"', '\\'],
+        );
+        assert_char_array_slice_equals_char_array::<7, 7, 0>(
+            &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+            &['(', ')', '\'', '`', ',', '"', ';'],
+        );
+        assert_char_array_slice_equals_char_array::<3, 3, 0>(&QuoteForm::LEADS, &['\'', '`', ',']);
+        assert_char_array_slice_equals_char_array::<1, 1, 0>(
+            &crate::error::UnquoteForm::LEADS,
+            &[','],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "CHAR-SLICE-EQUALS-ARRAY-VIOLATION")]
+    fn assert_char_array_slice_equals_char_array_panics_at_runtime_on_positionwise_drift() {
+        // NEGATIVE PIN — CHAR-SLICE-EQUALS-ARRAY-VIOLATION corner: a
+        // char at some position in `full[START..START + M)` that
+        // does NOT byte-equal the peer sub-array `sub` at the
+        // offset-matched position MUST panic at runtime with the
+        // axis-named message. Pins the helper's positionwise-drift
+        // reject arm — a regression that silently short-circuited on
+        // the first slice position without checking the middle or
+        // terminal slice positions would slip through the compile-
+        // time witness's failure mode too. The offending char `'!'`
+        // at outer position `3` (interior of the sub-slice `[1..4)`,
+        // offset `2` inside `sub`) pins the middle-of-slice drift
+        // mode.
+        assert_char_array_slice_equals_char_array::<5, 3, 1>(
+            &['z', 'b', 'c', '!', 'z'],
+            &['b', 'c', 'd'],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "START-OUT-OF-BOUNDS")]
+    fn assert_char_array_slice_equals_char_array_panics_at_runtime_on_start_out_of_bounds() {
+        // NEGATIVE PIN — START-OUT-OF-BOUNDS gate: a caller-side
+        // turbofish arity slip on the `START` const-generic where
+        // `START > N` MUST panic at runtime with the START-OUT-OF-
+        // BOUNDS-named message BEFORE the peer SLICE-LENGTH-OUT-OF-
+        // BOUNDS gate reads `N - START` (which would `usize`-
+        // underflow had this gate not caught the slip first). Pins
+        // the gate's placement at the TOP of the helper — a
+        // regression that dropped the gate would either underflow
+        // subtraction at the peer gate OR panic deeper in
+        // `full[START + i]` bounds-checking with a helper-name-less
+        // panic message. The offending `START = 7` against `N = 5`
+        // pins the strict `START > N` reject arm; the LEGAL
+        // `START == N` empty-slice-at-right-endpoint corner is
+        // covered by the peer acceptance test above.
+        assert_char_array_slice_equals_char_array::<5, 0, 7>(&['x', 'x', 'x', 'x', 'x'], &[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SLICE-LENGTH-OUT-OF-BOUNDS")]
+    fn assert_char_array_slice_equals_char_array_panics_at_runtime_on_slice_length_out_of_bounds() {
+        // NEGATIVE PIN — SLICE-LENGTH-OUT-OF-BOUNDS gate: a peer
+        // sub-array arity `M` that exceeds the outer array's tail
+        // cardinality `N - START` MUST panic at runtime with the
+        // slice-length-out-of-bounds-named message. Peer gate to the
+        // START-OUT-OF-BOUNDS arm above — the two gates jointly
+        // enforce `START ≤ N` and `M ≤ N - START` before any content
+        // sweep. The offending `M = 5` against `N - START = 5 - 3 =
+        // 2` pins the strict `M > N - START` reject arm; the LEGAL
+        // exact-fit corner `M == N - START` is covered by the
+        // middle-slice acceptance test above.
+        assert_char_array_slice_equals_char_array::<5, 5, 3>(
+            &['x', 'x', 'x', 'x', 'x'],
+            &['x', 'x', 'x', 'x', 'x'],
+        );
+    }
+
+    #[test]
+    fn assert_char_array_slice_equals_char_array_panic_message_names_the_helper_and_char_slice_equals_array_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — CHAR-SLICE-EQUALS-ARRAY-
+        // VIOLATION arm: the panic message MUST begin with the
+        // helper's own name AND identify the failed AXIS as "CHAR-
+        // SLICE-EQUALS-ARRAY-VIOLATION" so downstream diagnostics
+        // route the drift back to (a) the helper by string search on
+        // `"assert_char_array_slice_equals_char_array"` and (b) the
+        // failed axis by string search on `"CHAR-SLICE-EQUALS-ARRAY-
+        // VIOLATION"`. Sibling posture to the u8-row peer's
+        // provenance pin
+        // `assert_u8_array_slice_equals_u8_array_panic_message_names_the_helper_and_slice_equals_array_violation_axis`
+        // — the two pins together bind the (helper, failed-axis)
+        // provenance pair at ONE test per corner of the (SUB-SLICE
+        // ARRAY-image) column on both the (u8) row AND the (char)
+        // row of the (element-type × contract-shape) matrix. The
+        // `CHAR-` prefix on this axis disambiguates it from the u8-
+        // row sibling's plain `SLICE-EQUALS-ARRAY-VIOLATION` axis
+        // vocabulary; the shared `-SLICE-EQUALS-ARRAY-VIOLATION`
+        // infix lets callers grep either element-type variant by
+        // the shared axis substring.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_array_slice_equals_char_array::<5, 3, 1>(
+                &['z', 'b', 'c', '!', 'z'],
+                &['b', 'c', 'd'],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_array_slice_equals_char_array must panic on \
+             a positionwise drift — the reject-positionwise-drift arm \
+             is the CONTENT failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_array_slice_equals_char_array panic \
+                 payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_array_slice_equals_char_array"),
+            "assert_char_array_slice_equals_char_array panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+        assert!(
+            msg.contains("CHAR-SLICE-EQUALS-ARRAY-VIOLATION"),
+            "assert_char_array_slice_equals_char_array panic message \
+             {msg:?} must name the failed AXIS (\"CHAR-SLICE-EQUALS-\
+             ARRAY-VIOLATION\") for axis-provenance-preserving \
+             failure diagnostics",
         );
     }
 

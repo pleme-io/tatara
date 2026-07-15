@@ -3914,6 +3914,307 @@ const _: () =
     );
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// the sub-slice `full[START..START + M)` of the family-wide `[(char,
+/// char); N]` paired substrate array `full` is NOT byte-for-byte equal
+/// to the peer `[(char, char); M]` paired sub-array `sub` at the
+/// offset-matched positions. Binds ONE compound (SLICE × PAIRED-
+/// POSITIONWISE-EQUALITY) contract on the `(char, char)` product-
+/// element row of the (element-type × contract-shape) matrix at the
+/// (SUB-SLICE ARRAY-image) column — opens the FOURTH element-type row
+/// of that column peer to the pre-existing (u8) sibling
+/// [`assert_u8_array_slice_equals_u8_array`], (char) sibling
+/// [`assert_char_array_slice_equals_char_array`], and (str) sibling
+/// [`assert_str_array_slice_equals_str_array`]. Together the four
+/// helpers close the (SUB-SLICE ARRAY-image) column across the FULL
+/// (u8, char, str, (char, char)) element-type row set of the
+/// (element-type × contract-shape) matrix.
+///
+/// Bounds preconditions: `START ≤ N` (inclusive upper bound —
+/// `START == N` combined with `M == 0` is the LEGAL empty-slice-at-
+/// right-endpoint corner) AND `M ≤ N - START` (inclusive upper bound —
+/// `M == N - START` is the LEGAL exact-fit-to-right-endpoint corner).
+/// The two bounds gates fire IN ORDER — `START` is validated FIRST so
+/// the peer `M` gate can safely evaluate `N - START` without `usize`
+/// underflow. A caller-side turbofish arity slip fails-loudly on the
+/// specific bounds axis it violated BEFORE the positionwise sweep
+/// reads `full[START + i]`, so a bounds slip doesn't silently
+/// degenerate into a subtraction wrap-around OR a panic deeper in
+/// `full[START + i]` bounds-checking.
+///
+/// Failure axes — the helper partitions its rejection surface into
+/// FOUR disjoint arms, each with a DISTINCT axis-provenance prefix on
+/// the panic message so downstream diagnostics route the drift back
+/// to the specific gate (and, on the CONTENT arms, the specific
+/// COLUMN of the paired sub-slice) that diverged:
+///   1. `START-OUT-OF-BOUNDS` — `START > N`.
+///   2. `SLICE-LENGTH-OUT-OF-BOUNDS` — `M > N - START` (the peer
+///      `START` gate above guarantees `N - START` never underflows).
+///   3. `CHAR-PAIR-SLICE-EQUALS-ARRAY-LEFT-COLUMN-VIOLATION` — some
+///      `i ∈ [0..M)` where `full[START + i].0 != sub[i].0` (LEFT
+///      column of the paired positionwise sweep).
+///   4. `CHAR-PAIR-SLICE-EQUALS-ARRAY-RIGHT-COLUMN-VIOLATION` — some
+///      `i ∈ [0..M)` where `full[START + i].1 != sub[i].1` (RIGHT
+///      column of the paired positionwise sweep).
+///
+/// The two CONTENT arms split by COLUMN in the SAME style as the
+/// sibling (char, char)-row [`assert_char_pair_array_columns_equal_
+/// char_arrays`] helper's `LEFT-COLUMN-DIVERGENCE` /
+/// `RIGHT-COLUMN-DIVERGENCE` split, so a diagnostic that names the
+/// failed axis routes UNAMBIGUOUSLY to (a) this specific (char, char)-
+/// row SLICE-EQUALS-ARRAY helper by string search on the axis substring
+/// `-CHAR-PAIR-SLICE-EQUALS-ARRAY-` (distinguishing it from the sibling
+/// `-CHAR-SLICE-EQUALS-ARRAY-` (char) row axis and the plain `-SLICE-
+/// EQUALS-ARRAY-` (u8) row axis) and (b) the failed COLUMN by the
+/// `-LEFT-COLUMN-` / `-RIGHT-COLUMN-` infix. The shared `-SLICE-EQUALS-
+/// ARRAY-VIOLATION` suffix lets callers grep any of the FOUR element-
+/// type variants by ONE substring.
+///
+/// Applied to the substrate's (`Atom::ESCAPE_TABLE`,
+/// `Atom::NAMED_ESCAPE_TABLE`) pair at ONE module-level `const _: () =
+/// assert_char_pair_array_slice_equals_char_pair_array::<5, 3, 0>(&
+/// Atom::ESCAPE_TABLE, &Atom::NAMED_ESCAPE_TABLE);` witness below the
+/// helper. `Atom::ESCAPE_TABLE[0..3]` (`[(char, char); 3]` HEAD
+/// segment) is byte-for-byte equal to `Atom::NAMED_ESCAPE_TABLE`
+/// verbatim by declaration intent — the outer `ESCAPE_TABLE` array's
+/// first three initializer slots each spell an entry drawn directly
+/// from `NAMED_ESCAPE_TABLE`'s corresponding slot. Pre-lift, this
+/// HEAD-segment positionwise-composition identity was bound TRANSITIVELY
+/// through the sibling [`assert_char_pair_array_is_concatenation_of_
+/// char_pair_array_and_char_array_diagonal`]`::<5, 3, 2>` witness on the
+/// same three-array triple — that sibling binds the FULL composite
+/// `ESCAPE_TABLE == NAMED_ESCAPE_TABLE ++ diagonal(SELF_ESCAPE_TABLE)`
+/// so the HEAD is transitively bound alongside the DIAGONAL TAIL.
+/// Post-lift, the HEAD-segment identity binds INDEPENDENTLY on its
+/// OWN axis at ONE additional `const _` line — a regression that
+/// silently broke the diagonal-tail binding (e.g. by swapping the
+/// diagonal embedding to an anti-diagonal `(SELF[1], SELF[0])`)
+/// would trip the sibling witness's `DIAGONAL-TAIL-*` arm alone;
+/// this new witness continues to guarantee the HEAD-segment identity
+/// on the CHAR-PAIR-SLICE-EQUALS-ARRAY-* axis regardless of the
+/// tail's shape, so a HEAD-only drift (e.g. reordering the three
+/// NAMED entries in ESCAPE_TABLE's initializer while leaving
+/// NAMED_ESCAPE_TABLE's order intact) trips THIS witness's LEFT-
+/// COLUMN / RIGHT-COLUMN axis on its OWN axis-provenance vocabulary.
+/// The two witnesses partition the drift-detection surface by SEGMENT
+/// (HEAD vs DIAGONAL TAIL) and by AXIS-PROVENANCE (SLICE-EQUALS-ARRAY
+/// vs SEGMENTED-CONCATENATION-with-DIAGONAL-TAIL), catching each
+/// SEGMENT's drift on the axis best suited to route the fix back to
+/// the SPECIFIC declaration site at fault.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP
+/// tokenizer that constructs a paired sub-array at runtime and wants
+/// to verify SLICE-EQUALS-ARRAY structure before consuming it — and
+/// the panic surfaces normally in that path (pinned by
+/// `assert_char_pair_array_slice_equals_char_pair_array_panics_at_
+/// runtime_on_left_column_drift`,
+/// `assert_char_pair_array_slice_equals_char_pair_array_panics_at_
+/// runtime_on_right_column_drift`,
+/// `assert_char_pair_array_slice_equals_char_pair_array_panics_at_
+/// runtime_on_start_out_of_bounds`,
+/// `assert_char_pair_array_slice_equals_char_pair_array_panics_at_
+/// runtime_on_slice_length_out_of_bounds`, and the two axis-
+/// provenance pins on the LEFT-COLUMN + RIGHT-COLUMN axes).
+///
+/// Adding a new family-wide `[(char, char); N]` substrate array whose
+/// sub-slice is byte-for-byte equal to a peer paired sub-vocabulary's
+/// canonical `[(char, char); M]` listing: pair the declaration with
+/// `const _: () = assert_char_pair_array_slice_equals_char_pair_array::
+/// <N, M, START>(&Self::FOO_TABLE, &Self::FOO_SUB_TABLE);` co-located
+/// after the composite's declaration and the compound identity binds
+/// at compile time.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the SLICE-EQUALS-ARRAY
+///   positionwise-composition contract on the `(char, char)` paired
+///   vocabulary becomes a TYPE-LEVEL theorem the substrate carries
+///   per (container, sub-carving) pair rather than a runtime iterator
+///   sweep the developer must remember to write per pair.
+/// - THEORY.md §III — the typescape; the (element-type × contract-
+///   shape) matrix now carries the (SUB-SLICE ARRAY-image) column
+///   at ALL FOUR element-type rows — the (u8), (char), (str), and
+///   `(char, char)` rows each ship a peer const-fn helper. The FOUR
+///   helpers close the SUB-SLICE ARRAY-image column of the matrix.
+/// - THEORY.md §VI.1 — generation over composition; the paired
+///   positionwise sweep IS the generative shape. Every new paired
+///   composite declared as a positionwise-composition against a peer
+///   paired sub-vocabulary adds ONE `const _` line to get the
+///   compound theorem rather than re-deriving a runtime
+///   `full[START + i] == sub[i]` per-position sweep.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   SUB-SLICE positionwise-composition proof at declaration site AND
+///   the peer-sub-vocabulary consumers that read the composite's sub-
+///   slice regenerate through the SAME `const _` witness.
+pub const fn assert_char_pair_array_slice_equals_char_pair_array<
+    const N: usize,
+    const M: usize,
+    const START: usize,
+>(
+    full: &[(char, char); N],
+    sub: &[(char, char); M],
+) {
+    if START > N {
+        panic!(
+            "assert_char_pair_array_slice_equals_char_pair_array: \
+             START-OUT-OF-BOUNDS — the const parameter `START` sits \
+             OUTSIDE the outer array's valid position range `[0..N]` \
+             (inclusive upper bound: `START == N` combined with `M == \
+             0` is the LEGAL empty-slice-at-right-endpoint corner). \
+             Fix at the `const _` witness's turbofish by reconciling \
+             `START` against the outer array's declared arity `N`. \
+             The START-OUT-OF-BOUNDS gate fires FIRST — a mistyped \
+             `START` on the caller side fails HERE before the peer \
+             `SLICE-LENGTH-OUT-OF-BOUNDS` gate reads `N - START` \
+             (which would underflow `usize` had this gate not caught \
+             the slip), so a subtle bounds slip doesn't silently \
+             degenerate into a subtraction wrap-around OR a panic \
+             deeper in `full[START + i]` bounds-checking."
+        );
+    }
+    if M > N - START {
+        panic!(
+            "assert_char_pair_array_slice_equals_char_pair_array: \
+             SLICE-LENGTH-OUT-OF-BOUNDS — the peer sub-array's arity \
+             `M` exceeds the outer array's tail cardinality `N - \
+             START`, so the positionwise sweep `full[START + i]` for \
+             `i ∈ [0..M)` would overrun the outer array's valid \
+             position range `[0..N)` at some `i ∈ [N - START..M)`. \
+             Fix at the `const _` witness's turbofish by reconciling \
+             `M` against the outer array's tail cardinality `N - \
+             START` OR by narrowing `START` to leave a longer tail. \
+             The peer `START-OUT-OF-BOUNDS` gate above guarantees \
+             `START ≤ N` so `N - START` never underflows `usize` at \
+             this gate. The LEGAL exact-fit corner `M == N - START` \
+             (the sub-array reaches EXACTLY to the outer array's \
+             right endpoint) is accepted; the STRICT `M > N - START` \
+             slip is what this gate rejects."
+        );
+    }
+    let mut i = 0;
+    while i < M {
+        if full[START + i].0 as u32 != sub[i].0 as u32 {
+            panic!(
+                "assert_char_pair_array_slice_equals_char_pair_array: \
+                 CHAR-PAIR-SLICE-EQUALS-ARRAY-LEFT-COLUMN-VIOLATION — \
+                 the outer `[(char, char); N]` paired array `full` \
+                 carries a LEFT-column entry at some position `START + \
+                 i` (for `i ∈ [0..M)`) that does NOT byte-equal the \
+                 peer `[(char, char); M]` paired sub-array `sub` at \
+                 the offset-matched position `i`. The substrate's \
+                 (SLICE × PAIRED-POSITIONWISE-EQUALITY) contract on \
+                 the LEFT column of the sub-slice `full[START..START + \
+                 M) == sub[..]` is broken; every consumer that reads \
+                 `full[START..START + M)`'s LEFT column as a \
+                 positionwise-aligned copy of the peer paired sub-\
+                 vocabulary's LEFT column (the substrate's Str-payload \
+                 escape-table HEAD segment `Atom::ESCAPE_TABLE[0..3] \
+                 == Atom::NAMED_ESCAPE_TABLE` — a regression that \
+                 reordered ESCAPE_TABLE's first three initializer \
+                 entries away from NAMED_ESCAPE_TABLE's canonical \
+                 order without updating NAMED_ESCAPE_TABLE trips \
+                 HERE on the LEFT column; any future container-array \
+                 paired sub-slice byte-for-byte equal to a peer \
+                 paired sub-vocabulary's canonical `[(char, char); \
+                 M]` listing) relies on this invariant. Fix at the \
+                 ARRAY-DECLARATION site (the drifted `full[START + \
+                 i].0` slot inside the slice segment) OR at the peer \
+                 paired sub-array's arm listing — the choice depends \
+                 on whether the drift is an unintended slot reorder \
+                 in the outer array's slice OR in the sub-carving's \
+                 own listing. The LEFT-COLUMN-* axis prefix routes \
+                 the fix specifically to the LEFT column of the \
+                 paired sweep — a RIGHT-column drift would trip the \
+                 peer RIGHT-COLUMN-* axis arm below on its OWN \
+                 distinct axis-provenance vocabulary."
+            );
+        }
+        if full[START + i].1 as u32 != sub[i].1 as u32 {
+            panic!(
+                "assert_char_pair_array_slice_equals_char_pair_array: \
+                 CHAR-PAIR-SLICE-EQUALS-ARRAY-RIGHT-COLUMN-VIOLATION \
+                 — the outer `[(char, char); N]` paired array `full` \
+                 carries a RIGHT-column entry at some position `START \
+                 + i` (for `i ∈ [0..M)`) that does NOT byte-equal the \
+                 peer `[(char, char); M]` paired sub-array `sub` at \
+                 the offset-matched position `i`. The substrate's \
+                 (SLICE × PAIRED-POSITIONWISE-EQUALITY) contract on \
+                 the RIGHT column of the sub-slice `full[START..START \
+                 + M) == sub[..]` is broken; every consumer that \
+                 reads `full[START..START + M)`'s RIGHT column as a \
+                 positionwise-aligned copy of the peer paired sub-\
+                 vocabulary's RIGHT column (the substrate's Str-\
+                 payload escape-table HEAD segment `Atom::ESCAPE_\
+                 TABLE[0..3] == Atom::NAMED_ESCAPE_TABLE` — a \
+                 regression that drifted a DECODED byte across \
+                 ESCAPE_TABLE and NAMED_ESCAPE_TABLE without updating \
+                 the other trips HERE on the RIGHT column; any \
+                 future container-array paired sub-slice byte-for-\
+                 byte equal to a peer paired sub-vocabulary's \
+                 canonical `[(char, char); M]` listing) relies on \
+                 this invariant. Fix at the ARRAY-DECLARATION site \
+                 (the drifted `full[START + i].1` slot inside the \
+                 slice segment) OR at the peer paired sub-array's \
+                 arm listing — the choice depends on whether the \
+                 drift is an unintended slot rewrite in the outer \
+                 array's slice OR in the sub-carving's own listing. \
+                 The RIGHT-COLUMN-* axis prefix routes the fix \
+                 specifically to the RIGHT column of the paired \
+                 sweep — a LEFT-column drift would trip the peer \
+                 LEFT-COLUMN-* axis arm above on its OWN distinct \
+                 axis-provenance vocabulary."
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time SLICE-EQUALS-ARRAY witness — the ONE `(container, sub-
+// carving)` pair on the substrate whose ARRAY-LEVEL structure composes
+// a paired container-array sub-slice byte-for-byte identical to a
+// peer paired sub-carving's canonical `[(char, char); M]` listing.
+// `Atom::ESCAPE_TABLE[0..3]` (the three-slot NAMED-escape HEAD segment
+// of the outer five-slot Str-payload escape-table array) is byte-for-
+// byte equal to `Atom::NAMED_ESCAPE_TABLE` verbatim — the outer
+// ESCAPE_TABLE array's first three initializer slots each spell an
+// entry drawn directly from NAMED_ESCAPE_TABLE's corresponding slot.
+// Pre-lift, this HEAD-segment positionwise-composition identity was
+// bound TRANSITIVELY through the sibling `assert_char_pair_array_is_
+// concatenation_of_char_pair_array_and_char_array_diagonal::<5, 3, 2>`
+// witness at line ~3909 above (that sibling binds the FULL composite
+// `ESCAPE_TABLE == NAMED_ESCAPE_TABLE ++ diagonal(SELF_ESCAPE_TABLE)`
+// so the HEAD segment is bound alongside the DIAGONAL TAIL through a
+// single composite-construction proof); post-lift, the HEAD segment
+// binds INDEPENDENTLY on the (SLICE × PAIRED-POSITIONWISE-EQUALITY)
+// axis at ONE additional `const _` line, routing any HEAD-only drift
+// (e.g. reordering ESCAPE_TABLE's first three initializer entries
+// while leaving NAMED_ESCAPE_TABLE's order intact) through the
+// CHAR-PAIR-SLICE-EQUALS-ARRAY-LEFT-COLUMN / -RIGHT-COLUMN axis-
+// provenance vocabulary rather than the sibling's `HEAD-SEGMENT-
+// LEFT-DIVERGENCE` / `HEAD-SEGMENT-RIGHT-DIVERGENCE` axis-
+// provenance vocabulary. The two witnesses partition the drift-
+// detection surface by SEGMENT and AXIS-PROVENANCE.
+//
+// Sibling posture to the FOUR (str)-row per-position witnesses on
+// `crate::error::SexpShape::LABELS` in `error.rs` (four
+// `assert_str_array_slice_equals_str_array::<12, {1,3,4,6,8,12},
+// {0,1,7,8}>` witnesses that positionally decompose the twelve-slot
+// LABELS parent array against its four sub-carvings' LABELS arrays)
+// and to the TWO singleton + ONE four-slot (u8)-row witnesses on
+// `SexpShape::HASH_DISCRIMINATORS` in this file. Those siblings each
+// carry the sub-carving-projection SLICE-EQUALS-ARRAY sweep at the
+// (u8) row and the (str) row of the (SUB-SLICE ARRAY-image) column;
+// this witness opens the SAME sweep at the `(char, char)` product-
+// element row on the SAME column. Together the (u8, char, str, (char,
+// char)) FOUR-row column closure carries the (SUB-SLICE ARRAY-image)
+// column of the (element-type × contract-shape) matrix across the
+// FULL element-type row set the substrate declares family-wide
+// arrays for at rustc time.
+const _: () = assert_char_pair_array_slice_equals_char_pair_array::<5, 3, 0>(
+    &Atom::ESCAPE_TABLE,
+    &Atom::NAMED_ESCAPE_TABLE,
+);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// the family-wide `[char; N]` scalar substrate array `arr` is NOT byte-
 /// for-byte equal to the CONCATENATION of the SELECTED COLUMN of the
 /// peer paired `[(char, char); K]` array `head_table` (contributing the
@@ -38001,6 +38302,312 @@ mod tests {
              panic message {msg:?} must name the failed AXIS \
              (\"CARDINALITY-MISMATCH\") for axis-provenance-preserving \
              failure diagnostics",
+        );
+    }
+
+    // ── `assert_char_pair_array_slice_equals_char_pair_array` — the
+    // `(char, char)` product-element row's SLICE-EQUALS-ARRAY verifier
+    // that binds the sub-slice `full[START..START + M) == sub[..]`
+    // paired-positionwise-composition contract at compile time. Row-
+    // dual peer to `assert_u8_array_slice_equals_u8_array`,
+    // `assert_char_array_slice_equals_char_array`, and
+    // `assert_str_array_slice_equals_str_array` on the (element-type)
+    // axis of the SAME (SUB-SLICE ARRAY-image) column of the (element-
+    // type × contract-shape) matrix. The runtime test surface pins
+    // each of the helper's arms (accept-canonical-middle-slice,
+    // accept-empty-sub-array-at-three-start-positions, accept-full-
+    // array-degenerate-at-two-arities, accept-substrate-escape-table-
+    // head-segment-decomposition, reject-left-column-drift, reject-
+    // right-column-drift, reject-start-out-of-bounds, reject-slice-
+    // length-out-of-bounds, panic-message-provenance on the LEFT-
+    // COLUMN + RIGHT-COLUMN axes) so a regression that silently
+    // weakened the helper on ANY arm (e.g. dropping the LEFT-column
+    // check, dropping the RIGHT-column check, dropping the `START`
+    // offset from the `full[START + i]` read, returning early past
+    // ANY bounds gate, or dropping the `as u32` char-to-scalar bridge
+    // that lets the const-eval sweep proceed byte-for-byte on each
+    // column) is caught by the helper's OWN test surface rather than
+    // only surfacing as a false-positive on some future paired
+    // container-array sub-slice equality.
+
+    #[test]
+    fn assert_char_pair_array_slice_equals_char_pair_array_accepts_a_canonical_middle_slice() {
+        // Canonical paired sub-slice `full[START..START + M) == sub[..]`
+        // inside a longer paired array `full` whose ENDPOINTS carry
+        // DIFFERENT pairs than the peer sub-array. Pins the outer
+        // `while i < M` sweep reads `full[START + i]` at the OFFSET
+        // position (not `full[i]`) on BOTH columns — a regression that
+        // dropped the `START` offset would compare `full[0..M)`
+        // against `sub[..]` and panic on the wrong axis. `START = 1`
+        // pins the sweep skips position `[0..START)` and reads only
+        // `[1..1+3) = [1..4)` on both columns of the paired sub-array.
+        assert_char_pair_array_slice_equals_char_pair_array::<5, 3, 1>(
+            &[('z', 'Z'), ('a', 'x'), ('b', 'y'), ('c', 'z'), ('z', 'Z')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_slice_equals_char_pair_array_accepts_the_empty_sub_array() {
+        // LEGAL degenerate: `M == 0` collapses the paired sub-array
+        // into an empty listing `[]`. The sweep never enters the loop
+        // body and the helper accepts. Cross-position coverage pins
+        // the empty-sub-array acceptance at THREE distinct `START`
+        // positions (`START == 0` at the left endpoint, `START == 2`
+        // in the interior, `START == N` at the right endpoint — the
+        // latter is the corner `START == N` combined with `M == 0`
+        // that the START-OUT-OF-BOUNDS gate's inclusive upper bound
+        // must accept). A regression that hard-coded `START < N` OR
+        // panicked on the `M == 0` corner is caught on ALL THREE
+        // arms.
+        assert_char_pair_array_slice_equals_char_pair_array::<5, 0, 0>(
+            &[('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X')],
+            &[],
+        );
+        assert_char_pair_array_slice_equals_char_pair_array::<5, 0, 2>(
+            &[('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X')],
+            &[],
+        );
+        assert_char_pair_array_slice_equals_char_pair_array::<5, 0, 5>(
+            &[('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X')],
+            &[],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_slice_equals_char_pair_array_accepts_the_full_array_degenerate() {
+        // Full-array-covering slice `M == N, START == 0` collapses
+        // to the ALL-positions-equal-peer-array shape `full == sub`
+        // pointwise on BOTH columns. Pins that the sweep proceeds
+        // through EVERY position of the outer paired array when
+        // `START = 0` and `M = N`. Cross-arity coverage on `N ∈ {2,
+        // 3}` pins the sweep's terminal-position visit across the
+        // small arities the substrate's paired escape-table
+        // vocabulary spans (`N = 2` for a hypothetical two-slot
+        // paired table, `N = 3` for `NAMED_ESCAPE_TABLE`).
+        assert_char_pair_array_slice_equals_char_pair_array::<2, 2, 0>(
+            &[('a', 'x'), ('b', 'y')],
+            &[('a', 'x'), ('b', 'y')],
+        );
+        assert_char_pair_array_slice_equals_char_pair_array::<3, 3, 0>(
+            &[('n', '\n'), ('t', '\t'), ('r', '\r')],
+            &[('n', '\n'), ('t', '\t'), ('r', '\r')],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_slice_equals_char_pair_array_accepts_the_substrate_escape_table_head_segment(
+    ) {
+        // Runtime cross-check that the substrate's (ESCAPE_TABLE,
+        // NAMED_ESCAPE_TABLE) HEAD-segment positionwise-composition
+        // identity `ESCAPE_TABLE[0..3] == NAMED_ESCAPE_TABLE` holds
+        // pointwise on BOTH columns. Runs the SAME helper the module-
+        // level `const _` witness runs at rustc time — a runtime
+        // safety net enforcing the theorem at BOTH stages of the
+        // toolchain (const at `cargo check`, runtime at `cargo
+        // test`). A regression that renamed one of the three
+        // NAMED-escape SOURCE or DECODED entries (or drifted the
+        // ordering across ESCAPE_TABLE's first three initializer
+        // slots) fails HERE at the substrate callsite AND at the
+        // const witness above. Peer of
+        // `assert_char_array_slice_equals_char_array_accepts_each_family_wide_substrate_array`
+        // on the (char) row — that witness carries the FULL-ARRAY
+        // per-position ORDER theorem for the EIGHT reader-boundary
+        // `[char; N]` arrays; this witness carries the HEAD-segment
+        // per-position ORDER theorem for the substrate's SINGLE
+        // paired-composite pair on the `(char, char)` product-
+        // element row.
+        assert_char_pair_array_slice_equals_char_pair_array::<5, 3, 0>(
+            &Atom::ESCAPE_TABLE,
+            &Atom::NAMED_ESCAPE_TABLE,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "CHAR-PAIR-SLICE-EQUALS-ARRAY-LEFT-COLUMN-VIOLATION")]
+    fn assert_char_pair_array_slice_equals_char_pair_array_panics_at_runtime_on_left_column_drift()
+    {
+        // NEGATIVE PIN — CHAR-PAIR-SLICE-EQUALS-ARRAY-LEFT-COLUMN-
+        // VIOLATION corner: a LEFT-column entry at some position in
+        // `full[START..START + M)` that does NOT byte-equal the peer
+        // sub-array `sub` at the offset-matched position MUST panic
+        // at runtime with the axis-named message. Pins the helper's
+        // LEFT-column reject arm — a regression that silently
+        // dropped the LEFT-column check while retaining the RIGHT-
+        // column check would slip through the compile-time witness's
+        // LEFT-drift failure mode too. The offending LEFT-column
+        // char `'!'` at outer position `3` (interior of the sub-
+        // slice `[1..4)`, offset `2` inside `sub`) pins the middle-
+        // of-slice LEFT-column drift mode.
+        assert_char_pair_array_slice_equals_char_pair_array::<5, 3, 1>(
+            &[('z', 'Z'), ('a', 'x'), ('b', 'y'), ('!', 'z'), ('z', 'Z')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "CHAR-PAIR-SLICE-EQUALS-ARRAY-RIGHT-COLUMN-VIOLATION")]
+    fn assert_char_pair_array_slice_equals_char_pair_array_panics_at_runtime_on_right_column_drift()
+    {
+        // NEGATIVE PIN — CHAR-PAIR-SLICE-EQUALS-ARRAY-RIGHT-COLUMN-
+        // VIOLATION corner: a RIGHT-column entry at some position in
+        // `full[START..START + M)` that does NOT byte-equal the peer
+        // sub-array `sub` at the offset-matched position MUST panic
+        // at runtime with the axis-named message. Pins the helper's
+        // RIGHT-column reject arm — a regression that silently
+        // dropped the RIGHT-column check while retaining the LEFT-
+        // column check would slip through the compile-time witness's
+        // RIGHT-drift failure mode too. The LEFT column matches
+        // exactly on every position so ONLY the RIGHT column drift
+        // (`'!'` at outer position `3`, offset `2` inside `sub`)
+        // fires the reject arm — routing the diagnostic to the
+        // RIGHT-COLUMN-* axis rather than the sibling LEFT-COLUMN-*
+        // axis.
+        assert_char_pair_array_slice_equals_char_pair_array::<5, 3, 1>(
+            &[('z', 'Z'), ('a', 'x'), ('b', 'y'), ('c', '!'), ('z', 'Z')],
+            &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "START-OUT-OF-BOUNDS")]
+    fn assert_char_pair_array_slice_equals_char_pair_array_panics_at_runtime_on_start_out_of_bounds(
+    ) {
+        // NEGATIVE PIN — START-OUT-OF-BOUNDS gate: a caller-side
+        // turbofish arity slip on the `START` const-generic where
+        // `START > N` MUST panic at runtime with the START-OUT-OF-
+        // BOUNDS-named message BEFORE the peer SLICE-LENGTH-OUT-OF-
+        // BOUNDS gate reads `N - START` (which would `usize`-
+        // underflow had this gate not caught the slip first). Pins
+        // the gate's placement at the TOP of the helper — a
+        // regression that dropped the gate would either underflow
+        // subtraction at the peer gate OR panic deeper in
+        // `full[START + i]` bounds-checking with a helper-name-less
+        // panic message. The offending `START = 7` against `N = 5`
+        // pins the strict `START > N` reject arm; the LEGAL
+        // `START == N` empty-slice-at-right-endpoint corner is
+        // covered by the peer acceptance test above.
+        assert_char_pair_array_slice_equals_char_pair_array::<5, 0, 7>(
+            &[('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X')],
+            &[],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "SLICE-LENGTH-OUT-OF-BOUNDS")]
+    fn assert_char_pair_array_slice_equals_char_pair_array_panics_at_runtime_on_slice_length_out_of_bounds(
+    ) {
+        // NEGATIVE PIN — SLICE-LENGTH-OUT-OF-BOUNDS gate: a peer
+        // sub-array arity `M` that exceeds the outer array's tail
+        // cardinality `N - START` MUST panic at runtime with the
+        // slice-length-out-of-bounds-named message. Peer gate to the
+        // START-OUT-OF-BOUNDS arm above — the two gates jointly
+        // enforce `START ≤ N` and `M ≤ N - START` before any content
+        // sweep. The offending `M = 5` against `N - START = 5 - 3 =
+        // 2` pins the strict `M > N - START` reject arm; the LEGAL
+        // exact-fit corner `M == N - START` is covered by the
+        // middle-slice acceptance test above.
+        assert_char_pair_array_slice_equals_char_pair_array::<5, 5, 3>(
+            &[('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X')],
+            &[('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X'), ('x', 'X')],
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_slice_equals_char_pair_array_panic_message_names_the_helper_and_left_column_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — CHAR-PAIR-SLICE-EQUALS-
+        // ARRAY-LEFT-COLUMN-VIOLATION arm: the panic message MUST
+        // begin with the helper's own name AND identify the failed
+        // AXIS as "CHAR-PAIR-SLICE-EQUALS-ARRAY-LEFT-COLUMN-
+        // VIOLATION" so downstream diagnostics route the drift back
+        // to (a) the helper by string search on
+        // `"assert_char_pair_array_slice_equals_char_pair_array"`
+        // and (b) the failed COLUMN of the paired sweep by string
+        // search on `"CHAR-PAIR-SLICE-EQUALS-ARRAY-LEFT-COLUMN-
+        // VIOLATION"`. Sibling posture to the (u8) / (char) / (str)
+        // row peers' provenance pins — the FOUR pins together bind
+        // the (helper, failed-axis) provenance pair at ONE test per
+        // corner of the (SUB-SLICE ARRAY-image) column across the
+        // FOUR element-type rows of the matrix.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_slice_equals_char_pair_array::<5, 3, 1>(
+                &[('z', 'Z'), ('a', 'x'), ('b', 'y'), ('!', 'z'), ('z', 'Z')],
+                &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_slice_equals_char_pair_array must \
+             panic on a LEFT-column drift — the reject-left-column-\
+             drift arm is a CONTENT failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_slice_equals_char_pair_array \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_pair_array_slice_equals_char_pair_array"),
+            "assert_char_pair_array_slice_equals_char_pair_array panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("CHAR-PAIR-SLICE-EQUALS-ARRAY-LEFT-COLUMN-VIOLATION"),
+            "assert_char_pair_array_slice_equals_char_pair_array panic \
+             message {msg:?} must name the failed AXIS (\"CHAR-PAIR-\
+             SLICE-EQUALS-ARRAY-LEFT-COLUMN-VIOLATION\") for axis-\
+             provenance-preserving failure diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_char_pair_array_slice_equals_char_pair_array_panic_message_names_the_helper_and_right_column_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — CHAR-PAIR-SLICE-EQUALS-
+        // ARRAY-RIGHT-COLUMN-VIOLATION arm: the panic message MUST
+        // begin with the helper's own name AND identify the failed
+        // AXIS as "CHAR-PAIR-SLICE-EQUALS-ARRAY-RIGHT-COLUMN-
+        // VIOLATION" so downstream diagnostics route the drift back
+        // to (a) the helper by string search AND (b) the failed
+        // COLUMN of the paired sweep by string search on the
+        // RIGHT-COLUMN-* axis. Peer pin to the LEFT-COLUMN
+        // provenance pin above — the two pins bind the (LEFT,
+        // RIGHT) column-axis provenance pair at ONE test per column.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_slice_equals_char_pair_array::<5, 3, 1>(
+                &[('z', 'Z'), ('a', 'x'), ('b', 'y'), ('c', '!'), ('z', 'Z')],
+                &[('a', 'x'), ('b', 'y'), ('c', 'z')],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_slice_equals_char_pair_array must \
+             panic on a RIGHT-column drift — the reject-right-column-\
+             drift arm is a CONTENT failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_slice_equals_char_pair_array \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_pair_array_slice_equals_char_pair_array"),
+            "assert_char_pair_array_slice_equals_char_pair_array panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("CHAR-PAIR-SLICE-EQUALS-ARRAY-RIGHT-COLUMN-VIOLATION"),
+            "assert_char_pair_array_slice_equals_char_pair_array panic \
+             message {msg:?} must name the failed AXIS (\"CHAR-PAIR-\
+             SLICE-EQUALS-ARRAY-RIGHT-COLUMN-VIOLATION\") for axis-\
+             provenance-preserving failure diagnostics",
         );
     }
 

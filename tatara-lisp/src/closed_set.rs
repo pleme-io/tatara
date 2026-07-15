@@ -6288,6 +6288,172 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::find_by_label(s).map(<Self as ClosedSet>::index_of)
     }
 
+    /// Allocating-carrier structured decode of `s` into a declaration-
+    /// order [`Self::ALL`] index — `Ok(idx)` when `s` matches some
+    /// `v.label()` exactly (where `idx == v.index_of()`), and
+    /// `Err(Self::make_unknown(s))` for every other string.
+    ///
+    /// The allocating-carrier sibling of [`Self::index_of_label`] on
+    /// the (side-effect on reject) axis of the (`&str → usize`
+    /// declaration-order projection) surface — where
+    /// [`Self::index_of_label`] returns [`None`] on rejection without
+    /// entering [`Self::make_unknown`], this method materializes the
+    /// typed [`Self::Unknown`] carrier owning a [`String`] copy of `s`
+    /// so a downstream structured-diagnostic renderer can bind the
+    /// substrate-wide `unknown {SET_LABEL}: {input}` shape onto the
+    /// same reject path a `parse_label`-shaped decoder threads. The
+    /// (`&str → usize` decl) direct-projection surface completes at
+    /// BOTH ends of the (side-effect) axis, matching the shape
+    /// [`Self::parse_label`] / [`Self::find_by_label`] pin one
+    /// return-type column over on the (`&str → Self`) direct-decode
+    /// surface.
+    ///
+    /// Sibling posture to [`Self::parse_label`] one return-type-axis
+    /// over on the (`&str → X` allocating carrier decode) surface:
+    /// [`Self::parse_label`] projects a `&str` label onto its typed
+    /// variant through the [`Self::ALL`] × [`Self::label`] sweep AND
+    /// threads the typed [`Self::Unknown`] carrier on rejection, this
+    /// method projects the same `&str` label through to its
+    /// declaration-order `usize` slot AND threads the SAME
+    /// [`Self::Unknown`] carrier on rejection — one composition step
+    /// further along the same allocating-carrier axis. Both return a
+    /// [`Result`] with the SAME [`Self::Unknown`] carrier shape on
+    /// rejection because the default composition threads
+    /// [`Self::parse_label`]'s `Err(unknown)` arm through
+    /// [`Result::map`] on the Ok column, so any consumer that decodes
+    /// through this method sees the SAME [`Self::Unknown`]-typed
+    /// rejection arm every `parse_label`-shaped `&str`-carrier
+    /// decoder sees.
+    ///
+    /// The (return-type × side-effect × ordering) partition of the
+    /// closed-set direct-decode surface post-lift:
+    ///
+    /// | Return \ Side-effect on reject     | Allocating (materialize `Unknown`)         | Non-allocating (`None` / `Option`)    |
+    /// |------------------------------------|--------------------------------------------|---------------------------------------|
+    /// | `Self`                             | [`Self::parse_label`]                      | [`Self::find_by_label`]               |
+    /// | `usize` (declaration-order)        | [`Self::parse_index_of_label`]             | [`Self::index_of_label`]              |
+    /// | `usize` (lexicographic-order)      | —                                          | [`Self::sorted_index_of_label`]       |
+    /// | `bool`                             | —                                          | [`Self::contains_label`]              |
+    ///
+    /// Default body composes [`Self::parse_label`] with
+    /// [`Self::index_of`] on the Ok arm — the allocating-carrier
+    /// direct-index decode is a typed CONSEQUENCE of the two
+    /// pre-existing primitives, not a third codepath. Implementors
+    /// override only when the composition needs to diverge (no
+    /// production implementor reaches for this today; the axis exists
+    /// for the same reason [`Self::parse_label`] /
+    /// [`Self::find_by_label`] / [`Self::index_of_label`] /
+    /// [`Self::index_of`] overrides exist — a typed escape hatch the
+    /// trait surface exposes rather than forcing the implementor to
+    /// hand-roll the impl). An implementor that overrides
+    /// [`Self::parse_label`] (a future perfect-hash carrier decoder, a
+    /// future canonicalization-aware label projection that folds case
+    /// or whitespace on the parse-arm) propagates the override through
+    /// this default body to the direct-index decode automatically;
+    /// the (`&str → usize`) allocating-carrier decode funnels every
+    /// sweep through ONE typed primitive on each of its (accept,
+    /// reject) partition arms.
+    ///
+    /// The (accept, reject) alignment with [`Self::parse_label`] — the
+    /// two methods MUST agree on membership at every `&str` payload
+    /// (both accept the same inputs, both reject the same inputs,
+    /// both surface the SAME [`Self::Unknown`] carrier shape on
+    /// rejection) — is guaranteed by the default composition and
+    /// pinned by the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (84) on every
+    /// implementor, so a passing well-formedness sweep means every
+    /// generic consumer can call `parse_index_of_label` on any `&str`
+    /// payload and expect the same `Result`-typed answer at every
+    /// crate boundary AND the SAME [`Self::Unknown`] carrier variant
+    /// on rejection as [`Self::parse_label`] surfaces.
+    ///
+    /// Future consumers — a compact wire-format decoder that reads a
+    /// `&str` config value (a Kubernetes annotation, a YAML enum
+    /// field, a diagnostic input string) and emits its declaration-
+    /// order position directly as a `u8` AND (on miss) surfaces the
+    /// substrate-wide `unknown {SET_LABEL}: {input}` diagnostic
+    /// without a two-step `parse_label + index_of` composition at
+    /// the decoder site, a `?`-operator-chained kwarg decoder that
+    /// projects a `&str` field payload directly onto its declaration-
+    /// order slot for a per-slot lookup table AND propagates the
+    /// natural `?`-friendly [`Self::Unknown`] carrier on rejection,
+    /// a `serde::Deserialize`-shaped visitor that decodes a `&str`
+    /// enum wire-form onto its per-slot storage AND emits the
+    /// substrate-wide carrier through the visitor's `Error` type on
+    /// unknown-variant rejection, an LSP config-diagnostic renderer
+    /// that maps parsed labels back to their canonical declaration-
+    /// order slot for stable per-slot rendering AND surfaces the
+    /// same substrate-wide `unknown {SET_LABEL}: {input}` phrase on
+    /// miss — bind to ONE trait method instead of hand-rolling either
+    /// `T::parse_label(s).map(T::index_of)` (which re-derives the
+    /// same two-primitive composition at every callsite AND makes
+    /// every downstream site depend on [`Self::parse_label`]'s
+    /// `Result`-typed dispatch shape) OR the inline
+    /// `T::ALL.iter().position(|v| v.label() == s)
+    /// .ok_or_else(|| T::make_unknown(s))` (which re-derives the
+    /// underlying three-primitive composition at every callsite AND
+    /// drops the [`Self::parse_label`] override propagation that
+    /// keeps every allocating-carrier decode consumer aligned on a
+    /// single typed dispatch) at each callsite, and the closed-set
+    /// (`&str → usize` allocating-carrier decl-order decode) surface
+    /// evolves at ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the allocating-carrier
+    /// (`&str → usize` decl) decode becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline
+    /// `Self::parse_label(s).map(Self::index_of)` composition at
+    /// every downstream label-to-slot-with-carrier site. The
+    /// (return-type × side-effect × ordering) partition of the
+    /// closed-set direct-decode surface completes at the
+    /// (`usize`-decl, allocating-carrier) corner — the direct-index
+    /// projection column at BOTH ends of the (side-effect) axis now
+    /// binds to a typed primitive, matching the shape
+    /// [`Self::parse_label`] / [`Self::find_by_label`] pin one
+    /// return-type column over.
+    /// THEORY.md §V.1 — knowable platform; the allocating-carrier
+    /// (`&str → usize` decl) decode was an unnamed compound of
+    /// [`Self::parse_label`] + [`Self::index_of`] pre-lift. Naming
+    /// it on the trait makes the projection a TYPED CONSEQUENCE of
+    /// the two substrate primitives — generic consumers see ONE
+    /// method, not ONE parse-index-decode-shape-per-crate. Clause
+    /// (84) pins the composition against the natural
+    /// `parse_label(s).map(index_of)` shape on every implementor so
+    /// a passing well-formedness sweep means every generic consumer
+    /// can call `parse_index_of_label` on any `&str` payload and
+    /// expect the same `Result`-typed answer at every crate boundary.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// allocating-carrier direct-decl-decode emerges from the
+    /// composition of TWO substrate primitives ([`Self::parse_label`],
+    /// [`Self::index_of`]) rather than as a per-implementor inline
+    /// `parse_label(s).map(index_of)` compound. A future tightening
+    /// of either primitive (a future perfect-hash `parse_label`, a
+    /// future canonicalization-aware label projection that folds
+    /// case / whitespace on the parse-arm, a future const-fn
+    /// `index_of` axis that makes the projection callable in const
+    /// contexts) propagates to every closed-set allocating-carrier
+    /// direct-decl-decode consumer through ONE trait body.
+    ///
+    /// Frontier inspiration: rustc's `Symbol::intern` composed with a
+    /// symbol-table index projection — the typed-symbol lookup with a
+    /// substrate-wide interned-string carrier on rejection composed
+    /// with the stable per-symbol slot projection, all through ONE
+    /// call the diagnostic engine binds to. MLIR's
+    /// `RegisteredOperationName::lookup(StringRef)` composed with
+    /// `getStableIndex()` on the typed op registry composes the
+    /// (name → registered op) allocating-carrier lookup with the (op
+    /// → stable index) projection into ONE direct
+    /// (`name → registered index`) surface the DiagnosticEngine's
+    /// per-op counters key off. Racket's `(hash-ref/failure enum sym
+    /// make-unknown)` composed with `(enum-index enum sym)` on a
+    /// closed enum stands as the same shape one vocabulary over on
+    /// the Lisp-VM side. Translation through pleme-io primitives: a
+    /// pure default method composing the trait's existing
+    /// [`Self::parse_label`] + [`Self::index_of`] surfaces — no new
+    /// dep, no new IR layer, no supertrait bound.
+    fn parse_index_of_label(s: &str) -> Result<usize, Self::Unknown> {
+        <Self as ClosedSet>::parse_label(s).map(<Self as ClosedSet>::index_of)
+    }
+
     /// The (hint) sibling of [`Self::index_of_label`] — the zero-
     /// allocation structured decode of `s` into a declaration-order
     /// index, threading a typed [`Self::suggest_closest`] hint into the
@@ -20557,6 +20723,108 @@ where
             "{type_name}: sorted_index_of_label_with_hint / index_of_label_with_hint accepted the reserved probe or disagreed on the (accept, reject) partition",
         ),
     }
+    // (84) — `T::parse_index_of_label` composes `parse_label` +
+    // `index_of` verbatim on the Ok arm AND preserves the
+    // `Self::Unknown` carrier shape on the Err arm. Every variant
+    // decodes to `Ok(v.index_of())` through the structured surface;
+    // the reserved probe rejects with the SAME substrate-wide
+    // `unknown {SET_LABEL}: {input}` carrier `parse_label` emits —
+    // both allocating-carrier decoders route through
+    // `make_unknown(probe)` on the reject arm, so the Display of
+    // the rejected carrier MUST render identically across the two
+    // return-type columns. The default trait body satisfies the
+    // clause for free; the assertion catches an override that
+    // drifts the composition (accepts the probe as Ok through a
+    // permissive index return, fabricates a different Unknown
+    // carrier shape than `parse_label` surfaces, OR emits the
+    // wrong declaration-order slot on a canonical variant). Sibling
+    // posture to clauses (7) + (21) + (82) on the (return-type ×
+    // side-effect × ordering × hint) 4-axis surface — clause (7)
+    // pins the `Self`-typed allocating-carrier decode with-hint
+    // arm's alignment, clause (21) pins the `usize`-typed decl-
+    // order non-allocating decode arm's alignment, clause (82) pins
+    // the `usize`-typed decl-order non-allocating decode with-hint
+    // arm's alignment, this clause pins the `usize`-typed decl-
+    // order allocating-carrier decode arm's alignment with
+    // `parse_label + index_of`. Together (2) + (7) + (21) + (82) +
+    // (84) close the allocating-carrier column on the (return-type
+    // × side-effect) 2×2 face at every populated (return-type)
+    // row of the (`Self`, `usize`-decl) partition — the (no-hint)
+    // corner on each row (parse_label at Self, parse_index_of_label
+    // at usize-decl) and the (with-hint) corner on the Self row
+    // (parse_label_with_hint at (7)). The (`usize`-decl with-hint,
+    // allocating-carrier) corner remains an unopened sibling that
+    // a future lift over `parse_label_with_hint + index_of` closes
+    // one axis further along the (hint) column — the sibling posture
+    // this clause's (usize-decl, no-hint) corner opens.
+    for &v in T::ALL {
+        let label = v.label();
+        match T::parse_index_of_label(label) {
+            Ok(decoded) => assert_eq!(
+                decoded, v.index_of(),
+                "{type_name}: parse_index_of_label round-trip {label:?} → variant decoded to declaration-order slot {decoded} but v.index_of() == {} — the allocating-carrier (`&str → usize` decl-order) decode drifted from the natural `parse_label(s).map(index_of)` composition on the accept arm",
+                v.index_of(),
+            ),
+            Err(_) => panic!(
+                "{type_name}: parse_index_of_label round-trip {label:?} → canonical variant rejected by the allocating-carrier (`&str → usize` decl-order) decode",
+            ),
+        }
+    }
+    match T::parse_index_of_label(probe) {
+        Ok(_) => panic!(
+            "{type_name}: parse_index_of_label accepted the reserved probe input — the allocating-carrier `usize`-typed decl-order decode MUST reject every input outside the closed set",
+        ),
+        Err(carrier) => assert_eq!(
+            carrier.to_string(),
+            expected,
+            "{type_name}: parse_index_of_label's Err carrier drifted from the substrate-wide `unknown {{SET_LABEL}}: {{input}}` shape — the override emits a different carrier than `parse_label` would",
+        ),
+    }
+    assert!(
+        T::parse_index_of_label("").is_err(),
+        "{type_name}: parse_index_of_label accepted the empty string — the empty-string boundary is structurally reserved outside the closed set at every allocating-carrier decode column",
+    );
+    // Cross-column alignment with clause (2)'s sibling primitive on the
+    // (return-type) axis — on EVERY probe (canonical labels + reserved
+    // probe + empty-string boundary) the two allocating-carrier decode
+    // surfaces MUST agree on membership AND on the Unknown carrier
+    // shape on rejection. Alignment against `parse_label` on the
+    // accept arm degenerates to
+    // `parse_index_of_label(s) == Ok(v.index_of())` when
+    // `parse_label(s) == Ok(v)`. Alignment against `parse_label` on
+    // the reject arm demands the SAME `Self::Unknown` carrier
+    // Display — the carrier renders through the substrate-wide
+    // `unknown {SET_LABEL}: {input}` shape at both return-type
+    // columns, so the two Displays MUST match byte-for-byte on
+    // every reject payload.
+    for &v in T::ALL {
+        let label = v.label();
+        let index_decode = T::parse_index_of_label(label);
+        let carrier_decode = T::parse_label(label);
+        match (index_decode, carrier_decode) {
+            (Ok(idx), Ok(w)) => assert_eq!(
+                idx, w.index_of(),
+                "{type_name}: parse_index_of_label({label:?}) accepted at decl slot {idx} but parse_label({label:?}) accepted at variant {w:?} whose index_of() == {} — the two allocating-carrier decode surfaces bifurcated on the accept arm's typed decl slot",
+                w.index_of(),
+            ),
+            (Err(_), Err(_)) => panic!(
+                "{type_name}: parse_index_of_label({label:?}) rejected a canonical variant label — the accept arm on both allocating-carrier decode surfaces MUST agree",
+            ),
+            (Ok(_), Err(_)) | (Err(_), Ok(_)) => panic!(
+                "{type_name}: parse_index_of_label({label:?}) and parse_label({label:?}) disagreed on the (accept, reject) partition — the allocating-carrier decode surface bifurcated across the (return-type) axis",
+            ),
+        }
+    }
+    match (T::parse_index_of_label(probe), T::parse_label(probe)) {
+        (Err(carrier_a), Err(carrier_b)) => assert_eq!(
+            carrier_a.to_string(),
+            carrier_b.to_string(),
+            "{type_name}: parse_index_of_label(reserved probe) and parse_label(reserved probe) disagreed on the `Self::Unknown` carrier's Display rendering — the allocating-carrier decode surface bifurcated on the Unknown carrier shape across the (return-type) axis",
+        ),
+        _ => panic!(
+            "{type_name}: parse_index_of_label / parse_label accepted the reserved probe or disagreed on the (accept, reject) partition",
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -24960,6 +25228,178 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an index_of_label() override drifted from the natural find_by_label+index_of composition on the non-canonical reject arm",
+        );
+    }
+
+    #[test]
+    fn parse_index_of_label_recovers_declaration_order_index_for_every_canonical_label() {
+        // The allocating-carrier (`&str` → `usize` decl-order)
+        // projection accept arm — for every canonical label
+        // `v.label()`, `T::parse_index_of_label(label)` returns
+        // `Ok(v.index_of())`. Sibling posture to
+        // `index_of_label_recovers_declaration_order_index_for_every_canonical_label`
+        // one axis over on the (side-effect on reject) column of
+        // the (`&str → usize` decl-order projection) surface — this
+        // pin covers the allocating-carrier decode arm on the
+        // canonical accept path, the sibling pin covered the
+        // non-allocating decode arm on the same path. Both walk
+        // `Self::ALL` at their canonical inputs and MUST agree
+        // slot-for-slot on the underlying (variant, canonical label,
+        // declaration-order index) triple across the (side-effect)
+        // axis. A regression that drifts either arm bifurcates the
+        // allocating-carrier direct-projection surface from the
+        // natural `parse_label+index_of` composition every
+        // `parse_label`-shaped decl-decoder consumer routes through.
+        for (i, &v) in <StubKind as ClosedSet>::ALL.iter().enumerate() {
+            let label = v.label();
+            assert_eq!(
+                <StubKind as ClosedSet>::parse_index_of_label(label),
+                Ok(i),
+                "parse_index_of_label({label:?}) failed to recover the declaration-order index at slot {i}",
+            );
+        }
+    }
+
+    #[test]
+    fn parse_index_of_label_rejects_non_canonical_string_with_substrate_wide_carrier() {
+        // The allocating-carrier (`&str` → `usize` decl-order)
+        // projection reject arm — a non-canonical `&str` returns
+        // `Err(carrier)` where the carrier's Display renders the
+        // substrate-wide `unknown {SET_LABEL}: {input}` shape (unlike
+        // the `Option`-typed `index_of_label` path that returns
+        // `None` on rejection). The reserved 38-char probe sits
+        // outside every plausible canonical label by construction,
+        // so `T::parse_index_of_label(<probe>)` MUST reject with the
+        // SAME carrier shape `parse_label(<probe>)` surfaces on the
+        // sibling column. Sibling posture to the sibling
+        // `find_by_label_rejects_unknown_input_without_allocating_carrier`
+        // one axis over on the (side-effect) axis — this pin
+        // extends the substrate-wide-carrier reject contract to the
+        // decl-order direct-index return-projection column that
+        // clause (12)'s pin doesn't reach.
+        let probe = "__assert_closed_set_well_formed_probe__";
+        let outcome = <StubKind as ClosedSet>::parse_index_of_label(probe);
+        match outcome {
+            Ok(_) => panic!("parse_index_of_label accepted the reserved probe input"),
+            Err(carrier) => assert_eq!(
+                carrier.to_string(),
+                format!("unknown stub kind: {probe}"),
+                "parse_index_of_label's Err carrier drifted from the substrate-wide `unknown {{SET_LABEL}}: {{input}}` shape",
+            ),
+        }
+    }
+
+    #[test]
+    fn parse_index_of_label_agrees_with_parse_label_composed_with_index_of_on_every_probe() {
+        // The allocating-carrier direct (`&str` → `usize` decl-order)
+        // projection MUST agree with the two-step
+        // `parse_label(s).map(index_of)` composition on every input
+        // the sweep walks. This test pins the alignment against a
+        // representative probe set: (a) every canonical variant
+        // label — both arms return the acceptance side `Ok(index)`
+        // AND project to the SAME declaration-order slot; (b) the
+        // reserved 38-char probe — both arms return the rejection
+        // side with the SAME `Self::Unknown` carrier's Display; (c)
+        // the empty-string boundary — both arms return the rejection
+        // side with the SAME `Self::Unknown` carrier matching clause
+        // (4)'s structural reservation. The alignment is the
+        // load-bearing contract that lets a generic consumer freely
+        // swap between the direct-projection surface and the
+        // two-step composition based on its rendering / storage
+        // needs without changing the program's decoded-slot
+        // semantics OR its rejection carrier shape. Sibling posture
+        // to
+        // `index_of_label_agrees_with_find_by_label_composed_with_index_of_on_every_probe`
+        // one axis over on the (side-effect) axis — this pin
+        // extends the (canonical accept, non-canonical reject)
+        // alignment to the allocating-carrier column of the
+        // (`&str → usize` decl-order) direct-projection surface.
+        let canonical_labels: [&str; 3] = ["alpha", "beta", "gamma"];
+        let non_canonical: [&str; 2] = ["__assert_closed_set_well_formed_probe__", ""];
+        for s in canonical_labels.iter().chain(non_canonical.iter()).copied() {
+            let direct = <StubKind as ClosedSet>::parse_index_of_label(s);
+            let composed =
+                <StubKind as ClosedSet>::parse_label(s).map(<StubKind as ClosedSet>::index_of);
+            match (direct, composed) {
+                (Ok(a), Ok(b)) => assert_eq!(
+                    a, b,
+                    "parse_index_of_label({s:?}) accepted at decl slot {a} but parse_label+index_of composition accepted at slot {b}",
+                ),
+                (Err(a), Err(b)) => assert_eq!(
+                    a.to_string(),
+                    b.to_string(),
+                    "parse_index_of_label({s:?}) rejected with a different carrier Display than parse_label({s:?})",
+                ),
+                _ => panic!(
+                    "parse_index_of_label({s:?}) disagreed with parse_label({s:?}).map(index_of) on the (accept, reject) partition",
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_parse_index_of_label_and_parse_label_composition(
+    ) {
+        // The well-formedness sweep's (84) clause —
+        // `T::parse_index_of_label(v.label())` MUST equal
+        // `Ok(v.index_of())` for every variant `v` in `T::ALL`, AND
+        // `T::parse_index_of_label(<reserved probe>)` MUST reject
+        // with the SAME `Self::Unknown` carrier Display `parse_label`
+        // surfaces, AND `T::parse_index_of_label("")` MUST reject.
+        // A hand-impl'd implementor whose override drifts the
+        // allocating-carrier decl-decode projection — e.g. a
+        // permissive override that returns `Ok(0)` for a
+        // non-canonical `&str` — fails the sweep loudly rather than
+        // silently bifurcating the allocating-carrier direct-index
+        // decode surface every downstream `?`-operator-chained
+        // config decoder / `serde::Deserialize` visitor /
+        // LSP-diagnostic renderer consumer routes through. Pinning
+        // the failure path here keeps the testkit's (84) clause
+        // guaranteed-to-fire — a regression that makes the assertion
+        // permissive (e.g. a future "either the accept OR the reject
+        // arm" relaxation that only checks one arm) breaks this
+        // stub-level contract before any per-implementor sweep runs.
+        // Sibling posture to the `_catches_drift_between_*` pin at
+        // clause (21) one axis over on the (side-effect) axis —
+        // together they close the structural-drift-catches sweep on
+        // both columns of the (`&str → usize` decl-order projection)
+        // × (side-effect) 2×2 face.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedParseIndexOfLabelKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedParseIndexOfLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedParseIndexOfLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted parse index of label kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedParseIndexOfLabelKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted parse index of label kind";
+            type Unknown = UnknownDriftedParseIndexOfLabelKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedParseIndexOfLabelKind(s.to_owned())
+            }
+            fn parse_index_of_label(_s: &str) -> Result<usize, Self::Unknown> {
+                // Drifted override — accepts every `&str` payload,
+                // including the reserved probe the testkit's clause
+                // (84) demands rejects. Fails the allocating-carrier
+                // decl-decode alignment with `parse_label(s).map(
+                // index_of)` on the non-canonical reject arm.
+                Ok(0)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedParseIndexOfLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a parse_index_of_label() override drifted from the natural parse_label+index_of composition on the non-canonical reject arm",
         );
     }
 

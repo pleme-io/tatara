@@ -428,6 +428,65 @@ const _: () = crate::ast::assert_str_array_within_str_finite_set::<2, 4>(
     &crate::ast::QuoteForm::IAC_FORGE_TAGS,
 );
 
+// Compile-time SLICE-EQUALS-ARRAY witnesses tightening the (UnquoteForm ⊂
+// QuoteForm) 2-of-4 subset-carve from set-level SUBSET to positionwise
+// SLICE-EQUALS at a specific contiguous START offset on the SAME three
+// `[&'static str; N]` sub-vocabulary → superset pairs the SUBSET witnesses
+// above cover. Pre-lift, the sub-carving's positional relationship to the
+// superset was pinned indirectly: (a) each sub-array's INJECTIVITY via the
+// three `assert_str_array_pairwise_distinct` witnesses at the top of this
+// module, (b) each sub-array's SET-EMBEDDING via the three SUBSET witnesses
+// immediately above, (c) each per-role scalar (`UnquoteForm::UNQUOTE_MARKER =
+// QuoteForm::UNQUOTE_PREFIX`, etc.) via alias equality at rustc time. What
+// NEITHER (a) + (b) NOR (c) alone pinned was the ARRAY-LEVEL POSITIONWISE
+// composition — that `UnquoteForm::MARKERS == QuoteForm::PREFIXES[2..4]`
+// element-for-element. A regression that silently swapped the two per-role
+// slot bindings in the sub-array initializer (e.g. `UnquoteForm::MARKERS:
+// [&'static str; 2] = [Self::SPLICE_MARKER, Self::UNQUOTE_MARKER]`) would
+// still pass INJECTIVITY (both aliases distinct), still pass SET-EMBEDDING
+// (both aliases still appear in `QuoteForm::PREFIXES`), still pass per-role
+// scalar equality (each alias still binds to the same `QuoteForm::*_PREFIX`
+// source constant), BUT would silently mis-align every consumer that reads
+// the sub-array by slot ordinal (`UnquoteForm::MARKERS[0]` semantically
+// naming the two-quote-family-arms-in-declaration-order for e.g. a per-slot
+// error diagnostic that mirrors `QuoteForm`'s slot ordinal 2 vs 3). The
+// SLICE-EQUALS witness pins the sub-carving's slot-ordering to a SPECIFIC
+// contiguous slice of the superset (`[2..4)` — the two UnquoteForm-family
+// arms sit at the tail of QuoteForm's four-arm declaration listing,
+// after the two non-substitution `Quote` + `Quasiquote` arms). Both drifts
+// the SUBSET witness stayed silent on (sub-carving reorder AND SUPERSET
+// reorder that leaves the sub-array's two aliases still present but at
+// different positions) fail HERE at rustc time with the
+// `STR-SLICE-EQUALS-ARRAY-VIOLATION` axis panic naming the drifted position.
+//
+// Sibling posture to the four-witness `SexpShape::LABELS` (12) SLICE-EQUALS
+// cluster at lines 331..=346 above (the outer twelve-arm SexpShape
+// vocabulary bound as the SEGMENTED CONCATENATION `[NIL_LABEL] ++
+// AtomKind::LABELS ++ [LIST_LABEL] ++ QuoteForm::LABELS` at rustc time via
+// four `assert_str_array_slice_equals_str_array` witnesses on the four
+// slot segments). Together the seven witnesses close the SLICE-EQUALS
+// column on BOTH sub-carving directions: those four pin sub-vocabularies
+// AS SEGMENTS OF the twelve-arm SexpShape outer array (the outer superset
+// pinned by-segment against its sub-carvings); these three pin
+// UnquoteForm sub-arrays AS SLICES OF the QuoteForm superset (the outer
+// superset pinned as the position-source for the sub-carvings). The
+// (SexpShape ⊃ {AtomKind, QuoteForm, StructuralKind}) SUPERSET-AS-SEGMENTS
+// posture and the (UnquoteForm ⊂ QuoteForm) SUB-AS-SLICE posture are the
+// two orientations of the same positionwise-composition theorem the
+// SLICE-EQUALS helper carries.
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<4, 2, 2>(
+    &crate::ast::QuoteForm::LABELS,
+    &UnquoteForm::LABELS,
+);
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<4, 2, 2>(
+    &crate::ast::QuoteForm::PREFIXES,
+    &UnquoteForm::MARKERS,
+);
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<4, 2, 2>(
+    &crate::ast::QuoteForm::IAC_FORGE_TAGS,
+    &UnquoteForm::IAC_FORGE_TAGS,
+);
+
 // Compile-time STR-DISJOINTNESS witnesses closing the ARRAY-LEVEL
 // vocabulary-disjointness corner of the STATIC ⊕ DYNAMIC partition
 // idiom on the substrate's TWO peer diagnostic algebras
@@ -21468,5 +21527,42 @@ mod tests {
                  of the disjoint-union theorem"
             );
         }
+    }
+
+    /// Runtime SLICE-EQUALS-ARRAY safety net for the (UnquoteForm ⊂
+    /// QuoteForm) 2-of-4 sub-carve on the three sibling `[&'static str;
+    /// N]` vocabulary axes — sweeps the same three
+    /// `assert_str_array_slice_equals_str_array::<4, 2, 2>` invocations
+    /// pinned at compile time in the module-level `const _` block
+    /// immediately below the peer SUBSET-embedding witness cluster.
+    /// The `const _` witnesses fire FIRST at `cargo check`; this
+    /// runtime pin catches the ARRAY-LEVEL positionwise drift at
+    /// `cargo test` as a safety net enforcing the theorem at BOTH
+    /// stages of the toolchain.
+    ///
+    /// A regression that (a) swaps the two per-role slot bindings in
+    /// one of the `UnquoteForm::MARKERS` / `LABELS` / `IAC_FORGE_TAGS`
+    /// initializers, or (b) reorders the four-arm `QuoteForm::PREFIXES`
+    /// / `LABELS` / `IAC_FORGE_TAGS` superset such that the two
+    /// UnquoteForm-family arms no longer sit contiguously at slots
+    /// `[2..4)`, fails HERE with the `STR-SLICE-EQUALS-ARRAY-VIOLATION`
+    /// axis panic naming the drifted position — where the sibling
+    /// SUBSET-embedding safety-net pins stay silent (both aliases still
+    /// appear in the superset, just at different positions).
+    #[test]
+    fn assert_str_array_slice_equals_str_array_accepts_unquote_form_sub_carve_of_quote_form() {
+        use crate::ast::assert_str_array_slice_equals_str_array;
+        assert_str_array_slice_equals_str_array::<4, 2, 2>(
+            &crate::ast::QuoteForm::LABELS,
+            &UnquoteForm::LABELS,
+        );
+        assert_str_array_slice_equals_str_array::<4, 2, 2>(
+            &crate::ast::QuoteForm::PREFIXES,
+            &UnquoteForm::MARKERS,
+        );
+        assert_str_array_slice_equals_str_array::<4, 2, 2>(
+            &crate::ast::QuoteForm::IAC_FORGE_TAGS,
+            &UnquoteForm::IAC_FORGE_TAGS,
+        );
     }
 }

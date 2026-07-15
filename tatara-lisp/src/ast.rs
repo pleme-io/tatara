@@ -6157,6 +6157,294 @@ const _: () = assert_u8_array_slice_is_scalar_replica::<12, 1, 7>(
     AtomKind::OUTER_HASH_DISCRIMINATOR,
 );
 
+/// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of `full` at positions `[START..START + M)` is NOT byte-
+/// equal to the peer `sub` entry at the same offset `[i - START]`.
+///
+/// Opens the SLICE-EQUALS-ARRAY column on the (`u8`) row of the
+/// (element-type × contract-shape) matrix. Row-sibling posture to the
+/// pre-existing SLICE-BLOCK-CONSTANCY corner on the SAME (`u8`) row
+/// ([`assert_u8_array_slice_is_scalar_replica`]) — where that helper
+/// binds a sub-slice `full[START..END) == [scalar; END - START]` to a
+/// SINGLE scalar (a MANY-TO-ONE-COLLAPSE shape whose per-position
+/// image is a CONSTANT byte), this helper binds a sub-slice
+/// `full[START..START + M) == sub[..]` to a SIBLING ARRAY of arity `M`
+/// (a POSITIONWISE-COMPOSITION shape whose per-position image is
+/// carried by an INDEPENDENT peer array). The two together cover the
+/// SUB-SLICE column at BOTH the SINGLE-scalar-image arity (the sibling
+/// above) AND the ARRAY-of-length-`M`-image arity (this helper).
+///
+/// The load-bearing carrier on the substrate is the pair
+/// ([`crate::error::SexpShape::HASH_DISCRIMINATORS`] (`[u8; 12]`),
+/// [`QuoteForm::HASH_DISCRIMINATORS`] (`[u8; 4]`)) at the SexpShape
+/// sub-slice `[8..12)`. Both arrays share their four byte values
+/// (`3`, `4`, `5`, `6`) via the four per-role
+/// [`QuoteForm::QUOTE_HASH_DISCRIMINATOR`] /
+/// [`QuoteForm::QUASIQUOTE_HASH_DISCRIMINATOR`] /
+/// [`QuoteForm::UNQUOTE_HASH_DISCRIMINATOR`] /
+/// [`QuoteForm::UNQUOTE_SPLICE_HASH_DISCRIMINATOR`] `pub(crate) const`
+/// aliases, but the two per-array declaration LISTINGS are independent
+/// — a regression that reordered ONE array's arm listing without
+/// reordering the other's (e.g. swapped positions 10 and 11 of the
+/// outer `SexpShape::HASH_DISCRIMINATORS` array so `UNQUOTE_SPLICE`'s
+/// byte `6` slid ahead of `UNQUOTE`'s byte `5` while leaving
+/// `QuoteForm::HASH_DISCRIMINATORS` in its canonical order) would
+/// preserve BOTH arrays' PERMUTATION-of-`[3..=6]` contract — the
+/// pre-existing weak witness
+/// [`assert_u8_array_permutes_inclusive_range::<4, 3, 6>`] on
+/// [`QuoteForm::HASH_DISCRIMINATORS`] above binds the tail SLICE'S
+/// image SET (`{3, 4, 5, 6}`) but is SILENT on the tail slice's
+/// per-position ORDER against the peer [`QuoteForm::HASH_DISCRIMINATORS`]
+/// listing. Pre-lift the POSITIONWISE-tail-equality against the sub-
+/// carving array was pinned ONLY at runtime through the per-position
+/// sweep inside
+/// `sexp_shape_hash_discriminators_align_with_sub_carvings_by_projection`
+/// (in `error.rs`), which routes each `SexpShape::HASH_DISCRIMINATORS
+/// [i]` through the shape's sub-carving projection method
+/// (`as_quote_form().unwrap().hash_discriminator()`) at test-time.
+/// Post-lift the ARRAY-LEVEL slice-equals-array contract binds at
+/// rustc-time via ONE `const _` line on the substrate CONSTANTS
+/// directly — a regression that reordered ONE array's arm listing
+/// fails at `cargo check` BEFORE any test scheduler runs.
+///
+/// Bounds preconditions and gate ordering: two CARDINALITY gates fire
+/// at the TOP of the sweep BEFORE any per-position content check
+/// begins, so a caller-side turbofish arity slip fails-loud on the
+/// bounds axis rather than silently degenerating into a truncated or
+/// vacuous sweep:
+/// * `START > N` → `START-OUT-OF-BOUNDS` panic. The caller's slice
+///   start index sits OUTSIDE the outer array's valid position range
+///   `[0..N]` (inclusive upper bound: `START == N` combined with
+///   `M == 0` is the LEGAL empty-slice corner and is accepted). A
+///   silent slip past this gate would either panic on `full[START +
+///   i]` bounds-check at runtime (const-eval catches it first) or, on
+///   an over-cautious future refactor that gated with a raw `START >=
+///   N`, silently reject the legal `START == N, M == 0` empty corner.
+/// * `M > N - START` → `SLICE-LENGTH-OUT-OF-BOUNDS` panic. The
+///   caller's sub-array arity `M` overruns the outer array's tail
+///   `[START..N)` — semantically equivalent to `START + M > N` but
+///   phrased through subtraction to avoid `usize` arithmetic overflow
+///   on the (unrealistic but pedantic) `START, M` pair with
+///   `START + M > usize::MAX`; gate 1 guarantees `START ≤ N` so
+///   `N - START` never underflows. The overrun would land the sweep
+///   at `full[START + i]` for some `i ∈ [N - START..M)` and panic
+///   deeper in bounds-checking with a helper-name-less message.
+/// * `M == 0` is a LEGAL empty-sub-array corner (the sweep never
+///   enters the loop body and the helper accepts, regardless of
+///   `START`). `START == N` with `M == 0` collapses to the empty-slice
+///   corner at the RIGHT endpoint. The pre-check sequence gates only
+///   STRICT violations (`>`) so both degenerate corners
+///   (`M == 0`, `M == N - START` at the exact-fit right endpoint)
+///   remain in range.
+///
+/// Delegates to `u8`'s native `==` in const-fn context — no auxiliary
+/// byte-equality helper needed. The two-array positionwise-composition
+/// sweep is the natural arity extension of the single-scalar sibling
+/// above: ONE outer `while i < M` from `i = 0`, ONE inner comparison
+/// `full[START + i] != sub[i]`, ONE panic arm.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_u8_array_slice_equals_u8_array_panics_at_runtime_on_positionwise_drift`,
+/// `assert_u8_array_slice_equals_u8_array_panics_at_runtime_on_start_out_of_bounds`,
+/// `assert_u8_array_slice_equals_u8_array_panics_at_runtime_on_slice_length_out_of_bounds`,
+/// and
+/// `assert_u8_array_slice_equals_u8_array_panic_message_names_the_helper_and_slice_equals_array_violation_axis`.
+/// The panic-message axis-provenance strings
+/// (`"SLICE-EQUALS-ARRAY-VIOLATION"`, `"START-OUT-OF-BOUNDS"`,
+/// `"SLICE-LENGTH-OUT-OF-BOUNDS"`) are chosen DISTINCT from every
+/// sibling helper's axis vocabulary — the sibling
+/// [`assert_u8_array_slice_is_scalar_replica`] carries
+/// `"SLICE-BLOCK-CONSTANCY-VIOLATION"` / `"END-OUT-OF-BOUNDS"` /
+/// `"INVERTED-RANGE"` on the SINGLE-scalar-image sweep, so a
+/// diagnostic that crosses the two SUB-SLICE helpers routes back to
+/// its authoring helper by axis string alone. The
+/// `SLICE-LENGTH-OUT-OF-BOUNDS` axis renames what would be the
+/// sibling's `END-OUT-OF-BOUNDS` gate to reflect the shift from
+/// `(START, END)` const generics to `(START, M)` — the CARDINALITY
+/// carrier is the peer array's arity `M`, not an END index.
+///
+/// Theory grounding:
+/// - THEORY.md §III — the typescape; the SLICE-EQUALS-ARRAY corner on
+///   the (`u8`) row of the (element-type × contract-shape) matrix
+///   becomes a TYPE-LEVEL theorem the substrate carries per
+///   `(full, sub, START)` triple rather than a runtime iterator sweep
+///   through the sub-carving projection method per triple.
+///   Complements the pre-existing SLICE-BLOCK-CONSTANCY sibling on
+///   the SAME row — the two together open the SUB-SLICE column at
+///   BOTH the SINGLE-scalar-image arity (constant block) AND the
+///   ARRAY-of-length-`M`-image arity (positionwise composition).
+/// - THEORY.md §V.1 — knowable platform; the positionwise
+///   composition contract binding
+///   `SexpShape::HASH_DISCRIMINATORS[8..12] ==
+///   QuoteForm::HASH_DISCRIMINATORS` at rustc-time closes the drift-
+///   catch loop one invocation stage earlier than the pre-lift
+///   per-position runtime sweep inside
+///   `sexp_shape_hash_discriminators_align_with_sub_carvings_by_projection`.
+///   The runtime pin survives as a sibling check for the SHAPE-level
+///   projection method chain (a distinct failure mode from a drift
+///   in the constants themselves); together the two enforce the
+///   theorem at BOTH stages of the toolchain.
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key partition is the `intent_hash` composition axis —
+///   binding the quote-family tail-slice's per-position ORDER at the
+///   ARRAY level makes attestation-key drift on the four-slot quote-
+///   family sub-carving a compile error rather than a silent BLAKE3
+///   mis-hash across the four quote-family outer shapes.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   slice sweep IS the generative shape — every future substrate
+///   POSITIONWISE-COMPOSITION between a container array's sub-slice
+///   and a sub-carving's canonical `[u8; M]` listing (a hypothetical
+///   `Signal::CATEGORIES` outer array whose middle segment is
+///   pointwise equal to a `CriticalSignal::CATEGORIES` sub-carving
+///   array; a `ProcessPhase::ORDER` array whose leading segment is
+///   pointwise equal to a `PreparationPhase::ORDER` sub-carving)
+///   picks up the positionwise-equality theorem at ONE new `const _`
+///   line rather than at `M` inline byte comparisons per callsite.
+pub const fn assert_u8_array_slice_equals_u8_array<
+    const N: usize,
+    const M: usize,
+    const START: usize,
+>(
+    full: &[u8; N],
+    sub: &[u8; M],
+) {
+    if START > N {
+        panic!(
+            "assert_u8_array_slice_equals_u8_array: START-OUT-OF-\
+             BOUNDS — the const parameter `START` sits OUTSIDE the \
+             outer array's valid position range `[0..N]` (inclusive \
+             upper bound: `START == N` combined with `M == 0` is the \
+             LEGAL empty-slice-at-right-endpoint corner). Fix at the \
+             `const _` witness's turbofish by reconciling `START` \
+             against the outer array's declared arity `N`. The \
+             START-OUT-OF-BOUNDS gate fires FIRST — a mistyped \
+             `START` on the caller side fails HERE before the peer \
+             `SLICE-LENGTH-OUT-OF-BOUNDS` gate reads `N - START` \
+             (which would underflow `usize` had this gate not caught \
+             the slip), so a subtle bounds slip doesn't silently \
+             degenerate into a subtraction wrap-around OR a panic \
+             deeper in `full[START + i]` bounds-checking."
+        );
+    }
+    if M > N - START {
+        panic!(
+            "assert_u8_array_slice_equals_u8_array: SLICE-LENGTH-OUT-\
+             OF-BOUNDS — the peer sub-array's arity `M` exceeds the \
+             outer array's tail cardinality `N - START`, so the \
+             positionwise sweep `full[START + i]` for `i ∈ [0..M)` \
+             would overrun the outer array's valid position range \
+             `[0..N)` at some `i ∈ [N - START..M)`. Fix at the \
+             `const _` witness's turbofish by reconciling `M` against \
+             the outer array's tail cardinality `N - START` OR by \
+             narrowing `START` to leave a longer tail. The peer \
+             `START-OUT-OF-BOUNDS` gate above guarantees `START ≤ N` \
+             so `N - START` never underflows `usize` at this gate. \
+             The LEGAL exact-fit corner `M == N - START` (the sub-\
+             array reaches EXACTLY to the outer array's right \
+             endpoint) is accepted; the STRICT `M > N - START` slip \
+             is what this gate rejects."
+        );
+    }
+    let mut i = 0;
+    while i < M {
+        if full[START + i] != sub[i] {
+            panic!(
+                "assert_u8_array_slice_equals_u8_array: SLICE-EQUALS-\
+                 ARRAY-VIOLATION — the outer `[u8; N]` array `full` \
+                 carries a byte at some position `START + i` (for \
+                 `i ∈ [0..M)`) that does NOT byte-equal the peer \
+                 `[u8; M]` sub-array `sub` at the offset-matched \
+                 position `i`. The substrate's SLICE-EQUALS-ARRAY \
+                 positionwise-composition contract on the sub-slice \
+                 `full[START..START + M) == sub[..]` is broken; \
+                 every consumer that reads `full[START..START + M)` \
+                 as a positionwise-aligned copy of the peer sub-\
+                 carving array (the four-slot QUOTE-family tail \
+                 `crate::error::SexpShape::HASH_DISCRIMINATORS[8..12] \
+                 == crate::ast::QuoteForm::HASH_DISCRIMINATORS`; any \
+                 future container-array sub-slice byte-for-byte equal \
+                 to a peer sub-carving's canonical `[u8; M]` listing) \
+                 relies on this invariant. Fix at the ARRAY-\
+                 DECLARATION site (the drifted `full[START + i]` \
+                 entry inside the slice segment) OR at the peer sub-\
+                 array's arm listing — the choice depends on whether \
+                 the drift is an unintended slot reorder in the outer \
+                 array's tail OR in the sub-carving's own listing."
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time SLICE-EQUALS-ARRAY witness — the ONE `(container,
+// sub-carving)` pair on the substrate whose ARRAY-LEVEL structure
+// composes a container-array sub-slice byte-for-byte identical to a
+// peer sub-carving's canonical `[u8; M]` listing. `SexpShape::HASH_
+// DISCRIMINATORS[8..12]` (the four-slot quote-family tail of the
+// outer twelve-shape array, `[3, 4, 5, 6]`) is byte-for-byte equal
+// to `QuoteForm::HASH_DISCRIMINATORS` (the four-slot quote-family
+// carving's canonical listing, `[3, 4, 5, 6]`). Both arrays share
+// their four byte values via the four per-role `QuoteForm::{QUOTE,
+// QUASIQUOTE, UNQUOTE, UNQUOTE_SPLICE}_HASH_DISCRIMINATOR`
+// `pub(crate) const` aliases (the outer SexpShape array's tail-arm
+// initializers each spell `Self::<ROLE>_HASH_DISCRIMINATOR` where
+// each `SexpShape::<ROLE>_HASH_DISCRIMINATOR` is declared as an
+// alias for `QuoteForm::<ROLE>_HASH_DISCRIMINATOR`), so the array-
+// level positionwise-equality theorem `SexpShape::HASH_DISCRIMINATORS
+// [8..12] == QuoteForm::HASH_DISCRIMINATORS` is the ARRAY-LEVEL
+// surface of the four per-role aliases' shared upstream. Pre-lift
+// this per-position tail equality was pinned ONLY at runtime through
+// the per-position sweep inside `sexp_shape_hash_discriminators_
+// align_with_sub_carvings_by_projection` (in `error.rs`, routing
+// each `SexpShape::HASH_DISCRIMINATORS[i]` through the shape's sub-
+// carving projection `as_quote_form().unwrap().hash_discriminator()`
+// on the four quote-family arms); post-lift the ARRAY-LEVEL slice-
+// equals-array contract binds at rustc-time via ONE `const _` line,
+// one invocation stage earlier than the runtime pin. A regression
+// that reorders the outer `SexpShape::HASH_DISCRIMINATORS` array's
+// quote-family tail (e.g. swaps positions 10 and 11 so `UNQUOTE_
+// SPLICE_HASH_DISCRIMINATOR = 6` slides ahead of `UNQUOTE_HASH_
+// DISCRIMINATOR = 5`) while leaving `QuoteForm::HASH_DISCRIMINATORS`
+// in its canonical order fails at `cargo check` BEFORE any test
+// scheduler runs. The pre-existing `assert_u8_array_permutes_
+// inclusive_range::<4, 3, 6>(&QuoteForm::HASH_DISCRIMINATORS)`
+// witness above is STRICTLY WEAKER — it binds the sub-carving
+// array's image SET is `{3, 4, 5, 6}` but is SILENT on the outer
+// container array's tail per-position ORDER against the sub-
+// carving's listing.
+//
+// The atomic-collapse sub-slice `SexpShape::HASH_DISCRIMINATORS
+// [1..7)` stays on the sibling `assert_u8_array_slice_is_scalar_
+// replica::<12, 1, 7>` witness above because its shape is MANY-TO-
+// ONE-COLLAPSE onto a single scalar `AtomKind::OUTER_HASH_
+// DISCRIMINATOR`, not POSITIONWISE-COMPOSITION with a peer array —
+// there is no natural `[u8; 6]` sub-carving array to compose it
+// against (the six atomic outer shapes collapse to a SCALAR image,
+// not an array image). The singleton slices `[0..1) == [NIL_BYTE]`
+// and `[7..8) == [LIST_BYTE]` (`StructuralKind::NIL_HASH_
+// DISCRIMINATOR` and `StructuralKind::LIST_HASH_DISCRIMINATOR`) are
+// pinned via the peer `assert_scalar_plus_two_u8_arrays_permute_
+// inclusive_range` witness above (which binds the outer joint
+// bijection `{0..=6} == {OUTER} ⊕ StructuralKind::HASH_DISCRIMINATORS
+// ⊕ QuoteForm::HASH_DISCRIMINATORS`) — the joint witness binds their
+// per-position order INSIDE the outer sub-carving array
+// (`StructuralKind::HASH_DISCRIMINATORS = [0, 2]`) but is SILENT on
+// their per-position order INSIDE the container `SexpShape::HASH_
+// DISCRIMINATORS` array at positions 0 and 7. A future sibling
+// witness on the SAME slice-equals-array helper could bind
+// `SexpShape::HASH_DISCRIMINATORS[0..1] == [StructuralKind::HASH_
+// DISCRIMINATORS[0]]` and `SexpShape::HASH_DISCRIMINATORS[7..8] ==
+// [StructuralKind::HASH_DISCRIMINATORS[1]]` — this run opens the
+// column at the four-slot QUOTE-family corner because it carries
+// the LARGEST sub-carving array (four positions vs. two + two
+// singletons) and thus the highest reorder-catch surface per
+// `const _` witness line.
+const _: () = assert_u8_array_slice_equals_u8_array::<12, 4, 8>(
+    &crate::error::SexpShape::HASH_DISCRIMINATORS,
+    &QuoteForm::HASH_DISCRIMINATORS,
+);
+
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
 // serde_json serialization that would otherwise dominate cache overhead on
@@ -34728,6 +35016,199 @@ mod tests {
             "assert_u8_array_slice_is_scalar_replica panic message \
              {msg:?} must name the failed AXIS (\"SLICE-BLOCK-\
              CONSTANCY-VIOLATION\") for axis-provenance-preserving \
+             failure diagnostics",
+        );
+    }
+
+    // ── `assert_u8_array_slice_equals_u8_array` — the SLICE-EQUALS-
+    // ARRAY sibling of `assert_u8_array_slice_is_scalar_replica` on
+    // the SAME (u8) row. Sibling posture: same runtime-test surface
+    // (accept-canonical-middle-slice, accept-empty-sub-array, accept-
+    // full-array-degenerate, accept-sexp-shape-quote-tail-composition,
+    // reject-positionwise-drift, reject-start-out-of-bounds, reject-
+    // slice-length-out-of-bounds, panic-message-provenance)
+    // specialised to the (u8) SUB-SLICE ARRAY-image composition shape.
+    // A regression that silently weakens the helper (e.g. flipping
+    // `full[START + i] != sub[i]` to `==`, dropping the `START`
+    // offset from the outer read, moving the START gate BELOW the
+    // sweep, narrowing the sweep to `while i < M - 1` and missing
+    // the terminal position, or returning early past ANY bounds gate)
+    // is caught by the helper's OWN test surface rather than only
+    // surfacing as a false-positive on the
+    // `SexpShape::HASH_DISCRIMINATORS[8..12] ==
+    // QuoteForm::HASH_DISCRIMINATORS` witness.
+
+    #[test]
+    fn assert_u8_array_slice_equals_u8_array_accepts_a_canonical_middle_slice() {
+        // Canonical sub-slice `full[START..START + M) == sub[..]`
+        // inside a longer array `full` whose ENDPOINTS carry
+        // DIFFERENT bytes than the peer sub-array. Pins the outer
+        // `while i < M` sweep reads `full[START + i]` at the
+        // OFFSET position (not `full[i]`) — a regression that
+        // dropped the `START` offset would compare `full[0..M)`
+        // against `sub[..]` and pass on `full[0]=9 != sub[0]=1`
+        // silently or panic on the wrong axis. `START = 1` pins
+        // the sweep skips position `[0..START)` and reads only
+        // `[1..1+3) = [1..4)`.
+        assert_u8_array_slice_equals_u8_array::<7, 3, 1>(&[9, 3, 4, 5, 9, 9, 9], &[3, 4, 5]);
+    }
+
+    #[test]
+    fn assert_u8_array_slice_equals_u8_array_accepts_the_empty_sub_array() {
+        // LEGAL degenerate: `M == 0` collapses the sub-array into
+        // an empty listing `[]`. The sweep never enters the loop
+        // body and the helper accepts. Cross-position coverage
+        // pins the empty-sub-array acceptance at THREE distinct
+        // `START` positions (`START == 0` at the left endpoint,
+        // `START == 3` in the interior, `START == N` at the right
+        // endpoint — the latter is the corner `START == N` combined
+        // with `M == 0` that the START-OUT-OF-BOUNDS gate's
+        // inclusive upper bound must accept). A regression that
+        // hard-coded `START < N` OR panicked on the `M == 0` corner
+        // is caught on ALL THREE arms.
+        assert_u8_array_slice_equals_u8_array::<5, 0, 0>(&[7, 7, 7, 7, 7], &[]);
+        assert_u8_array_slice_equals_u8_array::<5, 0, 3>(&[7, 7, 7, 7, 7], &[]);
+        assert_u8_array_slice_equals_u8_array::<5, 0, 5>(&[7, 7, 7, 7, 7], &[]);
+    }
+
+    #[test]
+    fn assert_u8_array_slice_equals_u8_array_accepts_the_full_array_degenerate() {
+        // Full-array-covering slice `M == N, START == 0` collapses
+        // to the ALL-positions-equal-peer-array shape `full == sub`
+        // pointwise. Pins that the sweep proceeds through EVERY
+        // position of the outer array when `START = 0` and `M = N`.
+        // Cross-arity coverage on `N ∈ {3, 4, 6}` pins the sweep's
+        // terminal-position visit across a range of array
+        // cardinalities.
+        assert_u8_array_slice_equals_u8_array::<3, 3, 0>(&[10, 20, 30], &[10, 20, 30]);
+        assert_u8_array_slice_equals_u8_array::<4, 4, 0>(&[3, 4, 5, 6], &[3, 4, 5, 6]);
+        assert_u8_array_slice_equals_u8_array::<6, 6, 0>(&[0, 1, 2, 3, 4, 5], &[0, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn assert_u8_array_slice_equals_u8_array_accepts_sexp_shape_quote_tail_composition() {
+        // Runtime cross-check that the substrate's ONE
+        // POSITIONWISE-COMPOSITION `[u8; N]` sub-slice
+        // `SexpShape::HASH_DISCRIMINATORS[8..12]` byte-for-byte
+        // equal to the peer `QuoteForm::HASH_DISCRIMINATORS` is a
+        // well-formed SLICE-EQUALS-ARRAY relation at runtime too.
+        // The pair enforces the theorem at TWO stages of the
+        // toolchain: the const witness fires FIRST at `cargo
+        // check`, this runtime pin catches the drift at `cargo
+        // test` as a safety net. Sibling posture to the peer
+        // runtime cross-check
+        // `assert_u8_array_slice_is_scalar_replica_accepts_sexp_shape_atomic_collapse_slice`
+        // — this witness carries the SLICE-EQUALS-ARRAY theorem
+        // (positionwise composition with a peer array of arity
+        // `M`) on the SAME (u8) row's quote-family tail slice
+        // rather than the MANY-TO-ONE-COLLAPSE theorem
+        // (positionwise composition with a SCALAR) on the atomic-
+        // collapse mid slice.
+        assert_u8_array_slice_equals_u8_array::<12, 4, 8>(
+            &crate::error::SexpShape::HASH_DISCRIMINATORS,
+            &QuoteForm::HASH_DISCRIMINATORS,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "SLICE-EQUALS-ARRAY-VIOLATION")]
+    fn assert_u8_array_slice_equals_u8_array_panics_at_runtime_on_positionwise_drift() {
+        // NEGATIVE PIN — SLICE-EQUALS-ARRAY-VIOLATION corner: a
+        // byte at some position in `full[START..START + M)` that
+        // does NOT byte-equal the peer sub-array `sub` at the
+        // offset-matched position MUST panic at runtime with the
+        // slice-named message. Pins the helper's positionwise-
+        // drift reject arm — a regression that silently short-
+        // circuited on the first slice position without checking
+        // the middle or terminal slice positions would slip
+        // through the compile-time witness's failure mode too.
+        // The offending byte `9` at outer position `3` (interior
+        // of the sub-slice `[1..4)`, offset `2` inside `sub`)
+        // pins the middle-of-slice drift mode.
+        assert_u8_array_slice_equals_u8_array::<5, 3, 1>(&[0, 3, 4, 9, 0], &[3, 4, 5]);
+    }
+
+    #[test]
+    #[should_panic(expected = "START-OUT-OF-BOUNDS")]
+    fn assert_u8_array_slice_equals_u8_array_panics_at_runtime_on_start_out_of_bounds() {
+        // NEGATIVE PIN — START-OUT-OF-BOUNDS gate: a caller-side
+        // turbofish arity slip on the `START` const-generic where
+        // `START > N` MUST panic at runtime with the START-OUT-OF-
+        // BOUNDS-named message BEFORE the peer SLICE-LENGTH-OUT-OF-
+        // BOUNDS gate reads `N - START` (which would `usize`-
+        // underflow had this gate not caught the slip first). Pins
+        // the gate's placement at the TOP of the helper — a
+        // regression that dropped the gate would either underflow
+        // subtraction at the peer gate OR panic deeper in
+        // `full[START + i]` bounds-checking with a helper-name-less
+        // panic message. The offending `START = 7` against `N = 5`
+        // pins the strict `START > N` reject arm; the LEGAL
+        // `START == N` empty-slice-at-right-endpoint corner is
+        // covered by the peer acceptance test above.
+        assert_u8_array_slice_equals_u8_array::<5, 0, 7>(&[1, 1, 1, 1, 1], &[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SLICE-LENGTH-OUT-OF-BOUNDS")]
+    fn assert_u8_array_slice_equals_u8_array_panics_at_runtime_on_slice_length_out_of_bounds() {
+        // NEGATIVE PIN — SLICE-LENGTH-OUT-OF-BOUNDS gate: a peer
+        // sub-array arity `M` that exceeds the outer array's tail
+        // cardinality `N - START` MUST panic at runtime with the
+        // slice-length-out-of-bounds-named message. Peer gate to
+        // the START-OUT-OF-BOUNDS arm above — the two gates
+        // jointly enforce `START ≤ N` and `M ≤ N - START` before
+        // any content sweep. The offending `M = 5` against
+        // `N - START = 5 - 3 = 2` pins the strict `M > N - START`
+        // reject arm; the LEGAL exact-fit corner `M == N - START`
+        // is covered by the middle-slice acceptance test above.
+        assert_u8_array_slice_equals_u8_array::<5, 5, 3>(&[1, 1, 1, 1, 1], &[1, 1, 1, 1, 1]);
+    }
+
+    #[test]
+    fn assert_u8_array_slice_equals_u8_array_panic_message_names_the_helper_and_slice_equals_array_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — SLICE-EQUALS-ARRAY-
+        // VIOLATION arm: the panic message MUST begin with the
+        // helper's own name AND identify the failed AXIS as
+        // "SLICE-EQUALS-ARRAY-VIOLATION" so downstream diagnostics
+        // route the drift back to (a) the helper by string search
+        // on `"assert_u8_array_slice_equals_u8_array"` and (b) the
+        // failed axis by string search on `"SLICE-EQUALS-ARRAY-
+        // VIOLATION"`. Sibling posture to
+        // `assert_u8_array_slice_is_scalar_replica_panic_message_names_the_helper_and_slice_block_constancy_violation_axis`
+        // on the sibling SLICE-BLOCK-CONSTANCY corner — the shared
+        // `"SLICE-"` prefix lets callers grep either the SINGLE-
+        // scalar-image or ARRAY-of-length-`M`-image variant by
+        // the shared prefix, while the `-BLOCK-CONSTANCY-` /
+        // `-EQUALS-ARRAY-` infix disambiguates the CONTRACT
+        // SHAPE.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_slice_equals_u8_array::<5, 3, 1>(&[0, 3, 4, 9, 0], &[3, 4, 5]);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_slice_equals_u8_array must panic on a \
+             positionwise drift — the reject-positionwise-drift arm \
+             is the CONTENT failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_slice_equals_u8_array panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_slice_equals_u8_array"),
+            "assert_u8_array_slice_equals_u8_array panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+        assert!(
+            msg.contains("SLICE-EQUALS-ARRAY-VIOLATION"),
+            "assert_u8_array_slice_equals_u8_array panic message \
+             {msg:?} must name the failed AXIS (\"SLICE-EQUALS-\
+             ARRAY-VIOLATION\") for axis-provenance-preserving \
              failure diagnostics",
         );
     }

@@ -6288,6 +6288,146 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::find_by_label(s).map(<Self as ClosedSet>::index_of)
     }
 
+    /// The (hint) sibling of [`Self::index_of_label`] — the zero-
+    /// allocation structured decode of `s` into a declaration-order
+    /// index, threading a typed [`Self::suggest_closest`] hint into the
+    /// rejection envelope. Peer of [`Self::find_by_label_with_hint`]
+    /// on the (`usize`-typed direct projection) axis of the closed-set
+    /// structured-decode surface: where [`Self::find_by_label_with_hint`]
+    /// returns the typed variant on match, this method projects that
+    /// variant through [`Self::index_of`] so the caller gets the
+    /// declaration-order slot directly.
+    ///
+    /// On exact match returns `Ok(idx)` where `idx == v.index_of()` for
+    /// the canonical variant `v` bound to label `s`. On miss returns
+    /// `Err(hint)` where `hint` is the typed variant
+    /// [`Self::suggest_closest`] keys on — `Some(v)` when a canonical
+    /// label sits within the substrate-wide bounded edit distance,
+    /// `None` when no candidate qualifies (the conservative-suggestion
+    /// contract — silent over guessing).
+    ///
+    /// The hint slot carries the TYPED VARIANT rather than its
+    /// declaration-order slot so a downstream diagnostic renderer can
+    /// freely project the hint through [`Self::label`] for a
+    /// `did you mean 'foo'?` message, through [`Self::index_of`] for
+    /// the near-miss's declaration slot, OR through
+    /// [`Self::sorted_index_of`] for the near-miss's lex slot — one
+    /// zero-allocation structured decode surfaces every consumer's
+    /// downstream projection without paying the
+    /// [`Self::make_unknown`] carrier allocation
+    /// [`Self::parse_label_with_hint`] threads on the same reject
+    /// path. Matches the (hint = typed variant) shape
+    /// [`Self::find_by_label_with_hint`] pins one axis over on the
+    /// (`Self`-typed direct decode) column.
+    ///
+    /// Peer of [`Self::find_by_label_with_hint`] on the (return-type)
+    /// axis of the structured-decode surface — that method returns the
+    /// typed variant, this method returns its declaration-order slot.
+    /// Sibling of [`Self::index_of_label`] on the (hint) axis of the
+    /// (`&str → usize`) direct-index projection surface. Together with
+    /// the four sibling methods on the closed-set structured-decode
+    /// surface, this method closes the (return-type × hint) 2×2 corner
+    /// on the (`&str → usize` direct projection, with-hint) cell:
+    ///
+    /// | Return type \ Hint | No hint                   | With hint                          |
+    /// |--------------------|---------------------------|------------------------------------|
+    /// | `Self`             | [`Self::find_by_label`]   | [`Self::find_by_label_with_hint`]  |
+    /// | `usize` (decl)     | [`Self::index_of_label`]  | [`Self::index_of_label_with_hint`] |
+    ///
+    /// Default body composes [`Self::find_by_label_with_hint`] with
+    /// [`Self::index_of`] on the Ok arm — the structured index decode
+    /// is a typed CONSEQUENCE of the two pre-existing primitives, not
+    /// a third codepath. Implementors override only when the
+    /// composition needs to diverge (no production implementor reaches
+    /// for this today; the axis exists for the same reason
+    /// [`Self::index_of_label`] / [`Self::find_by_label_with_hint`]
+    /// overrides exist — a typed escape hatch the trait surface
+    /// exposes rather than forcing the implementor to hand-roll the
+    /// impl). An implementor that overrides
+    /// [`Self::find_by_label_with_hint`] OR [`Self::index_of`]
+    /// propagates the override through this default body
+    /// automatically; the structured (`&str → usize`) decode with
+    /// hint funnels every sweep through ONE typed primitive per axis.
+    ///
+    /// Future consumers — an LSP hover pass that resolves the typed
+    /// declaration-order slot under the operator's cursor AND (on
+    /// miss) renders a `did you mean <hint.label()>?` next to a bare
+    /// rejection WITHOUT paying carrier allocation per non-matching
+    /// hover; a compact wire-format decoder that reads a `&str` config
+    /// value and emits either the declaration-order byte directly OR
+    /// a typed near-miss the operator sees when the field's value is
+    /// a fuzzy hit
+    /// (`T::index_of_label_with_hint(cfg).unwrap_or_else(|hint|
+    /// { emit_hint(hint); T::default_kind().index_of() })`); a
+    /// `filter_map`-shaped stream projection over cluster-wide
+    /// `tatara.pleme.io/*` annotation keys that partitions each
+    /// element into (typed_slot, typed_hint, bare_unrecognized_key)
+    /// via `index_of_label_with_hint` — bind to ONE trait method
+    /// instead of hand-rolling the
+    /// `find_by_label_with_hint(s).map(index_of)` composition at each
+    /// callsite, and the closed-set zero-allocation structured
+    /// (`&str → usize`) decode surface evolves at ONE site rather
+    /// than per-consumer.
+    ///
+    /// The (accept, reject) alignment with
+    /// [`Self::find_by_label_with_hint`] — the two methods MUST agree
+    /// on membership at every `&str` payload (both accept the same
+    /// inputs, both reject the same inputs, both surface the SAME
+    /// typed hint variant on rejection) — is guaranteed by the
+    /// default composition and pinned by the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (82) on every
+    /// implementor, so a passing well-formedness sweep means every
+    /// generic consumer can call `index_of_label_with_hint` on any
+    /// `&str` payload and expect the same `Result`-typed answer at
+    /// every crate boundary AND the SAME `Option<Self>` hint variant
+    /// on rejection as [`Self::find_by_label_with_hint`] surfaces.
+    ///
+    /// THEORY.md §III — the typescape; the structured
+    /// (`&str → usize` with hint) decode becomes a TYPE projection on
+    /// the trait rather than a per-consumer inline
+    /// `find_by_label_with_hint(s).map(index_of)` composition at
+    /// every downstream label-to-slot-with-hint site. The (return-
+    /// type × hint) 2×2 matrix partitions the structured direct-
+    /// decode surface exhaustively into FOUR typed projections, each
+    /// with a distinct load-bearing consumer surface — `Self`-typed
+    /// carrier decode on either side of the (hint) axis, `usize`-
+    /// typed direct decode on either side.
+    /// THEORY.md §V.1 — knowable platform; the structured
+    /// (`&str → usize` with hint) decode was an unnamed compound of
+    /// [`Self::find_by_label_with_hint`] + [`Self::index_of`] pre-
+    /// lift. Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two substrate primitives — generic
+    /// consumers see ONE method, not ONE structured-index-decode-
+    /// shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// structured-diagnostic shape emerges from the composition of
+    /// TWO substrate primitives ([`Self::find_by_label_with_hint`],
+    /// [`Self::index_of`]) rather than as a per-implementor
+    /// structured-index-decode impl. A future tightening of either
+    /// primitive (a future perfect-hash lookup on
+    /// [`Self::find_by_label_with_hint`], a future const-fn
+    /// [`Self::index_of`] axis that makes the projection callable in
+    /// const contexts) propagates to every closed-set structured
+    /// (`&str → usize` with hint) consumer through ONE trait body.
+    ///
+    /// Frontier inspiration: rustc's `find_best_match_for_name`
+    /// composed with `Symbol::intern` composed with a caller-side
+    /// symbol-table index projection — the typed-symbol lookup with a
+    /// bounded near-miss adornment slot AND a downstream projection
+    /// onto a stable per-symbol slot without materializing a
+    /// diagnostic on miss when the caller supplies a natural
+    /// fallback. MLIR's `OperationName::dyn_cast<T>` composed with
+    /// `RegisteredOperationName::getStableIndex()` on miss delivers
+    /// the same (structured index decode with typed near-miss) shape
+    /// one vocabulary over on the typed op registry. Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's existing [`Self::find_by_label_with_hint`] with
+    /// [`Self::index_of`] — no new primitive, no new dep, no new IR
+    /// layer, no allocation.
+    fn index_of_label_with_hint(s: &str) -> Result<usize, Option<Self>> {
+        <Self as ClosedSet>::find_by_label_with_hint(s).map(<Self as ClosedSet>::index_of)
+    }
+
     /// The declaration-order-index sibling of [`Self::index_of`] one
     /// ordering-axis over — the direct (typed variant → `usize`
     /// lexicographic-order index) projection through the closed set,
@@ -20052,6 +20192,94 @@ where
             "{type_name}: T::is_sorted_endpoint_index({i}) == T::is_sorted_interior_index({i}) — the (lex-endpoint, lex-interior) partition collapsed on lex slot {i}, breaking the boolean-partition contract every generic consumer expects. On every canonical slot in 0..T::CARDINALITY the two predicates MUST answer complementary bools, mirroring the `Self`-arg complementarity clause (33) one arg-type axis over AND the `&str`-arg complementarity clause (57) one arg-type axis over",
         );
     }
+    // (82) — `T::index_of_label_with_hint` composes
+    // `find_by_label_with_hint` + `index_of` verbatim on the Ok arm
+    // AND preserves the `Option<Self>` hint slot on the Err arm.
+    // Every variant decodes to `Ok(v.index_of())` through the
+    // structured surface; the reserved probe rejects with `Err(None)`
+    // — the same 38-char probe clause (7) reserves as beyond
+    // `suggest_closest`'s bounded edit distance by construction; the
+    // empty-string boundary clause (4) reserves as structurally
+    // outside the closed set rejects with `Err(_)` (the hint slot's
+    // shape on the empty-string arm is `suggest_closest`'s call —
+    // typically `None` but not fixed by contract, so the assertion
+    // matches on the reject side alone). The default trait body
+    // satisfies the clause for free; the assertion catches an
+    // override that drifts the composition (accepts the probe as Ok
+    // through a permissive index return, fabricates a hint slot the
+    // sibling `find_by_label_with_hint` doesn't surface, OR emits the
+    // wrong declaration-order slot on a canonical variant). Sibling
+    // posture to clause (13) on the (return-type × hint) 2×2 axis of
+    // the closed-set structured-decode surface — clause (13) pins
+    // the `Self`-typed decode arm's alignment with
+    // `find_by_label + suggest_closest`, this clause pins the
+    // `usize`-typed decode arm's alignment with
+    // `find_by_label_with_hint + index_of`. Together the two
+    // clauses close both columns of the (return-type × hint) 2×2
+    // corner on the (with-hint) row.
+    for &v in T::ALL {
+        let label = v.label();
+        match T::index_of_label_with_hint(label) {
+            Ok(decoded) => assert_eq!(
+                decoded, v.index_of(),
+                "{type_name}: index_of_label_with_hint round-trip {label:?} → variant decoded to slot {decoded} but v.index_of() == {} — the structured (`&str → usize` with hint) decode drifted from the natural `find_by_label_with_hint(s).map(index_of)` composition on the accept arm",
+                v.index_of(),
+            ),
+            Err(_) => panic!(
+                "{type_name}: index_of_label_with_hint round-trip {label:?} → canonical variant rejected by the structured (`&str → usize` with hint) decode",
+            ),
+        }
+    }
+    match T::index_of_label_with_hint(probe) {
+        Ok(_) => panic!(
+            "{type_name}: index_of_label_with_hint accepted the reserved probe input — the structured zero-allocation `usize`-typed decode MUST reject every input outside the closed set",
+        ),
+        Err(hint) => assert!(
+            hint.is_none(),
+            "{type_name}: index_of_label_with_hint fabricated a `did you mean ...?` hint for the unrecognizable probe — the conservative-suggestion contract demands `None` for inputs beyond the bounded edit distance",
+        ),
+    }
+    // Cross-column alignment with clause (13)'s sibling primitive —
+    // on EVERY probe (canonical labels + reserved probe + empty
+    // string) the two structured-decode surfaces MUST agree on
+    // membership AND on the typed hint variant. `Ok`-arm's typed
+    // hint is structurally absent (`suggest_closest` never fires on
+    // the accept path), so alignment on the accept path degenerates
+    // to `index_of_label_with_hint(s) == Ok(v.index_of())` when
+    // `find_by_label_with_hint(s) == Ok(v)`. `Err`-arm's typed hint
+    // is [`Self::suggest_closest`]'s answer on the same input, so
+    // alignment holds iff both siblings surface the SAME
+    // `Option<Self>` hint variant on the reject arm.
+    for &v in T::ALL {
+        let label = v.label();
+        let hint_decode = T::index_of_label_with_hint(label);
+        let carrier_decode = T::find_by_label_with_hint(label);
+        match (hint_decode, carrier_decode) {
+            (Ok(idx), Ok(w)) => assert_eq!(
+                idx, w.index_of(),
+                "{type_name}: index_of_label_with_hint({label:?}) accepted at slot {idx} but find_by_label_with_hint({label:?}) accepted at variant {w:?} whose index_of() == {} — the two structured-decode surfaces bifurcated on the accept arm's typed slot",
+                w.index_of(),
+            ),
+            (Err(_), Err(_)) => panic!(
+                "{type_name}: index_of_label_with_hint({label:?}) rejected a canonical variant label — the accept arm on both structured-decode surfaces MUST agree",
+            ),
+            (Ok(_), Err(_)) | (Err(_), Ok(_)) => panic!(
+                "{type_name}: index_of_label_with_hint({label:?}) and find_by_label_with_hint({label:?}) disagreed on the (accept, reject) partition — the structured-decode surface bifurcated across the (return-type) axis",
+            ),
+        }
+    }
+    match (
+        T::index_of_label_with_hint(probe),
+        T::find_by_label_with_hint(probe),
+    ) {
+        (Err(hint_a), Err(hint_b)) => assert_eq!(
+            hint_a, hint_b,
+            "{type_name}: index_of_label_with_hint(reserved probe) and find_by_label_with_hint(reserved probe) disagreed on the typed hint slot — the structured-decode surface bifurcated on the (hint) axis's Option<Self> variant across the two return-type columns",
+        ),
+        _ => panic!(
+            "{type_name}: index_of_label_with_hint / find_by_label_with_hint accepted the reserved probe or disagreed on the (accept, reject) partition",
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -24455,6 +24683,176 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an index_of_label() override drifted from the natural find_by_label+index_of composition on the non-canonical reject arm",
+        );
+    }
+
+    #[test]
+    fn index_of_label_with_hint_returns_ok_index_for_exact_match() {
+        // The exact-match arm — `index_of_label_with_hint("alpha")`
+        // returns `Ok(0)` (StubKind::Alpha's declaration-order slot)
+        // and never enters `suggest_closest`. Sibling posture to
+        // `find_by_label_with_hint_returns_ok_variant_for_exact_match`
+        // one axis over on the (return-type) column of the
+        // (return-type × hint) 2×2 matrix — this pin covers the
+        // `usize`-typed direct-decode column on the exact-match arm.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let outcome = <StubKind as ClosedSet>::index_of_label_with_hint(v.label());
+            assert_eq!(outcome, Ok(v.index_of()));
+        }
+    }
+
+    #[test]
+    fn index_of_label_with_hint_returns_hint_for_near_miss() {
+        // The near-miss arm — `index_of_label_with_hint("alpa")`
+        // returns `Err(Some(StubKind::Alpha))`: the typed decode
+        // misses (the input isn't a canonical label), and the
+        // substrate-wide bounded edit distance places "alpha" within
+        // reach (Levenshtein distance 1 ≤ bound 2 for 4-char input).
+        // The hint slot carries the typed variant (not the near-miss
+        // index) so the downstream renderer can project into label
+        // OR index OR sorted_index freely. Sibling posture to
+        // `find_by_label_with_hint_returns_hint_for_near_miss` one
+        // axis over on the (return-type) column — both pins agree
+        // that the hint variant is `Some(StubKind::Alpha)` on the
+        // reject arm regardless of the accept-arm return type.
+        let outcome = <StubKind as ClosedSet>::index_of_label_with_hint("alpa");
+        assert_eq!(outcome, Err(Some(StubKind::Alpha)));
+    }
+
+    #[test]
+    fn index_of_label_with_hint_returns_none_hint_for_far_miss() {
+        // The conservative-suggestion arm — an input whose closest
+        // label sits beyond the substrate-wide bounded edit distance
+        // returns `Err(None)` rather than `Err(Some(best_of_the_bunch))`.
+        // The hint slot stays absent so the `did you mean …?` surface
+        // doesn't fabricate an unrelated suggestion. Sibling posture
+        // to `find_by_label_with_hint_returns_none_hint_for_far_miss`
+        // one axis over — this pin extends the conservative-
+        // suggestion contract to the `usize`-typed direct-decode
+        // column.
+        let outcome = <StubKind as ClosedSet>::index_of_label_with_hint("xxxxxxxx");
+        assert_eq!(outcome, Err(None));
+    }
+
+    #[test]
+    fn index_of_label_with_hint_rejects_unknown_input_without_allocating_carrier() {
+        // Zero-allocation structured-decode reject arm — an input
+        // outside the closed set returns `Err(hint)` WITHOUT
+        // threading through `make_unknown`. The (allocating carrier
+        // decode, non-allocating typed decode) axis of the
+        // structured-decode surface partitions cleanly at the return-
+        // type boundary: `parse_label_with_hint(s)` allocates
+        // `UnknownStubKind("zzzz".to_owned())` next to the hint
+        // slot; this method returns a bare `Err(hint)`. Sibling
+        // posture to
+        // `find_by_label_with_hint_rejects_unknown_input_without_allocating_carrier`
+        // one axis over on the (return-type) column — both pins
+        // guarantee the zero-alloc reject contract independent of
+        // the accept-arm's `Self`/`usize` return-type distinction.
+        let outcome = <StubKind as ClosedSet>::index_of_label_with_hint("zzzz");
+        assert_eq!(outcome, Err(None));
+    }
+
+    #[test]
+    fn index_of_label_with_hint_agrees_with_find_by_label_with_hint_on_every_probe() {
+        // The (return-type) axis of the (structured-decode) 2×2
+        // matrix MUST stay semantically aligned on every input the
+        // sweep walks. This test pins the alignment against a
+        // representative 6-input probe set covering (a) every
+        // canonical variant label — both arms return the acceptance
+        // side AND project to the SAME declaration-order slot (via
+        // `Self::index_of` on the `Self`-typed column, directly on
+        // the `usize`-typed column); (b) a near-miss — both arms
+        // return `Err(Some(v))` on the SAME typed hint variant;
+        // (c) a far miss — both arms return `Err(None)` on the same
+        // absent-hint slot; (d) the empty-string boundary. The
+        // alignment is the load-bearing contract that lets a generic
+        // consumer freely swap between the two return-type columns
+        // of the (structured-decode) matrix based on its
+        // downstream-projection needs (typed variant for label
+        // rendering, `usize` for compact wire encoding / per-slot
+        // metrics binning) without changing the program's
+        // structured-decode semantics.
+        let inputs: [&str; 6] = ["alpha", "beta", "gamma", "alpa", "xxxxxxxx", ""];
+        for input in inputs {
+            let index_outcome = <StubKind as ClosedSet>::index_of_label_with_hint(input);
+            let variant_outcome = <StubKind as ClosedSet>::find_by_label_with_hint(input);
+            match (index_outcome, variant_outcome) {
+                (Ok(idx), Ok(v)) => assert_eq!(
+                    idx, v.index_of(),
+                    "index_of_label_with_hint({input:?}) accepted at slot {idx} but find_by_label_with_hint({input:?}) accepted at variant {v:?} whose index_of() == {} — the two structured-decode surfaces bifurcated on the accept arm's typed slot", v.index_of(),
+                ),
+                (Err(hint_i), Err(hint_v)) => assert_eq!(
+                    hint_i, hint_v,
+                    "index_of_label_with_hint({input:?}) and find_by_label_with_hint({input:?}) disagreed on the typed hint slot — the (return-type) axis of the structured-decode matrix bifurcated on the hint column",
+                ),
+                (Ok(_), Err(_)) | (Err(_), Ok(_)) => panic!(
+                    "index_of_label_with_hint({input:?}) and find_by_label_with_hint({input:?}) disagreed on the (accept, reject) partition — the structured-decode surface bifurcated across the (return-type) axis",
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_index_of_label_with_hint_and_composition(
+    ) {
+        // The well-formedness sweep's (82) clause —
+        // `T::index_of_label_with_hint` MUST compose
+        // `find_by_label_with_hint` + `index_of` verbatim. A hand-
+        // impl'd implementor whose override drifts the composition
+        // (accepts the probe as Ok through a permissive index
+        // return, fabricates a hint slot the sibling
+        // `find_by_label_with_hint` doesn't surface, OR emits the
+        // wrong declaration-order slot on a canonical variant) fails
+        // the sweep loudly rather than silently bifurcating the
+        // zero-allocation structured-index-decode surface every
+        // LSP hover / compact-encoder / metrics-binner consumer
+        // routes through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_find_by_label_with_hint_and_composition`
+        // one axis over on the (return-type) column — both pins
+        // extend the structural-drift-catches sweep to the
+        // structured-decode-with-hint row of the closed-set
+        // structured-decode matrix.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIndexOfLabelWithHintKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedIndexOfLabelWithHintKind(pub String);
+        impl core::fmt::Display for UnknownDriftedIndexOfLabelWithHintKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted index of label with hint kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DriftedIndexOfLabelWithHintKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted index of label with hint kind";
+            type Unknown = UnknownDriftedIndexOfLabelWithHintKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIndexOfLabelWithHintKind(s.to_owned())
+            }
+            fn index_of_label_with_hint(_s: &str) -> Result<usize, Option<Self>> {
+                // Drifted override — accepts every `&str` payload,
+                // including the reserved probe the testkit's clause
+                // (82) demands rejects. Fails the direct-projection
+                // alignment with `find_by_label_with_hint(s).map(index_of)`
+                // on the non-canonical reject arm.
+                Ok(0)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedIndexOfLabelWithHintKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an index_of_label_with_hint() override drifted from the natural find_by_label_with_hint+index_of composition on the non-canonical reject arm",
         );
     }
 

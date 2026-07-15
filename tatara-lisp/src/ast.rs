@@ -2695,6 +2695,208 @@ const _: () = assert_char_pair_array_columns_equal_char_arrays(
 );
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// the family-wide `[(char, char); N]` paired substrate array `arr`
+/// carries a character that appears in BOTH its LEFT column projection
+/// AND its RIGHT column projection (across ANY position pair). Binds
+/// ONE conjunct clause on the `(char, char)` product-element row of the
+/// (element-type × contract-shape) matrix at the
+/// (cross-column-disjointness) column — CROSS-COLUMN-COLLISION — the
+/// set of characters appearing as LEFT entries MUST be DISJOINT from
+/// the set of characters appearing as RIGHT entries. Formally:
+/// `∀ i, j ∈ 0..N : arr[i].0 as u32 != arr[j].1 as u32` — including
+/// the diagonal `i == j` case (a `('a', 'a')` self-mapping pair
+/// FAILS this contract even though it satisfies BOTH the SELF-arm
+/// identity-relation shape AND the sibling
+/// [`assert_char_pair_array_bijective`] per-column injectivity check).
+///
+/// Contract-shape orthogonality with the FOUR sibling paired-array
+/// verifiers on the SAME row:
+///   * [`assert_char_pair_array_bijective`] closes the per-column
+///     INJECTIVITY axis (LEFT-column ∧ RIGHT-column pairwise-distinct,
+///     INDEPENDENTLY) — a table like `[('a', 'x'), ('a', 'y')]` fails
+///     BIJECTIVITY (LEFT duplicated) but passes CROSS-COLUMN-DISJOINT
+///     (LEFT = {'a'}, RIGHT = {'x', 'y'}, disjoint). The two axes are
+///     INDEPENDENT: neither implies the other.
+///   * [`assert_char_pair_array_pairwise_distinct`] closes the WEAKER
+///     CONJOINED-tuple INJECTIVITY axis — a table like
+///     `[('a', 'a')]` passes CONJOINED-tuple pairwise-distinctness
+///     (only one tuple) but FAILS CROSS-COLUMN-DISJOINT (LEFT[0] ==
+///     RIGHT[0] on the diagonal).
+///   * [`assert_char_pair_array_within_char_pair_finite_set`] closes
+///     the SUBSET-EMBEDDING axis — orthogonal to cross-column
+///     disjointness (a table can be a subset of a well-formed set and
+///     still violate cross-column disjointness if the set itself does).
+///   * [`assert_char_pair_arrays_disjoint`] closes the BETWEEN-ARRAY
+///     DISJOINTNESS axis (two arrays share no CONJOINED tuple) — this
+///     helper closes the WITHIN-ARRAY CROSS-COLUMN DISJOINTNESS axis
+///     (one array's LEFT column shares no CHARACTER with its RIGHT
+///     column). The two axes are DUAL: BETWEEN-ARRAY vs WITHIN-ARRAY,
+///     CONJOINED-tuple vs CROSS-COLUMN-CHARACTER.
+///
+/// The invariant is load-bearing for the substrate's
+/// pattern-DISTINCT-from-value sub-vocabulary at
+/// [`Atom::NAMED_ESCAPE_TABLE`] (`[(char, char); 3]`): the three
+/// named-escape rows `('n', '\n')`, `('t', '\t')`, `('r', '\r')` are
+/// pattern-DISTINCT-from-value by algebra design (the printable ASCII
+/// SOURCE column and the control-character DECODED column MUST NOT
+/// overlap — a regression that added a pair like `('n', 'r')` or
+/// `('a', 'a')` would silently collapse the pattern-DISTINCT-from-value
+/// axis by routing a SOURCE character back to itself OR to another
+/// SOURCE character, making the two sub-vocabularies
+/// (pattern-distinct at [`Atom::NAMED_ESCAPE_TABLE`] +
+/// pattern-equals at [`Atom::SELF_ESCAPE_TABLE`]) share membership).
+/// The SHAPE ASYMMETRY between the two peer arrays (`[(char, char); N]`
+/// vs `[char; N]`) already encodes the identity-relation asymmetry in
+/// the TYPE — but a `[(char, char); N]` on the DISTINCT sub-vocabulary
+/// side can silently drift a pair onto the diagonal while retaining
+/// its paired shape. Pre-lift, the cross-column disjointness of
+/// `NAMED_ESCAPE_TABLE` lived ONLY as prose in the substrate's escape-
+/// table docstrings ("the THREE pattern-DISTINCT-from-value named-
+/// escape rows") plus as an implicit consequence of the ASCII-letter
+/// vs control-character byte-range partition. Post-lift the cross-
+/// column disjointness binds at `cargo check` time — a regression
+/// that adds a `('a', 'a')` diagonal pair, a `('n', 'r')` cross-row
+/// SOURCE-to-SOURCE aliasing pair, or any pair drifting a character
+/// across the LEFT / RIGHT partition fails the build rather than the
+/// test suite.
+///
+/// Applies ONLY to the pattern-DISTINCT-from-value sub-vocabulary of
+/// the escape-table family. [`Atom::ESCAPE_TABLE`] (`[(char, char); 5]`)
+/// INTENTIONALLY violates cross-column disjointness on its two SELF
+/// arms (the tail two positions `(STR_DELIMITER, STR_DELIMITER)` +
+/// `(STR_ESCAPE_LEAD, STR_ESCAPE_LEAD)` are diagonal self-mappings by
+/// design). No witness is co-located on `Atom::ESCAPE_TABLE` — the
+/// SHAPE ASYMMETRY between the two escape-table sub-vocabularies IS
+/// the axis distinguishing them, and this helper's contract holds
+/// ONLY on the DISTINCT side.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP
+/// tokenizer that constructs a paired vocabulary at runtime and wants
+/// to verify cross-column disjointness before consuming it — and the
+/// panic surfaces normally in that path (pinned by
+/// `assert_char_pair_array_columns_cross_disjoint_panics_at_runtime_
+/// on_diagonal_collision` and its off-diagonal peers). The axis-
+/// provenance string `"CROSS-COLUMN-COLLISION"` is chosen DISTINCT
+/// from every sibling helper's axis vocabulary (`"CHAR-PAIR-TUPLE-
+/// COLLISION"` on `_pairwise_distinct`, `"LEFT column"` / `"RIGHT
+/// column"` on `_bijective`, `"CHAR-PAIR-SUBSET-VIOLATION"` on
+/// `_within_char_pair_finite_set`, `"CHAR-PAIR-DISJOINTNESS-
+/// VIOLATION"` on `_arrays_disjoint`, `"LEFT-COLUMN-DIVERGENCE"` /
+/// `"RIGHT-COLUMN-DIVERGENCE"` on `_columns_equal_char_arrays`) so a
+/// diagnostic that names the failed axis routes UNAMBIGUOUSLY to
+/// this specific cross-column-disjointness helper rather than to a
+/// sibling paired-array verifier.
+///
+/// Adding a new family-wide `[(char, char); N]` paired array on a
+/// pattern-DISTINCT-from-value sub-vocabulary (e.g. a hypothetical
+/// (short-form, long-form) alias table where short and long forms
+/// live in disjoint character partitions, or a `(bracket-open,
+/// bracket-close)` table where open and close characters MUST NOT
+/// alias): pair the declaration with `const _: () = assert_char_
+/// pair_array_columns_cross_disjoint(&Self::FOO_TABLE);` co-located
+/// immediately after the array's declaration and the cross-column
+/// disjointness contract binds at compile time WITHOUT a runtime
+/// LEFT.iter().any(RIGHT.contains) sweep.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the WITHIN-ARRAY CROSS-
+///   COLUMN disjointness contract becomes a TYPE-LEVEL theorem the
+///   substrate carries per pattern-DISTINCT-from-value paired-array
+///   declaration rather than a runtime membership sweep the developer
+///   must remember to write per array.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   cross-column disjointness proof at declaration site AND the
+///   escape-table consumers that route SOURCE-column characters
+///   THROUGH `decode_str_escape` to DECODED-column characters (and
+///   rely on that route being one-way) regenerate through the SAME
+///   `const _` witness.
+/// - THEORY.md §VI.1 — generation over composition; the doubly-nested
+///   `while` cross-column sweep IS the generative shape. Every new
+///   pattern-DISTINCT-from-value closed-set paired-array adds ONE
+///   `const _` line to get the cross-column disjointness theorem
+///   rather than re-deriving a `HashSet::intersection` runtime test
+///   per array.
+pub const fn assert_char_pair_array_columns_cross_disjoint<const N: usize>(
+    arr: &[(char, char); N],
+) {
+    let mut i = 0;
+    while i < N {
+        let mut j = 0;
+        while j < N {
+            if arr[i].0 as u32 == arr[j].1 as u32 {
+                panic!(
+                    "assert_char_pair_array_columns_cross_disjoint: \
+                     CROSS-COLUMN-COLLISION — family-wide `[(char, \
+                     char); N]` paired substrate array carries a \
+                     character appearing in BOTH the LEFT column at \
+                     some position `i` AND the RIGHT column at some \
+                     position `j` (possibly `i == j`, the diagonal \
+                     self-mapping case). The substrate's WITHIN-ARRAY \
+                     CROSS-COLUMN DISJOINTNESS contract on the array \
+                     is broken; every consumer that treats the paired \
+                     array as a pattern-DISTINCT-from-value sub-\
+                     vocabulary (any escape-table decode path that \
+                     assumes SOURCE bytes and DECODED bytes live in \
+                     disjoint character partitions so `decode_str_\
+                     escape` is a strictly ONE-WAY mapping, any \
+                     future `(bracket-open, bracket-close)` paired \
+                     vocabulary that assumes open and close characters \
+                     alias with neither each other nor a peer role) \
+                     relies on this invariant. Fix at the ARRAY-\
+                     DECLARATION site by moving the diagonal or \
+                     cross-row aliased pair to the peer SELF-arm \
+                     vocabulary (`Atom::SELF_ESCAPE_TABLE` on the \
+                     escape-table family) OR by re-shaping the pair \
+                     to route the shared character to a single column. \
+                     The CROSS-COLUMN-COLLISION axis is DISTINCT from \
+                     the sibling `_bijective` per-column INJECTIVITY \
+                     axis (a table like `[('a', 'x'), ('a', 'y')]` \
+                     fails `_bijective` on the LEFT-column-duplicate \
+                     arm but PASSES this helper because LEFT = {{'a'}} \
+                     and RIGHT = {{'x', 'y'}} are disjoint) and from \
+                     the sibling `_pairwise_distinct` CONJOINED-tuple \
+                     INJECTIVITY axis (a table like `[('a', 'a')]` \
+                     passes `_pairwise_distinct` on the singleton but \
+                     FAILS this helper on the diagonal `arr[0].0 == \
+                     arr[0].1` — the two axes cross-check different \
+                     failure modes on the SAME paired vocabulary)"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+// Compile-time WITHIN-ARRAY CROSS-COLUMN disjointness witness — one
+// `const _: () = assert_char_pair_array_columns_cross_disjoint(&…)`
+// binding the pattern-DISTINCT-from-value sub-vocabulary's cross-
+// column character-set disjointness at `cargo check` time on the
+// substrate's escape-table family. Applied to
+// `Atom::NAMED_ESCAPE_TABLE` (`[(char, char); 3]` — the three named-
+// escape rows `('n', '\n')`, `('t', '\t')`, `('r', '\r')`); the LEFT
+// column projection = {'n', 't', 'r'} (printable ASCII) and the RIGHT
+// column projection = {'\n', '\t', '\r'} (control characters) are
+// disjoint by algebra design. A regression that added a `('n', 'r')`
+// SOURCE-to-SOURCE aliasing pair, a `('a', 'a')` diagonal self-
+// mapping pair, or any pair drifting a character across the LEFT /
+// RIGHT partition fails the build rather than the test suite.
+// Deliberately NOT applied to `Atom::ESCAPE_TABLE` — that array
+// composes `NAMED_ESCAPE_TABLE` with two SELF arms at the tail
+// (`(STR_DELIMITER, STR_DELIMITER)` + `(STR_ESCAPE_LEAD, STR_ESCAPE_
+// LEAD)`), which INTENTIONALLY violate cross-column disjointness on
+// the diagonal by algebra design. The SHAPE ASYMMETRY between the
+// pattern-DISTINCT-from-value (`NAMED_ESCAPE_TABLE`) and the pattern-
+// EQUALS-value (`SELF_ESCAPE_TABLE`) sub-vocabularies is the axis
+// distinguishing them, and this helper's contract holds ONLY on the
+// DISTINCT side of that partition. Sibling to the `_bijective` +
+// `_pairwise_distinct` witnesses above on the SAME paired array — the
+// three witnesses close complementary INJECTIVITY axes (per-column,
+// per-tuple, per-CROSS-column) at `cargo check` time.
+const _: () = assert_char_pair_array_columns_cross_disjoint(&Atom::NAMED_ESCAPE_TABLE);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// the family-wide `[(char, char); N]` paired substrate array `arr` is
 /// NOT byte-for-byte equal to the CONCATENATION of the peer paired
 /// array `head` (contributing the FIRST `K` positions of `arr`
@@ -34362,6 +34564,220 @@ mod tests {
             "assert_char_pair_array_columns_equal_char_arrays panic \
              message {msg:?} must name the failed AXIS (\"RIGHT-\
              COLUMN-DIVERGENCE\") for axis-provenance-preserving \
+             failure diagnostics",
+        );
+    }
+
+    // ── `assert_char_pair_array_columns_cross_disjoint` — the
+    // `(char, char)` product-element WITHIN-ARRAY CROSS-COLUMN
+    // disjointness verifier that binds `LEFT column ∩ RIGHT column
+    // = ∅` at compile time on a pattern-DISTINCT-from-value paired-
+    // array vocabulary. Peer to the four prior paired-array verifiers
+    // on the SAME row (`_pairwise_distinct` — CONJOINED-tuple
+    // INJECTIVITY; `_bijective` — per-column INJECTIVITY;
+    // `_within_char_pair_finite_set` — SUBSET-EMBEDDING;
+    // `_arrays_disjoint` — BETWEEN-ARRAY CONJOINED-tuple
+    // DISJOINTNESS): where the four siblings close within-tuple /
+    // within-column / between-array axes, this helper closes the
+    // WITHIN-ARRAY CROSS-COLUMN-CHARACTER axis. The runtime test
+    // surface pins each of the helper's arms (accept-empty-array,
+    // accept-singleton-when-left-disjoint-from-right, accept-multi-
+    // element-when-cross-disjoint, accept-substrate-family-wide-
+    // NAMED_ESCAPE_TABLE, accept-when-left-column-duplicates-with-
+    // cross-disjoint-preserved, reject-diagonal-collision, reject-
+    // head-left-matches-head-right-off-diagonal, reject-head-left-
+    // matches-tail-right, reject-tail-left-matches-head-right,
+    // reject-tail-left-matches-tail-right, panic-message-provenance
+    // on the CROSS-COLUMN-COLLISION axis) so a regression that
+    // silently weakened the helper on ANY arm is caught by the
+    // helper's OWN test surface rather than only surfacing as a
+    // false-positive on some future pattern-DISTINCT-from-value
+    // `[(char, char); N]` array's compound pin.
+
+    #[test]
+    fn assert_char_pair_array_columns_cross_disjoint_accepts_the_empty_array() {
+        // Empty array `arr = []` at the `[(char, char); 0]` corner —
+        // vacuously cross-column-disjoint (no `(i, j)` position pair
+        // exists to test). Pins the outer `while i < N` guard's
+        // short-circuit on `N == 0`. Turbofish binding required
+        // because there's no other cue for the const parameter on
+        // the empty array literal.
+        assert_char_pair_array_columns_cross_disjoint::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_cross_disjoint_accepts_a_singleton_when_left_disjoint_from_right(
+    ) {
+        // Singleton `arr = [('a', 'x')]` — LEFT column = {'a'},
+        // RIGHT column = {'x'}, disjoint. Pins the singleton corner
+        // where the ONLY `(i, j)` position pair is `(0, 0)` on the
+        // diagonal and `arr[0].0 != arr[0].1` so the diagonal arm
+        // does NOT fire.
+        assert_char_pair_array_columns_cross_disjoint(&[('a', 'x')]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_cross_disjoint_accepts_a_multi_element_when_cross_disjoint() {
+        // Three-element `arr = [('a', 'x'), ('b', 'y'), ('c', 'z')]`
+        // with LEFT = {'a', 'b', 'c'}, RIGHT = {'x', 'y', 'z'},
+        // disjoint. Pins the inner sweep's coverage of BOTH
+        // diagonal AND off-diagonal `(i, j)` position pairs at
+        // EACH `i` — a regression that returned early after
+        // position 0 would silently accept a cross-column collision
+        // at position 1 or 2 or an off-diagonal cross-column
+        // collision at `(0, 1)`, `(1, 0)`, `(0, 2)`, `(2, 0)`,
+        // `(1, 2)`, `(2, 1)`.
+        assert_char_pair_array_columns_cross_disjoint(&[('a', 'x'), ('b', 'y'), ('c', 'z')]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_cross_disjoint_accepts_the_family_wide_substrate_named_escape_table(
+    ) {
+        // Positive pin on the family-wide `Atom::NAMED_ESCAPE_TABLE`
+        // paired array this helper is applied to at compile time via
+        // the module-level `const _:` witness. Runtime pin as a
+        // second-stage safety net if the const-eval sweep is ever
+        // silently dropped. Sibling posture to the `_bijective` +
+        // `_pairwise_distinct` family-wide pins on the same paired
+        // array — the three pins bind complementary INJECTIVITY axes
+        // (per-column, per-tuple, per-CROSS-column) of the same
+        // substrate table. LEFT column = {'n', 't', 'r'} (printable
+        // ASCII source chars), RIGHT column = {'\n', '\t', '\r'}
+        // (control character decoded values), disjoint by algebra
+        // design.
+        assert_char_pair_array_columns_cross_disjoint(&Atom::NAMED_ESCAPE_TABLE);
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_cross_disjoint_accepts_when_left_column_duplicates_but_cross_disjoint_preserved(
+    ) {
+        // Orthogonality with `_bijective`: a table like
+        // `[('a', 'x'), ('a', 'y')]` VIOLATES per-column INJECTIVITY
+        // (LEFT column repeats 'a') but PASSES cross-column
+        // disjointness (LEFT = {'a'}, RIGHT = {'x', 'y'} are
+        // disjoint). Pins this helper's axis as INDEPENDENT of
+        // `_bijective` — a diagnostic that names CROSS-COLUMN-
+        // COLLISION routes UNAMBIGUOUSLY to a cross-column drift,
+        // not to a per-column duplicate.
+        assert_char_pair_array_columns_cross_disjoint(&[('a', 'x'), ('a', 'y')]);
+        // Symmetric orthogonality on the RIGHT column: a table like
+        // `[('a', 'x'), ('b', 'x')]` VIOLATES per-column INJECTIVITY
+        // (RIGHT column repeats 'x') but PASSES cross-column
+        // disjointness (LEFT = {'a', 'b'}, RIGHT = {'x'} are
+        // disjoint).
+        assert_char_pair_array_columns_cross_disjoint(&[('a', 'x'), ('b', 'x')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_cross_disjoint")]
+    fn assert_char_pair_array_columns_cross_disjoint_panics_at_runtime_on_diagonal_collision() {
+        // NEGATIVE PIN — diagonal `(i == j == 0)` corner: `arr[0] =
+        // ('a', 'a')` collides with itself across columns. Pins the
+        // inner sweep INCLUDING the `j == i` case — a regression that
+        // set `j = i + 1` (skipping the diagonal) would silently
+        // accept a `('a', 'a')` self-mapping pair, which is EXACTLY
+        // the SELF-arm identity-relation shape the pattern-DISTINCT-
+        // from-value sub-vocabulary MUST NOT carry.
+        assert_char_pair_array_columns_cross_disjoint(&[('a', 'a')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_cross_disjoint")]
+    fn assert_char_pair_array_columns_cross_disjoint_panics_at_runtime_on_diagonal_collision_at_interior_position(
+    ) {
+        // NEGATIVE PIN — interior diagonal `(i == j == 1)` corner:
+        // pins the diagonal arm firing at ANY interior position,
+        // not just the head. A regression that started the sweep
+        // at `i = 1` for `j` (skipping the diagonal at each `i`)
+        // would silently accept a `('b', 'b')` self-mapping pair at
+        // position 1.
+        assert_char_pair_array_columns_cross_disjoint(&[('a', 'x'), ('b', 'b'), ('c', 'z')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_cross_disjoint")]
+    fn assert_char_pair_array_columns_cross_disjoint_panics_at_runtime_on_head_left_matches_tail_right(
+    ) {
+        // NEGATIVE PIN — off-diagonal `(i, j) = (0, 1)` corner:
+        // `arr[0].0 == 'a'` collides with `arr[1].1 == 'a'` at
+        // an off-diagonal position pair. Pins the inner sweep
+        // covering `j > i` — a regression that only checked the
+        // diagonal `i == j` would silently accept the head LEFT
+        // aliasing the tail RIGHT.
+        assert_char_pair_array_columns_cross_disjoint(&[('a', 'x'), ('b', 'a')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_cross_disjoint")]
+    fn assert_char_pair_array_columns_cross_disjoint_panics_at_runtime_on_tail_left_matches_head_right(
+    ) {
+        // NEGATIVE PIN — off-diagonal `(i, j) = (1, 0)` corner:
+        // `arr[1].0 == 'a'` collides with `arr[0].1 == 'a'` at the
+        // OTHER off-diagonal orientation. Pins the inner sweep
+        // covering `j < i` — a regression that only checked `j >=
+        // i` would silently accept the tail LEFT aliasing the head
+        // RIGHT.
+        assert_char_pair_array_columns_cross_disjoint(&[('x', 'a'), ('a', 'y')]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_pair_array_columns_cross_disjoint")]
+    fn assert_char_pair_array_columns_cross_disjoint_panics_at_runtime_on_tail_position_diagonal_collision(
+    ) {
+        // NEGATIVE PIN — tail-position diagonal `(i == j == N-1)`
+        // corner: pins the outer `while i < N` bound INCLUDING the
+        // last row — a regression that walked `while i < N - 1`
+        // (dropping the last row) would silently accept a tail-
+        // position `('c', 'c')` diagonal collision.
+        assert_char_pair_array_columns_cross_disjoint(&[('a', 'x'), ('b', 'y'), ('c', 'c')]);
+    }
+
+    #[test]
+    fn assert_char_pair_array_columns_cross_disjoint_panic_message_names_the_helper_and_cross_column_collision_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — CROSS-COLUMN-COLLISION arm:
+        // the panic message MUST begin with the helper's own name
+        // AND identify the failed AXIS as "CROSS-COLUMN-COLLISION"
+        // so downstream diagnostics route the drift back to (a) the
+        // helper by string search on
+        // `"assert_char_pair_array_columns_cross_disjoint"` and (b)
+        // the axis by string search on `"CROSS-COLUMN-COLLISION"`.
+        // The axis-provenance string is chosen DISTINCT from every
+        // sibling helper's axis vocabulary (`"CHAR-PAIR-TUPLE-
+        // COLLISION"` on `_pairwise_distinct`, `"LEFT column"` /
+        // `"RIGHT column"` on `_bijective`, `"CHAR-PAIR-SUBSET-
+        // VIOLATION"` on `_within_char_pair_finite_set`, `"CHAR-
+        // PAIR-DISJOINTNESS-VIOLATION"` on `_arrays_disjoint`,
+        // `"LEFT-COLUMN-DIVERGENCE"` / `"RIGHT-COLUMN-DIVERGENCE"`
+        // on `_columns_equal_char_arrays`) — a diagnostic that
+        // names the failed axis routes UNAMBIGUOUSLY to this
+        // specific cross-column-disjointness helper's arm.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_pair_array_columns_cross_disjoint(&[('a', 'a')]);
+        });
+        let payload = outcome.expect_err(
+            "assert_char_pair_array_columns_cross_disjoint must \
+             panic on a diagonal `('a', 'a')` self-mapping pair",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_pair_array_columns_cross_disjoint \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_pair_array_columns_cross_disjoint"),
+            "assert_char_pair_array_columns_cross_disjoint panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("CROSS-COLUMN-COLLISION"),
+            "assert_char_pair_array_columns_cross_disjoint panic \
+             message {msg:?} must name the failed AXIS (\"CROSS-\
+             COLUMN-COLLISION\") for axis-provenance-preserving \
              failure diagnostics",
         );
     }

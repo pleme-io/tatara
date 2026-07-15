@@ -1500,6 +1500,226 @@ pub const fn assert_str_finite_set_covered_by_three_str_arrays<
 }
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// `arr` is NOT the concatenation of `K` byte-verbatim replicas of
+/// `head` followed by `N - K` byte-verbatim replicas of `tail` on the
+/// substrate's family-wide `[&'static str; N]` MANY-TO-ONE variant →
+/// canonical-projection vocabulary. Binds ONE conjunct clause: BLOCK-
+/// CONSTANCY-VIOLATION — every entry in the HEAD segment `arr[0..K)`
+/// MUST byte-equal `head` and every entry in the TAIL segment
+/// `arr[K..N)` MUST byte-equal `tail`.
+///
+/// Contract-orthogonal peer to [`assert_str_array_pairwise_distinct`]
+/// on the (INJECTIVITY, MANY-TO-ONE-BLOCK-CONSTANCY) axis of the
+/// (contract-shape) column on the SAME (`&'static str`) row: where the
+/// pairwise-distinctness sibling binds `∀ i ≠ j : arr[i] ≠ arr[j]` at
+/// compile time (INTRA-ARRAY INJECTIVITY on arrays whose per-index
+/// projection is bijective with a per-index typed source), this BLOCK-
+/// CONSTANCY sibling binds `arr = [head; K] ++ [tail; N - K]` at
+/// compile time (INTRA-ARRAY BLOCK-CONSTANT MANY-TO-ONE PROJECTION on
+/// arrays whose per-index projection is a MANY-TO-ONE pattern
+/// collapsing multiple contiguous typed sources onto ONE canonical
+/// scalar byte). The two helpers close the (INJECTIVITY, MANY-TO-ONE-
+/// BLOCK-CONSTANCY) 2-corner face on the (`&'static str`) row at ONE
+/// peer const-fn helper per structural shape; a single family-wide
+/// `[&'static str; N]` array picks whichever helper matches its
+/// per-index projection cardinality (a BIJECTIVE per-index projection
+/// binds the pairwise-distinct sibling; a MANY-TO-ONE per-index
+/// projection binds this block-constancy sibling).
+///
+/// The invariant is load-bearing for the substrate's typed variant →
+/// canonical-projection MANY-TO-ONE closed-set surface at
+/// [`crate::error::CompilerSpecIoStage::OPERATIONS`]: the four typed
+/// variants of [`crate::error::CompilerSpecIoStage`] project through
+/// [`crate::error::CompilerSpecIoStage::operation`] onto EXACTLY TWO
+/// canonical `&'static str` operation labels
+/// ([`crate::error::CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION`]
+/// (`"realize_to_disk"`) shared by
+/// [`crate::error::CompilerSpecIoStage::RealizeToDiskSerialize`] and
+/// [`crate::error::CompilerSpecIoStage::RealizeToDiskWrite`];
+/// [`crate::error::CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION`]
+/// (`"load_from_disk"`) shared by
+/// [`crate::error::CompilerSpecIoStage::LoadFromDiskRead`] and
+/// [`crate::error::CompilerSpecIoStage::LoadFromDiskDeserialize`]).
+/// The `[REALIZE, REALIZE, LOAD, LOAD]` block-constant shape encodes
+/// the compound-key `"{operation}: {stage}"` surface's 2-of-2-to-2
+/// partition — a regression that silently flip-flopped the projection
+/// (e.g. reorder to `[REALIZE, LOAD, REALIZE, LOAD]`, drift a variant
+/// slot to a distinct third operation label) would compile cleanly
+/// past the sibling `_pairwise_distinct` exclusion (this array is
+/// INTENTIONALLY non-injective, so the pairwise-distinct helper does
+/// NOT bind it) and only fail at test time via the runtime pin
+/// `compiler_spec_io_stage_operations_align_with_all_by_index`; post-
+/// lift the ARRAY-LEVEL block-constancy binds at rustc time via ONE
+/// `const _` line, one invocation stage earlier than the runtime pin.
+///
+/// The `K = 0` and `K = N` degenerate corners collapse the array into
+/// a ONE-BLOCK replica: `K = 0` yields `arr = [tail; N]`; `K = N`
+/// yields `arr = [head; N]`. Both corners pass through the same
+/// sweep without a distinct code path, and both are covered by the
+/// helper's test surface — a future substrate array whose per-index
+/// projection collapses ALL positions onto ONE canonical byte binds
+/// through either degenerate corner at ONE const-generic setting.
+///
+/// SET-side well-formedness: no SET-side arm here — the helper takes
+/// TWO scalars, NOT a scalar plus a target-set spec, so there's no
+/// SET well-formedness axis to gate on the CALLER'S input. The two
+/// scalars `head` and `tail` MAY be byte-equal (in which case the
+/// helper degenerates to a SINGLE-BLOCK replica-check that binds the
+/// SAME constancy across all `N` positions with `head == tail`); the
+/// two scalars MAY be byte-distinct (the intended TWO-BLOCK partition
+/// shape). Either case is a well-formed BLOCK-CONSTANCY invariant.
+///
+/// CARDINALITY-MISMATCH gate: `K > N` fails FIRST at const-eval time
+/// (before any per-position sweep begins) with a CARDINALITY-MISMATCH
+/// arm so a caller-side turbofish arity slip on the `K` const-generic
+/// routes to the CARDINALITY axis rather than silently degenerating
+/// into a truncated head-only sweep. The `K == N` and `K == 0`
+/// corners are LEGAL (the ONE-BLOCK degenerate shapes) so the gate
+/// is `K > N`, not `K >= N`.
+///
+/// Adding a new family-wide `[&'static str; N]` MANY-TO-ONE variant →
+/// canonical-projection array to the substrate: pair the declaration
+/// with `const _: () = assert_str_array_is_concatenation_of_two_
+/// scalar_replicas::<N, K>(&Self::FOO, HEAD_SCALAR, TAIL_SCALAR);`
+/// co-located after the array's declaration and the block-constancy
+/// contract binds at compile time. The rustc-forced arity
+/// `[&'static str; N]` composes with this const-eval sweep so BOTH
+/// cardinality AND per-index MANY-TO-ONE block-constancy are compile-
+/// time theorems on the SAME array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_str_array_is_concatenation_of_two_scalar_replicas_panics_
+/// at_runtime_on_head_segment_drift`, `..._on_tail_segment_drift`,
+/// `..._on_arity_slip`, and `..._panic_message_names_the_helper_and_
+/// block_constancy_violation_axis`.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the MANY-TO-ONE variant →
+///   canonical-projection block-constant contract on the `&'static
+///   str` per-index projection axis becomes a TYPE-LEVEL theorem the
+///   substrate carries per (arr, head, tail, K) quadruple rather than
+///   a runtime iterator sweep the developer must remember to write
+///   per quadruple.
+/// - THEORY.md §III — the typescape; the (element-type × contract-
+///   shape) matrix now carries the MANY-TO-ONE-BLOCK-CONSTANCY corner
+///   on the (`&'static str`) row at ONE peer const-fn helper. Combined
+///   with the pre-existing (`_pairwise_distinct`) INJECTIVITY sibling
+///   the two helpers close the (INJECTIVITY, MANY-TO-ONE-BLOCK-
+///   CONSTANCY) 2-corner face on the (`&'static str`) row — every
+///   family-wide `[&'static str; N]` per-index projection array picks
+///   the corner that matches its per-index projection cardinality.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   block-constant sweep IS the generative shape. Every new MANY-TO-
+///   ONE variant → canonical-projection substrate closed set adds ONE
+///   `const _` line to get the block-constant theorem rather than
+///   re-deriving a per-projection runtime multiplicity check.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   BLOCK-CONSTANCY proof at declaration site AND the compound-key
+///   `"{operation}: {stage}"` surface's partition contract regenerate
+///   through the SAME `const _` witness at the ARRAY level.
+///
+/// Frontier inspiration: Lean 4's `List.replicate` unfolded at the
+/// concrete 2-block `List.replicate K head ++ List.replicate (N - K)
+/// tail` monomorphic realisation — the substrate primitive embeds
+/// the same run-length shape as a rustc const-eval-time proof
+/// obligation at every block-constant projection site rather than as
+/// a Lean tactic invocation deferred to `elab_command`. The MANY-TO-
+/// ONE variant → canonical-projection shape mirrors GHC Core's
+/// constant-folding of a `case` scrutinee whose match arms collapse a
+/// wider sum type onto a narrower sum type via a per-arm literal
+/// projection; where GHC folds this at Core compilation, the
+/// substrate binds the projection identity at rustc const-eval time.
+pub const fn assert_str_array_is_concatenation_of_two_scalar_replicas<
+    const N: usize,
+    const K: usize,
+>(
+    arr: &[&'static str; N],
+    head: &'static str,
+    tail: &'static str,
+) {
+    if K > N {
+        panic!(
+            "assert_str_array_is_concatenation_of_two_scalar_replicas: \
+             CARDINALITY-MISMATCH — the two const parameters `N` and \
+             `K` must satisfy `K <= N` so the HEAD segment of `arr` \
+             (positions `[0..K)`) followed by the TAIL segment \
+             (positions `[K..N)`) exactly cover `arr`'s `N` \
+             positions. Fix at the `const _` witness's turbofish by \
+             reconciling the two arities against the composite's \
+             declared arity. The CARDINALITY-MISMATCH gate \
+             distinguishes THIS failure from every content-drift arm \
+             — a mistyped ARITY on the caller side fails HERE before \
+             any per-position sweep begins, so a subtle arity slip \
+             doesn't silently degenerate into a truncated head-only \
+             sweep."
+        );
+    }
+    let mut i = 0;
+    while i < K {
+        if !str_bytes_equal(arr[i], head) {
+            panic!(
+                "assert_str_array_is_concatenation_of_two_scalar_replicas: \
+                 HEAD-SEGMENT-BLOCK-CONSTANCY-VIOLATION — the family-\
+                 wide `&'static str` array `arr` carries an entry at \
+                 some position in `[0, K)` (the HEAD segment) that \
+                 does NOT byte-for-byte equal the peer `head` scalar. \
+                 The substrate's HEAD-SEGMENT BLOCK-CONSTANCY \
+                 contract on the array is broken; every consumer that \
+                 reads `arr[0..K)` and the peer `head` scalar as \
+                 INTERCHANGEABLE (any MANY-TO-ONE variant → \
+                 canonical-projection consumer expecting the first \
+                 `K` variant slots to share ONE canonical projection \
+                 byte — e.g. the `zip(Self::ALL, Self::OPERATIONS)` \
+                 compound-key `\"{{operation}}: {{stage}}\"` surface \
+                 consumers on \
+                 `crate::error::CompilerSpecIoStage::OPERATIONS` \
+                 whose first two slots project through \
+                 `crate::error::CompilerSpecIoStage::REALIZE_TO_DISK_\
+                 OPERATION`) relies on this invariant. Fix at the \
+                 ARRAY-DECLARATION site (the drifted `arr[i]` entry) \
+                 OR at the per-role scalar constant that `head` \
+                 re-exports — the choice depends on whether the drift \
+                 is an unintended slot reorder inside the array or a \
+                 rename of the canonical projection byte upstream."
+            );
+        }
+        i += 1;
+    }
+    let mut j = K;
+    while j < N {
+        if !str_bytes_equal(arr[j], tail) {
+            panic!(
+                "assert_str_array_is_concatenation_of_two_scalar_replicas: \
+                 TAIL-SEGMENT-BLOCK-CONSTANCY-VIOLATION — the family-\
+                 wide `&'static str` array `arr` carries an entry at \
+                 some position in `[K, N)` (the TAIL segment) that \
+                 does NOT byte-for-byte equal the peer `tail` scalar. \
+                 The substrate's TAIL-SEGMENT BLOCK-CONSTANCY \
+                 contract on the array is broken; every consumer that \
+                 reads `arr[K..N)` and the peer `tail` scalar as \
+                 INTERCHANGEABLE (any MANY-TO-ONE variant → \
+                 canonical-projection consumer expecting the last \
+                 `N - K` variant slots to share ONE canonical \
+                 projection byte — e.g. the `zip(Self::ALL, \
+                 Self::OPERATIONS)` compound-key `\"{{operation}}: \
+                 {{stage}}\"` surface consumers on \
+                 `crate::error::CompilerSpecIoStage::OPERATIONS` whose \
+                 last two slots project through \
+                 `crate::error::CompilerSpecIoStage::LOAD_FROM_DISK_\
+                 OPERATION`) relies on this invariant. Fix at the \
+                 ARRAY-DECLARATION site (the drifted `arr[j]` entry) \
+                 OR at the per-role scalar constant that `tail` \
+                 re-exports — the choice depends on whether the drift \
+                 is an unintended slot reorder inside the array or a \
+                 rename of the canonical projection byte upstream."
+            );
+        }
+        j += 1;
+    }
+}
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` alias byte-for-byte.
 ///
 /// Column-dual peer to [`assert_char_array_pairwise_distinct`] and
@@ -33771,6 +33991,283 @@ mod tests {
             &["b"],
             &["c"],
             &["a", "a", "b"],
+        );
+    }
+
+    // ── `assert_str_array_is_concatenation_of_two_scalar_replicas` —
+    // the MANY-TO-ONE-BLOCK-CONSTANCY sibling of the INJECTIVITY
+    // sibling on the (`&'static str`) row of the (element-type ×
+    // contract-shape) matrix. Sibling posture: symmetric runtime-test
+    // surface (accept-two-block-partition, accept-K-zero-degenerate,
+    // accept-K-equals-N-degenerate, accept-empty-array, accept-
+    // compiler-spec-io-stage-operations-partition, reject-head-drift,
+    // reject-tail-drift, reject-arity-slip, panic-message-provenance)
+    // specialised to the MANY-TO-ONE block-constant projection shape.
+    // A regression that silently weakens the helper (e.g. flipping
+    // `str_bytes_equal` to `!str_bytes_equal`, narrowing the outer
+    // sweep to `while i < K - 1` on the HEAD segment, silently
+    // skipping the TAIL segment, or returning early past the
+    // CARDINALITY-MISMATCH gate) is caught by the helper's OWN test
+    // surface rather than only surfacing as a false-positive on the
+    // `CompilerSpecIoStage::OPERATIONS` witness.
+
+    #[test]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_accepts_the_two_block_partition() {
+        // Canonical two-block partition `[head; K] ++ [tail; N - K]`
+        // at the substrate's ONE non-injective per-index projection
+        // array `CompilerSpecIoStage::OPERATIONS` — the `(N, K) =
+        // (4, 2)` corner with `(head, tail) = (REALIZE_TO_DISK,
+        // LOAD_FROM_DISK)` MUST pass. Cross-partition coverage on
+        // arities (3, 1), (4, 2), (5, 3) pins the INNER `while i < K`
+        // and `while j < N` sweeps proceed through EACH position of
+        // BOTH segments rather than short-circuiting on ANY early
+        // position.
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<3, 1>(
+            &["a", "b", "b"],
+            "a",
+            "b",
+        );
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<4, 2>(
+            &["a", "a", "b", "b"],
+            "a",
+            "b",
+        );
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<5, 3>(
+            &["a", "a", "a", "b", "b"],
+            "a",
+            "b",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_accepts_the_k_zero_all_tail_degenerate(
+    ) {
+        // Degenerate `K = 0` corner collapses the array into the ALL-
+        // TAIL replica `arr == [tail; N]`. The HEAD segment is empty
+        // (`while i < 0` never enters); the TAIL segment covers
+        // positions `[0, N)`. Cross-arity coverage on the `K = 0`
+        // axis pins the HEAD-segment sweep's outer `while i < K`
+        // terminates at `i = 0` when `K = 0`, and the TAIL-segment
+        // sweep's outer `while j < N` starts at `j = K = 0` and
+        // proceeds through EVERY position. A regression that hard-
+        // coded `K > 0` or short-circuited on the empty HEAD-segment
+        // arm would silently reject this legal degenerate shape.
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<3, 0>(
+            &["x", "x", "x"],
+            "unused",
+            "x",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_accepts_the_k_equals_n_all_head_degenerate(
+    ) {
+        // Degenerate `K = N` corner collapses the array into the ALL-
+        // HEAD replica `arr == [head; N]`. The HEAD segment covers
+        // positions `[0, N)`; the TAIL segment is empty (`while j <
+        // N` starts at `j = K = N` and never enters). Peer to the
+        // `K = 0` degenerate corner — together the two corners pin
+        // the ONE-BLOCK degenerate shapes on BOTH endpoints of the
+        // `K ∈ [0, N]` const-generic range. A regression that hard-
+        // coded `K < N` or short-circuited on the empty TAIL-segment
+        // arm would silently reject this legal degenerate shape.
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<3, 3>(
+            &["x", "x", "x"],
+            "x",
+            "unused",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_accepts_the_empty_array() {
+        // Trivial `N = 0, K = 0` corner: the empty array trivially
+        // satisfies BOTH the empty HEAD segment `[head; 0]` and the
+        // empty TAIL segment `[tail; 0]`. Pins that the vacuous case
+        // on the `[&'static str; 0]` corner of the const-N generic
+        // passes without either segment sweep entering. Turbofish
+        // binding required because there's no cue for the const
+        // parameters on the empty array literal.
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<0, 0>(
+            &[],
+            "unused-head",
+            "unused-tail",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_accepts_head_equals_tail_single_block(
+    ) {
+        // Corner where `head == tail` collapses the two-block
+        // partition into a SINGLE-BLOCK replica: `arr == [head; N] ==
+        // [tail; N]`. The partition boundary `K` is irrelevant to the
+        // observable byte-shape when `head` and `tail` are byte-
+        // equal, so ANY `K ∈ [0, N]` accepts. Pins the docstring
+        // note "the two scalars `head` and `tail` MAY be byte-equal
+        // (in which case the helper degenerates to a SINGLE-BLOCK
+        // replica-check)". Cross-K coverage inside `N = 4`: K = 0
+        // (empty HEAD), K = 2 (interior split), K = 4 (empty TAIL).
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<4, 0>(
+            &["z", "z", "z", "z"],
+            "z",
+            "z",
+        );
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<4, 2>(
+            &["z", "z", "z", "z"],
+            "z",
+            "z",
+        );
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<4, 4>(
+            &["z", "z", "z", "z"],
+            "z",
+            "z",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_accepts_compiler_spec_io_stage_operations_partition(
+    ) {
+        // Runtime cross-check that the substrate's ONE non-injective
+        // per-index projection array `CompilerSpecIoStage::OPERATIONS`
+        // — the `(N, K) = (4, 2)` corner with `(head, tail) =
+        // (REALIZE_TO_DISK_OPERATION, LOAD_FROM_DISK_OPERATION)` —
+        // the substrate's module-level `const _` witness at `error.rs`
+        // pins at COMPILE time is a well-formed BLOCK-CONSTANCY
+        // relation at runtime too. The pair enforces the theorem at
+        // TWO stages of the toolchain: the const witness fires FIRST
+        // at `cargo check`, this runtime pin catches the drift at
+        // `cargo test` as a safety net. Sibling posture to
+        // `compiler_spec_io_stage_operations_align_with_all_by_index`
+        // (which pins per-position equality via `stage.operation()`
+        // at runtime) and to
+        // `compiler_spec_io_stage_operations_partition_all_two_ways`
+        // (which pins the two operation-label multiplicities at
+        // runtime) — this witness carries the SAME theorem at the
+        // ARRAY-LEVEL block-constant shape at COMPILE time.
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<4, 2>(
+            &crate::error::CompilerSpecIoStage::OPERATIONS,
+            crate::error::CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION,
+            crate::error::CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "HEAD-SEGMENT-BLOCK-CONSTANCY-VIOLATION")]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_panics_at_runtime_on_head_segment_drift(
+    ) {
+        // NEGATIVE PIN — HEAD-SEGMENT-BLOCK-CONSTANCY-VIOLATION
+        // corner: an entry in the HEAD segment `arr[0..K)` that does
+        // NOT byte-equal `head` MUST panic at runtime with the HEAD-
+        // segment-named message. Pins the helper's HEAD-segment
+        // reject arm — a regression that silently short-circuited on
+        // the first HEAD position without checking the middle or
+        // terminal HEAD positions would slip through the compile-
+        // time witness's failure mode too. The offending str "x" at
+        // position 1 (interior HEAD) pins the middle-of-HEAD drift
+        // mode. `K = 3, N = 5` so the HEAD segment spans positions
+        // `[0, 3)` — the interior drift at position 1 is inside the
+        // HEAD, not the TAIL boundary.
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<5, 3>(
+            &["a", "x", "a", "b", "b"],
+            "a",
+            "b",
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "TAIL-SEGMENT-BLOCK-CONSTANCY-VIOLATION")]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_panics_at_runtime_on_tail_segment_drift(
+    ) {
+        // NEGATIVE PIN — TAIL-SEGMENT-BLOCK-CONSTANCY-VIOLATION
+        // corner: an entry in the TAIL segment `arr[K..N)` that does
+        // NOT byte-equal `tail` MUST panic at runtime with the TAIL-
+        // segment-named message. Peer to the HEAD-segment drift arm
+        // above — the SAME helper, DIFFERENT segment arm. Pins that
+        // the outer `while j < N` sweep on the TAIL segment reaches
+        // `j = N - 1` (else the terminal drift would slip through).
+        // The offending str "x" at position 4 (terminal TAIL) with
+        // `K = 3, N = 5` pins the terminal-TAIL drift mode.
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<5, 3>(
+            &["a", "a", "a", "b", "x"],
+            "a",
+            "b",
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "CARDINALITY-MISMATCH")]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_panics_at_runtime_on_arity_slip() {
+        // NEGATIVE PIN — CARDINALITY-MISMATCH gate: a caller-side
+        // turbofish arity slip on the `K` const-generic where `K > N`
+        // MUST panic at runtime with the CARDINALITY-MISMATCH-named
+        // message BEFORE any per-position sweep begins. Pins the
+        // gate's placement at the TOP of the helper — a regression
+        // that dropped the gate would silently degenerate into a
+        // truncated HEAD-only sweep at the caller's `K` cap without
+        // ever entering the TAIL sweep, silently accepting an array
+        // whose TAIL positions carry arbitrary drift. The offending
+        // `K = 5` against `N = 3` pins the strict `K > N` reject
+        // arm; the LEGAL `K == N` degenerate is covered by a peer
+        // acceptance test above.
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<3, 5>(
+            &["a", "a", "a"],
+            "a",
+            "b",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_panic_message_names_the_helper_and_block_constancy_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — HEAD-SEGMENT-BLOCK-
+        // CONSTANCY-VIOLATION arm: the panic message MUST begin with
+        // the helper's own name AND identify the failed AXIS as
+        // "HEAD-SEGMENT-BLOCK-CONSTANCY-VIOLATION" so downstream
+        // diagnostics route the drift back to (a) the helper by
+        // string search on
+        // `"assert_str_array_is_concatenation_of_two_scalar_replicas"`
+        // and (b) the segment + axis by string search on
+        // `"HEAD-SEGMENT-BLOCK-CONSTANCY-VIOLATION"`. Sibling posture
+        // to `assert_str_array_pairwise_distinct_panic_message_...`
+        // on the sibling (str)-row INJECTIVITY provenance pin AND to
+        // the sibling ROW-DUAL `_covered_by_three_str_arrays`'s
+        // `"SET-STR-MISSING"` axis vocabulary — the shared
+        // `"BLOCK-CONSTANCY-VIOLATION"` suffix lets callers grep
+        // either the HEAD or TAIL segment arm by the shared suffix
+        // pattern alone, while the `HEAD-` / `TAIL-` prefix
+        // disambiguates the SEGMENT.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_is_concatenation_of_two_scalar_replicas::<3, 2>(
+                &["a", "x", "b"],
+                "a",
+                "b",
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_str_array_is_concatenation_of_two_scalar_replicas \
+             must panic on a HEAD-segment drift — the reject-HEAD-drift \
+             arm is one of the two BLOCK-CONSTANCY-VIOLATION failure \
+             modes of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_str_array_is_concatenation_of_two_scalar_replicas \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_str_array_is_concatenation_of_two_scalar_replicas"),
+            "assert_str_array_is_concatenation_of_two_scalar_replicas \
+             panic message {msg:?} must name the helper for \
+             provenance-preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("HEAD-SEGMENT-BLOCK-CONSTANCY-VIOLATION"),
+            "assert_str_array_is_concatenation_of_two_scalar_replicas \
+             panic message {msg:?} must name the failed AXIS (\"HEAD-\
+             SEGMENT-BLOCK-CONSTANCY-VIOLATION\") for axis-provenance-\
+             preserving failure diagnostics",
         );
     }
 

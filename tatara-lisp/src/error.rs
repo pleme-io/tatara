@@ -52,7 +52,13 @@ pub type Result<T> = std::result::Result<T, LispError>;
 // Enrolling it in this block would fail const-eval; the intended
 // invariant on `OPERATIONS` is "variant-index alignment with
 // `CompilerSpecIoStage::ALL`", not injectivity — different theorem,
-// different helper.
+// different helper. The peer helper the substrate now carries is
+// `crate::ast::assert_str_array_is_concatenation_of_two_scalar_
+// replicas` on the (contract-shape ∈ {MANY-TO-ONE-BLOCK-CONSTANCY})
+// corner of the (`&'static str`) row; its ONE `const _` witness
+// binding `CompilerSpecIoStage::OPERATIONS` lives further down this
+// module in the STR-BLOCK-CONSTANCY witness block (search for
+// `assert_str_array_is_concatenation_of_two_scalar_replicas`).
 //
 // Adding a new family-wide `[&'static str; N]` array to this module:
 // add ONE co-located `const _: () = crate::ast::assert_str_array_
@@ -402,6 +408,77 @@ const _: () = crate::ast::assert_str_arrays_disjoint::<2, 2>(
 const _: () = crate::ast::assert_str_arrays_disjoint::<3, 1>(
     &OptionalParamMalformedReason::STATIC_LABELS,
     &OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS,
+);
+
+// Compile-time STR-BLOCK-CONSTANCY witness closing the ARRAY-LEVEL
+// MANY-TO-ONE variant → canonical-projection corner on the substrate's
+// TYPED-VARIANT × CANONICAL-PROJECTION MANY-TO-ONE surface at
+// `CompilerSpecIoStage::OPERATIONS`. Where every OTHER family-wide
+// `[&'static str; N]` array on the substrate carries a BIJECTIVE
+// per-index projection (`AtomKind::LABELS[i]` is bijective with
+// `AtomKind::ALL[i].label()`; `QuoteForm::LABELS[i]` is bijective with
+// `QuoteForm::ALL[i].label()`; `CompilerSpecIoStage::LABELS[i]` is
+// bijective with `CompilerSpecIoStage::ALL[i].label()`) and binds
+// INJECTIVITY through `assert_str_array_pairwise_distinct` at the
+// module top, `CompilerSpecIoStage::OPERATIONS` is the ONE substrate
+// array whose per-index projection is INTENTIONALLY MANY-TO-ONE —
+// the four `CompilerSpecIoStage::ALL[i].operation()` per-variant
+// projections collapse onto EXACTLY TWO canonical operation-label
+// bytes (both `Realize…` variants share `"realize_to_disk"`; both
+// `Load…` variants share `"load_from_disk"`) yielding the
+// `[REALIZE_TO_DISK, REALIZE_TO_DISK, LOAD_FROM_DISK, LOAD_FROM_DISK]`
+// 2-of-2-to-2 block-constant array literal at the declaration site.
+// The pre-existing module-top comment (adjacent to the family-wide
+// `assert_str_array_pairwise_distinct` witnesses) documents the
+// EXCLUSION from injectivity as intentional AND names the intended
+// axis: "variant-index alignment with `CompilerSpecIoStage::ALL`, not
+// injectivity — different theorem, different helper". This witness
+// IS the different helper the comment named — the ARRAY-LEVEL block-
+// constant structure `arr = [head; K] ++ [tail; N - K]` at
+// `(N, K) = (4, 2)`, `(head, tail) = (REALIZE_TO_DISK_OPERATION,
+// LOAD_FROM_DISK_OPERATION)`. Pre-lift the block-constant structure
+// bound only at runtime through `compiler_spec_io_stage_operations_
+// align_with_all_by_index` (positional projection through
+// `stage.operation()`) plus `compiler_spec_io_stage_operations_
+// partition_all_two_ways` (multiplicity counts of the two operation
+// labels); post-lift the ARRAY-LEVEL block-constancy binds at rustc
+// time via ONE `const _` line. A regression that silently flip-
+// flopped the projection (reorder `OPERATIONS` to `[REALIZE, LOAD,
+// REALIZE, LOAD]`; drift a slot to a distinct third operation label;
+// collapse to a single-block `[REALIZE, REALIZE, REALIZE, REALIZE]`)
+// fails at `cargo check` BEFORE any test scheduler runs. The
+// invariant is load-bearing at THREE consumer layers documented on
+// `Self::OPERATIONS`'s docstring: (i) an LSP / REPL completion
+// provider surfacing every legal operation label in an `operation=`
+// metrics query bar (the deduped block-labels IS the ONE typed
+// coverage sweep); (ii) `tatara-check` coverage assertions verifying
+// every workspace `.lisp` file's `CompilerSpec` rejection classifies
+// to some entry of `Self::OPERATIONS`; (iii) Sekiban audit-trail
+// metrics jointly labeled by `Self::operation` × `Self::label` whose
+// `operation=` label set IS the deduped `Self::OPERATIONS` (e.g.
+// `tatara_lisp_compiler_spec_io_total{operation="realize_to_disk",
+// stage="serialize"}`) — all three layers rely on the block-constant
+// partition holding at ONE cargo-check-time site. Adding a hypothetical
+// fifth variant (`LoadFromStrDeserialize` once an in-memory
+// `load_from_str` lands, `RealizeToDiskAtomicReplace` if the realize
+// path grows a crash-safe-rename stage) extends `Self::ALL` ONCE +
+// `Self::operation` ONCE + `Self::OPERATIONS` ONCE — the block-
+// constant witness re-fires against the extended arity through the
+// rustc-forced `[&'static str; N]` gate (with the appropriate new
+// `(N, K)` const-generic reflecting the new 2-of-2-to-3 or 2-of-3-to-2
+// partition) so the extension picks up the block-constancy contract
+// mechanically. Sibling to the FOURTEEN family-wide
+// `assert_str_array_pairwise_distinct` witnesses at the module top on
+// the (contract-shape ∈ {INJECTIVITY}) column of the (`&'static str`)
+// row — this witness closes the (contract-shape ∈ {MANY-TO-ONE-BLOCK-
+// CONSTANCY}) corner peer to the (INJECTIVITY) column at ONE `const
+// _` line, closing the (INJECTIVITY, MANY-TO-ONE-BLOCK-CONSTANCY)
+// 2-corner face on the (`&'static str`) row on the substrate's
+// per-index projection surface.
+const _: () = crate::ast::assert_str_array_is_concatenation_of_two_scalar_replicas::<4, 2>(
+    &CompilerSpecIoStage::OPERATIONS,
+    CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION,
+    CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION,
 );
 
 #[derive(Debug, Error)]
@@ -21046,6 +21123,38 @@ mod tests {
         assert_str_arrays_disjoint::<3, 1>(
             &OptionalParamMalformedReason::STATIC_LABELS,
             &OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS,
+        );
+    }
+
+    /// Runtime safety-net sibling of the module-level compile-time
+    /// STR-BLOCK-CONSTANCY witness on the MANY-TO-ONE variant →
+    /// canonical-projection surface at
+    /// `CompilerSpecIoStage::OPERATIONS`. Re-runs the `const _: () =
+    /// crate::ast::assert_str_array_is_concatenation_of_two_scalar_
+    /// replicas::<4, 2>(&OPERATIONS, REALIZE_TO_DISK_OPERATION,
+    /// LOAD_FROM_DISK_OPERATION)` witness pinned above the
+    /// `LispError` enum at runtime as a safety net so a build that
+    /// skips `cargo check`'s const-eval sweep still catches the
+    /// block-constant drift here. Peer to
+    /// `compiler_spec_io_stage_operations_align_with_all_by_index`
+    /// (which pins per-position projection equality through
+    /// `stage.operation()`) and to
+    /// `compiler_spec_io_stage_operations_partition_all_two_ways`
+    /// (which pins the two operation-label multiplicities) — the
+    /// three tests jointly sweep the block-constant partition at
+    /// THREE distinct runtime angles (per-position equality with
+    /// ALL, multiplicity count of each block scalar, ARRAY-LEVEL
+    /// block-constancy structural pattern) while the compile-time
+    /// witness above binds the ARRAY-LEVEL structural pattern at
+    /// `cargo check` time as the FIRST-firing arm.
+    #[test]
+    fn assert_str_array_is_concatenation_of_two_scalar_replicas_accepts_compiler_spec_io_stage_operations(
+    ) {
+        use crate::ast::assert_str_array_is_concatenation_of_two_scalar_replicas;
+        assert_str_array_is_concatenation_of_two_scalar_replicas::<4, 2>(
+            &CompilerSpecIoStage::OPERATIONS,
+            CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION,
+            CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION,
         );
     }
 

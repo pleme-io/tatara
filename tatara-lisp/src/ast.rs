@@ -5897,6 +5897,266 @@ const _: () = assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4, 0
     &QuoteForm::HASH_DISCRIMINATORS,
 );
 
+/// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of `arr` at positions `[START..END)` is NOT byte-equal to
+/// the peer `scalar`.
+///
+/// Opens the SLICE-BLOCK-CONSTANCY column on the (`u8`) row of the
+/// (element-type × contract-shape) matrix. Row-dual sibling posture to
+/// the pre-existing (`&'static str`)-row helper
+/// [`assert_str_array_is_concatenation_of_two_scalar_replicas`], but
+/// specialised to the (u8) element type AND generalised from a
+/// FIXED-PARTITION two-block-covering-the-full-array shape to an
+/// ARBITRARY sub-slice `[START..END)` inside a possibly-longer array
+/// `[0..N)`. Where the (str)-row helper binds a FULL-ARRAY partition
+/// `arr == [head; K] ++ [tail; N - K]` (both blocks together cover
+/// `[0..N)` exactly), this helper binds a SINGLE-BLOCK SUB-SLICE
+/// `arr[START..END) == [scalar; END - START]` (the positions OUTSIDE
+/// the slice are unconstrained by this witness — they can carry any
+/// bytes, potentially bound by peer witnesses on other slices).
+///
+/// The load-bearing carrier on the substrate is
+/// [`crate::error::SexpShape::HASH_DISCRIMINATORS`] (`[u8; 12]`), whose
+/// positions `[1..7)` INTENTIONALLY collapse onto the SINGLE outer
+/// cache-key byte [`AtomKind::OUTER_HASH_DISCRIMINATOR`] (`= 1u8`) —
+/// the six atomic outer shapes (`Symbol` / `Keyword` / `String` /
+/// `Int` / `Float` / `Bool`) all route through `Sexp::Atom(_)`'s
+/// SINGLE outer marker byte on the outer-`Sexp` Hash algebra, so their
+/// twelve-shape → seven-byte collapse condenses SIX shape slots into
+/// ONE cache-key byte. The six per-role
+/// [`SexpShape::SYMBOL_HASH_DISCRIMINATOR`] /
+/// [`SexpShape::KEYWORD_HASH_DISCRIMINATOR`] /
+/// [`SexpShape::STRING_HASH_DISCRIMINATOR`] /
+/// [`SexpShape::INT_HASH_DISCRIMINATOR`] /
+/// [`SexpShape::FLOAT_HASH_DISCRIMINATOR`] /
+/// [`SexpShape::BOOL_HASH_DISCRIMINATOR`] `pub(crate) const` aliases
+/// are ALL declared as `= crate::ast::AtomKind::OUTER_HASH_DISCRIMINATOR`
+/// on the six atomic-outer arms, so the array-level slice-block-
+/// constancy theorem `SexpShape::HASH_DISCRIMINATORS[1..7) == [OUTER; 6]`
+/// is the ARRAY-LEVEL surface of the six per-role aliases' shared
+/// upstream. A regression that silently reroutes ONE alias (e.g.
+/// renames `SexpShape::SYMBOL_HASH_DISCRIMINATOR` to alias
+/// `StructuralKind::LIST_HASH_DISCRIMINATOR` instead) OR that reorders
+/// `SexpShape::ALL` so a NON-atomic shape lands in positions `[1..7)`
+/// (e.g. moves `SexpShape::List` into slot `4`, drifting `LIST_BYTE
+/// = 2` into the atomic-collapse slice) fails at `cargo check` BEFORE
+/// any test scheduler runs, at ONE `const _` line rather than at the
+/// pre-lift sextet of per-alias assertions inside
+/// `sexp_shape_hash_discriminators_pin_legacy_outer_cache_key_bytes`.
+///
+/// Bounds preconditions and gate ordering: three CARDINALITY gates
+/// fire at the TOP of the sweep BEFORE any per-position content check
+/// begins, so a caller-side turbofish arity slip fails-loud on the
+/// bounds axis rather than silently degenerating into a truncated or
+/// vacuous sweep:
+/// * `START > N` → `START-OUT-OF-BOUNDS` panic. The caller's slice
+///   start index sits OUTSIDE the array's valid position range
+///   `[0..N]` (inclusive upper bound: `START == N` is the empty-slice
+///   corner and is legal). A silent slip past this gate would either
+///   panic on `arr[i]` bounds-check at runtime (const-eval catches it
+///   first) or, on an over-cautious future refactor that gated with a
+///   raw `START >= N`, silently reject the legal `START == N` empty
+///   corner.
+/// * `END > N` → `END-OUT-OF-BOUNDS` panic. The caller's slice end
+///   index sits OUTSIDE the array's valid position range `[0..N]`.
+///   Analogous to the `START` gate; the two gates jointly enforce
+///   `START, END ∈ [0..N]` before any content sweep.
+/// * `START > END` → `INVERTED-RANGE` panic. The caller supplied a
+///   right-open slice `[START..END)` whose left bound exceeds its
+///   right bound — mathematically the empty slice, but semantically a
+///   caller-side turbofish typo (e.g. `::<12, 7, 1>` instead of
+///   `::<12, 1, 7>`). Routes to a distinct gate rather than silently
+///   accepting the empty sweep so a coordinated typo across `START`
+///   and `END` fails-loud on the ordering axis rather than passing
+///   vacuously.
+/// * `START == END` is a LEGAL empty-slice corner: the sweep never
+///   enters the loop body and the helper accepts. The pre-check
+///   sequence gates only STRICT violations (`>`) so both endpoints
+///   (`START == 0` and `END == N`) remain in range and the `START ==
+///   END` empty case degenerates cleanly.
+///
+/// Delegates to `u8`'s native `==` in const-fn context — no auxiliary
+/// byte-equality helper needed (unlike the (str)-row peer's
+/// [`str_bytes_equal`] delegation). The single-scalar SLICE-BLOCK-
+/// CONSTANCY sweep is the simplest shape in the const-fn family: ONE
+/// outer `while i < END` from `i = START`, ONE inner comparison, ONE
+/// panic arm.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_u8_array_slice_is_scalar_replica_panics_at_runtime_on_slice_content_drift`,
+/// `assert_u8_array_slice_is_scalar_replica_panics_at_runtime_on_start_out_of_bounds`,
+/// `assert_u8_array_slice_is_scalar_replica_panics_at_runtime_on_end_out_of_bounds`,
+/// `assert_u8_array_slice_is_scalar_replica_panics_at_runtime_on_inverted_range`,
+/// and
+/// `assert_u8_array_slice_is_scalar_replica_panic_message_names_the_helper_and_slice_block_constancy_violation_axis`.
+/// The panic-message axis-provenance strings
+/// (`"SLICE-BLOCK-CONSTANCY-VIOLATION"`, `"START-OUT-OF-BOUNDS"`,
+/// `"END-OUT-OF-BOUNDS"`, `"INVERTED-RANGE"`) are chosen DISTINCT
+/// from every sibling helper's axis vocabulary so a diagnostic that
+/// crosses helper boundaries stays unambiguous under `grep` on the
+/// failed axis.
+///
+/// Theory grounding:
+/// - THEORY.md §III — the typescape; the SLICE-BLOCK-CONSTANCY corner
+///   on the (`u8`) row of the (element-type × contract-shape) matrix
+///   becomes a TYPE-LEVEL theorem the substrate carries per (arr,
+///   scalar, START, END) quadruple rather than a runtime iterator
+///   sweep per quadruple. Complements the pre-existing (str)-row
+///   FULL-ARRAY BLOCK-CONSTANCY sibling — the two together cover the
+///   BLOCK-CONSTANCY column at BOTH the SUB-SLICE arity (this helper)
+///   and the FULL-ARRAY-with-two-blocks arity (the sibling), on
+///   COMPLEMENTARY element-type rows.
+/// - THEORY.md §V.1 — knowable platform; the sub-slice constant-
+///   block contract on the substrate's ONE MANY-TO-ONE-collapse
+///   `[u8; N]` array binds at `cargo check` time via ONE `const _`
+///   line, closing the drift-catch loop one invocation stage earlier
+///   than the pre-lift sextet of per-alias assertions inside
+///   `sexp_shape_hash_discriminators_pin_legacy_outer_cache_key_bytes`.
+/// - THEORY.md §V.3 — three-pillar attestation; the outer-`Sexp`
+///   cache-key partition is the `intent_hash` composition axis —
+///   binding the six-way atomic-shape collapse at the ARRAY level
+///   makes attestation-key drift on the atomic-collapse slice a
+///   compile error rather than a silent BLAKE3 mis-hash across the
+///   six atomic outer shapes.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   slice sweep IS the generative shape — every future MANY-TO-ONE
+///   variant → canonical-projection substrate SUB-SLICE-CONSTANT
+///   segment (a hypothetical `Signal::CLASSES` array whose middle
+///   segment collapses several signal variants onto the SAME class
+///   byte; a `ProcessPhase::CATEGORIES` array whose per-category
+///   segments each collapse onto a shared category byte) picks up
+///   the block-constant theorem at ONE new `const _` line rather
+///   than at (END - START) inline byte comparisons per callsite.
+pub const fn assert_u8_array_slice_is_scalar_replica<
+    const N: usize,
+    const START: usize,
+    const END: usize,
+>(
+    arr: &[u8; N],
+    scalar: u8,
+) {
+    if START > N {
+        panic!(
+            "assert_u8_array_slice_is_scalar_replica: START-OUT-OF-\
+             BOUNDS — the const parameter `START` sits OUTSIDE the \
+             array's valid position range `[0..N]` (inclusive upper \
+             bound: `START == N` is the LEGAL empty-slice corner). \
+             Fix at the `const _` witness's turbofish by reconciling \
+             `START` against the array's declared arity `N`. The \
+             START-OUT-OF-BOUNDS gate fires FIRST — a mistyped \
+             `START` on the caller side fails HERE before any per-\
+             position sweep begins, so a subtle bounds slip doesn't \
+             silently degenerate into a vacuous sweep OR a panic \
+             deeper in `arr[i]` bounds-checking."
+        );
+    }
+    if END > N {
+        panic!(
+            "assert_u8_array_slice_is_scalar_replica: END-OUT-OF-\
+             BOUNDS — the const parameter `END` sits OUTSIDE the \
+             array's valid position range `[0..N]` (inclusive upper \
+             bound: `END == N` is the LEGAL slice-to-end corner). \
+             Fix at the `const _` witness's turbofish by reconciling \
+             `END` against the array's declared arity `N`. Peer \
+             gate to the START-OUT-OF-BOUNDS arm above — the two \
+             gates jointly enforce `START, END ∈ [0..N]` before any \
+             content sweep."
+        );
+    }
+    if START > END {
+        panic!(
+            "assert_u8_array_slice_is_scalar_replica: INVERTED-RANGE \
+             — the const parameters `START` and `END` satisfy `START \
+             > END`, so the right-open slice `[START..END)` is \
+             mathematically empty but semantically a caller-side \
+             turbofish typo (e.g. `::<N, END, START>` instead of \
+             `::<N, START, END>`). Routes to a distinct gate rather \
+             than silently accepting the empty sweep so a coordinated \
+             typo across the two const parameters fails-loud on the \
+             ordering axis. The LEGAL empty-slice corner is `START \
+             == END` (accepted without entering the sweep); the \
+             STRICT `START > END` slip is what this gate rejects."
+        );
+    }
+    let mut i = START;
+    while i < END {
+        if arr[i] != scalar {
+            panic!(
+                "assert_u8_array_slice_is_scalar_replica: SLICE-BLOCK-\
+                 CONSTANCY-VIOLATION — the family-wide `[u8; N]` \
+                 array `arr` carries a byte at some position in \
+                 `[START..END)` (the SLICE segment) that does NOT \
+                 byte-equal the peer `scalar`. The substrate's SLICE-\
+                 BLOCK-CONSTANCY contract on the array-slice is \
+                 broken; every consumer that reads `arr[START..END)` \
+                 as a homogeneous constant block sharing ONE \
+                 canonical byte with the peer `scalar` (the SIX \
+                 atomic-outer-shape collapse onto `crate::ast::\
+                 AtomKind::OUTER_HASH_DISCRIMINATOR` at positions \
+                 `[1..7)` of `crate::error::SexpShape::HASH_\
+                 DISCRIMINATORS` — the twelve-shape → seven-byte \
+                 collapse condensing SIX atomic shape slots into ONE \
+                 outer-`Sexp` cache-key byte; any future MANY-TO-ONE \
+                 variant → canonical-projection substrate SUB-SLICE-\
+                 CONSTANT segment) relies on this invariant. Fix at \
+                 the ARRAY-DECLARATION site (the drifted `arr[i]` \
+                 entry inside the slice segment) OR at the per-role \
+                 scalar constant that `scalar` re-exports — the \
+                 choice depends on whether the drift is an \
+                 unintended slot reorder inside the slice OR a \
+                 rename of the canonical projection byte upstream."
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time SLICE-BLOCK-CONSTANCY witness — the ONE `[u8; N]`
+// array on the substrate whose ARRAY-LEVEL structure carries a MANY-
+// TO-ONE-COLLAPSE SUB-SLICE segment. `SexpShape::HASH_DISCRIMINATORS`
+// (`[u8; 12]`) has positions `[1..7)` INTENTIONALLY collapsing onto
+// the SINGLE outer cache-key byte `AtomKind::OUTER_HASH_DISCRIMINATOR
+// = 1u8` — the six atomic outer shapes (`Symbol` / `Keyword` /
+// `String` / `Int` / `Float` / `Bool`) all route through `Sexp::Atom(_)
+// `'s SINGLE outer marker byte on the outer-`Sexp` Hash algebra, so
+// their twelve-shape → seven-byte collapse condenses SIX shape slots
+// into ONE cache-key byte. Pre-lift this six-way collapse was pinned
+// ONLY through the six per-alias runtime assertions inside
+// `sexp_shape_hash_discriminators_pin_legacy_outer_cache_key_bytes`
+// (`assert_eq!(SexpShape::SYMBOL_HASH_DISCRIMINATOR, 1)` × six roles);
+// post-lift the ARRAY-LEVEL slice constancy `SexpShape::HASH_
+// DISCRIMINATORS[1..7) == [OUTER; 6]` binds at rustc-time via ONE
+// `const _` line, one invocation stage earlier than the runtime pin.
+// A regression that reorders `SexpShape::ALL` so a non-atomic variant
+// lands in the atomic-collapse slice (e.g. moves `SexpShape::List`
+// into slot `4`, drifting `LIST_BYTE = 2` into positions `[1..7)`) OR
+// that reroutes ONE atomic-shape alias to a different upstream byte
+// fails-loudly HERE at const-eval on the ARRAY-LEVEL slice.
+//
+// The three OTHER load-bearing SexpShape::HASH_DISCRIMINATORS slices
+// are intentionally OMITTED from this compile-time sweep because they
+// are ALREADY compile-time-enforced through TIGHTER contracts: the
+// singleton slices `[0..1) == [NIL_BYTE]` and `[7..8) == [LIST_BYTE]`
+// (`StructuralKind::NIL_HASH_DISCRIMINATOR` and `StructuralKind::LIST_
+// HASH_DISCRIMINATOR`) are pinned via the peer `assert_scalar_plus_
+// two_u8_arrays_permute_inclusive_range` witness above (which binds
+// the outer joint bijection `{0..=6} == {OUTER} ⊕ StructuralKind::
+// HASH_DISCRIMINATORS ⊕ QuoteForm::HASH_DISCRIMINATORS`); the four-
+// element tail slice `[8..12) == QuoteForm::HASH_DISCRIMINATORS`
+// (`[3, 4, 5, 6]`) is pinned via the peer `assert_u8_array_permutes_
+// inclusive_range::<4, 3, 6>` witness above (which binds the tail
+// slice's PERMUTATION-of-`[3..=6]` shape). Only the middle atomic-
+// collapse slice `[1..7)` requires a NEW helper — its shape is
+// MANY-TO-ONE-BLOCK-CONSTANT rather than PERMUTATION (which is
+// injective and would fail on this six-of-one collapse) or SUBSET
+// (which is weaker and would accept the drifted `[1, 1, 2, 1, 1, 1]`
+// slice that this witness rejects on position 2).
+const _: () = assert_u8_array_slice_is_scalar_replica::<12, 1, 7>(
+    &crate::error::SexpShape::HASH_DISCRIMINATORS,
+    AtomKind::OUTER_HASH_DISCRIMINATOR,
+);
+
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash
 // manually so cache keys can hash a borrowed `&[Sexp]` directly — avoids the
 // serde_json serialization that would otherwise dominate cache overhead on
@@ -34268,6 +34528,207 @@ mod tests {
              panic message {msg:?} must name the failed AXIS (\"HEAD-\
              SEGMENT-BLOCK-CONSTANCY-VIOLATION\") for axis-provenance-\
              preserving failure diagnostics",
+        );
+    }
+
+    // ── `assert_u8_array_slice_is_scalar_replica` — the (`u8`)-row
+    // SLICE-BLOCK-CONSTANCY sibling of the (`&'static str`)-row FULL-
+    // ARRAY-two-block-partition sibling
+    // `assert_str_array_is_concatenation_of_two_scalar_replicas`.
+    // Sibling posture: symmetric runtime-test surface (accept-canonical-
+    // slice, accept-empty-slice-corners, accept-full-array-degenerate,
+    // accept-sexp-shape-atomic-collapse, reject-slice-content-drift,
+    // reject-start-out-of-bounds, reject-end-out-of-bounds, reject-
+    // inverted-range, panic-message-provenance) specialised to the (u8)
+    // sub-slice SINGLE-scalar block-constant shape. A regression that
+    // silently weakens the helper (e.g. flipping `arr[i] != scalar`
+    // to `==`, moving the START gate BELOW the sweep, narrowing the
+    // sweep to `while i < END - 1` and missing the terminal position,
+    // or returning early past ANY bounds gate) is caught by the
+    // helper's OWN test surface rather than only surfacing as a false-
+    // positive on the `SexpShape::HASH_DISCRIMINATORS[1..7)` witness.
+
+    #[test]
+    fn assert_u8_array_slice_is_scalar_replica_accepts_a_canonical_middle_slice() {
+        // Canonical sub-slice `arr[START..END) == [scalar; END - START]`
+        // inside a longer array `arr` whose ENDPOINTS carry DIFFERENT
+        // bytes than the slice. Pins the outer `while i < END` sweep
+        // enters at `i = START` (skipping positions `[0..START)`) AND
+        // terminates at `i = END` (skipping positions `[END..N)`) —
+        // BOTH endpoint bytes DIFFER from `scalar` so a regression
+        // that widened the sweep beyond the slice would fail here.
+        assert_u8_array_slice_is_scalar_replica::<7, 1, 6>(&[9, 1, 1, 1, 1, 1, 9], 1);
+    }
+
+    #[test]
+    fn assert_u8_array_slice_is_scalar_replica_accepts_the_empty_slice_at_start_equals_end() {
+        // LEGAL degenerate: `START == END` collapses the slice into an
+        // empty range `[START..START)`. The sweep never enters the
+        // loop body and the helper accepts. Cross-position coverage
+        // pins the empty-slice acceptance at THREE distinct positions
+        // (`START == 0` at the left endpoint, `START == 3` in the
+        // interior, `START == N` at the right endpoint) so a
+        // regression that hard-coded `START < END` OR panicked on the
+        // `START == END` corner is caught on ALL THREE arms. Peer to
+        // the `K == N` / `K == 0` degenerate corners of the sibling
+        // `assert_str_array_is_concatenation_of_two_scalar_replicas`.
+        assert_u8_array_slice_is_scalar_replica::<5, 0, 0>(&[7, 7, 7, 7, 7], 42);
+        assert_u8_array_slice_is_scalar_replica::<5, 3, 3>(&[7, 7, 7, 7, 7], 42);
+        assert_u8_array_slice_is_scalar_replica::<5, 5, 5>(&[7, 7, 7, 7, 7], 42);
+    }
+
+    #[test]
+    fn assert_u8_array_slice_is_scalar_replica_accepts_the_full_array_slice() {
+        // Full-array-covering slice `[0..N)` collapses to the ALL-
+        // scalar-replica shape `arr == [scalar; N]` (peer to the
+        // `K == N` degenerate of the sibling str-row helper). Pins
+        // that the sweep proceeds through EVERY position of the array
+        // when `START = 0` and `END = N`. Cross-arity coverage on
+        // `N ∈ {3, 6, 8}` pins the sweep's terminal-position visit
+        // across a range of array cardinalities.
+        assert_u8_array_slice_is_scalar_replica::<3, 0, 3>(&[5, 5, 5], 5);
+        assert_u8_array_slice_is_scalar_replica::<6, 0, 6>(&[0, 0, 0, 0, 0, 0], 0);
+        assert_u8_array_slice_is_scalar_replica::<8, 0, 8>(
+            &[255, 255, 255, 255, 255, 255, 255, 255],
+            255,
+        );
+    }
+
+    #[test]
+    fn assert_u8_array_slice_is_scalar_replica_accepts_sexp_shape_atomic_collapse_slice() {
+        // Runtime cross-check that the substrate's ONE MANY-TO-ONE-
+        // COLLAPSE `[u8; N]` sub-slice `SexpShape::HASH_DISCRIMINATORS
+        // [1..7)` — the six-slot atomic-outer-shape collapse onto
+        // `AtomKind::OUTER_HASH_DISCRIMINATOR` — the substrate's
+        // module-level `const _` witness at `ast.rs` pins at COMPILE
+        // time is a well-formed SLICE-BLOCK-CONSTANCY relation at
+        // runtime too. The pair enforces the theorem at TWO stages of
+        // the toolchain: the const witness fires FIRST at `cargo
+        // check`, this runtime pin catches the drift at `cargo test`
+        // as a safety net. Sibling posture to the peer runtime cross-
+        // check on the sibling
+        // `assert_str_array_is_concatenation_of_two_scalar_replicas_accepts_compiler_spec_io_stage_operations_partition`
+        // — this witness carries the SAME class of MANY-TO-ONE-
+        // COLLAPSE theorem at the ARRAY-slice level on the (u8) row
+        // rather than the FULL-ARRAY-two-block level on the (str) row.
+        assert_u8_array_slice_is_scalar_replica::<12, 1, 7>(
+            &crate::error::SexpShape::HASH_DISCRIMINATORS,
+            AtomKind::OUTER_HASH_DISCRIMINATOR,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "SLICE-BLOCK-CONSTANCY-VIOLATION")]
+    fn assert_u8_array_slice_is_scalar_replica_panics_at_runtime_on_slice_content_drift() {
+        // NEGATIVE PIN — SLICE-BLOCK-CONSTANCY-VIOLATION corner: an
+        // entry in the slice `arr[START..END)` that does NOT byte-
+        // equal `scalar` MUST panic at runtime with the slice-named
+        // message. Pins the helper's slice-content reject arm — a
+        // regression that silently short-circuited on the first slice
+        // position without checking the middle or terminal slice
+        // positions would slip through the compile-time witness's
+        // failure mode too. The offending byte `9` at position `3`
+        // (interior of the slice) with `START = 1, END = 6` pins the
+        // middle-of-slice drift mode.
+        assert_u8_array_slice_is_scalar_replica::<7, 1, 6>(&[0, 1, 1, 9, 1, 1, 0], 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "START-OUT-OF-BOUNDS")]
+    fn assert_u8_array_slice_is_scalar_replica_panics_at_runtime_on_start_out_of_bounds() {
+        // NEGATIVE PIN — START-OUT-OF-BOUNDS gate: a caller-side
+        // turbofish arity slip on the `START` const-generic where
+        // `START > N` MUST panic at runtime with the START-OUT-OF-
+        // BOUNDS-named message BEFORE any per-position sweep begins.
+        // Pins the gate's placement at the TOP of the helper — a
+        // regression that dropped the gate would either silently
+        // degenerate into a vacuous sweep OR panic deeper in `arr[i]`
+        // bounds-checking with a helper-name-less panic message. The
+        // offending `START = 7` against `N = 5` pins the strict
+        // `START > N` reject arm; the LEGAL `START == N` empty
+        // corner is covered by the peer acceptance test above.
+        assert_u8_array_slice_is_scalar_replica::<5, 7, 7>(&[1, 1, 1, 1, 1], 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "END-OUT-OF-BOUNDS")]
+    fn assert_u8_array_slice_is_scalar_replica_panics_at_runtime_on_end_out_of_bounds() {
+        // NEGATIVE PIN — END-OUT-OF-BOUNDS gate: a caller-side
+        // turbofish arity slip on the `END` const-generic where
+        // `END > N` MUST panic at runtime with the END-OUT-OF-BOUNDS-
+        // named message. Peer to the START-OUT-OF-BOUNDS arm above —
+        // the two gates jointly enforce `START, END ∈ [0..N]` before
+        // any content sweep. The offending `END = 9` against `N = 5`
+        // pins the strict `END > N` reject arm; the LEGAL `END == N`
+        // slice-to-end corner is covered by the full-array acceptance
+        // test above. `START = 0` sits in-bounds so the START gate
+        // does not fire first.
+        assert_u8_array_slice_is_scalar_replica::<5, 0, 9>(&[1, 1, 1, 1, 1], 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "INVERTED-RANGE")]
+    fn assert_u8_array_slice_is_scalar_replica_panics_at_runtime_on_inverted_range() {
+        // NEGATIVE PIN — INVERTED-RANGE gate: a caller-side turbofish
+        // typo that swaps `START` and `END` (both individually in-
+        // bounds, but `START > END`) MUST panic at runtime with the
+        // INVERTED-RANGE-named message. Pins that the strict `START
+        // > END` slip fails-loud on a DISTINCT axis rather than
+        // silently accepting the empty sweep — a regression that
+        // dropped this gate would silently accept ANY array on the
+        // swapped-turbofish call site. The offending `START = 5,
+        // END = 2` against `N = 7` pins the strict `START > END`
+        // reject arm; the LEGAL `START == END` empty corner is
+        // covered by the peer acceptance test above.
+        assert_u8_array_slice_is_scalar_replica::<7, 5, 2>(&[1, 1, 1, 1, 1, 1, 1], 1);
+    }
+
+    #[test]
+    fn assert_u8_array_slice_is_scalar_replica_panic_message_names_the_helper_and_slice_block_constancy_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — SLICE-BLOCK-CONSTANCY-
+        // VIOLATION arm: the panic message MUST begin with the
+        // helper's own name AND identify the failed AXIS as "SLICE-
+        // BLOCK-CONSTANCY-VIOLATION" so downstream diagnostics route
+        // the drift back to (a) the helper by string search on
+        // `"assert_u8_array_slice_is_scalar_replica"` and (b) the
+        // failed axis by string search on `"SLICE-BLOCK-CONSTANCY-
+        // VIOLATION"`. Sibling posture to
+        // `assert_str_array_is_concatenation_of_two_scalar_replicas_panic_message_...`
+        // on the sibling (str)-row FULL-ARRAY BLOCK-CONSTANCY
+        // provenance pin — the shared `"BLOCK-CONSTANCY-VIOLATION"`
+        // suffix lets callers grep either the SUB-SLICE or FULL-
+        // ARRAY variant by the shared suffix pattern alone, while
+        // the `SLICE-` / `HEAD-SEGMENT-` / `TAIL-SEGMENT-` prefix
+        // disambiguates the CONTRACT SHAPE.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_u8_array_slice_is_scalar_replica::<5, 1, 4>(&[0, 1, 9, 1, 0], 1);
+        });
+        let payload = outcome.expect_err(
+            "assert_u8_array_slice_is_scalar_replica must panic on a \
+             slice-content drift — the reject-slice-drift arm is the \
+             CONTENT failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_u8_array_slice_is_scalar_replica panic payload \
+                 must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_u8_array_slice_is_scalar_replica"),
+            "assert_u8_array_slice_is_scalar_replica panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+        assert!(
+            msg.contains("SLICE-BLOCK-CONSTANCY-VIOLATION"),
+            "assert_u8_array_slice_is_scalar_replica panic message \
+             {msg:?} must name the failed AXIS (\"SLICE-BLOCK-\
+             CONSTANCY-VIOLATION\") for axis-provenance-preserving \
+             failure diagnostics",
         );
     }
 

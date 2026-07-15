@@ -5840,6 +5840,109 @@ const _: () = assert_u8_array_permutes_inclusive_range::<2, 5, 6>(
     &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
 );
 
+// Compile-time FULL-ARRAY per-position ORDER pins — one `const _: () =
+// assert_u8_array_slice_equals_u8_array::<N, N, 0>(&…, &[literal
+// bytes; N])` per family-wide `[u8; N]` hash-discriminator
+// SUB-CARVING array on the substrate's closed-set outer algebras.
+// Each invocation exercises the [`assert_u8_array_slice_equals_u8_array`]
+// helper at its FULL-ARRAY corner (`M == N`, `START == 0`) — the
+// SLICE-EQUALS-ARRAY sweep collapses to an ALL-positions-equal-peer-
+// array pointwise identity `arr == [b_0, b_1, …, b_{N-1}]`. The peer
+// literal-byte sub-array on the RHS pins BOTH (a) the per-position
+// ORDER of the outer array's declaration (the CANONICAL variant-
+// declaration order that all `zip(ALL, HASH_DISCRIMINATORS)` consumers
+// depend on) AND (b) each per-role `pub(crate) const *_HASH_DISCRIMINATOR`
+// alias's canonical `u8` byte value the outer array's slots re-
+// export. Strictly STRONGER on the (contract-strength) axis than the
+// sibling permutation witnesses IMMEDIATELY ABOVE: those bind each
+// array's IMAGE SET (`{0..=5}` for `AtomKind`, `{3..=6}` for
+// `QuoteForm`, `{5..=6}` for `UnquoteForm`) via the JOINT
+// (INJECTIVITY ∧ SURJECTIVITY ∧ ARITY) permutation-of-range contract
+// but are SILENT on which SLOT of the array each byte lands at — a
+// regression that swapped `SYMBOL_HASH_DISCRIMINATOR = 0` and
+// `KEYWORD_HASH_DISCRIMINATOR = 1` (drifting `AtomKind::HASH_DISCRIMINATORS`
+// from `[0, 1, 2, 3, 4, 5]` to `[1, 0, 2, 3, 4, 5]`) preserves the
+// permutation witness's `{0..=5}` set-image AND the joint witness's
+// scalar-plus-two-arrays `{0..=6}` set-image but silently misaligns
+// the runtime pin `atom_kind_hash_discriminators_align_with_all_by_index`
+// (which iterates `zip(AtomKind::ALL, AtomKind::HASH_DISCRIMINATORS)`
+// and pins `HASH_DISCRIMINATORS[i] == ALL[i].hash_discriminator()` —
+// after the swap `HASH_DISCRIMINATORS[0] == 1` but
+// `ALL[0].hash_discriminator() == AtomKind::Symbol.hash_discriminator()
+// == 0` fails the alignment at position 0). Post-lift the ARRAY-LEVEL
+// per-position order binds at rustc time via ONE `const _` witness per
+// array; a drift at either the per-role `pub(crate) const` byte OR
+// the array declaration's ordering fails at `cargo check` BEFORE any
+// test scheduler runs.
+//
+// The four `..._pin_legacy_cache_key_bytes` runtime pins the new
+// witnesses supersede:
+// * `atom_kind_hash_discriminators_pin_legacy_cache_key_bytes` (in
+//   `ast.rs`) — six `assert_eq!` on `AtomKind::{SYMBOL, KEYWORD, STR,
+//   INT, FLOAT, BOOL}_HASH_DISCRIMINATOR == {0, 1, 2, 3, 4, 5}`.
+// * `quote_form_hash_discriminators_pin_legacy_cache_key_bytes` (in
+//   `ast.rs`) — four `assert_eq!` on `QuoteForm::{QUOTE, QUASIQUOTE,
+//   UNQUOTE, UNQUOTE_SPLICE}_HASH_DISCRIMINATOR == {3, 4, 5, 6}`.
+// * `unquote_form_hash_discriminators_pin_legacy_cache_key_bytes` (in
+//   `error.rs`) — two `assert_eq!` on `UnquoteForm::{UNQUOTE,
+//   SPLICE}_HASH_DISCRIMINATOR == {5, 6}`.
+// * `structural_kind_hash_discriminators_pin_legacy_cache_key_bytes`
+//   (in `error.rs`) — two `assert_eq!` on `StructuralKind::{NIL,
+//   LIST}_HASH_DISCRIMINATOR == {0, 2}`.
+// Each runtime pin's fourteen total `assert_eq!` inline byte
+// comparisons collapse to ONE `const _` witness per array (FOUR
+// `const _` lines total) that bind the SAME per-role byte values
+// AND the array's per-position ordering at rustc time. The runtime
+// pins survive as sibling checks — they compose through the
+// per-role `pub(crate) const` alias directly rather than the outer
+// container array's declaration; a regression that drifted a
+// per-role alias's declaration but LEFT the array's slot-i
+// initializer with the correct literal byte inline (structurally
+// distinct from the alias-source-of-truth path this family relies
+// on) fails at the runtime pin as a distinct failure mode.
+//
+// Sibling posture to the four-witness EXHAUSTIVE per-position sweep
+// on the OUTER `SexpShape::HASH_DISCRIMINATORS` container the trio
+// of `assert_u8_array_slice_equals_u8_array::<12, {1, 4}, {0, 7, 8}>`
+// witnesses + the `assert_u8_array_slice_is_scalar_replica::<12, 1, 7>`
+// witness (all inside `ast.rs`, below the `Sexp` Hash impl area)
+// close on the outer twelve-shape container. Those four witnesses
+// pin the OUTER container against its FOUR sub-carvings; these four
+// witnesses pin each SUB-CARVING array against its LITERAL bytes.
+// Together the eight witnesses close the (outer container, sub-
+// carving) × (per-position ORDER) 2×N face across the substrate's
+// entire outer-`Sexp` cache-key hash-discriminator hierarchy at
+// rustc time.
+//
+// `SexpShape::HASH_DISCRIMINATORS` is INTENTIONALLY OMITTED from
+// this family sweep — the outer twelve-shape → seven-byte NON-
+// INJECTIVE collapse means the outer container is NOT expressible
+// as an equality with any literal `[u8; 12]` peer WITHOUT re-
+// stating the six-way atomic-collapse block-constancy segment
+// (which is ALREADY pinned via the sibling
+// `assert_u8_array_slice_is_scalar_replica::<12, 1, 7>` witness
+// below). The four SUB-CARVING arrays in this sweep ARE injective
+// on their own carving; each one is expressible as `arr == [b_0,
+// b_1, …, b_{N-1}]` with each `b_i` a DISTINCT byte, which is
+// EXACTLY the shape `assert_u8_array_slice_equals_u8_array` at the
+// FULL-ARRAY corner (`M == N`, `START == 0`) binds.
+const _: () = assert_u8_array_slice_equals_u8_array::<6, 6, 0>(
+    &AtomKind::HASH_DISCRIMINATORS,
+    &[0u8, 1, 2, 3, 4, 5],
+);
+const _: () = assert_u8_array_slice_equals_u8_array::<4, 4, 0>(
+    &QuoteForm::HASH_DISCRIMINATORS,
+    &[3u8, 4, 5, 6],
+);
+const _: () = assert_u8_array_slice_equals_u8_array::<2, 2, 0>(
+    &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+    &[5u8, 6],
+);
+const _: () = assert_u8_array_slice_equals_u8_array::<2, 2, 0>(
+    &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+    &[0u8, 2],
+);
+
 // Compile-time JOINT permutation-of-range witness — the ONE
 // `(scalar, [u8; M], [u8; N])` triple across the substrate whose
 // joint carving permutes the OUTER-`Sexp` cache-key discriminator
@@ -35184,6 +35287,61 @@ mod tests {
         assert_u8_array_slice_equals_u8_array::<12, 4, 8>(
             &crate::error::SexpShape::HASH_DISCRIMINATORS,
             &QuoteForm::HASH_DISCRIMINATORS,
+        );
+    }
+
+    #[test]
+    fn assert_u8_array_slice_equals_u8_array_accepts_sub_carving_hash_discriminators_per_position_order(
+    ) {
+        // Runtime cross-check that the FOUR sub-carving
+        // `HASH_DISCRIMINATORS` arrays each byte-equal their
+        // canonical literal-byte listing pointwise at the FULL-ARRAY
+        // corner (`M == N`, `START == 0`). Runs the SAME helper the
+        // four `const _` witnesses above line 5842 in this file run
+        // at rustc time — a runtime safety net enforcing the
+        // theorem at BOTH stages of the toolchain (const at `cargo
+        // check`, runtime at `cargo test`). A regression that
+        // renamed one of the per-role `*_HASH_DISCRIMINATOR` aliases
+        // (or drifted its literal byte value at the declaration
+        // site, or reordered a slot in the outer array's
+        // initializer) fails HERE at the substrate callsite AND at
+        // the const witness above. Peer of
+        // `assert_u8_array_slice_equals_u8_array_accepts_sexp_shape_quote_tail_composition`
+        // above — that witness carries the SLICE-EQUALS-ARRAY
+        // theorem for the OUTER container against a SUB-CARVING
+        // array; this witness carries the theorem for each of the
+        // FOUR sub-carving arrays against a literal-byte listing.
+        //
+        // The four sub-carvings appear here in canonical order
+        // (`{0..=6}` outer-`Sexp` cache-key partition, top-to-
+        // bottom):
+        // * `StructuralKind::HASH_DISCRIMINATORS == [0u8, 2]` — the
+        //   structural-residual carving. Non-contiguous (gap at
+        //   `1u8` reserved for the atomic-carve outer marker).
+        // * `AtomKind::HASH_DISCRIMINATORS == [0u8, 1, 2, 3, 4, 5]`
+        //   — the nested-inner atomic-payload carving specialising
+        //   the outer `1u8` atomic marker inside `Hash for Atom`.
+        // * `QuoteForm::HASH_DISCRIMINATORS == [3u8, 4, 5, 6]` —
+        //   the quote-family carving covering the four homoiconic
+        //   prefixes.
+        // * `UnquoteForm::HASH_DISCRIMINATORS == [5u8, 6]` — the
+        //   two-of-four substitution subset of `QuoteForm`
+        //   projecting through `to_quote_form()`.
+        assert_u8_array_slice_equals_u8_array::<2, 2, 0>(
+            &crate::error::StructuralKind::HASH_DISCRIMINATORS,
+            &[0u8, 2],
+        );
+        assert_u8_array_slice_equals_u8_array::<6, 6, 0>(
+            &AtomKind::HASH_DISCRIMINATORS,
+            &[0u8, 1, 2, 3, 4, 5],
+        );
+        assert_u8_array_slice_equals_u8_array::<4, 4, 0>(
+            &QuoteForm::HASH_DISCRIMINATORS,
+            &[3u8, 4, 5, 6],
+        );
+        assert_u8_array_slice_equals_u8_array::<2, 2, 0>(
+            &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+            &[5u8, 6],
         );
     }
 

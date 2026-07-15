@@ -1176,6 +1176,98 @@ const _: () = assert_str_array_pairwise_distinct(&QuoteForm::PREFIXES);
 const _: () = assert_str_array_pairwise_distinct(&QuoteForm::IAC_FORGE_TAGS);
 const _: () = assert_str_array_pairwise_distinct(&QuoteForm::LABELS);
 
+// Compile-time FULL-ARRAY per-position ORDER pins — one `const _: () =
+// assert_str_array_slice_equals_str_array::<N, N, 0>(&…, &[literal strs;
+// N])` per family-wide `[&'static str; N]` scalar-composed substrate
+// array on the closed-set outer-algebras' label / prefix / tag / literal
+// vocabularies. Each invocation exercises the
+// [`assert_str_array_slice_equals_str_array`] helper at its FULL-ARRAY
+// corner (`M == N`, `START == 0`) — the SLICE-EQUALS-ARRAY sweep
+// collapses to the ALL-positions-equal-peer-array pointwise identity
+// `arr == [s_0, s_1, …, s_{N-1}]`. The peer literal-str sub-array on
+// the RHS pins BOTH (a) the per-position ORDER of the outer array's
+// declaration (the CANONICAL variant-declaration order every
+// closed-set outer-algebra consumer depends on) AND (b) each per-role
+// `pub const *_LABEL` / `*_PREFIX` / `*_TAG` / `TRUE_LITERAL` /
+// `FALSE_LITERAL` alias's canonical `&'static str` value the outer
+// array's slots re-export. Strictly STRONGER on the (contract-strength)
+// axis than the sibling `_pairwise_distinct` witnesses at lines
+// 1173..=1177 above: those bind each array's IMAGE SET via INJECTIVITY
+// but are SILENT on which SLOT each str lands at — a regression that
+// swapped `Atom::TRUE_LITERAL` (`"#t"`) and `Atom::FALSE_LITERAL`
+// (`"#f"`) (drifting `Atom::BOOL_LITERALS` from `["#t", "#f"]` to
+// `["#f", "#t"]`) preserves the pairwise-distinctness witness (both
+// strs still distinct) but silently misaligns every consumer indexing
+// `BOOL_LITERALS[0]` for the canonical `true`-lexeme dispatch. A
+// silent value-drift of a per-role scalar (e.g. an ELisp-compat
+// rename of `AtomKind::SYMBOL_LABEL` from `"symbol"` to `"sym"`, a
+// Racket-compat rename of `QuoteForm::QUASIQUOTE_LABEL`) that flows
+// through the composed array without updating the outer array's
+// literal image ALSO fails HERE where the pairwise-distinctness
+// witness stays silent. Post-lift the ARRAY-LEVEL per-position order
+// binds at rustc time via ONE `const _` witness per array; a drift
+// at either the per-role `pub const *_LABEL` / `*_PREFIX` / `*_TAG`
+// str OR the array declaration's ordering fails at `cargo check`
+// BEFORE any test scheduler runs.
+//
+// Sibling posture to the EIGHT-witness (char)-row FULL-ARRAY per-
+// position ORDER cluster at lines 893..=914 above (the eight
+// `assert_char_array_slice_equals_char_array::<N, N, 0>(&…, &[literal
+// chars; N])` witnesses on the substrate's `[char; N]` reader-boundary
+// vocabulary) and the FOUR-witness (u8)-row FULL-ARRAY per-position
+// ORDER cluster below in this file (four
+// `assert_u8_array_slice_equals_u8_array::<N, N, 0>(&…, &[literal
+// bytes; N])` witnesses on the sub-carving `[u8; N]`
+// `HASH_DISCRIMINATORS` arrays). Together the eight (char)-row + four
+// (u8)-row + these five (str)-row witnesses close the (element-type
+// × contract-shape) matrix's FULL-ARRAY per-position ORDER column
+// across ALL THREE scalar element-type rows (char, u8, &'static str)
+// EXHAUSTIVELY at rustc time.
+//
+// The five pinned arrays appear here in canonical (owning-algebra,
+// per-role-alias-count-ascending) order:
+// * `Atom::BOOL_LITERALS == ["#t", "#f"]` — Scheme-canonical bool-
+//   lexeme spellings on the `Atom` algebra (two per-role literals).
+// * `AtomKind::LABELS == ["symbol", "keyword", "string", "int",
+//   "float", "bool"]` — atomic-payload diagnostic labels on the
+//   `AtomKind` subset algebra (six per-role labels).
+// * `QuoteForm::PREFIXES == ["'", "`", ",", ",@"]` — quote-family
+//   reader-punctuation prefix bytes on the `QuoteForm` algebra (four
+//   per-role prefixes; the fourth `",@"` is the ONLY two-char prefix
+//   on the closed set — pinned separately by
+//   `quote_form_unquote_splice_prefix_constant_composes_from_unquote_lead_and_splice_discriminator`).
+// * `QuoteForm::LABELS == ["quote", "quasiquote", "unquote",
+//   "unquote-splice"]` — diagnostic labels on the `QuoteForm` algebra
+//   (four per-role labels; the fourth `"unquote-splice"` is the
+//   substrate's SHORTER diagnostic idiom for `LispError::TypeMismatch.got`
+//   surfaces — INTENTIONALLY DISTINCT from the iac-forge tag's
+//   Common-Lisp-canonical `"unquote-splicing"` spelling).
+// * `QuoteForm::IAC_FORGE_TAGS == ["quote", "quasiquote", "unquote",
+//   "unquote-splicing"]` — cross-crate canonical-form tags on the
+//   `QuoteForm` algebra (four per-role tags; the fourth
+//   `"unquote-splicing"` is Common-Lisp-canonical and distinct from
+//   `QuoteForm::LABELS[3]`'s shorter `"unquote-splice"` spelling —
+//   pinned by
+//   `quote_form_iac_forge_tag_and_label_disagree_only_on_unquote_splice_arm`).
+const _: () =
+    assert_str_array_slice_equals_str_array::<2, 2, 0>(&Atom::BOOL_LITERALS, &["#t", "#f"]);
+const _: () = assert_str_array_slice_equals_str_array::<6, 6, 0>(
+    &AtomKind::LABELS,
+    &["symbol", "keyword", "string", "int", "float", "bool"],
+);
+const _: () = assert_str_array_slice_equals_str_array::<4, 4, 0>(
+    &QuoteForm::PREFIXES,
+    &["'", "`", ",", ",@"],
+);
+const _: () = assert_str_array_slice_equals_str_array::<4, 4, 0>(
+    &QuoteForm::LABELS,
+    &["quote", "quasiquote", "unquote", "unquote-splice"],
+);
+const _: () = assert_str_array_slice_equals_str_array::<4, 4, 0>(
+    &QuoteForm::IAC_FORGE_TAGS,
+    &["quote", "quasiquote", "unquote", "unquote-splicing"],
+);
+
 /// Compile-time contract verifier — panics at const evaluation time if
 /// any entry of `a` aliases any entry of `b` byte-for-byte through
 /// [`str::as_bytes`].
@@ -34893,6 +34985,55 @@ mod tests {
         assert_str_array_slice_equals_str_array::<12, 4, 8>(
             &crate::error::SexpShape::LABELS,
             &QuoteForm::LABELS,
+        );
+    }
+
+    #[test]
+    fn assert_str_array_slice_equals_str_array_accepts_every_family_wide_substrate_array_full_array_literal_listing(
+    ) {
+        // Runtime cross-check that the SAME five (str)-row FULL-ARRAY
+        // LITERAL witnesses covered at COMPILE time by the module-
+        // level `const _: () = ...` cluster immediately below the
+        // (str)-row `assert_str_array_pairwise_distinct` witnesses
+        // (`Atom::BOOL_LITERALS` / `AtomKind::LABELS` /
+        // `QuoteForm::PREFIXES` / `QuoteForm::LABELS` /
+        // `QuoteForm::IAC_FORGE_TAGS`) also hold when exercised at
+        // runtime. A regression that removes ONE of the const
+        // witnesses would still leave THIS runtime pin as a safety
+        // net; the const witness fires FIRST at `cargo check`, this
+        // runtime pin catches the positionwise drift at `cargo
+        // test`. The pair enforces the theorem at TWO stages of the
+        // toolchain (const at `cargo check`, runtime at `cargo
+        // test`). Sibling posture to
+        // `assert_char_array_slice_equals_char_array_accepts_every_family_wide_substrate_array_full_array_literal_listing`
+        // (if / when that (char)-row runtime-safety-net peer is
+        // added) — the two would jointly enforce the FULL-ARRAY per-
+        // position ORDER column at runtime across the (char, str)
+        // 2-row face of the (element-type × contract-shape) matrix.
+        //
+        // A regression that (a) reorders one of the outer arrays'
+        // slots away from canonical declaration order, or (b) drifts
+        // one of the per-role scalar `pub const *_LABEL` / `*_PREFIX`
+        // / `*_TAG` / `TRUE_LITERAL` / `FALSE_LITERAL` aliases the
+        // outer array's slots re-export, fails HERE with the
+        // `STR-SLICE-EQUALS-ARRAY-VIOLATION` axis panic naming the
+        // drifted position.
+        assert_str_array_slice_equals_str_array::<2, 2, 0>(&Atom::BOOL_LITERALS, &["#t", "#f"]);
+        assert_str_array_slice_equals_str_array::<6, 6, 0>(
+            &AtomKind::LABELS,
+            &["symbol", "keyword", "string", "int", "float", "bool"],
+        );
+        assert_str_array_slice_equals_str_array::<4, 4, 0>(
+            &QuoteForm::PREFIXES,
+            &["'", "`", ",", ",@"],
+        );
+        assert_str_array_slice_equals_str_array::<4, 4, 0>(
+            &QuoteForm::LABELS,
+            &["quote", "quasiquote", "unquote", "unquote-splice"],
+        );
+        assert_str_array_slice_equals_str_array::<4, 4, 0>(
+            &QuoteForm::IAC_FORGE_TAGS,
+            &["quote", "quasiquote", "unquote", "unquote-splicing"],
         );
     }
 

@@ -199,6 +199,49 @@ const _: () = crate::ast::assert_str_arrays_disjoint::<4, 2>(
     &StructuralKind::LABELS,
 );
 
+// Compile-time (⊆) SET-COVERAGE witness closing the twelve-arm
+// `SexpShape::LABELS` disjoint-union theorem — every entry of the
+// parent outer-shape vocabulary is reached by at least one of the
+// three sub-vocabularies (`AtomKind::LABELS`, `QuoteForm::LABELS`,
+// `StructuralKind::LABELS`). Composes with the pre-existing (⊇)
+// SUBSET-embedding witnesses (three `_within_str_finite_set` lines
+// above), the pairwise-DISJOINTNESS witnesses (two above plus one
+// (`AtomKind::LABELS` ∩ `QuoteForm::LABELS`) in `ast.rs`), and the
+// parent INJECTIVITY witness (`assert_str_array_pairwise_distinct(
+// &SexpShape::LABELS)` above) to close the FULL disjoint-union
+// theorem
+//   `SexpShape::LABELS ≡ AtomKind::LABELS ⊕ QuoteForm::LABELS ⊕
+//    StructuralKind::LABELS`
+// as a rustc-time proof obligation. Pre-lift the (⊆) direction lived
+// only as the runtime cross-check
+// `sexp_shape_labels_is_disjoint_union_of_three_sub_vocabularies` at
+// the tests submodule; post-lift the (⊆) direction binds at `cargo
+// check` time via ONE `const _` line on the partition quadruple. A
+// regression that silently drops a variant from ONE sub-vocabulary
+// (e.g. removing `AtomKind::Bool` and its `AtomKind::BOOL_LABEL`
+// alias while leaving `SexpShape::Bool` and `SexpShape::BOOL_LABEL`
+// in the parent vocabulary) fires the SET-STR-MISSING panic at
+// `cargo check` BEFORE any test scheduler runs.
+//
+// Composition law with the sibling (⊇) SUBSET + pairwise-
+// DISJOINTNESS + parent INJECTIVITY witnesses: given the four
+// corners, the disjoint-union theorem follows CONSTRUCTIVELY —
+//   (⊇) every sub-vocabulary label is in the parent (three SUBSET
+//        witnesses);
+//   (⊆) every parent label is in some sub-vocabulary (this witness);
+//   pairwise-disjoint sub-vocabularies (three DISJOINTNESS witnesses);
+//   parent has no duplicate entries (INJECTIVITY witness).
+// The cardinality composition `6 + 4 + 2 = 12` is a CONSEQUENCE of
+// the four corners rather than a separate pre-check; the rustc-
+// enforced arities `[&'static str; N]` for N ∈ {6, 4, 2, 12} pin the
+// cardinality quadruple at the declaration site.
+const _: () = crate::ast::assert_str_finite_set_covered_by_three_str_arrays::<6, 4, 2, 12>(
+    &crate::ast::AtomKind::LABELS,
+    &crate::ast::QuoteForm::LABELS,
+    &StructuralKind::LABELS,
+    &SexpShape::LABELS,
+);
+
 // Compile-time SUBSET-embedding witnesses closing the `[&'static str;
 // N]` STR row of the (UnquoteForm ⊂ QuoteForm) 2-of-4 subset-carve
 // axis on the substrate's `str`-side vocabulary triple. Pre-lift the

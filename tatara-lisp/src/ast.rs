@@ -1255,6 +1255,251 @@ pub const fn assert_str_array_within_str_finite_set<const N: usize, const M: usi
 }
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of the target finite `set` is NOT reached by at least one
+/// entry across the three sub-vocabulary arrays `a`, `b`, `c`.
+///
+/// SURJECTIVITY dual of [`assert_str_array_within_str_finite_set`] at
+/// the (`&'static str`) row of the (element-type × contract-shape)
+/// matrix, extended to the 3-array-union carrier shape: where the
+/// within-helper closes the SUBSET direction for a single array
+/// (`arr ⊆ set`), this helper closes the COVERAGE direction for a
+/// three-array partition triple (`set ⊆ a ∪ b ∪ c`) at compile time.
+/// Composed with the three sibling SUBSET-EMBEDDING witnesses (each
+/// sub-array's `_within_str_finite_set` pin) AND the three sibling
+/// pairwise-DISJOINTNESS witnesses (each pair's
+/// `assert_str_arrays_disjoint` pin) AND the parent's INJECTIVITY
+/// witness (`_pairwise_distinct` on the parent set), the four
+/// contract-shape corners jointly close the full DISJOINT-UNION
+/// theorem `set ≡ a ⊕ b ⊕ c` at rustc const-eval time on the
+/// substrate's twelve-arm `SexpShape::LABELS` outer-vocabulary
+/// partition — the pre-existing runtime cross-check
+/// `sexp_shape_labels_is_disjoint_union_of_three_sub_vocabularies`
+/// becomes a defense-in-depth safety net for the SAME theorem the
+/// compile-time witness triple now enforces at `cargo check` time,
+/// one invocation stage earlier.
+///
+/// Delegates target-set well-formedness to the ARRAY-side
+/// [`assert_str_array_pairwise_distinct`] helper via a co-located
+/// call at the TOP of the sweep — a malformed `set` (e.g.
+/// `["a", "a", "b"]`) is not a well-formed finite set of cardinality
+/// `W` and silently mis-verifies the intended COVERAGE contract on
+/// any `(a, b, c)` triple whose distinct-value union misses the
+/// duplicated set byte (the duplicated byte still counts as covered
+/// on the FIRST hit even if the second copy is absent from the
+/// union). Routes drift on the CALLER'S TARGET-SET SPEC to the SET-
+/// side well-formedness axis rather than to a downstream SET-STR-
+/// MISSING symptom on `(a, b, c)`. The (str) row does NOT carry a
+/// separate `assert_str_finite_set_pairwise_distinct` alias; the
+/// delegation reuses the ARRAY-side helper directly, matching the
+/// (str) row's sibling delegation shape at
+/// [`assert_str_array_within_str_finite_set`].
+///
+/// The sub-vocabulary arities `N`, `M`, `K` and the parent
+/// cardinality `W` are INDEPENDENT const generics: this helper
+/// intentionally does NOT enforce `N + M + K == W` at const-eval
+/// time. That arity sum is a CONSEQUENCE of the disjoint-union
+/// theorem (COVERAGE here + pairwise DISJOINTNESS at the sibling
+/// witnesses + parent INJECTIVITY) rather than a separate pre-
+/// condition; a caller that binds all three peer witnesses AND this
+/// COVERAGE witness AND finds a cardinality mismatch has necessarily
+/// broken one of the four contract corners, and the diagnostic fires
+/// on the specific corner that broke rather than on a synthetic
+/// arity-sum pre-check. Under-covering triples (`N + M + K < W`) fire
+/// the SET-STR-MISSING panic here; over-covering triples
+/// (`N + M + K > W`) fire the STR-DISJOINTNESS-VIOLATION panic at the
+/// sibling pairwise-disjointness witness or the STR-SUBSET-VIOLATION
+/// panic at the sibling `_within_str_finite_set` witness. The four-
+/// corner diagnostic partition stays sharp on the FAILURE mode rather
+/// than collapsing every drift onto a single arity-sum axis.
+///
+/// Pre-lift the twelve-arm `SexpShape::LABELS` disjoint-union
+/// theorem lived as a runtime cross-check
+/// (`sexp_shape_labels_is_disjoint_union_of_three_sub_vocabularies`
+/// at `error.rs` tests module) that iterated every parent label and
+/// counted its multiplicity across the three sub-vocabularies. The
+/// runtime sweep enforced BOTH directions (⊆) and (⊇) of the
+/// disjoint-union at test time; the (⊇) direction was already lifted
+/// to compile time via three `_within_str_finite_set` witnesses in
+/// `error.rs` (each sub-vocab ⊂ parent) and three
+/// `assert_str_arrays_disjoint` witnesses (pairwise disjoint), but
+/// the (⊆) direction — every parent label appears in at least one
+/// sub-vocabulary — remained runtime-only. Post-lift this helper
+/// binds the (⊆) direction at `cargo check` time via ONE `const _`
+/// line on the (`AtomKind::LABELS`, `QuoteForm::LABELS`,
+/// `StructuralKind::LABELS`, `SexpShape::LABELS`) partition-triple-
+/// with-parent quadruple; a regression that silently drops a variant
+/// from one of the three sub-vocabularies (e.g. removing
+/// `AtomKind::Bool` and its `AtomKind::BOOL_LABEL` alias while
+/// leaving `SexpShape::Bool` and its `SexpShape::BOOL_LABEL` alias in
+/// the parent vocabulary) fires the SET-STR-MISSING panic at
+/// `cargo check` BEFORE any test scheduler runs.
+///
+/// Adding a new n-way partition proof on the substrate's `&'static
+/// str` vocabularies (e.g. a hypothetical fourth sub-vocabulary
+/// carving of a widened `SexpShape` parent, or an independent
+/// partition on `Atom::ESCAPE_SOURCES` into printable / whitespace /
+/// control sub-vocabularies): pair the parent+partition declaration
+/// with `const _: () = assert_str_finite_set_covered_by_three_str_
+/// arrays::<N, M, K, W>(&Foo::LABELS, &Bar::LABELS, &Baz::LABELS,
+/// &Parent::LABELS);` co-located after the partition arrays'
+/// declarations and the COVERAGE contract binds at compile time. The
+/// rustc-forced arities `[&'static str; N]`, `[&'static str; M]`,
+/// `[&'static str; K]`, `[&'static str; W]` compose with this const-
+/// eval sweep so BOTH the four cardinalities AND the (⊆) disjoint-
+/// union direction are compile-time theorems on the SAME partition
+/// quadruple.
+///
+/// Delegates to the existing module-private [`str_bytes_equal`]
+/// const-fn helper so a future toolchain stabilising `const fn
+/// str::eq` collapses ALL FOUR (str)-row helpers ((str, pairwise-
+/// distinct), (str, disjointness), (str, subset-embedding), (str,
+/// three-array-coverage)) through ONE edit.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_str_finite_set_covered_by_three_str_arrays_panics_at_runtime_on_uncovered_parent_entry`
+/// and
+/// `assert_str_finite_set_covered_by_three_str_arrays_panic_message_names_the_helper_and_set_str_missing_axis`.
+/// The panic site carries the `"SET-STR-MISSING"` axis-provenance
+/// string chosen DISTINCT from every sibling helper's axis vocabulary
+/// (`"duplicate"` on the ARRAY-side pairwise-distinct sibling; `"STR-
+/// SUBSET-VIOLATION"` on the (str) row SUBSET sibling; `"STR-
+/// DISJOINTNESS-VIOLATION"` on the (str) row DISJOINTNESS sibling;
+/// `"CHAR-SUBSET-VIOLATION"` on the (char) row-dual SUBSET sibling;
+/// `"SUBSET-VIOLATION"` on the (u8) row-dual finite-set SUBSET-only
+/// sibling; `"OUT-OF-SET"` / `"SET-BYTE-MISSING"` on the (u8) covers-
+/// finite-set sibling; `"OUT-OF-RANGE"` / `"MISSING"` on the (u8)
+/// covers-inclusive-range sibling; `"ARITY-MISMATCH"` on both (u8)
+/// `_permutes_*` compound helpers; `"SET-NOT-PAIRWISE-DISTINCT"` on
+/// the (u8) SET-side well-formedness sibling) so a diagnostic that
+/// names the failed axis routes UNAMBIGUOUSLY to (a) this specific
+/// three-array COVERAGE helper on the `&'static str` element-type
+/// row, (b) the `set` argument as the drift-target (the parent
+/// element that no sub-array reaches) rather than any single sub-
+/// vocabulary carrier. The `"SET-STR-MISSING"` axis distinguishes
+/// from the (u8) row's `"SET-BYTE-MISSING"` peer via the element-
+/// type infix — one substring search per element-type routes any
+/// row's SET-side COVERAGE-VIOLATION back to its element-type peer.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the DISJOINT-UNION theorem
+///   on `&'static str` sub-vocabulary partitions becomes a TYPE-LEVEL
+///   theorem the substrate carries per (partition-triple, parent)
+///   quadruple rather than a runtime test the developer must
+///   remember to write per partition.
+/// - THEORY.md §III — the typescape; the (element-type × contract-
+///   shape) matrix now carries the THREE-ARRAY-COVERAGE corner on
+///   the (`&'static str`) row at ONE peer const-fn helper. Combined
+///   with the pre-existing (str, pairwise-distinct), (str, subset-
+///   embedding), and (str, disjointness) siblings, the four contract-
+///   shape corners on the (`&'static str`) row jointly close the
+///   full DISJOINT-UNION theorem on any n-way partition of a
+///   `&'static str` vocabulary at compile time.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   coverage sweep IS the generative shape. Every new n-way `&'static
+///   str` vocabulary partition adds ONE `const _` line (plus the
+///   sibling SUBSET-EMBEDDING and pairwise-DISJOINTNESS witnesses per
+///   sub-array pair) to get the DISJOINT-UNION theorem rather than
+///   re-deriving a per-partition runtime iterator sweep at each site.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   COVERAGE proof at declaration site AND the outer-algebra's
+///   twelve-arm shape-label partition regenerate through the SAME
+///   `const _` witness at the ARRAY level.
+///
+/// Frontier inspiration: Lean 4's `Finset.disjUnion` /
+/// `Finset.biUnion_eq_iff_forall_mem_exists` unfolded at the
+/// concrete 3-arm `[&'static str; W] ⊆ [&'static str; N] ∪ [&'static
+/// str; M] ∪ [&'static str; K]` monomorphic realisation — the
+/// substrate primitive here embeds the same coverage relation as a
+/// rustc const-eval-time proof obligation at every partition site
+/// rather than as a Lean tactic invocation deferred to `elab_command`.
+pub const fn assert_str_finite_set_covered_by_three_str_arrays<
+    const N: usize,
+    const M: usize,
+    const K: usize,
+    const W: usize,
+>(
+    a: &[&'static str; N],
+    b: &[&'static str; M],
+    c: &[&'static str; K],
+    set: &[&'static str; W],
+) {
+    // Delegate target-set well-formedness to the sibling ARRAY-side
+    // pairwise-distinctness helper FIRST. Placed BEFORE the SET-STR-
+    // MISSING sweep below because a malformed `set` (e.g. `["a", "a",
+    // "b"]`) is not a well-formed finite set of cardinality `W` and
+    // silently mis-verifies the intended COVERAGE contract — the
+    // duplicated byte still counts as covered on the FIRST hit even
+    // if the second copy is absent from the union. Routes drift on
+    // the CALLER'S TARGET-SET SPEC to the SET-side well-formedness
+    // axis rather than to a downstream SET-STR-MISSING symptom on
+    // `(a, b, c)`. A well-formed `set` passes this arm as a no-op —
+    // the sweep is const-eval-elidable and costs zero at rustc-time
+    // on the substrate call sites.
+    assert_str_array_pairwise_distinct(set);
+    let mut w = 0;
+    while w < W {
+        let target = set[w];
+        let mut found = false;
+        let mut i = 0;
+        while i < N {
+            if str_bytes_equal(target, a[i]) {
+                found = true;
+                break;
+            }
+            i += 1;
+        }
+        if !found {
+            let mut j = 0;
+            while j < M {
+                if str_bytes_equal(target, b[j]) {
+                    found = true;
+                    break;
+                }
+                j += 1;
+            }
+        }
+        if !found {
+            let mut k = 0;
+            while k < K {
+                if str_bytes_equal(target, c[k]) {
+                    found = true;
+                    break;
+                }
+                k += 1;
+            }
+        }
+        if !found {
+            panic!(
+                "assert_str_finite_set_covered_by_three_str_arrays: \
+                 SET-STR-MISSING — the target finite `set` carries a \
+                 parent entry at some position whose bytes are NOT \
+                 reached by any of the three sub-vocabulary arrays \
+                 `a`, `b`, `c`. The substrate's THREE-ARRAY COVERAGE \
+                 contract on the partition-triple is broken; every \
+                 consumer that expects the union `a ∪ b ∪ c` to span \
+                 the parent finite vocabulary (`SexpShape::LABELS ≡ \
+                 AtomKind::LABELS ⊕ QuoteForm::LABELS ⊕ \
+                 StructuralKind::LABELS` on the twelve-arm outer-\
+                 shape label partition; any future n-way disjoint-\
+                 union theorem on the substrate's `&'static str` \
+                 vocabularies) relies on every parent entry being \
+                 reached by at least one sub-array. Fix at the SUB-\
+                 VOCABULARY DECLARATION site (the missing entry is \
+                 an intentional variant of the parent that ONE sub-\
+                 vocabulary must carry) OR at the PARENT-VOCABULARY \
+                 DECLARATION site (the missing entry was inadvertently \
+                 added to the parent without extending any sub-\
+                 vocabulary) — the choice depends on whether the \
+                 drift is an unintended parent overshoot or an \
+                 unintended sub-vocabulary shrinkage"
+            );
+        }
+        w += 1;
+    }
+}
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` alias byte-for-byte.
 ///
 /// Column-dual peer to [`assert_char_array_pairwise_distinct`] and
@@ -32685,6 +32930,285 @@ mod tests {
         // formedness pins — the three pins together bind the
         // delegation chain at ONE test per element-type row.
         assert_str_array_within_str_finite_set::<2, 3>(&["a", "b"], &["a", "b", "b"]);
+    }
+
+    // ── `assert_str_finite_set_covered_by_three_str_arrays` — the
+    // (⊆) SET-COVERAGE dual of the SUBSET-embedding sibling on the
+    // (`&'static str`) row of the (element-type × contract-shape)
+    // matrix, extended to the 3-array-union carrier shape. Sibling
+    // posture: same runtime-test surface (accept-empty-parent,
+    // accept-parent-covered-by-first-array, accept-parent-covered-
+    // by-second-array, accept-parent-covered-by-third-array, accept-
+    // sexp-shape-labels-partition, reject-uncovered-parent-entry,
+    // reject-terminal-uncovered-parent-entry, panic-message-
+    // provenance, delegated-set-well-formedness) specialised to the
+    // 3-array coverage shape. A regression that silently weakens the
+    // helper (e.g. dropping the second-array probe, dropping the
+    // third-array probe, or short-circuiting on the first parent
+    // position) is caught by the helper's OWN test surface rather
+    // than only surfacing as a false-positive on the
+    // `SexpShape::LABELS` disjoint-union witness.
+
+    #[test]
+    fn assert_str_finite_set_covered_by_three_str_arrays_accepts_the_empty_parent() {
+        // Empty parent `set = []` at the `[&'static str; 0]` corner
+        // — vacuously covered by any triple of sub-vocabulary arrays
+        // (no `w` position exists to test). Cross-arity coverage on
+        // the trivial PARENT corner of the const-W generic across
+        // three sub-vocabulary-arity combinations. Turbofish binding
+        // required because there's no other cue for the const
+        // parameters on the empty array literal.
+        assert_str_finite_set_covered_by_three_str_arrays::<0, 0, 0, 0>(&[], &[], &[], &[]);
+        assert_str_finite_set_covered_by_three_str_arrays::<1, 0, 0, 0>(&["x"], &[], &[], &[]);
+        assert_str_finite_set_covered_by_three_str_arrays::<1, 2, 3, 0>(
+            &["a"],
+            &["b", "c"],
+            &["d", "e", "f"],
+            &[],
+        );
+    }
+
+    #[test]
+    fn assert_str_finite_set_covered_by_three_str_arrays_accepts_parent_covered_by_first_array() {
+        // Singleton parent `set = [K]` at the `[&'static str; 1]`
+        // corner MUST pass when `K` is in the FIRST sub-vocabulary
+        // array `a`. Pins the FIRST-ARRAY probe arm's short-circuit
+        // discovery — the parent entry is reached without exhausting
+        // the second- or third-array probes. Cross-position coverage
+        // inside `a`: parent hit at FIRST, MIDDLE, LAST position of
+        // `a` pins the INNER `while i < N` sweep terminates at the
+        // first-match position rather than always at position `0` OR
+        // always at position `N - 1`.
+        assert_str_finite_set_covered_by_three_str_arrays::<3, 2, 1, 1>(
+            &["k", "b", "c"],
+            &["d", "e"],
+            &["f"],
+            &["k"],
+        );
+        assert_str_finite_set_covered_by_three_str_arrays::<3, 2, 1, 1>(
+            &["a", "k", "c"],
+            &["d", "e"],
+            &["f"],
+            &["k"],
+        );
+        assert_str_finite_set_covered_by_three_str_arrays::<3, 2, 1, 1>(
+            &["a", "b", "k"],
+            &["d", "e"],
+            &["f"],
+            &["k"],
+        );
+    }
+
+    #[test]
+    fn assert_str_finite_set_covered_by_three_str_arrays_accepts_parent_covered_by_second_array() {
+        // Singleton parent MUST pass when `K` is in the SECOND sub-
+        // vocabulary array `b` but NOT in `a`. Pins the SECOND-ARRAY
+        // probe arm — the coverage sweep proceeds from `a` to `b`
+        // when `a` returns no hit. A regression that dropped the
+        // `if !found { … b sweep … }` block would silently reject
+        // this case as SET-STR-MISSING even though `b` carries the
+        // covering entry. Cross-position coverage inside `b`: FIRST,
+        // MIDDLE, LAST positions of `b` pin the INNER `while j < M`
+        // sweep terminates at the first-match position.
+        assert_str_finite_set_covered_by_three_str_arrays::<3, 3, 1, 1>(
+            &["a", "b", "c"],
+            &["k", "e", "f"],
+            &["g"],
+            &["k"],
+        );
+        assert_str_finite_set_covered_by_three_str_arrays::<3, 3, 1, 1>(
+            &["a", "b", "c"],
+            &["d", "k", "f"],
+            &["g"],
+            &["k"],
+        );
+        assert_str_finite_set_covered_by_three_str_arrays::<3, 3, 1, 1>(
+            &["a", "b", "c"],
+            &["d", "e", "k"],
+            &["g"],
+            &["k"],
+        );
+    }
+
+    #[test]
+    fn assert_str_finite_set_covered_by_three_str_arrays_accepts_parent_covered_by_third_array() {
+        // Singleton parent MUST pass when `K` is in the THIRD sub-
+        // vocabulary array `c` but NOT in `a` or `b`. Pins the
+        // THIRD-ARRAY probe arm — the coverage sweep proceeds all
+        // the way to `c` when `a` and `b` both return no hit. A
+        // regression that dropped the `if !found { … c sweep … }`
+        // block would silently reject this case as SET-STR-MISSING
+        // even though `c` carries the covering entry. Cross-position
+        // coverage inside `c`: FIRST, MIDDLE, LAST positions of `c`
+        // pin the INNER `while k < K` sweep terminates at the first-
+        // match position.
+        assert_str_finite_set_covered_by_three_str_arrays::<3, 2, 3, 1>(
+            &["a", "b", "c"],
+            &["d", "e"],
+            &["k", "g", "h"],
+            &["k"],
+        );
+        assert_str_finite_set_covered_by_three_str_arrays::<3, 2, 3, 1>(
+            &["a", "b", "c"],
+            &["d", "e"],
+            &["f", "k", "h"],
+            &["k"],
+        );
+        assert_str_finite_set_covered_by_three_str_arrays::<3, 2, 3, 1>(
+            &["a", "b", "c"],
+            &["d", "e"],
+            &["f", "g", "k"],
+            &["k"],
+        );
+    }
+
+    #[test]
+    fn assert_str_finite_set_covered_by_three_str_arrays_accepts_sexp_shape_labels_partition() {
+        // Runtime cross-check that the twelve-arm
+        // (`AtomKind::LABELS`, `QuoteForm::LABELS`,
+        // `StructuralKind::LABELS`, `SexpShape::LABELS`) partition
+        // quadruple the substrate's module-level `const _` witness at
+        // `error.rs` pins at COMPILE time is a well-formed SET-
+        // COVERAGE relation at runtime too. The quadruple enforces the
+        // (⊆) direction of the disjoint-union theorem at TWO stages
+        // of the toolchain: the const witness fires FIRST at `cargo
+        // check`, this runtime pin catches the drift at `cargo test`
+        // as a safety net. Sibling posture to
+        // `assert_str_array_within_str_finite_set_accepts_each_family_wide_substrate_subset`
+        // — the sibling sweeps the (⊇) SUBSET direction for the three
+        // sub-vocabularies; this pin sweeps the (⊆) COVERAGE direction
+        // for the parent. Cardinality composition: 6 + 4 + 2 = 12 =
+        // `SexpShape::LABELS.len()`.
+        assert_str_finite_set_covered_by_three_str_arrays::<6, 4, 2, 12>(
+            &AtomKind::LABELS,
+            &QuoteForm::LABELS,
+            &crate::error::StructuralKind::LABELS,
+            &crate::error::SexpShape::LABELS,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "SET-STR-MISSING")]
+    fn assert_str_finite_set_covered_by_three_str_arrays_panics_at_runtime_on_uncovered_parent_entry(
+    ) {
+        // NEGATIVE PIN — SET-STR-MISSING corner: a parent set carrying
+        // an entry NOT in any of the three sub-vocabulary arrays MUST
+        // panic at runtime with the SET-STR-MISSING-named message.
+        // Pins the helper's OWN reject arm — a regression that
+        // silently returned without panicking on an uncovered entry
+        // would slip through the compile-time witness's failure mode
+        // too. The offending str `"z"` is intentionally chosen ABSENT
+        // from `a ∪ b ∪ c` to pin the SET-STR-MISSING drift mode.
+        assert_str_finite_set_covered_by_three_str_arrays::<1, 1, 1, 2>(
+            &["a"],
+            &["b"],
+            &["c"],
+            &["a", "z"],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "SET-STR-MISSING")]
+    fn assert_str_finite_set_covered_by_three_str_arrays_panics_at_runtime_on_terminal_uncovered_parent_entry(
+    ) {
+        // NEGATIVE PIN — terminal-position drift: an uncovered entry
+        // at the LAST parent position MUST panic — pins that the
+        // outer `while w < W` loop reaches `w = W - 1` (else the
+        // terminal drift would slip through). A regression that
+        // narrowed the outer sweep to `while w < W - 1` (off-by-one
+        // on the OUTER bound) would silently accept this parent set
+        // even though the trailing `"z"` is uncovered.
+        assert_str_finite_set_covered_by_three_str_arrays::<1, 1, 1, 4>(
+            &["a"],
+            &["b"],
+            &["c"],
+            &["a", "b", "c", "z"],
+        );
+    }
+
+    #[test]
+    fn assert_str_finite_set_covered_by_three_str_arrays_panic_message_names_the_helper_and_set_str_missing_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — SET-STR-MISSING arm: the
+        // panic message MUST begin with the helper's own name AND
+        // identify the failed AXIS as "SET-STR-MISSING" so downstream
+        // diagnostics route the drift back to (a) the helper by
+        // string search on
+        // `"assert_str_finite_set_covered_by_three_str_arrays"` and
+        // (b) the axis by string search on `"SET-STR-MISSING"`.
+        // Sibling posture to
+        // `assert_str_array_within_str_finite_set_panic_message_names_the_helper_and_str_subset_violation_axis`
+        // on the sibling (str)-row SUBSET-VIOLATION provenance pin
+        // AND to the (u8) row-dual peer's `"SET-BYTE-MISSING"` axis
+        // vocabulary on `assert_u8_array_covers_finite_set` — the
+        // element-type infix `"STR"` vs `"BYTE"` disambiguates the
+        // element-type peer while the shared `"SET-…-MISSING"` suffix
+        // lets callers grep any row's COVERAGE-side SET-MISSING
+        // sibling by the shared suffix pattern alone.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_finite_set_covered_by_three_str_arrays::<1, 1, 1, 2>(
+                &["a"],
+                &["b"],
+                &["c"],
+                &["a", "z"],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_str_finite_set_covered_by_three_str_arrays must \
+             panic on an uncovered parent entry — the reject-uncovered \
+             arm is the sole SET-STR-MISSING failure mode of the \
+             helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_str_finite_set_covered_by_three_str_arrays \
+                 panic payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_str_finite_set_covered_by_three_str_arrays"),
+            "assert_str_finite_set_covered_by_three_str_arrays panic \
+             message {msg:?} must name the helper for provenance-\
+             preserving failure diagnostics",
+        );
+        assert!(
+            msg.contains("SET-STR-MISSING"),
+            "assert_str_finite_set_covered_by_three_str_arrays panic \
+             message {msg:?} must name the failed AXIS (\"SET-STR-\
+             MISSING\") for axis-provenance-preserving failure \
+             diagnostics",
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_pairwise_distinct")]
+    fn assert_str_finite_set_covered_by_three_str_arrays_panics_on_malformed_target_set_spec() {
+        // NEGATIVE PIN — DELEGATED SET-side well-formedness: a
+        // malformed parent-set spec `["a", "a", "b"]` fed into the
+        // COVERAGE helper MUST panic on the DELEGATED pairwise-
+        // distinct arm BEFORE the SET-STR-MISSING arm fires. Pins the
+        // delegation chain: a regression that dropped the
+        // `assert_str_array_pairwise_distinct(set)` call at the top
+        // of `assert_str_finite_set_covered_by_three_str_arrays`
+        // would silently accept a malformed parent set with duplicate
+        // entries (the duplicated byte counts as covered on the first
+        // hit even when the second copy is absent from `a ∪ b ∪ c`).
+        // The panic message surfaces from the sibling ARRAY-side
+        // pairwise-distinct helper directly (containing its
+        // `"assert_str_array_pairwise_distinct"` panic-name prefix)
+        // because the (str) row does NOT carry a separate
+        // `assert_str_finite_set_pairwise_distinct` alias — the
+        // delegation reuses the ARRAY-side helper per the design
+        // choice documented on the SET-side well-formedness section
+        // of the helper's docstring.
+        assert_str_finite_set_covered_by_three_str_arrays::<1, 1, 1, 3>(
+            &["a"],
+            &["b"],
+            &["c"],
+            &["a", "a", "b"],
+        );
     }
 
     // ── `assert_u8_array_pairwise_distinct` — the `u8` element-type

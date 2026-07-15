@@ -7394,6 +7394,165 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::find_by_label_with_hint(s).map(<Self as ClosedSet>::sorted_index_of)
     }
 
+    /// Allocating-carrier structured decode of `s` into a
+    /// lexicographic-order index, threading the substrate-wide
+    /// `unknown {SET_LABEL}: {input}` [`Self::Unknown`] carrier
+    /// through the reject arm — the ordering-axis sibling of
+    /// [`Self::parse_index_of_label`] one ordering-axis over on the
+    /// (allocating-carrier `&str → usize` decode, no-hint) surface.
+    /// Where [`Self::parse_index_of_label`] projects the accept-arm
+    /// variant through [`Self::index_of`] (declaration order), this
+    /// method projects it through [`Self::sorted_index_of`] (lex
+    /// order), so the caller gets the canonical alphabetic-order slot
+    /// directly through ONE call the substrate's diagnostic engine
+    /// binds to.
+    ///
+    /// On exact match returns `Ok(idx)` where `idx == v.sorted_index_of()`
+    /// for the canonical variant `v` bound to label `s`. On miss
+    /// returns `Err(unknown)` where `unknown` is the typed
+    /// [`Self::Unknown`] carrier owning a [`String`] copy of `s` and
+    /// rendering the substrate-wide `unknown {SET_LABEL}: {input}`
+    /// shape through [`Display`](core::fmt::Display) — the SAME
+    /// carrier shape [`Self::parse_label`] and
+    /// [`Self::parse_index_of_label`] emit on the reject path, funnelled
+    /// through ONE structural rejection variant every
+    /// `?`-operator-chained decoder / typed-`serde`-error surface /
+    /// substrate-wide diagnostic pipeline binds to.
+    ///
+    /// Peer of [`Self::parse_index_of_label`] one ordering-axis over on
+    /// the (allocating carrier, `&str → usize` decode, no-hint) column
+    /// of the (return-type × side-effect × hint × ordering) 4-axis
+    /// surface: both share the SAME `Result<usize, Self::Unknown>`
+    /// return shape (allocating-carrier `?`-friendly), the SAME
+    /// non-hinted rejection arm, and the SAME two-primitive-
+    /// composition body — differing only in whether they project
+    /// through [`Self::index_of`] (declaration order) or
+    /// [`Self::sorted_index_of`] (lex order). Peer of
+    /// [`Self::sorted_index_of_label`] one side-effect axis over on
+    /// the (lex, no-hint, `&str → usize`) column: where
+    /// [`Self::sorted_index_of_label`] returns a bare
+    /// [`Option<usize>`] with no carrier allocation on rejection, this
+    /// method threads the substrate-wide typed carrier through the
+    /// reject arm, so a `?`-operator-chained decoder that wants both
+    /// the lex slot AND the substrate-wide diagnostic threading binds
+    /// to ONE method.
+    ///
+    /// The (side-effect × ordering) 2×2 matrix on the (`&str → usize`
+    /// no-hint) row partitions post-lift:
+    ///
+    /// | Side-effect on reject             | Declaration order              | Lexicographic order                    |
+    /// |-----------------------------------|--------------------------------|----------------------------------------|
+    /// | Allocating (materialize carrier)  | [`Self::parse_index_of_label`] | [`Self::parse_sorted_index_of_label`]  |
+    /// | Non-allocating (bare Option)      | [`Self::index_of_label`]       | [`Self::sorted_index_of_label`]        |
+    ///
+    /// Default body composes [`Self::parse_label`] with
+    /// [`Self::sorted_index_of`] verbatim — the
+    /// `Result<usize-lex, Self::Unknown>` shape is a typed CONSEQUENCE
+    /// of the two pre-existing primitives, not a third codepath.
+    /// Implementors override only when the composition needs to
+    /// diverge from the natural `parse_label(s).map(sorted_index_of)`
+    /// shape (no production implementor reaches for this today; the
+    /// axis exists for the same reason `via` / `set_label` / `labels` /
+    /// `parse_label` / `sorted_index_of` / `parse_index_of_label` /
+    /// `sorted_index_of_label` overrides exist — a typed escape hatch
+    /// the trait surface exposes rather than forcing the implementor
+    /// to hand-roll the impl). An implementor that overrides
+    /// [`Self::parse_label`] (a future perfect-hash label-decoder, a
+    /// future canonicalization-aware label projection that folds case
+    /// or whitespace) propagates the override through this default
+    /// body to the allocating-carrier lex-index arm automatically; the
+    /// (`Self`-return, `usize`-decl-return, `usize`-lex-return) column
+    /// of the allocating-carrier row funnels every structured
+    /// diagnostic-carrying decode through ONE typed primitive on each
+    /// of its return-projection columns.
+    ///
+    /// The rejection contract — a non-canonical `&str` allocates
+    /// [`Self::Unknown`] via [`Self::make_unknown`] with the SAME
+    /// substrate-wide `unknown {SET_LABEL}: {input}` [`Display`](core::fmt::Display)
+    /// shape [`Self::parse_label`] emits, the empty-string boundary
+    /// that clause (4) reserves as structurally outside the closed
+    /// set rejects to the SAME carrier shape — is guaranteed by the
+    /// default composition through [`Self::parse_label`]'s allocating-
+    /// carrier reject arm; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (85) pins the
+    /// both-directions equality against the natural composition on
+    /// every implementor, so a passing well-formedness sweep means
+    /// every generic consumer can call `parse_sorted_index_of_label`
+    /// on any `&str` payload and expect the same
+    /// `Result<usize, Self::Unknown>` answer at every crate boundary.
+    ///
+    /// Future consumers — a lex-order compact wire encoder that reads
+    /// a `&str` config value (a Kubernetes annotation with a lex-order
+    /// stability contract, a YAML enum field whose byte-order
+    /// semantics pin the CANONICAL alphabetic order rather than
+    /// DECLARATION order — the two are structurally distinct when the
+    /// closed set's canonical ordering is defined by alphabetic order),
+    /// emits its lex-order position AND propagates the substrate-wide
+    /// typed carrier on rejection via the `?` operator; a lex-order
+    /// metrics binner that reads a diagnostic label from an incoming
+    /// trace event and increments
+    /// `counters[T::parse_sorted_index_of_label(label)?]` under the
+    /// per-lex-slot aggregation shape AND threads the substrate-wide
+    /// typed error through its `Result` return path; a `tatara-check`
+    /// per-slot per-label diagnostic that partitions a batch of
+    /// incoming labels by lex-order slot AND surfaces the substrate-
+    /// wide typed rejection carrier on unrecognized inputs through
+    /// ONE method rather than through the two-primitive
+    /// `parse_label(s).map(sorted_index_of)` composition at each
+    /// callsite; a serde-`Deserialize` visitor over a `&str` enum
+    /// wire-form whose typed slot storage is keyed on lex order (a
+    /// wire-format that pins byte-order stability on alphabetic
+    /// order) — bind to ONE trait method instead of hand-rolling the
+    /// composition at each callsite, and the closed-set `(&str →
+    /// usize-lex with carrier)` structured projection surface evolves
+    /// at ONE site rather than per-consumer.
+    ///
+    /// THEORY.md §III — the typescape; the (`&str → usize` lex-order
+    /// index with allocating carrier) structured decode becomes a
+    /// TYPE projection on the trait, completing the (side-effect ×
+    /// ordering) 2×2 partition on the (`&str → usize` no-hint) row at
+    /// the (allocating, lex) corner. The (return-type × side-effect ×
+    /// hint × ordering) 4-axis surface's (allocating, `usize`-lex,
+    /// no-hint) corner binds at ONE typed method rather than at
+    /// per-consumer inline `parse_label(s).map(sorted_index_of)`
+    /// composition.
+    /// THEORY.md §V.1 — knowable platform; the (`&str → usize-lex
+    /// with carrier`) projection was an unnamed compound of
+    /// [`Self::parse_label`] composed with [`Self::sorted_index_of`]
+    /// pre-lift. Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two substrate primitives — generic
+    /// consumers see ONE method, not ONE lex-index-decode-shape-per-
+    /// crate.
+    /// THEORY.md §VI.1 — generation over composition; the direct
+    /// (`&str → usize-lex with carrier`) projection emerges from the
+    /// composition of TWO substrate primitives ([`Self::parse_label`],
+    /// [`Self::sorted_index_of`]) rather than as a per-implementor
+    /// inline compound. A future tightening of either primitive (a
+    /// future perfect-hash `parse_label`, a future canonicalization-
+    /// aware label projection that folds case / whitespace, a future
+    /// const-fn `sorted_index_of` axis) propagates to every closed-
+    /// set allocating-carrier lex-index consumer through ONE trait
+    /// body.
+    ///
+    /// Frontier inspiration: rustc's `Symbol::intern` composed with a
+    /// lex-sorted symbol-table index projection — the typed-symbol
+    /// lookup with a substrate-wide interned-string carrier on
+    /// rejection composed with a stable lex-order slot projection, all
+    /// through ONE call the diagnostic engine binds to. MLIR's
+    /// `RegisteredOperationName::lookup(StringRef)` composed with
+    /// `getStableIndex()` on the lex-sorted Op registry — the same
+    /// shape one ordering-axis over on the C++ side. Racket's
+    /// `(hash-ref/failure enum sym make-unknown)` composed with
+    /// `(enum-sort-index enum sym)` on a closed enum stands as the
+    /// same shape one vocabulary over on the Lisp-VM side. Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's existing [`Self::parse_label`] +
+    /// [`Self::sorted_index_of`] surfaces — no new dep, no new IR
+    /// layer, no supertrait bound.
+    fn parse_sorted_index_of_label(s: &str) -> Result<usize, Self::Unknown> {
+        <Self as ClosedSet>::parse_label(s).map(<Self as ClosedSet>::sorted_index_of)
+    }
+
     /// The declaration-order neighbor immediately AFTER `self` in
     /// [`Self::ALL`] — `Some(Self::ALL[self.index_of() + 1])` when
     /// `self` is not the tail, [`None`] otherwise.
@@ -20825,6 +20984,111 @@ where
             "{type_name}: parse_index_of_label / parse_label accepted the reserved probe or disagreed on the (accept, reject) partition",
         ),
     }
+    // (85) — `T::parse_sorted_index_of_label` composes `parse_label` +
+    // `sorted_index_of` verbatim on the Ok arm AND preserves the
+    // `Self::Unknown` carrier shape on the Err arm. Every variant
+    // decodes to `Ok(v.sorted_index_of())` through the structured
+    // surface; the reserved probe rejects with the SAME substrate-
+    // wide `unknown {SET_LABEL}: {input}` carrier `parse_label` emits
+    // — all three allocating-carrier decoders route through
+    // `make_unknown(probe)` on the reject arm, so the Display of the
+    // rejected carrier MUST render identically across the three
+    // return-type columns (`Self`, `usize`-decl, `usize`-lex). The
+    // default trait body satisfies the clause for free; the
+    // assertion catches an override that drifts the composition
+    // (accepts the probe as Ok through a permissive lex-index
+    // return, fabricates a different Unknown carrier shape than
+    // `parse_label` surfaces, OR emits the wrong lex-order slot on a
+    // canonical variant). Sibling posture to clauses (2) + (7) +
+    // (21) + (82) + (83) + (84) on the (return-type × side-effect ×
+    // ordering × hint) 4-axis surface — clause (84) at
+    // `parse_index_of_label` on the (allocating, no-hint, decl)
+    // corner, this clause at `parse_sorted_index_of_label` on the
+    // (allocating, no-hint, lex) corner. Together (2) + (84) + (85)
+    // close the allocating-carrier no-hint face across ALL THREE
+    // return-type columns (`Self`, `usize`-decl, `usize`-lex),
+    // completing the (return-type × ordering) 3×2 partition of the
+    // structured no-hint carrier-decode surface at every populated
+    // corner. The (`Self`-typed, lex-ordering) corner collapses onto
+    // (2) because the carrier decode's typed variant carries no
+    // ordering-axis distinction. The remaining unopened siblings —
+    // (`usize`-decl, allocating, with-hint) at a future
+    // `parse_index_of_label_with_hint` and (`usize`-lex, allocating,
+    // with-hint) at a future `parse_sorted_index_of_label_with_hint`
+    // — sit one axis further along the (hint) column.
+    for &v in T::ALL {
+        let label = v.label();
+        match T::parse_sorted_index_of_label(label) {
+            Ok(decoded) => assert_eq!(
+                decoded, v.sorted_index_of(),
+                "{type_name}: parse_sorted_index_of_label round-trip {label:?} → variant decoded to lex-order slot {decoded} but v.sorted_index_of() == {} — the allocating-carrier (`&str → usize` lex-order) decode drifted from the natural `parse_label(s).map(sorted_index_of)` composition on the accept arm",
+                v.sorted_index_of(),
+            ),
+            Err(_) => panic!(
+                "{type_name}: parse_sorted_index_of_label round-trip {label:?} → canonical variant rejected by the allocating-carrier (`&str → usize` lex-order) decode",
+            ),
+        }
+    }
+    match T::parse_sorted_index_of_label(probe) {
+        Ok(_) => panic!(
+            "{type_name}: parse_sorted_index_of_label accepted the reserved probe input — the allocating-carrier `usize`-typed lex-order decode MUST reject every input outside the closed set",
+        ),
+        Err(carrier) => assert_eq!(
+            carrier.to_string(),
+            expected,
+            "{type_name}: parse_sorted_index_of_label's Err carrier drifted from the substrate-wide `unknown {{SET_LABEL}}: {{input}}` shape — the override emits a different carrier than `parse_label` would",
+        ),
+    }
+    assert!(
+        T::parse_sorted_index_of_label("").is_err(),
+        "{type_name}: parse_sorted_index_of_label accepted the empty string — the empty-string boundary is structurally reserved outside the closed set at every allocating-carrier decode column",
+    );
+    // Cross-column alignment with clause (2)'s sibling primitive on the
+    // (return-type) axis AND cross-ordering alignment with clause (84)
+    // one ordering-axis over — on EVERY probe (canonical labels +
+    // reserved probe) the three allocating-carrier decode surfaces
+    // (Self via parse_label, usize-decl via parse_index_of_label,
+    // usize-lex via parse_sorted_index_of_label) MUST agree on
+    // membership AND on the Unknown carrier Display on rejection.
+    // Alignment against `parse_label` on the accept arm degenerates
+    // to `parse_sorted_index_of_label(s) == Ok(v.sorted_index_of())`
+    // when `parse_label(s) == Ok(v)`. Alignment against
+    // `parse_index_of_label` on the reject arm demands the SAME
+    // `Self::Unknown` carrier Display — the carrier renders through
+    // the substrate-wide `unknown {SET_LABEL}: {input}` shape at
+    // both `usize`-typed return-type columns, so the two Displays
+    // MUST match byte-for-byte on every reject payload.
+    for &v in T::ALL {
+        let label = v.label();
+        let lex_decode = T::parse_sorted_index_of_label(label);
+        let carrier_decode = T::parse_label(label);
+        match (lex_decode, carrier_decode) {
+            (Ok(idx), Ok(w)) => assert_eq!(
+                idx, w.sorted_index_of(),
+                "{type_name}: parse_sorted_index_of_label({label:?}) accepted at lex slot {idx} but parse_label({label:?}) accepted at variant {w:?} whose sorted_index_of() == {} — the two allocating-carrier decode surfaces bifurcated on the accept arm's typed lex slot",
+                w.sorted_index_of(),
+            ),
+            (Err(_), Err(_)) => panic!(
+                "{type_name}: parse_sorted_index_of_label({label:?}) rejected a canonical variant label — the accept arm on both allocating-carrier decode surfaces MUST agree",
+            ),
+            (Ok(_), Err(_)) | (Err(_), Ok(_)) => panic!(
+                "{type_name}: parse_sorted_index_of_label({label:?}) and parse_label({label:?}) disagreed on the (accept, reject) partition — the allocating-carrier decode surface bifurcated across the (return-type × ordering) axis",
+            ),
+        }
+    }
+    match (
+        T::parse_sorted_index_of_label(probe),
+        T::parse_index_of_label(probe),
+    ) {
+        (Err(carrier_a), Err(carrier_b)) => assert_eq!(
+            carrier_a.to_string(),
+            carrier_b.to_string(),
+            "{type_name}: parse_sorted_index_of_label(reserved probe) and parse_index_of_label(reserved probe) disagreed on the `Self::Unknown` carrier's Display rendering — the two `usize`-typed allocating-carrier decode surfaces bifurcated on the Unknown carrier shape across the (ordering) axis",
+        ),
+        _ => panic!(
+            "{type_name}: parse_sorted_index_of_label / parse_index_of_label accepted the reserved probe or disagreed on the (accept, reject) partition",
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -25400,6 +25664,178 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a parse_index_of_label() override drifted from the natural parse_label+index_of composition on the non-canonical reject arm",
+        );
+    }
+
+    #[test]
+    fn parse_sorted_index_of_label_recovers_lex_order_index_for_every_canonical_label() {
+        // The allocating-carrier (`&str` → `usize` lex-order)
+        // projection accept arm — for every canonical label
+        // `v.label()`, `T::parse_sorted_index_of_label(label)` returns
+        // `Ok(v.sorted_index_of())`. Sibling posture to
+        // `parse_index_of_label_recovers_declaration_order_index_for_every_canonical_label`
+        // one ordering-axis over on the (`&str → usize` allocating-
+        // carrier no-hint) surface — this pin covers the lex-order
+        // decode arm on the canonical accept path, the sibling pin
+        // covered the declaration-order decode arm on the same path.
+        // Both walk `Self::ALL` at their canonical inputs and MUST
+        // agree slot-for-slot on the underlying (variant, canonical
+        // label, ordering-axis-specific index) triple across the
+        // (ordering) axis. On the StubKind fixture ("alpha", "beta",
+        // "gamma" already lex-ordered under `str::cmp`), declaration
+        // slot and lex slot agree slot-for-slot — a regression that
+        // reorders the natural agreement bifurcates the allocating-
+        // carrier direct-lex-projection surface from the natural
+        // `parse_label+sorted_index_of` composition.
+        for &v in <StubKind as ClosedSet>::ALL {
+            let label = v.label();
+            assert_eq!(
+                <StubKind as ClosedSet>::parse_sorted_index_of_label(label),
+                Ok(<StubKind as ClosedSet>::sorted_index_of(v)),
+                "parse_sorted_index_of_label({label:?}) failed to recover the lex-order index for variant {v:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn parse_sorted_index_of_label_rejects_non_canonical_string_with_substrate_wide_carrier() {
+        // The allocating-carrier (`&str` → `usize` lex-order)
+        // projection reject arm — a non-canonical `&str` returns
+        // `Err(carrier)` where the carrier's Display renders the
+        // substrate-wide `unknown {SET_LABEL}: {input}` shape (unlike
+        // the `Option`-typed `sorted_index_of_label` path that returns
+        // `None` on rejection). The reserved 38-char probe sits
+        // outside every plausible canonical label by construction, so
+        // `T::parse_sorted_index_of_label(<probe>)` MUST reject with
+        // the SAME carrier shape `parse_label(<probe>)` AND
+        // `parse_index_of_label(<probe>)` surface on the two sibling
+        // allocating-carrier decode columns. Sibling posture to
+        // `parse_index_of_label_rejects_non_canonical_string_with_substrate_wide_carrier`
+        // one ordering-axis over — this pin extends the substrate-
+        // wide-carrier reject contract to the lex-order return-
+        // projection column.
+        let probe = "__assert_closed_set_well_formed_probe__";
+        let outcome = <StubKind as ClosedSet>::parse_sorted_index_of_label(probe);
+        match outcome {
+            Ok(_) => panic!("parse_sorted_index_of_label accepted the reserved probe input"),
+            Err(carrier) => assert_eq!(
+                carrier.to_string(),
+                format!("unknown stub kind: {probe}"),
+                "parse_sorted_index_of_label's Err carrier drifted from the substrate-wide `unknown {{SET_LABEL}}: {{input}}` shape",
+            ),
+        }
+    }
+
+    #[test]
+    fn parse_sorted_index_of_label_agrees_with_parse_label_composed_with_sorted_index_of_on_every_probe(
+    ) {
+        // The allocating-carrier direct (`&str` → `usize` lex-order)
+        // projection MUST agree with the two-step
+        // `parse_label(s).map(sorted_index_of)` composition on every
+        // input the sweep walks. This test pins the alignment against
+        // a representative probe set: (a) every canonical variant
+        // label — both arms return the acceptance side `Ok(lex_index)`
+        // AND project to the SAME lex-order slot; (b) the reserved
+        // 38-char probe — both arms return the rejection side with
+        // the SAME `Self::Unknown` carrier's Display; (c) the empty-
+        // string boundary — both arms return the rejection side with
+        // the SAME `Self::Unknown` carrier matching clause (4)'s
+        // structural reservation. The alignment is the load-bearing
+        // contract that lets a generic consumer freely swap between
+        // the direct-projection surface and the two-step composition
+        // based on its rendering / storage needs without changing the
+        // program's decoded-slot semantics OR its rejection carrier
+        // shape. Sibling posture to
+        // `parse_index_of_label_agrees_with_parse_label_composed_with_index_of_on_every_probe`
+        // one ordering-axis over — this pin extends the (canonical
+        // accept, non-canonical reject) alignment to the lex-order
+        // column of the (`&str → usize` allocating-carrier) direct-
+        // projection surface.
+        let canonical_labels: [&str; 3] = ["alpha", "beta", "gamma"];
+        let non_canonical: [&str; 2] = ["__assert_closed_set_well_formed_probe__", ""];
+        for s in canonical_labels.iter().chain(non_canonical.iter()).copied() {
+            let direct = <StubKind as ClosedSet>::parse_sorted_index_of_label(s);
+            let composed = <StubKind as ClosedSet>::parse_label(s)
+                .map(<StubKind as ClosedSet>::sorted_index_of);
+            match (direct, composed) {
+                (Ok(a), Ok(b)) => assert_eq!(
+                    a, b,
+                    "parse_sorted_index_of_label({s:?}) accepted at lex slot {a} but parse_label+sorted_index_of composition accepted at slot {b}",
+                ),
+                (Err(a), Err(b)) => assert_eq!(
+                    a.to_string(),
+                    b.to_string(),
+                    "parse_sorted_index_of_label({s:?}) rejected with a different carrier Display than parse_label({s:?})",
+                ),
+                _ => panic!(
+                    "parse_sorted_index_of_label({s:?}) disagreed with parse_label({s:?}).map(sorted_index_of) on the (accept, reject) partition",
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_parse_sorted_index_of_label_and_parse_label_composition(
+    ) {
+        // The well-formedness sweep's (85) clause —
+        // `T::parse_sorted_index_of_label(v.label())` MUST equal
+        // `Ok(v.sorted_index_of())` for every variant `v` in
+        // `T::ALL`, AND `T::parse_sorted_index_of_label(<reserved
+        // probe>)` MUST reject with the SAME `Self::Unknown` carrier
+        // Display `parse_label` surfaces, AND
+        // `T::parse_sorted_index_of_label("")` MUST reject. A hand-
+        // impl'd implementor whose override drifts the allocating-
+        // carrier lex-decode projection — e.g. a permissive override
+        // that returns `Ok(0)` for a non-canonical `&str` — fails the
+        // sweep loudly rather than silently bifurcating the
+        // allocating-carrier direct-lex-index decode surface every
+        // downstream `?`-operator-chained lex-order config decoder /
+        // `serde::Deserialize` lex-slot visitor / LSP lex-slot
+        // diagnostic renderer consumer routes through. Sibling posture
+        // to the `_catches_drift_between_*` pin at clause (84) one
+        // ordering-axis over — together they close the structural-
+        // drift-catches sweep on both columns of the (`&str → usize`
+        // allocating-carrier) × (ordering) 2×2 face.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedParseSortedIndexOfLabelKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedParseSortedIndexOfLabelKind(pub String);
+        impl core::fmt::Display for UnknownDriftedParseSortedIndexOfLabelKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted parse sorted index of label kind: {}",
+                    self.0,
+                )
+            }
+        }
+        impl ClosedSet for DriftedParseSortedIndexOfLabelKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "drifted parse sorted index of label kind";
+            type Unknown = UnknownDriftedParseSortedIndexOfLabelKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedParseSortedIndexOfLabelKind(s.to_owned())
+            }
+            fn parse_sorted_index_of_label(_s: &str) -> Result<usize, Self::Unknown> {
+                // Drifted override — accepts every `&str` payload,
+                // including the reserved probe the testkit's clause
+                // (85) demands rejects. Fails the allocating-carrier
+                // lex-decode alignment with `parse_label(s).map(
+                // sorted_index_of)` on the non-canonical reject arm.
+                Ok(0)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedParseSortedIndexOfLabelKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a parse_sorted_index_of_label() override drifted from the natural parse_label+sorted_index_of composition on the non-canonical reject arm",
         );
     }
 

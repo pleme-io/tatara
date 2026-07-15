@@ -2019,6 +2019,244 @@ pub const fn assert_str_array_is_concatenation_of_two_scalar_replicas<
 }
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// the sub-slice `full[START..START + M)` does NOT byte-equal the peer
+/// sub-array `sub[..]` positionwise (`&'static str`-by-`&'static str`).
+///
+/// Row-dual peer of [`assert_u8_array_slice_equals_u8_array`] and
+/// [`assert_char_array_slice_equals_char_array`] on the (element-type)
+/// axis: where the `u8` sibling closes the outer-`Sexp` cache-key
+/// discriminator sub-carving vocabulary at compile time AND the `char`
+/// sibling closes the substrate's reader-boundary `[char; N]` scalar-
+/// composed vocabulary at compile time, this closes the substrate's
+/// family-wide `[&'static str; N]` label / prefix / tag / literal
+/// vocabulary at compile time. Opens the SUB-SLICE ARRAY-image column
+/// on the (str) row of the (element-type × contract-shape) matrix peer
+/// to the u8-row + char-row siblings' SUB-SLICE ARRAY-image column —
+/// the three helpers together lift EVERY positionwise-composition
+/// contract `arr[START..START + M) == sub[..]` on scalar-family-wide
+/// substrate arrays into a COMPILE-TIME theorem, one per element-type
+/// row of the matrix.
+///
+/// The MIDDLE-SLICE corner (`0 < START`, `START + M < N`) — the shape
+/// the (str) row uniquely exercises against the substrate's twelve-arm
+/// [`crate::error::SexpShape::LABELS`] vocabulary — pins that each
+/// sub-carving's LABELS array occupies its CANONICAL SLOTS on the
+/// parent superset's declaration order, one invocation stage stronger
+/// than the pre-existing SET-level DISJOINT-UNION witnesses (three
+/// `assert_str_array_within_str_finite_set::<sub, 12>` embeddings,
+/// three `assert_str_arrays_disjoint::<a, b>` pairwise-disjointness
+/// witnesses, one `assert_str_finite_set_covered_by_three_str_arrays::
+/// <6, 4, 2, 12>` coverage witness, one `assert_str_array_pairwise_
+/// distinct(&SexpShape::LABELS)` INJECTIVITY witness). The SET-level
+/// theorem `SexpShape::LABELS ≡ AtomKind::LABELS ⊕ QuoteForm::LABELS ⊕
+/// StructuralKind::LABELS` those seven witnesses close is SILENT on
+/// which SLOTS each sub-vocabulary's arms occupy — a regression that
+/// permuted `SexpShape::LABELS` from
+/// `[NIL, SYMBOL, KEYWORD, STRING, INT, FLOAT, BOOL, LIST, QUOTE,
+/// QUASIQUOTE, UNQUOTE, UNQUOTE_SPLICE]` (`StructuralKind` at slots
+/// `{0, 7}`, `AtomKind` at slots `[1..7)`, `QuoteForm` at slots
+/// `[8..12)` — the CANONICAL positional decomposition) to
+/// `[SYMBOL, NIL, KEYWORD, STRING, INT, FLOAT, BOOL, LIST, QUOTE,
+/// QUASIQUOTE, UNQUOTE, UNQUOTE_SPLICE]` (swapping slots `0` and `1`,
+/// interleaving `AtomKind` into a slot the structural-residual carving
+/// previously owned) preserves the SET-level disjoint-union theorem
+/// (both sub-vocabularies still embed into the parent, still cover, still
+/// disjoint, parent still injective) but silently misaligns every
+/// consumer indexing `SexpShape::LABELS[0]` for the NIL diagnostic
+/// literal. THIS helper binds each sub-slice's positionwise composition
+/// against its sub-vocabulary's canonical array at rustc time —
+/// strictly STRONGER on the (contract-strength) axis than the sibling
+/// SET-level DISJOINT-UNION witnesses.
+///
+/// Consumer sites this helper closes at the MIDDLE-SLICE corner:
+/// * [`crate::error::SexpShape::LABELS`] `[0..1) ==
+///   [crate::error::StructuralKind::NIL_LABEL]` — the singleton left-
+///   endpoint slot of the outer twelve-shape LABELS array binds the
+///   structural-residual carving's NIL role at the CANONICAL slot `0`.
+/// * [`crate::error::SexpShape::LABELS`] `[1..7) == AtomKind::LABELS` —
+///   the six-slot atomic-payload middle slice binds the six atomic
+///   variants' LABELS at the CANONICAL slots `[1..7)`, one invocation
+///   stage stronger than the (u8)-row peer at the SAME slice range
+///   `[1..7)` where the six slots collapse to a single scalar
+///   [`AtomKind::OUTER_HASH_DISCRIMINATOR`] byte (`1u8`) — the (str)
+///   row's per-slot LABELS listing distinguishes ALL SIX slots
+///   individually, so a permutation of the six atomic arms inside the
+///   parent's `[1..7)` slice fails HERE where the (u8)-row's SCALAR-
+///   REPLICA sibling stays silent.
+/// * [`crate::error::SexpShape::LABELS`] `[7..8) ==
+///   [crate::error::StructuralKind::LIST_LABEL]` — the singleton mirror-
+///   endpoint slot at the atomic-collapse right endpoint binds the
+///   structural-residual carving's LIST role at the CANONICAL slot `7`.
+/// * [`crate::error::SexpShape::LABELS`] `[8..12) == QuoteForm::LABELS`
+///   — the four-slot quote-family tail slice binds the four quote-
+///   family variants' LABELS at the CANONICAL slots `[8..12)`, peer to
+///   the (u8)-row's `assert_u8_array_slice_equals_u8_array::<12, 4, 8>
+///   (&SexpShape::HASH_DISCRIMINATORS, &QuoteForm::HASH_DISCRIMINATORS)`
+///   witness.
+///
+/// Together the FOUR positional witnesses cover the ENTIRE twelve-slot
+/// outer container's per-position LABEL sequence at rustc time — the
+/// UNION of the four disjoint slice ranges `[0..1) ∪ [1..7) ∪ [7..8) ∪
+/// [8..12)` exhausts the twelve-slot outer container's position space.
+/// Sibling posture to the (u8)-row's FOUR positional witnesses on
+/// `SexpShape::HASH_DISCRIMINATORS` (the two singleton
+/// slice-equals-array witnesses on `[0..1)` and `[7..8)`, the six-slot
+/// slice-is-scalar-replica witness on `[1..7)`, the four-slot
+/// slice-equals-array witness on `[8..12)`) — both rows now carry the
+/// FULL positional decomposition of the twelve-slot outer container at
+/// rustc time on BOTH the (u8) discriminator axis AND the (str) label
+/// axis. A regression that reordered `SexpShape::LABELS` fails at BOTH
+/// the (u8)-row `HASH_DISCRIMINATORS` positional witnesses (through
+/// the parallel outer twelve-slot ordering) AND the (str)-row LABELS
+/// positional witnesses lifted here.
+///
+/// Pre-lift the twelve-arm `SexpShape::LABELS` positional decomposition
+/// lived ONLY through the runtime cross-check
+/// `sexp_shape_labels_align_with_sub_vocabularies_by_position` (in
+/// `error.rs`, sweeping the twelve positions and routing each
+/// `SexpShape::LABELS[i]` through its sub-vocabulary via
+/// `SexpShape::ALL[i].as_atom_kind() / .as_quote_form()` composition);
+/// post-lift the ARRAY-LEVEL positional decomposition binds at rustc
+/// time via FOUR `const _` lines, one invocation stage earlier than
+/// the runtime pin. A regression that reorders the outer
+/// `SexpShape::LABELS` array's initializer (e.g. swapping slot `0`'s
+/// `Self::NIL_LABEL` with slot `1`'s `Self::SYMBOL_LABEL`) while
+/// leaving each sub-vocabulary in its canonical order fails at
+/// `cargo check` BEFORE any test scheduler runs.
+///
+/// The three axis-partitioned panic messages (`START-OUT-OF-BOUNDS`,
+/// `SLICE-LENGTH-OUT-OF-BOUNDS`, `STR-SLICE-EQUALS-ARRAY-VIOLATION`)
+/// mirror the u8 sibling's message vocabulary with the `STR-` prefix
+/// on the CONTENT-drift axis so callers grep either the (u8) row's
+/// plain `SLICE-EQUALS-ARRAY-VIOLATION`, the (char) row's
+/// `CHAR-SLICE-EQUALS-ARRAY-VIOLATION`, or the (str) row's
+/// `STR-SLICE-EQUALS-ARRAY-VIOLATION` axis-prefix by element-type. The
+/// shared `-SLICE-EQUALS-ARRAY-VIOLATION` infix lets callers grep any
+/// element-type variant by the shared axis substring.
+///
+/// Adding a new family-wide `[&'static str; N]` array to the substrate
+/// whose declaration is a positionwise composition against named per-
+/// role `pub const *_LABEL` / `*_PREFIX` / `*_TAG` `&'static str`
+/// constants: pair the declaration with `const _: () =
+/// assert_str_array_slice_equals_str_array::<N, M, START>(&Self::FOO_
+/// ARRAY, &Self::SUB_ARRAY);` co-located after the array's declaration
+/// and the per-slot ORDER contract binds at compile time. The rustc-
+/// forced arities `[&'static str; N]` + `[&'static str; M]` compose
+/// with this const-eval sweep so BOTH cardinality AND per-slot
+/// canonical-str-value are compile-time theorems on the SAME array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — e.g. a REPL / LSP surface
+/// that constructs a `[&'static str; N]` at runtime from a user-
+/// supplied vocabulary and wants to verify positionwise composition
+/// against a peer sub-array before consuming it — and the panic
+/// surfaces normally in that path (pinned by
+/// `assert_str_array_slice_equals_str_array_panics_at_runtime_on_positionwise_drift`,
+/// `assert_str_array_slice_equals_str_array_panics_at_runtime_on_start_out_of_bounds`,
+/// `assert_str_array_slice_equals_str_array_panics_at_runtime_on_slice_length_out_of_bounds`,
+/// AND
+/// `assert_str_array_slice_equals_str_array_panic_message_names_the_helper_and_str_slice_equals_array_violation_axis`).
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide per-position
+///   ORDER contract on the `&'static str`-typed vocabulary becomes a
+///   TYPE-LEVEL theorem the substrate carries per array declaration
+///   rather than a runtime iterator sweep the developer must remember
+///   to write per array.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   positionwise sweep IS the generative shape. Every new closed-set
+///   string array declared as a positionwise composition against
+///   named-per-role `pub const` labels adds ONE `const _` line to get
+///   the per-slot ORDER theorem rather than re-deriving a runtime
+///   index-by-index `assert_eq!` block per array.
+/// - THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+///   per-slot-ORDER proof at declaration site AND the per-role
+///   `pub const *_LABEL` alias-chain composition every consumer relies
+///   on regenerate through the SAME `const _` witness.
+pub const fn assert_str_array_slice_equals_str_array<
+    const N: usize,
+    const M: usize,
+    const START: usize,
+>(
+    full: &[&'static str; N],
+    sub: &[&'static str; M],
+) {
+    if START > N {
+        panic!(
+            "assert_str_array_slice_equals_str_array: START-OUT-OF-\
+             BOUNDS — the const parameter `START` sits OUTSIDE the \
+             outer array's valid position range `[0..N]` (inclusive \
+             upper bound: `START == N` combined with `M == 0` is the \
+             LEGAL empty-slice-at-right-endpoint corner). Fix at the \
+             `const _` witness's turbofish by reconciling `START` \
+             against the outer array's declared arity `N`. The \
+             START-OUT-OF-BOUNDS gate fires FIRST — a mistyped \
+             `START` on the caller side fails HERE before the peer \
+             `SLICE-LENGTH-OUT-OF-BOUNDS` gate reads `N - START` \
+             (which would underflow `usize` had this gate not caught \
+             the slip), so a subtle bounds slip doesn't silently \
+             degenerate into a subtraction wrap-around OR a panic \
+             deeper in `full[START + i]` bounds-checking."
+        );
+    }
+    if M > N - START {
+        panic!(
+            "assert_str_array_slice_equals_str_array: SLICE-LENGTH-\
+             OUT-OF-BOUNDS — the peer sub-array's arity `M` exceeds \
+             the outer array's tail cardinality `N - START`, so the \
+             positionwise sweep `full[START + i]` for `i ∈ [0..M)` \
+             would overrun the outer array's valid position range \
+             `[0..N)` at some `i ∈ [N - START..M)`. Fix at the \
+             `const _` witness's turbofish by reconciling `M` against \
+             the outer array's tail cardinality `N - START` OR by \
+             narrowing `START` to leave a longer tail. The peer \
+             `START-OUT-OF-BOUNDS` gate above guarantees `START ≤ N` \
+             so `N - START` never underflows `usize` at this gate. \
+             The LEGAL exact-fit corner `M == N - START` (the sub-\
+             array reaches EXACTLY to the outer array's right \
+             endpoint) is accepted; the STRICT `M > N - START` slip \
+             is what this gate rejects."
+        );
+    }
+    let mut i = 0;
+    while i < M {
+        if !str_bytes_equal(full[START + i], sub[i]) {
+            panic!(
+                "assert_str_array_slice_equals_str_array: STR-SLICE-\
+                 EQUALS-ARRAY-VIOLATION — the outer `[&'static str; \
+                 N]` array `full` carries a str at some position \
+                 `START + i` (for `i ∈ [0..M)`) that does NOT byte-\
+                 equal the peer `[&'static str; M]` sub-array `sub` \
+                 at the offset-matched position `i`. The substrate's \
+                 SLICE-EQUALS-ARRAY positionwise-composition contract \
+                 on the sub-slice `full[START..START + M) == sub[..]` \
+                 is broken; every consumer that reads `full[START..\
+                 START + M)` as a positionwise-aligned copy of a peer \
+                 sub-vocabulary's canonical `[&'static str; M]` \
+                 listing (the twelve-slot outer container \
+                 `crate::error::SexpShape::LABELS` whose four \
+                 canonical sub-slices `[0..1) == \
+                 [crate::error::StructuralKind::NIL_LABEL]`, `[1..7) \
+                 == AtomKind::LABELS`, `[7..8) == [crate::error::\
+                 StructuralKind::LIST_LABEL]`, `[8..12) == \
+                 QuoteForm::LABELS` compose the parent LABELS \
+                 vocabulary from the three sub-carvings' LABELS \
+                 arrays; any future container-array sub-slice byte-\
+                 for-byte equal to a peer sub-carving's canonical \
+                 `[&'static str; M]` listing) relies on this \
+                 invariant. Fix at the ARRAY-DECLARATION site (the \
+                 drifted `full[START + i]` entry inside the slice \
+                 segment) OR at the peer sub-array's arm listing — \
+                 the choice depends on whether the drift is an \
+                 unintended slot reorder in the outer array's tail \
+                 OR in the sub-carving's own listing."
+            );
+        }
+        i += 1;
+    }
+}
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` alias byte-for-byte.
 ///
 /// Column-dual peer to [`assert_char_array_pairwise_distinct`] and
@@ -34050,6 +34288,260 @@ mod tests {
             msg.contains("CHAR-SLICE-EQUALS-ARRAY-VIOLATION"),
             "assert_char_array_slice_equals_char_array panic message \
              {msg:?} must name the failed AXIS (\"CHAR-SLICE-EQUALS-\
+             ARRAY-VIOLATION\") for axis-provenance-preserving \
+             failure diagnostics",
+        );
+    }
+
+    // ── `assert_str_array_slice_equals_str_array` — the (str)-row
+    // peer to `assert_u8_array_slice_equals_u8_array` +
+    // `assert_char_array_slice_equals_char_array` on the (element-
+    // type) axis of the SUB-SLICE ARRAY-image column of the
+    // (element-type × contract-shape) matrix. The runtime test
+    // surface pins each of the helper's arms (accept-middle-slice,
+    // accept-empty-sub-array, accept-full-array-degenerate, accept-
+    // sexp-shape-labels-positional-decomposition, reject-positionwise-
+    // drift, reject-start-out-of-bounds, reject-slice-length-out-of-
+    // bounds, panic-message-provenance on the STR-SLICE-EQUALS-ARRAY-
+    // VIOLATION axis) so a regression that silently weakened the
+    // helper on ANY arm is caught by the helper's OWN test surface
+    // rather than only surfacing as a false-positive on some future
+    // sub-slice `[&'static str; N]` pair's compound pin.
+
+    #[test]
+    fn assert_str_array_slice_equals_str_array_accepts_a_canonical_middle_slice() {
+        // Canonical sub-slice `full[START..START + M) == sub[..]`
+        // inside a longer array `full` whose ENDPOINTS carry DIFFERENT
+        // strings than the peer sub-array. Pins the outer `while i <
+        // M` sweep reads `full[START + i]` at the OFFSET position
+        // (not `full[i]`) — a regression that dropped the `START`
+        // offset would compare `full[0..M)` against `sub[..]` and
+        // pass on `full[0]="z" != sub[0]="b"` silently or panic on
+        // the wrong axis. `START = 1` pins the sweep skips position
+        // `[0..START)` and reads only `[1..1+3) = [1..4)`. Sibling
+        // posture to
+        // `assert_char_array_slice_equals_char_array_accepts_a_canonical_middle_slice`
+        // and
+        // `assert_u8_array_slice_equals_u8_array_accepts_a_canonical_middle_slice`
+        // — the three share the middle-slice acceptance arm across
+        // the (element-type × contract-shape) 3-row × 1-column face
+        // at the (SUB-SLICE ARRAY-image) column.
+        assert_str_array_slice_equals_str_array::<7, 3, 1>(
+            &["z", "b", "c", "d", "z", "z", "z"],
+            &["b", "c", "d"],
+        );
+    }
+
+    #[test]
+    fn assert_str_array_slice_equals_str_array_accepts_the_empty_sub_array() {
+        // LEGAL degenerate: `M == 0` collapses the sub-array into an
+        // empty listing `[]`. The sweep never enters the loop body
+        // and the helper accepts. Cross-position coverage pins the
+        // empty-sub-array acceptance at THREE distinct `START`
+        // positions (`START == 0` at the left endpoint, `START == 3`
+        // in the interior, `START == N` at the right endpoint — the
+        // latter is the corner `START == N` combined with `M == 0`
+        // that the START-OUT-OF-BOUNDS gate's inclusive upper bound
+        // must accept). A regression that hard-coded `START < N` OR
+        // panicked on the `M == 0` corner is caught on ALL THREE
+        // arms.
+        assert_str_array_slice_equals_str_array::<5, 0, 0>(&["x", "x", "x", "x", "x"], &[]);
+        assert_str_array_slice_equals_str_array::<5, 0, 3>(&["x", "x", "x", "x", "x"], &[]);
+        assert_str_array_slice_equals_str_array::<5, 0, 5>(&["x", "x", "x", "x", "x"], &[]);
+    }
+
+    #[test]
+    fn assert_str_array_slice_equals_str_array_accepts_the_full_array_degenerate() {
+        // Full-array-covering slice `M == N, START == 0` collapses
+        // to the ALL-positions-equal-peer-array shape `full == sub`
+        // pointwise. Pins that the sweep proceeds through EVERY
+        // position of the outer array when `START = 0` and `M = N`.
+        // Cross-arity coverage on `N ∈ {1, 3, 6}` pins the sweep's
+        // terminal-position visit across the range of str arities
+        // the substrate's LABELS arrays span (`N = 1` for the
+        // singleton sub-carvings, `N = 4` for `QuoteForm::LABELS`,
+        // `N = 6` for `AtomKind::LABELS`).
+        assert_str_array_slice_equals_str_array::<1, 1, 0>(&["nil"], &["nil"]);
+        assert_str_array_slice_equals_str_array::<3, 3, 0>(
+            &["quote", "quasiquote", "unquote"],
+            &["quote", "quasiquote", "unquote"],
+        );
+        assert_str_array_slice_equals_str_array::<6, 6, 0>(
+            &["symbol", "keyword", "string", "int", "float", "bool"],
+            &["symbol", "keyword", "string", "int", "float", "bool"],
+        );
+    }
+
+    #[test]
+    fn assert_str_array_slice_equals_str_array_accepts_sexp_shape_labels_positional_decomposition()
+    {
+        // Runtime cross-check that the FOUR canonical sub-slices of
+        // `crate::error::SexpShape::LABELS` (`[&'static str; 12]`)
+        // each byte-equal their sub-carving's canonical
+        // `[&'static str; M]` listing pointwise. Runs the SAME
+        // helper the FOUR `const _` witnesses in `error.rs` (in the
+        // block titled "Compile-time SLICE-EQUALS-ARRAY witnesses
+        // closing the twelve-arm `SexpShape::LABELS` POSITIONAL
+        // decomposition") run at rustc time — a runtime safety net
+        // enforcing the theorem at BOTH stages of the toolchain
+        // (const at `cargo check`, runtime at `cargo test`). A
+        // regression that reordered any of the twelve slots in the
+        // outer array's initializer, or drifted any sub-carving's
+        // per-role LABEL alias, fails HERE at the substrate callsite
+        // AND at the const witness in `error.rs`. Sibling posture to
+        // `assert_u8_array_slice_equals_u8_array_accepts_sub_carving_hash_discriminators_per_position_order`
+        // on the (u8) row — that witness carries the positional
+        // decomposition theorem for the FOUR sub-carving
+        // `HASH_DISCRIMINATORS` arrays; this witness carries the
+        // SAME theorem for the FOUR sub-carving LABELS arrays
+        // (strictly STRONGER at the `[1..7)` slice: the (u8) row's
+        // sibling collapses to a SCALAR replica witness on the six-
+        // slot atomic-payload middle slice, but the (str) row's
+        // per-slot label listing distinguishes ALL SIX slots
+        // individually).
+        //
+        // The four canonical sub-slices are (all under the shared
+        // `&'static str` element-type and shared parent
+        // `[&'static str; 12]` outer container `SexpShape::LABELS`):
+        //   1. `SexpShape::LABELS[0..1)  ==
+        //      [StructuralKind::NIL_LABEL]`
+        //   2. `SexpShape::LABELS[1..7)  == AtomKind::LABELS`
+        //   3. `SexpShape::LABELS[7..8)  ==
+        //      [StructuralKind::LIST_LABEL]`
+        //   4. `SexpShape::LABELS[8..12) == QuoteForm::LABELS`
+        assert_str_array_slice_equals_str_array::<12, 1, 0>(
+            &crate::error::SexpShape::LABELS,
+            &[crate::error::StructuralKind::NIL_LABEL],
+        );
+        assert_str_array_slice_equals_str_array::<12, 6, 1>(
+            &crate::error::SexpShape::LABELS,
+            &AtomKind::LABELS,
+        );
+        assert_str_array_slice_equals_str_array::<12, 1, 7>(
+            &crate::error::SexpShape::LABELS,
+            &[crate::error::StructuralKind::LIST_LABEL],
+        );
+        assert_str_array_slice_equals_str_array::<12, 4, 8>(
+            &crate::error::SexpShape::LABELS,
+            &QuoteForm::LABELS,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "STR-SLICE-EQUALS-ARRAY-VIOLATION")]
+    fn assert_str_array_slice_equals_str_array_panics_at_runtime_on_positionwise_drift() {
+        // NEGATIVE PIN — STR-SLICE-EQUALS-ARRAY-VIOLATION corner: a
+        // str at some position in `full[START..START + M)` that does
+        // NOT byte-equal the peer sub-array `sub` at the offset-
+        // matched position MUST panic at runtime with the axis-named
+        // message. Pins the helper's positionwise-drift reject arm —
+        // a regression that silently short-circuited on the first
+        // slice position without checking the middle or terminal
+        // slice positions would slip through the compile-time
+        // witness's failure mode too. The offending str `"!"` at
+        // outer position `3` (interior of the sub-slice `[1..4)`,
+        // offset `2` inside `sub`) pins the middle-of-slice drift
+        // mode.
+        assert_str_array_slice_equals_str_array::<5, 3, 1>(
+            &["z", "b", "c", "!", "z"],
+            &["b", "c", "d"],
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "START-OUT-OF-BOUNDS")]
+    fn assert_str_array_slice_equals_str_array_panics_at_runtime_on_start_out_of_bounds() {
+        // NEGATIVE PIN — START-OUT-OF-BOUNDS gate: a caller-side
+        // turbofish arity slip on the `START` const-generic where
+        // `START > N` MUST panic at runtime with the START-OUT-OF-
+        // BOUNDS-named message BEFORE the peer SLICE-LENGTH-OUT-OF-
+        // BOUNDS gate reads `N - START` (which would `usize`-
+        // underflow had this gate not caught the slip first). Pins
+        // the gate's placement at the TOP of the helper — a
+        // regression that dropped the gate would either underflow
+        // subtraction at the peer gate OR panic deeper in
+        // `full[START + i]` bounds-checking with a helper-name-less
+        // panic message. The offending `START = 7` against `N = 5`
+        // pins the strict `START > N` reject arm; the LEGAL
+        // `START == N` empty-slice-at-right-endpoint corner is
+        // covered by the peer acceptance test above.
+        assert_str_array_slice_equals_str_array::<5, 0, 7>(&["x", "x", "x", "x", "x"], &[]);
+    }
+
+    #[test]
+    #[should_panic(expected = "SLICE-LENGTH-OUT-OF-BOUNDS")]
+    fn assert_str_array_slice_equals_str_array_panics_at_runtime_on_slice_length_out_of_bounds() {
+        // NEGATIVE PIN — SLICE-LENGTH-OUT-OF-BOUNDS gate: a peer
+        // sub-array arity `M` that exceeds the outer array's tail
+        // cardinality `N - START` MUST panic at runtime with the
+        // slice-length-out-of-bounds-named message. Peer gate to the
+        // START-OUT-OF-BOUNDS arm above — the two gates jointly
+        // enforce `START ≤ N` and `M ≤ N - START` before any content
+        // sweep. The offending `M = 5` against `N - START = 5 - 3 =
+        // 2` pins the strict `M > N - START` reject arm; the LEGAL
+        // exact-fit corner `M == N - START` is covered by the middle-
+        // slice acceptance test above.
+        assert_str_array_slice_equals_str_array::<5, 5, 3>(
+            &["x", "x", "x", "x", "x"],
+            &["x", "x", "x", "x", "x"],
+        );
+    }
+
+    #[test]
+    fn assert_str_array_slice_equals_str_array_panic_message_names_the_helper_and_str_slice_equals_array_violation_axis(
+    ) {
+        // PANIC-MESSAGE PROVENANCE PIN — STR-SLICE-EQUALS-ARRAY-
+        // VIOLATION arm: the panic message MUST begin with the
+        // helper's own name AND identify the failed AXIS as "STR-
+        // SLICE-EQUALS-ARRAY-VIOLATION" so downstream diagnostics
+        // route the drift back to (a) the helper by string search on
+        // `"assert_str_array_slice_equals_str_array"` and (b) the
+        // failed axis by string search on `"STR-SLICE-EQUALS-ARRAY-
+        // VIOLATION"`. Sibling posture to the u8-row peer's
+        // provenance pin
+        // `assert_u8_array_slice_equals_u8_array_panic_message_names_the_helper_and_slice_equals_array_violation_axis`
+        // AND the char-row peer's provenance pin
+        // `assert_char_array_slice_equals_char_array_panic_message_names_the_helper_and_char_slice_equals_array_violation_axis`
+        // — the three pins together bind the (helper, failed-axis)
+        // provenance triple at ONE test per corner of the (SUB-SLICE
+        // ARRAY-image) column on the (u8) + (char) + (str) rows of
+        // the (element-type × contract-shape) matrix. The `STR-`
+        // prefix on this axis disambiguates it from the u8-row
+        // sibling's plain `SLICE-EQUALS-ARRAY-VIOLATION` axis
+        // vocabulary AND the char-row sibling's `CHAR-SLICE-EQUALS-
+        // ARRAY-VIOLATION` axis vocabulary; the shared `-SLICE-
+        // EQUALS-ARRAY-VIOLATION` infix lets callers grep any of
+        // the three element-type variants by the shared axis
+        // substring.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_slice_equals_str_array::<5, 3, 1>(
+                &["z", "b", "c", "!", "z"],
+                &["b", "c", "d"],
+            );
+        });
+        let payload = outcome.expect_err(
+            "assert_str_array_slice_equals_str_array must panic on a \
+             positionwise drift — the reject-positionwise-drift arm \
+             is the CONTENT failure mode of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_str_array_slice_equals_str_array panic \
+                 payload must be a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_str_array_slice_equals_str_array"),
+            "assert_str_array_slice_equals_str_array panic message \
+             {msg:?} must name the helper for provenance-preserving \
+             failure diagnostics",
+        );
+        assert!(
+            msg.contains("STR-SLICE-EQUALS-ARRAY-VIOLATION"),
+            "assert_str_array_slice_equals_str_array panic message \
+             {msg:?} must name the failed AXIS (\"STR-SLICE-EQUALS-\
              ARRAY-VIOLATION\") for axis-provenance-preserving \
              failure diagnostics",
         );

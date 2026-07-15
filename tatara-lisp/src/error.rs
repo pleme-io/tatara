@@ -248,6 +248,103 @@ const _: () = crate::ast::assert_str_finite_set_covered_by_three_str_arrays::<6,
     &SexpShape::LABELS,
 );
 
+// Compile-time SLICE-EQUALS-ARRAY witnesses closing the twelve-arm
+// `SexpShape::LABELS` POSITIONAL decomposition — the FOUR canonical
+// sub-slices of the twelve-slot outer container each byte-equal a
+// sub-carving's canonical `[&'static str; M]` listing at rustc time.
+// Strictly STRONGER on the (contract-strength) axis than the seven
+// sibling SET-level witnesses above (three `_within_str_finite_set`
+// SUBSET-embedding + three `_arrays_disjoint` pairwise-disjointness +
+// one `_finite_set_covered_by_three_str_arrays` coverage): the SET-
+// level disjoint-union theorem `SexpShape::LABELS ≡ AtomKind::LABELS ⊕
+// QuoteForm::LABELS ⊕ StructuralKind::LABELS` those seven witnesses
+// close is SILENT on which SLOTS each sub-vocabulary's arms occupy —
+// a regression that permuted `SexpShape::LABELS` from the CANONICAL
+// declaration order `[NIL, SYMBOL, KEYWORD, STRING, INT, FLOAT, BOOL,
+// LIST, QUOTE, QUASIQUOTE, UNQUOTE, UNQUOTE_SPLICE]` (`StructuralKind`
+// at slots `{0, 7}`, `AtomKind` at slots `[1..7)`, `QuoteForm` at
+// slots `[8..12)`) to `[SYMBOL, NIL, KEYWORD, STRING, INT, FLOAT,
+// BOOL, LIST, QUOTE, QUASIQUOTE, UNQUOTE, UNQUOTE_SPLICE]` (swapping
+// slots `0` and `1`, interleaving `AtomKind` into a slot the
+// structural-residual carving previously owned) preserves the SET-
+// level disjoint-union theorem (both sub-vocabularies still embed
+// into the parent, still cover, still disjoint, parent still
+// injective) but silently misaligns every consumer indexing
+// `SexpShape::LABELS[0]` for the NIL diagnostic literal. Post-lift
+// the ARRAY-LEVEL positional decomposition binds at rustc time via
+// FOUR `const _` lines below, one invocation stage earlier than the
+// runtime pin.
+//
+// Sibling posture to the (u8)-row's FOUR positional witnesses on
+// `SexpShape::HASH_DISCRIMINATORS` at `ast.rs` (two singleton
+// `assert_u8_array_slice_equals_u8_array::<12, 1, {0, 7}>` witnesses
+// on `[0..1)` + `[7..8)`, one six-slot `assert_u8_array_slice_is_
+// scalar_replica::<12, 1, 7>` witness on `[1..7)`, one four-slot
+// `assert_u8_array_slice_equals_u8_array::<12, 4, 8>` witness on
+// `[8..12)`). The (u8) row's `[1..7)` slice collapses to a SCALAR
+// replica (all six atomic-payload shapes share the outer-`Sexp`
+// `Atom` marker byte `1u8`); the (str) row's `[1..7)` slice preserves
+// all six SLOTS individually (each atomic variant carries a DISTINCT
+// diagnostic label byte-string). The (str) row's stronger information
+// content at the `[1..7)` slice is precisely why the (str) row picks
+// up the FULL slice-equals-array shape at ALL FOUR slices (not the
+// SCALAR-REPLICA sibling at the interior slice).
+//
+// The FOUR pinned pairs — all on the shared `&'static str` element-
+// type and on the shared parent `[&'static str; 12]` outer container
+// `SexpShape::LABELS`:
+//   1. `SexpShape::LABELS[0..1)   == [StructuralKind::NIL_LABEL]`
+//      (singleton left-endpoint slot, structural-residual NIL role)
+//   2. `SexpShape::LABELS[1..7)   == AtomKind::LABELS`
+//      (six-slot atomic-payload middle slice — the six atomic-kind
+//      labels in CANONICAL variant-declaration order)
+//   3. `SexpShape::LABELS[7..8)   == [StructuralKind::LIST_LABEL]`
+//      (singleton mirror-endpoint slot at the atomic-collapse right
+//      endpoint, structural-residual LIST role)
+//   4. `SexpShape::LABELS[8..12)  == QuoteForm::LABELS`
+//      (four-slot quote-family tail — the four quote-family labels in
+//      CANONICAL variant-declaration order)
+//
+// The four disjoint slice ranges `[0..1) ∪ [1..7) ∪ [7..8) ∪ [8..12)`
+// exhaust the twelve-slot outer container's position space —
+// `1 + 6 + 1 + 4 = 12`. Composed with the pre-existing pairwise-
+// distinctness witness on the parent array, the FOUR positional
+// witnesses jointly close the POSITIONAL DECOMPOSITION theorem
+//   `SexpShape::LABELS == [NIL] ++ AtomKind::LABELS ++ [LIST] ++
+//    QuoteForm::LABELS`
+// as a rustc-time proof obligation, strictly stronger than the SET-
+// level disjoint-union theorem the seven sibling witnesses above
+// close. A regression that reordered ANY of the twelve slots in the
+// outer array's initializer fails HERE at `cargo check` BEFORE any
+// test scheduler runs.
+//
+// The two singleton pairs use INLINE `[&'static str; 1]` singleton
+// arrays rather than `&StructuralKind::LABELS[0..1]` slice syntax
+// because the helper's signature takes `&[&'static str; M]` (a const-
+// generic array reference, arity-known at rustc time) rather than
+// `&[&'static str]` (a slice type with runtime-length). The inline
+// arrays project the two per-role `pub const *_LABEL` bytes directly
+// — a regression that renamed one of the two aliases fails at the
+// alias's declaration site FIRST (a missing symbol referent), which
+// routes to a distinct diagnostic axis rather than to the witness's
+// STR-SLICE-EQUALS-ARRAY-VIOLATION panic.
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<12, 1, 0>(
+    &SexpShape::LABELS,
+    &[StructuralKind::NIL_LABEL],
+);
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<12, 6, 1>(
+    &SexpShape::LABELS,
+    &crate::ast::AtomKind::LABELS,
+);
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<12, 1, 7>(
+    &SexpShape::LABELS,
+    &[StructuralKind::LIST_LABEL],
+);
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<12, 4, 8>(
+    &SexpShape::LABELS,
+    &crate::ast::QuoteForm::LABELS,
+);
+
 // Compile-time SUBSET-embedding witnesses closing the `[&'static str;
 // N]` STR row of the (UnquoteForm ⊂ QuoteForm) 2-of-4 subset-carve
 // axis on the substrate's `str`-side vocabulary triple. Pre-lift the

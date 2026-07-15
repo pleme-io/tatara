@@ -325,6 +325,85 @@ const _: () = crate::ast::assert_str_array_within_str_finite_set::<2, 4>(
     &crate::ast::QuoteForm::IAC_FORGE_TAGS,
 );
 
+// Compile-time STR-DISJOINTNESS witnesses closing the ARRAY-LEVEL
+// vocabulary-disjointness corner of the STATIC ⊕ DYNAMIC partition
+// idiom on the substrate's TWO peer diagnostic algebras
+// (`TemplateInvariantKind` — the bytecode-runtime invariant surface;
+// `OptionalParamMalformedReason` — the `&optional` parser rejection
+// surface). Each algebra carries the SAME closed-set carving idiom
+// documented on `Self::DYNAMIC_DESCRIPTORS`'s docstring: "every closed-
+// set outer algebra the substrate carries now pins BOTH its STATIC-
+// subset canonical-bytes array AND its DYNAMIC-subset per-role-slot
+// array at ONE `pub const` per axis" — TemplateInvariantKind at
+// 2 ⊕ 2 asymmetric widths, OptionalParamMalformedReason at 3 ⊕ 1
+// asymmetric widths. Pre-lift, EACH array's INTRA-array pairwise-
+// distinctness bound at compile time via the four `assert_str_array_
+// pairwise_distinct` witnesses at the top of this module — but the
+// CROSS-array (STATIC ∩ DYNAMIC = ∅) vocabulary-disjointness clause
+// lived ONLY as an emergent property of the two carvings' semantic
+// contract (STATIC arms bind FULL diagnostic bytes; DYNAMIC arms bind
+// only the noun-slot bytes that a shared `format!("… {descriptor} …")`
+// template interpolates). Post-lift the ARRAY-LEVEL disjointness of
+// the STATIC ⊕ DYNAMIC 2-of-2 face binds at rustc time via ONE `const _`
+// line per algebra. A regression that silently drifts a DYNAMIC
+// descriptor into a STATIC message/label byte (e.g. renames
+// `TemplateInvariantKind::SUBST_BAD_INDEX_DESCRIPTOR` from `"param"`
+// into `"compiled template produced no value"`, colliding with
+// `TemplateInvariantKind::FINAL_NO_VALUE_MESSAGE`; renames
+// `OptionalParamMalformedReason::EXTRA_ELEMENTS_DESCRIPTOR` from
+// `"elements"` into `"empty list"`, colliding with
+// `OptionalParamMalformedReason::EMPTY_LIST_LABEL`) fails at
+// `cargo check` BEFORE any test scheduler runs. The invariant is
+// load-bearing at three consumer layers documented on the two
+// algebras' DYNAMIC_DESCRIPTORS docstrings: (i) `tatara-check`
+// coverage assertions grep the STATIC arms' full label bytes and the
+// DYNAMIC arms' descriptor noun bytes as DISJOINT vocabularies, so a
+// collision would silently mis-classify one carving's diagnostic as
+// the other's; (ii) Sekiban audit-trail metrics keyed on the STATIC-
+// subset FULL message OR the DYNAMIC-subset noun-descriptor treat
+// the two byte-spaces as disjoint metric-label sub-vocabularies; (iii)
+// LSP quick-fix vocabularies rendered from the DYNAMIC-arm descriptor
+// slot MUST NOT collide with the STATIC-arm full-label vocabulary
+// (else a quick-fix keyed on the descriptor would fire on a STATIC
+// arm whose full label happens to string-equal the descriptor). The
+// two witnesses close the STR-DISJOINTNESS column on the (algebra ×
+// carving-pair) face at ONE `const _` line per algebra; adding a
+// hypothetical fifth per-algebra rejection reason on either the
+// STATIC or DYNAMIC arm extends only the respective array (with
+// rustc's forced-arity `[&'static str; N]` gate re-firing the
+// disjointness sweep against the extended array in lockstep).
+// Sibling to the FIVE substrate-pinned `assert_str_arrays_disjoint`
+// witnesses on the (SexpShape sub-vocabulary × sub-vocabulary) triple
+// (three at the (`AtomKind`, `QuoteForm`, `StructuralKind`) triple
+// hosted across `ast.rs` and `error.rs`) plus the (UnquoteForm ⊂
+// QuoteForm) subset-embedding face — those witnesses close the DISJOINT
+// UNION theorem on the substrate's twelve-arm outer-shape LABELS
+// vocabulary; these witnesses close the STATIC ⊕ DYNAMIC carving
+// theorem on the substrate's TWO peer diagnostic algebras.
+//
+// The two pinned pairs are (all under the shared `&'static str`
+// element-type):
+//   1. `TemplateInvariantKind::STATIC_MESSAGES` ∩
+//      `TemplateInvariantKind::DYNAMIC_DESCRIPTORS` = ∅
+//      (2-arm STATIC subset carrying the full `"compiled template:
+//      EndList with empty stack"` / `"compiled template produced no
+//      value"` messages vs. 2-arm DYNAMIC subset carrying the `"param"`
+//      / `"splice"` noun slots — no byte shared).
+//   2. `OptionalParamMalformedReason::STATIC_LABELS` ∩
+//      `OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS` = ∅
+//      (3-arm STATIC subset carrying the full `"empty list"` /
+//      `"missing default"` / `"name not a symbol"` labels vs. 1-arm
+//      DYNAMIC subset carrying the `"elements"` noun slot — no byte
+//      shared).
+const _: () = crate::ast::assert_str_arrays_disjoint::<2, 2>(
+    &TemplateInvariantKind::STATIC_MESSAGES,
+    &TemplateInvariantKind::DYNAMIC_DESCRIPTORS,
+);
+const _: () = crate::ast::assert_str_arrays_disjoint::<3, 1>(
+    &OptionalParamMalformedReason::STATIC_LABELS,
+    &OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS,
+);
+
 #[derive(Debug, Error)]
 pub enum LispError {
     #[error("unexpected character {0:?} at position {1}")]
@@ -20937,6 +21016,37 @@ mod tests {
         use crate::ast::assert_str_arrays_disjoint;
         assert_str_arrays_disjoint::<6, 2>(&crate::ast::AtomKind::LABELS, &StructuralKind::LABELS);
         assert_str_arrays_disjoint::<4, 2>(&crate::ast::QuoteForm::LABELS, &StructuralKind::LABELS);
+    }
+
+    /// Runtime safety-net sibling of the module-level compile-time
+    /// STR-DISJOINTNESS witnesses on the STATIC ⊕ DYNAMIC 2-of-2 face
+    /// of the substrate's TWO peer diagnostic algebras
+    /// (`TemplateInvariantKind` at 2 ⊕ 2 asymmetric widths;
+    /// `OptionalParamMalformedReason` at 3 ⊕ 1 asymmetric widths).
+    /// Re-runs each `const _: () = crate::ast::assert_str_arrays_
+    /// disjoint::<N, M>(&<algebra>::STATIC_*, &<algebra>::DYNAMIC_
+    /// DESCRIPTORS)` witness pinned above the `LispError` enum at
+    /// runtime as a safety net so a build that skips `cargo check`'s
+    /// const-eval sweep still catches drift here. Peer to
+    /// `assert_str_arrays_disjoint_accepts_each_structural_kind_partition_pair`
+    /// above (which sweeps the SexpShape 3-way sub-vocabulary triple's
+    /// two `error.rs`-hosted disjointness pairs); together the two
+    /// tests sweep all FOUR `error.rs`-hosted `assert_str_arrays_
+    /// disjoint` witnesses at runtime. The compile-time `const _`
+    /// sweep at the top of this module fires FIRST at `cargo check`;
+    /// this test catches drift again at `cargo test` if the const-
+    /// eval sweep is ever silently dropped.
+    #[test]
+    fn assert_str_arrays_disjoint_accepts_each_static_dynamic_carving_pair() {
+        use crate::ast::assert_str_arrays_disjoint;
+        assert_str_arrays_disjoint::<2, 2>(
+            &TemplateInvariantKind::STATIC_MESSAGES,
+            &TemplateInvariantKind::DYNAMIC_DESCRIPTORS,
+        );
+        assert_str_arrays_disjoint::<3, 1>(
+            &OptionalParamMalformedReason::STATIC_LABELS,
+            &OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS,
+        );
     }
 
     /// Runtime DISJOINT-UNION theorem — the twelve-arm outer

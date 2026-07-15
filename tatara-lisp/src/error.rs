@@ -578,6 +578,93 @@ const _: () = crate::ast::assert_str_array_is_concatenation_of_two_scalar_replic
     CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION,
 );
 
+// Compile-time per-position ORDER witnesses closing the (`&'static
+// str`)-row FULL-ARRAY LITERAL column across the FIVE remaining scalar-
+// composed `[&'static str; N]` label vocabularies in this module —
+// `ExpectedKwargShape::LABELS` (7), `KwargPathKind::LABELS` (3),
+// `MacroDefHead::KEYWORDS` (3), `CompilerSpecIoStage::LABELS` (4),
+// `StructuralKind::LABELS` (2). Peer to ast.rs's FIVE-witness
+// (str)-row cluster on `Atom::BOOL_LITERALS` (2), `AtomKind::LABELS`
+// (6), and `QuoteForm::PREFIXES` / `LABELS` / `IAC_FORGE_TAGS`
+// (4 each) at lines 1252..=1269 in that file, and to the pre-existing
+// FOUR-witness `SexpShape::LABELS` (12) per-position cluster at lines
+// 331..=346 above in this file — together the ten witnesses bind the
+// (str)-row FULL-ARRAY per-position ORDER column across TEN family-
+// wide `[&'static str; N]` label vocabularies on the substrate at
+// rustc time.
+//
+// Each per-role scalar `pub const *_LABEL` / `*_KEYWORD` alias on the
+// closed-set outer algebra binds AT rustc TIME to its CANONICAL
+// literal-str value through the outer array's `[_; N]` initializer
+// positional composition. Two failure axes survive the pre-lift
+// `_pairwise_distinct` cluster at the module top that the post-lift
+// LITERAL witnesses reject at rustc time:
+//   1. Outer-array SLOT REORDER: a regression that swaps
+//      `KwargPathKind::NAMED_LABEL` (`"named"`) and
+//      `KwargPathKind::ITEM_LABEL` (`"item"`) in the outer
+//      `KwargPathKind::LABELS` initializer preserves pairwise-
+//      distinctness (both strs still distinct) but silently
+//      misaligns every consumer indexing `LABELS[0]` for the canonical
+//      NAMED-arm diagnostic dispatch. Analogous reorder-drifts on
+//      `ExpectedKwargShape::LABELS` / `MacroDefHead::KEYWORDS` /
+//      `CompilerSpecIoStage::LABELS` / `StructuralKind::LABELS`
+//      survive the pairwise-distinctness witness the SAME way.
+//   2. Per-role scalar VALUE DRIFT: a silent value-drift of a per-
+//      role scalar (e.g. an operator-facing polish
+//      `ExpectedKwargShape::LIST_OF_STRINGS_LABEL` from `"list of
+//      strings"` to `"list<string>"`; a Racket-compat rename
+//      `MacroDefHead::DEFMACRO_KEYWORD` from `"defmacro"` to
+//      `"define-syntax"`; a shorter idiom migration
+//      `CompilerSpecIoStage::REALIZE_TO_DISK_SERIALIZE_LABEL` from
+//      `"serialize"` to `"ser"`) that flows through the composed
+//      array without updating the outer array's literal image fails
+//      HERE with the `STR-SLICE-EQUALS-ARRAY-VIOLATION` panic naming
+//      the drifted position, where the pairwise-distinctness witness
+//      stays silent because the drifted str remains distinct from
+//      its peers.
+//
+// Future extensions that benefit: adding a hypothetical eighth
+// expected-shape variant (a distinct `Float` once `extract_float`
+// stops accepting integers, a `Symbol`, or a parameterized
+// `ListOfInts`) extends `ExpectedKwargShape::ALL` AND
+// `ExpectedKwargShape::LABELS` AND requires widening this witness's
+// `<7, 7, 0>` const-generic turbofish AND appending the new label
+// literal to the RHS listing in lockstep — rustc's forced-arity
+// check on `[&'static str; N]` fails compilation if either side
+// drifts out of lockstep. Analogous single-variant extensions on the
+// four sibling algebras (`KwargPathKind`, `MacroDefHead`,
+// `CompilerSpecIoStage`, `StructuralKind`) propagate through their
+// respective `<N, N, 0>` witnesses under the same forced-arity
+// gate.
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<7, 7, 0>(
+    &ExpectedKwargShape::LABELS,
+    &[
+        "keyword",
+        "string",
+        "int",
+        "number",
+        "bool",
+        "list",
+        "list of strings",
+    ],
+);
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<3, 3, 0>(
+    &KwargPathKind::LABELS,
+    &["named", "item", "slot"],
+);
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<3, 3, 0>(
+    &MacroDefHead::KEYWORDS,
+    &["defmacro", "defpoint-template", "defcheck"],
+);
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<4, 4, 0>(
+    &CompilerSpecIoStage::LABELS,
+    &["serialize", "write", "read", "deserialize"],
+);
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<2, 2, 0>(
+    &StructuralKind::LABELS,
+    &["nil", "list"],
+);
+
 #[derive(Debug, Error)]
 pub enum LispError {
     #[error("unexpected character {0:?} at position {1}")]
@@ -21252,6 +21339,73 @@ mod tests {
             &CompilerSpecIoStage::OPERATIONS,
             CompilerSpecIoStage::REALIZE_TO_DISK_OPERATION,
             CompilerSpecIoStage::LOAD_FROM_DISK_OPERATION,
+        );
+    }
+
+    /// Runtime cross-check that the SAME five (str)-row FULL-ARRAY
+    /// LITERAL witnesses covered at COMPILE time by the module-level
+    /// `const _: () = crate::ast::assert_str_array_slice_equals_str_
+    /// array::<N, N, 0>(&…, &[literal strs; N])` cluster immediately
+    /// below the `assert_str_array_is_concatenation_of_two_scalar_
+    /// replicas::<4, 2>(&CompilerSpecIoStage::OPERATIONS, …)` block
+    /// witness — pinning `ExpectedKwargShape::LABELS`,
+    /// `KwargPathKind::LABELS`, `MacroDefHead::KEYWORDS`,
+    /// `CompilerSpecIoStage::LABELS`, and `StructuralKind::LABELS`
+    /// against their canonical literal-str listings — also hold when
+    /// exercised at runtime. A regression that removes ONE of the
+    /// const witnesses would still leave THIS runtime pin as a
+    /// safety net; the const witness fires FIRST at `cargo check`,
+    /// this runtime pin catches the positionwise drift at `cargo
+    /// test`. The pair enforces the theorem at TWO stages of the
+    /// toolchain.
+    ///
+    /// Sibling posture to
+    /// `assert_str_array_slice_equals_str_array_accepts_every_family_wide_substrate_array_full_array_literal_listing`
+    /// in `ast.rs` (the ast-side (str)-row cluster's runtime peer
+    /// on `Atom::BOOL_LITERALS` / `AtomKind::LABELS` /
+    /// `QuoteForm::PREFIXES` / `QuoteForm::LABELS` /
+    /// `QuoteForm::IAC_FORGE_TAGS`) — together the two runtime
+    /// tests sweep TEN family-wide `[&'static str; N]` label
+    /// vocabularies on the substrate at `cargo test` time as
+    /// safety-net peers to the ten compile-time `const _` witnesses.
+    ///
+    /// A regression that (a) reorders one of the outer arrays' slots
+    /// away from canonical declaration order, or (b) drifts one of
+    /// the per-role scalar `pub const *_LABEL` / `*_KEYWORD` aliases
+    /// the outer array's slots re-export, fails HERE with the
+    /// `STR-SLICE-EQUALS-ARRAY-VIOLATION` axis panic naming the
+    /// drifted position.
+    #[test]
+    fn assert_str_array_slice_equals_str_array_accepts_every_family_wide_error_module_array_full_array_literal_listing(
+    ) {
+        use crate::ast::assert_str_array_slice_equals_str_array;
+        assert_str_array_slice_equals_str_array::<7, 7, 0>(
+            &ExpectedKwargShape::LABELS,
+            &[
+                "keyword",
+                "string",
+                "int",
+                "number",
+                "bool",
+                "list",
+                "list of strings",
+            ],
+        );
+        assert_str_array_slice_equals_str_array::<3, 3, 0>(
+            &KwargPathKind::LABELS,
+            &["named", "item", "slot"],
+        );
+        assert_str_array_slice_equals_str_array::<3, 3, 0>(
+            &MacroDefHead::KEYWORDS,
+            &["defmacro", "defpoint-template", "defcheck"],
+        );
+        assert_str_array_slice_equals_str_array::<4, 4, 0>(
+            &CompilerSpecIoStage::LABELS,
+            &["serialize", "write", "read", "deserialize"],
+        );
+        assert_str_array_slice_equals_str_array::<2, 2, 0>(
+            &StructuralKind::LABELS,
+            &["nil", "list"],
         );
     }
 

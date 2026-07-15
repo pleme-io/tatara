@@ -913,6 +913,108 @@ const _: () =
 const _: () =
     assert_char_array_slice_equals_char_array::<1, 1, 0>(&crate::error::UnquoteForm::LEADS, &[',']);
 
+// Compile-time SUB-CARVING per-position ARRAY-LEVEL POSITIONAL-
+// COMPOSITION witnesses on `Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS`
+// (`[char; 7]`) — the outer-`Sexp` reader-boundary category-leading
+// seven-char SPAN whose declaration order composes across THREE type
+// namespaces (`Sexp`, `QuoteForm`, `Atom`) as the segmented
+// concatenation
+//
+//     NON_WHITESPACE_BARE_ATOM_TERMINATORS
+//         == Sexp::LIST_DELIMITERS       // slots [0..2)
+//         ++ QuoteForm::LEADS            // slots [2..5)
+//         ++ [Atom::STR_DELIMITER]       // slot   [5..6)
+//         ++ [Sexp::COMMENT_LEAD]        // slot   [6..7)
+//
+// Each of the FOUR right-hand-side segments names an INDEPENDENT
+// substrate primitive on ONE of the three sub-algebras — the OUTER
+// terminator SPAN is the composition surface where the FOUR sub-
+// vocabularies land at their canonical reader-outer-dispatch slots. The
+// pre-existing FULL-ARRAY LITERAL-listing witness IMMEDIATELY ABOVE
+// (`assert_char_array_slice_equals_char_array::<7, 7, 0>(&…, &['(', ')',
+// '\'', '`', ',', '"', ';'])`) binds the SPAN against a HARDCODED
+// `[char; 7]` peer literal — it catches drifts of the PER-ROLE `pub
+// const` chars each sub-carving array's slot re-exports through the
+// underlying `Sexp::LIST_OPEN` / `Sexp::LIST_CLOSE` / `QuoteForm::
+// QUOTE_LEAD` / … / `Sexp::COMMENT_LEAD` primitives, but is SILENT on
+// the ARRAY-LEVEL structural composition axis — a regression that
+// reorders `Sexp::LIST_DELIMITERS` from `[LIST_OPEN, LIST_CLOSE]` to
+// `[LIST_CLOSE, LIST_OPEN]` (or `QuoteForm::LEADS` from `[QUOTE_LEAD,
+// QUASIQUOTE_LEAD, UNQUOTE_LEAD]` to any other permutation of the same
+// three chars) while leaving `NON_WHITESPACE_BARE_ATOM_TERMINATORS` in
+// its canonical initializer form silently misaligns every consumer that
+// treats the composite's HEAD-2-slice as positionally-interchangeable
+// with `Sexp::LIST_DELIMITERS` (or the MIDDLE-3-slice with
+// `QuoteForm::LEADS`) — the OUTER LITERAL witness accepts both
+// sub-carving reorders because the LITERAL peer array's slot-0 (`'('`)
+// and slot-1 (`')'`) still match `NON_WHITESPACE_BARE_ATOM_TERMINATORS`
+// even though the sub-carving's declaration slot-0 and slot-1 drifted.
+// The pre-existing SET-level SUBSET witnesses at lines 369..=380 above
+// (`assert_char_array_within_char_finite_set::<{2,3}, 7>(&{LIST_
+// DELIMITERS, QuoteForm::LEADS}, &NON_WHITESPACE_BARE_ATOM_TERMINATORS)`)
+// bind the sub-carvings' distinct-value SET is CONTAINED in the
+// composite's distinct-value SET but are silent on positional alignment
+// — the SAME sub-carving reorders survive those witnesses because
+// distinct-value SET membership is order-invariant.
+//
+// These FOUR new `const _` witnesses close the missing corner: each
+// binds a SUB-CARVING array positionwise-equal to its canonical SLOT
+// SEGMENT of the composite terminator SPAN via
+// [`assert_char_array_slice_equals_char_array`] at the SUB-SLICE ARRAY-
+// image corner (`START ∈ {0, 2, 5, 6}`, `M ∈ {2, 3, 1, 1}`,
+// `M < N == 7`). Post-lift a drift at ANY of the sub-carvings'
+// declaration ordering (or at the composite's slot ordering) fails
+// AT rustc time BEFORE the pre-existing FULL-ARRAY LITERAL witness re-
+// verifies the composite's literal identity — the two witness families
+// bind the composite through DISTINCT drift-detection axes (LITERAL
+// against inline chars, POSITIONAL against sub-carving arrays) that
+// TOGETHER catch every ARRAY-LEVEL misalignment the pre-lift
+// (INJECTIVITY + SUBSET-EMBEDDING) 2-corner face silently accepted.
+//
+// Sibling posture to the FOUR-witness EXHAUSTIVE per-position sub-
+// carving composition sweep on the OUTER `SexpShape::HASH_DISCRIMINATORS`
+// container (the trio of `assert_u8_array_slice_equals_u8_array::<12,
+// {1, 4}, {0, 7, 8}>` witnesses + the `assert_u8_array_slice_is_scalar_
+// replica::<12, 1, 7>` witness below in this file). Those FOUR
+// witnesses pin the (u8) row's twelve-slot outer container against its
+// FOUR sub-carvings at rustc time; THESE FOUR witnesses pin the (char)
+// row's seven-slot outer terminator SPAN against its FOUR sub-carvings
+// at rustc time. Together the eight witnesses close the (element-type
+// × contract-shape) matrix's SUB-CARVING per-position POSITIONAL-
+// COMPOSITION corner across BOTH the (u8) row (outer-`Sexp` cache-key
+// discriminator hierarchy) AND the (char) row (reader-outer-dispatch
+// terminator SPAN) EXHAUSTIVELY at the FOUR-sub-carving-per-container
+// depth.
+//
+// A hypothetical seventh reader-outer-dispatch category (e.g. a
+// `#|…|#` block-comment lead byte pinning a fresh `Sexp::BLOCK_COMMENT_
+// LEAD` primitive) would extend `NON_WHITESPACE_BARE_ATOM_TERMINATORS`
+// to `[char; 8]` AND require a FIFTH witness below binding
+// `NON_WHITESPACE_BARE_ATOM_TERMINATORS[7..8) == [Sexp::BLOCK_COMMENT_
+// LEAD]` (or, if the new lead byte joins an EXISTING sub-carving like
+// `Sexp::COMMENT_LEAD`'s comment axis, a widened `Sexp::COMMENT_LEADS`
+// array replaces the singleton at slot `[6..7)` and its widened arity
+// propagates through the widened witness's const-generic turbofish).
+// Rustc's forced-arity check on `[char; N]` fails compilation if the
+// composite's arity grows without the corresponding sub-carving
+// widening (or vice versa).
+const _: () = assert_char_array_slice_equals_char_array::<7, 2, 0>(
+    &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+    &Sexp::LIST_DELIMITERS,
+);
+const _: () = assert_char_array_slice_equals_char_array::<7, 3, 2>(
+    &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+    &QuoteForm::LEADS,
+);
+const _: () = assert_char_array_slice_equals_char_array::<7, 1, 5>(
+    &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+    &[Atom::STR_DELIMITER],
+);
+const _: () = assert_char_array_slice_equals_char_array::<7, 1, 6>(
+    &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+    &[Sexp::COMMENT_LEAD],
+);
+
 /// Compile-time contract verifier — panics at const evaluation time if
 /// any two entries of `arr` alias byte-for-byte through
 /// [`str::as_bytes`].
@@ -34475,6 +34577,72 @@ mod tests {
         assert_char_array_slice_equals_char_array::<1, 1, 0>(
             &crate::error::UnquoteForm::LEADS,
             &[','],
+        );
+    }
+
+    #[test]
+    fn assert_char_array_slice_equals_char_array_accepts_terminator_span_sub_carving_positional_composition(
+    ) {
+        // Runtime cross-check that the outer-`Sexp` reader-boundary
+        // terminator SPAN `Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS`
+        // (`[char; 7]`) positionally composes as the segmented
+        // concatenation of its FOUR sub-carvings:
+        //
+        //     NON_WHITESPACE_BARE_ATOM_TERMINATORS
+        //         == Sexp::LIST_DELIMITERS       // slots [0..2)
+        //         ++ QuoteForm::LEADS            // slots [2..5)
+        //         ++ [Atom::STR_DELIMITER]       // slot   [5..6)
+        //         ++ [Sexp::COMMENT_LEAD]        // slot   [6..7)
+        //
+        // Runs the SAME helper the FOUR `const _` witnesses at line
+        // ~915 in this file run at rustc time — a runtime safety net
+        // enforcing the ARRAY-LEVEL POSITIONAL-COMPOSITION theorem at
+        // BOTH stages of the toolchain (const at `cargo check`,
+        // runtime at `cargo test`). Strictly STRONGER on the
+        // (contract-strength) axis than the sibling
+        // `sexp_list_delimiters_positionally_align_with_terminator_head`
+        // /
+        // `quote_form_leads_positionally_align_with_terminator_mid`
+        // -shape pre-lift runtime pins that lived only in prose in the
+        // sub-carvings' composition-rule docstrings: those pin the
+        // SUBSET containment `LIST_DELIMITERS ⊆ NON_WHITESPACE_BARE_
+        // ATOM_TERMINATORS` (and `QuoteForm::LEADS ⊆
+        // NON_WHITESPACE_BARE_ATOM_TERMINATORS`) as a SET-level
+        // theorem, order-invariant on the sub-carving side; this pin
+        // binds the ARRAY-LEVEL POSITIONAL identity at the CANONICAL
+        // slot segments. A regression that reorders any sub-carving's
+        // declaration (e.g. `Sexp::LIST_DELIMITERS = [LIST_CLOSE,
+        // LIST_OPEN]` swapping the pair, or `QuoteForm::LEADS =
+        // [QUASIQUOTE_LEAD, QUOTE_LEAD, UNQUOTE_LEAD]` permuting the
+        // triple) preserves the SET-level SUBSET theorem AND the FULL-
+        // ARRAY LITERAL witness on `NON_WHITESPACE_BARE_ATOM_
+        // TERMINATORS` (which peer-compares against a HARDCODED
+        // `[char; 7]` literal via its inline listing rather than
+        // against the SUB-CARVING arrays) but silently misaligns every
+        // consumer that treats the composite's slot segment as
+        // positionally-interchangeable with its sub-carving. Peer
+        // posture to `assert_u8_array_slice_equals_u8_array_accepts_
+        // sexp_shape_hash_discriminators_per_position_order`-shape
+        // sibling on the (u8) row — that pin carries the SUB-CARVING
+        // per-position POSITIONAL-COMPOSITION theorem for the twelve-
+        // slot outer `SexpShape::HASH_DISCRIMINATORS` container; this
+        // pin carries the same theorem for the seven-slot outer
+        // `NON_WHITESPACE_BARE_ATOM_TERMINATORS` SPAN.
+        assert_char_array_slice_equals_char_array::<7, 2, 0>(
+            &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+            &Sexp::LIST_DELIMITERS,
+        );
+        assert_char_array_slice_equals_char_array::<7, 3, 2>(
+            &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+            &QuoteForm::LEADS,
+        );
+        assert_char_array_slice_equals_char_array::<7, 1, 5>(
+            &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+            &[Atom::STR_DELIMITER],
+        );
+        assert_char_array_slice_equals_char_array::<7, 1, 6>(
+            &Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS,
+            &[Sexp::COMMENT_LEAD],
         );
     }
 

@@ -5616,6 +5616,78 @@ const _: () = assert_u8_array_within_u8_finite_set::<2, 4>(
     &QuoteForm::HASH_DISCRIMINATORS,
 );
 
+// Compile-time TIGHTENING witness — the (u8)-row analog of the
+// (str)-row three-witness SUB-AS-SLICE cluster in `error.rs`
+// (`assert_str_array_slice_equals_str_array::<4, 2, 2>` on the
+// `UnquoteForm::{LABELS, MARKERS, IAC_FORGE_TAGS} ⊂
+// QuoteForm::{LABELS, PREFIXES, IAC_FORGE_TAGS}` sub-carve). The
+// pre-existing SUBSET-embedding witness above binds `UnquoteForm::
+// HASH_DISCRIMINATORS ⊂ QuoteForm::HASH_DISCRIMINATORS` at the SET
+// level (`{5, 6} ⊂ {3, 4, 5, 6}`); this witness tightens the
+// binding to POSITIONWISE SLICE-EQUALS on the SAME sub-carve —
+// `QuoteForm::HASH_DISCRIMINATORS[2..4] == UnquoteForm::HASH_
+// DISCRIMINATORS[..]` byte-for-byte in canonical slot order.
+//
+// Two failure axes survive the SET-level SUBSET witness above that
+// this POSITIONWISE witness rejects at rustc time:
+//   1. Sub-array SLOT REORDER: a regression that swaps
+//      `UnquoteForm::HASH_DISCRIMINATORS` from `[UNQUOTE_HASH_
+//      DISCRIMINATOR, SPLICE_HASH_DISCRIMINATOR]` (`[5, 6]`) to
+//      `[SPLICE_HASH_DISCRIMINATOR, UNQUOTE_HASH_DISCRIMINATOR]`
+//      (`[6, 5]`) preserves the SUBSET witness (both bytes still
+//      appear in the superset) — but silently misaligns every
+//      consumer indexing the sub-array by slot ordinal (the
+//      `UnquoteForm::hash_discriminator` per-variant projection at
+//      `error.rs`'s `UnquoteForm` inherent impl, the runtime
+//      partition test
+//      `unquote_form_hash_discriminators_align_with_quote_form_
+//      hash_discriminators_by_projection`).
+//   2. Superset SLOT REORDER that leaves sub-array bytes still
+//      present but at different positions: a regression that
+//      reorders `QuoteForm::HASH_DISCRIMINATORS` from `[3, 4, 5,
+//      6]` to any permutation that leaves `{5, 6}` non-contiguous
+//      or non-tail (e.g. `[5, 3, 6, 4]`) preserves the SUBSET
+//      witness (both sub-array bytes still appear in the superset,
+//      just at scattered non-`[2..4)` positions) — but the sub-
+//      carving no longer sits at the tail of the superset's four-
+//      arm declaration listing, breaking the compositional
+//      invariant that `QuoteForm::HASH_DISCRIMINATORS[2..4] ==
+//      UnquoteForm::HASH_DISCRIMINATORS` presumes.
+//
+// Sibling posture: the (str)-row tightening cluster at `error.rs`
+// (three `assert_str_array_slice_equals_str_array::<4, 2, 2>`
+// witnesses on the `LABELS` / `MARKERS↔PREFIXES` / `IAC_FORGE_TAGS`
+// vocabulary triple) closes the SLICE-EQUALS column on the SAME
+// (UnquoteForm ⊂ QuoteForm) 2-of-4 sub-carve at the STR element-
+// type row; this witness closes the SAME column at the U8 element-
+// type row. Together the four-witness cluster (three str + one u8)
+// exhausts the (element-type × vocabulary-axis) matrix of the
+// substitution-subset carving at the SLICE-EQUALS positionwise-
+// composition contract.
+//
+// Composition with the sibling FULL-ARRAY LITERAL witnesses at
+// lines 6961..=6976 below: those two witnesses independently pin
+// `QuoteForm::HASH_DISCRIMINATORS == [3u8, 4, 5, 6]` and
+// `UnquoteForm::HASH_DISCRIMINATORS == [5u8, 6]` against their
+// literal byte listings. This SLICE-EQUALS witness composes with
+// them — a drift on EITHER array's literal listing fails first at
+// the peer FULL-ARRAY witness; a drift on the sub-carving's
+// contiguous-tail placement inside the superset that leaves BOTH
+// literal listings intact (e.g. a fifth quote-family variant
+// landing at an interior position of `QuoteForm::HASH_DISCRIMINATORS`
+// shifting UNQUOTE/UNQUOTE_SPLICE off `[2..4)`) fails HERE at the
+// SUB-AS-SLICE witness. Sibling to the JOINT permutation witness
+// `assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4,
+// 0, 6>` at line 7029 — that witness binds the outer partition
+// `{0..=6} = {OUTER} ⊕ StructuralKind::HASH_DISCRIMINATORS ⊕
+// QuoteForm::HASH_DISCRIMINATORS` as a bijection; this witness
+// binds the sub-carving `UnquoteForm::HASH_DISCRIMINATORS` to a
+// SPECIFIC contiguous slice of that quote-family carving.
+const _: () = assert_u8_array_slice_equals_u8_array::<4, 2, 2>(
+    &QuoteForm::HASH_DISCRIMINATORS,
+    &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
+);
+
 /// Compile-time contract verifier — panics at const evaluation time if
 /// the distinct-values sets of `a` and `b` share any byte on the
 /// substrate's `u8` cache-key vocabulary. Binds ONE conjunct clause:
@@ -37009,6 +37081,44 @@ mod tests {
         assert_u8_array_slice_equals_u8_array::<2, 2, 0>(
             &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
             &[5u8, 6],
+        );
+    }
+
+    /// Runtime SLICE-EQUALS-ARRAY safety net for the (UnquoteForm ⊂
+    /// QuoteForm) 2-of-4 sub-carve on the (u8) HASH_DISCRIMINATORS
+    /// vocabulary axis — mirrors the module-level `const _: () =
+    /// assert_u8_array_slice_equals_u8_array::<4, 2, 2>(&QuoteForm::
+    /// HASH_DISCRIMINATORS, &UnquoteForm::HASH_DISCRIMINATORS)` witness
+    /// added below line 5617 in this file. The `const _` witness fires
+    /// FIRST at `cargo check`; this runtime pin catches the ARRAY-LEVEL
+    /// positionwise drift at `cargo test` as a safety net enforcing the
+    /// theorem at BOTH stages of the toolchain.
+    ///
+    /// (U8)-row peer to `assert_str_array_slice_equals_str_array_
+    /// accepts_unquote_form_sub_carve_of_quote_form` at `error.rs`'s
+    /// tests submodule — that test sweeps the SAME 2-of-4 sub-carve at
+    /// the (str) row across three vocabulary axes (`LABELS`,
+    /// `MARKERS↔PREFIXES`, `IAC_FORGE_TAGS`); this test sweeps the same
+    /// carve at the (u8) row on the ONE `HASH_DISCRIMINATORS` axis.
+    /// Together the four runtime witnesses close the (element-type ×
+    /// vocabulary-axis) matrix of the substitution-subset carve at the
+    /// SLICE-EQUALS positionwise-composition contract, on the runtime-
+    /// pin sibling face of the four-witness compile-time cluster.
+    ///
+    /// A regression that (a) swaps `UnquoteForm::HASH_DISCRIMINATORS`
+    /// from `[UNQUOTE_HASH_DISCRIMINATOR, SPLICE_HASH_DISCRIMINATOR]`
+    /// to `[SPLICE_HASH_DISCRIMINATOR, UNQUOTE_HASH_DISCRIMINATOR]`, or
+    /// (b) reorders `QuoteForm::HASH_DISCRIMINATORS` such that the two
+    /// `UnquoteForm` bytes no longer sit contiguously at slots
+    /// `[2..4)`, fails HERE with the `SLICE-EQUALS-ARRAY-VIOLATION`
+    /// axis panic naming the drifted position — where the sibling
+    /// SET-level SUBSET safety-net stays silent (both bytes still
+    /// appear in the superset, just at different positions).
+    #[test]
+    fn assert_u8_array_slice_equals_u8_array_accepts_unquote_form_sub_carve_of_quote_form() {
+        assert_u8_array_slice_equals_u8_array::<4, 2, 2>(
+            &QuoteForm::HASH_DISCRIMINATORS,
+            &crate::error::UnquoteForm::HASH_DISCRIMINATORS,
         );
     }
 

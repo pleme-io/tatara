@@ -6421,28 +6421,105 @@ pub const fn assert_u8_array_slice_equals_u8_array<
 // DISCRIMINATOR`, not POSITIONWISE-COMPOSITION with a peer array —
 // there is no natural `[u8; 6]` sub-carving array to compose it
 // against (the six atomic outer shapes collapse to a SCALAR image,
-// not an array image). The singleton slices `[0..1) == [NIL_BYTE]`
-// and `[7..8) == [LIST_BYTE]` (`StructuralKind::NIL_HASH_
-// DISCRIMINATOR` and `StructuralKind::LIST_HASH_DISCRIMINATOR`) are
-// pinned via the peer `assert_scalar_plus_two_u8_arrays_permute_
-// inclusive_range` witness above (which binds the outer joint
-// bijection `{0..=6} == {OUTER} ⊕ StructuralKind::HASH_DISCRIMINATORS
-// ⊕ QuoteForm::HASH_DISCRIMINATORS`) — the joint witness binds their
-// per-position order INSIDE the outer sub-carving array
-// (`StructuralKind::HASH_DISCRIMINATORS = [0, 2]`) but is SILENT on
-// their per-position order INSIDE the container `SexpShape::HASH_
-// DISCRIMINATORS` array at positions 0 and 7. A future sibling
-// witness on the SAME slice-equals-array helper could bind
-// `SexpShape::HASH_DISCRIMINATORS[0..1] == [StructuralKind::HASH_
-// DISCRIMINATORS[0]]` and `SexpShape::HASH_DISCRIMINATORS[7..8] ==
-// [StructuralKind::HASH_DISCRIMINATORS[1]]` — this run opens the
-// column at the four-slot QUOTE-family corner because it carries
-// the LARGEST sub-carving array (four positions vs. two + two
-// singletons) and thus the highest reorder-catch surface per
-// `const _` witness line.
+// not an array image). The two singleton slices `[0..1)` and
+// `[7..8)` on the outer container are pinned via the two sibling
+// `assert_u8_array_slice_equals_u8_array::<12, 1, _>` witnesses
+// IMMEDIATELY BELOW — see the prose comment there for the per-
+// slot binding on `StructuralKind::NIL_HASH_DISCRIMINATOR` and
+// `StructuralKind::LIST_HASH_DISCRIMINATOR`. Together the four
+// SexpShape `HASH_DISCRIMINATORS` sub-slice witnesses (the
+// singleton `[0..1)`, the atomic-collapse `[1..7)`, the singleton
+// `[7..8)`, the quote-family tail `[8..12)`) EXHAUSTIVELY pin the
+// twelve-slot outer container's per-position byte SHAPE at rustc-
+// time, closing the corner the runtime sweep
+// `sexp_shape_hash_discriminators_align_with_sub_carvings_by_projection`
+// (in `error.rs`) previously covered alone.
 const _: () = assert_u8_array_slice_equals_u8_array::<12, 4, 8>(
     &crate::error::SexpShape::HASH_DISCRIMINATORS,
     &QuoteForm::HASH_DISCRIMINATORS,
+);
+
+// Compile-time SLICE-EQUALS-ARRAY singleton witnesses — the two
+// remaining unpinned-at-rustc-time slots on
+// `crate::error::SexpShape::HASH_DISCRIMINATORS` (`[u8; 12]`). Both
+// are covered by the LARGER sub-carving arrays' `[u8; 1]` slice
+// projections against the container's singleton slice.
+//
+// * Position `[0..1)` — `SexpShape::HASH_DISCRIMINATORS[0] ==
+//   StructuralKind::HASH_DISCRIMINATORS[0] ==
+//   StructuralKind::NIL_HASH_DISCRIMINATOR == 0u8`. The outer
+//   container's slot-0 initializer spells `Self::NIL_HASH_
+//   DISCRIMINATOR` which is declared as an alias for
+//   `StructuralKind::NIL_HASH_DISCRIMINATOR` (see
+//   `SexpShape::NIL_HASH_DISCRIMINATOR = StructuralKind::NIL_HASH_
+//   DISCRIMINATOR` in `error.rs`). Comparing against the singleton
+//   `[StructuralKind::NIL_HASH_DISCRIMINATOR]` sub-array binds the
+//   container's SLOT-0 POSITION to the structural-residual
+//   carving's NIL role at rustc-time.
+// * Position `[7..8)` — the mirror slot at the atomic-collapse
+//   right endpoint, spelling `Self::LIST_HASH_DISCRIMINATOR` which
+//   aliases `StructuralKind::LIST_HASH_DISCRIMINATOR = 2u8`.
+//
+// Pre-lift these two per-position bindings were pinned ONLY at
+// runtime through the twelve-position sweep inside
+// `sexp_shape_hash_discriminators_align_with_sub_carvings_by_projection`
+// (routing each `SexpShape::HASH_DISCRIMINATORS[i]` through the
+// shape's sub-carving projection `as_structural_kind().unwrap().
+// hash_discriminator()` on the two structural-residual arms);
+// post-lift the ARRAY-LEVEL slice-equals-array contract binds at
+// rustc-time via TWO `const _` lines, one invocation stage earlier
+// than the runtime pin. The peer joint witness
+// `assert_scalar_plus_two_u8_arrays_permute_inclusive_range::<2, 4,
+// 0, 6>(AtomKind::OUTER_HASH_DISCRIMINATOR,
+// &StructuralKind::HASH_DISCRIMINATORS,
+// &QuoteForm::HASH_DISCRIMINATORS)` above is STRICTLY WEAKER on
+// these two slots — it binds the SUB-CARVING array
+// `StructuralKind::HASH_DISCRIMINATORS = [0, 2]` per-position order
+// but is SILENT on which SLOTS of the outer CONTAINER `SexpShape::
+// HASH_DISCRIMINATORS` the sub-carving's two bytes land at (a
+// regression that swapped `Self::NIL_HASH_DISCRIMINATOR` and
+// `Self::LIST_HASH_DISCRIMINATOR` in the outer array initializer
+// so slot 0 becomes `2u8` and slot 7 becomes `0u8` would preserve
+// the sub-carving array's `[0, 2]` order the joint witness pins
+// AND the outer array's global `{0..=6}` set-image the joint
+// witness pins, but would silently corrupt the outer container's
+// per-position slot-to-carving-role mapping the two new witnesses
+// below reject).
+//
+// Sibling posture to the four-slot QUOTE-family tail
+// `assert_u8_array_slice_equals_u8_array::<12, 4, 8>(&SexpShape::
+// HASH_DISCRIMINATORS, &QuoteForm::HASH_DISCRIMINATORS)` witness
+// IMMEDIATELY ABOVE — that witness carries the sub-carving
+// projection at the LARGEST arity (4 positions in a single
+// `const _` line); these two witnesses carry the sub-carving
+// projection at the SMALLEST arity (1 position each, at the two
+// disjoint singleton slots the structural-residual carving
+// occupies on the outer container). Together the three SLICE-
+// EQUALS-ARRAY witnesses cover the ENTIRE SexpShape ⊃
+// {StructuralKind, QuoteForm} sub-carving composition at rustc-
+// time — `SexpShape::HASH_DISCRIMINATORS[0..1] ∪ [7..8) ∪ [8..12)`
+// exhausts the eight non-atomic slots on the outer container, so
+// combined with the sibling `SLICE-BLOCK-CONSTANCY` witness on
+// `[1..7)` the twelve-slot outer array is FULLY pinned per-
+// position at rustc-time.
+//
+// The two witnesses use INLINE `[u8; 1]` singleton arrays rather
+// than `&StructuralKind::HASH_DISCRIMINATORS[0..1]` slice syntax
+// because the helper's signature takes `&[u8; M]` (a const-generic
+// array reference, arity-known at rustc time) rather than `&[u8]`
+// (a slice type with runtime-length). The inline arrays project
+// the two per-role `pub(crate) const` bytes directly — a
+// regression that renamed one of the two aliases fails at the
+// alias's declaration site FIRST (a missing symbol referent),
+// which routes to a distinct diagnostic axis rather than to the
+// witness's SLICE-EQUALS-ARRAY-VIOLATION panic.
+const _: () = assert_u8_array_slice_equals_u8_array::<12, 1, 0>(
+    &crate::error::SexpShape::HASH_DISCRIMINATORS,
+    &[crate::error::StructuralKind::NIL_HASH_DISCRIMINATOR],
+);
+const _: () = assert_u8_array_slice_equals_u8_array::<12, 1, 7>(
+    &crate::error::SexpShape::HASH_DISCRIMINATORS,
+    &[crate::error::StructuralKind::LIST_HASH_DISCRIMINATOR],
 );
 
 // `Sexp` is `PartialEq` but not `Eq` (Float contains NaN). We implement Hash

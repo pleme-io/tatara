@@ -6818,6 +6818,194 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The lex-order strict-interior index list — the `Vec<usize>`
+    /// decl-slot projection of [`Self::sorted_interior`] over the
+    /// closed-set lex-axis boundary-partition surface. Every index `i`
+    /// in the returned vector is the [`Self::index_of`] declaration-slot
+    /// of some strictly-lex-interior variant `v` in
+    /// [`Self::sorted_interior`] (`<Self as ClosedSet>::is_sorted_interior(v)
+    /// == true`, equivalently `<Self as ClosedSet>::is_sorted_interior_index(<Self as ClosedSet>::sorted_index_of(v))
+    /// == true`), so `i` names neither the decl slot of
+    /// [`Self::sorted_first`] nor the decl slot of [`Self::sorted_last`];
+    /// the lex order of [`Self::sorted_interior`] is preserved verbatim
+    /// (the returned vector's entries are ORDERED by lex position but
+    /// each entry carries the DECLARATION slot the variant sits at in
+    /// [`Self::ALL`], not the lex slot — the same `usize` carrier
+    /// [`Self::interior_indices`] returns one ordering axis over).
+    ///
+    /// CLOSES the (`Vec<usize>` decl-slot collection) return-shape row
+    /// on the (return-shape × ordering) 3×2 interior-aggregation matrix
+    /// at its (`Vec<usize>`, lex) corner peer to
+    /// [`Self::interior_indices`]'s (`Vec<usize>`, decl) corner one
+    /// ordering axis over. Sibling posture to
+    /// [`Self::sorted_interior_labels`] one return-shape axis over on
+    /// the (`Vec<Self>`, `Vec<&'static str>`, `Vec<usize>`) return-shape
+    /// partition of the closed-set lex-axis interior-aggregation surface
+    /// — [`Self::sorted_interior`] materializes each strictly-lex-
+    /// interior slot as `Self`, [`Self::sorted_interior_labels`] labels
+    /// each slot under [`Self::label`], this method projects each slot
+    /// onto its declaration-order `usize` position through
+    /// [`Self::index_of`]. All three walk the SAME (lex-endpoint-
+    /// stripped variant sequence) primitive and MUST agree slot-for-slot
+    /// on the underlying (variant → decl slot, variant → canonical
+    /// label, variant → variant) three-way projection triangle over the
+    /// strictly-lex-interior partition.
+    ///
+    /// The (return-shape × ordering × partition-flavor) 3×2×2 cube over
+    /// the closed-set aggregation surface post-lift:
+    ///
+    /// | Return-shape             | Full-set decl      | Full-set lex      | Interior decl       | Interior lex        |
+    /// |--------------------------|--------------------|-------------------|---------------------|---------------------|
+    /// | `Vec<Self>`              | (implicit `ALL`)   | [`Self::sorted_variants`] | [`Self::interior`] | [`Self::sorted_interior`] |
+    /// | `Vec<&'static str>`      | [`Self::labels`]   | [`Self::sorted_labels`]   | [`Self::interior_labels`] | [`Self::sorted_interior_labels`] |
+    /// | `Vec<usize>`             | (implicit `0..CARDINALITY`) | (implicit `sorted_indices()` — pending) | [`Self::interior_indices`] | this method |
+    ///
+    /// The (`Vec<usize>`, interior) row now closes at BOTH ordering
+    /// columns; the (`Vec<usize>`, full-set) row remains implicit at
+    /// both columns awaiting a future
+    /// [`Self::indices`] / [`Self::sorted_indices`] pair (a low-priority
+    /// lift — full-set `usize` collections are trivially derivable from
+    /// `T::CARDINALITY` alone at every callsite whereas the boundary-
+    /// partition-stripped interior variant needs the boundary predicate
+    /// composed in).
+    ///
+    /// Default body composes [`Self::sorted_interior`] with
+    /// `.into_iter()` + `.map(Self::index_of)` verbatim — the strictly-
+    /// lex-interior decl-slot collection is a typed CONSEQUENCE of the
+    /// lex-boundary-partition predicate composed with the per-slot
+    /// decl-index projection, not a fourth codepath through inline
+    /// slice arithmetic
+    /// `T::sorted_variants().into_iter().enumerate().filter(|(li, _)| T::is_sorted_interior_index(li)).map(|(_, v)| T::index_of(v)).collect()`
+    /// (which re-derives the lex-endpoint-position literals at every
+    /// callsite AND drifts silently when a future implementor overrides
+    /// [`Self::is_sorted_interior_index`] to route through a divergent
+    /// lex-boundary primitive). Implementors override only when the
+    /// strictly-lex-interior decl-slot collection needs to diverge from
+    /// the natural `sorted_interior().into_iter().map(index_of).collect()`
+    /// shape — a typed escape hatch the trait surface exposes rather
+    /// than forcing the implementor to hand-roll the impl. An
+    /// implementor that overrides [`Self::is_sorted_interior`] (or the
+    /// [`Self::is_sorted_endpoint`] / [`Self::is_sorted_first`] /
+    /// [`Self::is_sorted_last`] scalars it funnels through) propagates
+    /// the override through [`Self::sorted_interior`] to this default
+    /// body automatically; the (variant → strictly-lex-interior decl-
+    /// slot collection) projection funnels through ONE typed predicate
+    /// on the filter column AND through [`Self::index_of`] on the
+    /// projection column.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::sorted_interior`] returns the
+    /// empty vector, so this method returns `[]`. Two-variant degeneracy
+    /// — for `T::CARDINALITY == 2`, [`Self::sorted_interior`] returns
+    /// `[]` (both slots are lex endpoints), so this method returns `[]`.
+    /// The strictly-lex-interior decl-slot collection has strictly
+    /// `CARDINALITY - 2` elements for `CARDINALITY >= 2` and `0`
+    /// elements at the singleton edge, matching
+    /// [`Self::sorted_interior`]'s cardinality profile one return-shape
+    /// axis over.
+    ///
+    /// DIVERGENCE FROM [`Self::interior_indices`]: on any closed set
+    /// whose declaration order matches lex order the two methods return
+    /// the same slot list (`StubKind`'s canonical labels `("alpha",
+    /// "beta", "gamma")` sort-in-place at every position, so
+    /// `T::interior_indices() == T::sorted_interior_indices() == [1]`).
+    /// On any closed set whose declaration order DIVERGES from lex order
+    /// the two methods return different slot lists — the (`decl slots
+    /// filtered through the decl-order boundary`) collection under
+    /// [`Self::interior_indices`] is not the same as the (`decl slots
+    /// filtered through the lex-order boundary`) collection under this
+    /// method. Consumers that want the alphabetized interior slot list
+    /// (an alphabetized interior-only completion bar keyed on decl slots,
+    /// a `tatara-check` per-slot metrics counter that iterates the
+    /// canonical-label-sorted strictly-interior slots to key its counter
+    /// table, a deterministic-across-machines interior-only bitset
+    /// renderer whose alphabetized ordering must not depend on
+    /// [`Self::ALL`]'s declaration order) bind THIS method; consumers
+    /// that want the declaration-order interior slot list (a bounded
+    /// interior loop keyed on decl slots that must iterate variants in
+    /// their canonical declaration order) bind [`Self::interior_indices`].
+    ///
+    /// Future consumers — a bounded lex-interior loop that iterates over
+    /// `T::sorted_interior_indices()` to key per-slot data structures
+    /// that hold entries ONLY for strictly-lex-interior slots (an
+    /// alphabetized interior-observed-slot renderer that sets bit `i`
+    /// per observed strictly-lex-interior slot in the ORDER `i` sits at
+    /// on the lex axis, a per-slot metrics counter table `[u64;
+    /// T::CARDINALITY]` that zeroes both lex endpoints and increments
+    /// the lex-interior slots per sample in lex-order arrival, a
+    /// deterministic-across-machines interior-only Prometheus tag whose
+    /// alphabetized rendering key routes through the strictly-lex-
+    /// interior decl-slot list), a range-based coherence probe that
+    /// asserts every observed decl-slot sits in
+    /// `T::sorted_interior_indices()` before crediting the observation
+    /// to the lex-interior arm of a boundary-flavored fold, a
+    /// `tatara-check` per-slot per-label diagnostic that renders
+    /// `<label>: <count>` for the strictly-lex-interior slots in
+    /// alphabetized order — bind to ONE trait method instead of
+    /// hand-rolling either
+    /// `T::sorted_interior().into_iter().map(T::index_of).collect()`
+    /// (which re-derives the same two-primitive composition at every
+    /// callsite) OR the inline enumeration-based composition that
+    /// re-derives the underlying lex-boundary-partition predicate at
+    /// every callsite AND drifts silently when a future implementor
+    /// overrides [`Self::sorted_interior`] to route through a divergent
+    /// lex-boundary primitive.
+    ///
+    /// The strictly-lex-interior decl-slot collection contract —
+    /// `T::sorted_interior_indices() == T::sorted_interior().into_iter().map(T::index_of).collect()`
+    /// on every implementor — is guaranteed by the default composition
+    /// through [`Self::sorted_interior`] + [`Self::index_of`]; the
+    /// well-formedness contract [`assert_closed_set_well_formed`]'s new
+    /// clause (95) pins the composition against the natural
+    /// `sorted_interior().into_iter().map(index_of).collect()` shape on
+    /// every implementor so a passing well-formedness sweep means every
+    /// generic consumer can call `sorted_interior_indices` on any typed
+    /// carrier and expect the same `Vec<usize>` answer at every crate
+    /// boundary.
+    ///
+    /// THEORY.md §III — the typescape; the (strictly-lex-interior
+    /// partition → decl-slot collection) `Vec<usize>` projection becomes
+    /// a TYPE projection on the trait rather than a per-consumer inline
+    /// `T::sorted_interior().into_iter().map(T::index_of).collect()`
+    /// two-primitive composition at every downstream lex-interior-decl-
+    /// slot lookup site. The (return-shape × ordering) 3×2 interior-
+    /// aggregation matrix CLOSES its sixth corner at the (`Vec<usize>`,
+    /// lex) slot alongside the five pre-existing corners.
+    /// THEORY.md §V.1 — knowable platform; the (strictly-lex-interior
+    /// decl-slot collection) projection was an unnamed compound of
+    /// [`Self::sorted_interior`] + `.map(Self::index_of).collect()`
+    /// pre-lift; naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two substrate primitives — generic consumers
+    /// see ONE method, not ONE lex-interior-decl-slot-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the projection
+    /// emerges from the composition of [`Self::sorted_interior`] +
+    /// [`Self::index_of`] rather than as a per-implementor
+    /// `const SORTED_INTERIOR_INDICES: [usize; N - 2]` declaration
+    /// that silently drifts from [`Self::ALL`] on any reordering or
+    /// when a hand-rolled [`Self::is_sorted_interior`] override carves
+    /// a different strictly-lex-interior partition.
+    ///
+    /// Frontier inspiration: Racket's `(enum-indices/lex-interior enum)`
+    /// on a closed enum projects the lex-interior partition directly
+    /// onto its declaration-order slot list, complementary to
+    /// `(enum-indices/interior enum)` that emits the declaration-
+    /// interior slot list. MLIR's
+    /// `mlir::OperationName::sorted_interior_op_indices()` on the
+    /// registered-op enumeration (the alphabetized boundary-stripped
+    /// operation collection's index projection). Translation through
+    /// pleme-io primitives: a pure default method composing the trait's
+    /// existing [`Self::sorted_interior`] + [`Self::index_of`] surfaces
+    /// — no new dep, no new IR layer, no supertrait bound, no per-
+    /// implementor allocation beyond the natural `Vec<usize>` collection
+    /// the sibling [`Self::interior_indices`] surface already routes one
+    /// ordering axis over.
+    fn sorted_interior_indices() -> ::std::vec::Vec<usize> {
+        <Self as ClosedSet>::sorted_interior()
+            .into_iter()
+            .map(<Self as ClosedSet>::index_of)
+            .collect()
+    }
+
     /// Recover the canonical [`Self::label`] at declaration-order
     /// position `i` in [`Self::ALL`], or [`None`] if
     /// `i >= Self::CARDINALITY`.
@@ -23094,6 +23282,66 @@ where
             "{type_name}: T::interior_indices() emitted decl-slot {i} that fails T::is_interior_index({i}) — the strictly-interior decl-slot collection admitted an endpoint slot, bifurcating the boundary-partition contract clauses (74) + (75) pin at the `usize`-arg predicate axis. Every slot in T::interior_indices() MUST satisfy T::is_interior_index(_) by the interior()+index_of composition contract",
         );
     }
+    // (95) — `T::sorted_interior_indices()` MUST equal
+    // `T::sorted_interior().into_iter().map(T::index_of).collect::<Vec<_>>()`
+    // AND every element `i` in the returned vector MUST satisfy
+    // `T::is_sorted_interior_index(T::sorted_index_of(T::from_index(i).unwrap())) == true`
+    // (equivalently: the DECLARATION slot `i` names a variant whose LEX
+    // slot sits strictly inside the lex-endpoint pair). The default
+    // trait body threads `T::sorted_interior()` through
+    // `.map(T::index_of).collect()` verbatim and satisfies both
+    // alignments for free; the assertion catches a future implementor
+    // whose override drifts the projection (a stale override that folds
+    // the lex-interior decl-slot collection onto the full-set
+    // `(0..T::CARDINALITY).collect()` — silently including both
+    // lex-endpoint slots and bifurcating from the lex-boundary-partition
+    // contract; a swap override that returns declaration-order interior
+    // slots instead of lex-order interior slots — silently bifurcating
+    // from the (declaration, lex) ordering axis and collapsing the
+    // (return-shape × ordering) 3×2 matrix's sixth (`Vec<usize>`, lex)
+    // corner onto its (`Vec<usize>`, decl) peer; an override that
+    // routes a lex-endpoint decl-slot into any tuple position —
+    // silently detaching the strictly-lex-interior partition rendering
+    // from [`Self::sorted_interior`]'s canonical partition of
+    // `T::sorted_variants()`) loudly rather than silently bifurcating
+    // the strictly-lex-interior decl-slot-collection projection surface
+    // every downstream lex-interior-decl-slot consumer routes through.
+    // Sibling posture to clauses (39) + (41) + (93) + (94) — clause
+    // (39) pins the `Vec<Self>` lex-order strictly-interior variant
+    // collection, clause (41) pins the `Vec<&'static str>` lex-order
+    // strictly-interior label collection, clause (93) pins the
+    // `(usize, usize)` lex-order PAIR-endpoint aggregation, clause (94)
+    // pins the `Vec<usize>` DECLARATION-order strictly-interior decl-
+    // slot collection, this clause pins the `Vec<usize>` LEX-order
+    // strictly-interior decl-slot collection — the (return-shape ×
+    // ordering) 3×2 = 6-corner interior-aggregation matrix now closes
+    // at all six corners with matching well-formedness clauses, and
+    // the (partition-flavor) axis stays partitioned cleanly against
+    // the boundary-aggregation `(usize, usize)` pair-endpoint corners
+    // one arity level over.
+    let expected_sorted_interior_indices: Vec<usize> = T::sorted_interior()
+        .into_iter()
+        .map(<T as ClosedSet>::index_of)
+        .collect();
+    assert_eq!(
+        T::sorted_interior_indices(),
+        expected_sorted_interior_indices,
+        "{type_name}: T::sorted_interior_indices() drifted from T::sorted_interior().into_iter().map(T::index_of).collect() — the lex-order strictly-interior decl-slot collection no longer agrees with the natural sorted_interior().map(index_of) two-primitive composition, so a downstream alphabetized interior-only completion bar / lex-interior-arm parallel-vector renderer / lex-interior-partition metrics counter / lex-interior-observed bitset renderer that binds `T::sorted_interior_indices()` as its `Vec<usize>` strictly-lex-interior decl-slot query surface would render the wrong slot list",
+    );
+    for &i in &T::sorted_interior_indices() {
+        // The lex-order decl-slot list carries DECLARATION indices `i`
+        // whose LEX indices sit strictly inside the (sorted_first,
+        // sorted_last) endpoints. Round-trip the decl-slot through the
+        // (usize → typed variant → lex index) two-step composition and
+        // pin the resulting lex index against the boundary-partition
+        // predicate on the lex axis.
+        let variant = T::from_index(i).unwrap_or_else(|| panic!("{type_name}: T::sorted_interior_indices() emitted decl-slot {i} that fails T::from_index({i}).is_some() — the strictly-lex-interior decl-slot collection admitted an out-of-range slot, breaking clauses (17) + (94) + this clause's shared bounds invariant"));
+        let lex_slot = T::sorted_index_of(variant);
+        assert!(
+            T::is_sorted_interior_index(lex_slot),
+            "{type_name}: T::sorted_interior_indices() emitted decl-slot {i} (lex slot {lex_slot}) that fails T::is_sorted_interior_index({lex_slot}) — the strictly-lex-interior decl-slot collection admitted a lex-endpoint slot, bifurcating the lex-boundary-partition contract clauses (76) + (77) pin at the `usize`-arg predicate axis. Every decl-slot in T::sorted_interior_indices() MUST decode through T::from_index + T::sorted_index_of to a lex slot satisfying T::is_sorted_interior_index(_) by the sorted_interior()+index_of composition contract",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -34266,6 +34514,296 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted an interior_indices() override that included the endpoint slots on the strictly-interior partition",
+        );
+    }
+
+    #[test]
+    fn sorted_interior_indices_returns_lex_order_strict_interior_index_slice() {
+        // The lex-order interior-decl-slot-collection projection returns
+        // the `T::index_of(_)` decl-slot of every strictly-lex-interior
+        // variant in `T::sorted_interior()` — the lex-head endpoint
+        // anchor (Alpha at lex slot 0, decl slot 0) and the lex-tail
+        // endpoint anchor (Gamma at lex slot 2, decl slot 2) are both
+        // filtered out by the lex-boundary-partition predicate on the
+        // `sorted_interior()` sourcing collection, leaving `[1]` (Beta's
+        // declaration-order slot, which is also its lex-order slot on
+        // this fixture) on the 3-variant stub. `StubKind`'s canonical
+        // labels are `("alpha", "beta", "gamma")` — the declaration
+        // ordering matches the lex ordering here, so the lex-interior-
+        // decl-slot collection matches the declaration-interior-decl-
+        // slot collection. Sibling posture to
+        // `interior_indices_returns_declaration_order_strict_interior_index_slice`
+        // one ordering axis over on the (declaration, lex) partition of
+        // the closed-set interior-decl-slot-collection surface —
+        // together the two tests bind the (`Vec<usize>`, declaration) +
+        // (`Vec<usize>`, lex) corner pair of the (return-shape ×
+        // ordering) 3×2 interior-aggregation matrix at their
+        // ordering-collapsed shape (they SHOULD agree here because the
+        // stub's declaration matches its lex ordering).
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_interior_indices(),
+            vec![1_usize],
+        );
+    }
+
+    #[test]
+    fn sorted_interior_indices_collapses_to_empty_on_singleton_closed_set() {
+        // Singleton degeneracy — a 1-variant closed set has both
+        // lex-endpoint slots collapsed onto the sole variant, so
+        // `T::sorted_interior()` returns `[]` and this method inherits
+        // the empty projection through the natural
+        // `sorted_interior().map(index_of).collect()` composition.
+        // Sibling posture to
+        // `interior_indices_collapses_to_empty_on_singleton_closed_set`
+        // one ordering axis over — the (`Vec<usize>`, decl) +
+        // (`Vec<usize>`, lex) corner pair of the interior-aggregation
+        // matrix collapses to the empty collection simultaneously on
+        // the singleton edge.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonSortedInteriorIndicesStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonSortedInteriorIndicesStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonSortedInteriorIndicesStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown singleton sorted interior indices stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for SingletonSortedInteriorIndicesStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton sorted interior indices stub kind";
+            type Unknown = UnknownSingletonSortedInteriorIndicesStubKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonSortedInteriorIndicesStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonSortedInteriorIndicesStubKind as ClosedSet>::sorted_interior_indices(),
+            Vec::<usize>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_interior_indices_agrees_with_sorted_interior_map_index_of_on_stub_kind() {
+        // The direct (lex-order strictly-interior decl-slot collection)
+        // projection MUST agree with the two-step
+        // `sorted_interior().into_iter().map(index_of).collect()`
+        // composition on the stub-level surface. Pinning the alignment
+        // here means a generic consumer can freely swap between the
+        // direct-projection surface and the two-step composition based
+        // on its rendering / storage needs without changing the
+        // program's decoded-slot semantics. A regression that drifts
+        // the direct-projection surface (a permissive override that
+        // includes the lex-endpoint slots, a swapped override that
+        // returns declaration-order slots instead of lex-order slots,
+        // a strict override that drops lex-interior slots) fails this
+        // pin stub-level before any per-implementor sweep depends on
+        // the alignment downstream.
+        let direct = <StubKind as ClosedSet>::sorted_interior_indices();
+        let composed: Vec<usize> = <StubKind as ClosedSet>::sorted_interior()
+            .into_iter()
+            .map(<StubKind as ClosedSet>::index_of)
+            .collect();
+        assert_eq!(
+            direct, composed,
+            "sorted_interior_indices() disagreed with sorted_interior().into_iter().map(index_of).collect() — the direct lex-order strictly-interior decl-slot collection bifurcated from the natural two-step composition",
+        );
+    }
+
+    #[test]
+    fn sorted_interior_indices_diverges_from_full_range_when_endpoints_exist() {
+        // The strictly-lex-interior partition contract — for every
+        // `T::CARDINALITY >= 2` closed set,
+        // `T::sorted_interior_indices()` MUST NEVER contain either
+        // lex-endpoint's decl slot (`T::sorted_first().index_of()` or
+        // `T::sorted_last().index_of()`) AND MUST NEVER equal the
+        // full-set slot range `(0..T::CARDINALITY).collect()`. Pinning
+        // the contract here means a regression that folds
+        // `sorted_interior_indices()` onto the full-set slot range
+        // (e.g. an override that returns `(0..T::CARDINALITY).collect()`
+        // instead of the boundary-stripped slot list) fails this
+        // stub-level check before any per-implementor sweep depends on
+        // the partition downstream. On the 3-variant `StubKind` fixture
+        // (labels alpha < beta < gamma, matching declaration order),
+        // the lex-endpoints are Alpha (decl slot 0) and Gamma (decl
+        // slot 2), so the lex-interior-decl-slot collection is `[1]` —
+        // strictly one slot, strictly excluding both lex-endpoint
+        // decl-slots (0, 2).
+        let lex_interior = <StubKind as ClosedSet>::sorted_interior_indices();
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        let head_decl_slot =
+            <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::sorted_first());
+        let tail_decl_slot =
+            <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::sorted_last());
+        assert!(
+            !lex_interior.contains(&head_decl_slot),
+            "sorted_interior_indices() included the lex-head endpoint's decl slot {head_decl_slot} — the lex-boundary-partition predicate MUST strip both lex-endpoint decl-slots from the strictly-lex-interior partition",
+        );
+        assert!(
+            !lex_interior.contains(&tail_decl_slot),
+            "sorted_interior_indices() included the lex-tail endpoint's decl slot {tail_decl_slot} — the lex-boundary-partition predicate MUST strip both lex-endpoint decl-slots from the strictly-lex-interior partition",
+        );
+        let full_range: Vec<usize> = (0..cardinality).collect();
+        assert_ne!(
+            lex_interior, full_range,
+            "sorted_interior_indices() folded onto the full-set slot range (0..T::CARDINALITY).collect() — the strictly-lex-interior partition MUST diverge from the full-set slot range on every closed set with T::CARDINALITY >= 2",
+        );
+    }
+
+    #[test]
+    fn interior_indices_and_sorted_interior_indices_diverge_on_declaration_order_that_diverges_from_lex_order(
+    ) {
+        // The (return-shape × ordering) 3×2 interior-aggregation
+        // matrix's ordering axis is LOAD-BEARING on the (`Vec<usize>`,
+        // interior) row — the two ordering columns MUST return DIFFERENT
+        // slot lists whenever declaration order diverges from lex order.
+        // Fixture: declaration order = `[Gamma, Alpha, Beta]` (labels
+        // "gamma", "alpha", "beta") with declaration slots `Gamma → 0`,
+        // `Alpha → 1`, `Beta → 2`. The lex-sorted order is `[alpha
+        // (Alpha), beta (Beta), gamma (Gamma)]`, so lex slots are
+        // `Alpha → 0`, `Beta → 1`, `Gamma → 2`. Declaration-order
+        // interior filters out declaration slots 0 (Gamma) and 2 (Beta)
+        // — leaving `[Alpha]` at declaration slot 1. Lex-order interior
+        // filters out lex slots 0 (Alpha) and 2 (Gamma) — leaving
+        // `[Beta]` at declaration slot 2. Therefore:
+        // `interior_indices() == [1]` (declaration slot of Alpha)
+        // `sorted_interior_indices() == [2]` (declaration slot of Beta)
+        // The two slot lists diverge exactly when declaration order
+        // diverges from lex order — pinning the divergence here binds
+        // the ordering axis as load-bearing and prevents a regression
+        // that folds `sorted_interior_indices` onto `interior_indices`
+        // (or vice versa) from passing silently.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DeclLexDivergentInteriorIndicesKind {
+            Gamma,
+            Alpha,
+            Beta,
+        }
+        #[derive(Debug)]
+        struct UnknownDeclLexDivergentInteriorIndicesKind(pub String);
+        impl core::fmt::Display for UnknownDeclLexDivergentInteriorIndicesKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown decl-lex divergent interior indices kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DeclLexDivergentInteriorIndicesKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Alpha, Self::Beta];
+            const SET_LABEL: &'static str = "decl-lex divergent interior indices kind";
+            type Unknown = UnknownDeclLexDivergentInteriorIndicesKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDeclLexDivergentInteriorIndicesKind(s.to_owned())
+            }
+        }
+        // Declaration-order interior slots: filter out declaration
+        // slot 0 (Gamma) and declaration slot 2 (Beta), leaving
+        // declaration slot 1 (Alpha).
+        assert_eq!(
+            <DeclLexDivergentInteriorIndicesKind as ClosedSet>::interior_indices(),
+            vec![1_usize],
+        );
+        // Lex-order interior slots: filter out lex slot 0 (alpha =
+        // Alpha at decl slot 1) and lex slot 2 (gamma = Gamma at decl
+        // slot 0), leaving lex slot 1 (beta = Beta at decl slot 2).
+        assert_eq!(
+            <DeclLexDivergentInteriorIndicesKind as ClosedSet>::sorted_interior_indices(),
+            vec![2_usize],
+        );
+        // Pinning divergence directly — the two slot lists MUST NOT
+        // agree on this fixture. Any implementor that folds one onto
+        // the other (a stale override that returns the declaration-
+        // order slot list from the lex-order method, or vice versa)
+        // fails this pin.
+        assert_ne!(
+            <DeclLexDivergentInteriorIndicesKind as ClosedSet>::interior_indices(),
+            <DeclLexDivergentInteriorIndicesKind as ClosedSet>::sorted_interior_indices(),
+            "interior_indices() and sorted_interior_indices() collapsed onto the same slot list on a fixture whose declaration order diverges from its lex order — the (return-shape × ordering) 3×2 interior-aggregation matrix's ordering axis is no longer load-bearing",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_interior_indices_and_composition()
+    {
+        // The well-formedness sweep's (95) clause —
+        // `T::sorted_interior_indices()` MUST equal
+        // `T::sorted_interior().into_iter().map(T::index_of).collect()`
+        // AND every returned decl-slot MUST decode through
+        // `T::from_index + T::sorted_index_of` to a lex slot satisfying
+        // `T::is_sorted_interior_index(_)`. A hand-impl'd implementor
+        // whose override drifts the composition — e.g. a permissive
+        // override that returns the full-set slot range — fails the
+        // sweep loudly rather than silently bifurcating the strictly-
+        // lex-interior decl-slot-collection projection surface every
+        // downstream lex-interior-decl-slot consumer routes through.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_interior_indices_and_composition`
+        // one ordering axis over on the (declaration, lex) partition of
+        // clauses (94) + (95).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedInteriorIndicesKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedInteriorIndicesKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedInteriorIndicesKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted interior indices kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DriftedSortedInteriorIndicesKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted sorted interior indices kind";
+            type Unknown = UnknownDriftedSortedInteriorIndicesKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedInteriorIndicesKind(s.to_owned())
+            }
+            fn sorted_interior_indices() -> Vec<usize> {
+                // Drifted override — returns the FULL-SET decl-slot
+                // range `[0, 1, 2]` including both lex-endpoint slots
+                // instead of the boundary-stripped `[1]` the natural
+                // `sorted_interior().map(index_of)` composition
+                // produces. Fails clause (95)'s lex-boundary-partition
+                // contract at both lex-endpoint slots simultaneously.
+                vec![0, 1, 2]
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedInteriorIndicesKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_interior_indices() override that included the lex-endpoint slots on the strictly-lex-interior partition",
         );
     }
 

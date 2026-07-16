@@ -5449,6 +5449,238 @@ pub trait ClosedSet: Sized + Copy + 'static {
         )
     }
 
+    /// The declaration-order endpoint DECL-INDEX pair — the tuple
+    /// `(T::first().index_of(), T::last().index_of())` projected onto
+    /// the trait surface as ONE call. Opens the `(usize, usize)` pair-
+    /// aggregation row on the closed-set endpoint-anchor pair
+    /// return-shape matrix at the (declaration) ordering corner,
+    /// mirroring [`Self::endpoint_labels`] one return-type axis over on
+    /// the (`(&'static str, &'static str)`, `(usize, usize)`) return-
+    /// shape column of the pair-endpoint aggregation matrix AND
+    /// mirroring [`Self::first_index`] + [`Self::last_index`] one
+    /// aggregation-shape axis over on the (singular scalar, pair-tuple)
+    /// partition of the closed-set declaration-axis endpoint-decl-slot
+    /// return-shape column.
+    ///
+    /// The (return-type × ordering × aggregation-shape) 3×2×2 = 12-corner
+    /// endpoint-anchor return-shape hypercube partitions post-lift:
+    ///
+    /// | Return type \\ (Ordering, Aggregation) | (Decl, Singular)                              | (Decl, Pair)                       | (Lex, Singular)                                              | (Lex, Pair)                                 |
+    /// |----------------------------------------|-----------------------------------------------|------------------------------------|--------------------------------------------------------------|---------------------------------------------|
+    /// | `Self` (typed variant)                 | [`Self::first`] / [`Self::last`]              | [`Self::endpoints`]                | [`Self::sorted_first`] / [`Self::sorted_last`]               | [`Self::sorted_endpoints`]                  |
+    /// | `&'static str` (label)                 | [`Self::first_label`] / [`Self::last_label`]  | [`Self::endpoint_labels`]          | [`Self::sorted_first_label`] / [`Self::sorted_last_label`]   | [`Self::sorted_endpoint_labels`]            |
+    /// | `usize` (decl-slot)                    | [`Self::first_index`] / [`Self::last_index`]  | this method                        | [`Self::sorted_first_index`] / [`Self::sorted_last_index`]   | [`Self::sorted_endpoint_indices`]           |
+    ///
+    /// Every generic consumer that wants BOTH declaration-order endpoint
+    /// DECL-SLOTS as ONE `(usize, usize)` tuple (a bounded-loop range
+    /// walker that destructures
+    /// `let (head_idx, tail_idx) = T::endpoint_indices();` and walks
+    /// the declaration-order chain from `head_idx` to `tail_idx` on a
+    /// parallel-vector `<[U]>::iter().skip(head_idx).take(tail_idx - head_idx + 1)`
+    /// projection WITHOUT materializing the two typed anchor variants,
+    /// a `Range<usize>`-based traversal that binds BOTH endpoint decl-
+    /// slots atomically, a range-based coherence probe that anchors
+    /// BOTH endpoint slot assertions through ONE destructure, an audit
+    /// event that emits BOTH decl-slot integer coordinates atomically
+    /// without a per-slot `index_of()` call, a parallel-vector
+    /// boundary-badge that renders
+    /// `<vec[head_idx]> ↔ <vec[tail_idx]>` in ONE lookup pair) binds
+    /// to ONE typed method rather than hand-rolling the
+    /// `(T::first().index_of(), T::last().index_of())` four-primitive
+    /// composition OR the
+    /// `let (h, t) = T::endpoints(); (h.index_of(), t.index_of())`
+    /// two-step destructure-then-project at every callsite.
+    ///
+    /// Default body destructures [`Self::endpoints`] and projects each
+    /// tuple slot under [`Self::index_of`] — the (head-decl-slot,
+    /// tail-decl-slot) pair aggregation is a typed CONSEQUENCE of the
+    /// composition of the pair-aggregation primitive with the per-slot
+    /// decl-index projection, not a fifth codepath through
+    /// [`Self::ALL`] with slice-index-0 / slice-index-(N - 1) integer
+    /// literals. Implementors override only when the decl-slot-pair
+    /// aggregation needs to diverge from the natural
+    /// `(first().index_of(), last().index_of())` shape (no production
+    /// implementor reaches for this today; the axis exists for the
+    /// same reason `via` / `set_label` / `labels` / `endpoints` /
+    /// `endpoint_labels` overrides exist — a typed escape hatch the
+    /// trait surface exposes rather than forcing the implementor to
+    /// hand-roll the impl). An implementor that overrides
+    /// [`Self::endpoints`] (or the [`Self::first`] / [`Self::last`]
+    /// scalars it funnels through) OR overrides [`Self::index_of`]
+    /// propagates the override through this default body to the
+    /// decl-slot-pair aggregation automatically; the (declaration-order
+    /// head-decl-slot, declaration-order tail-decl-slot) pair-
+    /// aggregation surface funnels through the pair-aggregation
+    /// primitive on the tuple-shape column AND the per-slot decl-index
+    /// projection on the rendering column.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::first`] and [`Self::last`] both
+    /// return the sole variant whose `index_of()` is `0`, so this
+    /// method returns the diagonal tuple `(0, 0)` — the decl-slot pair
+    /// collapses to a diagonal tuple over the sole variant's decl-slot.
+    /// Mirrors [`Self::endpoints`]'s singleton collapse one return-shape
+    /// axis over and preserves the tuple SHAPE even at the boundary-
+    /// cardinality edge where the two SLOTS collapse onto the same
+    /// decl-slot integer coordinate. Two-variant degeneracy —
+    /// [`Self::first`] and [`Self::last`] name distinct variants at
+    /// decl-slots `0` and `1`, so this method returns `(0, 1)`.
+    ///
+    /// The endpoint-decl-slot pair contract —
+    /// `T::endpoint_indices() == (T::first().index_of(), T::last().index_of())`
+    /// AND `T::endpoint_indices() == (0, T::CARDINALITY - 1)` on every
+    /// implementor — is guaranteed by the default composition through
+    /// the pair-aggregation primitive and the per-slot decl-index
+    /// projection; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (92) pins the
+    /// composition against the natural
+    /// `(first().index_of(), last().index_of())` shape AND against the
+    /// `(0, CARDINALITY - 1)` structural fixpoint on every implementor
+    /// so a passing well-formedness sweep means every generic consumer
+    /// can call [`Self::endpoint_indices`] on any typed carrier and
+    /// expect the same tuple answer at every crate boundary.
+    ///
+    /// THEORY.md §III — the typescape; the (declaration-order head-
+    /// decl-slot, declaration-order tail-decl-slot) pair-aggregation
+    /// becomes a TYPE projection on the trait rather than a per-consumer
+    /// inline `(T::first().index_of(), T::last().index_of())`
+    /// composition at every downstream decl-slot-pair-endpoint site.
+    /// The closed-set pair-aggregation return-shape matrix gains its
+    /// `(usize, usize)` declaration-axis corner — the (return-type ×
+    /// ordering) 3×2 pair-endpoint aggregation matrix on the pair-tuple
+    /// return-shape column is now closed at the (`usize`, declaration)
+    /// corner.
+    /// THEORY.md §V.1 — knowable platform; the (declaration-order
+    /// head-decl-slot, declaration-order tail-decl-slot) pair
+    /// aggregation was an unnamed compound of [`Self::endpoints`]
+    /// destructured under [`Self::index_of`] pre-lift; naming it on
+    /// the trait makes the projection a TYPED CONSEQUENCE of the two
+    /// substrate primitives — generic consumers see ONE method, not
+    /// one decl-slot-pair-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (declaration-
+    /// order decl-slot-pair) aggregation emerges from the composition
+    /// of [`Self::endpoints`] with per-slot [`Self::index_of`]
+    /// projection rather than as a per-implementor
+    /// `const ENDPOINT_INDICES: (usize, usize) = (0, N - 1)`
+    /// declaration that silently drifts from [`Self::ALL`] on any
+    /// reordering.
+    ///
+    /// Frontier inspiration: Racket's `enum-endpoint-indices` on closed
+    /// enumerations (the decl-slot pair aggregation of the declaration-
+    /// order head + tail anchors on the enumeration chain); Idris's
+    /// `Fin (S n)` non-empty finite-cardinality types where
+    /// `endpointIndices : Fin (S n) -> (Nat, Nat)` folds the (head-idx,
+    /// tail-idx) pair through a shared tuple projection; Haskell's
+    /// `(fromEnum minBound, fromEnum maxBound)` on the `Bounded + Enum`
+    /// type-class pair — the endpoint decl-slot pair exposed as a bare
+    /// typed tuple rather than four separate scalar calls; MLIR's
+    /// `RegisteredOperationName::begin_end_indices()` on the
+    /// declaration-order Op registry (the decl-slot pair projection
+    /// over the registered-op enumeration). Translation through
+    /// pleme-io primitives: a pure default method destructuring the
+    /// trait's existing [`Self::endpoints`] pair-aggregation surface
+    /// under per-slot [`Self::index_of`] projection — no new dep, no
+    /// new IR layer, no supertrait bound, no allocation.
+    fn endpoint_indices() -> (usize, usize) {
+        let (head, tail) = <Self as ClosedSet>::endpoints();
+        (
+            <Self as ClosedSet>::index_of(head),
+            <Self as ClosedSet>::index_of(tail),
+        )
+    }
+
+    /// The lexicographic-order endpoint DECL-INDEX pair — the tuple
+    /// `(T::sorted_first().index_of(), T::sorted_last().index_of())`
+    /// projected onto the trait surface as ONE call. Closes the
+    /// (return-type × ordering) 3×2 = 6-corner pair-endpoint
+    /// aggregation matrix at the (`usize`, lex) corner alongside the
+    /// other five corners: [`Self::endpoints`] +
+    /// [`Self::sorted_endpoints`] on the `(Self, Self)` row,
+    /// [`Self::endpoint_labels`] + [`Self::sorted_endpoint_labels`] on
+    /// the `(&'static str, &'static str)` row, and
+    /// [`Self::endpoint_indices`] (this method's declaration-axis
+    /// sibling) on the `(usize, usize)` row.
+    ///
+    /// Sibling posture to [`Self::endpoint_indices`] one ordering axis
+    /// over on the (declaration, lex) partition of the closed-set
+    /// `(usize, usize)`-typed pair-endpoint aggregation row —
+    /// [`Self::endpoint_indices`] projects the declaration-order
+    /// endpoint decl-slot pair, this method projects the lex-order
+    /// endpoint decl-slot pair. See [`Self::endpoint_indices`] for the
+    /// shared design rationale, sibling matrix, override axis, future-
+    /// consumer inventory, THEORY.md grounding, and frontier inspiration
+    /// — this method is the lex-ordering-axis arm of the same axis and
+    /// inherits every property from the declaration-axis arm's
+    /// documentation, differing only in the composition through
+    /// [`Self::sorted_endpoints`] instead of [`Self::endpoints`] and
+    /// the alphabetized consumer surface (an alphabetized range-walker
+    /// that binds BOTH lex-endpoint decl-slots atomically, a lex-
+    /// ordered saga-step audit event that emits both lex anchor decl-
+    /// slot integer coordinates atomically, an alphabetized truth-table
+    /// property test that anchors edge assertions at BOTH lex endpoint
+    /// decl-slots through ONE destructure). On an implementor whose
+    /// declaration order matches its lex order the two arms return the
+    /// same tuple; on an implementor whose declaration order diverges
+    /// from its lex order they name DIFFERENT canonical decl-slot pairs
+    /// (see
+    /// `endpoint_indices_and_sorted_endpoint_indices_diverge_on_declaration_order_that_diverges_from_lex_order`).
+    ///
+    /// Default body destructures [`Self::sorted_endpoints`] and projects
+    /// each tuple slot under [`Self::index_of`] — the (lex-head-decl-
+    /// slot, lex-tail-decl-slot) pair aggregation is a typed CONSEQUENCE
+    /// of the composition of the lex-pair-aggregation primitive with the
+    /// per-slot decl-index projection, not a fifth codepath through
+    /// [`Self::sorted_variants`] + `<[T]>::first` + `<[T]>::last` +
+    /// per-slot `index_of`. Implementors override only when the lex-
+    /// decl-slot-pair aggregation needs to diverge from the natural
+    /// `(sorted_first().index_of(), sorted_last().index_of())` shape.
+    /// An implementor that overrides [`Self::sorted_endpoints`] (or the
+    /// [`Self::sorted_first`] / [`Self::sorted_last`] scalars it funnels
+    /// through) OR overrides [`Self::index_of`] propagates the override
+    /// through this default body to the lex-decl-slot-pair aggregation
+    /// automatically.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::sorted_first`] and
+    /// [`Self::sorted_last`] both return the sole variant whose
+    /// `index_of()` is `0`, so this method returns the diagonal tuple
+    /// `(0, 0)`. All FOUR pair-endpoint aggregation projections
+    /// ([`Self::endpoints`], [`Self::sorted_endpoints`],
+    /// [`Self::endpoint_indices`], this method) collapse onto the same
+    /// anchor at the boundary-cardinality edge under their respective
+    /// per-slot return-type projections.
+    ///
+    /// The lex-endpoint-decl-slot pair contract —
+    /// `T::sorted_endpoint_indices() == (T::sorted_first().index_of(), T::sorted_last().index_of())`
+    /// AND
+    /// `(T::from_index(T::sorted_endpoint_indices().0), T::from_index(T::sorted_endpoint_indices().1)) == (Some(T::sorted_first()), Some(T::sorted_last()))`
+    /// on every implementor — is guaranteed by the default composition
+    /// through the lex-pair-aggregation primitive and the per-slot
+    /// decl-index projection; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (93) pins the
+    /// composition against the natural
+    /// `(sorted_first().index_of(), sorted_last().index_of())` shape
+    /// AND against the `from_index`-round-trip fixpoint back onto the
+    /// lex-endpoint typed anchors on every implementor.
+    ///
+    /// Clauses (34) + (35) + (36) + (37) + (92) + (93) together CLOSE
+    /// the (return-type × ordering) 3×2 = 6-corner pair-endpoint
+    /// aggregation matrix at ALL SIX corners: (`Self`, declaration) at
+    /// clause (34); (`Self`, lex) at clause (35); (`&'static str`,
+    /// declaration) at clause (36); (`&'static str`, lex) at clause (37);
+    /// (`usize`, declaration) at clause (92); (`usize`, lex) at clause
+    /// (93). Every generic consumer that binds any of the six pair-
+    /// endpoint aggregation projection methods sees the SAME tuple
+    /// shape at every crate boundary regardless of which return-type
+    /// axis / ordering-axis corner it walks.
+    fn sorted_endpoint_indices() -> (usize, usize) {
+        let (head, tail) = <Self as ClosedSet>::sorted_endpoints();
+        (
+            <Self as ClosedSet>::index_of(head),
+            <Self as ClosedSet>::index_of(tail),
+        )
+    }
+
     /// Render the declaration-order endpoint-label pair as a `String`
     /// joined by `sep` — the joined-`String` sibling of
     /// [`Self::endpoint_labels`] one return-shape axis over on the
@@ -22565,6 +22797,100 @@ where
         Some(T::sorted_last()),
         "{type_name}: T::sorted_last_index() drifted from the `T::from_index(_)` reverse round-trip pin — `T::from_index(T::sorted_last().index_of())` MUST equal `Some(T::sorted_last())` by the (index_of, from_index) reverse round-trip clause (17), so the composition MUST land at a decl-slot that decodes back to the lex-tail anchor on every implementor; a downstream lex-tail consumer that binds `T::sorted_last_index()` as its lex-tail decl-slot query surface would read a slot that decodes to some OTHER variant when the substrate's (decl-slot → typed variant) reverse projection routes through the drifted decl-slot",
     );
+    // (92) — `T::endpoint_indices()` MUST equal
+    // `(T::first().index_of(), T::last().index_of())` AND
+    // `T::endpoint_indices()` MUST equal `(0, T::CARDINALITY - 1)` —
+    // the `(usize, usize)` declaration-order pair-endpoint aggregation
+    // composes the (declaration pair-endpoint anchor) primitive with
+    // per-slot decl-index projection AND lands at the structural
+    // `(0, CARDINALITY - 1)` fixpoint. The default trait body
+    // destructures `T::endpoints()` and projects each slot under
+    // `T::index_of` verbatim and satisfies both alignments for free;
+    // the assertion catches a future implementor whose override drifts
+    // the `(usize, usize)` declaration-order pair-endpoint projection
+    // (a stale override that hard-codes `(0, 0)` or swaps the slots
+    // to `(N - 1, 0)` — silently transposing the head- and tail-slot
+    // integer coordinates; a fold override that folds the pair onto
+    // `(0, T::CARDINALITY - 2)` — silently detaching the tail slot
+    // from `T::last().index_of()`; an override that routes a non-
+    // canonical decl-slot into either tuple position — silently
+    // detaching the decl-slot pair rendering from the endpoint anchors'
+    // canonical decl-slots in `T::ALL`) loudly rather than silently
+    // bifurcating the `(usize, usize)` declaration-axis pair-endpoint-
+    // aggregation projection surface every downstream decl-slot-pair
+    // consumer routes through. Sibling posture to clauses (34) + (36)
+    // + (88) + (89) — clause (34) pins the `(Self, Self)` declaration-
+    // order pair-endpoint aggregation, clause (36) pins the
+    // `(&'static str, &'static str)` declaration-order pair-endpoint
+    // aggregation, clauses (88) + (89) pin the `usize` singular
+    // declaration-order head + tail endpoint decl-slot projections,
+    // this clause pins the `(usize, usize)` declaration-order pair-
+    // endpoint aggregation against the composition of the declaration
+    // pair-endpoint anchor primitive with the per-slot decl-index
+    // projection AND against the `(0, CARDINALITY - 1)` structural
+    // fixpoint.
+    assert_eq!(
+        T::endpoint_indices(),
+        (T::first().index_of(), T::last().index_of()),
+        "{type_name}: T::endpoint_indices() drifted from (T::first().index_of(), T::last().index_of()) — the declaration-order pair-endpoint decl-slot aggregation no longer agrees with the natural (T::first().index_of(), T::last().index_of()) four-primitive composition, so a downstream range walker / audit event / parallel-vector boundary-badge consumer that binds `T::endpoint_indices()` as its `(usize, usize)` declaration-order pair-endpoint query surface would render the wrong tuple",
+    );
+    assert_eq!(
+        T::endpoint_indices(),
+        (0, T::CARDINALITY - 1),
+        "{type_name}: T::endpoint_indices() drifted from the `(0, T::CARDINALITY - 1)` structural fixpoint — `T::first() == T::ALL[0]` + `T::last() == T::ALL[T::CARDINALITY - 1]` by clauses (18) + (19) and `T::ALL[i].index_of() == i` by the `index_of` well-formedness pin, so the composition MUST land at the `(0, T::CARDINALITY - 1)` tuple on every implementor; a downstream declaration-axis range walker that binds `T::endpoint_indices()` as its `(head_idx, tail_idx)` range destructure would iterate the WRONG slot range when the substrate's `<[Self]>::iter().position(...)` decl-slot semantics anchor the endpoint pair at `(0, T::CARDINALITY - 1)`",
+    );
+    // (93) — `T::sorted_endpoint_indices()` MUST equal
+    // `(T::sorted_first().index_of(), T::sorted_last().index_of())` AND
+    // `(T::from_index(T::sorted_endpoint_indices().0), T::from_index(T::sorted_endpoint_indices().1))`
+    // MUST equal `(Some(T::sorted_first()), Some(T::sorted_last()))` —
+    // the `(usize, usize)` lex-order pair-endpoint aggregation composes
+    // the (lex pair-endpoint anchor) primitive with per-slot decl-index
+    // projection AND round-trips both slots through the (decl-slot →
+    // typed variant) reverse projection back onto the lex-endpoint
+    // typed anchors. The default trait body destructures
+    // `T::sorted_endpoints()` and projects each slot under
+    // `T::index_of` verbatim and satisfies both alignments for free;
+    // the assertion catches a future implementor whose override drifts
+    // the `(usize, usize)` lex-order pair-endpoint projection (a stale
+    // override that folds the pair onto `T::endpoint_indices()` —
+    // silently bifurcating the (declaration, lex) ordering axis at the
+    // `(usize, usize)` pair-endpoint-aggregation corner on any
+    // implementor whose declaration order diverges from its lex order;
+    // a swap override that transposes the lex-head and lex-tail slots
+    // — silently swapping the two anchor decl-slots; an override that
+    // routes a non-lex-endpoint decl-slot into either tuple position —
+    // silently detaching the lex-endpoint decl-slot rendering from the
+    // lex anchors' canonical decl-slots in `T::ALL`) loudly rather
+    // than silently bifurcating the lex-axis `(usize, usize)` pair-
+    // endpoint-aggregation projection surface every downstream lex-
+    // decl-slot-pair consumer routes through. Sibling posture to clauses
+    // (35) + (37) + (90) + (91) + (92) — clause (35) pins the
+    // `(Self, Self)` lex-order pair-endpoint aggregation, clause (37)
+    // pins the `(&'static str, &'static str)` lex-order pair-endpoint
+    // aggregation, clauses (90) + (91) pin the `usize` singular lex-
+    // order head + tail endpoint decl-slot projections, clause (92)
+    // pins the `(usize, usize)` DECLARATION-order pair-endpoint
+    // aggregation, this clause pins the `(usize, usize)` LEX-order
+    // pair-endpoint aggregation against the composition of the lex
+    // pair-endpoint anchor primitive with the per-slot decl-index
+    // projection. Clauses (34) + (35) + (36) + (37) + (92) + (93)
+    // together CLOSE the (return-type × ordering) 3×2 = 6-corner
+    // pair-endpoint aggregation matrix at ALL SIX corners — every
+    // generic consumer that binds any of the six pair-endpoint
+    // aggregation projection methods sees the SAME tuple shape at
+    // every crate boundary regardless of which return-type axis /
+    // ordering-axis corner it walks.
+    assert_eq!(
+        T::sorted_endpoint_indices(),
+        (T::sorted_first().index_of(), T::sorted_last().index_of()),
+        "{type_name}: T::sorted_endpoint_indices() drifted from (T::sorted_first().index_of(), T::sorted_last().index_of()) — the lex-order pair-endpoint decl-slot aggregation no longer agrees with the natural (T::sorted_first().index_of(), T::sorted_last().index_of()) four-primitive composition, so a downstream lex-range walker / lex-audit event / lex-parallel-vector boundary-badge consumer that binds `T::sorted_endpoint_indices()` as its `(usize, usize)` lex-order pair-endpoint query surface would render the wrong tuple",
+    );
+    let (sorted_head_slot, sorted_tail_slot) = T::sorted_endpoint_indices();
+    assert_eq!(
+        (T::from_index(sorted_head_slot), T::from_index(sorted_tail_slot)),
+        (Some(T::sorted_first()), Some(T::sorted_last())),
+        "{type_name}: T::sorted_endpoint_indices() drifted from the `T::from_index(_)` reverse round-trip pin — `(T::from_index(T::sorted_first().index_of()), T::from_index(T::sorted_last().index_of()))` MUST equal `(Some(T::sorted_first()), Some(T::sorted_last()))` by clauses (17) + (90) + (91), so the composition MUST land at a decl-slot pair that decodes back to the (lex-head, lex-tail) anchor pair on every implementor; a downstream lex-endpoint consumer that binds `T::sorted_endpoint_indices()` as its `(usize, usize)` lex-order pair-endpoint query surface would read a tuple that decodes to some OTHER variant pair when the substrate's (decl-slot → typed variant) reverse projection routes through a drifted tuple slot",
+    );
 }
 
 #[cfg(test)]
@@ -32818,6 +33144,367 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_last_index() override that folds the lex-tail-endpoint decl-slot onto the declaration-tail-endpoint decl-slot rather than composing T::sorted_last().index_of() and round-tripping through T::from_index onto T::sorted_last()",
+        );
+    }
+
+    #[test]
+    fn endpoint_indices_returns_declaration_order_pair_of_head_and_tail_decl_slots() {
+        // The `(usize, usize)` declaration-order pair-endpoint aggregation
+        // returns `(T::first().index_of(), T::last().index_of())`. On
+        // `StubKind` (declaration order `[Alpha, Beta, Gamma]`),
+        // `T::first()` is `Alpha` at decl-slot `0` and `T::last()` is
+        // `Gamma` at decl-slot `2`, so the pair is `(0, 2)`. Sibling
+        // posture to `endpoints_returns_declaration_order_head_and_tail_as_a_tuple`
+        // one return-type axis over on the (`(Self, Self)`,
+        // `(usize, usize)`) partition of the closed-set declaration-axis
+        // pair-endpoint aggregation matrix AND sibling posture to the
+        // `first_index` + `last_index` singular arms one aggregation-
+        // shape axis over on the (singular scalar, pair-tuple) partition.
+        assert_eq!(<StubKind as ClosedSet>::endpoint_indices(), (0, 2));
+    }
+
+    #[test]
+    fn endpoint_indices_composes_endpoints_with_index_of_on_every_implementor() {
+        // Direct alignment against the four-primitive composition on the
+        // stub — `T::endpoint_indices() == (T::first().index_of(), T::last().index_of())`
+        // holds by the default trait body's construction AND by well-
+        // formedness clause (92)'s pin. Anchors the (destructure decl
+        // pair-endpoint primitive, project each slot under per-slot
+        // decl-index) invariant against structural equality with the
+        // pre-existing four-primitive path.
+        let composed = (
+            <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::first()),
+            <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::last()),
+        );
+        assert_eq!(<StubKind as ClosedSet>::endpoint_indices(), composed);
+    }
+
+    #[test]
+    fn endpoint_indices_lands_at_the_zero_cardinality_minus_one_structural_fixpoint() {
+        // The `(0, T::CARDINALITY - 1)` structural fixpoint — clauses
+        // (18) + (19) pin `T::first() == T::ALL[0]` and
+        // `T::last() == T::ALL[CARDINALITY - 1]`, so the natural
+        // (endpoints, index_of) composition MUST land at `(0, N - 1)`
+        // on every implementor. On `StubKind` (CARDINALITY = 3), the
+        // pair is `(0, 2)`. Anchors the structural-fixpoint arm of
+        // well-formedness clause (92) against the four-primitive
+        // composition arm.
+        assert_eq!(
+            <StubKind as ClosedSet>::endpoint_indices(),
+            (0, <StubKind as ClosedSet>::CARDINALITY - 1),
+        );
+    }
+
+    #[test]
+    fn sorted_endpoint_indices_returns_lex_order_pair_of_head_and_tail_decl_slots() {
+        // The `(usize, usize)` lex-order pair-endpoint aggregation
+        // returns `(T::sorted_first().index_of(), T::sorted_last().index_of())`.
+        // `StubKind`'s labels are lex-monotone so `T::sorted_first()`
+        // is `Alpha` at decl-slot `0` and `T::sorted_last()` is `Gamma`
+        // at decl-slot `2`, so the pair is `(0, 2)`. Sibling posture to
+        // `endpoint_indices_returns_declaration_order_pair_of_head_and_tail_decl_slots`
+        // one ordering axis over on the (declaration, lex) partition of
+        // the closed-set `(usize, usize)`-typed pair-endpoint
+        // aggregation row — on `StubKind` the two axes agree and the
+        // arms return the same tuple; on an ordering-divergent stub
+        // they diverge (see
+        // `endpoint_indices_and_sorted_endpoint_indices_diverge_on_declaration_order_that_diverges_from_lex_order`).
+        assert_eq!(<StubKind as ClosedSet>::sorted_endpoint_indices(), (0, 2));
+    }
+
+    #[test]
+    fn sorted_endpoint_indices_composes_sorted_endpoints_with_index_of_on_every_implementor() {
+        // Direct alignment against the four-primitive composition on the
+        // stub — `T::sorted_endpoint_indices() == (T::sorted_first().index_of(), T::sorted_last().index_of())`
+        // holds by the default trait body's construction AND by well-
+        // formedness clause (93)'s pin.
+        let composed = (
+            <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::sorted_first()),
+            <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::sorted_last()),
+        );
+        assert_eq!(<StubKind as ClosedSet>::sorted_endpoint_indices(), composed,);
+    }
+
+    #[test]
+    fn sorted_endpoint_indices_round_trips_through_from_index_onto_the_lex_endpoint_anchors() {
+        // The `from_index` round-trip pin — each slot of
+        // `T::sorted_endpoint_indices()` MUST decode back to its
+        // corresponding lex-endpoint typed anchor via
+        // `T::from_index(_)`. Anchors the (decl-slot pair → typed-
+        // variant pair) reverse-projection invariant against structural
+        // equality with the pre-existing typed-anchor primitives at the
+        // (lex, head) AND (lex, tail) endpoint corners on the pair-
+        // aggregation shape.
+        let (sorted_head_slot, sorted_tail_slot) =
+            <StubKind as ClosedSet>::sorted_endpoint_indices();
+        assert_eq!(
+            <StubKind as ClosedSet>::from_index(sorted_head_slot),
+            Some(<StubKind as ClosedSet>::sorted_first()),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::from_index(sorted_tail_slot),
+            Some(<StubKind as ClosedSet>::sorted_last()),
+        );
+    }
+
+    #[test]
+    fn endpoint_indices_and_sorted_endpoint_indices_diverge_on_declaration_order_that_diverges_from_lex_order(
+    ) {
+        // The (declaration-axis, lex-axis) pair-endpoint decl-slot
+        // contract on a stub whose declaration order deliberately
+        // diverges from its lex order — `endpoint_indices()` names the
+        // decl-order endpoint slot pair `(0, CARDINALITY - 1)` while
+        // `sorted_endpoint_indices()` names the DECL-SLOTS of the
+        // lex-min and lex-max variants (which are the LEX-order
+        // endpoint slot pair, NOT the declaration-order endpoint slot
+        // pair). On the deliberate 3-variant stub with declaration
+        // order `[Gamma, Beta, Alpha]` and labels
+        // `("gamma", "beta", "alpha")`: declaration head/tail are
+        // `Gamma` (decl-slot `0`) / `Alpha` (decl-slot `2`); lex
+        // head/tail (under `str: Ord`) are `Alpha` (decl-slot `2`) /
+        // `Gamma` (decl-slot `0`). The two pair-endpoint decl-slot
+        // projections therefore diverge in a strict transposition:
+        // `endpoint_indices()` = `(0, 2)`, `sorted_endpoint_indices()`
+        // = `(2, 0)`. Sibling posture to
+        // `sorted_first_index_and_sorted_last_index_diverge_on_declaration_order_that_diverges_from_lex_order`
+        // one aggregation-shape axis over on the (singular scalar,
+        // pair-tuple) partition of the ordering-divergent stub surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum EndpointIndicesDivergenceStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownEndpointIndicesDivergenceStubKind(pub String);
+        impl core::fmt::Display for UnknownEndpointIndicesDivergenceStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown endpoint indices divergence stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for EndpointIndicesDivergenceStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "endpoint indices divergence stub kind";
+            type Unknown = UnknownEndpointIndicesDivergenceStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownEndpointIndicesDivergenceStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <EndpointIndicesDivergenceStubKind as ClosedSet>::endpoint_indices(),
+            (0, 2),
+        );
+        assert_eq!(
+            <EndpointIndicesDivergenceStubKind as ClosedSet>::sorted_endpoint_indices(),
+            (2, 0),
+        );
+        assert_ne!(
+            <EndpointIndicesDivergenceStubKind as ClosedSet>::endpoint_indices(),
+            <EndpointIndicesDivergenceStubKind as ClosedSet>::sorted_endpoint_indices(),
+            "endpoint_indices() and sorted_endpoint_indices() returned the SAME decl-slot pair on a stub whose declaration order deliberately diverges from its lex order — the (declaration, lex) ordering partition MUST be structurally observed by the two pair-endpoint decl-slot projections",
+        );
+        // The stub also satisfies the well-formedness sweep — clauses
+        // (92) + (93) fire on a declaration order that diverges from
+        // the lex order, pinning BOTH pair-endpoint decl-slot
+        // projections at the ordering-divergent implementor edge.
+        super::assert_closed_set_well_formed::<EndpointIndicesDivergenceStubKind>();
+    }
+
+    #[test]
+    fn endpoint_indices_and_sorted_endpoint_indices_collapse_on_singleton_closed_set() {
+        // Singleton degeneracy — a closed set with one variant has
+        // `T::first()` = `T::last()` = `T::sorted_first()` =
+        // `T::sorted_last()` = the sole variant whose `index_of()` is
+        // `0`, so BOTH pair-endpoint decl-slot aggregations return
+        // `(0, 0)` — the diagonal tuple over the sole variant's
+        // decl-slot. All SIX pair-endpoint aggregation projections
+        // (`endpoints`, `sorted_endpoints`, `endpoint_labels`,
+        // `sorted_endpoint_labels`, `endpoint_indices`,
+        // `sorted_endpoint_indices`) collapse onto the same anchor at
+        // the boundary-cardinality edge under their respective per-slot
+        // return-type projections. Well-formedness sweep must ALSO pass
+        // on the singleton — clauses (92) + (93) hold structurally at
+        // `CARDINALITY == 1`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonEndpointIndicesStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonEndpointIndicesStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonEndpointIndicesStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown singleton endpoint indices stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for SingletonEndpointIndicesStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton endpoint indices stub kind";
+            type Unknown = UnknownSingletonEndpointIndicesStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonEndpointIndicesStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonEndpointIndicesStubKind as ClosedSet>::endpoint_indices(),
+            (0, 0),
+        );
+        assert_eq!(
+            <SingletonEndpointIndicesStubKind as ClosedSet>::sorted_endpoint_indices(),
+            (0, 0),
+        );
+        super::assert_closed_set_well_formed::<SingletonEndpointIndicesStubKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_endpoint_indices_and_endpoint_indices_composition(
+    ) {
+        // The well-formedness sweep's (92) clause — `T::endpoint_indices()`
+        // MUST equal `(T::first().index_of(), T::last().index_of())` AND
+        // `T::endpoint_indices()` MUST equal `(0, T::CARDINALITY - 1)`.
+        // A hand-impl'd implementor whose override drifts the
+        // declaration-order pair-endpoint decl-slot projection (routes
+        // an interior variant's decl-slot into either tuple position,
+        // swaps the head and tail slots to `(N - 1, 0)`, fabricates a
+        // non-canonical value detached from [`Self::endpoints`] AND
+        // [`Self::index_of`]) fails the sweep loudly rather than
+        // silently bifurcating the declaration-axis pair-endpoint-
+        // decl-slot projection surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedEndpointIndicesKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedEndpointIndicesKind(pub String);
+        impl core::fmt::Display for UnknownDriftedEndpointIndicesKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted endpoint indices kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedEndpointIndicesKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted endpoint indices kind";
+            type Unknown = UnknownDriftedEndpointIndicesKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedEndpointIndicesKind(s.to_owned())
+            }
+            fn endpoint_indices() -> (usize, usize) {
+                // Drifted override — swaps the head + tail decl-slots
+                // (returns `(2, 0)` instead of `(0, 2)`), silently
+                // transposing the singular head- and tail-slot integer
+                // coordinates every downstream range walker routes
+                // through. Would fold a `Range<head_idx..=tail_idx>`
+                // consumer onto an empty range on the 3-variant stub.
+                (2, 0)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedEndpointIndicesKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted an endpoint_indices() override that transposes the head and tail decl-slots rather than composing (T::first().index_of(), T::last().index_of()) and landing at the (0, T::CARDINALITY - 1) fixpoint",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_endpoint_indices_and_sorted_endpoint_indices_composition(
+    ) {
+        // The well-formedness sweep's (93) clause —
+        // `T::sorted_endpoint_indices()` MUST equal
+        // `(T::sorted_first().index_of(), T::sorted_last().index_of())`
+        // AND each slot MUST round-trip through `T::from_index(_)` back
+        // onto the corresponding lex-endpoint typed anchor. Sibling
+        // posture to
+        // `assert_closed_set_well_formed_catches_drift_between_endpoint_indices_and_endpoint_indices_composition`
+        // one ordering axis over on the (declaration, lex) partition of
+        // the closed-set pair-endpoint decl-slot drift-catch sweep. A
+        // hand-impl'd implementor whose override folds the lex-pair-
+        // endpoint decl-slot projection onto the declaration-pair
+        // (returns `(0, N - 1)` instead of the lex-endpoint decl-slot
+        // pair on an ordering-divergent stub) fails the sweep loudly
+        // rather than silently bifurcating the (declaration, lex)
+        // ordering axis at the `(usize, usize)` pair-endpoint-
+        // aggregation corner.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedEndpointIndicesKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedEndpointIndicesKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedEndpointIndicesKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted endpoint indices kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DriftedSortedEndpointIndicesKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "drifted sorted endpoint indices kind";
+            type Unknown = UnknownDriftedSortedEndpointIndicesKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedEndpointIndicesKind(s.to_owned())
+            }
+            fn sorted_endpoint_indices() -> (usize, usize) {
+                // Drifted override — folds the lex-endpoint pair onto
+                // the declaration-endpoint pair (returns `(0, 2)`,
+                // matching declaration head/tail decl-slots) rather
+                // than composing
+                // `(T::sorted_first().index_of(), T::sorted_last().index_of())`
+                // (which lands at `(2, 0)` on the ordering-divergent
+                // stub — the decl-slots of `Alpha` + `Gamma`, the
+                // lex-min + lex-max anchors). Would silently fold a
+                // lex-pair range walker onto the declaration-pair range
+                // on the ordering-divergent stub.
+                (0, 2)
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedEndpointIndicesKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_endpoint_indices() override that folds the lex-pair-endpoint decl-slot onto the declaration-pair-endpoint decl-slot rather than composing (T::sorted_first().index_of(), T::sorted_last().index_of()) and round-tripping each slot through T::from_index onto (T::sorted_first(), T::sorted_last())",
         );
     }
 

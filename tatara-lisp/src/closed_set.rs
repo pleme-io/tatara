@@ -3236,6 +3236,198 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::label(<Self as ClosedSet>::sorted_last())
     }
 
+    /// The lex-order head-endpoint DECL-INDEX — `T::sorted_first().index_of()`
+    /// projected onto the trait surface as ONE call. Opens the
+    /// `usize`-typed return-type row on the lex-axis (head, tail)
+    /// singular endpoint-anchor return-shape column at the head slot,
+    /// mirroring [`Self::sorted_first_label`] one return-type axis
+    /// over on the (`&'static str`, `usize`) return-shape column of
+    /// the lex-axis singular endpoint-anchor projection matrix AND
+    /// mirroring [`Self::first_index`] one ordering axis over on the
+    /// (declaration, lex) partition of the closed-set singular head-
+    /// endpoint decl-slot return-shape column.
+    ///
+    /// Sibling posture to [`Self::sorted_first`] one return-type axis
+    /// over on the (typed-variant `Self`, decl-order slot `usize`)
+    /// partition of the closed-set lex-axis singular head-endpoint
+    /// return-shape column — [`Self::sorted_first`] materializes the
+    /// lex-min typed variant, this method materializes its decl-slot
+    /// integer coordinate WITHOUT threading the caller through the
+    /// two-hop `T::sorted_first().index_of()` composition. Sibling
+    /// posture to [`Self::first_index`] one ordering axis over on the
+    /// (declaration, lex) partition of the closed-set singular head-
+    /// endpoint decl-slot return-shape column — on an implementor
+    /// whose declaration order matches its lex order the two arms
+    /// return the same slot; on an implementor whose declaration
+    /// order diverges from its lex order they name DIFFERENT canonical
+    /// decl-slots (see `sorted_first_index_and_sorted_last_index_diverge_on_declaration_order_that_diverges_from_lex_order`).
+    ///
+    /// The (return-type × ordering × endpoint-direction) 3×2×2 = 12-corner
+    /// singular endpoint-anchor return-shape hypercube partitions
+    /// post-lift:
+    ///
+    /// | Return type \\ (Ordering, Endpoint) | (Decl, Head)              | (Decl, Tail)             | (Lex, Head)                   | (Lex, Tail)                  |
+    /// |-------------------------------------|---------------------------|--------------------------|-------------------------------|------------------------------|
+    /// | `Self` (typed variant)              | [`Self::first`]           | [`Self::last`]           | [`Self::sorted_first`]        | [`Self::sorted_last`]        |
+    /// | `&'static str` (label)              | [`Self::first_label`]     | [`Self::last_label`]     | [`Self::sorted_first_label`]  | [`Self::sorted_last_label`]  |
+    /// | `usize` (decl-slot)                 | [`Self::first_index`]     | [`Self::last_index`]     | [`Self::sorted_first_index`]  | [`Self::sorted_last_index`]  |
+    ///
+    /// Every generic consumer that wants the lex-order head-endpoint
+    /// decl-slot as ONE `usize` (a lex-anchored parallel-vector lookup
+    /// on a per-decl-slot side-table `<[U]>::get(T::sorted_first_index())`
+    /// that folds the lex-min variant's shadow onto its decl-slot
+    /// integer coordinate WITHOUT allocating [`Self::sorted_variants`],
+    /// an alphabetized-completion cursor that positions the caret at
+    /// the lex-min decl-slot coordinate, a lex-boundary coherence probe
+    /// that anchors an edge assertion at the lex-head slot's decl-slot
+    /// integer coordinate WITHOUT walking [`Self::sorted_variants`]) binds
+    /// to ONE typed method rather than hand-rolling the
+    /// `T::sorted_first().index_of()` composition (which re-derives the
+    /// same two-primitive projection at every callsite AND silently
+    /// drifts when [`Self::sorted_first`] OR [`Self::index_of`] is
+    /// overridden) OR the `T::sorted_variants()[0].index_of()`
+    /// composition (which forces a `Vec<Self>` allocation the singular
+    /// arm avoids by construction).
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::sorted_first`]) with the per-slot [`Self::index_of`]
+    /// projection — the lex-head decl-slot is a typed CONSEQUENCE of
+    /// the (lex head anchor) primitive composed with the (decl-index
+    /// projection) primitive, not a per-implementor
+    /// `const SORTED_HEAD_INDEX: usize = ...;` declaration that
+    /// silently drifts from [`Self::ALL`] on any label edit.
+    /// Implementors override only when the lex-head decl-slot needs to
+    /// diverge from the natural `T::sorted_first().index_of()` shape
+    /// (no production implementor reaches for this today; the axis
+    /// exists for the same reason `via` / `set_label` / `labels` /
+    /// `first` / `last` / `sorted_first` / `sorted_last` /
+    /// `first_label` / `last_label` / `sorted_first_label` /
+    /// `sorted_last_label` / `first_index` / `last_index` overrides
+    /// exist — a typed escape hatch rather than forcing the
+    /// implementor to hand-roll the impl). An implementor that
+    /// overrides [`Self::sorted_first`] OR overrides [`Self::index_of`]
+    /// propagates the override through this default body automatically;
+    /// the lex-head-decl-slot surface funnels through the lex head-
+    /// anchor primitive on the anchor-materialization column AND the
+    /// per-slot decl-index projection on the coordinate-rendering
+    /// column.
+    ///
+    /// The lex-head-decl-slot contract — `T::sorted_first_index() ==
+    /// T::sorted_first().index_of()` AND
+    /// `T::from_index(T::sorted_first_index()) == Some(T::sorted_first())`
+    /// on every implementor — is guaranteed by the default composition
+    /// through [`Self::sorted_first`] and [`Self::index_of`]; the
+    /// well-formedness contract [`assert_closed_set_well_formed`]'s
+    /// new clause (90) pins the composition against the natural
+    /// `T::sorted_first().index_of()` shape AND against the
+    /// `from_index`-round-trip fixpoint on every implementor so a
+    /// passing well-formedness sweep means every generic consumer can
+    /// call [`Self::sorted_first_index`] on any typed carrier and
+    /// expect the same `usize` answer at every crate boundary.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::sorted_first`] returns the sole
+    /// variant and this method returns its decl-slot `0`. All six
+    /// singular endpoint-anchor decl-slot projections
+    /// ([`Self::first_index`], [`Self::last_index`],
+    /// [`Self::sorted_first_index`], [`Self::sorted_last_index`], and
+    /// the two label-arm shadows [`Self::first_label`] +
+    /// [`Self::sorted_first_label`] under the singleton label
+    /// collapse) fold onto the same anchor at the boundary-cardinality
+    /// edge.
+    ///
+    /// THEORY.md §III — the typescape; the (lex head anchor →
+    /// decl-slot) singular projection becomes a TYPE projection on
+    /// the trait rather than a per-consumer inline
+    /// `T::sorted_first().index_of()` two-primitive composition at
+    /// every downstream lex-head decl-slot lookup site.
+    /// THEORY.md §V.1 — knowable platform; the (lex head anchor →
+    /// decl-slot) projection was an unnamed compound of
+    /// [`Self::sorted_first`] + [`Self::index_of`] pre-lift; naming it
+    /// on the trait makes the projection a TYPED CONSEQUENCE of TWO
+    /// substrate primitives — generic consumers see ONE method, not
+    /// one lex-head-decl-slot-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (lex head
+    /// anchor → decl-slot) projection emerges from the composition of
+    /// TWO substrate primitives rather than as a per-implementor
+    /// `const SORTED_HEAD_INDEX: usize = ...;` declaration.
+    ///
+    /// Frontier inspiration: Racket's `enum-sorted-first-index` on
+    /// closed enumerations under lex-ordering; Idris's
+    /// `finToNat (sortedFirst : Fin (S n))` composed with a
+    /// `sortBy comparingLabel` prelude on the finite-cardinality
+    /// universe (folded onto the head slot of the lex-sorted chain);
+    /// Haskell's `fromEnum (minimumBy (comparing show) [minBound..])`
+    /// on the `Bounded + Enum + Show` type-class triple; MLIR's
+    /// `RegisteredOperationName::lex_begin_index()` on the lex-sorted
+    /// Op registry; Rust's
+    /// `strum::EnumIter().min_by_key(|v| v.get_str()).map(|v| v as usize)`
+    /// composed through the iterator API. Translation through pleme-io
+    /// primitives: a pure default method composing the trait's
+    /// existing [`Self::sorted_first`] surface with the per-slot
+    /// [`Self::index_of`] projection — no new dep, no new IR layer,
+    /// no supertrait bound, no allocation.
+    fn sorted_first_index() -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::sorted_first())
+    }
+
+    /// The lex-order tail-endpoint DECL-INDEX —
+    /// `T::sorted_last().index_of()` projected onto the trait surface
+    /// as ONE call. Closes the (`usize`, lex, tail) corner of the
+    /// (return-type × ordering × endpoint-direction) 3×2×2 = 12-corner
+    /// singular endpoint-anchor return-shape hypercube alongside the
+    /// other eleven corners: [`Self::first`] / [`Self::last`] /
+    /// [`Self::sorted_first`] / [`Self::sorted_last`] on the Self-anchor
+    /// row, [`Self::first_label`] / [`Self::last_label`] /
+    /// [`Self::sorted_first_label`] / [`Self::sorted_last_label`] on
+    /// the label row, and [`Self::first_index`] / [`Self::last_index`] /
+    /// [`Self::sorted_first_index`] (this method's head sibling) on
+    /// the decl-slot row.
+    ///
+    /// Sibling posture to [`Self::sorted_first_index`] one endpoint-
+    /// direction axis over on the (head, tail) partition of the lex-
+    /// axis singular endpoint-anchor `usize`-return-shape column:
+    /// [`Self::sorted_first_index`] projects the lex-head-endpoint's
+    /// decl-slot, this method projects the lex-tail-endpoint's
+    /// decl-slot. See [`Self::sorted_first_index`] for the shared
+    /// design rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration — this
+    /// method is the tail-direction arm of the same axis and inherits
+    /// every property from the head arm's documentation, differing only
+    /// in the composition through [`Self::sorted_last`] instead of
+    /// [`Self::sorted_first`]. Sibling posture to [`Self::last_index`]
+    /// one ordering axis over on the (declaration, lex) partition of
+    /// the closed-set singular tail-endpoint decl-slot return-shape
+    /// column — on an implementor whose declaration order matches its
+    /// lex order the two arms return the same slot; on an implementor
+    /// whose declaration order diverges from its lex order they name
+    /// DIFFERENT canonical decl-slots.
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::sorted_last`]) with the per-slot [`Self::index_of`]
+    /// projection. The lex-tail-decl-slot contract —
+    /// `T::sorted_last_index() == T::sorted_last().index_of()` AND
+    /// `T::from_index(T::sorted_last_index()) == Some(T::sorted_last())`
+    /// on every implementor — is guaranteed by the default composition;
+    /// the well-formedness contract [`assert_closed_set_well_formed`]'s
+    /// new clause (91) pins the composition against the natural
+    /// `T::sorted_last().index_of()` shape AND against the
+    /// `from_index`-round-trip fixpoint on every implementor.
+    ///
+    /// Clauses (88) + (89) + (90) + (91) together CLOSE the
+    /// (return-type × ordering × endpoint-direction) 3×2×2 = 12-corner
+    /// singular endpoint-anchor return-shape hypercube at ALL FOUR
+    /// `usize`-typed decl-slot corners: (declaration, head) at (88);
+    /// (declaration, tail) at (89); (lex, head) at (90); (lex, tail)
+    /// at (91). Every generic consumer that binds any of the twelve
+    /// singular endpoint-anchor projection methods sees the SAME
+    /// endpoint-anchor answer at every crate boundary regardless of
+    /// which return-type axis / ordering-axis / endpoint-direction
+    /// corner it walks.
+    fn sorted_last_index() -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::sorted_last())
+    }
+
     /// The lexicographic-order head-endpoint membership predicate —
     /// `true` when `self` is [`Self::sorted_first`], `false` otherwise.
     /// Closes the (lex, head) corner of the (ordering-axis × endpoint-
@@ -22288,6 +22480,91 @@ where
         T::CARDINALITY,
         "{type_name}: T::last_index() drifted from the `T::CARDINALITY - 1` structural fixpoint — `T::last() == T::ALL[T::CARDINALITY - 1]` by clause (18) and `T::ALL[T::CARDINALITY - 1].index_of() == T::CARDINALITY - 1` by the `index_of` well-formedness pin, so the composition MUST land at slot `T::CARDINALITY - 1` on every implementor; a downstream tail-slot consumer that binds `T::last_index()` as its singular tail-anchor decl-slot query surface would read a non-`CARDINALITY - 1` tail slot when the substrate's `<[Self]>::iter().position(...)` decl-slot semantics anchor the tail at slot `T::CARDINALITY - 1`",
     );
+    // (90) — `T::sorted_first_index()` MUST equal
+    // `T::sorted_first().index_of()` AND
+    // `T::from_index(T::sorted_first_index())` MUST equal
+    // `Some(T::sorted_first())` — the singular lex-order head-endpoint
+    // decl-slot projection on the lex-axis singular endpoint-anchor
+    // `usize`-return-shape column composes the (lex head anchor)
+    // primitive with the (per-slot decl-index) projection AND round-
+    // trips through the (decl-slot → typed variant) reverse projection
+    // back onto the lex-head anchor. The default trait body composes
+    // `T::index_of(T::sorted_first())` verbatim and satisfies both
+    // alignments for free; the assertion catches a future implementor
+    // whose override drifts the singular lex-head-decl-slot projection
+    // (a stale override that hard-codes a literal detached from
+    // [`Self::sorted_first`] AND [`Self::index_of`] — silently forking
+    // the lex-head-anchor decl-slot rendering from the index-projection
+    // primitive; a fold override that returns [`Self::first_index`]
+    // instead — silently bifurcating the (declaration, lex) ordering
+    // axis at the singular head-endpoint decl-slot return-shape corner
+    // on any implementor whose declaration order diverges from its lex
+    // order; an override that routes a non-lex-head decl-slot into the
+    // lex-head-endpoint slot — silently detaching the lex-head decl-slot
+    // rendering from the lex-min anchor's canonical decl-slot in
+    // [`T::ALL`]; a fabricated override that returns `usize::MAX` —
+    // silently detaching the lex-head decl-slot rendering from every
+    // canonical slot in [`T::ALL`]) loudly rather than silently
+    // bifurcating the singular lex-head-endpoint-decl-slot projection
+    // surface every downstream lex-head-decl-slot consumer routes
+    // through. Sibling posture to clauses (48) + (88) — clause (48)
+    // pins the singular `&'static str` lex-head-label projection
+    // against the composition of the lex head-endpoint-anchor primitive
+    // with the per-slot label projection, clause (88) pins the singular
+    // `usize` DECLARATION-head decl-slot projection against the
+    // composition of the declaration head-endpoint-anchor primitive
+    // with the per-slot decl-index projection, this clause pins the
+    // singular `usize` LEX-head decl-slot projection against the
+    // composition of the LEX head-endpoint-anchor primitive with the
+    // per-slot decl-index projection.
+    assert_eq!(
+        T::sorted_first_index(),
+        T::sorted_first().index_of(),
+        "{type_name}: T::sorted_first_index() drifted from T::sorted_first().index_of() — the singular lex-order head-endpoint decl-slot projection no longer agrees with the natural `T::sorted_first().index_of()` two-primitive composition, so a downstream lex-head-slot cursor / lex-head-slot completion / lex-head-slot coherence probe consumer that binds `T::sorted_first_index()` as its singular lex-head-anchor decl-slot query surface would render the wrong `usize`",
+    );
+    assert_eq!(
+        T::from_index(T::sorted_first_index()),
+        Some(T::sorted_first()),
+        "{type_name}: T::sorted_first_index() drifted from the `T::from_index(_)` reverse round-trip pin — `T::from_index(T::sorted_first().index_of())` MUST equal `Some(T::sorted_first())` by the (index_of, from_index) reverse round-trip clause (17), so the composition MUST land at a decl-slot that decodes back to the lex-head anchor on every implementor; a downstream lex-head consumer that binds `T::sorted_first_index()` as its lex-head decl-slot query surface would read a slot that decodes to some OTHER variant when the substrate's (decl-slot → typed variant) reverse projection routes through the drifted decl-slot",
+    );
+    // (91) — `T::sorted_last_index()` MUST equal
+    // `T::sorted_last().index_of()` AND
+    // `T::from_index(T::sorted_last_index())` MUST equal
+    // `Some(T::sorted_last())` — the singular lex-order tail-endpoint
+    // decl-slot projection on the lex-axis singular endpoint-anchor
+    // `usize`-return-shape column composes the (lex tail anchor)
+    // primitive with the (per-slot decl-index) projection AND round-
+    // trips through the (decl-slot → typed variant) reverse projection
+    // back onto the lex-tail anchor. Sibling posture to clauses (49) +
+    // (89) + (90) — clause (49) pins the singular `&'static str`
+    // lex-tail-label projection against the composition of the lex
+    // tail-endpoint-anchor primitive with the per-slot label projection,
+    // clause (89) pins the singular `usize` DECLARATION-tail decl-slot
+    // projection against the composition of the declaration tail-
+    // endpoint-anchor primitive with the per-slot decl-index projection,
+    // clause (90) pins the singular `usize` LEX-head decl-slot
+    // projection against the composition of the lex head-endpoint-anchor
+    // primitive with the per-slot decl-index projection, this clause
+    // pins the singular `usize` LEX-tail decl-slot projection against
+    // the composition of the LEX tail-endpoint-anchor primitive with
+    // the per-slot decl-index projection. Clauses (88) + (89) + (90) +
+    // (91) together CLOSE the (return-type × ordering × endpoint-
+    // direction) 3×2×2 = 12-corner singular endpoint-anchor return-shape
+    // hypercube at ALL FOUR `usize`-typed decl-slot corners — every
+    // generic consumer that binds any of the twelve singular endpoint-
+    // anchor projection methods sees the SAME endpoint-anchor answer at
+    // every crate boundary regardless of which return-type axis /
+    // ordering-axis / endpoint-direction corner it walks.
+    assert_eq!(
+        T::sorted_last_index(),
+        T::sorted_last().index_of(),
+        "{type_name}: T::sorted_last_index() drifted from T::sorted_last().index_of() — the singular lex-order tail-endpoint decl-slot projection no longer agrees with the natural `T::sorted_last().index_of()` two-primitive composition, so a downstream lex-tail-slot cursor / lex-tail-slot completion / lex-tail-slot coherence probe consumer that binds `T::sorted_last_index()` as its singular lex-tail-anchor decl-slot query surface would render the wrong `usize`",
+    );
+    assert_eq!(
+        T::from_index(T::sorted_last_index()),
+        Some(T::sorted_last()),
+        "{type_name}: T::sorted_last_index() drifted from the `T::from_index(_)` reverse round-trip pin — `T::from_index(T::sorted_last().index_of())` MUST equal `Some(T::sorted_last())` by the (index_of, from_index) reverse round-trip clause (17), so the composition MUST land at a decl-slot that decodes back to the lex-tail anchor on every implementor; a downstream lex-tail consumer that binds `T::sorted_last_index()` as its lex-tail decl-slot query surface would read a slot that decodes to some OTHER variant when the substrate's (decl-slot → typed variant) reverse projection routes through the drifted decl-slot",
+    );
 }
 
 #[cfg(test)]
@@ -32196,6 +32473,351 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a last_index() override that folds the tail-endpoint decl-slot onto the head-endpoint decl-slot rather than composing T::last().index_of() and landing at the T::CARDINALITY - 1 fixpoint",
+        );
+    }
+
+    #[test]
+    fn sorted_first_index_returns_lex_order_head_endpoint_decl_slot() {
+        // The singular lex-order head-endpoint decl-slot projection
+        // returns `T::sorted_first().index_of()`. `StubKind`'s
+        // declaration order is `[Alpha, Beta, Gamma]` and its labels
+        // are lex-monotone, so `T::sorted_first()` is `Alpha` and its
+        // decl-slot is `0`. Sibling posture to
+        // `first_index_returns_declaration_order_head_endpoint_decl_slot_of_zero`
+        // one ordering axis over on the (declaration, lex) partition of
+        // the closed-set singular head-endpoint decl-slot return-shape
+        // column — on `StubKind` the two axes agree and the arms
+        // return the same slot; on an ordering-divergent stub they
+        // diverge (see
+        // `sorted_first_index_and_sorted_last_index_diverge_on_declaration_order_that_diverges_from_lex_order`).
+        assert_eq!(<StubKind as ClosedSet>::sorted_first_index(), 0);
+    }
+
+    #[test]
+    fn sorted_first_index_composes_sorted_first_with_index_of_on_every_implementor() {
+        // Direct alignment against the two-primitive composition on the
+        // stub — `T::sorted_first_index() == T::sorted_first().index_of()`
+        // holds by the default trait body's construction AND by well-
+        // formedness clause (90)'s pin. Anchors the (compose lex head-
+        // anchor primitive with per-slot decl-index projection)
+        // invariant against structural equality with the pre-existing
+        // two-primitive path. Sibling posture to
+        // `first_index_composes_first_with_index_of_on_every_implementor`
+        // one ordering axis over on the (declaration, lex) partition.
+        let composed = <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::sorted_first());
+        assert_eq!(<StubKind as ClosedSet>::sorted_first_index(), composed);
+    }
+
+    #[test]
+    fn sorted_last_index_returns_lex_order_tail_endpoint_decl_slot() {
+        // The singular lex-order tail-endpoint decl-slot projection
+        // returns `T::sorted_last().index_of()`. On `StubKind`
+        // (declaration order `[Alpha, Beta, Gamma]`, labels
+        // lex-monotone), `T::sorted_last()` is `Gamma` and its
+        // decl-slot is `2`. Sibling posture to
+        // `last_index_returns_declaration_order_tail_endpoint_decl_slot_of_cardinality_minus_one`
+        // one ordering axis over.
+        assert_eq!(<StubKind as ClosedSet>::sorted_last_index(), 2);
+    }
+
+    #[test]
+    fn sorted_last_index_composes_sorted_last_with_index_of_on_every_implementor() {
+        // Direct alignment against the two-primitive composition on the
+        // stub — `T::sorted_last_index() == T::sorted_last().index_of()`
+        // holds by the default trait body's construction AND by well-
+        // formedness clause (91)'s pin. Sibling posture to
+        // `last_index_composes_last_with_index_of_on_every_implementor`
+        // one ordering axis over.
+        let composed = <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::sorted_last());
+        assert_eq!(<StubKind as ClosedSet>::sorted_last_index(), composed);
+    }
+
+    #[test]
+    fn sorted_first_index_and_sorted_last_index_round_trip_through_from_index_onto_the_lex_endpoint_anchors(
+    ) {
+        // The `from_index` round-trip pin — `T::from_index(T::sorted_first_index())
+        // == Some(T::sorted_first())` AND
+        // `T::from_index(T::sorted_last_index()) == Some(T::sorted_last())`
+        // on every implementor. Anchors the (decl-slot → typed variant)
+        // reverse-projection invariant against structural equality with
+        // the pre-existing typed-anchor primitives at the (lex, head)
+        // AND (lex, tail) endpoint corners. Sibling posture to the
+        // `from_index_round_trips_through_index_of_into_the_original_variant`
+        // family one lex-endpoint-anchor axis over on the endpoint-
+        // restricted slot subset.
+        assert_eq!(
+            <StubKind as ClosedSet>::from_index(<StubKind as ClosedSet>::sorted_first_index()),
+            Some(<StubKind as ClosedSet>::sorted_first()),
+        );
+        assert_eq!(
+            <StubKind as ClosedSet>::from_index(<StubKind as ClosedSet>::sorted_last_index()),
+            Some(<StubKind as ClosedSet>::sorted_last()),
+        );
+    }
+
+    #[test]
+    fn sorted_first_index_and_sorted_last_index_diverge_on_declaration_order_that_diverges_from_lex_order(
+    ) {
+        // The (declaration-axis, lex-axis) singular endpoint decl-slot
+        // contract on a stub whose declaration order deliberately
+        // diverges from its lex order — `first_index()` /
+        // `last_index()` name the decl-order endpoint slots (`0` and
+        // `CARDINALITY - 1`) while `sorted_first_index()` /
+        // `sorted_last_index()` name the DECL-SLOTS of the lex-min
+        // and lex-max variants (which are the LEX-order endpoint
+        // slots, NOT declaration-order endpoint slots). On the
+        // deliberate 3-variant stub with declaration order `[Gamma,
+        // Beta, Alpha]` and labels `("gamma", "beta", "alpha")`:
+        // declaration head/tail are `Gamma` (decl-slot `0`) /
+        // `Alpha` (decl-slot `2`); lex head/tail (under `str: Ord`)
+        // are `Alpha` (decl-slot `2`) / `Gamma` (decl-slot `0`).
+        // The four singular endpoint decl-slot projections therefore
+        // diverge in a strict permutation: `first_index()` = `0`,
+        // `last_index()` = `2`, `sorted_first_index()` = `2`,
+        // `sorted_last_index()` = `0`. Sibling posture to
+        // `sorted_first_label_and_sorted_last_label_diverge_on_declaration_order_that_diverges_from_lex_order`
+        // one return-type axis over on the (`&'static str`, `usize`)
+        // partition of the ordering-divergent stub surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SortedEndpointIndexDivergenceStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownSortedEndpointIndexDivergenceStubKind(pub String);
+        impl core::fmt::Display for UnknownSortedEndpointIndexDivergenceStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown sorted endpoint index divergence stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for SortedEndpointIndexDivergenceStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "sorted endpoint index divergence stub kind";
+            type Unknown = UnknownSortedEndpointIndexDivergenceStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSortedEndpointIndexDivergenceStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SortedEndpointIndexDivergenceStubKind as ClosedSet>::first_index(),
+            0,
+        );
+        assert_eq!(
+            <SortedEndpointIndexDivergenceStubKind as ClosedSet>::last_index(),
+            2,
+        );
+        assert_eq!(
+            <SortedEndpointIndexDivergenceStubKind as ClosedSet>::sorted_first_index(),
+            2,
+        );
+        assert_eq!(
+            <SortedEndpointIndexDivergenceStubKind as ClosedSet>::sorted_last_index(),
+            0,
+        );
+        assert_ne!(
+            <SortedEndpointIndexDivergenceStubKind as ClosedSet>::first_index(),
+            <SortedEndpointIndexDivergenceStubKind as ClosedSet>::sorted_first_index(),
+            "first_index() and sorted_first_index() returned the SAME decl-slot on a stub whose declaration order deliberately diverges from its lex order — the (declaration, lex) ordering partition MUST be structurally observed by the two singular head-decl-slot projections",
+        );
+        assert_ne!(
+            <SortedEndpointIndexDivergenceStubKind as ClosedSet>::last_index(),
+            <SortedEndpointIndexDivergenceStubKind as ClosedSet>::sorted_last_index(),
+            "last_index() and sorted_last_index() returned the SAME decl-slot on a stub whose declaration order deliberately diverges from its lex order — the (declaration, lex) ordering partition MUST be structurally observed by the two singular tail-decl-slot projections",
+        );
+        // The stub also satisfies the well-formedness sweep — clauses
+        // (88) + (89) + (90) + (91) all fire on a declaration order
+        // that diverges from the lex order, pinning ALL FOUR singular
+        // endpoint decl-slot projections at the ordering-divergent
+        // implementor edge.
+        super::assert_closed_set_well_formed::<SortedEndpointIndexDivergenceStubKind>();
+    }
+
+    #[test]
+    fn sorted_first_index_and_sorted_last_index_collapse_on_singleton_closed_set() {
+        // Singleton degeneracy — a closed set with one variant has
+        // `T::sorted_first()` and `T::sorted_last()` both return the
+        // sole variant whose `index_of()` is `0`, so
+        // `T::sorted_first_index()` and `T::sorted_last_index()` both
+        // return `0`. All FOUR `usize`-typed singular endpoint decl-slot
+        // projections ([`Self::first_index`], [`Self::last_index`],
+        // [`Self::sorted_first_index`], [`Self::sorted_last_index`])
+        // collapse onto the same anchor at the boundary-cardinality
+        // edge. Well-formedness sweep must ALSO pass on the singleton
+        // — clauses (88) + (89) + (90) + (91) all hold structurally at
+        // `CARDINALITY == 1`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonSortedFirstLastIndexStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonSortedFirstLastIndexStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonSortedFirstLastIndexStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown singleton sorted first last index stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for SingletonSortedFirstLastIndexStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton sorted first last index stub kind";
+            type Unknown = UnknownSingletonSortedFirstLastIndexStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonSortedFirstLastIndexStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonSortedFirstLastIndexStubKind as ClosedSet>::sorted_first_index(),
+            0,
+        );
+        assert_eq!(
+            <SingletonSortedFirstLastIndexStubKind as ClosedSet>::sorted_last_index(),
+            0,
+        );
+        super::assert_closed_set_well_formed::<SingletonSortedFirstLastIndexStubKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_first_index_and_sorted_first_index_composition(
+    ) {
+        // The well-formedness sweep's (90) clause —
+        // `T::sorted_first_index()` MUST equal
+        // `T::sorted_first().index_of()` AND
+        // `T::from_index(T::sorted_first_index())` MUST equal
+        // `Some(T::sorted_first())`. A hand-impl'd implementor whose
+        // override drifts the singular lex-head-decl-slot projection
+        // (routes an interior variant's decl-slot into the lex-head-
+        // endpoint slot, folds the lex-head-decl-slot onto
+        // `first_index()`, fabricates a non-canonical value detached
+        // from [`Self::sorted_first`] AND [`Self::index_of`]) fails
+        // the sweep loudly rather than silently bifurcating the
+        // lex-axis singular head-endpoint-decl-slot projection surface.
+        // Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_first_index_and_first_index_composition`
+        // one ordering axis over on the (declaration, lex) partition.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedFirstIndexKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedFirstIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedFirstIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted first index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedFirstIndexKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "drifted sorted first index kind";
+            type Unknown = UnknownDriftedSortedFirstIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedFirstIndexKind(s.to_owned())
+            }
+            fn sorted_first_index() -> usize {
+                // Drifted override — hard-codes `0` (the declaration-head
+                // decl-slot on this stub) rather than composing
+                // `T::sorted_first().index_of()` (which lands at `2`,
+                // the decl-slot of `Alpha` — the lex-min anchor). Would
+                // silently fold a lex-head consumer onto the declaration
+                // head slot on the ordering-divergent stub.
+                0
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedFirstIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_first_index() override that folds the lex-head-endpoint decl-slot onto the declaration-head-endpoint decl-slot rather than composing T::sorted_first().index_of() and round-tripping through T::from_index onto T::sorted_first()",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_last_index_and_sorted_last_index_composition(
+    ) {
+        // The well-formedness sweep's (91) clause —
+        // `T::sorted_last_index()` MUST equal
+        // `T::sorted_last().index_of()` AND
+        // `T::from_index(T::sorted_last_index())` MUST equal
+        // `Some(T::sorted_last())`. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_last_index_and_last_index_composition`
+        // one ordering axis over on the (declaration, lex) partition
+        // AND sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_sorted_first_index_and_sorted_first_index_composition`
+        // one endpoint-direction axis over on the (head, tail)
+        // partition of the closed-set lex-axis singular endpoint-anchor
+        // decl-slot drift-catch sweep.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedLastIndexKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedLastIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedLastIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted last index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedLastIndexKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "drifted sorted last index kind";
+            type Unknown = UnknownDriftedSortedLastIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedLastIndexKind(s.to_owned())
+            }
+            fn sorted_last_index() -> usize {
+                // Drifted override — hard-codes `2` (the declaration-tail
+                // decl-slot on this stub) rather than composing
+                // `T::sorted_last().index_of()` (which lands at `0`,
+                // the decl-slot of `Gamma` — the lex-max anchor). Would
+                // silently fold a lex-tail consumer onto the declaration
+                // tail slot on the ordering-divergent stub.
+                2
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedLastIndexKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_last_index() override that folds the lex-tail-endpoint decl-slot onto the declaration-tail-endpoint decl-slot rather than composing T::sorted_last().index_of() and round-tripping through T::from_index onto T::sorted_last()",
         );
     }
 

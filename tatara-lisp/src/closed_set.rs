@@ -1787,6 +1787,132 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::label(<Self as ClosedSet>::last())
     }
 
+    /// The declaration-order head-endpoint DECL-INDEX — `T::first().index_of()`
+    /// projected onto the trait surface as ONE call. Opens the
+    /// `usize`-typed return-type column on the declaration-axis (head,
+    /// tail) endpoint-anchor singular partition at the head slot,
+    /// mirroring [`Self::first_label`] one return-type axis over on
+    /// the (`&'static str`, `usize`) return-shape column of the
+    /// declaration-axis singular endpoint-anchor projection matrix.
+    ///
+    /// Sibling posture to [`Self::first`] one return-type axis over on
+    /// the (typed-variant `Self`, decl-order slot `usize`) partition of
+    /// the closed-set declaration-axis head-endpoint return-shape column
+    /// — [`Self::first`] materializes the typed head-endpoint variant,
+    /// this method materializes its decl-slot WITHOUT threading the
+    /// caller through the two-hop `T::first().index_of()` composition.
+    /// Sibling posture to [`Self::first_label`] one return-type axis
+    /// over on the (`&'static str`, `usize`) partition of the closed-
+    /// set declaration-axis singular head-endpoint return-shape column
+    /// — [`Self::first_label`] projects the head-endpoint canonical
+    /// label, this method projects its decl-slot integer coordinate.
+    ///
+    /// The (return-type × endpoint-direction) 3×2 matrix over the
+    /// declaration-axis singular endpoint-anchor return-shape column
+    /// partitions post-lift:
+    ///
+    /// | Return type \\ Endpoint  | Head                     | Tail                    |
+    /// |--------------------------|--------------------------|-------------------------|
+    /// | `Self` (typed variant)   | [`Self::first`]          | [`Self::last`]          |
+    /// | `&'static str` (label)   | [`Self::first_label`]    | [`Self::last_label`]    |
+    /// | `usize` (decl-slot)      | [`Self::first_index`]    | (future `last_index`)   |
+    ///
+    /// Every generic consumer that wants the declaration-order head-
+    /// endpoint decl-slot as ONE `usize` (a bounded-loop guard that
+    /// short-circuits when `i == T::first_index()` before decoding the
+    /// slot into a typed variant, a `<[U]>::get(T::first_index())`
+    /// parallel-vector lookup on a per-decl-slot side-table, a
+    /// completion cursor that positions the caret at the head decl-slot
+    /// coordinate WITHOUT threading the caller through a
+    /// `T::first().index_of()` two-primitive composition, a bounded-
+    /// range coherence probe that anchors an edge assertion at the
+    /// decl-head slot integer coordinate) binds to ONE typed method
+    /// rather than hand-rolling either the `T::first().index_of()`
+    /// composition (which re-derives the same two-primitive projection
+    /// at every callsite AND silently drifts when [`Self::first`] OR
+    /// [`Self::index_of`] is overridden) OR a per-implementor
+    /// `const HEAD_INDEX: usize = 0;` const that silently drifts from
+    /// [`Self::ALL`] on reordering.
+    ///
+    /// Default body composes ONE substrate primitive
+    /// ([`Self::first`]) with the per-slot [`Self::index_of`] projection
+    /// — the head-endpoint decl-slot is a typed CONSEQUENCE of the
+    /// (typed head anchor) primitive composed with the (decl-index
+    /// projection) primitive, not a per-implementor
+    /// `const HEAD_INDEX: usize = 0;` declaration. Implementors override
+    /// only when the head-endpoint decl-slot needs to diverge from the
+    /// natural `T::first().index_of()` shape (no production implementor
+    /// reaches for this today; the axis exists for the same reason
+    /// `via` / `set_label` / `labels` / `first` / `last` /
+    /// `endpoint_labels` / `first_label` overrides exist — a typed
+    /// escape hatch rather than forcing the implementor to hand-roll
+    /// the impl). An implementor that overrides [`Self::first`] OR
+    /// overrides [`Self::index_of`] propagates the override through
+    /// this default body automatically; the head-endpoint-decl-slot
+    /// surface funnels through the declaration head-anchor primitive
+    /// on the anchor-materialization column AND the per-slot decl-
+    /// index projection on the coordinate-rendering column.
+    ///
+    /// The head-endpoint-decl-slot contract — `T::first_index() ==
+    /// T::first().index_of() == 0` on every implementor — is guaranteed
+    /// by the default composition through [`Self::first`] and
+    /// [`Self::index_of`]; the well-formedness contract
+    /// [`assert_closed_set_well_formed`]'s new clause (88) pins the
+    /// composition against the natural `T::first().index_of()` shape
+    /// AND against the literal `0` fixpoint on every implementor so
+    /// a passing well-formedness sweep means every generic consumer
+    /// can call [`Self::first_index`] on any typed carrier and expect
+    /// the same `usize` answer at every crate boundary.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::first`] returns the sole variant
+    /// and this method returns its decl-slot `0`. The singleton edge is
+    /// the boundary-cardinality case where the head-endpoint decl-slot
+    /// AND the (future) tail-endpoint decl-slot AND the sole interior-
+    /// less variant's decl-slot all collapse onto the same `0` anchor.
+    ///
+    /// THEORY.md §III — the typescape; the (declaration head anchor →
+    /// decl-slot) singular projection becomes a TYPE projection on the
+    /// trait rather than a per-consumer inline `T::first().index_of()`
+    /// two-primitive composition at every downstream head-slot lookup
+    /// site. Opens the `usize` return-type row on the (return-type ×
+    /// endpoint-direction) singular endpoint-anchor projection matrix.
+    /// THEORY.md §V.1 — knowable platform; the (declaration head anchor
+    /// → decl-slot) projection was an unnamed compound of
+    /// [`Self::first`] + [`Self::index_of`] pre-lift; naming it on the
+    /// trait makes the projection a TYPED CONSEQUENCE of TWO substrate
+    /// primitives — generic consumers see ONE method, not one head-
+    /// decl-slot-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the (declaration
+    /// head anchor → decl-slot) projection emerges from the composition
+    /// of TWO substrate primitives ([`Self::first`], [`Self::index_of`])
+    /// rather than as a per-implementor `const HEAD_INDEX: usize = 0;`
+    /// declaration. A future tightening of either primitive (a future
+    /// perfect-hash forward projection, a future const-fn axis that
+    /// makes the projection callable in const contexts, a future
+    /// non-zero-based decl-slot extension for sparse closed sets)
+    /// propagates to every closed-set head-decl-slot consumer through
+    /// this method's body.
+    ///
+    /// Frontier inspiration: Racket's `enum-first-index` on closed
+    /// enumerations under a canonical index projection (the singular
+    /// head-anchor decl-slot projection on the declaration-order chain);
+    /// Idris's `FZ : Fin (S n)` on the non-empty finite-cardinality
+    /// head-anchor slot (the typed zeroth element of a bounded chain);
+    /// Haskell's `fromEnum minBound` on the `Bounded + Enum` type-class
+    /// pair (the head-anchor decl-slot rendering composed from two
+    /// prelude primitives on the bounded chain); MLIR's
+    /// `RegisteredOperationName::begin_index()` on the declaration-
+    /// order Op registry; Rust's `strum::EnumIter::next().map(|v|
+    /// v as usize)` composed through the iterator API. Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// the trait's existing [`Self::first`] surface with the per-slot
+    /// [`Self::index_of`] projection — no new dep, no new IR layer,
+    /// no supertrait bound, no allocation.
+    fn first_index() -> usize {
+        <Self as ClosedSet>::index_of(<Self as ClosedSet>::first())
+    }
+
     /// The declaration-order head-endpoint LABEL predicate — `true`
     /// iff `s` equals [`Self::first_label`], `false` otherwise. Closes
     /// the (arg-type × endpoint-direction) 2×2 declaration-axis
@@ -21896,6 +22022,67 @@ where
             "{type_name}: parse_sorted_index_of_label_with_hint / sorted_index_of_label_with_hint accepted the reserved probe or disagreed on the (accept, reject) partition",
         ),
     }
+    // (88) — `T::first_index()` MUST equal `T::first().index_of()`
+    // AND MUST equal the literal `0` — the singular declaration-order
+    // head-endpoint decl-slot projection on the declaration-axis
+    // singular endpoint-anchor `usize`-return-shape column composes
+    // the (declaration head anchor) primitive with the (per-slot
+    // decl-index) projection AND lands at the structural `0` fixpoint
+    // of the `<[Self]>::iter().position(...)` decl-slot semantics
+    // (`T::first() == T::ALL[0]` by clause (18), so
+    // `T::first().index_of() == 0` by the `index_of` well-formedness
+    // pin on clause (17)). The default trait body composes
+    // `T::index_of(T::first())` verbatim and satisfies both alignments
+    // for free; the assertion catches a future implementor whose
+    // override drifts the singular head-decl-slot projection (a stale
+    // override that hard-codes a non-zero literal detached from
+    // [`Self::first`] AND [`Self::index_of`] — silently forking the
+    // head-anchor decl-slot rendering from the index-projection
+    // primitive every downstream head-decl-slot consumer routes
+    // through; a permissive override that returns
+    // `T::CARDINALITY - 1` — silently swapping the singular head-slot
+    // projection with the tail-slot; a fold override that returns
+    // [`Self::first`]'s `sorted_index_of` instead — silently
+    // bifurcating the (declaration, lex) ordering axis at the
+    // singular head-endpoint-index return-shape slot on any
+    // implementor whose declaration order diverges from its lex order;
+    // an override that returns a strictly-interior variant's decl-slot
+    // — silently routing an interior slot into the head-endpoint-
+    // decl-slot projection; a fabricated override that returns
+    // `usize::MAX` — silently detaching the head-decl-slot rendering
+    // from every canonical slot in [`T::ALL`]) loudly rather than
+    // silently bifurcating the singular head-endpoint-decl-slot
+    // projection surface every downstream head-decl-slot consumer
+    // routes through. Sibling posture to clauses (18) + (34) + (36)
+    // + (46) — clause (18) pins the individual (declaration head)
+    // scalar endpoint-anchor projection against `T::ALL[0]`, clause
+    // (34) pins the (typed variant, typed variant) pair-aggregation
+    // projection on the declaration axis, clause (36) pins the
+    // (label, label) pair-aggregation projection on the declaration
+    // axis, clause (46) pins the singular `&'static str` head-label
+    // projection against the composition of the declaration head-
+    // endpoint-anchor primitive with the per-slot label projection,
+    // this clause pins the singular `usize` head-decl-slot projection
+    // against the composition of the declaration head-endpoint-anchor
+    // primitive with the per-slot decl-index projection. Clauses (18)
+    // + (46) + (88) together OPEN the (return-type × head-endpoint-
+    // direction) 3×1 matrix over the declaration-axis singular head-
+    // endpoint-anchor return-shape column at ALL THREE return-type
+    // corners (typed-variant `Self`, canonical-label `&'static str`,
+    // decl-slot `usize`) — every generic consumer that binds any of
+    // the three singular head-anchor projection methods sees the SAME
+    // head-endpoint answer at every crate boundary regardless of
+    // which return-type axis / aggregation-shape corner it walks.
+    assert_eq!(
+        T::first_index(),
+        T::first().index_of(),
+        "{type_name}: T::first_index() drifted from T::first().index_of() — the singular declaration-order head-endpoint decl-slot projection no longer agrees with the natural `T::first().index_of()` two-primitive composition, so a downstream head-slot cursor / head-slot completion / head-slot coherence probe consumer that binds `T::first_index()` as its singular head-anchor decl-slot query surface would render the wrong `usize`",
+    );
+    assert_eq!(
+        T::first_index(),
+        0,
+        "{type_name}: T::first_index() drifted from the literal `0` fixpoint — `T::first() == T::ALL[0]` by clause (18) and `T::ALL[0].index_of() == 0` by the `index_of` well-formedness pin, so the composition MUST land at slot 0 on every implementor; a downstream head-slot consumer that binds `T::first_index()` as its singular head-anchor decl-slot query surface would read a non-zero head slot when the substrate's `<[Self]>::iter().position(...)` decl-slot semantics anchor the head at slot 0",
+    );
 }
 
 #[cfg(test)]
@@ -31516,6 +31703,139 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a last_label() override that folds the tail-endpoint label onto the head-endpoint label rather than composing T::last().label()",
+        );
+    }
+
+    #[test]
+    fn first_index_returns_declaration_order_head_endpoint_decl_slot_of_zero() {
+        // The singular declaration-order head-endpoint decl-slot
+        // projection returns `T::first().index_of()` which composes to
+        // `T::ALL[0].index_of() == 0` on every implementor. `StubKind`'s
+        // declaration order is `[Alpha, Beta, Gamma]`, so
+        // `T::first_index()` returns `0`. Sibling posture to
+        // `first_label_returns_declaration_order_head_endpoint_label`
+        // one return-type axis over on the (`&'static str`, `usize`)
+        // partition of the closed-set declaration-axis singular head-
+        // endpoint return-shape column — the label arm returns the
+        // canonical string label, the decl-slot arm returns the
+        // canonical decl-slot integer coordinate. Well-formedness clause
+        // (88) additionally pins the (T::first_index() == 0) structural
+        // fixpoint, so this test AND clause (88) BOTH catch a drift.
+        assert_eq!(<StubKind as ClosedSet>::first_index(), 0);
+    }
+
+    #[test]
+    fn first_index_composes_first_with_index_of_on_every_implementor() {
+        // Direct alignment against the two-primitive composition on the
+        // stub — `T::first_index() == T::first().index_of()` holds by
+        // the default trait body's construction AND by well-formedness
+        // clause (88)'s pin. Anchors the (compose head-anchor primitive
+        // with per-slot decl-index projection) invariant against
+        // structural equality with the pre-existing two-primitive path.
+        let composed = <StubKind as ClosedSet>::index_of(<StubKind as ClosedSet>::first());
+        assert_eq!(<StubKind as ClosedSet>::first_index(), composed);
+    }
+
+    #[test]
+    fn first_index_collapses_to_zero_on_singleton_closed_set() {
+        // Singleton degeneracy — a closed set with one variant has
+        // `T::first()` return the sole variant whose `index_of()` is
+        // `0`, so `T::first_index()` returns `0`. The singular decl-
+        // slot projection preserves its `usize` SHAPE at the boundary-
+        // cardinality edge where the head-endpoint decl-slot AND the
+        // sole interior-less variant's decl-slot collapse onto the
+        // same `0` anchor. Well-formedness sweep must ALSO pass on the
+        // singleton — the (88) clause's `T::first_index() == 0` pin
+        // holds structurally at `CARDINALITY == 1`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonFirstIndexStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonFirstIndexStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonFirstIndexStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton first index stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonFirstIndexStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton first index stub kind";
+            type Unknown = UnknownSingletonFirstIndexStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Only => "only",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonFirstIndexStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(<SingletonFirstIndexStubKind as ClosedSet>::first_index(), 0,);
+        super::assert_closed_set_well_formed::<SingletonFirstIndexStubKind>();
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_first_index_and_first_index_composition()
+    {
+        // The well-formedness sweep's (88) clause —
+        // `T::first_index()` MUST equal `T::first().index_of()` AND
+        // MUST equal `0`. A hand-impl'd implementor whose override
+        // drifts the singular head-decl-slot projection (hard-codes a
+        // non-zero literal detached from [`Self::first`] AND
+        // [`Self::index_of`], routes an interior variant's decl-slot
+        // into the head-endpoint slot, folds the head-decl-slot onto
+        // `T::CARDINALITY - 1` at the endpoint-direction axis) fails
+        // the sweep loudly rather than silently bifurcating the
+        // declaration-axis singular head-endpoint-decl-slot projection
+        // surface every downstream head-decl-slot consumer routes
+        // through. Sibling posture to
+        // `assert_closed_set_well_formed_catches_drift_between_first_label_and_first_label_composition`
+        // one return-type axis over on the (`&'static str`, `usize`)
+        // partition of the closed-set declaration-axis singular head-
+        // endpoint drift-catch sweep.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedFirstIndexKind {
+            Head,
+            Middle,
+            Tail,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedFirstIndexKind(pub String);
+        impl core::fmt::Display for UnknownDriftedFirstIndexKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted first index kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedFirstIndexKind {
+            const ALL: &'static [Self] = &[Self::Head, Self::Middle, Self::Tail];
+            const SET_LABEL: &'static str = "drifted first index kind";
+            type Unknown = UnknownDriftedFirstIndexKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Head => "head",
+                    Self::Middle => "middle",
+                    Self::Tail => "tail",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedFirstIndexKind(s.to_owned())
+            }
+            fn first_index() -> usize {
+                // Drifted override — routes the tail-endpoint decl-slot
+                // into the head-endpoint slot, silently swapping the
+                // singular head-decl-slot projection with the tail-slot
+                // every downstream head-decl-slot consumer routes
+                // through. Would silently fold a head-anchor bounded-
+                // loop guard onto the last slot on the 3-variant stub.
+                2
+            }
+        }
+        let outcome =
+            std::panic::catch_unwind(super::assert_closed_set_well_formed::<DriftedFirstIndexKind>);
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a first_index() override that returns the tail-endpoint decl-slot rather than composing T::first().index_of() and landing at the literal 0 fixpoint",
         );
     }
 

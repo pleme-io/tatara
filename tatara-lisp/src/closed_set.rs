@@ -15126,6 +15126,171 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .count()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "per-slot variant histogram"
+    /// projection — the `Vec<usize>` DECLARATION-ORDER histogram over
+    /// [`Self::ALL`] whose slot `i` reports the multiplicity of
+    /// `T::ALL[i]` in `items`. The `Vec<usize>` per-slot histogram
+    /// opener on the (per-target × Vec) column of the equivalence-
+    /// partition surface, positioned as the concrete AGGREGATION
+    /// behind the just-lifted usize-return [`Self::count_occurrences_of`]
+    /// per-target multiplicity primitive (which reports the
+    /// multiplicity of ONE target) and the Vec-return
+    /// [`Self::present_variants`] present-witness projection (which
+    /// reports the STRICTLY-POSITIVE arm of the same histogram as a
+    /// typed variant witness). The (per-target, per-slot) × (usize,
+    /// Vec) 2×2 = 4-corner (arity × return-shape) face on the
+    /// equivalence-partition surface now closes the `Vec<usize>` per-
+    /// slot column at the (Vec<usize>, per-slot) corner peer to the
+    /// (`usize`, per-target) corner [`Self::count_occurrences_of`]
+    /// opened.
+    ///
+    /// Declaration-order contract: slot `i` of the returned
+    /// `Vec<usize>` reports the multiplicity of `T::ALL[i]` in
+    /// `items` — the histogram walks [`Self::ALL`] in declaration
+    /// order and projects each slot's variant through the per-target
+    /// multiplicity primitive. Pinned by
+    /// `variant_counts_slot_i_equals_count_occurrences_of_variant_i_across_every_triple`.
+    ///
+    /// Length contract: `T::variant_counts(items).len() == T::CARDINALITY`
+    /// on every slice on every implementor — the histogram has ONE
+    /// slot per variant of the closed set, so the returned vector's
+    /// length is anchored at the substrate's forced-arity constant.
+    /// Pinned by clause (98) at BOTH the full-set and empty-slice
+    /// fixpoints AND by the test-sweep.
+    ///
+    /// Partition identity: for every slice `items`,
+    /// `T::variant_counts(items).iter().sum::<usize>() == items.len()`
+    /// — the histogram partitions the slice's positions exactly,
+    /// because every position sits at EXACTLY ONE variant (the
+    /// (variant → decl-slot) injectivity clause (16) forces the per-
+    /// position occurrence-arm membership disjoint on `target`). This
+    /// is the direct Vec-lift of
+    /// [`Self::count_occurrences_of`]'s per-target partition identity.
+    /// Pinned by
+    /// `variant_counts_summed_equals_slice_length_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::variant_counts(&[])` is the all-
+    /// zeros vector of length [`Self::CARDINALITY`] on every
+    /// implementor — the empty slice hits zero positions, so every
+    /// per-slot filter accepts nothing. Pinned by clause (98)'s
+    /// empty-slice fixpoint arm and by
+    /// `variant_counts_returns_all_zeros_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::variant_counts(<T as ClosedSet>::ALL)` is the all-ones
+    /// vector of length [`Self::CARDINALITY`] UNCONDITIONALLY — the
+    /// closed-set well-formedness invariant
+    /// [`assert_closed_set_well_formed`]'s clause (3) pins variants
+    /// as pairwise distinct, so every variant appears in `T::ALL` at
+    /// exactly one position and every histogram slot lands at `1`.
+    /// Pinned by clause (98)'s full-set fixpoint arm and by
+    /// `variant_counts_returns_all_ones_on_the_full_set_across_every_kind`.
+    ///
+    /// Reversal-invariance: `T::variant_counts(items)` equals
+    /// `T::variant_counts(items.iter().rev().copied().collect::<Vec<_>>())`
+    /// for every slice — reversing a slice preserves its multiset of
+    /// variant identities, and every per-slot histogram bar is a
+    /// function of that multiset alone. Pinned by
+    /// `variant_counts_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_occurrences_of`] primitive at the
+    /// trait level. The composition uses one `T::ALL` iteration
+    /// mapping each variant through [`Self::count_occurrences_of`],
+    /// so the sweep costs O(T::CARDINALITY * n) on slice arity `n` —
+    /// allocation-free per-slot, no `PartialEq`/`Eq`/`Hash`
+    /// supertrait bound (the trait's minimal `Sized + Copy + 'static`
+    /// supertrait pair stays untouched), no bitset-shape carrier.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::variant_counts`]: a `tatara-check` predicate
+    /// `(check-phases-histogram …)` that verifies a rollout window's
+    /// per-`WorkloadPhase` occurrence count matches a Lisp-authored
+    /// histogram spec exactly at plan time — catching a rollout that
+    /// silently over- or under-visits a specific phase; an LSP
+    /// diagnostic on a Lisp-author-written closed-set field that
+    /// renders the full per-variant histogram as an author-facing
+    /// spark-line (`":severities [:warn :warn :crit]" → "info: 0,
+    /// warn: 2, error: 0, crit: 1"`) rather than the per-target scalar
+    /// [`Self::count_occurrences_of`] projection or the collapsed
+    /// [`Self::count_distinct`] scalar; a Sekiban audit-trail per-
+    /// window classification histogram bar sequence carrying the
+    /// concrete per-variant occurrence counts as its per-window
+    /// witness; a `tatara-lisp::macro_expand::Expander` hygiene pass
+    /// that reports the exact per-identifier hit-count over a
+    /// template's generated body against a required closed
+    /// vocabulary; a per-slot rate limiter reading its throttle
+    /// budget as an entire per-variant histogram vector (rather than
+    /// a per-variant lookup per window). Each binds to ONE typed N-
+    /// ary per-slot histogram projection on the trait rather than
+    /// re-deriving
+    /// `T::ALL.iter().map(|v| T::count_occurrences_of(v, items)).collect()`
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the equivalence-partition surface now
+    /// closes the (per-target × Vec) column at the (Vec<usize>, per-
+    /// slot) corner peer to the (per-target × usize) corner
+    /// [`Self::count_occurrences_of`] opened. The next natural lift
+    /// on this surface — a `sorted_variant_counts(items) -> Vec<usize>`
+    /// LEX-order per-slot histogram whose slot `i` reads
+    /// `T::count_occurrences_of(T::sorted_variants()[i], items)` —
+    /// opens the (per-slot × lex) corner peer to the (per-slot ×
+    /// decl) corner this lift opens on the (per-slot × ordering)
+    /// 2-corner face of the histogram surface. Downstream consumers
+    /// wanting the "mode" (variant with maximum multiplicity, i.e.
+    /// argmax of the histogram) or the "least-frequent" variant
+    /// (argmin) compose on this projection through iterator sweep
+    /// without an additional substrate primitive.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary per-
+    /// slot histogram projection becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline
+    /// `T::ALL.iter().map(|v| T::count_occurrences_of(v, items)).collect()`
+    /// composition at every downstream generic site. THEORY.md §V.1
+    /// — knowable platform; the (per-slot × Vec) histogram corner
+    /// was an unnamed inline composition recurring at every
+    /// prospective downstream "what does the full per-variant
+    /// histogram look like?" site pre-lift. Naming it on the trait
+    /// makes the projection a TYPED CONSEQUENCE of the substrate's
+    /// per-target multiplicity primitive
+    /// [`Self::count_occurrences_of`] mapped over
+    /// [`Self::ALL`]. THEORY.md §VI.1 — generation over composition;
+    /// the per-slot histogram projection emerges from the composition
+    /// of ONE substrate primitive
+    /// ([`Self::count_occurrences_of`]) with an
+    /// `iter().map().collect()` combinator on `T::ALL`, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Clojure's `(frequencies coll)` returning
+    /// a `Map<Element, usize>` per-element histogram; Python's
+    /// `collections.Counter(items)` returning a `dict[element, int]`
+    /// per-element histogram; Julia's `StatsBase.counts(items,
+    /// levels)` on a fixed level-set returning a per-level
+    /// `Vector{Int}`; NumPy's `np.bincount(items, minlength=N)`
+    /// returning a per-index count array; R's `tabulate(items,
+    /// nbins)` returning a per-bin count vector; Coq's `count_occ_by`
+    /// combinator lifted to a per-element projection over a decidable-
+    /// equality carrier. Translation through pleme-io primitives: the
+    /// N-ary per-slot histogram projection on the closed-set trait
+    /// binds through the substrate's per-target multiplicity primitive
+    /// [`Self::count_occurrences_of`] mapped over [`Self::ALL`] — no
+    /// new dep, no supertrait bound (the [`Self::index_of`] projection
+    /// [`Self::count_occurrences_of`] threads through replaces the
+    /// `Eq`/`Hash` bound the standard-library `Counter` /
+    /// `frequencies` signatures demand), no map-shape carrier
+    /// allocation (the substrate's [`Self::ALL`] slot-order pins the
+    /// output to a dense `Vec<usize>` of length
+    /// [`Self::CARDINALITY`]), no allocation per input position (the
+    /// underlying primitive folds each position under `filter().count()`
+    /// without a hash-table probe).
+    fn variant_counts(items: &[Self]) -> ::std::vec::Vec<usize> {
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .map(|v| <Self as ClosedSet>::count_occurrences_of(v, items))
+            .collect()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -23838,6 +24003,77 @@ where
             target_label = <T as ClosedSet>::label(target),
         );
     }
+    // (98) — `T::variant_counts(items)` MUST return a `Vec<usize>` of
+    // length `T::CARDINALITY` AND MUST agree POSITIONWISE with the
+    // decl-order per-target multiplicity projection on every slice.
+    // Pinned at both the empty-slice fixpoint (all zeros) AND the
+    // full-set fixpoint (all ones) — the two arms partition the
+    // failure modes at the (length-anchored × per-slot value) corner
+    // simultaneously so an override that returns the wrong LENGTH fires
+    // on the length arm loudly (a shorter vec silently drops variants,
+    // a longer vec silently duplicates them, either bifurcates the
+    // CARDINALITY-anchored histogram contract) AND an override that
+    // returns the wrong PER-SLOT VALUE fires on the composition-
+    // equality arm loudly (a per-slot value that folds onto
+    // `items.len()` regardless of slot returns `T::CARDINALITY` at
+    // every slot on the full set — silently collapsing the per-slot
+    // histogram onto the slice-length constant; a per-slot value that
+    // returns `0` unconditionally silently detaches the histogram from
+    // the pinned per-target hit-count). The default trait body threads
+    // `T::ALL.iter().copied().map(|v| T::count_occurrences_of(v, items)).collect()`
+    // verbatim and satisfies both fixpoint arms + the composition-
+    // equality arm for free; the assertion catches a future implementor
+    // whose override drifts the projection loudly rather than silently
+    // bifurcating the per-slot histogram projection surface every
+    // downstream per-slot histogram consumer routes through. Sibling
+    // posture to clause (97) — clause (97) pins the (`usize`, per-
+    // target) multiplicity corner on the equivalence-partition
+    // surface; this clause pins the (`Vec<usize>`, per-slot) histogram
+    // corner peer to it one arity axis over, and pins its composition
+    // through the per-target primitive so any drift in the underlying
+    // primitive that clause (97) misses at the per-target × (empty,
+    // full) 2-corner face still bifurcates loudly at the per-slot
+    // composition-equality arm here.
+    let empty_histogram = T::variant_counts(&[]);
+    assert_eq!(
+        empty_histogram.len(),
+        T::CARDINALITY,
+        "{type_name}: T::variant_counts(&[]).len() == {empty_histogram_len} != T::CARDINALITY {} — the per-slot histogram projection MUST return a `Vec<usize>` of length `T::CARDINALITY` on every slice; a shorter vec silently drops variants, a longer vec silently duplicates them, either bifurcates the CARDINALITY-anchored histogram contract every downstream per-slot histogram consumer routes through",
+        T::CARDINALITY,
+        empty_histogram_len = empty_histogram.len(),
+    );
+    for (slot, &count) in empty_histogram.iter().enumerate() {
+        assert_eq!(
+            count,
+            0,
+            "{type_name}: T::variant_counts(&[])[{slot}] == {count} != 0 — the per-slot histogram projection MUST report zero occurrences at every slot on the empty slice because the empty slice hits zero positions; a non-zero empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream per-slot histogram consumer routes through",
+        );
+    }
+    let full_set_histogram = T::variant_counts(T::ALL);
+    assert_eq!(
+        full_set_histogram.len(),
+        T::CARDINALITY,
+        "{type_name}: T::variant_counts(T::ALL).len() == {full_set_histogram_len} != T::CARDINALITY {} — the per-slot histogram projection MUST return a `Vec<usize>` of length `T::CARDINALITY` on every slice; a shorter vec silently drops variants, a longer vec silently duplicates them, either bifurcates the CARDINALITY-anchored histogram contract every downstream per-slot histogram consumer routes through",
+        T::CARDINALITY,
+        full_set_histogram_len = full_set_histogram.len(),
+    );
+    for (slot, &count) in full_set_histogram.iter().enumerate() {
+        assert_eq!(
+            count,
+            1,
+            "{type_name}: T::variant_counts(T::ALL)[{slot}] == {count} != 1 — the per-slot histogram projection MUST report exactly one occurrence at every slot on the full set by clause (3)'s pairwise-distinctness invariant; a per-slot count != 1 on the full set silently bifurcates the (variant → decl-slot) injectivity clause (16) at the per-slot histogram projection surface, breaking every downstream per-variant histogram consumer",
+        );
+    }
+    let expected_full_set_histogram: Vec<usize> = T::ALL
+        .iter()
+        .copied()
+        .map(|v| T::count_occurrences_of(v, T::ALL))
+        .collect();
+    assert_eq!(
+        full_set_histogram,
+        expected_full_set_histogram,
+        "{type_name}: T::variant_counts(T::ALL) drifted from T::ALL.iter().map(|v| T::count_occurrences_of(v, T::ALL)).collect() — the per-slot histogram projection no longer agrees with the natural per-target multiplicity composition on the full-set fixpoint, so a downstream histogram renderer / per-slot budget consumer / per-variant occurrence-count sweep that binds `T::variant_counts` as its `Vec<usize>` per-slot query surface would render the wrong histogram",
+    );
 }
 
 #[cfg(test)]
@@ -47522,6 +47758,283 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedCountOccurrencesOfKind whose count_occurrences_of override folds onto items.len() — clause (97)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn variant_counts_returns_all_zeros_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (per-slot × Vec<usize> histogram
+        // projection): `T::variant_counts(&[])` is the all-zeros
+        // vector of length `T::CARDINALITY` on every implementor — the
+        // empty slice hits zero positions, so every per-slot filter
+        // accepts nothing. Sibling posture to
+        // `count_occurrences_of_returns_zero_on_the_empty_slice_across_every_target`
+        // one arity axis over: the (per-target × usize) multiplicity
+        // primitive reports `0` at every target; this Vec-lift
+        // projects the same `0` at every slot of the returned dense
+        // histogram vector.
+        let empty: &[StubKind] = &[];
+        let histogram = <StubKind as ClosedSet>::variant_counts(empty);
+        assert_eq!(
+            histogram.len(),
+            <StubKind as ClosedSet>::CARDINALITY,
+            "T::variant_counts(&[]) length diverged from T::CARDINALITY",
+        );
+        for (slot, &count) in histogram.iter().enumerate() {
+            assert_eq!(
+                count, 0,
+                "T::variant_counts(&[])[{slot}] diverged from the empty-slice fixpoint `0`",
+            );
+        }
+    }
+
+    #[test]
+    fn variant_counts_returns_all_ones_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::variant_counts(<T as ClosedSet>::ALL)`
+        // is the all-ones vector of length `T::CARDINALITY`
+        // UNCONDITIONALLY — the closed-set well-formedness invariant
+        // `assert_closed_set_well_formed`'s clause (3) pins labels
+        // (and hence variants) as pairwise distinct, so every variant
+        // appears in `T::ALL` at exactly one position and every
+        // histogram slot lands at `1`. Sibling posture to
+        // `count_occurrences_of_returns_one_on_the_full_set_across_every_target`
+        // one arity axis over: the (per-target × usize) multiplicity
+        // primitive reports `1` at every target; this Vec-lift
+        // projects the same `1` at every slot of the returned dense
+        // histogram vector.
+        let all = <StubKind as ClosedSet>::ALL;
+        let histogram = <StubKind as ClosedSet>::variant_counts(all);
+        assert_eq!(
+            histogram.len(),
+            <StubKind as ClosedSet>::CARDINALITY,
+            "T::variant_counts(T::ALL) length diverged from T::CARDINALITY",
+        );
+        for (slot, &count) in histogram.iter().enumerate() {
+            assert_eq!(
+                count, 1,
+                "T::variant_counts(T::ALL)[{slot}] diverged from the full-set fixpoint `1` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+            );
+        }
+    }
+
+    #[test]
+    fn variant_counts_slot_i_equals_count_occurrences_of_variant_i_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (positionwise): for every
+        // slice `items` and every slot `i` in `[0, T::CARDINALITY)`,
+        // `T::variant_counts(items)[i] ==
+        // T::count_occurrences_of(T::ALL[i], items)` — the per-slot
+        // histogram projection is EXACTLY the mapping of the per-
+        // target multiplicity primitive over `T::ALL` in declaration
+        // order. Sweeps every length-3 triple × every slot pins the
+        // composition-equality contract across the full 3×3 = 9-corner
+        // (triple × slot) matrix. Catches a future override that
+        // reorders the vector, drops slots, or drifts individual
+        // entries — all three fold onto the positionwise equality
+        // arm at some (triple, slot) coordinate.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let histogram = <StubKind as ClosedSet>::variant_counts(&triple);
+                    for (slot, &target) in <StubKind as ClosedSet>::ALL.iter().enumerate() {
+                        let via_primitive =
+                            <StubKind as ClosedSet>::count_occurrences_of(target, &triple);
+                        assert_eq!(
+                            histogram[slot], via_primitive,
+                            "T::variant_counts({triple:?})[{slot}] diverged from T::count_occurrences_of({target:?}, {triple:?}) — the per-slot histogram projection MUST agree positionwise with the decl-order per-target multiplicity mapping",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_counts_summed_equals_slice_length_across_every_triple() {
+        // PARTITION IDENTITY: for every slice `items`,
+        // `T::variant_counts(items).iter().sum::<usize>() ==
+        // items.len()` — the histogram partitions the slice's
+        // positions exactly, because every position sits at EXACTLY
+        // ONE variant (the (variant → decl-slot) injectivity clause
+        // (16) forces the per-position occurrence-arm membership
+        // disjoint on `target`). Sibling posture to
+        // `count_occurrences_of_summed_over_all_targets_equals_slice_length_across_every_triple`
+        // one arity axis over: this Vec-lift threads the same
+        // partition identity through the returned dense histogram
+        // vector's `.iter().sum()` fold rather than the
+        // `T::ALL.iter().map(count_occurrences_of).sum()` per-target
+        // fold. Catches a future override that returns a scaled
+        // vector — an override multiplying every slot by an inflation
+        // factor would sum to `k * items.len()`, breaking the
+        // partition identity loudly.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let sum: usize = <StubKind as ClosedSet>::variant_counts(&triple)
+                        .iter()
+                        .sum();
+                    assert_eq!(
+                        sum,
+                        triple.len(),
+                        "T::variant_counts({triple:?}).iter().sum() diverged from triple.len() — the per-slot histogram partition identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_counts_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT: `T::variant_counts(items)
+        // == T::variant_counts(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and every per-slot histogram bar is a function
+        // of that multiset alone. Sibling posture to
+        // `count_occurrences_of_is_invariant_under_slice_reversal_across_every_target_and_triple`
+        // one arity axis over: this Vec-lift threads the same
+        // reversal-fixpoint through the returned dense histogram
+        // vector as a whole.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::variant_counts(&forward),
+                        <StubKind as ClosedSet>::variant_counts(&reversed),
+                        "T::variant_counts({forward:?}) diverged from T::variant_counts({reversed:?}) — the per-slot histogram projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_variant_counts_and_composition() {
+        // Drift catch — clause (98)'s full-set-fixpoint arm fires when
+        // an override folds the per-slot histogram onto `vec![
+        // items.len(); T::CARDINALITY]` regardless of slot (returning
+        // `T::CARDINALITY` at every slot on the full set rather than
+        // `1`). The stub below overrides the default body to return
+        // exactly that; on the full set that produces `[3, 3, 3] !=
+        // [1, 1, 1]`, tripping clause (98)'s full-set fixpoint arm at
+        // slot 0.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedVariantCountsKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedVariantCountsKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedVariantCountsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted variant_counts kind: {}", self.0)
+            }
+        }
+
+        impl DriftedVariantCountsKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedVariantCountsKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted variant_counts kind";
+            type Unknown = UnknownDriftedVariantCountsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedVariantCountsKind(s.to_owned())
+            }
+            fn variant_counts(items: &[Self]) -> ::std::vec::Vec<usize> {
+                // Drift: return `vec![items.len(); T::CARDINALITY]`
+                // regardless of slot. On the full set that produces
+                // `[3, 3, 3] != [1, 1, 1]`, tripping clause (98)'s
+                // full-set fixpoint arm at slot 0 loudly. The
+                // fixpoint arm partitions the failure mode at the
+                // (composition-equality × per-slot value) corner and
+                // catches the override before any downstream per-slot
+                // histogram consumer routes through it.
+                vec![items.len(); <Self as ClosedSet>::CARDINALITY]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedVariantCountsKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedVariantCountsKind whose variant_counts override folds onto vec![items.len(); CARDINALITY] — clause (98)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_length_drift_in_variant_counts() {
+        // Drift catch — clause (98)'s LENGTH arm fires when an
+        // override returns a `Vec<usize>` of the wrong length,
+        // regardless of per-slot values. The stub below returns
+        // `vec![0; T::CARDINALITY + 1]` on every slice — the values
+        // pass the empty-slice all-zeros arm (all-zeros suffix
+        // trivially satisfies the per-slot value check on the empty
+        // slice), but the LENGTH arm fires immediately: `T::CARDINALITY
+        // + 1 == 4 != T::CARDINALITY == 3`. Catches a future override
+        // that silently drops or duplicates slots — the length arm
+        // partitions the failure mode at the (length-anchored × per-
+        // slot value) corner independently of the composition-equality
+        // arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum LengthDriftedVariantCountsKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownLengthDriftedVariantCountsKind(pub String);
+
+        impl core::fmt::Display for UnknownLengthDriftedVariantCountsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown length-drifted variant_counts kind: {}", self.0)
+            }
+        }
+
+        impl LengthDriftedVariantCountsKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for LengthDriftedVariantCountsKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "length-drifted variant_counts kind";
+            type Unknown = UnknownLengthDriftedVariantCountsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownLengthDriftedVariantCountsKind(s.to_owned())
+            }
+            fn variant_counts(_items: &[Self]) -> ::std::vec::Vec<usize> {
+                vec![0; <Self as ClosedSet>::CARDINALITY + 1]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<LengthDriftedVariantCountsKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a LengthDriftedVariantCountsKind whose variant_counts override returns a Vec of the wrong length — clause (98)'s length arm MUST reject the drift",
         );
     }
 

@@ -17640,6 +17640,146 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY LEX-ORDER "present labels joined" projection — the
+    /// `String` rendering of [`Self::sorted_present_labels`] joined by
+    /// `sep`. Composes the substrate's lex-axis hit-label Vec-return
+    /// primitive with the standard-library
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// combinator so a passing implementor of
+    /// [`Self::sorted_present_labels`] automatically satisfies this
+    /// projection at every downstream site. The LEX-ORDER peer of
+    /// [`Self::present_labels_joined`] one ordering axis over on the
+    /// (declaration, lex) axis of the join-string column of the
+    /// equivalence-partition surface — opens the lex arm past the
+    /// declaration arm the sibling [`Self::present_labels_joined`]
+    /// closed.
+    ///
+    /// Sibling posture to [`Self::sorted_present_labels`] one return-
+    /// shape axis over on the (`Vec<&'static str>`, `String`) partition
+    /// of the lex-order arm of the equivalence-partition label-
+    /// aggregation surface — the Vec-return arm materializes each hit
+    /// slot as a `&'static str`, this method joins them into a single
+    /// `String` under the caller's separator. Sibling posture to
+    /// [`Self::sorted_labels_joined`] one partition-flavor axis over on
+    /// the (full-set, present-partition) surface — [`Self::sorted_labels_joined`]
+    /// renders EVERY label of [`Self::sorted_variants`] under the
+    /// caller's separator, this method renders only the DYNAMIC hit
+    /// partition of an N-ary input slice under the same separator in
+    /// the same lex order.
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::sorted_present_labels_joined(items, sep) ==
+    /// T::sorted_present_labels(items).join(sep)` — the join-string
+    /// projection binds through the substrate's
+    /// [`Self::sorted_present_labels`] Vec-return primitive composed
+    /// with `slice::join`. Pinned by
+    /// `sorted_present_labels_joined_equals_sorted_present_labels_dot_join_across_every_triple`.
+    ///
+    /// Cross-arm permutation identity: for every slice `items` and
+    /// every separator `sep`, `T::sorted_present_labels_joined(items,
+    /// sep)` and `T::present_labels_joined(items, sep)` render the
+    /// SAME hit-label multiset through `slice::join` — the two
+    /// projections join the SAME set of labels under the SAME
+    /// separator, but the OUTPUT byte layout differs whenever
+    /// declaration order and lex order diverge on the hit-set. On
+    /// implementors where declaration order aligns with lex order, the
+    /// two projections coincide byte-for-byte; on implementors that
+    /// diverge, the two projections diverge on layout while agreeing
+    /// on membership. Pinned by
+    /// `sorted_present_labels_joined_and_present_labels_joined_share_hit_multiset_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the hit-set
+    /// membership predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order regardless of the input ordering. Pinned by
+    /// `sorted_present_labels_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_present_labels_joined(&[], sep)
+    /// == ""` UNCONDITIONALLY for every `sep` — the empty slice hits
+    /// zero variants, so [`Self::sorted_present_labels`] yields the
+    /// empty `Vec`, and `slice::join` on an empty slice yields the
+    /// empty string. Full-set contract:
+    /// `T::sorted_present_labels_joined(<T as ClosedSet>::ALL, sep) ==
+    /// T::sorted_labels_joined(sep)` UNCONDITIONALLY for every `sep` —
+    /// the pairwise-distinctness invariant pins every variant of
+    /// [`Self::ALL`] as hitting itself, so every label survives the
+    /// filter and the returned join equals the substrate's lex-order
+    /// join under the same separator byte-for-byte.
+    ///
+    /// Bool-projection identity: for every slice `items` and every
+    /// separator `sep`, `T::sorted_present_labels_joined(items,
+    /// sep).is_empty()` iff `T::is_empty_hit_set(items)` — the lex-
+    /// order hit-set join-string is empty iff the underlying hit-set
+    /// is empty (i.e. iff `items` is either the empty slice OR the
+    /// zero-multiplicity carrier). Sibling posture to
+    /// `present_labels_joined.is_empty()` one ordering axis over — the
+    /// bool-projection is INVARIANT under the (declaration, lex) axis
+    /// because empty-set-ness is a function of the hit-set's
+    /// cardinality alone.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` labels a rollout window HIT in
+    /// canonical lex order as author-facing text (`"observed phases:
+    /// contracting, executing, terminal"` — author-stable regardless
+    /// of `ALL`-array declaration layout drift); an LSP completion pin
+    /// that renders the hit labels of an author-written closed-set
+    /// field in canonical lex order as a comma-joined "already-
+    /// selected" hint; a Sekiban audit-trail projection that carries
+    /// the hit-label witness of a classification poset window as a
+    /// deterministic pipe-joined string across machines regardless of
+    /// declaration-layout drift; a `tatara-lisp::macro_expand::Expander`
+    /// diagnostic that emits the concrete BOUND vocabulary identifiers
+    /// as a canonical slash-joined natural-language surface. Each
+    /// binds to ONE typed N-ary lex-order hit-label-as-string
+    /// projection on the trait rather than re-deriving
+    /// `T::sorted_present_labels(items).join(sep)` inline per callsite.
+    ///
+    /// Compounding closure: the (partition-arm × return-shape ×
+    /// ordering) 2×4×2 = 16-corner face on the equivalence-partition
+    /// surface now OPENS the lex-order arm of the join-string column
+    /// at the (present, `String`, lex) corner alongside the
+    /// pre-existing (present, `String`, declaration) corner at
+    /// [`Self::present_labels_joined`], the (absent, `String`,
+    /// declaration) corner at [`Self::missing_labels_joined`], and the
+    /// four Vec-return corners at [`Self::present_labels`] /
+    /// [`Self::missing_labels`] / [`Self::sorted_present_labels`] /
+    /// [`Self::sorted_missing_labels`]. The sole natural next lift on
+    /// this face — `sorted_missing_labels_joined` on (absent, `String`,
+    /// lex) — CLOSES the (partition-arm × ordering) 2×2 = 4-corner
+    /// face on the join-string column at its last remaining corner.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order hit-label-as-string projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::sorted_present_labels(items).join(sep)` composition
+    /// at every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the (present, label, `String`, lex) corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "which labels did we HIT, rendered joined in lex
+    /// order?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from the composition of
+    /// ONE substrate primitive ([`Self::sorted_present_labels`]) with
+    /// the standard-library `slice::join` combinator, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(string-join (map T-label (sort
+    /// (filter (lambda (v) (member v items)) (enum->list T)) #:key
+    /// T-label)) sep)`; Haskell's `intercalate sep . map label .
+    /// sortOn label . filter (\`elem\` items)` on the `Bounded + Enum
+    /// + Show` type-class trio; Julia's
+    /// `join(label.(sort(intersect(all, items), by=label)), sep)`.
+    /// Translation through pleme-io
+    /// primitives: a pure default method composing
+    /// [`Self::sorted_present_labels`] with `slice::join` — no new
+    /// dep, no supertrait bound, no set-shape carrier, no allocation
+    /// beyond the natural `String` allocation
+    /// [`Self::sorted_labels_joined`]'s sibling surface already routes.
+    fn sorted_present_labels_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::sorted_present_labels(items).join(sep)
+    }
+
     /// The N-ARY LEX-ORDER "missing labels" projection — the
     /// `Vec<&'static str>` label rendering of
     /// [`Self::sorted_missing_variants`] under [`Self::label`]. Every
@@ -53719,6 +53859,238 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn sorted_present_labels_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator(
+    ) {
+        // EMPTY-SLICE CONTRACT:
+        // `T::sorted_present_labels_joined(&[], sep) == ""`
+        // UNCONDITIONALLY for every `sep` — the empty slice hits zero
+        // variants, so `sorted_present_labels(&[])` yields the empty
+        // `Vec`, and `slice::join` on an empty slice yields the empty
+        // string. Sibling posture to
+        // `present_labels_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator`
+        // one ordering axis over — the empty-slice contract is
+        // INVARIANT under the (declaration, lex) axis because the
+        // empty-set-projected join collapses to the empty string on
+        // both arms.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_present_labels_joined(empty, sep),
+                String::new(),
+                "T::sorted_present_labels_joined(&[], {sep:?}) diverged from the empty-string fixpoint",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_joined_over_the_full_set_equals_sorted_labels_joined_across_every_separator(
+    ) {
+        // FULL-SET CONTRACT:
+        // `T::sorted_present_labels_joined(T::ALL, sep) ==
+        // T::sorted_labels_joined(sep)` UNCONDITIONALLY for every `sep`
+        // — the full-set hit-label list equals the substrate's lex-
+        // order label listing, so both projections thread the same
+        // slice through `slice::join` under the same separator.
+        // Sibling posture to
+        // `present_labels_joined_over_the_full_set_equals_labels_joined_across_every_separator`
+        // one ordering axis over on the (declaration, lex) join-string
+        // surface.
+        let all = <StubKind as ClosedSet>::ALL;
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_present_labels_joined(all, sep),
+                <StubKind as ClosedSet>::sorted_labels_joined(sep),
+                "T::sorted_present_labels_joined(T::ALL, {sep:?}) diverged from T::sorted_labels_joined({sep:?}) — the (full-set, lex-order hit-label-join) fixpoint was violated",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_joined_equals_sorted_present_labels_dot_join_across_every_triple() {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, `T::sorted_present_labels_joined(items, sep) ==
+        // T::sorted_present_labels(items).join(sep)` — the lex-order
+        // join-string projection binds through the substrate's
+        // `T::sorted_present_labels` Vec-return primitive composed with
+        // `slice::join`. Pins the (Vec-return, String-return) lex-order
+        // composition against the natural
+        // `sorted_present_labels + slice::join` shape across three
+        // representative separators.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected =
+                            <StubKind as ClosedSet>::sorted_present_labels(&triple).join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_present_labels_joined(&triple, sep),
+                            expected,
+                            "T::sorted_present_labels_joined({triple:?}, {sep:?}) diverged from T::sorted_present_labels({triple:?}).join({sep:?}) — the lex-order label-column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_present_labels_joined(items, sep) ==
+        // T::sorted_present_labels_joined(reversed items, sep)` on
+        // every slice for every separator — reversing a slice preserves
+        // its multiset of variant identities, and the hit-set membership
+        // predicate is a function of that multiset alone. The OUTPUT
+        // ordering is fixed by `T::sorted_variants`'s lex order
+        // regardless of the input ordering, so the joined `String`
+        // matches byte-for-byte under reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_present_labels_joined(&forward, sep),
+                            <StubKind as ClosedSet>::sorted_present_labels_joined(&reversed, sep),
+                            "T::sorted_present_labels_joined({forward:?}, {sep:?}) diverged from T::sorted_present_labels_joined({reversed:?}, {sep:?}) — the lex-order label-column hit-witness join MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_joined_threads_empty_separator_into_a_concatenated_sorted_run() {
+        // EMPTY-SEPARATOR CONTRACT:
+        // `T::sorted_present_labels_joined(items, "") ==
+        // T::sorted_present_labels(items).concat()` on every slice —
+        // with an empty separator, `slice::join` degenerates to
+        // concatenation of the lex-order hit-label list. Pins the
+        // degenerate-separator arm matching `present_labels_joined` /
+        // `missing_labels_joined` / `labels_joined` /
+        // `sorted_labels_joined` one partition-flavor over on the same
+        // join-string column.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String =
+                        <StubKind as ClosedSet>::sorted_present_labels(&triple).concat();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_present_labels_joined(&triple, ""),
+                        concat,
+                        "T::sorted_present_labels_joined({triple:?}, \"\") diverged from T::sorted_present_labels({triple:?}).concat() — the empty-separator degenerate arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT:
+        // `T::sorted_present_labels_joined(items, " and ") ==
+        // T::sorted_present_labels(items).join(" and ")` on every
+        // slice — pins the multi-character separator arm through the
+        // same composition, catching a drift that might treat only
+        // single-character separators verbatim on the lex-order arm.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected =
+                        <StubKind as ClosedSet>::sorted_present_labels(&triple).join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_present_labels_joined(&triple, " and "),
+                        expected,
+                        "T::sorted_present_labels_joined({triple:?}, \" and \") diverged from T::sorted_present_labels({triple:?}).join(\" and \") — the multi-character-separator arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_labels_joined_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order join-string column
+        // — `T::sorted_present_labels_joined(items, sep)` MUST
+        // normalize an arbitrary declaration order into ASCII
+        // lexicographic label order before threading `slice::join`,
+        // regardless of the implementor's `ALL`-array layout. A
+        // regression that returns `T::present_labels_joined(items,
+        // sep)` verbatim (without composing through the lex-order
+        // Vec-label peer) would pass every StubKind pin above (because
+        // StubKind's declaration order aligns with lex order) but
+        // silently bifurcate the lex-order join-string surface for any
+        // implementor whose declaration order differs from byte-wise
+        // sort order. Pinning the sort discipline here with a
+        // deliberately-out-of-order stub catches that drift on the
+        // join-string arm directly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseJoinStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseJoinStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseJoinStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse join stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseJoinStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse join stub kind";
+            type Unknown = UnknownReverseJoinStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseJoinStubKind(s.to_owned())
+            }
+        }
+        // Declaration order: gamma, beta, alpha — the present-arm's
+        // declaration-order join preserves layout.
+        let all = <ReverseJoinStubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <ReverseJoinStubKind as ClosedSet>::present_labels_joined(all, ", "),
+            "gamma, beta, alpha",
+            "present_labels_joined over the full set must preserve declaration order — gamma, beta, alpha",
+        );
+        // Lex order: alpha, beta, gamma — the lex-order join
+        // normalizes regardless of ALL-array declaration layout.
+        assert_eq!(
+            <ReverseJoinStubKind as ClosedSet>::sorted_present_labels_joined(all, ", "),
+            "alpha, beta, gamma",
+            "sorted_present_labels_joined over the full set must normalize to lex order — alpha, beta, gamma — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Partial hit: only [gamma] — lex-order join yields "gamma"
+        // (single-element sequence — separator does not appear).
+        let single = [ReverseJoinStubKind::Gamma];
+        assert_eq!(
+            <ReverseJoinStubKind as ClosedSet>::sorted_present_labels_joined(&single, ", "),
+            "gamma",
+            "sorted_present_labels_joined over a singleton hit-set must render the single label without separator",
+        );
+        // Partial hit: [alpha, gamma] — lex-order join yields
+        // "alpha, gamma" regardless of declaration layout.
+        let pair = [ReverseJoinStubKind::Gamma, ReverseJoinStubKind::Alpha];
+        assert_eq!(
+            <ReverseJoinStubKind as ClosedSet>::sorted_present_labels_joined(&pair, ", "),
+            "alpha, gamma",
+            "sorted_present_labels_joined over [gamma, alpha] must normalize to lex order — alpha, gamma — regardless of input ordering",
+        );
     }
 
     #[test]

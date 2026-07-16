@@ -15673,6 +15673,209 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .unwrap_or(0)
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "least-common multiplicity"
+    /// projection — the `usize` MIN-BAR of [`Self::variant_counts`],
+    /// reporting the smallest per-variant occurrence count across
+    /// [`Self::ALL`], or `0` when `items` is empty. The SCALAR-STATISTIC
+    /// closer on the (min-bar, max-bar) direction axis of the
+    /// (set-level × usize × statistical-aggregate) column of the
+    /// equivalence-partition surface, positioned as the DIRECT
+    /// (min-bar) PEER to the just-lifted (max-bar) corner
+    /// [`Self::max_variant_count`]. The (min-bar, max-bar) direction
+    /// axis of the statistical-aggregate column now closes at both
+    /// corners: the max-bar reports the LARGEST per-variant occurrence
+    /// count (the modal multiplicity), and this min-bar reports the
+    /// SMALLEST per-variant occurrence count (the least-common
+    /// multiplicity).
+    ///
+    /// Compounding equation with [`Self::is_missing_any`]: for every
+    /// slice `items`, `T::min_variant_count(items) == 0` iff
+    /// `T::is_missing_any(items)`. Post-lift the N-ary missing-any
+    /// predicate becomes a TYPED CONSEQUENCE of the scalar least-
+    /// common-multiplicity aggregate at the (`== 0`) threshold — no
+    /// per-consumer inline `T::variant_counts(items).iter().any(|&c|
+    /// c == 0)` re-composition. Sibling posture to
+    /// [`Self::max_variant_count`]'s (`<= 1` iff `is_pairwise_distinct`)
+    /// compounding equation one direction-axis over: the max-bar at
+    /// threshold `1` is the typed witness behind the N-ary pairwise-
+    /// distinctness predicate; the min-bar at threshold `0` is the
+    /// typed witness behind the N-ary missing-any predicate. Pinned by
+    /// `min_variant_count_equals_zero_iff_is_missing_any_across_every_triple`.
+    ///
+    /// Dually: `T::min_variant_count(items) > 0` iff
+    /// `T::is_covering(items)` — the min-bar direction reports strict
+    /// positivity iff every variant is present, projecting through the
+    /// same per-variant occurrence-count composition
+    /// [`Self::is_covering`] threads through.
+    ///
+    /// Empty-slice contract: `T::min_variant_count(&[]) == 0`
+    /// UNCONDITIONALLY — the empty slice hits zero positions, so every
+    /// per-variant occurrence count is `0` and the min-bar collapses to
+    /// `0`. Sibling posture to
+    /// `variant_counts_returns_all_zeros_on_the_empty_slice_across_every_kind`
+    /// one return-shape axis over: the Vec-return per-slot histogram
+    /// reports zeros at every slot; this scalar-return statistical
+    /// aggregate reports zero as the min-bar height. Pinned by
+    /// `min_variant_count_returns_zero_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract (non-degenerate): `T::min_variant_count(&[v])
+    /// == 0` on every variant `v` for every closed set of cardinality
+    /// `>= 2` — a singleton hits exactly one variant at one position,
+    /// leaving every OTHER variant at zero occurrences, so the min-bar
+    /// collapses to `0` (the un-hit variants' bar height). Diverges
+    /// from `T::max_variant_count(&[v]) == 1` on this same corner —
+    /// the (min, max) direction axis carries load-bearing divergence
+    /// on the singleton fixpoint: the max reads the target variant's
+    /// bar, the min reads any of the other variants' bars. Pinned by
+    /// `min_variant_count_returns_zero_on_every_singleton_slice_when_cardinality_is_at_least_two_across_every_variant`.
+    ///
+    /// Full-set contract: `T::min_variant_count(<T as ClosedSet>::ALL)
+    /// == 1` UNCONDITIONALLY — the closed-set well-formedness invariant
+    /// [`assert_closed_set_well_formed`]'s clause (3) pins variants as
+    /// pairwise distinct, so every variant of [`Self::ALL`] appears at
+    /// exactly one position in the full-set slice and every per-variant
+    /// occurrence count is `1`, collapsing the min-bar to `1`. Pinned
+    /// by `min_variant_count_returns_one_on_the_full_set_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::min_variant_count(&doubled_full_set) == 2` UNCONDITIONALLY
+    /// — the doubled-full-set slice appends [`Self::ALL`] to itself, so
+    /// every variant appears at EXACTLY two positions and the min-bar
+    /// collapses to `2`. Pinned by
+    /// `min_variant_count_returns_two_on_the_doubled_full_set_across_every_kind`.
+    ///
+    /// Composition-equality contract: for every slice `items`,
+    /// `T::min_variant_count(items) ==
+    /// T::variant_counts(items).into_iter().min().unwrap_or(0)` — the
+    /// scalar least-common-multiplicity aggregate agrees with the min-
+    /// reduction over the decl-order histogram exactly. Pinned by
+    /// `min_variant_count_equals_min_of_variant_counts_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on BOTH input AND output axes — permuting
+    /// `items` preserves its multiset of variant identities, and the
+    /// min-bar is a function of that multiset alone; the scalar
+    /// return shape carries no ordering to permute on the output side.
+    /// The (decl, lex) ordering axis collapses on the scalar-return
+    /// column, and the composition-equality identity holds against
+    /// both [`Self::variant_counts`] AND [`Self::sorted_variant_counts`]
+    /// (the two histograms are permutations of each other, and the
+    /// min-reduction is permutation-invariant). Pinned by
+    /// `min_variant_count_equals_min_of_sorted_variant_counts_across_every_triple`
+    /// and
+    /// `min_variant_count_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Max-bar upper bound: for every slice `items`,
+    /// `T::min_variant_count(items) <= T::max_variant_count(items)`
+    /// — the min-reduction over the per-slot histogram is bounded
+    /// above by the max-reduction over the same histogram. Pinned
+    /// by `min_variant_count_is_bounded_above_by_max_variant_count_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_occurrences_of`] primitive at the
+    /// trait level, folded over [`Self::ALL`] via the standard-library
+    /// [`Iterator::min`] combinator. The composition uses
+    /// `<Self as ClosedSet>::ALL.iter().copied().map(|v|
+    /// <Self as ClosedSet>::count_occurrences_of(v, items)).min()
+    /// .unwrap_or(0)`, mirroring [`Self::max_variant_count`] byte-for-
+    /// byte with `.min()` in place of `.max()`. Cost is
+    /// O(T::CARDINALITY * n) on slice arity `n` — no `PartialEq`/
+    /// `Eq`/`Hash` supertrait bound (the trait's minimal `Sized +
+    /// Copy + 'static` supertrait pair stays untouched), no map-
+    /// shape carrier, no allocation (the `Iterator::min` fold yields
+    /// a scalar). The `unwrap_or(0)` guard is a defensive fallback:
+    /// `T::CARDINALITY >= 1` by clause (1), so [`Self::ALL`] is non-
+    /// empty and the `min()` reduction always yields `Some`, but the
+    /// unwrap-with-fallback keeps the method panic-free even if a
+    /// future implementor violates clause (1) (which is caught eagerly
+    /// by [`assert_closed_set_well_formed`]).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::min_variant_count`]: a `tatara-check` predicate
+    /// `(check-phases-cover-every-variant …)` that verifies every
+    /// `WorkloadPhase` appears at least once in a rollout window by
+    /// binding `min_variant_count >= 1` (a direct typed alias for the
+    /// N-ary covering predicate); an LSP diagnostic on a Lisp-author-
+    /// written closed-set field that renders "least common value: X
+    /// (appears N times)" as an author-facing hint; a Sekiban audit-
+    /// trail per-window statistical projection carrying the smallest
+    /// per-variant occurrence count as its per-window witness
+    /// (surfacing the LEAST-visited variant on a rollout window); a
+    /// metric-emitter that binds Prometheus-style `min_bar` gauges
+    /// alongside the per-variant `bar_i` histogram + the just-lifted
+    /// `max_bar` gauge. Each binds to ONE typed N-ary scalar least-
+    /// common-multiplicity aggregate on the trait rather than re-
+    /// deriving `T::variant_counts(items).iter().copied().min()
+    /// .unwrap_or(0)` inline per callsite.
+    ///
+    /// Compounding closure: this projection CLOSES the (min-bar, max-
+    /// bar) direction axis of the (set-level × usize × statistical-
+    /// aggregate) column of the equivalence-partition surface at the
+    /// (min-bar) corner peer to [`Self::max_variant_count`]. Both
+    /// direction corners of the statistical-aggregate column now bind
+    /// through the substrate's per-target multiplicity primitive
+    /// [`Self::count_occurrences_of`] folded over [`Self::ALL`] under
+    /// distinct-directional standard-library reductions (`max` vs
+    /// `min`). Downstream statistical aggregates naturally compose
+    /// from this pair — the (max, min) pair projects the histogram
+    /// range; the mean / total / variance shapes compose on the same
+    /// per-target multiplicity primitive under `sum` / `fold`.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// scalar least-common-multiplicity aggregate becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline
+    /// `T::variant_counts(items).iter().copied().min().unwrap_or(0)`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (set-level × usize × statistical-
+    /// aggregate) min-bar corner was an unnamed inline composition
+    /// recurring at every prospective downstream "what is the smallest
+    /// per-variant occurrence count?" or "is every variant hit at
+    /// least once?" site pre-lift. Naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of the substrate's per-target
+    /// multiplicity primitive [`Self::count_occurrences_of`] folded
+    /// over [`Self::ALL`] under the standard-library `min` reduction.
+    /// THEORY.md §VI.1 — generation over composition; the scalar
+    /// least-common-multiplicity aggregate emerges from the
+    /// composition of ONE substrate primitive
+    /// ([`Self::count_occurrences_of`]) with an
+    /// `iter().copied().map().min()` combinator, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: R's `min(table(items))` — the canonical
+    /// min-bar of the per-level histogram on a factor carrier;
+    /// Julia's `minimum(values(StatsBase.countmap(items)))` on a
+    /// `Dict{Element, Int}` histogram; Python's `min(collections.Counter
+    /// (items).values(), default=0)` idiom; Haskell's `minimum . map
+    /// length . group . sort` on `Ord`-instance carriers; Clojure's
+    /// `(apply min 0 (vals (frequencies coll)))` composition on a
+    /// map histogram; NumPy's `np.bincount(items, minlength=N).min()`
+    /// idiom on integer indices with a min-length pad so the un-hit
+    /// bars register as zeros (the same forcing this projection binds
+    /// through [`Self::ALL`] to enumerate every bar-slot); Coq's
+    /// `list_min ∘ map (count_occ_by eq_dec items) all` composition
+    /// on a decidable-equality carrier. Translation through pleme-io
+    /// primitives: the N-ary scalar least-common-multiplicity
+    /// aggregate on the closed-set trait binds through the substrate's
+    /// per-target multiplicity primitive [`Self::count_occurrences_of`]
+    /// folded over [`Self::ALL`] under the standard-library `min`
+    /// reduction — no new dep, no supertrait bound, no histogram-
+    /// carrier allocation (the `min` fold yields a scalar without
+    /// materializing the intermediate `Vec<usize>` histogram — the
+    /// per-target counts stream through the fold one at a time). The
+    /// [`Self::ALL`]-enumeration replaces the NumPy `minlength=N` pad:
+    /// every ambient variant contributes a bar to the fold, so an un-
+    /// hit variant registers a `0` and forces the min-bar to `0`
+    /// without a per-bar zero-padding step on the input side.
+    fn min_variant_count(items: &[Self]) -> usize {
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .map(|v| <Self as ClosedSet>::count_occurrences_of(v, items))
+            .min()
+            .unwrap_or(0)
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -24592,6 +24795,62 @@ where
         T::max_variant_count(T::ALL),
         full_set_max_bar_expected,
         "{type_name}: T::max_variant_count(T::ALL) drifted from T::variant_counts(T::ALL).into_iter().max().unwrap_or(0) — the N-ary scalar modal-count aggregate no longer agrees with the max-reduction over the decl-order per-slot histogram on the full-set fixpoint, so a downstream statistical-aggregate consumer that binds `T::max_variant_count` as its scalar modal-count query surface would report the wrong bar-height",
+    );
+    // (101) — `T::min_variant_count(items)` MUST agree with the min-
+    // reduction over `T::variant_counts(items)` on every slice AND MUST
+    // land on its three canonical fixpoints (`0` on the empty slice,
+    // `1` on the full set, `2` on the doubled full set). The three
+    // fixpoints partition the failure modes at the (scalar-value ×
+    // slice-shape) corner simultaneously so an override that folds
+    // onto `items.len()` unconditionally fires on the full-set arm
+    // (returns `T::CARDINALITY` at every non-singleton full set rather
+    // than `1`); an override that returns `1` unconditionally fires
+    // on the empty-slice arm (returns `1` rather than `0`); an override
+    // that returns the WRONG min-bar on a non-fixpoint slice
+    // bifurcates loudly at the composition-equality arm (against
+    // `T::variant_counts(items).into_iter().min().unwrap_or(0)`) on the
+    // full-set fixpoint (which folds through the histogram exactly).
+    // The default trait body threads
+    // `T::ALL.iter().copied().map(|v| T::count_occurrences_of(v, items)).min().unwrap_or(0)`
+    // verbatim and satisfies all three fixpoint arms + the
+    // composition-equality arm for free; the assertion catches a
+    // future implementor whose override drifts the projection loudly
+    // rather than silently bifurcating the scalar least-common-
+    // multiplicity aggregate projection surface every downstream min-
+    // bar consumer routes through. Sibling posture to clause (100) —
+    // clause (100) pins the (max-bar) direction corner of the
+    // (set-level × usize × statistical-aggregate) column; this clause
+    // pins the (min-bar) direction corner peer to it one direction-
+    // axis over (max-reduction → min-reduction), and pins its
+    // composition through the per-slot histogram primitive so any
+    // drift in the underlying primitive that clauses (97) + (98) miss
+    // at the per-target / per-slot × (empty, full) 4-corner face still
+    // bifurcates loudly at the set-level min-reduction composition-
+    // equality arm here. The scalar-return column carries no ordering
+    // to permute on the output side, so the (decl, lex) ordering axis
+    // collapses on this clause; the composition-equality identity
+    // binds equivalently against `T::sorted_variant_counts`
+    // (permutation-invariance of min-reduction).
+    assert_eq!(
+        T::min_variant_count(&[]),
+        0,
+        "{type_name}: T::min_variant_count(&[]) != 0 — the N-ary scalar least-common-multiplicity aggregate MUST report `0` on the empty slice because every per-variant occurrence count is `0` on a zero-position slice and the min-bar collapses to `0`; a non-zero empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream min-bar consumer routes through",
+    );
+    assert_eq!(
+        T::min_variant_count(T::ALL),
+        1,
+        "{type_name}: T::min_variant_count(T::ALL) != 1 — the N-ary scalar least-common-multiplicity aggregate MUST report `1` on the full set by clause (3)'s pairwise-distinctness invariant because every variant appears at exactly one position and the min-bar collapses to `1`; a full-set min-bar != 1 silently bifurcates the (variant → decl-slot) injectivity clause (16) at the scalar least-common-multiplicity aggregate projection surface, breaking every downstream min-bar consumer",
+    );
+    assert_eq!(
+        T::min_variant_count(&doubled_full_set),
+        2,
+        "{type_name}: T::min_variant_count(&doubled_full_set) != 2 — the N-ary scalar least-common-multiplicity aggregate MUST report `2` on the doubled full set because every variant appears at exactly two positions in the doubled slice and the min-bar collapses to `2`; a doubled-full-set min-bar != 2 silently detaches the scalar aggregate from the pinned per-variant occurrence count on the doubled-slice fixpoint, breaking every downstream min-bar consumer",
+    );
+    let full_set_min_bar_expected = T::variant_counts(T::ALL).into_iter().min().unwrap_or(0);
+    assert_eq!(
+        T::min_variant_count(T::ALL),
+        full_set_min_bar_expected,
+        "{type_name}: T::min_variant_count(T::ALL) drifted from T::variant_counts(T::ALL).into_iter().min().unwrap_or(0) — the N-ary scalar least-common-multiplicity aggregate no longer agrees with the min-reduction over the decl-order per-slot histogram on the full-set fixpoint, so a downstream statistical-aggregate consumer that binds `T::min_variant_count` as its scalar min-bar query surface would report the wrong bar-height",
     );
 }
 
@@ -49304,6 +49563,423 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a ZeroDriftedMaxVariantCountKind whose max_variant_count override returns 0 unconditionally — clause (100)'s full-set + doubled-full-set fixpoint arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn min_variant_count_returns_zero_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (scalar × set-level × statistical-
+        // aggregate min-bar projection): `T::min_variant_count(&[])`
+        // is `0` on every implementor — the empty slice hits zero
+        // positions, so every per-variant occurrence count is `0` and
+        // the min-bar collapses to `0`. Sibling posture to
+        // `max_variant_count_returns_zero_on_the_empty_slice_across_every_kind`
+        // one direction-axis over: the (max-bar) direction reports `0`
+        // on the empty slice (all bars 0 → max is 0), and the (min-bar)
+        // direction agrees byte-for-byte (all bars 0 → min is 0). The
+        // (min, max) direction axis collapses at the empty-slice
+        // fixpoint because ALL bars are 0 — the min and max of a
+        // constant sequence coincide.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::min_variant_count(empty),
+            0,
+            "T::min_variant_count(&[]) diverged from the empty-slice fixpoint `0`",
+        );
+    }
+
+    #[test]
+    fn min_variant_count_returns_zero_on_every_singleton_slice_when_cardinality_is_at_least_two_across_every_variant(
+    ) {
+        // SINGLETON CONTRACT: `T::min_variant_count(&[v]) == 0` on
+        // every variant `v` for every closed set of cardinality `>= 2`
+        // — a singleton hits exactly one variant at one position,
+        // leaving every OTHER variant at zero occurrences, so the
+        // min-bar collapses to `0` (the un-hit variants' bar height).
+        // Diverges from
+        // `max_variant_count_returns_one_on_every_singleton_slice_across_every_variant`
+        // one direction-axis over: the (max-bar) direction reads the
+        // target variant's bar `1`, the (min-bar) direction reads any
+        // of the OTHER (cardinality - 1) variants' bars `0`. The
+        // (min, max) direction axis carries LOAD-BEARING divergence
+        // on the singleton fixpoint precisely because the singleton
+        // hits STRICTLY FEWER than the ambient cardinality of variants,
+        // so at least one bar is `0` and the min-max range is `[0, 1]`.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::min_variant_count(&singleton),
+                0,
+                "T::min_variant_count(&[{v:?}]) diverged from the singleton-slice min-bar fixpoint `0` on a cardinality-{cardinality} closed set — the un-hit variants' bar height MUST collapse the min-reduction to `0`",
+                cardinality = <StubKind as ClosedSet>::CARDINALITY,
+            );
+        }
+    }
+
+    #[test]
+    fn min_variant_count_returns_one_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::min_variant_count(<T as ClosedSet>::ALL)`
+        // is `1` UNCONDITIONALLY — the closed-set well-formedness
+        // invariant `assert_closed_set_well_formed`'s clause (3) pins
+        // labels (and hence variants) as pairwise distinct, so every
+        // variant appears in `T::ALL` at exactly one position and the
+        // min-bar collapses to `1`. Sibling posture to
+        // `max_variant_count_returns_one_on_the_full_set_across_every_kind`
+        // one direction-axis over: on the full-set fixpoint every bar
+        // is EXACTLY `1`, so both the (max-bar) direction and the
+        // (min-bar) direction collapse to `1`. The (min, max) direction
+        // axis coincides on this fixpoint because every bar is
+        // constant.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::min_variant_count(all),
+            1,
+            "T::min_variant_count(T::ALL) diverged from the full-set fixpoint `1` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+        );
+    }
+
+    #[test]
+    fn min_variant_count_returns_two_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::min_variant_count(&doubled)`
+        // is `2` UNCONDITIONALLY on the doubled-full-set slice — every
+        // variant appears at EXACTLY two positions and the min-bar
+        // collapses to `2`. Sibling posture to
+        // `max_variant_count_returns_two_on_the_doubled_full_set_across_every_kind`
+        // one direction-axis over: on the doubled-full-set fixpoint
+        // every bar is EXACTLY `2`, so both the (max-bar) direction
+        // and the (min-bar) direction collapse to `2`.
+        let doubled: ::std::vec::Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::min_variant_count(&doubled),
+            2,
+            "T::min_variant_count(&doubled_full_set) diverged from the doubled-full-set fixpoint `2`",
+        );
+    }
+
+    #[test]
+    fn min_variant_count_equals_min_of_variant_counts_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (against decl-order
+        // histogram): for every slice `items`,
+        // `T::min_variant_count(items) ==
+        // T::variant_counts(items).into_iter().min().unwrap_or(0)`
+        // — the scalar least-common-multiplicity aggregate agrees
+        // with the min-reduction over the decl-order per-slot
+        // histogram exactly. Sweeps every length-3 triple pins the
+        // composition-equality contract across the 3×3×3 = 27-corner
+        // triple space. Catches a future override that folds onto a
+        // wrong statistical aggregate (max, sum, mean) or a wrong
+        // bar-height. Sibling posture to
+        // `max_variant_count_equals_max_of_variant_counts_across_every_triple`
+        // one direction-axis over: the (max-bar) direction agrees
+        // with the max-reduction over the same histogram; the (min-
+        // bar) direction agrees with the min-reduction. The two
+        // reductions coincide only when the histogram is constant
+        // (empty slice → all zeros, full set → all ones, doubled →
+        // all twos), and diverge on every non-constant histogram.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let scalar = <StubKind as ClosedSet>::min_variant_count(&triple);
+                    let via_histogram = <StubKind as ClosedSet>::variant_counts(&triple)
+                        .into_iter()
+                        .min()
+                        .unwrap_or(0);
+                    assert_eq!(
+                        scalar, via_histogram,
+                        "T::min_variant_count({triple:?}) diverged from T::variant_counts({triple:?}).into_iter().min().unwrap_or(0) — the scalar least-common-multiplicity aggregate MUST agree with the min-reduction over the decl-order per-slot histogram exactly",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn min_variant_count_equals_min_of_sorted_variant_counts_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (against lex-order
+        // histogram): for every slice `items`,
+        // `T::min_variant_count(items) ==
+        // T::sorted_variant_counts(items).into_iter().min().unwrap_or(0)`
+        // — the scalar least-common-multiplicity aggregate agrees
+        // with the min-reduction over the lex-order per-slot
+        // histogram exactly. Since `sorted_variant_counts` is a
+        // permutation of `variant_counts` (they hold the same
+        // multiset of per-slot counts under the (decl → lex) slot
+        // bijection), and the min-reduction is permutation-
+        // invariant, the two composition-equality identities
+        // coincide byte-for-byte on every implementor. Pins the
+        // ordering-axis-collapse property on the scalar-return
+        // column: the (decl, lex) axis carries no divergence at
+        // this corner.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let scalar = <StubKind as ClosedSet>::min_variant_count(&triple);
+                    let via_sorted = <StubKind as ClosedSet>::sorted_variant_counts(&triple)
+                        .into_iter()
+                        .min()
+                        .unwrap_or(0);
+                    assert_eq!(
+                        scalar, via_sorted,
+                        "T::min_variant_count({triple:?}) diverged from T::sorted_variant_counts({triple:?}).into_iter().min().unwrap_or(0) — the scalar least-common-multiplicity aggregate MUST agree with the min-reduction over the lex-order per-slot histogram (ordering-axis-collapse on scalar-return)",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn min_variant_count_is_bounded_above_by_max_variant_count_across_every_triple() {
+        // (min-bar) <= (max-bar) INVARIANT: for every slice `items`,
+        // `T::min_variant_count(items) <= T::max_variant_count(items)`
+        // — the min-reduction over the per-slot histogram is bounded
+        // above by the max-reduction over the same histogram, because
+        // `min(xs) <= max(xs)` on every non-empty carrier `xs` (and
+        // `T::CARDINALITY >= 1` by clause (1) guarantees non-emptiness
+        // of the histogram carrier). Pins the direction-axis order on
+        // the (set-level × usize × statistical-aggregate) column at
+        // both direction corners simultaneously. Sweeps every length-3
+        // triple to pin the invariant across the 3×3×3 = 27-corner
+        // triple space; the empty-slice, singleton, and doubled-slice
+        // sub-corners stress-test the boundary at the constant-
+        // histogram fixpoints (where the two reductions coincide) and
+        // at the maximally-divergent singleton (where they hit `0`
+        // and `1`).
+        let empty: &[StubKind] = &[];
+        assert!(
+            <StubKind as ClosedSet>::min_variant_count(empty)
+                <= <StubKind as ClosedSet>::max_variant_count(empty),
+            "T::min_variant_count(&[]) > T::max_variant_count(&[]) — the (min-bar) <= (max-bar) invariant was violated on the empty-slice fixpoint",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let min_bar = <StubKind as ClosedSet>::min_variant_count(&triple);
+                    let max_bar = <StubKind as ClosedSet>::max_variant_count(&triple);
+                    assert!(
+                        min_bar <= max_bar,
+                        "T::min_variant_count({triple:?}) == {min_bar} > T::max_variant_count({triple:?}) == {max_bar} — the (min-bar) <= (max-bar) invariant was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn min_variant_count_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::min_variant_count(items) == T::min_variant_count(reversed items)`
+        // on every slice — reversing a slice preserves its multiset of
+        // variant identities, and the min-bar is a function of that
+        // multiset alone. Sibling posture to
+        // `max_variant_count_is_invariant_under_slice_reversal_across_every_triple`
+        // one direction-axis over: both the (max-bar) direction and
+        // the (min-bar) direction reductions inherit the reversal-
+        // invariance from the per-slot histogram they fold through
+        // (`variant_counts` is reversal-invariant per clause (98)).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let mut reversed = forward;
+                    reversed.reverse();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::min_variant_count(&forward),
+                        <StubKind as ClosedSet>::min_variant_count(&reversed),
+                        "T::min_variant_count diverged under slice reversal at ({forward:?}, {reversed:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn min_variant_count_equals_zero_iff_is_missing_any_across_every_triple() {
+        // COMPOUNDING EQUATION with `is_missing_any`: for every slice
+        // `items`, `T::min_variant_count(items) == 0` iff
+        // `T::is_missing_any(items)` — the scalar least-common-
+        // multiplicity aggregate at the (`== 0`) threshold is the
+        // TYPED WITNESS behind the N-ary missing-any predicate. If any
+        // variant of `T::ALL` fails to appear in `items`, its per-
+        // variant occurrence count is `0` and the min-bar collapses to
+        // `0`; if every variant appears at least once, every per-
+        // variant occurrence count is `>= 1` and the min-bar is `>= 1`.
+        // Sibling posture to
+        // `max_variant_count_at_most_one_iff_is_pairwise_distinct_across_every_triple`
+        // one direction-axis over: the (max-bar) direction at
+        // threshold `<= 1` witnesses pairwise-distinctness (no variant
+        // appears twice); the (min-bar) direction at threshold `== 0`
+        // witnesses missing-any (some variant appears zero times).
+        // Sweeps every length-3 triple pins the iff-equation across
+        // the 3×3×3 = 27-corner triple space. The empty-slice sub-
+        // corner stresses both sides at truth: `min_bar == 0` AND
+        // `is_missing_any` == `true`; the full-set sub-corner stresses
+        // both sides at falsity: `min_bar == 1 != 0` AND
+        // `is_missing_any` == `false`; the doubled-full-set sub-corner
+        // stresses both sides at falsity: `min_bar == 2 != 0` AND
+        // `is_missing_any` == `false`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::min_variant_count(empty) == 0,
+            <StubKind as ClosedSet>::is_missing_any(empty),
+            "T::min_variant_count(&[]) == 0 diverged from T::is_missing_any(&[]) — the (min-bar == 0) iff `is_missing_any` compounding equation was violated on the empty-slice fixpoint",
+        );
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::min_variant_count(all) == 0,
+            <StubKind as ClosedSet>::is_missing_any(all),
+            "T::min_variant_count(T::ALL) == 0 diverged from T::is_missing_any(T::ALL) — the (min-bar == 0) iff `is_missing_any` compounding equation was violated on the full-set fixpoint",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let min_bar = <StubKind as ClosedSet>::min_variant_count(&triple);
+                    let missing_any = <StubKind as ClosedSet>::is_missing_any(&triple);
+                    assert_eq!(
+                        min_bar == 0,
+                        missing_any,
+                        "T::min_variant_count({triple:?}) == 0 diverged from T::is_missing_any({triple:?}) — the scalar least-common-multiplicity aggregate at the `== 0` threshold MUST agree with the N-ary missing-any predicate",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_min_variant_count_and_composition() {
+        // Drift catch — clause (101)'s full-set-fixpoint arm fires
+        // when an override folds the scalar least-common-multiplicity
+        // aggregate onto `items.len()` regardless of slice shape. On
+        // the full set that produces `T::CARDINALITY != 1` (for
+        // T::CARDINALITY >= 2), tripping clause (101)'s full-set
+        // fixpoint arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedMinVariantCountKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedMinVariantCountKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedMinVariantCountKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted min_variant_count kind: {}", self.0)
+            }
+        }
+
+        impl DriftedMinVariantCountKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedMinVariantCountKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted min_variant_count kind";
+            type Unknown = UnknownDriftedMinVariantCountKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedMinVariantCountKind(s.to_owned())
+            }
+            fn min_variant_count(items: &[Self]) -> usize {
+                // Drift: return `items.len()` unconditionally. On the
+                // full set that produces `T::CARDINALITY == 3 != 1`,
+                // tripping clause (101)'s full-set fixpoint arm loudly.
+                items.len()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedMinVariantCountKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedMinVariantCountKind whose min_variant_count override folds onto items.len() — clause (101)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_one_drift_in_min_variant_count() {
+        // Drift catch — clause (101)'s empty-slice + doubled-full-set
+        // arms fire when an override returns `1` unconditionally. The
+        // full-set arm passes trivially (`1 == 1`); the empty-slice
+        // arm fails (`1 != 0`); the doubled-full-set arm fails
+        // (`1 != 2`). The three fixpoint arms partition the failure
+        // modes at the (scalar-value × slice-shape) corner so the
+        // assertion fires even if a future override "passes" one arm
+        // by accident. Sibling posture to
+        // `assert_closed_set_well_formed_catches_zero_drift_in_max_variant_count`
+        // one direction-axis over: the (max-bar) direction catches a
+        // `0`-unconditional drift because `max_variant_count(T::ALL)
+        // == 1 != 0`; the (min-bar) direction catches a `1`-
+        // unconditional drift because `min_variant_count(&[]) == 0
+        // != 1`. The two directions have DUAL zero-value drift
+        // catchers because their empty-slice fixpoints DIFFER only
+        // at the constant-return case (both are `0` on the empty
+        // slice, so a `0`-return survives the empty-slice arm on
+        // either direction; both are `1` on the full set, so a `1`-
+        // return survives the full-set arm on either direction; the
+        // divergence lives in which fixpoint arm each direction's
+        // constant-drift trips OTHER than the surviving one).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum OneDriftedMinVariantCountKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownOneDriftedMinVariantCountKind(pub String);
+
+        impl core::fmt::Display for UnknownOneDriftedMinVariantCountKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown one-drifted min_variant_count kind: {}", self.0)
+            }
+        }
+
+        impl OneDriftedMinVariantCountKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for OneDriftedMinVariantCountKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "one-drifted min_variant_count kind";
+            type Unknown = UnknownOneDriftedMinVariantCountKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownOneDriftedMinVariantCountKind(s.to_owned())
+            }
+            fn min_variant_count(_items: &[Self]) -> usize {
+                1
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<OneDriftedMinVariantCountKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a OneDriftedMinVariantCountKind whose min_variant_count override returns 1 unconditionally — clause (101)'s empty-slice + doubled-full-set fixpoint arms MUST reject the drift",
         );
     }
 

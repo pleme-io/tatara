@@ -15126,6 +15126,222 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .count()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC PER-TARGET "occurs-in" membership
+    /// predicate — `true` iff AT LEAST ONE position of `items` carries
+    /// the same variant identity as `target`, computed as the just-
+    /// lifted usize-return [`Self::count_occurrences_of`] per-target
+    /// multiplicity projection strictly exceeding zero. The PER-TARGET
+    /// BOOL-RETURN opener on the (per-target × bool) MEMBERSHIP column
+    /// of the equivalence-partition surface, positioned as the direct
+    /// PER-TARGET DECOMPOSITION of the just-lifted N-ary set-level
+    /// [`Self::is_covering`] present-arm predicate one column of the
+    /// (per-target, set-level) arity axis over — while
+    /// [`Self::is_covering`] reports "does the slice HIT every
+    /// variant?" (a single set-level `bool`), this projection reports
+    /// "does the slice HIT THIS variant?" (a per-target `bool` that
+    /// varies with `target`). The (per-target, set-level) × (bool,
+    /// usize) 2×2 = 4-corner (arity × return-shape) face on the
+    /// equivalence-partition surface now closes the `bool` per-target
+    /// column at the (`bool`, per-target) corner peer to the (`usize`,
+    /// per-target) corner [`Self::count_occurrences_of`] opened.
+    ///
+    /// Count-projection identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::occurs_in(v, items) == (T::count_occurrences_of(v, items) > 0)`
+    /// — the per-target bool membership predicate is the (nonzero-
+    /// fixpoint) projection of the per-target usize multiplicity
+    /// count. Sibling posture to
+    /// `is_missing_any_holds_iff_count_missing_is_strictly_positive_across_every_triple`
+    /// on the COLLAPSED set-level arity axis: the set-level absent-arm
+    /// bool predicate is `count_missing(items) > 0`; the per-target
+    /// present-arm bool predicate is `count_occurrences_of(v, items) > 0`.
+    /// Pinned by
+    /// `occurs_in_holds_iff_count_occurrences_of_is_strictly_positive_across_every_target_and_triple`.
+    ///
+    /// Present-arm identity (against Vec-return witness): for every
+    /// slice `items` and every target `v`,
+    /// `T::occurs_in(v, items) == T::present_variants(items).iter().any(|&w| T::index_of(w) == T::index_of(v))`
+    /// — the per-target bool predicate is the (per-target membership)
+    /// projection of the ambient set's Vec-return present-witness
+    /// projection. The bool-return per-target predicate SUBSUMES the
+    /// per-position membership sweep the Vec-return present-witness
+    /// projection carries. Pinned by
+    /// `occurs_in_matches_present_variants_membership_across_every_target_and_triple`.
+    ///
+    /// Set-level composition identity: for every slice `items`,
+    /// `T::is_covering(items) == T::ALL.iter().all(|&v| T::occurs_in(v, items))`
+    /// — the set-level present-arm predicate is exactly the universal
+    /// quantifier over the ambient set applied to the per-target
+    /// present-arm predicate. This is the (per-target → set-level)
+    /// Kleene-star lift of the current projection back onto the
+    /// set-level column [`Self::is_covering`] opens. Pinned by
+    /// `is_covering_equals_forall_target_of_occurs_in_across_every_triple`.
+    ///
+    /// Distinct-count identity: for every slice `items`,
+    /// `T::count_distinct(items) == T::ALL.iter().filter(|&&v| T::occurs_in(v, items)).count()`
+    /// — the set-level distinct count is exactly the count of TARGETS
+    /// whose per-target occurs-in predicate holds. Sibling posture to
+    /// `count_occurrences_of_positive_count_matches_count_distinct_across_every_triple`
+    /// on the (per-target × bool) column peer to the (per-target ×
+    /// usize > 0) column: both projections agree because both encode
+    /// the same (multiplicity > 0) fixpoint. Pinned by
+    /// `occurs_in_summed_over_all_targets_equals_count_distinct_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES on
+    /// element equality because
+    /// [`Self::count_occurrences_of`]'s ordering-axis invariance folds
+    /// through the `> 0` comparison bijectively. Sibling posture to
+    /// [`Self::count_distinct`], [`Self::count_missing`],
+    /// [`Self::count_occurrences_of`], [`Self::is_covering`],
+    /// [`Self::is_missing_any`], [`Self::is_uniform`], and every other
+    /// projection on the equivalence-partition surface: no separate
+    /// `sorted_occurs_in` peer is needed. Pinned by
+    /// `occurs_in_is_invariant_under_ordering_axis_across_every_target_and_triple`.
+    ///
+    /// Empty-slice contract: `T::occurs_in(v, &[])` is `false` for
+    /// every target `v` — the empty slice hits zero positions, so the
+    /// filter accepts none and the multiplicity is `0`, which folds
+    /// through the `> 0` comparison to `false`. Sibling posture to
+    /// `count_occurrences_of_returns_zero_on_the_empty_slice_across_every_target`
+    /// on the collapsed usize-return column: every membership
+    /// projection on the equivalence-partition surface reports `false`
+    /// at the empty-slice endpoint. Pinned by
+    /// `occurs_in_returns_false_on_the_empty_slice_across_every_target`.
+    ///
+    /// Singleton hit contract: `T::occurs_in(v, &[v])` is `true` for
+    /// every target `v` — a singleton slice at the target hits it
+    /// exactly once, so the multiplicity is `1 > 0`. Pinned by
+    /// `occurs_in_returns_true_on_the_matching_singleton_across_every_target`.
+    ///
+    /// Singleton miss contract: `T::occurs_in(v, &[w])` is `false` for
+    /// every target `v` and slice-element `w != v` (compared via
+    /// [`Self::index_of`]) — a singleton slice at a different variant
+    /// misses the target. Pinned by
+    /// `occurs_in_returns_false_on_the_non_matching_singleton_across_every_target_pair`.
+    ///
+    /// Full-set contract: `T::occurs_in(v, <T as ClosedSet>::ALL)` is
+    /// `true` for every target `v` UNCONDITIONALLY — the closed-set
+    /// well-formedness invariant [`assert_closed_set_well_formed`]'s
+    /// clause (3) pins labels (and hence variants) as pairwise
+    /// distinct, so every variant appears exactly once in
+    /// [`Self::ALL`], which folds through the `> 0` comparison to
+    /// `true`. Pinned by
+    /// `occurs_in_returns_true_on_the_full_set_across_every_target`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::occurs_in(v, &<T as ClosedSet>::ALL.iter().chain(<T as
+    /// ClosedSet>::ALL.iter()).copied().collect::<Vec<_>>())` is
+    /// `true` for every target `v` UNCONDITIONALLY — the doubled full
+    /// set hits every variant exactly twice, and `2 > 0` collapses to
+    /// `true`. Pinned by
+    /// `occurs_in_returns_true_on_the_doubled_full_set_across_every_target`.
+    ///
+    /// Repetition-monotone contract: for every slice `items`, every
+    /// target `v`, and every appended variant `w`,
+    /// `T::occurs_in(v, &[items, &[w][..]].concat())` implies
+    /// `T::occurs_in(v, items) || T::index_of(w) == T::index_of(v)` —
+    /// appending an element to a slice can only introduce membership
+    /// (never remove it); once `occurs_in(v, items)` is `true`, no
+    /// append can flip it to `false`. Pinned by
+    /// `occurs_in_is_monotone_under_append_across_every_target_and_variant`.
+    ///
+    /// Reversal-invariance: `T::occurs_in(v, items)` equals
+    /// `T::occurs_in(v, items.iter().rev().copied().collect::<Vec<_>>())`
+    /// for every target `v` — reversing a slice preserves its multiset
+    /// of variant identities, and the per-target membership predicate
+    /// is a function of that multiset alone. Pinned by
+    /// `occurs_in_is_invariant_under_slice_reversal_across_every_target_and_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_occurrences_of`] projection at the
+    /// trait level. The composition uses one `>` on `usize`, so the
+    /// sweep inherits [`Self::count_occurrences_of`]'s O(n) cost on
+    /// slice arity `n` — allocation-free, no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched), no
+    /// bitset-shape carrier.
+    ///
+    /// Future consumers that compose against [`Self::occurs_in`]:
+    /// a `tatara-check` predicate `(check-phase-was-visited …)` that
+    /// verifies a specific `WorkloadPhase` appears AT LEAST ONCE in a
+    /// rollout window at plan time — catching a spec that would
+    /// silently omit a phase; an LSP diagnostic on a Lisp-author-
+    /// written closed-set field that flags a value multiset as NOT
+    /// INCLUDING a required variant ("severity :error is missing"
+    /// rather than the count-side "0 :error occurrences") without
+    /// paying for the multiplicity when only the membership matters;
+    /// a Sekiban audit-trail per-variant "has-hit" bit-vector (one
+    /// bit per variant) across a window rather than the per-variant
+    /// usize histogram; a `tatara-lisp::macro_expand::Expander`
+    /// hygiene pass that reports the exact per-identifier "was it
+    /// referenced?" bool over a template's generated body against a
+    /// required closed vocabulary rather than a hit-count; a per-slot
+    /// alarm that fires when a specific variant appears at all
+    /// (rather than exceeds a threshold count). Each binds to ONE
+    /// typed N-ary per-target membership predicate on the trait rather
+    /// than re-deriving `T::count_occurrences_of(v, items) > 0` or
+    /// `items.iter().any(|&w| T::index_of(w) == T::index_of(v))`
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the (per-target, set-level) × (bool,
+    /// usize) 2×2 = 4-corner (arity × return-shape) face on the
+    /// equivalence-partition surface now closes EXHAUSTIVELY at four
+    /// typed primitives — [`Self::count_distinct`] (set-level, usize;
+    /// present-arm count), [`Self::is_covering`] (set-level, bool;
+    /// present-arm predicate: "present-count reaches cardinality"),
+    /// [`Self::count_occurrences_of`] (per-target, usize;
+    /// multiplicity), and THIS projection (per-target, bool;
+    /// membership: "multiplicity is strictly positive"). Post-lift
+    /// the 4-corner square binds to four typed substrate primitives
+    /// with no unnamed inline residual on any corner. The next lift
+    /// on this surface — a per-target `Option<usize>`-return
+    /// `first_occurrence_of(target, items) -> Option<usize>` (the
+    /// per-target head-position primitive) with a sibling
+    /// `last_occurrence_of` (per-target tail-position) — opens a
+    /// fresh `Option<usize>`-return column on the (per-target)
+    /// arity axis past the (bool, usize) columns this square closes.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary per-
+    /// target membership predicate becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline
+    /// `T::count_occurrences_of(v, items) > 0` or
+    /// `items.contains(&target)` composition at every downstream
+    /// generic site. THEORY.md §V.1 — knowable platform; the (per-
+    /// target × bool) membership corner was an unnamed inline
+    /// composition recurring at every prospective downstream "did we
+    /// hit THIS variant?" site pre-lift. Naming it on the trait makes
+    /// the projection a TYPED CONSEQUENCE of the substrate's per-
+    /// target multiplicity projection ([`Self::count_occurrences_of`])
+    /// compared strictly-positively to `0`. THEORY.md §VI.1 —
+    /// generation over composition; the per-target membership
+    /// predicate emerges from the composition of ONE substrate
+    /// primitive ([`Self::count_occurrences_of`]) with a `> 0`
+    /// comparison on `usize`, not as a per-implementor hand-rolled
+    /// body.
+    ///
+    /// Frontier inspiration: Coq's `In v l` inductive predicate on
+    /// `list nat` — the canonical per-target list-membership
+    /// predicate composing decidable equality with a fold; Idris's
+    /// `Data.List.Elem : a -> List a -> Type` witness combined with
+    /// `isElem` decision on a decidable-equality carrier; Rust's own
+    /// `items.contains(&target)` binds through a `Self: PartialEq`
+    /// supertrait bound; Julia's `target in items`; Python's
+    /// `target in items` on a `list`; Haskell's `Data.List.elem
+    /// target items`; NumPy's `bool(np.isin(items, target).any())`
+    /// idiom. Translation through pleme-io primitives: the N-ary per-
+    /// target membership predicate on the closed-set trait binds
+    /// through the substrate's per-target multiplicity projection
+    /// [`Self::count_occurrences_of`] compared strictly-positively to
+    /// `0` — no new dep, no supertrait bound (the
+    /// [`Self::index_of`] projection [`Self::count_occurrences_of`]
+    /// threads through replaces the `PartialEq` bound the standard-
+    /// library `contains` / `elem` / `in` signatures demand), no
+    /// allocation.
+    fn occurs_in(target: Self, items: &[Self]) -> bool {
+        <Self as ClosedSet>::count_occurrences_of(target, items) > 0
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "per-slot variant histogram"
     /// projection — the `Vec<usize>` DECLARATION-ORDER histogram over
     /// [`Self::ALL`] whose slot `i` reports the multiplicity of
@@ -26117,6 +26333,62 @@ where
             1,
             "{type_name}: T::variant_count_span(&[T::ALL[0]]) != 1 on a cardinality-{cardinality} closed set — the N-ary scalar-difference range-width projection MUST report `1` on every singleton slice when T::CARDINALITY >= 2 because a singleton histogram is `(0, …, 0, 1, 0, …, 0)`, the pair-return corner collapses to `(0, 1)`, and the difference collapses to `1 - 0 == 1`; a non-`1` singleton value silently bifurcates the strictly-non-uniform singleton fixpoint contract every downstream span consumer routes through, and catches a `_ => 0` unconditional override that the three constant-histogram ZERO fixpoints (empty, full, doubled) cannot see",
             cardinality = T::CARDINALITY,
+        );
+    }
+    // (105) — `T::occurs_in(target, items)` MUST agree with the per-
+    // target multiplicity projection's strictly-positive fixpoint on
+    // every (target, slice) pair AND MUST land on its two canonical
+    // fixpoints (`false` at every target on the empty slice, `true` at
+    // every target on the full set). The two fixpoints partition the
+    // failure modes at the (bool-value × slice-shape) corner
+    // simultaneously so an override that folds onto `true`
+    // unconditionally fires on the empty-slice arm (returns `true` at
+    // every target rather than `false`); an override that returns
+    // `false` unconditionally fires on the full-set arm (returns
+    // `false` at every target rather than `true`); an override that
+    // swaps the bool value on any non-fixpoint slice bifurcates loudly
+    // at the composition-equality arm against
+    // `T::count_occurrences_of(target, items) > 0` on the full-set
+    // fixpoint (which folds through the multiplicity projection
+    // exactly). The default trait body threads
+    // `<Self as ClosedSet>::count_occurrences_of(target, items) > 0`
+    // verbatim and satisfies both fixpoint arms + the composition-
+    // equality arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly rather
+    // than silently bifurcating the per-target membership predicate
+    // projection surface every downstream membership consumer routes
+    // through. Sibling posture to clause (97) — clause (97) pins the
+    // (`usize`, per-target) multiplicity corner on the equivalence-
+    // partition surface; this clause pins the (`bool`, per-target)
+    // membership corner peer to it one return-shape axis over
+    // (usize-return → bool-return via strictly-positive fixpoint),
+    // and pins its composition through the per-target multiplicity
+    // primitive so any drift in that underlying primitive that
+    // clause (97) misses at the per-target × (empty, full) 2-corner
+    // face still bifurcates loudly at the per-target membership
+    // composition-equality arm here. The bool-return column carries
+    // no ordering to permute on the output side (a single bit has no
+    // permutation), so the (decl, lex) ordering axis collapses on
+    // this clause.
+    for target in T::ALL.iter().copied() {
+        let empty_membership = T::occurs_in(target, &[]);
+        assert!(
+            !empty_membership,
+            "{type_name}: T::occurs_in({target_label:?}, &[]) == true != false — the per-target membership predicate MUST report `false` on the empty slice because the filter accepts no position on a zero-position slice, the multiplicity collapses to `0`, and `0 > 0` folds to `false`; a `true` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream per-target membership consumer routes through",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let full_set_membership = T::occurs_in(target, T::ALL);
+        assert!(
+            full_set_membership,
+            "{type_name}: T::occurs_in({target_label:?}, T::ALL) == false != true — the per-target membership predicate MUST report `true` at every target on the full set by clause (3)'s pairwise-distinctness invariant because every variant appears at exactly one position in T::ALL, the multiplicity collapses to `1`, and `1 > 0` folds to `true`; a `false` full-set value silently bifurcates the (variant → decl-slot) injectivity clause (16) at the per-target membership projection surface, breaking every downstream membership consumer",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let expected_full_set_membership = T::count_occurrences_of(target, T::ALL) > 0;
+        assert_eq!(
+            full_set_membership,
+            expected_full_set_membership,
+            "{type_name}: T::occurs_in({target_label:?}, T::ALL) drifted from (T::count_occurrences_of({target_label:?}, T::ALL) > 0) — the per-target membership predicate no longer agrees with the strictly-positive fixpoint of the per-target multiplicity projection on the full-set fixpoint, so a downstream membership consumer that binds `T::occurs_in` as its per-target bool query surface would report the wrong bit; the composition-equality arm catches an override that detaches the bool-return per-target membership from the usize-return per-target multiplicity's `> 0` comparison on any slice",
+            target_label = <T as ClosedSet>::label(target),
         );
     }
 }
@@ -49803,6 +50075,407 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedCountOccurrencesOfKind whose count_occurrences_of override folds onto items.len() — clause (97)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn occurs_in_returns_false_on_the_empty_slice_across_every_target() {
+        // EMPTY-SLICE CONTRACT (per-target × bool membership
+        // predicate): `T::occurs_in(v, &[])` is `false` for every
+        // target `v` — the filter accepts no position on a zero-
+        // position slice, the multiplicity collapses to `0`, and
+        // `0 > 0` folds to `false`. Sibling posture to
+        // `count_occurrences_of_returns_zero_on_the_empty_slice_across_every_target`
+        // one return-shape axis over: the (per-target × usize)
+        // multiplicity primitive reports `0` at every target; this
+        // bool-lift projects the same fixpoint through the `> 0`
+        // comparison to `false`.
+        let empty: &[StubKind] = &[];
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                !<StubKind as ClosedSet>::occurs_in(v, empty),
+                "T::occurs_in({v:?}, &[]) diverged from the empty-slice fixpoint `false`",
+            );
+        }
+    }
+
+    #[test]
+    fn occurs_in_returns_true_on_the_matching_singleton_across_every_target() {
+        // SINGLETON HIT CONTRACT: `T::occurs_in(v, &[v])` is `true`
+        // for every target `v` — a singleton slice at the target hits
+        // it exactly once, the multiplicity collapses to `1`, and
+        // `1 > 0` folds to `true`. Sibling posture to
+        // `count_occurrences_of_returns_one_on_the_matching_singleton_across_every_target`
+        // one return-shape axis over.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert!(
+                <StubKind as ClosedSet>::occurs_in(v, &singleton),
+                "T::occurs_in({v:?}, {singleton:?}) diverged from the matching-singleton fixpoint `true`",
+            );
+        }
+    }
+
+    #[test]
+    fn occurs_in_returns_false_on_the_non_matching_singleton_across_every_target_pair() {
+        // SINGLETON MISS CONTRACT: `T::occurs_in(v, &[w])` is `false`
+        // for every target `v` and slice-element `w` with
+        // `T::index_of(v) != T::index_of(w)` — a singleton slice at a
+        // different variant misses the target. Sweeping every (target,
+        // singleton-element) pair pins the miss contract across the
+        // full 3×3 = 9-corner (target × element) matrix at the six
+        // OFF-DIAGONAL corners; the three ON-DIAGONAL corners are
+        // pinned by the matching-singleton sibling.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::index_of(v) != <StubKind as ClosedSet>::index_of(w) {
+                    let singleton = [w];
+                    assert!(
+                        !<StubKind as ClosedSet>::occurs_in(v, &singleton),
+                        "T::occurs_in({v:?}, {singleton:?}) diverged from the non-matching-singleton fixpoint `false`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurs_in_returns_true_on_the_full_set_across_every_target() {
+        // FULL-SET CONTRACT: `T::occurs_in(v, <T as ClosedSet>::ALL)`
+        // is `true` for every target `v` UNCONDITIONALLY — the
+        // closed-set well-formedness invariant
+        // `assert_closed_set_well_formed`'s clause (3) pins labels
+        // (and hence variants) as pairwise distinct, so every variant
+        // appears in `T::ALL` at exactly one position. The multiplicity
+        // collapses to `1`, and `1 > 0` folds to `true`. Complements
+        // `is_covering_over_the_full_set_holds_unconditionally` on the
+        // per-target arity axis: the set-level present-arm predicate
+        // reaches its `true` fixpoint at the full set; the per-target
+        // present-arm predicate reaches its `true` fixpoint at every
+        // target on the same slice.
+        let all = <StubKind as ClosedSet>::ALL;
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                <StubKind as ClosedSet>::occurs_in(v, all),
+                "T::occurs_in({v:?}, T::ALL) diverged from the full-set fixpoint `true` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+            );
+        }
+    }
+
+    #[test]
+    fn occurs_in_returns_true_on_the_doubled_full_set_across_every_target() {
+        // DOUBLED-FULL-SET CONTRACT: `T::occurs_in(v, T::ALL ++ T::ALL)`
+        // is `true` for every target `v` UNCONDITIONALLY — the doubled
+        // full set hits every variant exactly twice, and `2 > 0` folds
+        // to `true`. Sibling posture to
+        // `count_occurrences_of_returns_two_on_the_doubled_full_set_across_every_target`
+        // on the (per-target × usize) column: the multiplicity doubles
+        // to `2` at every target; the bool-lift projects `true` at every
+        // target through the `> 0` comparison.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                <StubKind as ClosedSet>::occurs_in(v, &doubled),
+                "T::occurs_in({v:?}, ALL++ALL) diverged from the doubled-full-set fixpoint `true`",
+            );
+        }
+    }
+
+    #[test]
+    fn occurs_in_holds_iff_count_occurrences_of_is_strictly_positive_across_every_target_and_triple(
+    ) {
+        // COUNT-PROJECTION IDENTITY: for every slice `items` and every
+        // target `v`,
+        // `T::occurs_in(v, items) == (T::count_occurrences_of(v, items) > 0)`
+        // — the per-target bool membership predicate is the (nonzero-
+        // fixpoint) projection of the per-target usize multiplicity
+        // count. Sweeping every length-3 triple × every target pins
+        // the identity across the full 3×27 = 81-corner (target ×
+        // triple) matrix. Catches a future override that inverts the
+        // bool — the composition-equality arm bifurcates loudly on
+        // every non-fixpoint slice.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_bool = <StubKind as ClosedSet>::occurs_in(v, &triple);
+                        let via_count =
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &triple) > 0;
+                        assert_eq!(
+                            via_bool, via_count,
+                            "T::occurs_in({v:?}, {triple:?}) diverged from (T::count_occurrences_of({v:?}, {triple:?}) > 0) — the per-target bool membership predicate MUST project through the strictly-positive fixpoint of the per-target multiplicity",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurs_in_matches_present_variants_membership_across_every_target_and_triple() {
+        // PRESENT-ARM IDENTITY (against Vec-return witness): for every
+        // slice `items` and every target `v`, `T::occurs_in(v, items)`
+        // equals whether `v` appears in `T::present_variants(items)` —
+        // the per-target bool predicate is the (per-target membership)
+        // projection of the ambient set's Vec-return present-witness
+        // projection. Sweeping every length-3 triple × every target
+        // pins the identity across the full 3×27 = 81-corner (target ×
+        // triple) matrix of the equivalence-partition surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::present_variants(&triple);
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_bool = <StubKind as ClosedSet>::occurs_in(v, &triple);
+                        let via_membership = present.iter().any(|&w| {
+                            <StubKind as ClosedSet>::index_of(w)
+                                == <StubKind as ClosedSet>::index_of(v)
+                        });
+                        assert_eq!(
+                            via_bool, via_membership,
+                            "T::occurs_in({v:?}, {triple:?}) diverged from present_variants membership — the per-target bool predicate MUST match the Vec-return present-witness membership",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_covering_equals_forall_target_of_occurs_in_across_every_triple() {
+        // SET-LEVEL COMPOSITION IDENTITY: for every slice `items`,
+        // `T::is_covering(items) == T::ALL.iter().all(|&v|
+        // T::occurs_in(v, items))` — the set-level present-arm
+        // predicate is exactly the universal quantifier over the
+        // ambient set applied to the per-target present-arm predicate.
+        // This is the (per-target → set-level) Kleene-star lift back
+        // onto the set-level column. Sweeping every length-3 triple
+        // pins the identity across the full 27-corner (triple)
+        // domain. Catches a future override that detaches the
+        // set-level covering predicate from the per-target membership
+        // sweep on any triple.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_set_level = <StubKind as ClosedSet>::is_covering(&triple);
+                    let via_forall = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .all(|&v| <StubKind as ClosedSet>::occurs_in(v, &triple));
+                    assert_eq!(
+                        via_set_level, via_forall,
+                        "T::is_covering({triple:?}) diverged from forall v in T::ALL of T::occurs_in(v, {triple:?}) — the set-level present-arm predicate MUST equal the universal quantifier over the per-target present-arm predicate",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurs_in_summed_over_all_targets_equals_count_distinct_across_every_triple() {
+        // DISTINCT-COUNT IDENTITY: for every slice `items`,
+        // `T::count_distinct(items) ==
+        // T::ALL.iter().filter(|&&v| T::occurs_in(v, items)).count()`
+        // — the set-level distinct count is exactly the count of
+        // TARGETS whose per-target occurs-in predicate holds.
+        // Sibling posture to
+        // `count_occurrences_of_positive_count_matches_count_distinct_across_every_triple`
+        // on the (per-target × bool) column peer to the (per-target ×
+        // usize > 0) column: both projections agree because both
+        // encode the same (multiplicity > 0) fixpoint.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_bool = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .filter(|&v| <StubKind as ClosedSet>::occurs_in(v, &triple))
+                        .count();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_distinct(&triple),
+                        via_bool,
+                        "T::count_distinct({triple:?}) diverged from the occurs-in-filter count — the (per-target × bool) membership projection MUST agree with the (per-target × usize > 0) fixpoint on the set-level distinct-count arm",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurs_in_is_monotone_under_append_across_every_target_and_variant() {
+        // REPETITION-MONOTONE CONTRACT: for every slice `items`, every
+        // target `v`, and every appended variant `w`,
+        // `T::occurs_in(v, items ++ [w])` is at least as strong as
+        // `T::occurs_in(v, items)` — appending an element to a slice
+        // can only INTRODUCE membership (never remove it). If
+        // `occurs_in(v, items)` is already `true`, no append can flip
+        // it to `false`. If `occurs_in(v, items)` is `false` and
+        // `T::index_of(w) == T::index_of(v)`, the append flips it to
+        // `true`; otherwise it stays `false`. Sweeping every length-2
+        // base pair × every appended variant × every target pins the
+        // monotone contract across the full 3×3×3 = 27-corner (base ×
+        // append × target) cube.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let base = [a, b];
+                for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let mut extended = base.to_vec();
+                    extended.push(w);
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let before = <StubKind as ClosedSet>::occurs_in(v, &base);
+                        let after = <StubKind as ClosedSet>::occurs_in(v, &extended);
+                        let target_appended = <StubKind as ClosedSet>::index_of(v)
+                            == <StubKind as ClosedSet>::index_of(w);
+                        let expected_after = before || target_appended;
+                        assert_eq!(
+                            after, expected_after,
+                            "T::occurs_in({v:?}, {extended:?}) diverged from T::occurs_in({v:?}, {base:?}) || (T::index_of({v:?}) == T::index_of({w:?})) — the repetition-monotone append contract was violated",
+                        );
+                        if before {
+                            assert!(
+                                after,
+                                "T::occurs_in({v:?}, {extended:?}) flipped from `true` on {base:?} to `false` on the extension — the append-monotone contract was violated (membership can only strengthen under append)",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurs_in_is_invariant_under_ordering_axis_across_every_target_and_triple() {
+        // ORDERING-AXIS INVARIANCE CONTRACT: element equality is
+        // intrinsically ordering-agnostic — a slice's per-target
+        // membership is a property of the multiset of its element
+        // identities, not of the ordering the substrate uses to
+        // compare them. The projection composes on
+        // `<Self as ClosedSet>::index_of`, which is a bijection into
+        // `[0, T::CARDINALITY)`; and equality on that discriminator
+        // is invariant under any reordering of `T::ALL`. Sibling
+        // posture to
+        // `count_occurrences_of_is_invariant_under_ordering_axis_across_every_triple`
+        // on the (per-target × bool) column peer to the (per-target ×
+        // usize) column. Sweeps every triple × every target and
+        // cross-checks against the direct `any` sweep.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_any = triple.iter().any(|&w| {
+                            <StubKind as ClosedSet>::index_of(w)
+                                == <StubKind as ClosedSet>::index_of(v)
+                        });
+                        assert_eq!(
+                            <StubKind as ClosedSet>::occurs_in(v, &triple),
+                            via_any,
+                            "T::occurs_in({v:?}, {triple:?}) diverged from the direct index_of `any` sweep — the ordering-agnostic membership projection was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurs_in_is_invariant_under_slice_reversal_across_every_target_and_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::occurs_in(v, items) == T::occurs_in(v, reversed items)`
+        // on every slice and every target — reversing a slice
+        // preserves its multiset of variant identities, and the per-
+        // target membership predicate is a function of that multiset
+        // alone. Sibling posture to
+        // `count_occurrences_of_is_invariant_under_slice_reversal_across_every_target_and_triple`
+        // on the (per-target × bool) column peer to the (per-target ×
+        // usize) column: every projection on the equivalence-
+        // partition surface is a FIXPOINT of slice reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::occurs_in(v, &forward),
+                            <StubKind as ClosedSet>::occurs_in(v, &reversed),
+                            "T::occurs_in({v:?}, {forward:?}) diverged from T::occurs_in({v:?}, {reversed:?}) — the per-target membership projection MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_occurs_in_and_composition() {
+        // Drift catch — clause (105)'s full-set fixpoint arm fires
+        // when an override folds the per-target membership onto
+        // `false` regardless of target (returning `false` at every
+        // target on the full set rather than `true`). The stub below
+        // overrides the default body to return `false` unconditionally;
+        // on the full set that produces `false != true`, tripping
+        // clause (105)'s full-set fixpoint arm at every target loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedOccursInKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedOccursInKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedOccursInKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted occurs_in kind: {}", self.0)
+            }
+        }
+
+        impl DriftedOccursInKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedOccursInKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted occurs_in kind";
+            type Unknown = UnknownDriftedOccursInKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedOccursInKind(s.to_owned())
+            }
+            fn occurs_in(_target: Self, _items: &[Self]) -> bool {
+                // Drift: return `false` regardless of target. On the
+                // full set that produces `false != true` at every
+                // target, tripping clause (105)'s full-set fixpoint
+                // arm loudly. The full-set-fixpoint arm partitions
+                // the failure mode at the (composition-equality ×
+                // target-aware) corner and catches the override
+                // before any downstream per-target membership consumer
+                // routes through it.
+                false
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedOccursInKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedOccursInKind whose occurs_in override folds onto `false` unconditionally — clause (105)'s full-set fixpoint arm MUST reject the drift",
         );
     }
 

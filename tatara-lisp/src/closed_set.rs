@@ -14917,6 +14917,215 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::count_missing(items) > 0
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC PER-TARGET "occurrence count"
+    /// projection — the `usize` cardinality of the SET of positions of
+    /// `items` whose variant identity coincides with `target`, computed
+    /// as a per-position [`Self::index_of`] equality-filter through
+    /// `.count()`. The PER-TARGET USIZE-RETURN opener on the
+    /// (per-target × usize) MULTIPLICITY column of the equivalence-
+    /// partition surface, positioned as the direct PER-TARGET
+    /// DECOMPOSITION of the just-lifted N-ary set-level
+    /// [`Self::count_distinct`] projection — while
+    /// [`Self::count_distinct`] reports "how many DISTINCT variants
+    /// does the slice hit?" (a single set-level `usize`), this
+    /// projection reports "how many times does THIS variant appear?"
+    /// (a per-target `usize` that varies with `target`). Not a fresh
+    /// substrate primitive on the index axis — the count emerges from
+    /// one composition of the substrate's total-ordering discriminator
+    /// [`Self::index_of`] pinned as a bijection into
+    /// `[0, T::CARDINALITY)` by clause (16) with the standard-library
+    /// filter-through-count combinator.
+    ///
+    /// Partition identity (multiplicity partition): for every slice
+    /// `items`,
+    /// `sum over v in T::ALL of T::count_occurrences_of(v, items) ==
+    /// items.len()` — the (per-target) occurrence-count multiset
+    /// partitions the slice's positions exactly, because every
+    /// position sits at EXACTLY ONE variant (the (variant → decl-slot)
+    /// injectivity clause (16) forces the per-position occurrence-arm
+    /// membership disjoint on `target`). Pinned by
+    /// `count_occurrences_of_summed_over_all_targets_equals_slice_length_across_every_triple`.
+    ///
+    /// Multiplicity-versus-distinctness identity: for every slice
+    /// `items`,
+    /// `T::count_distinct(items) == T::ALL.iter().filter(|&&v| T::count_occurrences_of(v, items) > 0).count()`
+    /// — the set-level distinct count is exactly the count of TARGETS
+    /// whose per-target occurrence count is strictly positive. The
+    /// multiplicity projection SUBSUMES the distinct-count projection
+    /// on the (occurrence-count > 0) bool-projection column of the
+    /// per-target × return-shape face. Pinned by
+    /// `count_occurrences_of_positive_count_matches_count_distinct_across_every_triple`.
+    ///
+    /// Present-arm identity (per-target membership): for every slice
+    /// `items` and every target `v`,
+    /// `T::count_occurrences_of(v, items) > 0` iff `v` appears at some
+    /// position of `items` — the multiplicity projection collapses
+    /// through the `> 0` comparison onto the per-target membership
+    /// predicate the ambient set's [`Self::present_variants`] Vec-
+    /// return witness carries. Pinned by
+    /// `count_occurrences_of_positive_count_matches_present_variants_membership_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES on
+    /// element equality because [`Self::index_of`] is a bijection into
+    /// `[0, T::CARDINALITY)`, so "how many positions match `target`?"
+    /// is the same question under EVERY ordering. Sibling posture to
+    /// [`Self::count_distinct`], [`Self::count_missing`],
+    /// [`Self::is_constant`], [`Self::is_pairwise_distinct`],
+    /// [`Self::is_covering`], [`Self::is_missing_any`], and
+    /// [`Self::is_permutation_of_all`]'s ordering-axis invariance:
+    /// every projection on the equivalence-partition surface is
+    /// direction- AND ordering-agnostic; no separate
+    /// `sorted_count_occurrences_of` peer is needed. Pinned by
+    /// `count_occurrences_of_is_invariant_under_ordering_axis_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::count_occurrences_of(v, &[])` is `0`
+    /// for every target `v` — the empty slice hits zero positions, so
+    /// the filter accepts none. Sibling posture to
+    /// `count_distinct_returns_zero_on_the_empty_slice_across_every_kind`
+    /// on the collapsed set-level column: every counting projection
+    /// on the equivalence-partition surface reports `0` at the empty-
+    /// slice endpoint. Pinned by
+    /// `count_occurrences_of_returns_zero_on_the_empty_slice_across_every_target`.
+    ///
+    /// Singleton hit contract: `T::count_occurrences_of(v, &[v])` is
+    /// `1` for every target `v` — a singleton slice that matches the
+    /// target hits it exactly once. Pinned by
+    /// `count_occurrences_of_returns_one_on_the_matching_singleton_across_every_target`.
+    ///
+    /// Singleton miss contract: `T::count_occurrences_of(v, &[w])` is
+    /// `0` for every target `v` and slice-element `w != v` (compared
+    /// via [`Self::index_of`]) — a singleton slice at a different
+    /// variant misses the target. Pinned by
+    /// `count_occurrences_of_returns_zero_on_the_non_matching_singleton_across_every_target_pair`.
+    ///
+    /// Full-set contract: `T::count_occurrences_of(v, <T as
+    /// ClosedSet>::ALL)` is `1` for every target `v` UNCONDITIONALLY —
+    /// the closed-set well-formedness invariant
+    /// [`assert_closed_set_well_formed`]'s clause (3) pins labels (and
+    /// hence variants) as pairwise distinct, so every variant appears
+    /// exactly once in [`Self::ALL`]. Pinned by
+    /// `count_occurrences_of_returns_one_on_the_full_set_across_every_target`.
+    ///
+    /// Doubled-full-set contract: `T::count_occurrences_of(v, &<T as
+    /// ClosedSet>::ALL.iter().chain(<T as ClosedSet>::ALL.iter()).copied().collect::<Vec<_>>())`
+    /// is `2` for every target `v` UNCONDITIONALLY — the doubled full
+    /// set hits every variant exactly twice. Pinned by
+    /// `count_occurrences_of_returns_two_on_the_doubled_full_set_across_every_target`.
+    ///
+    /// Repetition-monotone contract: for every slice `items` and every
+    /// target `v`, `T::count_occurrences_of(v, &[items, &[v][..]].concat())
+    /// == T::count_occurrences_of(v, items) + 1` — appending one
+    /// matching element increments the count by one; appending a non-
+    /// matching element preserves the count. Pinned by
+    /// `count_occurrences_of_increments_on_matching_append_across_every_target_and_variant`.
+    ///
+    /// Upper-bound contract: `T::count_occurrences_of(v, items) <=
+    /// items.len()` on every slice and every target — the filter
+    /// never accepts more positions than it visits. Pinned by
+    /// `count_occurrences_of_is_bounded_above_by_slice_length_across_every_target_and_triple`.
+    ///
+    /// Reversal-invariance: `T::count_occurrences_of(v, items)` equals
+    /// `T::count_occurrences_of(v, items.iter().rev().copied().collect::<Vec<_>>())`
+    /// for every target `v` — reversing a slice preserves its
+    /// multiset of variant identities, and the multiplicity of any
+    /// specific target is a function of that multiset alone. Pinned
+    /// by
+    /// `count_occurrences_of_is_invariant_under_slice_reversal_across_every_target_and_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::index_of`] projection at the trait level.
+    /// The composition uses one `usize`-equality filter through
+    /// `.count()`, so the sweep costs O(n) on slice arity `n` —
+    /// allocation-free, no `PartialEq`/`Eq`/`Hash` supertrait bound
+    /// (the trait's minimal `Sized + Copy + 'static` supertrait pair
+    /// stays untouched), no bitset-shape carrier. STRICTLY BETTER
+    /// than [`Self::count_distinct`]'s O(n(n-1)/2) cost — the per-
+    /// target multiplicity projection linearizes what the set-level
+    /// distinct-count projection quadraticized against the first-
+    /// occurrence prefix sweep.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::count_occurrences_of`]: a `tatara-check` predicate
+    /// `(check-phase-invocation-count …)` that verifies a specific
+    /// `WorkloadPhase` appears EXACTLY N times in a rollout window at
+    /// plan time — catching a spec that would silently double-invoke
+    /// a phase; an LSP diagnostic on a Lisp-author-written closed-set
+    /// field that quantifies HOW MANY times a specific variant
+    /// appears in a value multiset (`":severities [:warn :warn :crit]"`
+    /// reports "warn: 2, crit: 1" per-variant rather than the ONE bit
+    /// "any repetition" that [`Self::is_pairwise_distinct`] surfaces);
+    /// a Sekiban audit-trail per-variant histogram bar (a "how often
+    /// did classification X get hit?" gauge across a window); a
+    /// `tatara-lisp::macro_expand::Expander` hygiene pass that
+    /// quantifies a template's per-identifier hit-count against a
+    /// required closed vocabulary; a per-slot rate limiter that reads
+    /// its throttle threshold as "at most K occurrences of THIS
+    /// variant per window". Each binds to ONE typed N-ary per-target
+    /// multiplicity projection on the trait rather than re-deriving
+    /// `items.iter().filter(|&&v| T::index_of(v) == T::index_of(target)).count()`
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the equivalence-partition surface now
+    /// opens the (per-target × usize) MULTIPLICITY column past the
+    /// (set-level × usize) + (set-level × bool) columns closed at
+    /// [`Self::count_distinct`] + [`Self::count_missing`] +
+    /// [`Self::is_covering`] + [`Self::is_missing_any`]. The next
+    /// natural lift on this surface — a Vec-return
+    /// `variant_counts(items) -> Vec<usize>` per-slot histogram whose
+    /// slot `i` reads `T::count_occurrences_of(T::from_index(i).unwrap(), items)`
+    /// — opens the (per-target-collection × Vec) column past the
+    /// (per-target × usize) column this lift opens. Downstream
+    /// consumers wanting the "mode" (variant with maximum
+    /// multiplicity), the "least-frequent" variant, or a full
+    /// histogram rendering compose on this projection through
+    /// [`Self::ALL`] iteration without an additional substrate
+    /// primitive.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary per-
+    /// target multiplicity projection becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `items.iter().filter(|&&v| T::index_of(v) == T::index_of(target)).count()`
+    /// composition at every downstream generic site. THEORY.md §V.1
+    /// — knowable platform; the (per-target × usize) multiplicity
+    /// corner was an unnamed inline composition recurring at every
+    /// prospective downstream "how many times did we hit THIS
+    /// variant?" site pre-lift. Naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of the substrate's total-
+    /// ordering discriminator ([`Self::index_of`]) filtered through
+    /// the standard-library `.filter().count()` combinator.
+    /// THEORY.md §VI.1 — generation over composition; the per-target
+    /// multiplicity projection emerges from the composition of ONE
+    /// substrate primitive ([`Self::index_of`]) with an
+    /// `iter().filter().count()` combinator on slice arity `n`, not
+    /// as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `count_occ Nat.eq_dec l x` combinator
+    /// on `list nat` — the canonical per-target multiplicity projection
+    /// composing a decidable-equality predicate with a fold; Idris's
+    /// `Data.List.count : (a -> Bool) -> List a -> Nat` with the
+    /// equality predicate specialized to `\v => v == target`; Rust's
+    /// own `items.iter().filter(|&&v| v == target).count()` binds
+    /// through a `Self: PartialEq` supertrait bound; Julia's `count(==(v),
+    /// items)`; Python's `items.count(v)` on a `list`; NumPy's
+    /// `np.count_nonzero(items == v)` idiom; Haskell's
+    /// `length (filter (== v) items)`. Translation through pleme-io
+    /// primitives: the N-ary per-target multiplicity projection on
+    /// the closed-set trait binds through the substrate's
+    /// [`Self::index_of`] projection filtered on equality of the
+    /// target's decl-slot against the per-position decl-slot — no
+    /// new dep, no supertrait bound (the [`Self::index_of`]
+    /// projection replaces the `PartialEq` bound the standard-
+    /// library `count`-family signatures demand), no bitset-shape
+    /// carrier, no allocation.
+    fn count_occurrences_of(target: Self, items: &[Self]) -> usize {
+        let target_index = <Self as ClosedSet>::index_of(target);
+        items
+            .iter()
+            .filter(|&&v| <Self as ClosedSet>::index_of(v) == target_index)
+            .count()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -23586,6 +23795,48 @@ where
             "{type_name}: T::sorted_indices() emitted duplicate decl-slot {i} — the lex-order full-set decl-slot collection MUST enumerate every decl-slot exactly once (permutation of `0..T::CARDINALITY`); a duplicate breaks the (variant → decl-slot) injectivity clause (16) at the lex-aggregation projection surface",
         );
         seen_sorted_indices[i] = true;
+    }
+    // (97) — `T::count_occurrences_of(target, T::ALL)` MUST equal `1`
+    // for every `target` in `T::ALL`, AND `T::count_occurrences_of(target,
+    // &[])` MUST equal `0` for every `target` in `T::ALL`. The default
+    // trait body threads `items.iter().filter(|&&v| T::index_of(v) ==
+    // T::index_of(target)).count()` verbatim and satisfies both
+    // fixpoint arms for free; the assertion catches a future
+    // implementor whose override drifts the projection (a stale
+    // override that returns `items.len()` regardless of target —
+    // silently collapsing the per-target multiplicity axis onto the
+    // slice-length constant and bifurcating the sum-over-targets
+    // partition identity; a swap override that returns `0`
+    // unconditionally — silently detaching the multiplicity projection
+    // from the pinned per-target hit-count and folding every downstream
+    // "how many times did we hit THIS variant?" query onto the empty-
+    // slice fixpoint) loudly rather than silently bifurcating the per-
+    // target multiplicity projection surface every downstream per-
+    // target occurrence-count consumer routes through. Sibling posture
+    // to clauses (16) + (17) — clause (16) pins the (variant → decl-
+    // slot) injectivity `T::index_of` funnels through, clause (17)
+    // pins the `Vec<Self>` lex-order full-set variant collection
+    // through sorted_variants alignment, this clause pins the (per-
+    // target × usize) multiplicity corner — the (per-target × return-
+    // shape) column of the equivalence-partition surface now opens at
+    // the (`usize`, per-target) corner with a `Vec<usize>` per-slot
+    // histogram peer trivially derivable from `T::ALL` iteration on
+    // this method as a future lift.
+    for target in T::ALL.iter().copied() {
+        let full_set_count = T::count_occurrences_of(target, T::ALL);
+        assert_eq!(
+            full_set_count,
+            1,
+            "{type_name}: T::count_occurrences_of({target_label:?}, T::ALL) == {full_set_count} != 1 — the per-target multiplicity projection MUST report exactly one occurrence of every target on the full set by clause (3)'s pairwise-distinctness invariant; a full-set count != 1 silently bifurcates the (variant → decl-slot) injectivity clause (16) at the per-target multiplicity projection surface, breaking every downstream per-variant occurrence-count consumer",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let empty_count = T::count_occurrences_of(target, &[]);
+        assert_eq!(
+            empty_count,
+            0,
+            "{type_name}: T::count_occurrences_of({target_label:?}, &[]) == {empty_count} != 0 — the per-target multiplicity projection MUST report zero occurrences on the empty slice because the filter accepts no position on a zero-position slice; a non-zero empty-slice count silently bifurcates the empty-slice fixpoint contract every downstream per-target occurrence-count consumer routes through",
+            target_label = <T as ClosedSet>::label(target),
+        );
     }
 }
 
@@ -46843,6 +47094,435 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn count_occurrences_of_returns_zero_on_the_empty_slice_across_every_target() {
+        // EMPTY-SLICE CONTRACT (per-target × usize multiplicity
+        // projection): `T::count_occurrences_of(v, &[])` is `0` for
+        // every target `v` — the filter accepts no position on a
+        // zero-position slice, and `.count()` on an empty iterator is
+        // `0`. Sibling posture to
+        // `count_distinct_returns_zero_on_the_empty_slice_across_every_kind`
+        // on the collapsed set-level column: every counting projection
+        // on the equivalence-partition surface reports `0` at the
+        // empty-slice endpoint.
+        let empty: &[StubKind] = &[];
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::count_occurrences_of(v, empty),
+                0,
+                "T::count_occurrences_of({v:?}, &[]) diverged from the empty-slice fixpoint `0`",
+            );
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_returns_one_on_the_matching_singleton_across_every_target() {
+        // SINGLETON HIT CONTRACT: `T::count_occurrences_of(v, &[v])`
+        // is `1` for every target `v` — a singleton slice at the
+        // target hits exactly one matching position. Sibling posture
+        // to `count_distinct_returns_one_on_every_singleton_slice_across_every_variant`
+        // one column of the (per-target) axis over: the set-level
+        // distinct-count collapses to `1` on every singleton, and the
+        // per-target multiplicity collapses to `1` on every matching
+        // singleton at the same endpoint.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::count_occurrences_of(v, &singleton),
+                1,
+                "T::count_occurrences_of({v:?}, {singleton:?}) diverged from the matching-singleton fixpoint `1`",
+            );
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_returns_zero_on_the_non_matching_singleton_across_every_target_pair() {
+        // SINGLETON MISS CONTRACT: `T::count_occurrences_of(v, &[w])`
+        // is `0` for every target `v` and slice-element `w` with
+        // `T::index_of(v) != T::index_of(w)` — a singleton slice at
+        // a different variant misses the target. Sweeping every
+        // (target, singleton-element) pair pins the miss contract
+        // across the full 3×3 = 9-corner (target × element) matrix
+        // at the six OFF-DIAGONAL corners; the three ON-DIAGONAL
+        // corners are pinned by the matching-singleton sibling.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::index_of(v) != <StubKind as ClosedSet>::index_of(w) {
+                    let singleton = [w];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_occurrences_of(v, &singleton),
+                        0,
+                        "T::count_occurrences_of({v:?}, {singleton:?}) diverged from the non-matching-singleton fixpoint `0`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_returns_one_on_the_full_set_across_every_target() {
+        // FULL-SET CONTRACT:
+        // `T::count_occurrences_of(v, <T as ClosedSet>::ALL)` is `1`
+        // for every target `v` UNCONDITIONALLY — the closed-set well-
+        // formedness invariant `assert_closed_set_well_formed`'s
+        // clause (3) pins labels (and hence variants) as pairwise
+        // distinct, so every variant appears in `T::ALL` at exactly
+        // one position. Complements
+        // `count_distinct_over_the_full_set_equals_cardinality` on
+        // the per-target column: the set-level distinct-count reaches
+        // its `T::CARDINALITY` fixpoint at the full set, and the per-
+        // target multiplicity collapses to `1` at every target on the
+        // same slice.
+        let all = <StubKind as ClosedSet>::ALL;
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::count_occurrences_of(v, all),
+                1,
+                "T::count_occurrences_of({v:?}, T::ALL) diverged from the full-set fixpoint `1` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+            );
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_returns_two_on_the_doubled_full_set_across_every_target() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::count_occurrences_of(v, <T as ClosedSet>::ALL ++ <T as
+        // ClosedSet>::ALL)` is `2` for every target `v`
+        // UNCONDITIONALLY — the doubled full set hits every variant
+        // exactly twice. Sibling posture to
+        // `count_distinct_over_the_full_set_equals_cardinality` at
+        // the OPPOSITE arity axis: the doubled slice's distinct-count
+        // stays at `T::CARDINALITY` (multiset dedup collapses the
+        // doubled positions), and the per-target multiplicity
+        // doubles to `2` at every target (per-position filter counts
+        // both instances).
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::count_occurrences_of(v, &doubled),
+                2,
+                "T::count_occurrences_of({v:?}, ALL++ALL) diverged from the doubled-full-set fixpoint `2`",
+            );
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_summed_over_all_targets_equals_slice_length_across_every_triple() {
+        // PARTITION IDENTITY: for every slice `items`,
+        // `sum over v in T::ALL of T::count_occurrences_of(v, items)
+        // == items.len()` — the (per-target) occurrence-count
+        // multiset partitions the slice's positions exactly, because
+        // every position sits at EXACTLY ONE variant (the (variant →
+        // decl-slot) injectivity clause (16) forces the per-position
+        // occurrence-arm membership disjoint on `target`). Sweeping
+        // every length-2 pair and length-3 triple pins the partition
+        // identity across the full domain of every operand tuple.
+        // Catches a future override that returns `items.len()`
+        // regardless of target — that override would sum to
+        // `items.len() * T::CARDINALITY`, breaking the partition
+        // identity loudly.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let pair = [a, b];
+                let sum: usize = <StubKind as ClosedSet>::ALL
+                    .iter()
+                    .copied()
+                    .map(|v| <StubKind as ClosedSet>::count_occurrences_of(v, &pair))
+                    .sum();
+                assert_eq!(
+                    sum,
+                    pair.len(),
+                    "sum over targets of T::count_occurrences_of(v, {pair:?}) diverged from pair.len() — the (per-target multiplicity) partition identity was violated",
+                );
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let sum: usize = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .map(|v| <StubKind as ClosedSet>::count_occurrences_of(v, &triple))
+                        .sum();
+                    assert_eq!(
+                        sum,
+                        triple.len(),
+                        "sum over targets of T::count_occurrences_of(v, {triple:?}) diverged from triple.len() — the (per-target multiplicity) partition identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_positive_count_matches_count_distinct_across_every_triple() {
+        // MULTIPLICITY-VERSUS-DISTINCTNESS IDENTITY: for every slice
+        // `items`,
+        // `T::count_distinct(items) == T::ALL.iter().filter(|&&v|
+        // T::count_occurrences_of(v, items) > 0).count()` — the set-
+        // level distinct count is exactly the count of TARGETS whose
+        // per-target occurrence count is strictly positive. The per-
+        // target multiplicity projection SUBSUMES the set-level
+        // distinct-count projection through the (occurrence-count >
+        // 0) bool-projection column. Catches a future override that
+        // collapses to `0` unconditionally — that override would
+        // report `0` distinct hits on every non-empty slice, breaking
+        // the identity on every slice whose distinct count is
+        // strictly positive.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_multiplicity = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .filter(|&v| <StubKind as ClosedSet>::count_occurrences_of(v, &triple) > 0)
+                        .count();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::count_distinct(&triple),
+                        via_multiplicity,
+                        "T::count_distinct({triple:?}) diverged from the multiplicity-projection count — the (multiplicity > 0) bool-projection SUBSUMES the set-level distinct count",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_positive_count_matches_present_variants_membership_across_every_triple()
+    {
+        // PRESENT-ARM IDENTITY: for every slice `items` and every
+        // target `v`, `T::count_occurrences_of(v, items) > 0` iff `v`
+        // appears in `T::present_variants(items)` — the multiplicity
+        // projection collapses through the `> 0` comparison onto the
+        // per-target membership predicate the ambient set's
+        // `present_variants` Vec-return witness carries. Sweeping
+        // every length-3 triple × every target pins the identity
+        // across the full 3×27 = 81-corner (target × triple) matrix
+        // of the equivalence-partition surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::present_variants(&triple);
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_multiplicity =
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &triple) > 0;
+                        let via_membership = present.iter().any(|&w| {
+                            <StubKind as ClosedSet>::index_of(w)
+                                == <StubKind as ClosedSet>::index_of(v)
+                        });
+                        assert_eq!(
+                            via_multiplicity, via_membership,
+                            "T::count_occurrences_of({v:?}, {triple:?}) > 0 diverged from present_variants membership — the (multiplicity > 0) present-arm predicate MUST match the Vec-return present-witness membership",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_increments_on_matching_append_across_every_target_and_variant() {
+        // REPETITION-MONOTONE CONTRACT: for every slice `items`, every
+        // target `v`, and every appended variant `w`,
+        // `T::count_occurrences_of(v, items ++ [w])` equals
+        // `T::count_occurrences_of(v, items) + 1` when
+        // `T::index_of(v) == T::index_of(w)`, and equals
+        // `T::count_occurrences_of(v, items)` otherwise — appending
+        // one matching element increments the count by one; appending
+        // a non-matching element preserves the count. Sweeping every
+        // length-2 base pair × every appended variant × every target
+        // pins the increment contract across the full 3×3×3 = 27-
+        // corner (base × append × target) cube.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let base = [a, b];
+                for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let mut extended = base.to_vec();
+                    extended.push(w);
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let before = <StubKind as ClosedSet>::count_occurrences_of(v, &base);
+                        let after = <StubKind as ClosedSet>::count_occurrences_of(v, &extended);
+                        let expected_delta = usize::from(
+                            <StubKind as ClosedSet>::index_of(v)
+                                == <StubKind as ClosedSet>::index_of(w),
+                        );
+                        assert_eq!(
+                            after,
+                            before + expected_delta,
+                            "T::count_occurrences_of({v:?}, {extended:?}) diverged from T::count_occurrences_of({v:?}, {base:?}) + {expected_delta} — the repetition-monotone increment contract was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_is_bounded_above_by_slice_length_across_every_target_and_triple() {
+        // UPPER-BOUND CONTRACT: `T::count_occurrences_of(v, items) <=
+        // items.len()` on every slice and every target — the filter
+        // never accepts more positions than it visits. Sweeping every
+        // length-3 triple × every target pins the bound across the
+        // full domain. Catches a future override whose body
+        // accidentally over-counts (a bug where the filter is
+        // inverted or dilated to a Cartesian product, for instance,
+        // would produce `items.len() * T::CARDINALITY`, which
+        // violates the bound).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        assert!(
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &triple)
+                                <= triple.len(),
+                            "T::count_occurrences_of({v:?}, {triple:?}) exceeded triple.len()",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_is_invariant_under_ordering_axis_across_every_triple() {
+        // ORDERING-AXIS INVARIANCE CONTRACT: element equality is
+        // intrinsically ordering-agnostic — a slice's per-target
+        // multiplicity is a property of the multiset of its element
+        // identities, not of the ordering the substrate uses to
+        // compare them. The projection composes on
+        // `<Self as ClosedSet>::index_of`, which is a bijection into
+        // `[0, T::CARDINALITY)`; and equality on that discriminator
+        // is invariant under any reordering of `T::ALL`. Sibling
+        // posture to
+        // `count_distinct_is_invariant_under_ordering_axis_across_every_triple`
+        // on the collapsed set-level column: both set-level AND per-
+        // target counting projections on the equivalence-partition
+        // surface are ordering-agnostic fixpoints of the (declaration,
+        // lex) reordering. Sweeps every triple × every target and
+        // cross-checks against the partition identity that the
+        // multiplicity sum equals the slice length.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_filter = triple
+                            .iter()
+                            .filter(|&&w| {
+                                <StubKind as ClosedSet>::index_of(w)
+                                    == <StubKind as ClosedSet>::index_of(v)
+                            })
+                            .count();
+                        assert_eq!(
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &triple),
+                            via_filter,
+                            "T::count_occurrences_of({v:?}, {triple:?}) diverged from the direct index_of filter sweep — the ordering-agnostic multiplicity projection was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_occurrences_of_is_invariant_under_slice_reversal_across_every_target_and_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::count_occurrences_of(v, items) ==
+        // T::count_occurrences_of(v, reversed items)` on every slice
+        // and every target — reversing a slice preserves its multiset
+        // of variant identities, and the multiplicity of any specific
+        // target is a function of that multiset alone. Sibling
+        // posture to
+        // `count_distinct_is_invariant_under_slice_reversal_across_every_triple`
+        // on the collapsed set-level column: every counting
+        // projection on the equivalence-partition surface is a
+        // FIXPOINT of slice reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &forward),
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &reversed),
+                            "T::count_occurrences_of({v:?}, {forward:?}) diverged from T::count_occurrences_of({v:?}, {reversed:?}) — the per-target multiplicity projection MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_count_occurrences_of_and_composition() {
+        // Drift catch — clause (97)'s full-set-fixpoint arm fires
+        // when an override folds the per-target multiplicity onto
+        // `items.len()` regardless of target (returning `T::CARDINALITY`
+        // rather than `1` on the full set) or onto `0` unconditionally.
+        // The stub below overrides the default body to return
+        // `items.len()`; on the full set that produces `T::CARDINALITY
+        // == 3 != 1`, tripping clause (97)'s full-set fixpoint arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedCountOccurrencesOfKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedCountOccurrencesOfKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedCountOccurrencesOfKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted count_occurrences_of kind: {}", self.0)
+            }
+        }
+
+        impl DriftedCountOccurrencesOfKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedCountOccurrencesOfKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted count_occurrences_of kind";
+            type Unknown = UnknownDriftedCountOccurrencesOfKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedCountOccurrencesOfKind(s.to_owned())
+            }
+            fn count_occurrences_of(_target: Self, items: &[Self]) -> usize {
+                // Drift: return `items.len()` regardless of target.
+                // On the full set that produces `T::CARDINALITY == 3
+                // != 1`, tripping clause (97)'s full-set fixpoint arm
+                // loudly. The full-set-fixpoint arm partitions the
+                // failure mode at the (composition-equality × target-
+                // aware) corner and catches the override before any
+                // downstream per-variant occurrence-count consumer
+                // routes through it.
+                items.len()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedCountOccurrencesOfKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedCountOccurrencesOfKind whose count_occurrences_of override folds onto items.len() — clause (97)'s full-set fixpoint arm MUST reject the drift",
+        );
     }
 
     #[test]

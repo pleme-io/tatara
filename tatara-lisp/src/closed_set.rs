@@ -17898,6 +17898,154 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY LEX-ORDER "missing labels joined" projection — the
+    /// `String` rendering of [`Self::sorted_missing_labels`] joined by
+    /// `sep`. Composes the substrate's lex-axis miss-label Vec-return
+    /// primitive with the standard-library
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// combinator so a passing implementor of
+    /// [`Self::sorted_missing_labels`] automatically satisfies this
+    /// projection at every downstream site. The FOURTH corner CLOSING
+    /// the (partition-arm × ordering) 2×2 = 4-corner join-string face
+    /// on the label-join column of the equivalence-partition surface
+    /// past the pre-existing corners at [`Self::present_labels_joined`]
+    /// (present × decl), [`Self::missing_labels_joined`] (absent × decl),
+    /// and [`Self::sorted_present_labels_joined`] (present × lex). The
+    /// LEX-ORDER peer of [`Self::missing_labels_joined`] one ordering
+    /// axis over, and the DE MORGAN dual of
+    /// [`Self::sorted_present_labels_joined`] one partition-arm axis
+    /// over.
+    ///
+    /// Sibling posture to [`Self::sorted_missing_labels`] one return-
+    /// shape axis over on the (`Vec<&'static str>`, `String`) partition
+    /// of the lex-order arm of the equivalence-partition label-
+    /// aggregation surface — the Vec-return arm materializes each miss
+    /// slot as a `&'static str`, this method joins them into a single
+    /// `String` under the caller's separator. Sibling posture to
+    /// [`Self::sorted_labels_joined`] one partition-flavor axis over on
+    /// the (full-set, missing-partition) surface —
+    /// [`Self::sorted_labels_joined`] renders EVERY label of
+    /// [`Self::sorted_variants`] under the caller's separator, this
+    /// method renders only the DYNAMIC miss partition of an N-ary input
+    /// slice under the same separator in the same lex order.
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::sorted_missing_labels_joined(items, sep) ==
+    /// T::sorted_missing_labels(items).join(sep)` — the join-string
+    /// projection binds through the substrate's
+    /// [`Self::sorted_missing_labels`] Vec-return primitive composed
+    /// with `slice::join`. Pinned by
+    /// `sorted_missing_labels_joined_equals_sorted_missing_labels_dot_join_across_every_triple`.
+    ///
+    /// Cross-arm permutation identity: for every slice `items` and
+    /// every separator `sep`, `T::sorted_missing_labels_joined(items,
+    /// sep)` and `T::missing_labels_joined(items, sep)` render the SAME
+    /// miss-label multiset through `slice::join` — the two projections
+    /// join the SAME set of labels under the SAME separator, but the
+    /// OUTPUT byte layout differs whenever declaration order and lex
+    /// order diverge on the miss-set. On implementors where declaration
+    /// order aligns with lex order, the two projections coincide byte-
+    /// for-byte; on implementors that diverge, the two projections
+    /// diverge on layout while agreeing on membership.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the miss-set
+    /// membership predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order regardless of the input ordering. Pinned by
+    /// `sorted_missing_labels_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_missing_labels_joined(&[], sep)
+    /// == T::sorted_labels_joined(sep)` UNCONDITIONALLY for every `sep`
+    /// — the empty slice hits zero variants, so EVERY label of
+    /// [`Self::ALL`] passes the "not present" filter,
+    /// [`Self::sorted_missing_labels`] yields the full lex-order label
+    /// listing, and `slice::join` under the caller's separator matches
+    /// [`Self::sorted_labels_joined`]'s byte layout exactly. Full-set
+    /// contract: `T::sorted_missing_labels_joined(<T as ClosedSet>::ALL,
+    /// sep) == ""` UNCONDITIONALLY for every `sep` — the well-formedness
+    /// pairwise-distinctness invariant pins every variant as hitting
+    /// itself, so the miss-set is empty and `slice::join` on an empty
+    /// slice yields the empty `String`. The two contracts are De Morgan
+    /// duals of [`Self::sorted_present_labels_joined`]'s empty-slice /
+    /// full-set contracts one partition-arm axis over — the miss-arm
+    /// empty-slice expands to full-labels-in-lex-order, the miss-arm
+    /// full-set collapses to the empty string, mirror-reversed from
+    /// the present-arm's empty-slice/full-set behaviors.
+    ///
+    /// Bool-projection identity: for every slice `items` and every
+    /// separator `sep`, `T::sorted_missing_labels_joined(items,
+    /// sep).is_empty()` iff `T::is_covering(items)` — the lex-order
+    /// miss-set join-string is empty iff the covering predicate holds
+    /// (i.e. iff the miss-label Vec is empty). Sibling posture to
+    /// `missing_labels_joined.is_empty()` one ordering axis over — the
+    /// bool-projection is INVARIANT under the (declaration, lex) axis
+    /// because miss-set-emptiness is a function of the miss-set's
+    /// cardinality alone. Pinned by
+    /// `sorted_missing_labels_joined_is_empty_iff_is_covering_holds_across_every_triple`.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` labels a rollout window MISSED in
+    /// canonical lex order as author-facing text (`"omitted phases:
+    /// contracting, terminal, warming"` — author-stable regardless of
+    /// `ALL`-array declaration layout drift); an LSP completion pin
+    /// that renders the missing labels of an author-written closed-set
+    /// field in canonical lex order as a comma-joined "still available"
+    /// hint; a Sekiban audit-trail projection whose per-window miss-
+    /// label witness renders as a deterministic pipe-joined string
+    /// across machines regardless of declaration-layout drift; a
+    /// `tatara-lisp::macro_expand::Expander` diagnostic that emits the
+    /// UNBOUND vocabulary identifiers as a canonical slash-joined
+    /// natural-language surface. Each binds to ONE typed N-ary lex-
+    /// order miss-label-as-string projection on the trait rather than
+    /// re-deriving `T::sorted_missing_labels(items).join(sep)` inline
+    /// per callsite.
+    ///
+    /// Compounding closure: the (partition-arm × ordering) 2×2 = 4-
+    /// corner face on the join-string column of the equivalence-
+    /// partition surface is now EXHAUSTIVELY CLOSED — the four corners
+    /// [`Self::present_labels_joined`] on (present × decl),
+    /// [`Self::missing_labels_joined`] on (absent × decl),
+    /// [`Self::sorted_present_labels_joined`] on (present × lex), and
+    /// THIS projection on (absent × lex) all bind through the same
+    /// `Vec-return + slice::join` composition shape, and each of the
+    /// four Vec-return underliers ([`Self::present_labels`] /
+    /// [`Self::missing_labels`] / [`Self::sorted_present_labels`] /
+    /// [`Self::sorted_missing_labels`]) already exists on the label-
+    /// column arm one return-shape axis over. Past the exhaustively-
+    /// closed (Vec-label × ordering × partition-arm) 2×2×2 = 8-corner
+    /// face on the label-column arm.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order miss-label-as-string projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::sorted_missing_labels(items).join(sep)` composition
+    /// at every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the (absent, label, `String`, lex) corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "which labels did we MISS, rendered joined in lex
+    /// order?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from the composition of ONE
+    /// substrate primitive ([`Self::sorted_missing_labels`]) with the
+    /// standard-library `slice::join` combinator, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(string-join (map T-label (sort
+    /// (filter (lambda (v) (not (member v items))) (enum->list T))
+    /// #:key T-label)) sep)`; Haskell's `intercalate sep . map label .
+    /// sortOn label . (all \\)` on the `Bounded + Enum + Show` type-
+    /// class trio; Julia's `join(label.(sort(setdiff(all, unique(items)),
+    /// by=label)), sep)`. Translation through pleme-io primitives: a
+    /// pure default method composing [`Self::sorted_missing_labels`]
+    /// with `slice::join` — no new dep, no supertrait bound, no set-
+    /// shape carrier, no allocation beyond the natural `String`
+    /// allocation [`Self::sorted_labels_joined`]'s sibling surface
+    /// already routes.
+    fn sorted_missing_labels_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::sorted_missing_labels(items).join(sep)
+    }
+
     /// The N-ARY DECLARATION-ORDER "present indices" projection — the
     /// `Vec<usize>` [`Self::ALL`]-index rendering of
     /// [`Self::present_variants`] under [`Self::index_of`]. Every
@@ -54360,6 +54508,334 @@ mod tests {
             vec!["alpha", "beta", "gamma"],
             "sorted_missing_labels over the empty slice must return the full label list in lex order — alpha, beta, gamma — regardless of the implementor's ALL-array declaration layout",
         );
+    }
+
+    #[test]
+    fn sorted_missing_labels_joined_over_the_empty_slice_equals_sorted_labels_joined_across_every_separator(
+    ) {
+        // EMPTY-SLICE CONTRACT:
+        // `T::sorted_missing_labels_joined(&[], sep) ==
+        // T::sorted_labels_joined(sep)` UNCONDITIONALLY for every `sep`
+        // — the empty slice hits zero variants, so EVERY label of
+        // `T::ALL` passes the "not present" filter,
+        // `sorted_missing_labels(&[])` yields the full lex-order label
+        // listing, and `slice::join` under the caller's separator
+        // matches `sorted_labels_joined(sep)` byte-for-byte. Sibling
+        // posture to the (declaration-arm) empty-slice contract at
+        // `missing_labels_joined_over_the_empty_slice_equals_labels_joined_across_every_separator`
+        // one ordering axis over — the empty-slice contract is a De
+        // Morgan dual of the present-arm empty-slice contract at
+        // `sorted_present_labels_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator`
+        // one partition-arm axis over.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_missing_labels_joined(empty, sep),
+                <StubKind as ClosedSet>::sorted_labels_joined(sep),
+                "T::sorted_missing_labels_joined(&[], {sep:?}) diverged from T::sorted_labels_joined({sep:?}) — the (empty-slice, lex-order miss-label-join) full-labels-in-lex-order fixpoint was violated",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_joined_over_the_full_set_returns_the_empty_string_across_every_separator(
+    ) {
+        // FULL-SET CONTRACT:
+        // `T::sorted_missing_labels_joined(T::ALL, sep) == ""`
+        // UNCONDITIONALLY for every `sep` — the well-formedness
+        // pairwise-distinctness invariant pins every variant of `T::ALL`
+        // as hitting itself, so the miss-label Vec is empty and
+        // `slice::join` on the empty slice yields the empty `String`.
+        // Sibling posture to
+        // `missing_labels_joined_over_the_full_set_returns_the_empty_string_across_every_separator`
+        // one ordering axis over — the full-set contract is INVARIANT
+        // under the (declaration, lex) axis because the miss-set is
+        // empty regardless of the ordering discipline applied to a
+        // zero-length list. De Morgan dual of the present-arm full-set
+        // contract at
+        // `sorted_present_labels_joined_over_the_full_set_equals_sorted_labels_joined_across_every_separator`
+        // one partition-arm axis over.
+        let all = <StubKind as ClosedSet>::ALL;
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_missing_labels_joined(all, sep),
+                String::new(),
+                "T::sorted_missing_labels_joined(T::ALL, {sep:?}) diverged from the empty-string fixpoint",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_joined_equals_sorted_missing_labels_dot_join_across_every_triple() {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, `T::sorted_missing_labels_joined(items, sep) ==
+        // T::sorted_missing_labels(items).join(sep)` — the lex-order
+        // miss-label join-string projection binds through the
+        // substrate's `T::sorted_missing_labels` Vec-return primitive
+        // composed with `slice::join`. Pins the (Vec-return, String-
+        // return) lex-order composition against the natural
+        // `sorted_missing_labels + slice::join` shape across three
+        // representative separators. Sibling posture to
+        // `missing_labels_joined_equals_missing_labels_dot_join_across_every_triple`
+        // one ordering axis over on the (declaration, lex) join-string
+        // surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected =
+                            <StubKind as ClosedSet>::sorted_missing_labels(&triple).join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_missing_labels_joined(&triple, sep),
+                            expected,
+                            "T::sorted_missing_labels_joined({triple:?}, {sep:?}) diverged from T::sorted_missing_labels({triple:?}).join({sep:?}) — the lex-order miss-label-column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_missing_labels_joined(items, sep) ==
+        // T::sorted_missing_labels_joined(reversed items, sep)` on
+        // every slice for every separator — reversing a slice preserves
+        // its multiset of variant identities, and the miss-set
+        // membership predicate is a function of that multiset alone.
+        // The OUTPUT ordering is fixed by `T::sorted_variants`'s lex
+        // order regardless of the input ordering, so the joined
+        // `String` matches byte-for-byte under reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_missing_labels_joined(&forward, sep),
+                            <StubKind as ClosedSet>::sorted_missing_labels_joined(&reversed, sep),
+                            "T::sorted_missing_labels_joined({forward:?}, {sep:?}) diverged from T::sorted_missing_labels_joined({reversed:?}, {sep:?}) — the lex-order miss-label-column join MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_joined_threads_empty_separator_into_a_concatenated_sorted_run() {
+        // EMPTY-SEPARATOR CONTRACT:
+        // `T::sorted_missing_labels_joined(items, "") ==
+        // T::sorted_missing_labels(items).concat()` on every slice —
+        // with an empty separator, `slice::join` degenerates to
+        // concatenation of the lex-order miss-label list. Pins the
+        // degenerate-separator arm matching
+        // `sorted_present_labels_joined_threads_empty_separator_into_a_concatenated_sorted_run`
+        // one partition-arm over on the same lex-order join-string
+        // column.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String =
+                        <StubKind as ClosedSet>::sorted_missing_labels(&triple).concat();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_labels_joined(&triple, ""),
+                        concat,
+                        "T::sorted_missing_labels_joined({triple:?}, \"\") diverged from T::sorted_missing_labels({triple:?}).concat() — the empty-separator degenerate arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT:
+        // `T::sorted_missing_labels_joined(items, " and ") ==
+        // T::sorted_missing_labels(items).join(" and ")` on every slice
+        // — pins the multi-character separator arm through the same
+        // composition, catching a drift that might treat only single-
+        // character separators verbatim on the lex-order miss arm.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected =
+                        <StubKind as ClosedSet>::sorted_missing_labels(&triple).join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_labels_joined(&triple, " and "),
+                        expected,
+                        "T::sorted_missing_labels_joined({triple:?}, \" and \") diverged from T::sorted_missing_labels({triple:?}).join(\" and \") — the multi-character-separator arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_joined_is_empty_iff_is_covering_holds_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY: for every slice `items` and every
+        // separator `sep`,
+        // `T::sorted_missing_labels_joined(items, sep).is_empty()` iff
+        // `T::is_covering(items)` — the lex-order miss-set join-string
+        // is empty iff the covering predicate holds (i.e. iff the miss-
+        // label Vec is empty). Pins the join-string-column projection
+        // against the bool-column projection one return-shape column
+        // over, and against
+        // `missing_labels_joined_is_empty_iff_is_covering_holds_across_every_triple`
+        // one ordering axis over — the bool-projection is INVARIANT
+        // under the (declaration, lex) axis because miss-set-emptiness
+        // is a function of the miss-set's cardinality alone.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["", ", ", "/", " | "] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_missing_labels_joined(&triple, sep)
+                                .is_empty(),
+                            <StubKind as ClosedSet>::is_covering(&triple),
+                            "T::sorted_missing_labels_joined({triple:?}, {sep:?}).is_empty() diverged from T::is_covering({triple:?}) — the (String-miss-join lex absent-arm, bool-return present-arm) De Morgan identity was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_labels_joined_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order miss-arm join-string
+        // column — `T::sorted_missing_labels_joined(items, sep)` MUST
+        // normalize an arbitrary declaration order into ASCII
+        // lexicographic label order before threading `slice::join`,
+        // regardless of the implementor's `ALL`-array layout. A
+        // regression that returns `T::missing_labels_joined(items, sep)`
+        // verbatim (without composing through the lex-order Vec-label
+        // peer) would pass every StubKind pin above (because StubKind's
+        // declaration order aligns with lex order) but silently
+        // bifurcate the lex-order miss-arm join-string surface for any
+        // implementor whose declaration order differs from byte-wise
+        // sort order. Pinning the sort discipline here with a
+        // deliberately-out-of-order stub catches that drift on the miss-
+        // arm join-string face directly. Sibling posture to
+        // `sorted_present_labels_joined_normalizes_arbitrary_declaration_order`
+        // one partition-arm axis over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseMissJoinStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseMissJoinStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseMissJoinStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse miss join stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseMissJoinStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse miss join stub kind";
+            type Unknown = UnknownReverseMissJoinStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseMissJoinStubKind(s.to_owned())
+            }
+        }
+        // Empty slice → miss-set = full set. Declaration-arm preserves
+        // layout: gamma, beta, alpha. Lex-arm normalizes: alpha, beta,
+        // gamma.
+        let empty: &[ReverseMissJoinStubKind] = &[];
+        assert_eq!(
+            <ReverseMissJoinStubKind as ClosedSet>::missing_labels_joined(empty, ", "),
+            "gamma, beta, alpha",
+            "missing_labels_joined over the empty slice must preserve declaration order — gamma, beta, alpha",
+        );
+        assert_eq!(
+            <ReverseMissJoinStubKind as ClosedSet>::sorted_missing_labels_joined(empty, ", "),
+            "alpha, beta, gamma",
+            "sorted_missing_labels_joined over the empty slice must normalize to lex order — alpha, beta, gamma — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Full set → miss-set = empty. Both arms collapse to the empty
+        // string byte-for-byte regardless of declaration layout.
+        let all = <ReverseMissJoinStubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <ReverseMissJoinStubKind as ClosedSet>::sorted_missing_labels_joined(all, ", "),
+            "",
+            "sorted_missing_labels_joined over the full set must collapse to the empty string regardless of the implementor's ALL-array declaration layout",
+        );
+        // Partial hit: only [alpha] present → miss-set = {beta, gamma}.
+        // Lex-order join yields "beta, gamma" regardless of layout.
+        let single = [ReverseMissJoinStubKind::Alpha];
+        assert_eq!(
+            <ReverseMissJoinStubKind as ClosedSet>::sorted_missing_labels_joined(&single, ", "),
+            "beta, gamma",
+            "sorted_missing_labels_joined over [alpha] must render the miss-set in lex order — beta, gamma — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Partial hit: [gamma] present → miss-set = {alpha, beta}.
+        // Lex-order join yields "alpha, beta" regardless of layout.
+        let single_gamma = [ReverseMissJoinStubKind::Gamma];
+        assert_eq!(
+            <ReverseMissJoinStubKind as ClosedSet>::sorted_missing_labels_joined(&single_gamma, ", "),
+            "alpha, beta",
+            "sorted_missing_labels_joined over [gamma] must render the miss-set in lex order — alpha, beta — regardless of the implementor's ALL-array declaration layout",
+        );
+    }
+
+    #[test]
+    fn sorted_present_labels_joined_concat_with_sorted_missing_labels_joined_recovers_sorted_labels_joined_multiset_across_every_triple(
+    ) {
+        // JOIN-STRING DE MORGAN CLOSURE: for every slice `items` and
+        // every separator `sep` s.t. `sep` does NOT appear inside any
+        // `T::label`, splitting each of
+        // `T::sorted_present_labels_joined(items, sep)` and
+        // `T::sorted_missing_labels_joined(items, sep)` on `sep`, then
+        // sorting the concatenation of the two label-sets, yields the
+        // sorted `T::sorted_labels()` byte-for-byte — the two join-
+        // string projections partition `T::sorted_labels()` on the
+        // join-string column, mirroring the Vec-label De Morgan
+        // complement identity at
+        // `sorted_present_labels_interleaved_with_sorted_missing_labels_recovers_sorted_labels_across_every_triple`
+        // one return-shape column over. This is the closure witness of
+        // the (partition-arm × ordering) 2×2 face on the join-string
+        // column at its fourth-corner completion.
+        let mut expected: Vec<&'static str> = <StubKind as ClosedSet>::sorted_labels();
+        expected.sort_unstable();
+        let sep = "|";
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present =
+                        <StubKind as ClosedSet>::sorted_present_labels_joined(&triple, sep);
+                    let missing =
+                        <StubKind as ClosedSet>::sorted_missing_labels_joined(&triple, sep);
+                    let mut union: Vec<&str> = Vec::new();
+                    if !present.is_empty() {
+                        union.extend(present.split(sep));
+                    }
+                    if !missing.is_empty() {
+                        union.extend(missing.split(sep));
+                    }
+                    union.sort_unstable();
+                    assert_eq!(
+                        union, expected,
+                        "T::sorted_present_labels_joined({triple:?}, {sep:?}).split({sep:?}) ⊔ T::sorted_missing_labels_joined({triple:?}, {sep:?}).split({sep:?}) diverged from T::sorted_labels() as a multiset — the (present, absent) lex-order join-string partition-arm complementarity was violated",
+                    );
+                }
+            }
+        }
     }
 
     #[test]

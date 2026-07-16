@@ -17206,6 +17206,104 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY DECLARATION-ORDER "present labels joined" projection —
+    /// the `String` rendering of [`Self::present_labels`] joined by
+    /// `sep`. Composes the substrate's declaration-axis hit-label
+    /// Vec-return primitive with the standard-library
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// combinator so a passing implementor of [`Self::present_labels`]
+    /// automatically satisfies this projection at every downstream
+    /// site.
+    ///
+    /// Sibling posture to [`Self::interior_labels_joined`] one
+    /// partition-flavor axis over on the (interior, present) partition
+    /// of the closed-set declaration-axis label-as-string surface —
+    /// [`Self::interior_labels_joined`] renders the STATIC strictly-
+    /// interior partition of [`Self::ALL`] under the caller's
+    /// separator, this method renders the DYNAMIC present partition of
+    /// an N-ary input slice under the same separator. Sibling posture
+    /// to [`Self::present_labels`] one return-shape axis over on the
+    /// (`Vec<&'static str>`, `String`) partition of the equivalence-
+    /// partition label-aggregation surface — the Vec-return arm
+    /// materializes each hit slot as a `&'static str`, this method
+    /// joins them into a single `String` under the caller's separator.
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::present_labels_joined(items, sep) ==
+    /// T::present_labels(items).join(sep)` — the join-string projection
+    /// binds through the substrate's [`Self::present_labels`] Vec-return
+    /// primitive composed with `slice::join`. Pinned by
+    /// `present_labels_joined_equals_present_labels_dot_join_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items` preserves
+    /// its multiset of variant identities, and the hit-set membership
+    /// predicate is a function of that multiset alone. The OUTPUT
+    /// ordering is fixed by [`Self::ALL`]'s declaration order regardless
+    /// of the input ordering. Pinned by
+    /// `present_labels_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::present_labels_joined(&[], sep)` is
+    /// the empty `String` UNCONDITIONALLY for every `sep` — the empty
+    /// slice hits zero variants, and `slice::join` on an empty slice
+    /// yields the empty string. Full-set contract:
+    /// `T::present_labels_joined(<T as ClosedSet>::ALL, sep) ==
+    /// T::labels_joined(sep)` — the full-set hit-labels join equals the
+    /// substrate's declaration-order labels join exactly under any
+    /// separator.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` labels a rollout window HIT as author-
+    /// facing text (`"touched phases: bootstrap, warmup, ready"`); an
+    /// LSP completion pin that renders the present labels of an author-
+    /// written closed-set field as a comma-joined "already-selected"
+    /// hint; a Sekiban audit-trail projection whose per-window hit-label
+    /// witness renders as a deterministic pipe-joined string across
+    /// machines; a `tatara-lisp::macro_expand::Expander` diagnostic that
+    /// emits the bound vocabulary identifiers as a slash-joined natural-
+    /// language surface. Each binds to ONE typed N-ary hit-label-as-
+    /// string projection on the trait rather than re-deriving
+    /// `T::present_labels(items).join(sep)` inline per callsite.
+    ///
+    /// Compounding closure: the (partition-flavor × return-shape) 2×2
+    /// matrix over the closed-set declaration-axis label-aggregation
+    /// surface opens the (present × `String`) corner alongside the
+    /// pre-existing [`Self::present_labels`] on (present × `Vec`) and
+    /// [`Self::interior_labels_joined`] on (interior × `String`).
+    /// The natural next lifts on this face — [`Self::missing_labels_joined`]
+    /// on (absent × `String` × declaration), and their two lex-axis
+    /// peers `sorted_present_labels_joined` and `sorted_missing_labels_joined`
+    /// — each bind through their respective sibling Vec-return primitive
+    /// under the same `slice::join` combinator.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary hit-
+    /// label-as-string projection becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline
+    /// `T::present_labels(items).join(sep)` composition at every
+    /// downstream generic site. THEORY.md §V.1 — knowable platform;
+    /// the (present, label, `String`) corner was an unnamed inline
+    /// composition recurring at every prospective downstream "which
+    /// labels did we HIT, rendered joined?" site pre-lift. THEORY.md
+    /// §VI.1 — generation over composition; the projection emerges
+    /// from the composition of ONE substrate primitive
+    /// ([`Self::present_labels`]) with the standard-library
+    /// `slice::join` combinator, not as a per-implementor hand-rolled
+    /// body.
+    ///
+    /// Frontier inspiration: Racket's `(string-join (map T-label
+    /// (filter (lambda (v) (member v items)) (enum->list T))) sep)`;
+    /// Haskell's `intercalate sep (map label (filter (`elem` items)
+    /// all))` on the `Bounded + Enum + Show` type-class trio; Julia's
+    /// `join(label.(intersect(all, unique(items))), sep)`. Translation
+    /// through pleme-io primitives: a pure default method composing
+    /// [`Self::present_labels`] with `slice::join` — no new dep, no
+    /// supertrait bound, no set-shape carrier, no allocation beyond
+    /// the natural `String` allocation [`Self::labels_joined`]'s
+    /// sibling surface already routes.
+    fn present_labels_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::present_labels(items).join(sep)
+    }
+
     /// The N-ARY DECLARATION-ORDER "missing labels" projection — the
     /// `Vec<&'static str>` label rendering of [`Self::missing_variants`]
     /// under [`Self::label`]. Every label `s` in the returned vector is
@@ -52894,6 +52992,144 @@ mod tests {
                         <StubKind as ClosedSet>::present_labels(&forward),
                         <StubKind as ClosedSet>::present_labels(&reversed),
                         "T::present_labels({forward:?}) diverged from T::present_labels({reversed:?}) — the label-column hit-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_labels_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator()
+    {
+        // EMPTY-SLICE CONTRACT:
+        // `T::present_labels_joined(&[], sep) == ""` UNCONDITIONALLY
+        // for every `sep` — the empty slice hits zero variants, so
+        // `present_labels(&[])` yields the empty `Vec`, and
+        // `slice::join` on an empty slice yields the empty string.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::present_labels_joined(empty, sep),
+                String::new(),
+                "T::present_labels_joined(&[], {sep:?}) diverged from the empty-string fixpoint",
+            );
+        }
+    }
+
+    #[test]
+    fn present_labels_joined_over_the_full_set_equals_labels_joined_across_every_separator() {
+        // FULL-SET CONTRACT:
+        // `T::present_labels_joined(T::ALL, sep) == T::labels_joined(sep)`
+        // UNCONDITIONALLY for every `sep` — the full-set hit-label list
+        // equals the substrate's declaration-order label listing, so
+        // both projections thread the same slice through `slice::join`
+        // under the same separator.
+        let all = <StubKind as ClosedSet>::ALL;
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::present_labels_joined(all, sep),
+                <StubKind as ClosedSet>::labels_joined(sep),
+                "T::present_labels_joined(T::ALL, {sep:?}) diverged from T::labels_joined({sep:?}) — the (full-set, hit-label-join) fixpoint was violated",
+            );
+        }
+    }
+
+    #[test]
+    fn present_labels_joined_equals_present_labels_dot_join_across_every_triple() {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, `T::present_labels_joined(items, sep) ==
+        // T::present_labels(items).join(sep)` — the join-string
+        // projection binds through the substrate's `T::present_labels`
+        // Vec-return primitive composed with `slice::join`. Pins the
+        // (Vec-return, String-return) composition against the natural
+        // `present_labels + slice::join` shape across three
+        // representative separators.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected = <StubKind as ClosedSet>::present_labels(&triple).join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::present_labels_joined(&triple, sep),
+                            expected,
+                            "T::present_labels_joined({triple:?}, {sep:?}) diverged from T::present_labels({triple:?}).join({sep:?}) — the label-column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_labels_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::present_labels_joined(items, sep) ==
+        // T::present_labels_joined(reversed items, sep)` on every
+        // slice for every separator — reversing a slice preserves its
+        // multiset of variant identities, and the hit-set membership
+        // predicate is a function of that multiset alone. The OUTPUT
+        // ordering is fixed by `T::ALL`'s declaration order regardless
+        // of the input ordering, so the joined `String` matches
+        // byte-for-byte under reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::present_labels_joined(&forward, sep),
+                            <StubKind as ClosedSet>::present_labels_joined(&reversed, sep),
+                            "T::present_labels_joined({forward:?}, {sep:?}) diverged from T::present_labels_joined({reversed:?}, {sep:?}) — the label-column hit-witness join MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_labels_joined_threads_empty_separator_into_a_concatenated_run() {
+        // EMPTY-SEPARATOR CONTRACT:
+        // `T::present_labels_joined(items, "") ==
+        // T::present_labels(items).concat()` on every slice — with an
+        // empty separator, `slice::join` degenerates to concatenation
+        // of the hit-label list. Pins the degenerate-separator arm
+        // matching `labels_joined` / `sorted_labels_joined` /
+        // `interior_labels_joined` one partition-flavor over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String = <StubKind as ClosedSet>::present_labels(&triple).concat();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::present_labels_joined(&triple, ""),
+                        concat,
+                        "T::present_labels_joined({triple:?}, \"\") diverged from T::present_labels({triple:?}).concat() — the empty-separator degenerate arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_labels_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT:
+        // `T::present_labels_joined(items, " and ") ==
+        // T::present_labels(items).join(" and ")` on every slice —
+        // pins the multi-character separator arm through the same
+        // composition, catching a drift that might treat only single-
+        // character separators verbatim.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected = <StubKind as ClosedSet>::present_labels(&triple).join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::present_labels_joined(&triple, " and "),
+                        expected,
+                        "T::present_labels_joined({triple:?}, \" and \") diverged from T::present_labels({triple:?}).join(\" and \") — the multi-character-separator arm was violated",
                     );
                 }
             }

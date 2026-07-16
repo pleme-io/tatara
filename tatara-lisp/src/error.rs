@@ -89,6 +89,47 @@ const _: () = crate::ast::assert_str_array_pairwise_distinct(&ExpectedKwargShape
 const _: () = crate::ast::assert_str_array_pairwise_distinct(&SexpShape::LABELS);
 const _: () = crate::ast::assert_str_array_pairwise_distinct(&StructuralKind::LABELS);
 
+// Compile-time NONEMPTY-CARDINALITY-LOWER-BOUND witnesses — one
+// `const _: () = crate::ast::assert_str_array_all_nonempty(&…)` per
+// family-wide `[&'static str; N]` array declared in this module.
+// Sibling to the `_pairwise_distinct` witnesses above — those pin
+// INJECTIVITY on each array (`∀ i ≠ j : arr[i] ≠ arr[j]`), these pin
+// the strictly-weaker per-entry cardinality gate (`∀ i : arr[i].len()
+// > 0`). The two contracts compose orthogonally: an array carrying
+// `["", ""]` fails INJECTIVITY at the zero-length-pair corner, but an
+// array carrying `["", "a"]` passes INJECTIVITY while failing NONEMPTY
+// — so the NONEMPTY witnesses close the remaining `""`-carrying corner
+// that INJECTIVITY alone cannot pin. Every consumer that spells a
+// closed-set variant through its `&'static str` label
+// (`AtomKind::label` / `QuoteForm::label` / `UnquoteForm::label` /
+// `StructuralKind::label` / `SexpShape::label` label projections;
+// `KwargPathKind::label` / `ExpectedKwargShape::label` for the kwarg-
+// diagnostic vocabulary; `MacroDefHead::KEYWORDS` /
+// `UnquoteForm::MARKERS` / `UnquoteForm::IAC_FORGE_TAGS` for the
+// reader-boundary sub-vocabularies; `CompilerSpecIoStage::LABELS` for
+// the compiler-spec I/O stage diagnostic) treats each entry as a
+// NONEMPTY identifier and would silently mis-behave on a `""` entry.
+// The two `TemplateInvariantKind` message / descriptor arrays and the
+// two `OptionalParamMalformedReason` message / descriptor arrays are
+// nonempty for the same reason — an empty diagnostic message erases
+// the failure signal at the display boundary.
+const _: () = crate::ast::assert_str_array_all_nonempty(&CompilerSpecIoStage::LABELS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&TemplateInvariantKind::STATIC_MESSAGES);
+const _: () =
+    crate::ast::assert_str_array_all_nonempty(&TemplateInvariantKind::DYNAMIC_DESCRIPTORS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&MacroDefHead::KEYWORDS);
+const _: () =
+    crate::ast::assert_str_array_all_nonempty(&OptionalParamMalformedReason::STATIC_LABELS);
+const _: () =
+    crate::ast::assert_str_array_all_nonempty(&OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&UnquoteForm::MARKERS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&UnquoteForm::IAC_FORGE_TAGS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&UnquoteForm::LABELS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&KwargPathKind::LABELS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&ExpectedKwargShape::LABELS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&SexpShape::LABELS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&StructuralKind::LABELS);
+
 // Compile-time SUBSET-embedding witnesses — the THREE family-wide
 // `[&'static str; N]` sub-vocabularies of the substrate's twelve-arm
 // outer-shape label vocabulary at `SexpShape::LABELS` whose distinct-

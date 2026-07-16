@@ -1269,6 +1269,145 @@ const _: () = assert_str_array_slice_equals_str_array::<4, 4, 0>(
 );
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of `arr` has zero length under [`str::len`] (equivalently
+/// `str::is_empty`).
+///
+/// Contract-orthogonal peer to [`assert_str_array_pairwise_distinct`]
+/// on the (contract-shape) column of the (`&'static str`) row of the
+/// (element-type × contract-shape) matrix: where the pairwise-
+/// distinctness sibling binds INTRA-array `∀ i ≠ j : arr[i] ≠ arr[j]`
+/// (INJECTIVITY on the multiset of entries), this NONEMPTY-CARDINALITY-
+/// LOWER-BOUND sibling binds the strictly-weaker per-entry cardinality
+/// gate `∀ i : arr[i].len() > 0` (NO ENTRY is the zero-length byte
+/// sequence). The two contracts compose orthogonally: an array that
+/// carries `["", ""]` fails the pairwise-distinctness contract at the
+/// zero-length-pair corner (pinned by
+/// `assert_str_array_pairwise_distinct_rejects_length_zero_collision`),
+/// but an array that carries `["", "a"]` passes pairwise-distinctness
+/// while failing NONEMPTY — so the NONEMPTY sibling closes the
+/// remaining `""`-carrying corner that INJECTIVITY alone cannot pin.
+/// The inner test is a direct [`str::is_empty`] delegation — const-
+/// stable since Rust 1.39 and const-callable on the substrate's
+/// toolchain — so no `str_bytes_equal`-shaped auxiliary helper is
+/// needed for this contract (the peer `_pairwise_distinct` sibling
+/// uses `str_bytes_equal` because it must compare TWO strings byte-
+/// for-byte while `const fn str::eq` remains unstable; this sibling
+/// only tests ONE string's length so it delegates directly).
+///
+/// The invariant is load-bearing for every consumer that spells a
+/// closed-set variant through its `&'static str` label — every
+/// [`AtomKind::label`] / [`QuoteForm::label`] / `parse_label` /
+/// `find_by_label` composition on the ClosedSet trait's family-wide
+/// label vocabularies (`Atom::BOOL_LITERALS` on the bool-literal
+/// dispatch; `AtomKind::LABELS` on the atomic-payload kind decode;
+/// `QuoteForm::LABELS` on the quote-family diagnostic vocabulary;
+/// `QuoteForm::PREFIXES` on the reader-boundary prefix vocabulary;
+/// `QuoteForm::IAC_FORGE_TAGS` on the canonical iac-forge tag
+/// vocabulary) treats each entry as a NONEMPTY identifier and would
+/// silently mis-behave on a `""` entry: `parse_label("")` would decode
+/// the empty string to that variant (silently making empty user input a
+/// valid variant spelling); `find_by_label("")` would return `Some(v)`
+/// rather than `None`; every string-search consumer that scans for a
+/// prefix or contains a label as a substring would spuriously match on
+/// every input (since `""` is a prefix and a substring of every
+/// string). Post-lift a regression that silently re-inlined one label
+/// constant to `""` (e.g. `AtomKind::SYMBOL_LABEL = "";`) fails at
+/// `cargo check` BEFORE any test scheduler runs.
+///
+/// Adding a new family-wide `[&'static str; N]` label / prefix / tag /
+/// literal vocabulary to the substrate: pair the declaration with
+/// `const _: () = assert_str_array_all_nonempty(&Self::FOO_ARRAY);`
+/// co-located after the array's declaration and the NONEMPTY-CARDINALITY-
+/// LOWER-BOUND contract binds at compile time. The rustc-forced arity
+/// `[&'static str; N]` composes with this const-eval sweep so BOTH
+/// cardinality AND per-entry nonempty are compile-time theorems on the
+/// SAME array.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_str_array_all_nonempty_panics_at_runtime_on_head_empty` /
+/// `_interior_empty` / `_tail_empty` and
+/// `assert_str_array_all_nonempty_panic_message_names_the_helper`. The
+/// panic site carries the `"STR-EMPTY-ENTRY"` axis-provenance string
+/// chosen DISTINCT from every sibling helper's axis vocabulary
+/// (`"duplicate"` on the pairwise-distinct sibling; `"STR-DISJOINTNESS-
+/// VIOLATION"` on the arrays-disjoint sibling; `"STR-SUBSET-VIOLATION"`
+/// on the within-finite-set sibling) so a diagnostic that names the
+/// failed axis routes UNAMBIGUOUSLY to THIS specific NONEMPTY helper.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide nonempty-
+///   cardinality-lower-bound contract on the `&'static str` label
+///   vocabulary becomes a TYPE-LEVEL theorem the substrate carries per
+///   array declaration rather than a runtime test the developer must
+///   remember to write per label constant.
+/// - THEORY.md §II.1 invariant 1 — typed entry; a closed-set variant's
+///   label projection is the entry-point discriminator into the typed
+///   algebra, and a `""` entry would silently break the discriminator
+///   at the boundary between untyped `&str` input and typed enum
+///   variant.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   sweep IS the generative shape. Every new closed-set label array
+///   adds ONE `const _` line to get the NONEMPTY theorem rather than
+///   re-deriving a per-array runtime iterator sweep at each call site.
+pub const fn assert_str_array_all_nonempty<const N: usize>(arr: &[&'static str; N]) {
+    let mut i = 0;
+    while i < N {
+        if arr[i].is_empty() {
+            panic!(
+                "assert_str_array_all_nonempty: STR-EMPTY-ENTRY — the \
+                 family-wide &'static str array carries a zero-length \
+                 entry at some position — the substrate's NONEMPTY-\
+                 CARDINALITY-LOWER-BOUND contract on the array is \
+                 broken; every consumer that spells a closed-set variant \
+                 through its `&'static str` label (AtomKind / QuoteForm \
+                 / UnquoteForm / StructuralKind / SexpShape label \
+                 projections; the reader-boundary prefix / tag \
+                 vocabularies; the bool-literal dispatch) treats each \
+                 entry as a NONEMPTY identifier — `parse_label(\"\")` \
+                 would silently decode the empty string to the offending \
+                 variant, `find_by_label(\"\")` would return `Some(v)` \
+                 rather than `None`, every substring / prefix scan would \
+                 spuriously match on every input. Fix at the ARRAY-\
+                 DECLARATION site by removing the `\"\"` entry OR by \
+                 giving it a nonempty canonical spelling"
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time NONEMPTY-CARDINALITY-LOWER-BOUND witnesses — one
+// `const _: () = assert_str_array_all_nonempty(&…)` per family-wide
+// `[&'static str; N]` array on the substrate's closed-set outer
+// algebras. Each invocation is const-evaluated at `cargo check` time; a
+// regression that silently re-inlined one label constant to `""` fails
+// the build rather than deferring to a per-consumer misbehavior at
+// runtime. Sibling to the pairwise-distinctness witnesses above — those
+// pin INJECTIVITY on each array, these pin the strictly-weaker per-
+// entry cardinality gate on the SAME arrays. The two contracts compose
+// orthogonally on every closed-set outer algebra's label vocabulary.
+// The five arrays covered here mirror the five arrays already pinned
+// by the `_pairwise_distinct` witnesses above (`Atom::BOOL_LITERALS`,
+// `AtomKind::LABELS`, `QuoteForm::PREFIXES`, `QuoteForm::IAC_FORGE_TAGS`,
+// `QuoteForm::LABELS`) — the (array × contract-shape) coverage matrix
+// on the (`&'static str`) row of this file now holds at every
+// (INJECTIVITY, NONEMPTY) corner for the five outer-algebra arrays
+// declared here. Analogous witnesses on the (`&'static str`) arrays
+// declared under `crate::error` (`CompilerSpecIoStage::LABELS`,
+// `MacroDefHead::KEYWORDS`, `MacroParams::LAMBDA_LIST_KEYWORDS`,
+// `UnquoteForm::MARKERS` / `IAC_FORGE_TAGS` / `LABELS`,
+// `KwargPathKind::LABELS`, `ExpectedKwargShape::LABELS`,
+// `SexpShape::LABELS`, `StructuralKind::LABELS`) land co-located with
+// the pre-existing `_pairwise_distinct` witnesses at that file's
+// module-level prelude.
+const _: () = assert_str_array_all_nonempty(&Atom::BOOL_LITERALS);
+const _: () = assert_str_array_all_nonempty(&AtomKind::LABELS);
+const _: () = assert_str_array_all_nonempty(&QuoteForm::PREFIXES);
+const _: () = assert_str_array_all_nonempty(&QuoteForm::IAC_FORGE_TAGS);
+const _: () = assert_str_array_all_nonempty(&QuoteForm::LABELS);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// any entry of `a` aliases any entry of `b` byte-for-byte through
 /// [`str::as_bytes`].
 ///
@@ -35595,6 +35734,145 @@ mod tests {
             "assert_str_array_pairwise_distinct panic message \
              {msg:?} must name the helper for provenance-preserving \
              failure diagnostics",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_all_nonempty_accepts_the_empty_array() {
+        // Empty array — vacuously all-nonempty (no entry to be empty).
+        // The compile-time `const _: () = assert_str_array_all_nonempty
+        // (&EMPTY);` would land on this arm, so the runtime call MUST
+        // return normally.
+        assert_str_array_all_nonempty::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_str_array_all_nonempty_accepts_nonempty_singleton_arrays() {
+        // Singleton array carrying a nonempty entry — the sole entry
+        // clears the length-gate. Cross-arity coverage on the
+        // `[&'static str; 1]` corner of the const-N generic.
+        assert_str_array_all_nonempty(&["a"]);
+        assert_str_array_all_nonempty(&[Atom::TRUE_LITERAL]);
+    }
+
+    #[test]
+    fn assert_str_array_all_nonempty_accepts_every_family_wide_substrate_array() {
+        // Runtime cross-check that the SAME five arrays the module-
+        // level `const _: () = ...` witnesses cover at COMPILE time
+        // are all-nonempty. Sibling posture to the runtime
+        // `_pairwise_distinct` cross-check above — the two together
+        // pin BOTH the INJECTIVITY axis AND the NONEMPTY-CARDINALITY-
+        // LOWER-BOUND axis on the SAME five arrays, at TWO stages of
+        // the toolchain (compile-time `const _` line + this runtime
+        // safety-net).
+        assert_str_array_all_nonempty(&Atom::BOOL_LITERALS);
+        assert_str_array_all_nonempty(&AtomKind::LABELS);
+        assert_str_array_all_nonempty(&QuoteForm::PREFIXES);
+        assert_str_array_all_nonempty(&QuoteForm::IAC_FORGE_TAGS);
+        assert_str_array_all_nonempty(&QuoteForm::LABELS);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_nonempty")]
+    fn assert_str_array_all_nonempty_panics_at_runtime_on_singleton_empty() {
+        // NEGATIVE PIN — singleton corner: a one-element array
+        // carrying the empty string MUST panic. Pins the helper's own
+        // reject-empty arm on the smallest possible array shape.
+        assert_str_array_all_nonempty(&[""]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_nonempty")]
+    fn assert_str_array_all_nonempty_panics_at_runtime_on_head_empty() {
+        // NEGATIVE PIN — head corner: the empty entry at position 0
+        // MUST fire even when subsequent entries are nonempty. Pins
+        // the outer sweep's inclusive-start behavior — a regression
+        // that walked `while i < N { … i += 1 }` from an off-by-one
+        // start (`i = 1`) would silently accept a leading `""` entry.
+        assert_str_array_all_nonempty(&["", "a", "b"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_nonempty")]
+    fn assert_str_array_all_nonempty_panics_at_runtime_on_interior_empty() {
+        // NEGATIVE PIN — interior corner: the empty entry at a
+        // strictly-interior position MUST fire. Pins the outer
+        // sweep's non-early-exit behavior at the head-arm — a
+        // regression that returned `Ok` on the first nonempty entry
+        // (bailing out of the sweep prematurely) would silently
+        // accept an interior `""` entry.
+        assert_str_array_all_nonempty(&["a", "", "b"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_nonempty")]
+    fn assert_str_array_all_nonempty_panics_at_runtime_on_tail_empty() {
+        // NEGATIVE PIN — tail corner: the empty entry at position
+        // `N - 1` MUST fire. Pins the outer `while i < N` upper bound
+        // — a regression that walked `while i < N - 1` (dropping the
+        // last slot) would silently accept a trailing `""` entry.
+        assert_str_array_all_nonempty(&["a", "b", "c", ""]);
+    }
+
+    #[test]
+    fn assert_str_array_all_nonempty_rejects_the_all_empty_array() {
+        // POSITIVE-ORTHOGONAL PIN — the ALL-empty corner: an array
+        // whose every entry is `""` fires the helper on the FIRST
+        // entry (the head-arm). Confirms the helper does not silently
+        // accept an array whose every entry alias-collapses onto the
+        // zero-length byte sequence — a corner that composes with
+        // `assert_str_array_pairwise_distinct_rejects_length_zero_
+        // collision` (that pin rejects `["", ""]` on the pairwise-
+        // distinctness axis; this pin rejects `["", ""]` on the
+        // NONEMPTY axis — the two contracts pin the `""`-repeat
+        // failure mode at BOTH the INJECTIVITY axis AND the
+        // NONEMPTY axis).
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_all_nonempty(&["", ""]);
+        });
+        outcome.expect_err(
+            "assert_str_array_all_nonempty must panic on an array \
+             whose every entry is `\"\"` — the head-arm fires on the \
+             zero-length entry at position 0",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_all_nonempty_panic_message_names_the_helper_and_axis() {
+        // PANIC-MESSAGE PROVENANCE PIN: the panic message MUST begin
+        // with the helper's own name AND name the failed axis as
+        // `"STR-EMPTY-ENTRY"` (chosen DISTINCT from every sibling
+        // helper's axis vocabulary: `"duplicate"` on the pairwise-
+        // distinct sibling; `"STR-DISJOINTNESS-VIOLATION"` on the
+        // arrays-disjoint sibling; `"STR-SUBSET-VIOLATION"` on the
+        // within-finite-set sibling) so a diagnostic that names the
+        // failed axis routes UNAMBIGUOUSLY to THIS specific helper.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_all_nonempty(&[""]);
+        });
+        let payload = outcome.expect_err(
+            "assert_str_array_all_nonempty must panic on an empty \
+             entry — the reject-empty arm is the point of the helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_str_array_all_nonempty panic payload must be \
+                 a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_str_array_all_nonempty"),
+            "assert_str_array_all_nonempty panic message {msg:?} must \
+             name the helper for provenance-preserving failure \
+             diagnostics",
+        );
+        assert!(
+            msg.contains("STR-EMPTY-ENTRY"),
+            "assert_str_array_all_nonempty panic message {msg:?} must \
+             name the failed axis as `STR-EMPTY-ENTRY` DISTINCT from \
+             every sibling helper's axis vocabulary",
         );
     }
 

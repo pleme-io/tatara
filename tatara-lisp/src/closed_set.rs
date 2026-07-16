@@ -15291,6 +15291,199 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "per-slot variant histogram"
+    /// projection in LEX order — the `Vec<usize>` LEX-ORDER histogram
+    /// over [`Self::sorted_variants`] whose slot `i` reports the
+    /// multiplicity of `T::sorted_variants()[i]` in `items`. The
+    /// LEX-ORDER peer of [`Self::variant_counts`] on the (declaration,
+    /// lex) ordering axis of the (per-slot × Vec<usize>) column of the
+    /// equivalence-partition surface — closes the lex arm past the
+    /// declaration arm the sibling [`Self::variant_counts`] opened. The
+    /// (per-slot × Vec<usize>) × (declaration, lex) 1×2 = 2-corner
+    /// (return-shape × ordering) face on the histogram surface now
+    /// closes at BOTH ordering corners.
+    ///
+    /// Lex-order contract: slot `i` of the returned `Vec<usize>` reports
+    /// the multiplicity of `T::sorted_variants()[i]` in `items` — the
+    /// histogram walks [`Self::sorted_variants`] in lex order and
+    /// projects each slot's variant through the per-target multiplicity
+    /// primitive. Pinned by
+    /// `sorted_variant_counts_slot_i_equals_count_occurrences_of_sorted_variant_i_across_every_triple`.
+    ///
+    /// Length contract:
+    /// `T::sorted_variant_counts(items).len() == T::CARDINALITY` on
+    /// every slice on every implementor — the histogram has ONE slot
+    /// per variant of the closed set, so the returned vector's length is
+    /// anchored at the substrate's forced-arity constant. Matches
+    /// [`Self::variant_counts`]'s length contract byte-for-byte — the
+    /// (declaration, lex) axis reorders the slots but preserves the
+    /// per-slot arity. Pinned by clause (99) at BOTH the full-set and
+    /// empty-slice fixpoints AND by the test-sweep.
+    ///
+    /// Cross-arm permutation identity: for every slice `items`,
+    /// `T::sorted_variant_counts(items)` is a PERMUTATION of
+    /// `T::variant_counts(items)` — the two projections read the SAME
+    /// per-target multiplicity primitive over the SAME hit-set (from
+    /// [`Self::ALL`] / [`Self::sorted_variants`], each containing every
+    /// variant exactly once), so the multiset of per-slot counts in the
+    /// two returned Vecs coincides though the ordering differs. The
+    /// permutation is fixed by the (declaration → lex) index
+    /// bijection: `T::sorted_variant_counts(items)[i] ==
+    /// T::variant_counts(items)[T::sorted_variants()[i].index_of()]`.
+    /// Pinned by
+    /// `sorted_variant_counts_is_a_permutation_of_variant_counts_across_every_triple`
+    /// and
+    /// `sorted_variant_counts_slot_i_equals_variant_counts_at_sorted_variant_index_of_across_every_triple`.
+    ///
+    /// Partition identity: for every slice `items`,
+    /// `T::sorted_variant_counts(items).iter().sum::<usize>() == items.len()`
+    /// — the histogram partitions the slice's positions exactly, because
+    /// every position sits at EXACTLY ONE variant (the (variant →
+    /// decl-slot) injectivity clause (16) forces the per-position
+    /// occurrence-arm membership disjoint on `target`, and the (variant
+    /// → lex-slot) sorted-index injectivity clause (17) forces the same
+    /// disjointness on the lex-order axis). This is the direct lex-lift
+    /// of [`Self::variant_counts`]'s partition identity — a permutation
+    /// preserves sums. Pinned by
+    /// `sorted_variant_counts_summed_equals_slice_length_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_variant_counts(&[])` is the
+    /// all-zeros vector of length [`Self::CARDINALITY`] on every
+    /// implementor — the empty slice hits zero positions, so every
+    /// per-slot filter accepts nothing. Sibling posture to
+    /// [`Self::variant_counts`]'s empty-slice endpoint one ordering axis
+    /// over: both projections agree on the empty-slice fixpoint because
+    /// the zero-vector has no positional content to distinguish decl
+    /// from lex order. Pinned by clause (99)'s empty-slice fixpoint arm
+    /// and by
+    /// `sorted_variant_counts_returns_all_zeros_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::sorted_variant_counts(<T as ClosedSet>::ALL)` is the all-ones
+    /// vector of length [`Self::CARDINALITY`] UNCONDITIONALLY — the
+    /// closed-set well-formedness invariant
+    /// [`assert_closed_set_well_formed`]'s clause (3) pins variants
+    /// as pairwise distinct, so every variant appears in `T::ALL` at
+    /// exactly one position and every histogram slot lands at `1`. The
+    /// full-set endpoint also collapses the (decl, lex) ordering
+    /// distinction because an all-ones vector is a permutation-fixpoint.
+    /// Pinned by clause (99)'s full-set fixpoint arm and by
+    /// `sorted_variant_counts_returns_all_ones_on_the_full_set_across_every_kind`.
+    ///
+    /// Reversal-invariance: `T::sorted_variant_counts(items)` equals
+    /// `T::sorted_variant_counts(items.iter().rev().copied().collect::<Vec<_>>())`
+    /// for every slice — reversing a slice preserves its multiset of
+    /// variant identities, and every per-slot histogram bar is a
+    /// function of that multiset alone. Pinned by
+    /// `sorted_variant_counts_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_occurrences_of`] primitive at the
+    /// trait level, composed with the substrate's
+    /// [`Self::sorted_variants`] canonical lex-order listing. The
+    /// composition uses one `T::sorted_variants()` iteration mapping
+    /// each variant through [`Self::count_occurrences_of`], so the
+    /// sweep costs O(N log N + T::CARDINALITY * n) on slice arity `n`
+    /// (the O(N log N) term is the outer `sort_unstable_by_key` inside
+    /// [`Self::sorted_variants`]; the O(T::CARDINALITY * n) term is
+    /// the per-slot per-target multiplicity sweep) — no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched), no
+    /// map-shape carrier.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_variant_counts`]: a `tatara-check` predicate
+    /// `(check-phases-histogram-lex …)` that verifies a rollout window's
+    /// per-`WorkloadPhase` occurrence count matches a Lisp-authored
+    /// histogram spec in LEX ORDER (so operator-facing diagnostics
+    /// agree with the substrate-wide sorted-labels + sorted-variants
+    /// canonical-listing surface); an LSP diagnostic on a Lisp-author-
+    /// written closed-set field that renders the full per-variant
+    /// histogram as an author-facing spark-line in the same lex order
+    /// the "did you mean …?" suggestion surface uses (`":severities
+    /// [:warn :warn :crit]" → "crit: 1, info: 0, warn: 2"`) rather than
+    /// the declaration-order [`Self::variant_counts`] shape; a Sekiban
+    /// audit-trail per-window classification histogram bar sequence
+    /// carrying the concrete per-variant occurrence counts in lex order
+    /// for operator-facing render agreement across every downstream
+    /// surface; a metric-emitter that binds Prometheus-style label
+    /// vectors in the same lex order the operator-facing dashboard
+    /// column ordering uses. Each binds to ONE typed N-ary lex-order
+    /// per-slot histogram projection on the trait rather than re-
+    /// deriving
+    /// `T::sorted_variants().into_iter().map(|v| T::count_occurrences_of(v, items)).collect()`
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the equivalence-partition surface now
+    /// closes the (per-slot × Vec × ordering) 1×2 = 2-corner face at
+    /// the (Vec<usize>, per-slot, lex) corner peer to the (Vec<usize>,
+    /// per-slot, decl) corner [`Self::variant_counts`] opened. The
+    /// (per-target, per-slot) × (usize, Vec) × (decl, lex) 2×2×2 =
+    /// 8-corner (arity × return-shape × ordering) cube on the histogram
+    /// surface now closes at THREE typed primitives across the (arity,
+    /// return-shape) face — the pre-existing per-target × usize corner
+    /// [`Self::count_occurrences_of`] at the (arity, return-shape)
+    /// corner (ordering-collapsed because a per-target scalar has no
+    /// slot list to order), the per-slot × Vec × decl corner
+    /// [`Self::variant_counts`], and this lift's per-slot × Vec × lex
+    /// corner. The remaining (per-target × usize × ordering) corner
+    /// collapses trivially: the scalar count of one target is
+    /// ordering-agnostic on the OUTPUT axis. Downstream consumers
+    /// wanting the "lex-order mode" (variant with maximum multiplicity
+    /// selected in lex order on ties) or the "lex-order least-frequent"
+    /// variant (argmin in lex order on ties) compose on this projection
+    /// through iterator sweep without an additional substrate primitive.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order per-slot histogram projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline
+    /// `T::sorted_variants().into_iter().map(|v| T::count_occurrences_of(v, items)).collect()`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (per-slot × Vec × lex) histogram corner
+    /// was an unnamed inline composition recurring at every prospective
+    /// downstream "what does the full per-variant histogram look like,
+    /// in lex order?" site pre-lift. Naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of the substrate's per-target
+    /// multiplicity primitive [`Self::count_occurrences_of`] mapped
+    /// over [`Self::sorted_variants`]. THEORY.md §VI.1 — generation
+    /// over composition; the per-slot lex-order histogram projection
+    /// emerges from the composition of TWO substrate primitives
+    /// ([`Self::sorted_variants`] + [`Self::count_occurrences_of`])
+    /// with an `into_iter().map().collect()` combinator, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: R's `table(factor(items, levels =
+    /// sort(levels)))` — the canonical per-level histogram in lex-
+    /// sorted level order; Julia's `StatsBase.counts(items,
+    /// sort(levels))` on a lex-sorted level-set returning a per-level
+    /// `Vector{Int}`; Clojure's `(into (sorted-map) (frequencies
+    /// coll))` returning a `SortedMap<Element, usize>` per-element
+    /// histogram in key-sorted order; Python's `collections.Counter(items)
+    /// .most_common()` after sort keyed on the element; NumPy's
+    /// `np.bincount(items[np.argsort(labels)], minlength=N)` idiom on a
+    /// pre-sorted label projection; Coq's `count_occ_by` combinator
+    /// composed with a `sort`-then-map over a decidable-equality
+    /// carrier. Translation through pleme-io primitives: the N-ary lex-
+    /// order per-slot histogram projection on the closed-set trait
+    /// binds through the substrate's per-target multiplicity primitive
+    /// [`Self::count_occurrences_of`] mapped over
+    /// [`Self::sorted_variants`] — no new dep, no supertrait bound (the
+    /// [`Self::index_of`] projection [`Self::count_occurrences_of`]
+    /// threads through replaces the `Eq`/`Hash` bound the standard-
+    /// library `Counter` / `frequencies` signatures demand), no map-
+    /// shape carrier allocation (the substrate's [`Self::sorted_variants`]
+    /// slot-order pins the output to a dense `Vec<usize>` of length
+    /// [`Self::CARDINALITY`]), no allocation per input position (the
+    /// underlying primitive folds each position under `filter().count()`
+    /// without a hash-table probe).
+    fn sorted_variant_counts(items: &[Self]) -> ::std::vec::Vec<usize> {
+        <Self as ClosedSet>::sorted_variants()
+            .into_iter()
+            .map(|v| <Self as ClosedSet>::count_occurrences_of(v, items))
+            .collect()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -24073,6 +24266,80 @@ where
         full_set_histogram,
         expected_full_set_histogram,
         "{type_name}: T::variant_counts(T::ALL) drifted from T::ALL.iter().map(|v| T::count_occurrences_of(v, T::ALL)).collect() — the per-slot histogram projection no longer agrees with the natural per-target multiplicity composition on the full-set fixpoint, so a downstream histogram renderer / per-slot budget consumer / per-variant occurrence-count sweep that binds `T::variant_counts` as its `Vec<usize>` per-slot query surface would render the wrong histogram",
+    );
+    // (99) — `T::sorted_variant_counts(items)` MUST return a `Vec<usize>`
+    // of length `T::CARDINALITY` AND MUST agree POSITIONWISE with the
+    // lex-order per-target multiplicity projection (i.e.
+    // `T::sorted_variants().into_iter().map(|v|
+    // T::count_occurrences_of(v, items)).collect()`) on every slice.
+    // Pinned at BOTH the empty-slice fixpoint (all zeros) AND the
+    // full-set fixpoint (all ones) — the two arms partition the failure
+    // modes at the (length-anchored × per-slot value) corner
+    // simultaneously so an override that returns the wrong LENGTH fires
+    // on the length arm loudly (a shorter vec silently drops variants,
+    // a longer vec silently duplicates them, either bifurcates the
+    // CARDINALITY-anchored histogram contract) AND an override that
+    // returns the wrong PER-SLOT VALUE fires on the composition-
+    // equality arm loudly. Sibling posture to clause (98) — clause
+    // (98) pins the (`Vec<usize>`, per-slot, decl) histogram corner on
+    // the equivalence-partition surface; this clause pins the
+    // (`Vec<usize>`, per-slot, lex) histogram corner peer to it one
+    // ordering axis over, and pins its composition through the per-
+    // target primitive so any drift in the underlying primitive that
+    // clause (97) misses at the per-target × (empty, full) 2-corner
+    // face still bifurcates loudly at the per-slot lex-order
+    // composition-equality arm here. Sibling posture to clause (96) —
+    // clause (96) pins the (`Vec<usize>`, sorted-indices, lex) full-set
+    // decl-slot listing at the composition-equality corner via the
+    // (decl-slot → variant → decl-slot) round-trip; this clause pins
+    // the (`Vec<usize>`, sorted-variant-counts, lex) full-set slot
+    // histogram at the same composition-equality corner via the
+    // (decl-slot → variant → count) mapping. Every implementor whose
+    // declaration order aligns with lex order (like `StubKind` and the
+    // majority of typed closed sets) sees this clause coincide byte-
+    // for-byte with clause (98); the extra clause fires only on
+    // implementors whose declaration order DIFFERS from lex order
+    // (`ReverseLabelStubKind` and any similar out-of-order kind), which
+    // is exactly where a per-slot histogram drift on the lex axis
+    // silently bifurcates from the decl axis.
+    let empty_sorted_histogram = T::sorted_variant_counts(&[]);
+    assert_eq!(
+        empty_sorted_histogram.len(),
+        T::CARDINALITY,
+        "{type_name}: T::sorted_variant_counts(&[]).len() == {empty_sorted_histogram_len} != T::CARDINALITY {} — the lex-order per-slot histogram projection MUST return a `Vec<usize>` of length `T::CARDINALITY` on every slice; a shorter vec silently drops variants, a longer vec silently duplicates them, either bifurcates the CARDINALITY-anchored histogram contract every downstream lex-order per-slot histogram consumer routes through",
+        T::CARDINALITY,
+        empty_sorted_histogram_len = empty_sorted_histogram.len(),
+    );
+    for (slot, &count) in empty_sorted_histogram.iter().enumerate() {
+        assert_eq!(
+            count,
+            0,
+            "{type_name}: T::sorted_variant_counts(&[])[{slot}] == {count} != 0 — the lex-order per-slot histogram projection MUST report zero occurrences at every slot on the empty slice because the empty slice hits zero positions; a non-zero empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream lex-order per-slot histogram consumer routes through",
+        );
+    }
+    let full_set_sorted_histogram = T::sorted_variant_counts(T::ALL);
+    assert_eq!(
+        full_set_sorted_histogram.len(),
+        T::CARDINALITY,
+        "{type_name}: T::sorted_variant_counts(T::ALL).len() == {full_set_sorted_histogram_len} != T::CARDINALITY {} — the lex-order per-slot histogram projection MUST return a `Vec<usize>` of length `T::CARDINALITY` on every slice; a shorter vec silently drops variants, a longer vec silently duplicates them, either bifurcates the CARDINALITY-anchored histogram contract every downstream lex-order per-slot histogram consumer routes through",
+        T::CARDINALITY,
+        full_set_sorted_histogram_len = full_set_sorted_histogram.len(),
+    );
+    for (slot, &count) in full_set_sorted_histogram.iter().enumerate() {
+        assert_eq!(
+            count,
+            1,
+            "{type_name}: T::sorted_variant_counts(T::ALL)[{slot}] == {count} != 1 — the lex-order per-slot histogram projection MUST report exactly one occurrence at every slot on the full set by clause (3)'s pairwise-distinctness invariant; a per-slot count != 1 on the full set silently bifurcates the (variant → decl-slot) injectivity clause (16) at the lex-order per-slot histogram projection surface, breaking every downstream lex-order per-variant histogram consumer",
+        );
+    }
+    let expected_full_set_sorted_histogram: Vec<usize> = T::sorted_variants()
+        .into_iter()
+        .map(|v| T::count_occurrences_of(v, T::ALL))
+        .collect();
+    assert_eq!(
+        full_set_sorted_histogram,
+        expected_full_set_sorted_histogram,
+        "{type_name}: T::sorted_variant_counts(T::ALL) drifted from T::sorted_variants().into_iter().map(|v| T::count_occurrences_of(v, T::ALL)).collect() — the lex-order per-slot histogram projection no longer agrees with the natural per-target multiplicity composition mapped over the sorted variants list on the full-set fixpoint, so a downstream histogram renderer / per-slot budget consumer / per-variant occurrence-count sweep that binds `T::sorted_variant_counts` as its `Vec<usize>` lex-order per-slot query surface would render the wrong histogram",
     );
 }
 
@@ -48035,6 +48302,407 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a LengthDriftedVariantCountsKind whose variant_counts override returns a Vec of the wrong length — clause (98)'s length arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_variant_counts_returns_all_zeros_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (per-slot × Vec<usize> × lex histogram
+        // projection): `T::sorted_variant_counts(&[])` is the all-zeros
+        // vector of length `T::CARDINALITY` on every implementor — the
+        // empty slice hits zero positions, so every per-slot filter
+        // accepts nothing. Sibling posture to
+        // `variant_counts_returns_all_zeros_on_the_empty_slice_across_every_kind`
+        // one ordering axis over: both projections agree on the empty-
+        // slice endpoint because the zero-vector has no positional
+        // content to distinguish decl from lex order.
+        let empty: &[StubKind] = &[];
+        let histogram = <StubKind as ClosedSet>::sorted_variant_counts(empty);
+        assert_eq!(
+            histogram.len(),
+            <StubKind as ClosedSet>::CARDINALITY,
+            "T::sorted_variant_counts(&[]) length diverged from T::CARDINALITY",
+        );
+        for (slot, &count) in histogram.iter().enumerate() {
+            assert_eq!(
+                count, 0,
+                "T::sorted_variant_counts(&[])[{slot}] diverged from the empty-slice fixpoint `0`",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_variant_counts_returns_all_ones_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::sorted_variant_counts(<T as
+        // ClosedSet>::ALL)` is the all-ones vector of length
+        // `T::CARDINALITY` UNCONDITIONALLY — the closed-set well-
+        // formedness invariant `assert_closed_set_well_formed`'s clause
+        // (3) pins labels (and hence variants) as pairwise distinct, so
+        // every variant appears in `T::ALL` at exactly one position and
+        // every histogram slot lands at `1`. Sibling posture to
+        // `variant_counts_returns_all_ones_on_the_full_set_across_every_kind`
+        // one ordering axis over: the all-ones vector is a permutation-
+        // fixpoint, so the (decl, lex) ordering distinction collapses
+        // on this endpoint.
+        let all = <StubKind as ClosedSet>::ALL;
+        let histogram = <StubKind as ClosedSet>::sorted_variant_counts(all);
+        assert_eq!(
+            histogram.len(),
+            <StubKind as ClosedSet>::CARDINALITY,
+            "T::sorted_variant_counts(T::ALL) length diverged from T::CARDINALITY",
+        );
+        for (slot, &count) in histogram.iter().enumerate() {
+            assert_eq!(
+                count, 1,
+                "T::sorted_variant_counts(T::ALL)[{slot}] diverged from the full-set fixpoint `1` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_variant_counts_slot_i_equals_count_occurrences_of_sorted_variant_i_across_every_triple(
+    ) {
+        // COMPOSITION-EQUALITY CONTRACT (positionwise, lex): for every
+        // slice `items` and every slot `i` in `[0, T::CARDINALITY)`,
+        // `T::sorted_variant_counts(items)[i] ==
+        // T::count_occurrences_of(T::sorted_variants()[i], items)` —
+        // the lex-order per-slot histogram projection is EXACTLY the
+        // mapping of the per-target multiplicity primitive over
+        // `T::sorted_variants()` in lex order. Sweeps every length-3
+        // triple × every slot pins the composition-equality contract
+        // across the full 3×3 = 9-corner (triple × slot) matrix.
+        // Catches a future override that reorders the vector, drops
+        // slots, or drifts individual entries — all three fold onto the
+        // positionwise equality arm at some (triple, slot) coordinate.
+        let sorted = <StubKind as ClosedSet>::sorted_variants();
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let histogram = <StubKind as ClosedSet>::sorted_variant_counts(&triple);
+                    for (slot, &target) in sorted.iter().enumerate() {
+                        let via_primitive =
+                            <StubKind as ClosedSet>::count_occurrences_of(target, &triple);
+                        assert_eq!(
+                            histogram[slot], via_primitive,
+                            "T::sorted_variant_counts({triple:?})[{slot}] diverged from T::count_occurrences_of({target:?}, {triple:?}) — the lex-order per-slot histogram projection MUST agree positionwise with the lex-order per-target multiplicity mapping",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_variant_counts_summed_equals_slice_length_across_every_triple() {
+        // PARTITION IDENTITY: for every slice `items`,
+        // `T::sorted_variant_counts(items).iter().sum::<usize>() ==
+        // items.len()` — the histogram partitions the slice's
+        // positions exactly, because every position sits at EXACTLY
+        // ONE variant. Sibling posture to
+        // `variant_counts_summed_equals_slice_length_across_every_triple`
+        // one ordering axis over: a permutation preserves sums, so the
+        // lex-lift threads the same partition identity through the
+        // returned dense histogram vector's `.iter().sum()` fold.
+        // Catches a future override that returns a scaled vector — an
+        // override multiplying every slot by an inflation factor would
+        // sum to `k * items.len()`, breaking the partition identity
+        // loudly.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let sum: usize = <StubKind as ClosedSet>::sorted_variant_counts(&triple)
+                        .iter()
+                        .sum();
+                    assert_eq!(
+                        sum,
+                        triple.len(),
+                        "T::sorted_variant_counts({triple:?}).iter().sum() diverged from triple.len() — the lex-order per-slot histogram partition identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_variant_counts_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_variant_counts(items) ==
+        // T::sorted_variant_counts(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and every per-slot histogram bar is a function of
+        // that multiset alone. Sibling posture to
+        // `variant_counts_is_invariant_under_slice_reversal_across_every_triple`
+        // one ordering axis over: this lex-lift threads the same
+        // reversal-fixpoint through the returned dense lex-ordered
+        // histogram vector as a whole.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_variant_counts(&forward),
+                        <StubKind as ClosedSet>::sorted_variant_counts(&reversed),
+                        "T::sorted_variant_counts({forward:?}) diverged from T::sorted_variant_counts({reversed:?}) — the lex-order per-slot histogram projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_variant_counts_is_a_permutation_of_variant_counts_across_every_triple() {
+        // CROSS-ARM PERMUTATION IDENTITY (positionwise via the (decl →
+        // lex) index bijection): for every slice `items` and every slot
+        // `i` in `[0, T::CARDINALITY)`,
+        // `T::sorted_variant_counts(items)[i] ==
+        // T::variant_counts(items)[T::sorted_variants()[i].index_of()]`
+        // — the two projections read the SAME per-target multiplicity
+        // primitive over the SAME hit-set, so the multiset of per-slot
+        // counts coincides though the ordering differs. The permutation
+        // is fixed by the (decl → lex) index bijection.
+        //
+        // On `StubKind` (declaration order aligned with lex order) the
+        // two projections coincide slot-for-slot; the cross-arm
+        // permutation collapses to the identity permutation. The
+        // ReverseLabelStubKind sub-test one arm below pins the non-
+        // trivial permutation on a lex-non-aligned closed set.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let decl = <StubKind as ClosedSet>::variant_counts(&triple);
+                    let lex = <StubKind as ClosedSet>::sorted_variant_counts(&triple);
+                    let sorted = <StubKind as ClosedSet>::sorted_variants();
+                    for (lex_slot, target) in sorted.iter().copied().enumerate() {
+                        let decl_slot = <StubKind as ClosedSet>::index_of(target);
+                        assert_eq!(
+                            lex[lex_slot], decl[decl_slot],
+                            "T::sorted_variant_counts({triple:?})[{lex_slot}] diverged from T::variant_counts({triple:?})[{decl_slot}] under the (lex → decl) index bijection T::sorted_variants()[i].index_of() — the two per-slot histogram projections MUST agree under the (decl → lex) permutation of slot indices",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_variant_counts_normalizes_declaration_order_on_a_lex_non_aligned_closed_set() {
+        // LEX-ORDER NORMALIZATION CONTRACT: `T::sorted_variant_counts`
+        // MUST return the per-slot histogram in LEX ORDER of the
+        // implementor's canonical LABELS, regardless of the
+        // implementor's `ALL`-array declaration layout. A regression
+        // that returns `T::variant_counts(items)` verbatim (without
+        // composing through the lex-order variant listing) would pass
+        // every StubKind pin above (because StubKind's declaration order
+        // aligns with lex order) but silently bifurcate the lex-order
+        // histogram surface for any implementor whose declaration order
+        // differs from byte-wise label sort order. Pinning the sort
+        // discipline here with a deliberately-out-of-order stub catches
+        // that drift on the lex-order histogram arm directly.
+        //
+        // The reverse-layout stub has ALL = [Gamma, Beta, Alpha]. The
+        // corresponding index_of assignments are Gamma → 0, Beta → 1,
+        // Alpha → 2. In LEX order under label the sequence is Alpha,
+        // Beta, Gamma → count_occurrences_of yields
+        // `[count(Alpha), count(Beta), count(Gamma)]` at slots
+        // `[0, 1, 2]` of the lex-order histogram. A regression returning
+        // the declaration-order arm would produce `[count(Gamma),
+        // count(Beta), count(Alpha)]` here — the divergence catches the
+        // bug.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseLabelStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseLabelStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseLabelStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse label stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseLabelStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse label stub kind";
+            type Unknown = UnknownReverseLabelStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseLabelStubKind(s.to_owned())
+            }
+        }
+        // Input: `[Gamma, Gamma, Beta]` — Gamma appears twice, Beta
+        // once, Alpha zero times.
+        let input = [
+            ReverseLabelStubKind::Gamma,
+            ReverseLabelStubKind::Gamma,
+            ReverseLabelStubKind::Beta,
+        ];
+        // Declaration-order histogram: `[count(Gamma), count(Beta),
+        // count(Alpha)]` == `[2, 1, 0]` — the decl arm preserves the
+        // implementor's `ALL` layout.
+        assert_eq!(
+            <ReverseLabelStubKind as ClosedSet>::variant_counts(&input),
+            vec![2usize, 1, 0],
+            "variant_counts over the input `[Gamma, Gamma, Beta]` must preserve declaration order — [2, 1, 0]",
+        );
+        // Lex-order histogram: `[count(Alpha), count(Beta),
+        // count(Gamma)]` == `[0, 1, 2]` — the lex arm normalizes
+        // regardless of ALL-array declaration layout.
+        assert_eq!(
+            <ReverseLabelStubKind as ClosedSet>::sorted_variant_counts(&input),
+            vec![0usize, 1, 2],
+            "sorted_variant_counts over the input `[Gamma, Gamma, Beta]` must normalize to lex order under label — [0, 1, 2] (count(Alpha), count(Beta), count(Gamma)) — regardless of the implementor's ALL-array declaration layout; a regression returning the decl-order arm would produce [2, 1, 0] here",
+        );
+        // Empty slice → all zeros in lex order.
+        let empty: &[ReverseLabelStubKind] = &[];
+        assert_eq!(
+            <ReverseLabelStubKind as ClosedSet>::sorted_variant_counts(empty),
+            vec![0usize, 0, 0],
+            "sorted_variant_counts over the empty slice must return the all-zeros vector in lex order — [0, 0, 0]",
+        );
+        // Full set → all ones in lex order.
+        let all = <ReverseLabelStubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <ReverseLabelStubKind as ClosedSet>::sorted_variant_counts(all),
+            vec![1usize, 1, 1],
+            "sorted_variant_counts over the full set must return the all-ones vector in lex order — [1, 1, 1] — by the closed-set pairwise-distinctness invariant",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_variant_counts_and_composition() {
+        // Drift catch — clause (99)'s full-set-fixpoint arm fires when
+        // an override folds the lex-order per-slot histogram onto
+        // `vec![items.len(); T::CARDINALITY]` regardless of slot
+        // (returning `T::CARDINALITY` at every slot on the full set
+        // rather than `1`). The stub below overrides the default body
+        // to return exactly that; on the full set that produces `[3, 3,
+        // 3] != [1, 1, 1]`, tripping clause (99)'s full-set fixpoint arm
+        // at slot 0.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedVariantCountsKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedVariantCountsKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedVariantCountsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted variant_counts kind: {}", self.0)
+            }
+        }
+
+        impl DriftedSortedVariantCountsKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedVariantCountsKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted variant_counts kind";
+            type Unknown = UnknownDriftedSortedVariantCountsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedVariantCountsKind(s.to_owned())
+            }
+            fn sorted_variant_counts(items: &[Self]) -> ::std::vec::Vec<usize> {
+                // Drift: return `vec![items.len(); T::CARDINALITY]`
+                // regardless of slot. On the full set that produces
+                // `[3, 3, 3] != [1, 1, 1]`, tripping clause (99)'s
+                // full-set fixpoint arm at slot 0 loudly.
+                vec![items.len(); <Self as ClosedSet>::CARDINALITY]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedVariantCountsKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedVariantCountsKind whose sorted_variant_counts override folds onto vec![items.len(); CARDINALITY] — clause (99)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_length_drift_in_sorted_variant_counts() {
+        // Drift catch — clause (99)'s LENGTH arm fires when an override
+        // returns a `Vec<usize>` of the wrong length, regardless of per-
+        // slot values. The stub below returns `vec![0; T::CARDINALITY +
+        // 1]` on every slice — the values pass the empty-slice all-
+        // zeros arm (all-zeros suffix trivially satisfies the per-slot
+        // value check on the empty slice), but the LENGTH arm fires
+        // immediately: `T::CARDINALITY + 1 == 4 != T::CARDINALITY == 3`.
+        // Catches a future override that silently drops or duplicates
+        // slots — the length arm partitions the failure mode at the
+        // (length-anchored × per-slot value) corner independently of
+        // the composition-equality arm.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum LengthDriftedSortedVariantCountsKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownLengthDriftedSortedVariantCountsKind(pub String);
+
+        impl core::fmt::Display for UnknownLengthDriftedSortedVariantCountsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown length-drifted sorted variant_counts kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl LengthDriftedSortedVariantCountsKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for LengthDriftedSortedVariantCountsKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "length-drifted sorted variant_counts kind";
+            type Unknown = UnknownLengthDriftedSortedVariantCountsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownLengthDriftedSortedVariantCountsKind(s.to_owned())
+            }
+            fn sorted_variant_counts(_items: &[Self]) -> ::std::vec::Vec<usize> {
+                vec![0; <Self as ClosedSet>::CARDINALITY + 1]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<LengthDriftedSortedVariantCountsKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a LengthDriftedSortedVariantCountsKind whose sorted_variant_counts override returns a Vec of the wrong length — clause (99)'s length arm MUST reject the drift",
         );
     }
 

@@ -15484,6 +15484,195 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "modal multiplicity" projection —
+    /// the `usize` MAX-BAR of [`Self::variant_counts`], reporting the
+    /// largest per-variant occurrence count across [`Self::ALL`], or
+    /// `0` when `items` is empty. The SCALAR-STATISTIC opener on the
+    /// (set-level × usize × statistical-aggregate) column of the
+    /// equivalence-partition surface — the FIRST typed set-level scalar
+    /// aggregate to reduce the [`Self::variant_counts`] `Vec<usize>`
+    /// histogram to a single `usize` bar-height statistic past the
+    /// pre-existing (set-level × usize × cardinality) column of
+    /// [`Self::count_distinct`] + [`Self::count_missing`] (which count
+    /// slots of the histogram — the count of non-zero bars and the
+    /// count of zero bars — rather than the bars' magnitudes).
+    ///
+    /// Compounding equation with [`Self::is_pairwise_distinct`]: for
+    /// every slice `items`, `T::max_variant_count(items) <= 1` iff
+    /// `T::is_pairwise_distinct(items)`. Post-lift the N-ary
+    /// distinctness predicate becomes a TYPED CONSEQUENCE of the
+    /// scalar modal-count aggregate at the (`<= 1`) threshold — no
+    /// per-consumer inline `T::variant_counts(items).iter().all(|&c|
+    /// c <= 1)` re-composition. Pinned by
+    /// `max_variant_count_at_most_one_iff_is_pairwise_distinct_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::max_variant_count(&[]) == 0`
+    /// UNCONDITIONALLY — the empty slice hits zero positions, so every
+    /// per-variant occurrence count is `0` and the max-bar collapses
+    /// to `0`. Sibling posture to
+    /// `variant_counts_returns_all_zeros_on_the_empty_slice_across_every_kind`
+    /// one return-shape axis over: the Vec-return per-slot histogram
+    /// reports zeros at every slot; this scalar-return statistical
+    /// aggregate reports zero as the max-bar height. Pinned by
+    /// `max_variant_count_returns_zero_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract: `T::max_variant_count(<T as ClosedSet>::ALL)
+    /// == 1` UNCONDITIONALLY — the closed-set well-formedness invariant
+    /// [`assert_closed_set_well_formed`]'s clause (3) pins variants as
+    /// pairwise distinct, so every variant of [`Self::ALL`] appears at
+    /// exactly one position in the full-set slice and every per-variant
+    /// occurrence count is `1`, collapsing the max-bar to `1`. Pinned
+    /// by `max_variant_count_returns_one_on_the_full_set_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::max_variant_count(&doubled_full_set) == 2` UNCONDITIONALLY
+    /// — the doubled-full-set slice appends [`Self::ALL`] to itself, so
+    /// every variant appears at EXACTLY two positions and the max-bar
+    /// collapses to `2`. Pinned by
+    /// `max_variant_count_returns_two_on_the_doubled_full_set_across_every_kind`.
+    ///
+    /// Singleton contract: `T::max_variant_count(&[v]) == 1` on every
+    /// variant `v` — the singleton slice hits exactly one variant at
+    /// exactly one position, so the max-bar is `1` (the target
+    /// variant's bar) with every other bar at `0`. Pinned by
+    /// `max_variant_count_returns_one_on_every_singleton_slice_across_every_variant`.
+    ///
+    /// Composition-equality contract: for every slice `items`,
+    /// `T::max_variant_count(items) ==
+    /// T::variant_counts(items).into_iter().max().unwrap_or(0)` — the
+    /// scalar modal-count aggregate agrees with the max-reduction over
+    /// the decl-order histogram exactly. Sibling posture to
+    /// `variant_counts_slot_i_equals_count_occurrences_of_variant_i_across_every_triple`
+    /// one return-shape axis over: the per-slot histogram agrees with
+    /// the per-target multiplicity projection at every slot; this
+    /// scalar-return aggregate agrees with the max-reduction of that
+    /// same per-slot histogram. Pinned by
+    /// `max_variant_count_equals_max_of_variant_counts_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on BOTH input AND output axes — permuting
+    /// `items` preserves its multiset of variant identities, and the
+    /// max-bar is a function of that multiset alone; the scalar
+    /// return shape carries no ordering to permute on the output side.
+    /// The (decl, lex) ordering axis collapses on the scalar-return
+    /// column, and the composition-equality identity holds against
+    /// both [`Self::variant_counts`] AND [`Self::sorted_variant_counts`]
+    /// (the two histograms are permutations of each other, and the
+    /// max-reduction is permutation-invariant). Pinned by
+    /// `max_variant_count_equals_max_of_sorted_variant_counts_across_every_triple`
+    /// and
+    /// `max_variant_count_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Slice-length upper bound: for every slice `items`,
+    /// `T::max_variant_count(items) <= items.len()` — no per-variant
+    /// occurrence count can exceed the slice's total length (the sum
+    /// of all counts is `items.len()` per clause (98)'s partition
+    /// identity, and the max is bounded by the sum). Pinned by
+    /// `max_variant_count_is_bounded_above_by_slice_length_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_occurrences_of`] primitive at the
+    /// trait level, folded over [`Self::ALL`] via the standard-library
+    /// [`Iterator::max`] combinator. The composition uses
+    /// `<Self as ClosedSet>::ALL.iter().copied().map(|v|
+    /// <Self as ClosedSet>::count_occurrences_of(v, items)).max()
+    /// .unwrap_or(0)`, so the sweep costs O(T::CARDINALITY * n) on
+    /// slice arity `n` (mirroring [`Self::variant_counts`]) — no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched), no
+    /// map-shape carrier, no allocation (the `Iterator::max` fold
+    /// yields a scalar). The `unwrap_or(0)` guard is a defensive
+    /// fallback: `T::CARDINALITY >= 1` by clause (1), so
+    /// [`Self::ALL`] is non-empty and the `max()` reduction always
+    /// yields `Some`, but the unwrap-with-fallback keeps the method
+    /// panic-free even if a future implementor violates clause (1)
+    /// (which is caught eagerly by [`assert_closed_set_well_formed`]).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::max_variant_count`]: a `tatara-check` predicate
+    /// `(check-phases-no-repeats …)` that verifies a rollout window
+    /// admits each `WorkloadPhase` at most once by binding
+    /// `max_variant_count <= 1` (a direct typed alias for the
+    /// pairwise-distinctness predicate); an LSP diagnostic on a Lisp-
+    /// author-written closed-set field that renders the modal-count
+    /// as an author-facing "most common value: X (appears N times)"
+    /// hint; a Sekiban audit-trail per-window statistical projection
+    /// carrying the peak per-variant occurrence count as its per-window
+    /// witness (not just the per-variant histogram vector); a metric-
+    /// emitter that binds Prometheus-style `max_bar` gauges alongside
+    /// the per-variant `bar_i` histogram. Each binds to ONE typed
+    /// N-ary scalar modal-count aggregate on the trait rather than
+    /// re-deriving `T::variant_counts(items).iter().copied().max()
+    /// .unwrap_or(0)` inline per callsite.
+    ///
+    /// Compounding closure: this projection OPENS the (set-level ×
+    /// usize × statistical-aggregate) column of the equivalence-
+    /// partition surface, past the pre-existing (set-level × usize ×
+    /// cardinality) column ([`Self::count_distinct`],
+    /// [`Self::count_missing`], [`Self::count_occurrences_of`]) and
+    /// the (per-slot × Vec<usize> × ordering) column
+    /// ([`Self::variant_counts`], [`Self::sorted_variant_counts`]).
+    /// The (min-bar, max-bar) direction axis on the statistical-
+    /// aggregate column becomes the natural next lift — the `min-bar`
+    /// direction collapses to `0` iff not covering, projecting as a
+    /// typed alias for [`Self::is_missing_any`] on every non-empty
+    /// slice; more expressive statistical aggregates (`argmax` /
+    /// `argmin` returning `Option<Self>` for the modal variant, the
+    /// count of variants achieving the modal multiplicity, the total
+    /// variance of the histogram vector) compose on this scalar
+    /// projection through iterator sweep without an additional
+    /// substrate primitive.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// scalar modal-count aggregate becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline
+    /// `T::variant_counts(items).iter().copied().max().unwrap_or(0)`
+    /// composition at every downstream generic site. THEORY.md §V.1
+    /// — knowable platform; the (set-level × usize × statistical-
+    /// aggregate) modal-count corner was an unnamed inline
+    /// composition recurring at every prospective downstream "what is
+    /// the largest per-variant occurrence count?" site pre-lift.
+    /// Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the substrate's per-target multiplicity
+    /// primitive [`Self::count_occurrences_of`] folded over
+    /// [`Self::ALL`] under the standard-library `max` reduction.
+    /// THEORY.md §VI.1 — generation over composition; the scalar
+    /// modal-count aggregate emerges from the composition of ONE
+    /// substrate primitive ([`Self::count_occurrences_of`]) with an
+    /// `iter().copied().map().max()` combinator, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: R's `max(table(items))` — the canonical
+    /// max-bar of the per-level histogram on a factor carrier;
+    /// Julia's `maximum(values(StatsBase.countmap(items)))` on a
+    /// `Dict{Element, Int}` histogram; Python's `max(collections.Counter
+    /// (items).values(), default=0)` idiom; Haskell's `maximum . map
+    /// length . group . sort` on `Ord`-instance carriers; Clojure's
+    /// `(apply max 0 (vals (frequencies coll)))` composition on a
+    /// map histogram; NumPy's `np.bincount(items).max(initial=0)`
+    /// idiom on integer indices; Coq's `list_max ∘ map (count_occ_by
+    /// eq_dec items) all` composition on a decidable-equality
+    /// carrier. Translation through pleme-io primitives: the N-ary
+    /// scalar modal-count aggregate on the closed-set trait binds
+    /// through the substrate's per-target multiplicity primitive
+    /// [`Self::count_occurrences_of`] folded over [`Self::ALL`] under
+    /// the standard-library `max` reduction — no new dep, no
+    /// supertrait bound (the [`Self::index_of`] projection
+    /// [`Self::count_occurrences_of`] threads through replaces the
+    /// `Eq`/`Hash` bound the standard-library `Counter` /
+    /// `countmap` / `frequencies` signatures demand), no histogram-
+    /// carrier allocation (the `max` fold yields a scalar without
+    /// materializing the intermediate `Vec<usize>` histogram — the
+    /// per-target counts stream through the fold one at a time).
+    fn max_variant_count(items: &[Self]) -> usize {
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .map(|v| <Self as ClosedSet>::count_occurrences_of(v, items))
+            .max()
+            .unwrap_or(0)
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -24340,6 +24529,69 @@ where
         full_set_sorted_histogram,
         expected_full_set_sorted_histogram,
         "{type_name}: T::sorted_variant_counts(T::ALL) drifted from T::sorted_variants().into_iter().map(|v| T::count_occurrences_of(v, T::ALL)).collect() — the lex-order per-slot histogram projection no longer agrees with the natural per-target multiplicity composition mapped over the sorted variants list on the full-set fixpoint, so a downstream histogram renderer / per-slot budget consumer / per-variant occurrence-count sweep that binds `T::sorted_variant_counts` as its `Vec<usize>` lex-order per-slot query surface would render the wrong histogram",
+    );
+    // (100) — `T::max_variant_count(items)` MUST agree with the max-
+    // reduction over `T::variant_counts(items)` on every slice AND MUST
+    // land on its three canonical fixpoints (`0` on the empty slice,
+    // `1` on the full set, `2` on the doubled full set). The three
+    // fixpoints partition the failure modes at the (scalar-value ×
+    // slice-shape) corner simultaneously so an override that folds
+    // onto `items.len()` unconditionally fires on the full-set arm
+    // (returns `T::CARDINALITY` at every non-singleton full set rather
+    // than `1`); an override that returns `0` unconditionally fires
+    // on the full-set arm (returns `0` rather than `1`) AND the
+    // doubled-full-set arm (returns `0` rather than `2`); an override
+    // that returns the WRONG max-bar on a non-fixpoint slice
+    // bifurcates loudly at the composition-equality arm (against
+    // `T::variant_counts(items).into_iter().max().unwrap_or(0)`) on the
+    // full-set fixpoint (which folds through the histogram exactly).
+    // The default trait body threads
+    // `T::ALL.iter().copied().map(|v| T::count_occurrences_of(v, items)).max().unwrap_or(0)`
+    // verbatim and satisfies all three fixpoint arms + the
+    // composition-equality arm for free; the assertion catches a
+    // future implementor whose override drifts the projection loudly
+    // rather than silently bifurcating the scalar modal-count aggregate
+    // projection surface every downstream max-bar consumer routes
+    // through. Sibling posture to clause (98) — clause (98) pins the
+    // (`Vec<usize>`, per-slot, decl) histogram corner on the
+    // equivalence-partition surface; this clause pins the (`usize`,
+    // set-level, statistical-aggregate) modal-count corner peer to it
+    // one return-shape axis over (Vec-return → scalar-return via
+    // max-reduction), and pins its composition through the per-slot
+    // histogram primitive so any drift in the underlying primitive that
+    // clauses (97) + (98) miss at the per-target / per-slot ×
+    // (empty, full) 4-corner face still bifurcates loudly at the
+    // set-level max-reduction composition-equality arm here. The
+    // scalar-return column carries no ordering to permute on the
+    // output side, so the (decl, lex) ordering axis collapses on this
+    // clause; the composition-equality identity binds equivalently
+    // against `T::sorted_variant_counts` (permutation-invariance of
+    // max-reduction).
+    assert_eq!(
+        T::max_variant_count(&[]),
+        0,
+        "{type_name}: T::max_variant_count(&[]) != 0 — the N-ary scalar modal-count aggregate MUST report `0` on the empty slice because every per-variant occurrence count is `0` on a zero-position slice and the max-bar collapses to `0`; a non-zero empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream max-bar consumer routes through",
+    );
+    assert_eq!(
+        T::max_variant_count(T::ALL),
+        1,
+        "{type_name}: T::max_variant_count(T::ALL) != 1 — the N-ary scalar modal-count aggregate MUST report `1` on the full set by clause (3)'s pairwise-distinctness invariant because every variant appears at exactly one position and the max-bar collapses to `1`; a full-set max-bar != 1 silently bifurcates the (variant → decl-slot) injectivity clause (16) at the scalar modal-count aggregate projection surface, breaking every downstream max-bar consumer",
+    );
+    let doubled_full_set: Vec<T> = T::ALL
+        .iter()
+        .copied()
+        .chain(T::ALL.iter().copied())
+        .collect();
+    assert_eq!(
+        T::max_variant_count(&doubled_full_set),
+        2,
+        "{type_name}: T::max_variant_count(&doubled_full_set) != 2 — the N-ary scalar modal-count aggregate MUST report `2` on the doubled full set because every variant appears at exactly two positions in the doubled slice and the max-bar collapses to `2`; a doubled-full-set max-bar != 2 silently detaches the scalar aggregate from the pinned per-variant occurrence count on the doubled-slice fixpoint, breaking every downstream max-bar consumer",
+    );
+    let full_set_max_bar_expected = T::variant_counts(T::ALL).into_iter().max().unwrap_or(0);
+    assert_eq!(
+        T::max_variant_count(T::ALL),
+        full_set_max_bar_expected,
+        "{type_name}: T::max_variant_count(T::ALL) drifted from T::variant_counts(T::ALL).into_iter().max().unwrap_or(0) — the N-ary scalar modal-count aggregate no longer agrees with the max-reduction over the decl-order per-slot histogram on the full-set fixpoint, so a downstream statistical-aggregate consumer that binds `T::max_variant_count` as its scalar modal-count query surface would report the wrong bar-height",
     );
 }
 
@@ -48703,6 +48955,355 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a LengthDriftedSortedVariantCountsKind whose sorted_variant_counts override returns a Vec of the wrong length — clause (99)'s length arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn max_variant_count_returns_zero_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (scalar × set-level × statistical-
+        // aggregate max-bar projection): `T::max_variant_count(&[])`
+        // is `0` on every implementor — the empty slice hits zero
+        // positions, so every per-variant occurrence count is `0` and
+        // the max-bar collapses to `0`. Sibling posture to
+        // `variant_counts_returns_all_zeros_on_the_empty_slice_across_every_kind`
+        // one return-shape axis over: the Vec-return per-slot
+        // histogram reports zeros at every slot; this scalar-return
+        // statistical aggregate reports zero as the max-bar height.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::max_variant_count(empty),
+            0,
+            "T::max_variant_count(&[]) diverged from the empty-slice fixpoint `0`",
+        );
+    }
+
+    #[test]
+    fn max_variant_count_returns_one_on_every_singleton_slice_across_every_variant() {
+        // SINGLETON CONTRACT: `T::max_variant_count(&[v]) == 1` on
+        // every variant `v` — the singleton slice hits exactly one
+        // variant at exactly one position, so the max-bar is `1` (the
+        // target variant's bar) with every other bar at `0`.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::max_variant_count(&singleton),
+                1,
+                "T::max_variant_count(&[{v:?}]) diverged from the singleton-slice fixpoint `1`",
+            );
+        }
+    }
+
+    #[test]
+    fn max_variant_count_returns_one_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::max_variant_count(<T as ClosedSet>::ALL)`
+        // is `1` UNCONDITIONALLY — the closed-set well-formedness
+        // invariant `assert_closed_set_well_formed`'s clause (3) pins
+        // labels (and hence variants) as pairwise distinct, so every
+        // variant appears in `T::ALL` at exactly one position and the
+        // max-bar collapses to `1`. Sibling posture to
+        // `variant_counts_returns_all_ones_on_the_full_set_across_every_kind`
+        // one return-shape axis over: the Vec-return per-slot
+        // histogram reports ones at every slot; this scalar-return
+        // statistical aggregate reports one as the max-bar height.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::max_variant_count(all),
+            1,
+            "T::max_variant_count(T::ALL) diverged from the full-set fixpoint `1` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+        );
+    }
+
+    #[test]
+    fn max_variant_count_returns_two_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::max_variant_count(&doubled)`
+        // is `2` UNCONDITIONALLY on the doubled-full-set slice — every
+        // variant appears at EXACTLY two positions and the max-bar
+        // collapses to `2`. Sibling posture to
+        // `count_occurrences_of_returns_two_on_the_doubled_full_set_across_every_target`
+        // one arity axis over: the per-target multiplicity primitive
+        // reports `2` at every target on the doubled full set; this
+        // scalar-return statistical aggregate reports two as the max-
+        // bar height because the max-reduction over an all-twos
+        // histogram is `2`.
+        let doubled: ::std::vec::Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::max_variant_count(&doubled),
+            2,
+            "T::max_variant_count(&doubled_full_set) diverged from the doubled-full-set fixpoint `2`",
+        );
+    }
+
+    #[test]
+    fn max_variant_count_equals_max_of_variant_counts_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (against decl-order
+        // histogram): for every slice `items`,
+        // `T::max_variant_count(items) ==
+        // T::variant_counts(items).into_iter().max().unwrap_or(0)`
+        // — the scalar modal-count aggregate agrees with the max-
+        // reduction over the decl-order per-slot histogram exactly.
+        // Sweeps every length-3 triple pins the composition-equality
+        // contract across the 3×3×3 = 27-corner triple space. Catches
+        // a future override that folds onto a wrong statistical
+        // aggregate (min, sum, mean) or a wrong bar-height.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let scalar = <StubKind as ClosedSet>::max_variant_count(&triple);
+                    let via_histogram = <StubKind as ClosedSet>::variant_counts(&triple)
+                        .into_iter()
+                        .max()
+                        .unwrap_or(0);
+                    assert_eq!(
+                        scalar, via_histogram,
+                        "T::max_variant_count({triple:?}) diverged from T::variant_counts({triple:?}).into_iter().max().unwrap_or(0) — the scalar modal-count aggregate MUST agree with the max-reduction over the decl-order per-slot histogram exactly",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn max_variant_count_equals_max_of_sorted_variant_counts_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (against lex-order
+        // histogram): for every slice `items`,
+        // `T::max_variant_count(items) ==
+        // T::sorted_variant_counts(items).into_iter().max().unwrap_or(0)`
+        // — the scalar modal-count aggregate agrees with the max-
+        // reduction over the lex-order per-slot histogram exactly.
+        // Since `sorted_variant_counts` is a permutation of
+        // `variant_counts` (they hold the same multiset of per-slot
+        // counts under the (decl → lex) slot bijection), and the
+        // max-reduction is permutation-invariant, the two composition-
+        // equality identities coincide byte-for-byte on every
+        // implementor. Pins the ordering-axis-collapse property on
+        // the scalar-return column: the (decl, lex) axis carries no
+        // divergence at this corner.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let scalar = <StubKind as ClosedSet>::max_variant_count(&triple);
+                    let via_sorted = <StubKind as ClosedSet>::sorted_variant_counts(&triple)
+                        .into_iter()
+                        .max()
+                        .unwrap_or(0);
+                    assert_eq!(
+                        scalar, via_sorted,
+                        "T::max_variant_count({triple:?}) diverged from T::sorted_variant_counts({triple:?}).into_iter().max().unwrap_or(0) — the scalar modal-count aggregate MUST agree with the max-reduction over the lex-order per-slot histogram (ordering-axis-collapse on scalar-return)",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn max_variant_count_is_bounded_above_by_slice_length_across_every_triple() {
+        // SLICE-LENGTH UPPER BOUND CONTRACT: for every slice `items`,
+        // `T::max_variant_count(items) <= items.len()` — no per-
+        // variant occurrence count can exceed the slice's total
+        // length (the sum of all counts is `items.len()` per clause
+        // (98)'s partition identity, and the max is bounded by the
+        // sum). Sibling posture to
+        // `count_occurrences_of_is_bounded_above_by_slice_length_across_every_target_and_triple`
+        // one arity axis over: the per-target multiplicity primitive
+        // is bounded above by `items.len()` at every target; this
+        // scalar-return statistical aggregate is bounded above by
+        // `items.len()` as the max-reduction of primitives that
+        // individually satisfy the bound.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let scalar = <StubKind as ClosedSet>::max_variant_count(&triple);
+                    assert!(
+                        scalar <= triple.len(),
+                        "T::max_variant_count({triple:?}) == {scalar} exceeds triple.len() == {}",
+                        triple.len(),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn max_variant_count_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::max_variant_count(items) == T::max_variant_count(reversed items)`
+        // on every slice — reversing a slice preserves its multiset of
+        // variant identities, and the max-bar is a function of that
+        // multiset alone. Sibling posture to
+        // `variant_counts_is_invariant_under_slice_reversal_across_every_triple`
+        // one return-shape axis over: the Vec-return histogram is
+        // reversal-invariant on every slot; the scalar-return max-
+        // reduction over that histogram inherits the invariance.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let mut reversed = forward;
+                    reversed.reverse();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::max_variant_count(&forward),
+                        <StubKind as ClosedSet>::max_variant_count(&reversed),
+                        "T::max_variant_count diverged under slice reversal at ({forward:?}, {reversed:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn max_variant_count_at_most_one_iff_is_pairwise_distinct_across_every_triple() {
+        // COMPOUNDING EQUATION with `is_pairwise_distinct`: for every
+        // slice `items`, `T::max_variant_count(items) <= 1` iff
+        // `T::is_pairwise_distinct(items)` — the scalar modal-count
+        // aggregate at the (`<= 1`) threshold is the TYPED WITNESS
+        // behind the N-ary pairwise-distinctness predicate. On a
+        // pairwise-distinct slice every per-variant occurrence count
+        // is `0` or `1` and the max-bar is `<= 1`; on a slice with a
+        // repeated variant that variant's bar rises to `>= 2` and the
+        // max-bar overshoots `1`. Sweeps every length-3 triple pins
+        // the iff-equation across the 3×3×3 = 27-corner triple space.
+        // The (empty-slice, singleton, doubled-slice) sub-corners
+        // stress-test the boundary at both truth values: the empty
+        // slice satisfies both sides (`max_bar == 0 <= 1`, distinct
+        // trivially); a singleton satisfies both sides
+        // (`max_bar == 1 <= 1`, distinct trivially); the doubled
+        // full-set fails both sides (`max_bar == 2 > 1`, not
+        // distinct); and the length-3 triples span both truth values.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let scalar = <StubKind as ClosedSet>::max_variant_count(&triple);
+                    let distinct = <StubKind as ClosedSet>::is_pairwise_distinct(&triple);
+                    assert_eq!(
+                        scalar <= 1,
+                        distinct,
+                        "T::max_variant_count({triple:?}) <= 1 diverged from T::is_pairwise_distinct({triple:?}) — the scalar modal-count aggregate at the `<= 1` threshold MUST agree with the N-ary pairwise-distinctness predicate",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_max_variant_count_and_composition() {
+        // Drift catch — clause (100)'s full-set-fixpoint arm fires
+        // when an override folds the scalar modal-count aggregate onto
+        // `items.len()` regardless of slice shape. On the full set
+        // that produces `T::CARDINALITY != 1` (for T::CARDINALITY >=
+        // 2), tripping clause (100)'s full-set fixpoint arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedMaxVariantCountKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedMaxVariantCountKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedMaxVariantCountKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted max_variant_count kind: {}", self.0)
+            }
+        }
+
+        impl DriftedMaxVariantCountKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedMaxVariantCountKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted max_variant_count kind";
+            type Unknown = UnknownDriftedMaxVariantCountKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedMaxVariantCountKind(s.to_owned())
+            }
+            fn max_variant_count(items: &[Self]) -> usize {
+                // Drift: return `items.len()` unconditionally. On the
+                // full set that produces `T::CARDINALITY == 3 != 1`,
+                // tripping clause (100)'s full-set fixpoint arm loudly.
+                items.len()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedMaxVariantCountKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedMaxVariantCountKind whose max_variant_count override folds onto items.len() — clause (100)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_zero_drift_in_max_variant_count() {
+        // Drift catch — clause (100)'s doubled-full-set arm fires when
+        // an override returns `0` unconditionally. The empty-slice arm
+        // passes trivially (`0 == 0`); the full-set arm fails
+        // (`0 != 1`); the doubled-full-set arm fails (`0 != 2`). The
+        // three fixpoint arms partition the failure modes at the
+        // (scalar-value × slice-shape) corner so the assertion fires
+        // even if a future override "passes" one arm by accident.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ZeroDriftedMaxVariantCountKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownZeroDriftedMaxVariantCountKind(pub String);
+
+        impl core::fmt::Display for UnknownZeroDriftedMaxVariantCountKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown zero-drifted max_variant_count kind: {}", self.0)
+            }
+        }
+
+        impl ZeroDriftedMaxVariantCountKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for ZeroDriftedMaxVariantCountKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "zero-drifted max_variant_count kind";
+            type Unknown = UnknownZeroDriftedMaxVariantCountKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownZeroDriftedMaxVariantCountKind(s.to_owned())
+            }
+            fn max_variant_count(_items: &[Self]) -> usize {
+                0
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<ZeroDriftedMaxVariantCountKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a ZeroDriftedMaxVariantCountKind whose max_variant_count override returns 0 unconditionally — clause (100)'s full-set + doubled-full-set fixpoint arms MUST reject the drift",
         );
     }
 

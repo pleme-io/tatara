@@ -15342,6 +15342,239 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::count_occurrences_of(target, items) > 0
     }
 
+    /// The N-ARY PER-TARGET "first occurrence position" projection —
+    /// `Some(i)` for the SMALLEST slice index `i` at which `items[i]`
+    /// carries the same variant identity as `target`, or `None` if
+    /// `target` does not appear. The PER-TARGET `Option<usize>`-RETURN
+    /// opener on the (per-target × `Option<usize>`) HEAD-POSITION column
+    /// of the equivalence-partition surface, positioned as the direct
+    /// POSITION-VALUE lift of the just-lifted bool-return
+    /// [`Self::occurs_in`] one return-shape axis over — while
+    /// [`Self::occurs_in`] reports "does the slice HIT this variant?"
+    /// (a per-target `bool`), this projection reports "at WHICH position
+    /// does the slice FIRST hit this variant?" (a per-target
+    /// `Option<usize>` whose `Some` arm carries the head-position and
+    /// whose `None` arm collapses onto [`Self::occurs_in`]'s `false`
+    /// arm).
+    ///
+    /// Presence-composition identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::first_occurrence_of(v, items).is_some() == T::occurs_in(v, items)`
+    /// — the `Option`'s discriminant is exactly the per-target bool
+    /// membership predicate, so `Some(_)` iff `occurs_in(_, _)` is
+    /// `true`. Pinned by
+    /// `first_occurrence_of_is_some_iff_occurs_in_across_every_target_and_triple`.
+    ///
+    /// Count-composition identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::first_occurrence_of(v, items).is_some() == (T::count_occurrences_of(v, items) > 0)`
+    /// — the head-position projection binds `Some` iff the multiplicity
+    /// is strictly positive.
+    ///
+    /// Empty-slice contract: `T::first_occurrence_of(v, &[])` is `None`
+    /// for every target `v` — the empty slice hits zero positions, so
+    /// `Iterator::position` yields `None`. Pinned by
+    /// `first_occurrence_of_returns_none_on_the_empty_slice_across_every_target`.
+    ///
+    /// Matching-singleton contract:
+    /// `T::first_occurrence_of(v, &[v]) == Some(0)` for every target
+    /// `v` — the sole position hits the target. Pinned by
+    /// `first_occurrence_of_returns_some_zero_on_the_matching_singleton_across_every_target`.
+    ///
+    /// Non-matching-singleton contract:
+    /// `T::first_occurrence_of(v, &[w]) == None` for every target `v`
+    /// and slice-element `w != v` (compared via [`Self::index_of`]).
+    /// Pinned by
+    /// `first_occurrence_of_returns_none_on_the_non_matching_singleton_across_every_target_pair`.
+    ///
+    /// Full-set contract:
+    /// `T::first_occurrence_of(v, <T as ClosedSet>::ALL) == Some(T::index_of(v))`
+    /// UNCONDITIONALLY — clause (3)'s pairwise-distinctness invariant
+    /// forces every variant to appear at exactly ONE position of the
+    /// full-set slice, and that position is precisely the variant's
+    /// decl-slot ([`Self::index_of`]). Pinned by clause (106) at the
+    /// full-set fixpoint AND by
+    /// `first_occurrence_of_returns_some_index_of_on_the_full_set_across_every_target`.
+    ///
+    /// Upper-bound contract: for every slice `items` and every target
+    /// `v`,
+    /// `T::first_occurrence_of(v, items).map(|i| i < items.len()).unwrap_or(true)`
+    /// — a `Some(i)` position is a valid slice index in
+    /// `[0, items.len())`. Pinned by
+    /// `first_occurrence_of_returns_valid_slice_index_when_some_across_every_target_and_triple`.
+    ///
+    /// Ordering (per-slot) contract: `T::first_occurrence_of(v, items)`
+    /// finds the SMALLEST valid slice index at which `items` carries a
+    /// variant with the same [`Self::index_of`] as `v`. At every valid
+    /// index `i < T::first_occurrence_of(v, items).unwrap_or(items.len())`,
+    /// `T::index_of(items[i]) != T::index_of(v)`. Pinned by
+    /// `first_occurrence_of_is_the_smallest_matching_position_across_every_target_and_triple`.
+    ///
+    /// Ordering-vs-last contract:
+    /// `T::first_occurrence_of(v, items) <= T::last_occurrence_of(v, items)`
+    /// (compared under the `Option<usize>` product order: `None <=
+    /// None`; both `None` when target absent, both `Some` when target
+    /// present with `first <= last`). Pinned by
+    /// `first_occurrence_of_is_at_most_last_occurrence_of_across_every_target_and_triple`.
+    ///
+    /// Slice-reversal contract: for every slice `items` and every
+    /// target `v` with `T::first_occurrence_of(v, items) == Some(i)`,
+    /// `T::first_occurrence_of(v, &reversed(items)) == Some(items.len() - 1 - T::last_occurrence_of(v, items).unwrap())`
+    /// — reversing the slice swaps first and last positions modulo
+    /// `items.len() - 1`. Pinned by
+    /// `slice_reversal_swaps_first_and_last_occurrence_of_across_every_target_and_triple`.
+    ///
+    /// Signature note: the projection composes through
+    /// [`Iterator::position`] on the same [`Self::index_of`] discriminator
+    /// [`Self::count_occurrences_of`] threads through — allocation-free,
+    /// no `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched), O(n)
+    /// on slice arity `n` with EARLY EXIT at the first hit (strictly
+    /// tighter than [`Self::count_occurrences_of`]'s full-slice sweep
+    /// on the presence arm).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::first_occurrence_of`]: a `tatara-check` predicate
+    /// `(check-phase-first-position …)` that anchors the earliest slice
+    /// position at which a `WorkloadPhase` transitions in a rollout
+    /// window at plan time; an LSP diagnostic on a Lisp-author-written
+    /// closed-set field that flags a value multiset's HEAD-ANCHOR
+    /// mismatch ("severity :error first appears at position 4 rather
+    /// than 0") without paying for the multiplicity when only the
+    /// head-anchor matters; a Sekiban audit-trail per-variant "first
+    /// hit" timestamp anchor across a window rather than a per-variant
+    /// hit-count histogram; a `tatara-lisp::macro_expand::Expander`
+    /// hygiene pass that reports the exact per-identifier "first bound
+    /// at position X" over a template's generated body against a
+    /// required closed vocabulary rather than a hit-count; a per-slot
+    /// alarm that fires at the FIRST occurrence of a specific variant
+    /// (rather than exceeds a threshold count). Each binds to ONE
+    /// typed N-ary per-target head-position primitive on the trait
+    /// rather than re-deriving `items.iter().position(|&w|
+    /// T::index_of(w) == T::index_of(target))` or the
+    /// `Self: PartialEq`-bound `items.iter().position(|&w| w == target)`
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the (per-target × return-shape) row on the
+    /// equivalence-partition surface now carries four typed corners —
+    /// [`Self::count_occurrences_of`] (usize; multiplicity),
+    /// [`Self::occurs_in`] (bool; membership), THIS projection
+    /// (`Option<usize>`; head-position), and its sibling
+    /// [`Self::last_occurrence_of`] (`Option<usize>`; tail-position)
+    /// one endpoint-direction axis over. The (per-target, set-level) ×
+    /// (bool, usize, Option<usize>) 2×3 = 6-corner (arity × return-
+    /// shape) block now closes the `Option<usize>`-return column at
+    /// the per-target arm. The next lift on this row past the
+    /// endpoint-anchor pair — a per-target `Vec<usize>`-return
+    /// `all_occurrences_of(target, items)` collecting EVERY slice
+    /// position of `target` — opens a fresh `Vec<usize>`-return column
+    /// on the (per-target) arity axis past the endpoint-anchor pair.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary per-
+    /// target head-position primitive becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `items.iter().position(…)` composition at every downstream
+    /// generic site. THEORY.md §V.1 — knowable platform; naming the
+    /// (per-target × `Option<usize>` × head) corner on the trait makes
+    /// the projection a TYPED CONSEQUENCE of the substrate's
+    /// [`Self::index_of`] discriminator threaded through
+    /// [`Iterator::position`]. THEORY.md §VI.1 — generation over
+    /// composition; the head-position primitive emerges from one
+    /// composition ([`Iterator::position`] on [`Self::index_of`]-
+    /// equality) rather than as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `List.find_index` derivable
+    /// combinator on `list nat` (the canonical per-target head-
+    /// position projection composing decidable equality with a fold);
+    /// Idris's `Data.List.findIndex : (a -> Bool) -> List a -> Maybe
+    /// Nat` with the equality predicate specialized to
+    /// `\v => v == target`; Rust's own
+    /// `items.iter().position(|&w| w == target)` binds through a
+    /// `Self: PartialEq` supertrait bound; Julia's `findfirst(==(v),
+    /// items)`; Python's `items.index(v)` on a `list` (with a
+    /// `ValueError` failure arm); Haskell's `Data.List.findIndex (==
+    /// v) items`. Translation through pleme-io primitives: the N-ary
+    /// per-target head-position projection on the closed-set trait
+    /// binds through [`Iterator::position`] keyed on the substrate's
+    /// [`Self::index_of`] projection — no new dep, no supertrait bound
+    /// (the [`Self::index_of`] projection replaces the `PartialEq`
+    /// bound the standard-library `position` / `findfirst` / `index`
+    /// signatures demand), no allocation.
+    fn first_occurrence_of(target: Self, items: &[Self]) -> Option<usize> {
+        let target_index = <Self as ClosedSet>::index_of(target);
+        items
+            .iter()
+            .position(|&v| <Self as ClosedSet>::index_of(v) == target_index)
+    }
+
+    /// The N-ARY PER-TARGET "last occurrence position" projection —
+    /// `Some(i)` for the LARGEST slice index `i` at which `items[i]`
+    /// carries the same variant identity as `target`, or `None` if
+    /// `target` does not appear. Sibling to
+    /// [`Self::first_occurrence_of`] one endpoint-direction axis over
+    /// on the (per-target × `Option<usize>` × endpoint-direction) 2-
+    /// corner face: [`Self::first_occurrence_of`] returns the smallest
+    /// matching slice index; this method returns the largest.
+    ///
+    /// See [`Self::first_occurrence_of`] for the shared design
+    /// rationale, sibling matrix, override axis, future-consumer
+    /// inventory, THEORY.md grounding, and frontier inspiration — this
+    /// method is the tail-direction arm of the same axis and inherits
+    /// every property from the head arm's documentation, differing only
+    /// in the composition through [`Iterator::rposition`] rather than
+    /// [`Iterator::position`].
+    ///
+    /// Presence-composition identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::last_occurrence_of(v, items).is_some() == T::occurs_in(v, items)`
+    /// — the `Option`'s discriminant is exactly the per-target bool
+    /// membership predicate. Pinned by
+    /// `last_occurrence_of_is_some_iff_occurs_in_across_every_target_and_triple`.
+    ///
+    /// Empty-slice contract: `T::last_occurrence_of(v, &[])` is `None`
+    /// for every target `v`. Pinned by
+    /// `last_occurrence_of_returns_none_on_the_empty_slice_across_every_target`.
+    ///
+    /// Matching-singleton contract:
+    /// `T::last_occurrence_of(v, &[v]) == Some(0)`. Pinned by
+    /// `last_occurrence_of_returns_some_zero_on_the_matching_singleton_across_every_target`.
+    ///
+    /// Full-set contract:
+    /// `T::last_occurrence_of(v, <T as ClosedSet>::ALL) == Some(T::index_of(v))`
+    /// UNCONDITIONALLY — clause (3)'s pairwise-distinctness invariant
+    /// forces every variant to appear at exactly ONE position of the
+    /// full-set slice, so the first and last positions COINCIDE at the
+    /// variant's decl-slot. Pinned by clause (107) at the full-set
+    /// fixpoint AND by
+    /// `last_occurrence_of_returns_some_index_of_on_the_full_set_across_every_target`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::last_occurrence_of(v, &doubled_full_set) == Some(T::CARDINALITY + T::index_of(v))`
+    /// — in the doubled slice each variant appears at TWO positions
+    /// (`index_of(v)` and `T::CARDINALITY + index_of(v)`), so the last-
+    /// position projection binds the second occurrence. Pinned by
+    /// `last_occurrence_of_returns_second_hit_on_the_doubled_full_set_across_every_target`.
+    ///
+    /// Ordering (per-slot) contract: `T::last_occurrence_of(v, items)`
+    /// finds the LARGEST valid slice index at which `items` carries a
+    /// variant with the same [`Self::index_of`] as `v`. At every valid
+    /// index `i > T::last_occurrence_of(v, items).unwrap_or(0)`,
+    /// `T::index_of(items[i]) != T::index_of(v)`. Pinned by
+    /// `last_occurrence_of_is_the_largest_matching_position_across_every_target_and_triple`.
+    ///
+    /// Signature note: the projection composes through
+    /// [`Iterator::rposition`] on the same [`Self::index_of`]
+    /// discriminator [`Self::count_occurrences_of`] threads through —
+    /// allocation-free, no supertrait bound past the trait's minimal
+    /// `Sized + Copy + 'static` pair, O(n) on slice arity `n` with
+    /// EARLY EXIT at the last hit walking from the tail.
+    fn last_occurrence_of(target: Self, items: &[Self]) -> Option<usize> {
+        let target_index = <Self as ClosedSet>::index_of(target);
+        items
+            .iter()
+            .rposition(|&v| <Self as ClosedSet>::index_of(v) == target_index)
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "per-slot variant histogram"
     /// projection — the `Vec<usize>` DECLARATION-ORDER histogram over
     /// [`Self::ALL`] whose slot `i` reports the multiplicity of
@@ -26388,6 +26621,124 @@ where
             full_set_membership,
             expected_full_set_membership,
             "{type_name}: T::occurs_in({target_label:?}, T::ALL) drifted from (T::count_occurrences_of({target_label:?}, T::ALL) > 0) — the per-target membership predicate no longer agrees with the strictly-positive fixpoint of the per-target multiplicity projection on the full-set fixpoint, so a downstream membership consumer that binds `T::occurs_in` as its per-target bool query surface would report the wrong bit; the composition-equality arm catches an override that detaches the bool-return per-target membership from the usize-return per-target multiplicity's `> 0` comparison on any slice",
+            target_label = <T as ClosedSet>::label(target),
+        );
+    }
+    // (106) — `T::first_occurrence_of(target, items)` MUST agree with
+    // the per-target head-position projection on every (target, slice)
+    // pair AND MUST land on its two canonical fixpoints (`None` at
+    // every target on the empty slice, `Some(T::index_of(target))` at
+    // every target on the full set). The two fixpoints partition the
+    // failure modes at the (Option-discriminant × slice-shape) corner
+    // simultaneously so an override that folds onto `None` regardless
+    // of `target` fires on the full-set arm (returns `None` at every
+    // target rather than `Some(T::index_of(target))`); an override
+    // that shifts the returned position by a constant offset from
+    // `T::index_of(target)` fires on the full-set position-equality
+    // arm; an override that swaps the endpoint direction (returning
+    // the LAST hit instead of the FIRST) is undetectable on the full
+    // set alone (each variant appears at exactly ONE position of the
+    // full set, so first == last there), but bifurcates loudly at the
+    // presence-composition arm against `T::occurs_in(target, items)`
+    // on the doubled-full-set slice (where first == index_of and
+    // last == CARDINALITY + index_of are DISTINCT). Sibling posture to
+    // clauses (97) + (105) — clause (97) pins the (`usize`, per-
+    // target) multiplicity corner on the equivalence-partition
+    // surface; clause (105) pins the (`bool`, per-target) membership
+    // corner peer to it one return-shape axis over; this clause pins
+    // the (`Option<usize>`, per-target, head) corner peer to them two
+    // return-shape axes over. The `Option<usize>`-return column
+    // carries no set-level ordering to permute on the output side
+    // (the Option's `Some` payload is a slice index, not a variant
+    // slot), so the (decl, lex) ordering axis on `T::ALL` collapses
+    // on this clause; the per-slot ordering axis on the SLICE side
+    // is pinned by the head-direction (position) arm of this clause
+    // and the tail-direction (rposition) arm of clause (107).
+    for target in T::ALL.iter().copied() {
+        let empty_head = T::first_occurrence_of(target, &[]);
+        assert!(
+            empty_head.is_none(),
+            "{type_name}: T::first_occurrence_of({target_label:?}, &[]) == {empty_head:?} != None — the per-target head-position projection MUST report `None` on the empty slice because the position sweep finds no match on a zero-position slice, so `Iterator::position` yields `None`; a `Some(_)` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream head-position consumer routes through",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let full_set_head = T::first_occurrence_of(target, T::ALL);
+        let target_index = <T as ClosedSet>::index_of(target);
+        assert_eq!(
+            full_set_head,
+            Some(target_index),
+            "{type_name}: T::first_occurrence_of({target_label:?}, T::ALL) drifted from Some(T::index_of({target_label:?})) — the per-target head-position projection MUST report `Some(T::index_of(target))` at every target on the full set by clause (3)'s pairwise-distinctness invariant because every variant appears at exactly one position in T::ALL at slot `T::index_of(target)`, so the smallest matching position collapses to that slot; a drifted full-set head position silently detaches the head-position projection from the (variant → decl-slot) injectivity clause (16) at the head-position projection surface, breaking every downstream head-position consumer",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        assert_eq!(
+            full_set_head.is_some(),
+            T::occurs_in(target, T::ALL),
+            "{type_name}: T::first_occurrence_of({target_label:?}, T::ALL).is_some() drifted from T::occurs_in({target_label:?}, T::ALL) — the per-target head-position projection's Option discriminant no longer agrees with the per-target bool membership predicate on the full-set fixpoint, so a downstream head-position consumer that binds `T::first_occurrence_of(_, _).is_some()` as its presence query surface would disagree with the per-target bool predicate; the composition-equality arm catches an override that detaches the Option discriminant from the strictly-positive fixpoint of the per-target multiplicity primitive on any slice",
+            target_label = <T as ClosedSet>::label(target),
+        );
+    }
+    // (107) — `T::last_occurrence_of(target, items)` MUST agree with
+    // the per-target tail-position projection on every (target, slice)
+    // pair AND MUST land on its three canonical fixpoints (`None` at
+    // every target on the empty slice, `Some(T::index_of(target))` at
+    // every target on the full set, `Some(T::CARDINALITY +
+    // T::index_of(target))` at every target on the doubled full set).
+    // The three fixpoints partition the failure modes at the
+    // (Option-discriminant × slice-shape × endpoint-direction) corner
+    // simultaneously so an override that folds onto `None` regardless
+    // of `target` fires on the full-set arm; an override that returns
+    // `Some(0)` unconditionally fires on the doubled-full-set arm at
+    // every target with `T::index_of(target) > 0` (which is guaranteed
+    // at cardinality >= 2 and at least one such target); an override
+    // that swaps the endpoint direction (returning the FIRST hit
+    // instead of the LAST) is undetectable on the full set alone (each
+    // variant appears at exactly ONE position of the full set, so
+    // first == last there), but fires loudly on the doubled-full-set
+    // arm at every target because the second occurrence at
+    // `T::CARDINALITY + T::index_of(target)` distinguishes it from the
+    // first at `T::index_of(target)` (a `first_occurrence_of` swap
+    // returns `T::index_of(target)` at the first slot, mismatching the
+    // pinned second-hit `T::CARDINALITY + T::index_of(target)`).
+    // Sibling posture to clauses (97) + (105) + (106) — clause (97)
+    // pins the (`usize`, per-target) multiplicity corner on the
+    // equivalence-partition surface; clause (105) pins the (`bool`,
+    // per-target) membership corner peer to it one return-shape axis
+    // over; clause (106) pins the (`Option<usize>`, per-target, head)
+    // corner peer to them two return-shape axes over; this clause
+    // pins the (`Option<usize>`, per-target, tail) corner peer to
+    // clause (106) one endpoint-direction axis over on the SLICE side.
+    // The `Option<usize>`-return column carries no set-level ordering
+    // to permute on the output side, so the (decl, lex) ordering axis
+    // on `T::ALL` collapses on this clause; the per-slot ordering axis
+    // on the SLICE side is pinned by the tail-direction (rposition)
+    // arm of this clause and the head-direction (position) arm of
+    // clause (106), which together CLOSE the (Option<usize>, per-
+    // target, endpoint-direction) 2-corner face at both endpoints.
+    for target in T::ALL.iter().copied() {
+        let empty_tail = T::last_occurrence_of(target, &[]);
+        assert!(
+            empty_tail.is_none(),
+            "{type_name}: T::last_occurrence_of({target_label:?}, &[]) == {empty_tail:?} != None — the per-target tail-position projection MUST report `None` on the empty slice because the reverse position sweep finds no match on a zero-position slice, so `Iterator::rposition` yields `None`; a `Some(_)` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream tail-position consumer routes through",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let target_index = <T as ClosedSet>::index_of(target);
+        let full_set_tail = T::last_occurrence_of(target, T::ALL);
+        assert_eq!(
+            full_set_tail,
+            Some(target_index),
+            "{type_name}: T::last_occurrence_of({target_label:?}, T::ALL) drifted from Some(T::index_of({target_label:?})) — the per-target tail-position projection MUST report `Some(T::index_of(target))` at every target on the full set by clause (3)'s pairwise-distinctness invariant because every variant appears at exactly one position in T::ALL at slot `T::index_of(target)`, so the largest matching position coincides with the smallest and both collapse to that slot; a drifted full-set tail position silently detaches the tail-position projection from the (variant → decl-slot) injectivity clause (16) at the tail-position projection surface, breaking every downstream tail-position consumer",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let doubled_tail = T::last_occurrence_of(target, &doubled_full_set);
+        assert_eq!(
+            doubled_tail,
+            Some(T::CARDINALITY + target_index),
+            "{type_name}: T::last_occurrence_of({target_label:?}, &doubled_full_set) drifted from Some(T::CARDINALITY + T::index_of({target_label:?})) — the per-target tail-position projection MUST report `Some(T::CARDINALITY + T::index_of(target))` at every target on the doubled full set because every variant appears at TWO positions (T::index_of(target) and T::CARDINALITY + T::index_of(target)) and the tail-position projection binds the SECOND occurrence at the doubled-slice fixpoint; a drifted doubled-tail value silently detaches the tail-position projection from the endpoint-direction axis, and in particular catches an override that swaps the endpoint direction (returns `Some(T::index_of(target))` instead of `Some(T::CARDINALITY + T::index_of(target))`) that clause (106)'s head-position full-set arm cannot see",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        assert_eq!(
+            doubled_tail.is_some(),
+            T::occurs_in(target, &doubled_full_set),
+            "{type_name}: T::last_occurrence_of({target_label:?}, &doubled_full_set).is_some() drifted from T::occurs_in({target_label:?}, &doubled_full_set) — the per-target tail-position projection's Option discriminant no longer agrees with the per-target bool membership predicate on the doubled-full-set fixpoint, so a downstream tail-position consumer that binds `T::last_occurrence_of(_, _).is_some()` as its presence query surface would disagree with the per-target bool predicate",
             target_label = <T as ClosedSet>::label(target),
         );
     }
@@ -50476,6 +50827,501 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedOccursInKind whose occurs_in override folds onto `false` unconditionally — clause (105)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn first_occurrence_of_returns_none_on_the_empty_slice_across_every_target() {
+        // EMPTY-SLICE CONTRACT: `T::first_occurrence_of(v, &[])` is
+        // `None` for every target `v` — the empty slice hits zero
+        // positions, so `Iterator::position` yields `None`. Sibling
+        // posture to
+        // `count_occurrences_of_returns_zero_on_the_empty_slice_across_every_target`
+        // and
+        // `occurs_in_returns_false_on_the_empty_slice_across_every_target`
+        // on the (per-target × Option<usize>) column peer to the
+        // (per-target × usize) and (per-target × bool) columns.
+        let empty: &[StubKind] = &[];
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::first_occurrence_of(v, empty),
+                None,
+                "T::first_occurrence_of({v:?}, &[]) diverged from the empty-slice fixpoint None",
+            );
+        }
+    }
+
+    #[test]
+    fn first_occurrence_of_returns_some_zero_on_the_matching_singleton_across_every_target() {
+        // MATCHING-SINGLETON CONTRACT:
+        // `T::first_occurrence_of(v, &[v]) == Some(0)` — the sole
+        // position hits the target at index 0.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::first_occurrence_of(v, &singleton),
+                Some(0),
+                "T::first_occurrence_of({v:?}, {singleton:?}) diverged from the matching-singleton fixpoint Some(0)",
+            );
+        }
+    }
+
+    #[test]
+    fn first_occurrence_of_returns_none_on_the_non_matching_singleton_across_every_target_pair() {
+        // NON-MATCHING-SINGLETON CONTRACT:
+        // `T::first_occurrence_of(v, &[w]) == None` for every target
+        // `v` and slice-element `w != v` (compared via
+        // `T::index_of`). Sweeps the six OFF-DIAGONAL corners of the
+        // 3×3 = 9-corner (target × element) matrix; the three
+        // ON-DIAGONAL corners are pinned by the matching-singleton
+        // sibling.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::index_of(v) != <StubKind as ClosedSet>::index_of(w) {
+                    let singleton = [w];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::first_occurrence_of(v, &singleton),
+                        None,
+                        "T::first_occurrence_of({v:?}, {singleton:?}) diverged from the non-matching-singleton fixpoint None",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn first_occurrence_of_returns_some_index_of_on_the_full_set_across_every_target() {
+        // FULL-SET CONTRACT:
+        // `T::first_occurrence_of(v, T::ALL) == Some(T::index_of(v))`
+        // — the closed-set well-formedness pairwise-distinctness
+        // invariant forces every variant to appear at exactly ONE
+        // position in T::ALL, and that position is the variant's
+        // decl-slot. Complements the parallel head-anchor projections
+        // (`first_label`, `first_index`) on the (full-set, head)
+        // corner.
+        let all = <StubKind as ClosedSet>::ALL;
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = Some(<StubKind as ClosedSet>::index_of(v));
+            assert_eq!(
+                <StubKind as ClosedSet>::first_occurrence_of(v, all),
+                expected,
+                "T::first_occurrence_of({v:?}, T::ALL) diverged from Some(T::index_of({v:?}))",
+            );
+        }
+    }
+
+    #[test]
+    fn first_occurrence_of_is_some_iff_occurs_in_across_every_target_and_triple() {
+        // PRESENCE-COMPOSITION IDENTITY: for every slice `items` and
+        // every target `v`,
+        // `T::first_occurrence_of(v, items).is_some() == T::occurs_in(v, items)`
+        // — the Option discriminant is the per-target bool membership
+        // predicate. Sweeps the full 3×27 = 81-corner (target ×
+        // triple) matrix. Catches an override that detaches the
+        // Option discriminant from the strictly-positive fixpoint of
+        // the per-target multiplicity primitive.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_option =
+                            <StubKind as ClosedSet>::first_occurrence_of(v, &triple).is_some();
+                        let via_bool = <StubKind as ClosedSet>::occurs_in(v, &triple);
+                        assert_eq!(
+                            via_option, via_bool,
+                            "T::first_occurrence_of({v:?}, {triple:?}).is_some() diverged from T::occurs_in({v:?}, {triple:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn first_occurrence_of_is_the_smallest_matching_position_across_every_target_and_triple() {
+        // SMALLEST-POSITION CONTRACT: at every valid index
+        // `i < T::first_occurrence_of(v, items).unwrap_or(items.len())`,
+        // `T::index_of(items[i]) != T::index_of(v)` — every position
+        // strictly BEFORE the returned head-position is a miss. Sweeps
+        // the full 3×27 = 81-corner (target × triple) matrix.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let head = <StubKind as ClosedSet>::first_occurrence_of(v, &triple);
+                        let bound = head.unwrap_or(triple.len());
+                        for i in 0..bound {
+                            assert_ne!(
+                                <StubKind as ClosedSet>::index_of(triple[i]),
+                                <StubKind as ClosedSet>::index_of(v),
+                                "T::first_occurrence_of({v:?}, {triple:?}) = {head:?} but slot {i} at {slot:?} MATCHES target — head-position projection was not the SMALLEST matching slot",
+                                slot = triple[i],
+                            );
+                        }
+                        if let Some(head_index) = head {
+                            assert_eq!(
+                                <StubKind as ClosedSet>::index_of(triple[head_index]),
+                                <StubKind as ClosedSet>::index_of(v),
+                                "T::first_occurrence_of({v:?}, {triple:?}) = Some({head_index}) but slot {head_index} at {slot:?} does NOT match target",
+                                slot = triple[head_index],
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn first_occurrence_of_returns_valid_slice_index_when_some_across_every_target_and_triple() {
+        // UPPER-BOUND CONTRACT: `T::first_occurrence_of(v, items) ==
+        // Some(i)` implies `i < items.len()` — a `Some(_)` position is
+        // a valid slice index in `[0, items.len())`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        if let Some(head) = <StubKind as ClosedSet>::first_occurrence_of(v, &triple)
+                        {
+                            assert!(
+                                head < triple.len(),
+                                "T::first_occurrence_of({v:?}, {triple:?}) = Some({head}) out of slice bounds ({len})",
+                                len = triple.len(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn last_occurrence_of_returns_none_on_the_empty_slice_across_every_target() {
+        // EMPTY-SLICE CONTRACT: `T::last_occurrence_of(v, &[])` is
+        // `None` for every target `v`.
+        let empty: &[StubKind] = &[];
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::last_occurrence_of(v, empty),
+                None,
+                "T::last_occurrence_of({v:?}, &[]) diverged from the empty-slice fixpoint None",
+            );
+        }
+    }
+
+    #[test]
+    fn last_occurrence_of_returns_some_zero_on_the_matching_singleton_across_every_target() {
+        // MATCHING-SINGLETON CONTRACT:
+        // `T::last_occurrence_of(v, &[v]) == Some(0)` — a singleton
+        // slice has first == last at index 0.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::last_occurrence_of(v, &singleton),
+                Some(0),
+                "T::last_occurrence_of({v:?}, {singleton:?}) diverged from Some(0)",
+            );
+        }
+    }
+
+    #[test]
+    fn last_occurrence_of_returns_some_index_of_on_the_full_set_across_every_target() {
+        // FULL-SET CONTRACT:
+        // `T::last_occurrence_of(v, T::ALL) == Some(T::index_of(v))`
+        // — clause (3)'s pairwise-distinctness invariant forces every
+        // variant to appear at exactly ONE position of T::ALL, so
+        // first and last coincide at the variant's decl-slot.
+        let all = <StubKind as ClosedSet>::ALL;
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = Some(<StubKind as ClosedSet>::index_of(v));
+            assert_eq!(
+                <StubKind as ClosedSet>::last_occurrence_of(v, all),
+                expected,
+                "T::last_occurrence_of({v:?}, T::ALL) diverged from Some(T::index_of({v:?}))",
+            );
+        }
+    }
+
+    #[test]
+    fn last_occurrence_of_returns_second_hit_on_the_doubled_full_set_across_every_target() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::last_occurrence_of(v, T::ALL ++ T::ALL) == Some(T::CARDINALITY + T::index_of(v))`
+        // — each variant appears at TWO positions
+        // (`T::index_of(v)` and `T::CARDINALITY + T::index_of(v)`),
+        // and the tail-position projection binds the SECOND
+        // occurrence. This catches an endpoint-direction swap
+        // undetectable on the full set alone.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected =
+                Some(<StubKind as ClosedSet>::CARDINALITY + <StubKind as ClosedSet>::index_of(v));
+            assert_eq!(
+                <StubKind as ClosedSet>::last_occurrence_of(v, &doubled),
+                expected,
+                "T::last_occurrence_of({v:?}, ALL++ALL) diverged from Some(CARDINALITY + index_of({v:?}))",
+            );
+        }
+    }
+
+    #[test]
+    fn last_occurrence_of_is_some_iff_occurs_in_across_every_target_and_triple() {
+        // PRESENCE-COMPOSITION IDENTITY: for every slice `items` and
+        // every target `v`,
+        // `T::last_occurrence_of(v, items).is_some() == T::occurs_in(v, items)`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_option =
+                            <StubKind as ClosedSet>::last_occurrence_of(v, &triple).is_some();
+                        let via_bool = <StubKind as ClosedSet>::occurs_in(v, &triple);
+                        assert_eq!(
+                            via_option, via_bool,
+                            "T::last_occurrence_of({v:?}, {triple:?}).is_some() diverged from T::occurs_in({v:?}, {triple:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn last_occurrence_of_is_the_largest_matching_position_across_every_target_and_triple() {
+        // LARGEST-POSITION CONTRACT: at every valid index
+        // `i > T::last_occurrence_of(v, items).unwrap_or(0)` (when
+        // Some) and every valid index `i < items.len()` (when None),
+        // `T::index_of(items[i]) != T::index_of(v)` — every position
+        // strictly AFTER the returned tail-position is a miss.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let tail = <StubKind as ClosedSet>::last_occurrence_of(v, &triple);
+                        match tail {
+                            None => {
+                                for i in 0..triple.len() {
+                                    assert_ne!(
+                                        <StubKind as ClosedSet>::index_of(triple[i]),
+                                        <StubKind as ClosedSet>::index_of(v),
+                                        "T::last_occurrence_of({v:?}, {triple:?}) = None but slot {i} at {slot:?} MATCHES",
+                                        slot = triple[i],
+                                    );
+                                }
+                            }
+                            Some(tail_index) => {
+                                assert_eq!(
+                                    <StubKind as ClosedSet>::index_of(triple[tail_index]),
+                                    <StubKind as ClosedSet>::index_of(v),
+                                    "T::last_occurrence_of({v:?}, {triple:?}) = Some({tail_index}) but slot {tail_index} at {slot:?} does NOT match",
+                                    slot = triple[tail_index],
+                                );
+                                for i in (tail_index + 1)..triple.len() {
+                                    assert_ne!(
+                                        <StubKind as ClosedSet>::index_of(triple[i]),
+                                        <StubKind as ClosedSet>::index_of(v),
+                                        "T::last_occurrence_of({v:?}, {triple:?}) = Some({tail_index}) but slot {i} > tail at {slot:?} MATCHES target — tail-position projection was not the LARGEST matching slot",
+                                        slot = triple[i],
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn first_occurrence_of_is_at_most_last_occurrence_of_across_every_target_and_triple() {
+        // ORDERING-VS-LAST CONTRACT:
+        // `T::first_occurrence_of(v, items) <= T::last_occurrence_of(v, items)`
+        // under the product `Option<usize>` order (both `None` when
+        // absent; both `Some` with `first <= last` when present).
+        // Bridges the head and tail arms of the (per-target ×
+        // Option<usize> × endpoint-direction) 2-corner face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let head = <StubKind as ClosedSet>::first_occurrence_of(v, &triple);
+                        let tail = <StubKind as ClosedSet>::last_occurrence_of(v, &triple);
+                        assert_eq!(
+                            head.is_some(),
+                            tail.is_some(),
+                            "T::first_occurrence_of({v:?}, {triple:?}) = {head:?} and T::last_occurrence_of = {tail:?} disagree on Option discriminant",
+                        );
+                        if let (Some(h), Some(t)) = (head, tail) {
+                            assert!(
+                                h <= t,
+                                "T::first_occurrence_of({v:?}, {triple:?}) = Some({h}) > T::last_occurrence_of = Some({t}) — head-tail ordering violated",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn slice_reversal_swaps_first_and_last_occurrence_of_across_every_target_and_triple() {
+        // SLICE-REVERSAL CONTRACT: for every slice `items` and every
+        // target `v` with `T::last_occurrence_of(v, items) == Some(j)`,
+        // `T::first_occurrence_of(v, &reversed(items)) == Some(items.len() - 1 - j)`.
+        // Reversing the slice swaps first and last positions modulo
+        // `items.len() - 1`. Bridges the head arm on the reversed
+        // slice to the tail arm on the forward slice, closing the
+        // endpoint-direction axis under slice reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let tail_forward = <StubKind as ClosedSet>::last_occurrence_of(v, &forward);
+                        let head_reversed =
+                            <StubKind as ClosedSet>::first_occurrence_of(v, &reversed);
+                        let expected_head_reversed = tail_forward.map(|j| forward.len() - 1 - j);
+                        assert_eq!(
+                            head_reversed, expected_head_reversed,
+                            "T::first_occurrence_of({v:?}, reversed({forward:?})) = {head_reversed:?} diverged from expected {expected_head_reversed:?} = map(last_occurrence_of({v:?}, {forward:?}) = {tail_forward:?}, |j| len - 1 - j)",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_first_occurrence_of_and_full_set() {
+        // Drift catch — clause (106)'s full-set fixpoint arm fires
+        // when an override folds the per-target head-position onto
+        // `None` regardless of target. The stub below overrides the
+        // default body to return `None` unconditionally; on the full
+        // set that produces `None != Some(T::index_of(target))` at
+        // every target, tripping clause (106)'s full-set fixpoint arm
+        // loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedFirstOccurrenceKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedFirstOccurrenceKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedFirstOccurrenceKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted first_occurrence kind: {}", self.0)
+            }
+        }
+
+        impl DriftedFirstOccurrenceKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedFirstOccurrenceKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted first_occurrence kind";
+            type Unknown = UnknownDriftedFirstOccurrenceKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedFirstOccurrenceKind(s.to_owned())
+            }
+            fn first_occurrence_of(_target: Self, _items: &[Self]) -> Option<usize> {
+                None
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedFirstOccurrenceKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedFirstOccurrenceKind whose first_occurrence_of override folds onto None unconditionally — clause (106)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_endpoint_direction_swap_on_last_occurrence_of() {
+        // Drift catch — clause (107)'s doubled-full-set arm fires when
+        // an override swaps the endpoint direction (returns the FIRST
+        // hit instead of the LAST). The stub below overrides the
+        // default body to delegate to `first_occurrence_of`; on the
+        // doubled full set at every target with `T::index_of(target) >
+        // 0` (which holds for at least Beta and Gamma), the first hit
+        // is at `T::index_of(target)` but the pinned last hit is at
+        // `T::CARDINALITY + T::index_of(target) = 3 + T::index_of(target)`,
+        // which differs.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedLastOccurrenceKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedLastOccurrenceKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedLastOccurrenceKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted last_occurrence kind: {}", self.0)
+            }
+        }
+
+        impl DriftedLastOccurrenceKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedLastOccurrenceKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted last_occurrence kind";
+            type Unknown = UnknownDriftedLastOccurrenceKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedLastOccurrenceKind(s.to_owned())
+            }
+            fn last_occurrence_of(target: Self, items: &[Self]) -> Option<usize> {
+                // Drift: swap endpoint direction — return the FIRST
+                // hit rather than the LAST. Clause (107)'s doubled-
+                // full-set arm at Beta / Gamma catches the swap
+                // because first == index_of(target) but the pinned
+                // last == CARDINALITY + index_of(target).
+                let target_index = <Self as ClosedSet>::index_of(target);
+                items
+                    .iter()
+                    .position(|&v| <Self as ClosedSet>::index_of(v) == target_index)
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedLastOccurrenceKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedLastOccurrenceKind whose last_occurrence_of override swaps endpoint direction — clause (107)'s doubled-full-set arm MUST reject the drift",
         );
     }
 

@@ -971,6 +971,185 @@ pub trait ClosedSet: Sized + Copy + 'static {
         variants
     }
 
+    /// The lex-order full-set decl-index list — the `Vec<usize>` decl-slot
+    /// projection of [`Self::sorted_variants`] over the closed-set
+    /// full-set lex-axis aggregation surface. Every entry `i` in the
+    /// returned vector is the [`Self::index_of`] declaration-slot of
+    /// some variant in [`Self::sorted_variants`]; the returned vector's
+    /// entries are ORDERED by lex position but each entry carries the
+    /// DECLARATION slot the variant sits at in [`Self::ALL`], not the
+    /// lex slot. Equivalently: the returned vector is a PERMUTATION of
+    /// `0..T::CARDINALITY` — every declaration slot appears exactly
+    /// once (paired with clause 96 in [`assert_closed_set_well_formed`])
+    /// — and reading the permutation left-to-right walks the closed set
+    /// in ASCII-`sort_unstable` label order.
+    ///
+    /// OPENS the (`Vec<usize>` decl-slot collection) return-shape row on
+    /// the (return-shape × ordering) 3×2 full-set aggregation matrix at
+    /// its (`Vec<usize>`, lex) corner. Sibling posture to
+    /// [`Self::sorted_variants`] one return-shape axis over on the
+    /// (`Vec<Self>`, `Vec<&'static str>`, `Vec<usize>`) return-shape
+    /// partition of the closed-set lex-axis full-set aggregation surface
+    /// — [`Self::sorted_variants`] materializes each full-set slot as
+    /// `Self`, [`Self::sorted_labels`] labels each slot under
+    /// [`Self::label`], this method projects each slot onto its
+    /// declaration-order `usize` position through [`Self::index_of`]. All
+    /// three walk the SAME (lex-ordered variant sequence) primitive and
+    /// MUST agree slot-for-slot on the underlying (variant → decl slot,
+    /// variant → canonical label, variant → variant) three-way
+    /// projection triangle over the full closed set.
+    ///
+    /// The (return-shape × ordering × partition-flavor) 3×2×3 cube over
+    /// the closed-set aggregation surface post-lift:
+    ///
+    /// | Return-shape             | Full-set decl                | Full-set lex                | Endpoint decl               | Endpoint lex                       | Interior decl               | Interior lex                       |
+    /// |--------------------------|------------------------------|-----------------------------|-----------------------------|------------------------------------|-----------------------------|------------------------------------|
+    /// | `Vec<Self>`              | (implicit `ALL`)             | [`Self::sorted_variants`]   | [`Self::endpoints`] pair    | [`Self::sorted_endpoints`] pair    | [`Self::interior`]          | [`Self::sorted_interior`]          |
+    /// | `Vec<&'static str>`      | [`Self::labels`]             | [`Self::sorted_labels`]     | [`Self::endpoint_labels`]   | [`Self::sorted_endpoint_labels`]   | [`Self::interior_labels`]   | [`Self::sorted_interior_labels`]   |
+    /// | `Vec<usize>`             | (implicit `0..CARDINALITY`)  | this method                 | [`Self::endpoint_indices`]  | [`Self::sorted_endpoint_indices`]  | [`Self::interior_indices`]  | [`Self::sorted_interior_indices`]  |
+    ///
+    /// The (`Vec<usize>`, full-set) row now closes at the lex column with
+    /// this method; the (`Vec<usize>`, full-set, decl) corner stays
+    /// implicit at `(0..T::CARDINALITY).collect()` because in declaration
+    /// order the decl-slot list is the identity range trivially derivable
+    /// from [`Self::CARDINALITY`] alone at every callsite whereas the
+    /// lex-order corner encodes the non-trivial lex-to-decl permutation
+    /// that consumers cannot re-derive without composing
+    /// [`Self::sorted_variants`] + [`Self::index_of`] verbatim.
+    ///
+    /// Default body composes [`Self::sorted_variants`] with
+    /// `.into_iter()` + `.map(Self::index_of)` verbatim — the lex-order
+    /// full-set decl-slot collection is a typed CONSEQUENCE of the
+    /// lex-sort primitive composed with the per-slot decl-index
+    /// projection, not a fourth codepath through inline
+    /// `T::sorted_labels().into_iter().filter_map(|s| T::parse_label(s).ok()).map(T::index_of).collect()`
+    /// (which re-decodes each label through the parse surface AND
+    /// silently drops a variant whose label re-decode ever regresses)
+    /// or `T::ALL.iter().copied().collect::<Vec<_>>().sort_unstable_by_key(|&v| T::label(v))`
+    /// followed by a hand-rolled `map(index_of)` (which re-derives the
+    /// sort surface at every callsite). Implementors override only when
+    /// the lex-order full-set decl-slot collection needs to diverge from
+    /// the natural `sorted_variants().into_iter().map(index_of).collect()`
+    /// shape — a typed escape hatch the trait surface exposes rather
+    /// than forcing the implementor to hand-roll the impl. An implementor
+    /// that overrides [`Self::sorted_variants`] (or the [`Self::label`]
+    /// projection its `sort_unstable_by_key` funnels through) propagates
+    /// the override through this default body to the lex-order decl-slot
+    /// projection automatically.
+    ///
+    /// Singleton degeneracy — for a closed set with
+    /// `T::CARDINALITY == 1`, [`Self::sorted_variants`] returns
+    /// `[T::first()]` whose `index_of()` is `0`, so this method returns
+    /// `vec![0]`. Two-variant degeneracy — [`Self::sorted_variants`]
+    /// returns the lex-sorted variant pair, so this method returns
+    /// `vec![lex_first.index_of(), lex_last.index_of()]` which permutes
+    /// `0..2` to `[0, 1]` when declaration order matches lex order and
+    /// to `[1, 0]` when declaration order reverses lex order.
+    ///
+    /// DIVERGENCE FROM the implicit `(0..T::CARDINALITY).collect()`
+    /// full-set × decl surface: on any closed set whose declaration
+    /// order MATCHES lex order the returned vector collapses onto the
+    /// identity range `(0..T::CARDINALITY).collect()` (`StubKind`'s
+    /// canonical labels `("alpha", "beta", "gamma")` sort-in-place at
+    /// every position, so `T::sorted_indices() == vec![0, 1, 2]`). On
+    /// any closed set whose declaration order DIVERGES from lex order
+    /// the vector carries a NON-IDENTITY permutation of
+    /// `0..T::CARDINALITY` — the lex-to-decl slot map that turns "walk
+    /// the closed set in alphabetical order" into "iterate through this
+    /// decl-slot list", exposing the same permutation the
+    /// [`Self::sorted_endpoint_indices`] pair-endpoint corner extracts
+    /// at its (`usize`, lex) slot on the pair-arity axis one arity level
+    /// down.
+    ///
+    /// Consumer surface — a `[Payload; T::CARDINALITY]` renderer that
+    /// emits per-slot payloads in alphabetical order without
+    /// materializing typed variants first (`for &i in
+    /// &T::sorted_indices() { render(payload_table[i]) }` instead of the
+    /// two-primitive `for v in T::sorted_variants() {
+    /// render(payload_table[T::index_of(v)]) }`), a deterministic-
+    /// across-machines Prometheus tag whose alphabetized rendering key
+    /// must route through the lex-to-decl permutation without exposing
+    /// the underlying declaration order, a `tatara-check` per-slot
+    /// per-label diagnostic that renders `<label>: <count>` in
+    /// alphabetized order while keying its counters on declaration
+    /// slots, an alphabetized full-set-observed bitset renderer that
+    /// sets bit `i` per observed decl-slot in the ORDER `i` sits at on
+    /// the lex axis — bind to ONE trait method instead of hand-rolling
+    /// `T::sorted_variants().into_iter().map(T::index_of).collect()`
+    /// (which re-derives the same two-primitive composition at every
+    /// callsite) OR the inline three-step
+    /// `T::sorted_labels().into_iter().filter_map(|s| T::parse_label(s).ok()).map(T::index_of).collect()`
+    /// (which re-decodes labels through the parse surface and silently
+    /// drops variants under any label-parse regression).
+    ///
+    /// The lex-order full-set decl-slot collection contract —
+    /// `T::sorted_indices() == T::sorted_variants().into_iter().map(T::index_of).collect()`
+    /// on every implementor AND the returned vector is a PERMUTATION of
+    /// `0..T::CARDINALITY` (length matches, every slot in range, no
+    /// duplicates) — is guaranteed by the default composition through
+    /// [`Self::sorted_variants`] + [`Self::index_of`]; the well-
+    /// formedness contract [`assert_closed_set_well_formed`]'s new
+    /// clause (96) pins the composition against the natural
+    /// `sorted_variants().into_iter().map(index_of).collect()` shape AND
+    /// pins the returned vector as a permutation of
+    /// `0..T::CARDINALITY` on every implementor. The two-arm pin
+    /// partitions the failure modes at the (composition-equality) corner
+    /// AND the (permutation-membership) corner simultaneously so a
+    /// permissive override that folds the lex-order decl-slot collection
+    /// onto the identity range `(0..T::CARDINALITY).collect()` on a
+    /// closed set whose declaration order diverges from lex order fires
+    /// on the composition-equality arm loudly rather than silently.
+    ///
+    /// THEORY.md §III — the typescape; the (full-set × lex → decl-slot
+    /// collection) `Vec<usize>` projection becomes a TYPE projection on
+    /// the trait rather than a per-consumer inline
+    /// `T::sorted_variants().into_iter().map(T::index_of).collect()`
+    /// two-primitive composition at every downstream lex-order-decl-slot
+    /// lookup site. The (return-shape × ordering × partition-flavor)
+    /// 3×2×3 aggregation cube's (`Vec<usize>`, lex, full-set) corner
+    /// closes here alongside the pre-existing (`Vec<usize>`, decl/lex,
+    /// endpoint) + (`Vec<usize>`, decl/lex, interior) corners; the
+    /// (return-shape × partition-flavor) column of the (`Vec<usize>`)
+    /// row now closes at the (full-set × lex), (endpoint × decl/lex),
+    /// (interior × decl/lex) corners with a single implicit
+    /// `(0..CARDINALITY).collect()` at the trivially-derivable
+    /// (full-set × decl) corner.
+    /// THEORY.md §V.1 — knowable platform; the (lex-order full-set
+    /// decl-slot collection) projection was an unnamed compound of
+    /// [`Self::sorted_variants`] + `.map(Self::index_of).collect()`
+    /// pre-lift; naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the two substrate primitives — generic consumers
+    /// see ONE method, not ONE lex-order-decl-slot-shape-per-crate.
+    /// THEORY.md §VI.1 — generation over composition; the projection
+    /// emerges from the composition of [`Self::sorted_variants`] +
+    /// [`Self::index_of`] rather than as a per-implementor
+    /// `const SORTED_INDICES: [usize; N]` declaration that silently
+    /// drifts from [`Self::ALL`] on any reordering or when a hand-rolled
+    /// [`Self::sorted_variants`] override carves a different lex-sort
+    /// permutation.
+    ///
+    /// Frontier inspiration: Racket's `(enum-indices/sorted enum)` on a
+    /// closed enum projects the full-set alphabetized decl-slot list,
+    /// complementary to `(enum-indices enum)` that emits the raw
+    /// declaration-order slot list. MLIR's
+    /// `mlir::OperationName::sortedRegisteredOpIndices()` on the
+    /// registered-op enumeration returns the alphabetized decl-slot
+    /// permutation generic op-walkers thread through when their
+    /// canonical ordering must not depend on registration order.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing the trait's existing [`Self::sorted_variants`] +
+    /// [`Self::index_of`] surfaces — no new dep, no new IR layer, no
+    /// supertrait bound, no per-implementor allocation beyond the
+    /// natural `Vec<usize>` collection the sibling
+    /// [`Self::sorted_interior_indices`] surface already routes one
+    /// partition-flavor axis over.
+    fn sorted_indices() -> ::std::vec::Vec<usize> {
+        <Self as ClosedSet>::sorted_variants()
+            .into_iter()
+            .map(<Self as ClosedSet>::index_of)
+            .collect()
+    }
+
     /// Project `needle` onto the closest variant whose
     /// [`Self::label`] sits within the substrate-wide bounded edit
     /// distance — the typed bridge between an unrecognized input and
@@ -23342,6 +23521,72 @@ where
             "{type_name}: T::sorted_interior_indices() emitted decl-slot {i} (lex slot {lex_slot}) that fails T::is_sorted_interior_index({lex_slot}) — the strictly-lex-interior decl-slot collection admitted a lex-endpoint slot, bifurcating the lex-boundary-partition contract clauses (76) + (77) pin at the `usize`-arg predicate axis. Every decl-slot in T::sorted_interior_indices() MUST decode through T::from_index + T::sorted_index_of to a lex slot satisfying T::is_sorted_interior_index(_) by the sorted_interior()+index_of composition contract",
         );
     }
+    // (96) — `T::sorted_indices()` MUST equal
+    // `T::sorted_variants().into_iter().map(T::index_of).collect::<Vec<_>>()`
+    // AND the returned vector MUST be a PERMUTATION of `0..T::CARDINALITY`
+    // (every decl-slot appears exactly once, length matches CARDINALITY,
+    // every element is in-range and unique). The default trait body
+    // threads `T::sorted_variants()` through `.map(T::index_of).collect()`
+    // verbatim and satisfies both alignments for free; the assertion
+    // catches a future implementor whose override drifts the projection
+    // (a stale override that folds the lex-order full-set decl-slot
+    // collection onto the identity range `(0..T::CARDINALITY).collect()`
+    // — silently collapsing the (decl, lex) ordering axis on any
+    // implementor whose lex order diverges from declaration order and
+    // silently bifurcating the lex-to-decl permutation from
+    // `T::sorted_variants()`'s canonical lex-order variant list; a swap
+    // override that returns declaration-order decl-slots
+    // `(0..T::CARDINALITY).collect()` instead of the lex-order
+    // permutation — silently bifurcating from the sorted-* row of the
+    // (decl, lex) partition and collapsing the (return-shape × ordering)
+    // 3×2 full-set aggregation matrix's (`Vec<usize>`, lex) corner onto
+    // its implicit `(0..CARDINALITY).collect()` peer at the
+    // (`Vec<usize>`, decl) corner; an override that emits a multiset
+    // with duplicate slots — silently detaching the full-set rendering
+    // from the CARDINALITY-anchored permutation contract, bifurcating
+    // the (variant → decl-slot) injectivity clause (16) at the lex-
+    // aggregation projection surface) loudly rather than silently
+    // bifurcating the full-set lex-order decl-slot projection surface
+    // every downstream lex-order-decl-slot consumer routes through.
+    // Sibling posture to clauses (17) + (94) + (95) — clause (17) pins
+    // the `Vec<Self>` lex-order full-set variant collection through
+    // sorted_variants alignment, clauses (94) + (95) pin the
+    // (`Vec<usize>`, decl/lex) strictly-interior arms of the same
+    // (return-shape × ordering × partition-flavor) 3×2×3 aggregation
+    // cube, this clause pins the (`Vec<usize>`, lex, full-set) corner —
+    // the (`Vec<usize>`) return-shape row now closes at the
+    // (full-set × lex), (endpoint × decl/lex), (interior × decl/lex)
+    // corners with a single implicit `(0..CARDINALITY).collect()` at the
+    // trivially-derivable (full-set × decl) corner.
+    let expected_sorted_indices: Vec<usize> = T::sorted_variants()
+        .into_iter()
+        .map(<T as ClosedSet>::index_of)
+        .collect();
+    assert_eq!(
+        T::sorted_indices(),
+        expected_sorted_indices,
+        "{type_name}: T::sorted_indices() drifted from T::sorted_variants().into_iter().map(T::index_of).collect() — the lex-order full-set decl-slot collection no longer agrees with the natural sorted_variants().map(index_of) two-primitive composition, so a downstream alphabetized full-set loop / lex-permutation payload-table renderer / lex-order metrics counter / alphabetized full-set-observed bitset renderer that binds `T::sorted_indices()` as its `Vec<usize>` lex-order full-set decl-slot query surface would render the wrong slot list",
+    );
+    let sorted_indices_len = T::sorted_indices().len();
+    assert_eq!(
+        sorted_indices_len,
+        T::CARDINALITY,
+        "{type_name}: T::sorted_indices() length {sorted_indices_len} != T::CARDINALITY {} — the lex-order full-set decl-slot collection MUST enumerate every decl-slot exactly once by the sorted_variants().map(index_of) composition contract; a shorter vector silently drops variants, a longer vector silently duplicates them, either bifurcates the CARDINALITY-anchored permutation contract",
+        T::CARDINALITY,
+    );
+    let mut seen_sorted_indices = vec![false; T::CARDINALITY];
+    for &i in &T::sorted_indices() {
+        assert!(
+            i < T::CARDINALITY,
+            "{type_name}: T::sorted_indices() emitted out-of-range decl-slot {i} (T::CARDINALITY = {}) — the lex-order full-set decl-slot collection admitted a slot outside `0..T::CARDINALITY`, breaking clauses (10) + (17)'s shared bounds invariant",
+            T::CARDINALITY,
+        );
+        assert!(
+            !seen_sorted_indices[i],
+            "{type_name}: T::sorted_indices() emitted duplicate decl-slot {i} — the lex-order full-set decl-slot collection MUST enumerate every decl-slot exactly once (permutation of `0..T::CARDINALITY`); a duplicate breaks the (variant → decl-slot) injectivity clause (16) at the lex-aggregation projection surface",
+        );
+        seen_sorted_indices[i] = true;
+    }
 }
 
 #[cfg(test)]
@@ -34804,6 +35049,322 @@ mod tests {
         assert!(
             outcome.is_err(),
             "assert_closed_set_well_formed accepted a sorted_interior_indices() override that included the lex-endpoint slots on the strictly-lex-interior partition",
+        );
+    }
+
+    #[test]
+    fn sorted_indices_returns_lex_order_full_set_decl_slot_permutation() {
+        // The lex-order full-set decl-slot collection returns the
+        // `T::index_of(_)` decl-slot of every variant in
+        // `T::sorted_variants()` — every declaration slot appears exactly
+        // once but the ORDER is lex-position, not declaration-position.
+        // On the 3-variant `StubKind` fixture (labels alpha < beta <
+        // gamma, matching declaration order), the lex-order variant list
+        // is [Alpha, Beta, Gamma] at declaration slots [0, 1, 2] — the
+        // identity permutation of `0..T::CARDINALITY`. Sibling posture
+        // to `sorted_labels_renders_labels_in_lexicographic_order` one
+        // return-shape axis over on the (`Vec<Self>`, `Vec<&str>`,
+        // `Vec<usize>`) partition of the closed-set lex-axis full-set
+        // aggregation surface — the typed-variant arm materializes each
+        // slot as `Self`, the label arm labels each slot under
+        // `T::label`, this decl-slot arm projects each slot onto its
+        // declaration-order `usize` position through `T::index_of`.
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_indices(),
+            vec![0_usize, 1, 2],
+        );
+    }
+
+    #[test]
+    fn sorted_indices_collapses_to_singleton_zero_on_singleton_closed_set() {
+        // Singleton degeneracy — a 1-variant closed set has the sole
+        // variant at declaration slot 0 which is also lex slot 0, so
+        // `T::sorted_variants()` returns `[T::first()]` whose
+        // `index_of()` is `0` and this method returns `vec![0]`. Sibling
+        // posture to `sorted_interior_indices_collapses_to_empty_on_singleton_closed_set`
+        // one partition-flavor axis over — the (full-set, endpoint,
+        // interior) partition-flavor axis collapses differently at the
+        // singleton edge: the full-set arm returns `[0]` (the sole slot
+        // survives the identity partition), the interior arm returns
+        // `[]` (both endpoint slots collapse onto the sole slot,
+        // stripping it from the strictly-interior partition).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SingletonSortedIndicesStubKind {
+            Only,
+        }
+        #[derive(Debug)]
+        struct UnknownSingletonSortedIndicesStubKind(pub String);
+        impl core::fmt::Display for UnknownSingletonSortedIndicesStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown singleton sorted indices stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for SingletonSortedIndicesStubKind {
+            const ALL: &'static [Self] = &[Self::Only];
+            const SET_LABEL: &'static str = "singleton sorted indices stub kind";
+            type Unknown = UnknownSingletonSortedIndicesStubKind;
+            fn label(self) -> &'static str {
+                "only"
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSingletonSortedIndicesStubKind(s.to_owned())
+            }
+        }
+        assert_eq!(
+            <SingletonSortedIndicesStubKind as ClosedSet>::sorted_indices(),
+            vec![0_usize],
+        );
+    }
+
+    #[test]
+    fn sorted_indices_agrees_with_sorted_variants_map_index_of_on_stub_kind() {
+        // The direct (lex-order full-set decl-slot collection) projection
+        // MUST agree with the two-step
+        // `sorted_variants().into_iter().map(index_of).collect()`
+        // composition on the stub-level surface. Pinning the alignment
+        // here means a generic consumer can freely swap between the
+        // direct-projection surface and the two-step composition based on
+        // its rendering / storage needs without changing the program's
+        // decoded-slot semantics. A regression that drifts the direct-
+        // projection surface (a permissive override that folds onto the
+        // identity range, a swap override that returns declaration-order
+        // slots, an override that emits duplicate slots) fails this pin
+        // stub-level before any per-implementor sweep depends on the
+        // alignment downstream.
+        let direct = <StubKind as ClosedSet>::sorted_indices();
+        let composed: Vec<usize> = <StubKind as ClosedSet>::sorted_variants()
+            .into_iter()
+            .map(<StubKind as ClosedSet>::index_of)
+            .collect();
+        assert_eq!(
+            direct, composed,
+            "sorted_indices() disagreed with sorted_variants().into_iter().map(index_of).collect() — the direct lex-order full-set decl-slot collection bifurcated from the natural two-step composition",
+        );
+    }
+
+    #[test]
+    fn sorted_indices_permutes_zero_to_cardinality_on_every_stub_fixture() {
+        // The lex-order full-set decl-slot collection contract — for
+        // every closed set, `T::sorted_indices()` MUST be a PERMUTATION
+        // of `0..T::CARDINALITY` (length matches, every slot in-range,
+        // no duplicates). Pinning the permutation invariant here means a
+        // regression that drops or duplicates a slot (e.g. an override
+        // that returns `vec![0, 1]` on a 3-variant fixture, or `vec![0,
+        // 1, 1]` with a duplicated slot) fails this stub-level check
+        // before any per-implementor sweep depends on the permutation
+        // downstream. On the 3-variant `StubKind` fixture, the lex-order
+        // decl-slot collection is `[0, 1, 2]` — a valid permutation of
+        // `0..3`.
+        let sorted_indices = <StubKind as ClosedSet>::sorted_indices();
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        assert_eq!(
+            sorted_indices.len(),
+            cardinality,
+            "sorted_indices() length {} != T::CARDINALITY {} — the lex-order full-set decl-slot collection dropped or duplicated a slot",
+            sorted_indices.len(),
+            cardinality,
+        );
+        let mut sorted = sorted_indices.clone();
+        sorted.sort_unstable();
+        let identity: Vec<usize> = (0..cardinality).collect();
+        assert_eq!(
+            sorted, identity,
+            "sorted_indices() is not a permutation of `0..T::CARDINALITY` after sorting — the lex-order full-set decl-slot collection MUST enumerate every decl-slot exactly once",
+        );
+    }
+
+    #[test]
+    fn sorted_indices_encodes_lex_to_decl_permutation_on_declaration_order_that_diverges_from_lex_order(
+    ) {
+        // The (return-shape × ordering) 3×2 full-set aggregation matrix's
+        // ordering axis is LOAD-BEARING on the (`Vec<usize>`, full-set)
+        // row — the lex-order column MUST return a NON-IDENTITY
+        // permutation of `0..T::CARDINALITY` whenever declaration order
+        // diverges from lex order (the identity range is the implicit
+        // full-set × decl surface, so a divergent implementor whose
+        // lex-order collapsed onto the identity would silently fold both
+        // ordering columns of the (`Vec<usize>`, full-set) row onto the
+        // same trivial answer). Fixture: declaration order = `[Gamma,
+        // Alpha, Beta]` (labels "gamma", "alpha", "beta") with
+        // declaration slots `Gamma → 0`, `Alpha → 1`, `Beta → 2`. The
+        // lex-sorted order is `[alpha (Alpha), beta (Beta), gamma
+        // (Gamma)]`, so `sorted_indices()` returns `[1, 2, 0]` — the
+        // lex-to-decl permutation. Pinning the divergence here binds
+        // the ordering axis as load-bearing and prevents a regression
+        // that folds `sorted_indices` onto the identity range from
+        // passing silently.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DeclLexDivergentSortedIndicesKind {
+            Gamma,
+            Alpha,
+            Beta,
+        }
+        #[derive(Debug)]
+        struct UnknownDeclLexDivergentSortedIndicesKind(pub String);
+        impl core::fmt::Display for UnknownDeclLexDivergentSortedIndicesKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown decl-lex divergent sorted indices kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for DeclLexDivergentSortedIndicesKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Alpha, Self::Beta];
+            const SET_LABEL: &'static str = "decl-lex divergent sorted indices kind";
+            type Unknown = UnknownDeclLexDivergentSortedIndicesKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDeclLexDivergentSortedIndicesKind(s.to_owned())
+            }
+        }
+        // Lex-sorted variant sequence: [alpha (Alpha), beta (Beta),
+        // gamma (Gamma)]. Declaration slots: Alpha → 1, Beta → 2,
+        // Gamma → 0. So `sorted_indices() == [1, 2, 0]`.
+        assert_eq!(
+            <DeclLexDivergentSortedIndicesKind as ClosedSet>::sorted_indices(),
+            vec![1_usize, 2, 0],
+        );
+        // Divergence pin — the lex-order decl-slot list MUST NOT equal
+        // the identity range `(0..T::CARDINALITY).collect()` on this
+        // fixture. A stale override that folds `sorted_indices` onto the
+        // identity range (silently collapsing the ordering axis of the
+        // (`Vec<usize>`, full-set) row) fails this pin.
+        let cardinality = <DeclLexDivergentSortedIndicesKind as ClosedSet>::CARDINALITY;
+        let identity: Vec<usize> = (0..cardinality).collect();
+        assert_ne!(
+            <DeclLexDivergentSortedIndicesKind as ClosedSet>::sorted_indices(),
+            identity,
+            "sorted_indices() folded onto the identity range (0..T::CARDINALITY).collect() on a fixture whose declaration order diverges from its lex order — the (return-shape × ordering) 3×2 full-set aggregation matrix's ordering axis is no longer load-bearing on the (`Vec<usize>`, full-set) row",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_indices_and_composition() {
+        // The well-formedness sweep's (96) clause — `T::sorted_indices()`
+        // MUST equal `T::sorted_variants().into_iter().map(T::index_of).collect()`
+        // AND the returned vector MUST be a permutation of
+        // `0..T::CARDINALITY` (length CARDINALITY, every slot in-range,
+        // no duplicates). A hand-impl'd implementor whose override drifts
+        // the composition — e.g. a permissive override that folds onto
+        // the identity range on a fixture whose declaration order
+        // diverges from lex order — fails the sweep loudly rather than
+        // silently bifurcating the full-set lex-order decl-slot-
+        // collection projection surface every downstream lex-order-decl-
+        // slot consumer routes through. Sibling posture to the sibling
+        // `_catches_drift_between_*` pins above (clauses 5-21 + 78-95).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedIndicesKind {
+            Gamma,
+            Alpha,
+            Beta,
+        }
+        #[derive(Debug)]
+        struct UnknownDriftedSortedIndicesKind(pub String);
+        impl core::fmt::Display for UnknownDriftedSortedIndicesKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted indices kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DriftedSortedIndicesKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Alpha, Self::Beta];
+            const SET_LABEL: &'static str = "drifted sorted indices kind";
+            type Unknown = UnknownDriftedSortedIndicesKind;
+            fn label(self) -> &'static str {
+                // Labels deliberately reorder under sort: declaration
+                // order is [gamma, alpha, beta] but lex order is [alpha,
+                // beta, gamma]. The natural `sorted_indices()` returns
+                // `[1, 2, 0]` (decl slots of alpha, beta, gamma). The
+                // drifted override returns `[0, 1, 2]` (the identity
+                // range) — clause (96)'s composition-equality arm
+                // catches the drift.
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedIndicesKind(s.to_owned())
+            }
+            fn sorted_indices() -> Vec<usize> {
+                // Drifted override — returns the identity range
+                // `[0, 1, 2]` instead of the lex-to-decl permutation
+                // `[1, 2, 0]` the natural `sorted_variants().map(index_of)`
+                // composition produces on this fixture. Fails clause
+                // (96)'s composition-equality arm on the (Vec<usize>,
+                // full-set × lex) corner of the aggregation matrix.
+                vec![0, 1, 2]
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DriftedSortedIndicesKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_indices() override that folded onto the identity range on a fixture whose declaration order diverges from its lex order",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_duplicate_decl_slot_in_sorted_indices() {
+        // The well-formedness sweep's (96) clause pins the
+        // (permutation-membership) arm on the (`Vec<usize>`, full-set × lex)
+        // corner independently of the composition-equality arm — an
+        // override that emits a multiset with duplicate slots fails the
+        // permutation contract even when a naive composition-equality
+        // check might have missed it. Fixture: a 3-variant closed set
+        // whose override returns `[0, 1, 1]` (duplicating decl slot 1)
+        // instead of the natural `[0, 1, 2]` — the duplicate-detection
+        // arm of clause (96) fires before the composition-equality arm
+        // has a chance to catch the mismatch.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DuplicateSortedIndicesKind {
+            First,
+            Second,
+            Third,
+        }
+        #[derive(Debug)]
+        struct UnknownDuplicateSortedIndicesKind(pub String);
+        impl core::fmt::Display for UnknownDuplicateSortedIndicesKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown duplicate sorted indices kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for DuplicateSortedIndicesKind {
+            const ALL: &'static [Self] = &[Self::First, Self::Second, Self::Third];
+            const SET_LABEL: &'static str = "duplicate sorted indices kind";
+            type Unknown = UnknownDuplicateSortedIndicesKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::First => "first",
+                    Self::Second => "second",
+                    Self::Third => "third",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDuplicateSortedIndicesKind(s.to_owned())
+            }
+            fn sorted_indices() -> Vec<usize> {
+                // Drifted override — duplicates decl slot 1 and drops
+                // decl slot 2. Fails clause (96)'s permutation-
+                // membership arm at the duplicate-detection check.
+                vec![0, 1, 1]
+            }
+        }
+        let outcome = std::panic::catch_unwind(
+            super::assert_closed_set_well_formed::<DuplicateSortedIndicesKind>,
+        );
+        assert!(
+            outcome.is_err(),
+            "assert_closed_set_well_formed accepted a sorted_indices() override that emitted a duplicate decl-slot on the (Vec<usize>, full-set × lex) permutation-membership contract",
         );
     }
 

@@ -16254,6 +16254,204 @@ pub trait ClosedSet: Sized + Copy + 'static {
         min_bar == max_bar
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "variant count span" projection —
+    /// the `usize` NON-NEGATIVE scalar-difference of the just-lifted
+    /// pair-return [`Self::variant_count_range`] projection's two
+    /// direction endpoints, computed as `max_bar - min_bar` on the
+    /// (max-bar, min-bar) pair. The SCALAR-DIFFERENCE range-width
+    /// opener on the (set-level × statistical-aggregate) row of the
+    /// equivalence-partition surface, positioned as the second
+    /// SCALAR REDUCTION of the just-opened pair-return endpoint-
+    /// anchor corner [`Self::variant_count_range`] through the
+    /// (slot-1 - slot-0) tuple-projection SATURATED DIFFERENCE
+    /// (the pair-return corner pins slot-0 <= slot-1 by clause
+    /// (102)'s direction-axis-order arm, so the difference is
+    /// non-negative and no saturation ever fires). Peer posture to
+    /// [`Self::is_uniform`] one return-shape axis over: the bool-
+    /// return uniformity corner reduces the pair through
+    /// slot-EQUALITY (`min == max`), yielding a bare `bool`; this
+    /// usize-return span corner reduces the SAME pair through
+    /// slot-SUBTRACTION (`max - min`), yielding a bare `usize`
+    /// range-width. The (set-level × statistical-aggregate) ×
+    /// (`usize`-scalar-direction, `(usize, usize)`-pair,
+    /// `bool`-scalar, `usize`-scalar-difference) 4-corner return-
+    /// shape face on the equivalence-partition surface now opens
+    /// its FOURTH corner as the direct SCALAR-DIFFERENCE reduction
+    /// of the pair-return corner past the two direction corners,
+    /// the pair-return corner, and the bool-return uniformity
+    /// corner.
+    ///
+    /// Composition-equality contract: for every slice `items`,
+    /// `T::variant_count_span(items) ==
+    /// T::variant_count_range(items).1 - T::variant_count_range(items).0`
+    /// — the scalar-difference range-width projection binds through
+    /// the pair-return endpoint-anchor projection's slot-subtraction
+    /// BYTE-FOR-BYTE. Equivalently, `T::variant_count_span(items)
+    /// == T::max_variant_count(items) - T::min_variant_count(items)`
+    /// via the direction-corner pair. Pinned by
+    /// `variant_count_span_agrees_with_variant_count_range_slot_subtraction_across_every_triple`
+    /// and `variant_count_span_agrees_with_max_minus_min_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::variant_count_span(&[]) == 0`
+    /// UNCONDITIONALLY — the empty slice hits zero positions, so
+    /// every per-variant occurrence count is `0`, the pair-return
+    /// corner collapses to `(0, 0)`, and the difference collapses
+    /// to `0 - 0 == 0`. The span reaches its degenerate-tuple ZERO
+    /// fixpoint at the empty-slice endpoint. Pinned by
+    /// `variant_count_span_returns_zero_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract: `T::variant_count_span(<T as ClosedSet>::ALL)
+    /// == 0` UNCONDITIONALLY — the closed-set well-formedness
+    /// invariant [`assert_closed_set_well_formed`]'s clause (3) pins
+    /// variants as pairwise distinct, so every variant of
+    /// [`Self::ALL`] appears at exactly one position, the pair-
+    /// return corner collapses to `(1, 1)`, and the difference
+    /// collapses to `1 - 1 == 0`. Pinned by
+    /// `variant_count_span_returns_zero_on_the_full_set_across_every_kind`.
+    ///
+    /// Doubled-full-set contract: `T::variant_count_span(&doubled)
+    /// == 0` UNCONDITIONALLY — the doubled-full-set slice appends
+    /// [`Self::ALL`] to itself, so every variant appears at EXACTLY
+    /// two positions, the pair-return corner collapses to `(2, 2)`,
+    /// and the difference collapses to `2 - 2 == 0`. Pinned by
+    /// `variant_count_span_returns_zero_on_the_doubled_full_set_across_every_kind`.
+    ///
+    /// Singleton SPAN-EQUALS-ONE contract: for every variant `v` on
+    /// a closed set of cardinality `>= 2`, `T::variant_count_span(&[v])
+    /// == 1` — a singleton hits exactly one variant at one position,
+    /// leaving every OTHER variant at zero occurrences, so the pair-
+    /// return corner collapses to `(0, 1)` and the difference
+    /// collapses to `1 - 0 == 1`. The singleton is the SMALLEST-arity
+    /// non-uniform slice on a cardinality-`>= 2` closed set — the
+    /// three canonical constant-histogram fixpoints (empty, full,
+    /// doubled) all yield span `0`, so the singleton on a `>= 2`
+    /// closed set is the primary non-degenerate drift catcher for a
+    /// `_ => 0` override. Pinned by
+    /// `variant_count_span_returns_one_on_every_singleton_slice_when_cardinality_is_at_least_two_across_every_variant`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the
+    /// (min-bar, max-bar) endpoints are functions of that multiset
+    /// alone; the scalar-difference reduction carries no ordering to
+    /// permute on the output side. The (declaration, lex) ordering
+    /// axis collapses on this projection. Pinned by
+    /// `variant_count_span_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Compounding equations: the scalar-difference span collapses
+    /// to `0` at the three canonical constant-histogram fixpoints
+    /// (empty → `(0, 0)` → `0`; full → `(1, 1)` → `0`; doubled →
+    /// `(2, 2)` → `0`), all inherited from the pair-return corner's
+    /// degenerate-tuple contracts. The (span == 0) predicate agrees
+    /// byte-for-byte with [`Self::is_uniform`] via the (slot-
+    /// equality → zero-difference) tuple-projection reduction:
+    /// `T::variant_count_span(items) == 0 iff T::is_uniform(items)`
+    /// — the span binds through the SAME pair-return corner as the
+    /// bool-return uniformity projection but under a DIFFERENT
+    /// scalar reduction (SUBTRACTION vs. EQUALITY). Pinned by
+    /// `variant_count_span_equals_zero_iff_is_uniform_across_every_triple`.
+    /// The span is bounded above by the pair-return corner's max
+    /// slot: `T::variant_count_span(items) <=
+    /// T::variant_count_range(items).1` on every slice — the
+    /// difference `max - min` is bounded above by `max` itself
+    /// (since `min >= 0`). Pinned by
+    /// `variant_count_span_is_bounded_above_by_max_variant_count_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// just-lifted pair-return endpoint-anchor projection
+    /// [`Self::variant_count_range`] — the composition uses ONE
+    /// `usize`-subtraction on the tuple's two slots, with the
+    /// slot-0 <= slot-1 direction-axis-order pinned by clause (102)
+    /// guaranteeing the subtraction never underflows. Cost is
+    /// O(T::CARDINALITY * n) on slice arity `n` (folded through the
+    /// pair-return corner's two direction folds, each of which walks
+    /// `T::ALL` once and sums per-target multiplicities over `items`)
+    /// — no `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's
+    /// minimal `Sized + Copy + 'static` supertrait pair stays
+    /// untouched), no histogram-carrier allocation (the scalar-
+    /// difference shape yields a bare `usize` without materializing
+    /// the intermediate `Vec<usize>` histogram; the pair-return
+    /// corner streams through its two direction folds one at a time).
+    ///
+    /// Future consumers that compose against [`Self::variant_count_span`]:
+    /// a `tatara-check` predicate `(check-phases-are-balanced-within
+    /// K …)` that asserts a rollout window's PhaseKind histogram
+    /// spread stays within a fixed tolerance `K` (catching a
+    /// rollout that skews too far even without hitting full
+    /// non-uniformity); a Prometheus-style spread-gauge on a
+    /// `Vec<Process>` collection whose PhaseKind histogram span
+    /// exceeds a threshold (fires when one phase runs far more
+    /// often than another without necessarily saturating the fleet);
+    /// a Sekiban audit-trail per-window spread witness on a
+    /// classification poset that surfaces the spread as one scalar
+    /// gauge rather than a pair-gauge; an LSP diagnostic on a
+    /// Lisp-author-written closed-set field that reports the
+    /// histogram spread as one scalar hint ("your severities range
+    /// by 3 visits") rather than as an endpoint pair. Each binds to
+    /// ONE typed scalar-return span projection on the trait rather
+    /// than re-deriving the `(max_variant_count(items) -
+    /// min_variant_count(items))` subtraction inline per callsite.
+    ///
+    /// Compounding closure: this projection OPENS the scalar-
+    /// difference reduction column past the pair-return endpoint-
+    /// anchor corner and the bool-return uniformity corner on the
+    /// (set-level × statistical-aggregate) row of the equivalence-
+    /// partition surface. The (set-level × statistical-aggregate) ×
+    /// (`usize`-scalar-direction, `(usize, usize)`-pair,
+    /// `bool`-scalar, `usize`-scalar-difference) 4-corner return-
+    /// shape face now opens the fourth (scalar-difference range-
+    /// width) corner as the direct SCALAR-DIFFERENCE reduction of
+    /// the pair-return endpoint-anchor projection past the two
+    /// scalar direction corners and the pair-return corner. The
+    /// (uniformity, span) pair on the pair-return corner's TWO
+    /// scalar reductions gives downstream consumers a canonical
+    /// (bool, usize) surface for both the DEGENERACY witness and
+    /// the DEGREE-OF-DEGENERACY witness of the histogram.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// scalar-difference range-width projection becomes a TYPE-
+    /// level primitive on the closed-set trait rather than a per-
+    /// consumer inline `T::variant_count_range(items).1 -
+    /// T::variant_count_range(items).0` composition at every
+    /// downstream generic site. THEORY.md §V.1 — knowable platform;
+    /// the (scalar-difference range-width) corner was an unnamed
+    /// inline composition recurring at every prospective downstream
+    /// "how far apart are the histogram's endpoints?" site pre-
+    /// lift. Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the substrate's pair-return endpoint-anchor
+    /// projection packaged as one scalar. THEORY.md §VI.1 —
+    /// generation over composition; the scalar-difference range-
+    /// width projection emerges from the composition of ONE
+    /// substrate primitive ([`Self::variant_count_range`]) with the
+    /// standard-library `usize`-subtraction combinator on the
+    /// tuple's two slots, not as a per-implementor hand-rolled
+    /// body.
+    ///
+    /// Frontier inspiration: NumPy's `bincount(items).ptp()` (peak-
+    /// to-peak) on a categorical histogram; R's `diff(range(table
+    /// (items)))` composition on a factor carrier; Julia's `let vs
+    /// = values(StatsBase.countmap(items)); maximum(vs) -
+    /// minimum(vs)` on a `Dict{Element, Int}` histogram; Python's
+    /// `max(c.values()) - min(c.values())` idiom on a
+    /// `collections.Counter`; Haskell's `let hs = map length .
+    /// group . sort $ items in maximum hs - minimum hs` on
+    /// `Ord`-instance carriers; Clojure's `(let [vs (vals
+    /// (frequencies coll))] (- (apply max vs) (apply min vs)))`
+    /// composition on a map histogram; MATLAB's `range(bincount)`
+    /// idiom. Translation through pleme-io primitives: the N-ary
+    /// scalar-difference range-width projection on the closed-set
+    /// trait binds through the just-lifted pair-return endpoint-
+    /// anchor projection's slot-subtraction — no new dep, no
+    /// supertrait bound, no histogram-carrier allocation (the
+    /// scalar-difference shape yields a bare `usize` without
+    /// materializing the intermediate `Vec<usize>` histogram; the
+    /// pair-return corner streams through its two direction folds
+    /// one at a time).
+    fn variant_count_span(items: &[Self]) -> usize {
+        let (min_bar, max_bar) = <Self as ClosedSet>::variant_count_range(items);
+        max_bar - min_bar
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -25358,6 +25556,73 @@ where
         assert!(
             !T::is_uniform(&singleton),
             "{type_name}: T::is_uniform(&[T::ALL[0]]) == true on a cardinality-{cardinality} closed set — the N-ary bool-return uniformity predicate MUST report `false` on every singleton slice when T::CARDINALITY >= 2 because a singleton histogram is `(0, …, 0, 1, 0, …, 0)` with a strictly-positive (max == 1) bar at the hit variant and a strictly-zero (min == 0) bar at every other variant, so min-bar != max-bar; a `true` singleton value silently bifurcates the strictly-non-uniform singleton fixpoint contract every downstream uniformity consumer routes through, and catches a `_ => true` unconditional override that the three constant-histogram TRUE fixpoints (empty, full, doubled) cannot see",
+            cardinality = T::CARDINALITY,
+        );
+    }
+    // (104) — `T::variant_count_span(items)` MUST agree with the
+    // pair-return endpoint-anchor projection's slot-subtraction on
+    // every slice AND MUST land on its three canonical ZERO fixpoints
+    // (empty slice, full set, doubled full set — all three canonical
+    // constant-histogram fixpoints yield uniform histograms with span
+    // 0). The three ZERO fixpoints alone cannot catch a `_ => 0`
+    // unconditional override because all three yield `0` under the
+    // correct projection too. The composition-equality arm against
+    // the pair-return corner on the doubled full set catches drift
+    // where the scalar-difference projection detaches from the pair-
+    // endpoint-subtraction composition. The (T::CARDINALITY >= 2)
+    // singleton arm catches a `_ => 0` unconditional override where
+    // the correct projection would return `1` on the strictly-non-
+    // uniform singleton histogram `(0, 1)` at the pair-return
+    // corner. At T::CARDINALITY == 1 every histogram is trivially
+    // uniform (span == 0) so the singleton catcher is gated behind
+    // the cardinality guard. The default trait body threads
+    // `max_bar - min_bar` from the pair-return corner verbatim and
+    // satisfies all four arms for free; the assertion catches a
+    // future implementor whose override drifts the projection loudly
+    // rather than silently bifurcating the scalar-difference range-
+    // width projection surface every downstream span consumer routes
+    // through. Sibling posture to clauses (100) + (101) + (102) +
+    // (103) — clauses (100) + (101) pin the two scalar direction
+    // corners of the (set-level × usize × statistical-aggregate)
+    // column; clause (102) pins the pair-return endpoint-anchor
+    // corner one return-shape axis over; clause (103) pins the
+    // bool-return uniformity corner peer to them via slot-EQUALITY;
+    // this clause pins the usize-return SCALAR-DIFFERENCE corner
+    // peer to them via slot-SUBTRACTION and pins its composition
+    // through the pair-return corner so any drift in that
+    // underlying primitive that clauses (102) + (103) miss at their
+    // own composition-equality arms still bifurcates loudly at the
+    // scalar-difference composition-equality arm here. The usize-
+    // return column carries no ordering to permute on the output
+    // side (the projection is a scalar reduction of a slot-
+    // subtraction), so the (decl, lex) ordering axis collapses on
+    // this clause.
+    assert_eq!(
+        T::variant_count_span(&[]),
+        0,
+        "{type_name}: T::variant_count_span(&[]) != 0 — the N-ary scalar-difference range-width projection MUST report `0` on the empty slice because every per-variant occurrence count is `0` on a zero-position slice, the pair-return corner collapses to `(0, 0)`, and the difference collapses to `0 - 0 == 0`; a non-zero empty-slice value silently bifurcates the empty-slice ZERO-fixpoint contract every downstream span consumer routes through",
+    );
+    assert_eq!(
+        T::variant_count_span(T::ALL),
+        0,
+        "{type_name}: T::variant_count_span(T::ALL) != 0 — the N-ary scalar-difference range-width projection MUST report `0` on the full set by clause (3)'s pairwise-distinctness invariant because every variant appears at exactly one position, the pair-return corner collapses to `(1, 1)`, and the difference collapses to `1 - 1 == 0`; a non-zero full-set value silently bifurcates the (variant → decl-slot) injectivity clause (16) at the scalar-difference range-width projection surface, breaking every downstream span consumer",
+    );
+    assert_eq!(
+        T::variant_count_span(&doubled_full_set),
+        0,
+        "{type_name}: T::variant_count_span(&doubled_full_set) != 0 — the N-ary scalar-difference range-width projection MUST report `0` on the doubled full set because every variant appears at exactly two positions in the doubled slice, the pair-return corner collapses to `(2, 2)`, and the difference collapses to `2 - 2 == 0`; a non-zero doubled-full-set value silently detaches the scalar-difference range-width projection from the pinned per-variant occurrence count on the doubled-slice fixpoint, breaking every downstream span consumer",
+    );
+    assert_eq!(
+        T::variant_count_span(&doubled_full_set),
+        doubled_max_bar - doubled_min_bar,
+        "{type_name}: T::variant_count_span(&doubled_full_set) drifted from T::variant_count_range(&doubled_full_set).1 - T::variant_count_range(&doubled_full_set).0 — the N-ary scalar-difference range-width projection no longer agrees with the pair-return endpoint-anchor projection's slot-subtraction on the doubled-full-set fixpoint, so a downstream span consumer that binds `T::variant_count_span` as its scalar-return histogram-spread query surface would report the wrong scalar; the composition-equality arm catches an override that detaches the usize-return scalar-difference from the pair-endpoint subtraction on any slice",
+    );
+    if T::CARDINALITY >= 2 {
+        let singleton = [T::ALL[0]];
+        assert_eq!(
+            T::variant_count_span(&singleton),
+            1,
+            "{type_name}: T::variant_count_span(&[T::ALL[0]]) != 1 on a cardinality-{cardinality} closed set — the N-ary scalar-difference range-width projection MUST report `1` on every singleton slice when T::CARDINALITY >= 2 because a singleton histogram is `(0, …, 0, 1, 0, …, 0)`, the pair-return corner collapses to `(0, 1)`, and the difference collapses to `1 - 0 == 1`; a non-`1` singleton value silently bifurcates the strictly-non-uniform singleton fixpoint contract every downstream span consumer routes through, and catches a `_ => 0` unconditional override that the three constant-histogram ZERO fixpoints (empty, full, doubled) cannot see",
             cardinality = T::CARDINALITY,
         );
     }
@@ -51290,6 +51555,329 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted an AlwaysFalseIsUniformKind whose is_uniform override returns false unconditionally — clause (103)'s empty-slice + full-set + doubled-full-set TRUE-fixpoint arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn variant_count_span_returns_zero_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (usize × set-level × span-difference
+        // projection): `T::variant_count_span(&[])` is `0` on every
+        // implementor — the empty slice hits zero positions, every
+        // per-variant occurrence count is `0`, the pair-return corner
+        // collapses to `(0, 0)`, and the scalar-difference reduction
+        // collapses to `0 - 0 == 0`. Sibling posture to
+        // `is_uniform_returns_true_on_the_empty_slice_across_every_kind`
+        // one return-shape axis over: the bool-return uniformity
+        // corner reduces the degenerate tuple `(0, 0)` through slot-
+        // equality to `true`; this scalar-difference corner reduces
+        // the SAME tuple through slot-subtraction to `0`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::variant_count_span(empty),
+            0,
+            "T::variant_count_span(&[]) diverged from the empty-slice degenerate-histogram ZERO fixpoint",
+        );
+    }
+
+    #[test]
+    fn variant_count_span_returns_zero_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::variant_count_span(<T as ClosedSet>::ALL)
+        // == 0` UNCONDITIONALLY — the closed-set well-formedness
+        // invariant `assert_closed_set_well_formed`'s clause (3) pins
+        // variants as pairwise distinct, so every variant appears at
+        // exactly one position in `T::ALL`, the pair-return corner
+        // collapses to `(1, 1)`, and the scalar-difference reduction
+        // collapses to `1 - 1 == 0`. Sibling posture to
+        // `is_uniform_returns_true_on_the_full_set_across_every_kind`
+        // one return-shape axis over.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::variant_count_span(all),
+            0,
+            "T::variant_count_span(T::ALL) diverged from the full-set degenerate-histogram ZERO fixpoint",
+        );
+    }
+
+    #[test]
+    fn variant_count_span_returns_zero_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::variant_count_span(&doubled)
+        // == 0` UNCONDITIONALLY on the doubled-full-set slice — every
+        // variant appears at exactly two positions, the pair-return
+        // corner collapses to `(2, 2)`, and the scalar-difference
+        // reduction collapses to `2 - 2 == 0`. Sibling posture to
+        // `is_uniform_returns_true_on_the_doubled_full_set_across_every_kind`
+        // one return-shape axis over.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::variant_count_span(&doubled),
+            0,
+            "T::variant_count_span(&doubled_full_set) diverged from the doubled-full-set degenerate-histogram ZERO fixpoint",
+        );
+    }
+
+    #[test]
+    fn variant_count_span_returns_one_on_every_singleton_slice_when_cardinality_is_at_least_two_across_every_variant(
+    ) {
+        // SINGLETON SPAN-EQUALS-ONE CONTRACT:
+        // `T::variant_count_span(&[v]) == 1` on every variant `v` for
+        // every closed set of cardinality `>= 2` — a singleton hits
+        // exactly one variant at one position, the pair-return corner
+        // collapses to `(0, 1)`, and the scalar-difference reduction
+        // collapses to `1 - 0 == 1`. The singleton is the SMALLEST-
+        // arity non-degenerate span on a cardinality-`>= 2` closed
+        // set — the three canonical constant-histogram fixpoints
+        // (empty, full, doubled) all yield span `0`, so the singleton
+        // is the primary non-degenerate drift catcher for a `_ => 0`
+        // unconditional override. Sibling posture to
+        // `is_uniform_returns_false_on_every_singleton_slice_when_cardinality_is_at_least_two_across_every_variant`
+        // one return-shape axis over: the bool-return corner reduces
+        // the non-degenerate tuple `(0, 1)` through slot-equality to
+        // `false`; this scalar-difference corner reduces the SAME
+        // tuple through slot-subtraction to `1`.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::variant_count_span(&singleton),
+                1,
+                "T::variant_count_span(&[{v:?}]) diverged from 1 on a cardinality-{cardinality} closed set — the singleton histogram has min-bar == 0 and max-bar == 1, so max - min == 1",
+                cardinality = <StubKind as ClosedSet>::CARDINALITY,
+            );
+        }
+    }
+
+    #[test]
+    fn variant_count_span_agrees_with_variant_count_range_slot_subtraction_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (against pair-return
+        // endpoint-anchor slot-subtraction): for every slice `items`,
+        // `T::variant_count_span(items) ==
+        // T::variant_count_range(items).1 -
+        // T::variant_count_range(items).0` — the scalar-difference
+        // span projection agrees with the pair-return corner's slot-
+        // subtraction BYTE-FOR-BYTE. Sweeps every length-3 triple to
+        // pin the composition-equality contract across the 3×3×3 =
+        // 27-corner triple space. Catches a future override that
+        // detaches the scalar-difference span from the pair-endpoint-
+        // subtraction composition on any slice. Sibling posture to
+        // `is_uniform_agrees_with_variant_count_range_slot_equality_across_every_triple`
+        // one scalar-reduction axis over: the bool-return uniformity
+        // corner reduces through slot-EQUALITY; this scalar-
+        // difference corner reduces the SAME pair through slot-
+        // SUBTRACTION.
+        let empty: &[StubKind] = &[];
+        let (empty_min, empty_max) = <StubKind as ClosedSet>::variant_count_range(empty);
+        assert_eq!(
+            <StubKind as ClosedSet>::variant_count_span(empty),
+            empty_max - empty_min,
+            "T::variant_count_span(&[]) diverged from T::variant_count_range(&[]).1 - T::variant_count_range(&[]).0 — the scalar-difference span projection MUST agree with the pair-endpoint slot-subtraction byte-for-byte",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let (min_bar, max_bar) = <StubKind as ClosedSet>::variant_count_range(&triple);
+                    assert_eq!(
+                        <StubKind as ClosedSet>::variant_count_span(&triple),
+                        max_bar - min_bar,
+                        "T::variant_count_span({triple:?}) diverged from T::variant_count_range({triple:?}).1 - T::variant_count_range({triple:?}).0 — the scalar-difference span projection MUST agree with the pair-endpoint slot-subtraction byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_count_span_agrees_with_max_minus_min_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (against direction-corner
+        // pair subtraction): for every slice `items`,
+        // `T::variant_count_span(items) ==
+        // T::max_variant_count(items) - T::min_variant_count(items)`
+        // — the scalar-difference span projection routes through the
+        // two scalar direction corners via their subtraction
+        // reduction. Sibling posture to the
+        // `variant_count_range_equals_min_max_pair_across_every_triple`
+        // pair-return composition-equality contract one return-shape
+        // axis over: the pair-return corner packages both direction
+        // corners as a tuple; this scalar-difference corner reduces
+        // the same pair through slot-subtraction. Catches an override
+        // that routes through the WRONG direction-corner primitives
+        // on any slice where the correct pair would differ.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let min_bar = <StubKind as ClosedSet>::min_variant_count(&triple);
+                    let max_bar = <StubKind as ClosedSet>::max_variant_count(&triple);
+                    assert_eq!(
+                        <StubKind as ClosedSet>::variant_count_span(&triple),
+                        max_bar - min_bar,
+                        "T::variant_count_span({triple:?}) diverged from T::max_variant_count({triple:?}) - T::min_variant_count({triple:?}) — the scalar-difference span projection MUST agree with the direction-corner pair-subtraction reduction byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_count_span_equals_zero_iff_is_uniform_across_every_triple() {
+        // COMPOUNDING EQUATION with `is_uniform`: for every slice
+        // `items`, `T::variant_count_span(items) == 0 iff
+        // T::is_uniform(items)` — the scalar-difference span binds
+        // through the SAME pair-return corner as the bool-return
+        // uniformity projection but under a DIFFERENT scalar
+        // reduction (SUBTRACTION vs. EQUALITY). The (span == 0)
+        // predicate agrees byte-for-byte with `is_uniform` via the
+        // (slot-equality → zero-difference) tuple-projection
+        // reduction. Pins the typed relationship between the two
+        // scalar reductions of the pair-return corner as a byte-for-
+        // byte identity. Catches a future override that decouples
+        // the two scalar reductions on any slice.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::variant_count_span(empty) == 0,
+            <StubKind as ClosedSet>::is_uniform(empty),
+            "(T::variant_count_span(&[]) == 0) diverged from T::is_uniform(&[]) — the (span == 0) predicate MUST agree with the bool-return uniformity projection byte-for-byte",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::variant_count_span(&triple) == 0,
+                        <StubKind as ClosedSet>::is_uniform(&triple),
+                        "(T::variant_count_span({triple:?}) == 0) diverged from T::is_uniform({triple:?}) — the (span == 0) predicate MUST agree with the bool-return uniformity projection byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_count_span_is_bounded_above_by_max_variant_count_across_every_triple() {
+        // UPPER-BOUND CONTRACT: `T::variant_count_span(items) <=
+        // T::max_variant_count(items)` on every slice — the
+        // difference `max - min` is bounded above by `max` itself
+        // (since `min >= 0` by `usize` typing). Pins the range-
+        // width projection's non-inflating property against the
+        // max-bar direction corner. Sibling posture to
+        // `max_variant_count_is_bounded_above_by_slice_length_across_every_triple`
+        // one direction-corner axis over: the max-bar direction
+        // corner is bounded above by slice length; this scalar-
+        // difference corner is bounded above by the max-bar
+        // direction corner itself.
+        let empty: &[StubKind] = &[];
+        assert!(
+            <StubKind as ClosedSet>::variant_count_span(empty)
+                <= <StubKind as ClosedSet>::max_variant_count(empty),
+            "T::variant_count_span(&[]) > T::max_variant_count(&[]) — the scalar-difference span MUST be bounded above by the max-bar direction corner",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert!(
+                        <StubKind as ClosedSet>::variant_count_span(&triple)
+                            <= <StubKind as ClosedSet>::max_variant_count(&triple),
+                        "T::variant_count_span({triple:?}) > T::max_variant_count({triple:?}) — the scalar-difference span MUST be bounded above by the max-bar direction corner",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_count_span_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::variant_count_span(items) ==
+        // T::variant_count_span(reversed items)` on every slice —
+        // reversing preserves the multiset of variant identities,
+        // the (min-bar, max-bar) endpoints are functions of that
+        // multiset alone, and their subtraction inherits the
+        // reversal invariance. Sibling posture to
+        // `is_uniform_is_invariant_under_slice_reversal_across_every_triple`
+        // one scalar-reduction axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::variant_count_span(&forward),
+                        <StubKind as ClosedSet>::variant_count_span(&reversed),
+                        "T::variant_count_span diverged under slice reversal at ({forward:?}, {reversed:?}) — the scalar-difference span MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_zero_drift_in_variant_count_span() {
+        // Drift catch — clause (104)'s (T::CARDINALITY >= 2)
+        // singleton non-zero arm fires when an override folds the
+        // scalar-difference span projection onto `0` unconditionally.
+        // On the singleton `[T::ALL[0]]` at T::CARDINALITY == 3 the
+        // drift produces `0` (via the `_ => 0` override) rather than
+        // the correct `1` (min-bar == 0, max-bar == 1, so max - min
+        // == 1), tripping clause (104)'s singleton arm loudly. The
+        // three canonical constant-histogram fixpoints (empty, full,
+        // doubled) all pass trivially even with the always-zero
+        // drift because their correct return values are ALSO `0`;
+        // the singleton catcher is the load-bearing arm on the
+        // (T::CARDINALITY >= 2) branch.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ZeroDriftedVariantCountSpanKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownZeroDriftedVariantCountSpanKind(pub String);
+
+        impl core::fmt::Display for UnknownZeroDriftedVariantCountSpanKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown zero-drifted variant_count_span kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl ZeroDriftedVariantCountSpanKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for ZeroDriftedVariantCountSpanKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "zero-drifted variant_count_span kind";
+            type Unknown = UnknownZeroDriftedVariantCountSpanKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownZeroDriftedVariantCountSpanKind(s.to_owned())
+            }
+            fn variant_count_span(_items: &[Self]) -> usize {
+                0
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<ZeroDriftedVariantCountSpanKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a ZeroDriftedVariantCountSpanKind whose variant_count_span override folds onto 0 unconditionally — clause (104)'s (T::CARDINALITY >= 2) singleton non-zero arm MUST reject the drift",
         );
     }
 

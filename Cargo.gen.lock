@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "cargo_lock_sha256": "993c6b189dd2d6f3626fc1cc7072cf8474da71b25e146888c3d40638edf18efe",
+  "cargo_lock_sha256": "66d62fff26fe67aaeef5ee77aca5930d061a4963f102be1f895e128b70df2241",
   "target_resolves": {
     "base": {
       "Inflector-0.11.4": {
@@ -9669,6 +9669,44 @@
         "build_dependencies": [],
         "features": []
       },
+      "maquina-engine-0.1.0-d65a421d73676c1945ef0b276c09d5180ee26d4d": {
+        "runtime_dependencies": [
+          {
+            "name": "async_trait",
+            "package_key": "async-trait-0.1.89",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "host"
+          },
+          {
+            "name": "serde",
+            "package_key": "serde-1.0.228",
+            "kind": "normal",
+            "features": [
+              "derive"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "thiserror",
+            "package_key": "thiserror-2.0.18",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
       "matchers-0.2.0": {
         "runtime_dependencies": [
           {
@@ -18755,6 +18793,16 @@
             "uses_default_features": true,
             "optional": false,
             "target": "cfg(unix)",
+            "tree": "target"
+          },
+          {
+            "name": "maquina_engine",
+            "package_key": "maquina-engine-0.1.0-d65a421d73676c1945ef0b276c09d5180ee26d4d",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
             "tree": "target"
           },
           {
@@ -37425,6 +37473,9 @@
     "maplit-1.0.2": {
       "edition": "2015"
     },
+    "maquina-engine-0.1.0-d65a421d73676c1945ef0b276c09d5180ee26d4d": {
+      "edition": "2024"
+    },
     "matchers-0.2.0": {
       "edition": "2018"
     },
@@ -38724,6 +38775,7 @@
     "gen-types-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": "sha256-xEoWHdYqKyxsndqB8U0YRyVlFMOpppRqIpbSxwbUWEw=",
     "gen-types-0.1.6-eea15518fdff36d8b21ed753b6b161fc0d3623f6": "sha256-vFH1p5Kdlop4JZIOsAWCi3NHKRU5an0uH0rkvDVEZPk=",
     "kasou-0.1.0-bbfaf245e0baf0cb6b6b0b6639a56f4e87cb4955": "sha256-pcr1XCIMjE8ZzdFLmE0RqZPBQTmYX87syQpl1oBzrrc=",
+    "maquina-engine-0.1.0-d65a421d73676c1945ef0b276c09d5180ee26d4d": "sha256-lAjTERFvjPpC5K2tBdKxT7McP21mGqQX64thEyoF1ZQ=",
     "shigoto-types-0.1.0-391a47959d0c29115c0fc98a7574b78105a09d65": "sha256-Kr3puH1GvINctgqvYyMRuBVtKWLlhKiQi2tfqUgirc8=",
     "shikumi-0.1.0-9161fde44527ec6572640d8a77f6919583f6b342": "sha256-+i3dDX8R+NRqGx59TlEhg8ou5sH+xRZ2HXMSq/QfTLY=",
     "tsunagu-0.1.1-2219c0853a003bc89d98eae3ad05b369594072de": "sha256-TfiZRLXx7D0bftYfxX54XgRjvAII2SY8RVLFGDrxquM="

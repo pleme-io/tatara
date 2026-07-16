@@ -23,6 +23,10 @@ pub enum Hypervisor {
     /// pleme-io's Rust-native Virtualization.framework wrapper — drives the
     /// VM in-process, no CLI shell-out.
     Kasou,
+    /// pleme-io's Rust-native libkrun (Hypervisor.framework) wrapper — the
+    /// lowest blessed macOS VM interface, driven in-process via `tateru`, no
+    /// CLI shell-out. The default máquina engine (see `theory/MAQUINA.md`).
+    Libkrun,
 }
 
 impl Default for Hypervisor {

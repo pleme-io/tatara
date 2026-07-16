@@ -20,10 +20,26 @@ tatara-build-remote = { path = "../tatara-build-remote" , version = "0.2.65" }
 gen-platform = { git = "https://github.com/pleme-io/gen", branch = "main" , version = "0.1" }
 gen-types = { git = "https://github.com/pleme-io/gen", branch = "main" , version = "0.1" }
 
+# Backend-neutral máquina VM lifecycle trait (theory/MAQUINA.md §X M0). The
+# core (MaquinaEngine trait, VmShape, NetworkMode, ShareMount, …) is
+# host-agnostic and dependency-light — always present. The heavy,
+# macOS-only FFI backends (tateru/libkrun, kasou/VZ) are pulled in only via
+# the `engines` feature below, mirroring maquina-engine's own
+# tateru-backend/kasou-backend split.
+maquina-engine = { git = "https://github.com/pleme-io/maquina-engine" , version = "0.1" }
+
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 blake3 = "1"
+
+[features]
+# Rust-native, in-process VmEngine backends (zero shell-out). macOS-only —
+# turns on maquina-engine's own backend features. Without this feature,
+# `engine::engine_for` still exists but always reports
+# `EngineSelectError::Unavailable`, keeping the default build
+# dependency-light (no tateru/kasou FFI).
+engines = ["maquina-engine/tateru-backend", "maquina-engine/kasou-backend"]
 
 [[bin]]
 name = "tatara-boot-gen"

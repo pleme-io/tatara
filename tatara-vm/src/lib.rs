@@ -32,7 +32,9 @@
 pub mod boot;
 pub mod config;
 pub mod darwin_rootfs;
+pub mod engine;
 pub mod guest;
+pub mod maquina;
 pub mod rootfs;
 pub mod vfkit;
 
@@ -41,6 +43,7 @@ pub use config::{
     GuestKernel, GuestRootfs, Hypervisor, NetworkKind, NetworkSpec, ShareSpec, VmSpec,
 };
 pub use darwin_rootfs::DarwinRootfs;
+pub use engine::{engine_for, EngineSelectError};
 pub use guest::{GuestKind, GuestSpec, ResourceLimits, WasmSpec};
 pub use rootfs::{GuestPackage, InitrdContent, InitrdFile, LinuxRootfs};
 pub use vfkit::{VfkitEmitter, VfkitJson};

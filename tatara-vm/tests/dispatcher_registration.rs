@@ -10,6 +10,8 @@
 //!   - VfkitDarwin (Apple Virtualization.framework, Darwin guests)
 //!   - Qemu        (KVM/HVF portable fallback)
 //!   - Kasou       (pleme-io Rust-native VZ wrapper, in-process)
+//!   - Libkrun     (pleme-io Rust-native libkrun wrapper, in-process — the
+//!                  default máquina engine, see theory/MAQUINA.md)
 
 use gen_platform::{catalog, TypedDispatcherTrait};
 use tatara_vm::Hypervisor;
@@ -19,14 +21,14 @@ fn hypervisor_registers_into_fleet_catalog() {
     let entry = catalog::by_label("tatara.hypervisor")
         .expect("tatara-vm must register Hypervisor into the fleet catalog");
     assert_eq!(entry.label, "tatara.hypervisor");
-    assert_eq!((entry.variant_count)(), 4);
+    assert_eq!((entry.variant_count)(), 5);
 }
 
 #[test]
 fn hypervisor_variant_kinds_kebab() {
     assert_eq!(
         Hypervisor::variant_kinds(),
-        vec!["vfkit", "vfkit-darwin", "qemu", "kasou"]
+        vec!["vfkit", "vfkit-darwin", "qemu", "kasou", "libkrun"]
     );
 }
 
@@ -38,6 +40,7 @@ fn hypervisor_round_trip() {
         Hypervisor::VfkitDarwin,
         Hypervisor::Qemu,
         Hypervisor::Kasou,
+        Hypervisor::Libkrun,
     ] {
         let k = variant.discriminant();
         let back = Hypervisor::from_str(k)
@@ -51,6 +54,7 @@ fn hypervisor_display_delegates_to_discriminant() {
     assert_eq!(Hypervisor::Vfkit.to_string(), "vfkit");
     assert_eq!(Hypervisor::VfkitDarwin.to_string(), "vfkit-darwin");
     assert_eq!(Hypervisor::Kasou.to_string(), "kasou");
+    assert_eq!(Hypervisor::Libkrun.to_string(), "libkrun");
 }
 
 #[test]
@@ -60,6 +64,11 @@ fn hypervisor_predicates() {
     assert!(!qemu.is_vfkit());
     assert!(!qemu.is_vfkit_darwin());
     assert!(!qemu.is_kasou());
+    assert!(!qemu.is_libkrun());
+
+    let libkrun = Hypervisor::Libkrun;
+    assert!(libkrun.is_libkrun());
+    assert!(!libkrun.is_kasou());
 }
 
 #[test]

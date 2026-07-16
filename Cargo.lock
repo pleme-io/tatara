@@ -3541,6 +3541,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
+name = "maquina-engine"
+version = "0.1.0"
+source = "git+https://github.com/pleme-io/maquina-engine#d65a421d73676c1945ef0b276c09d5180ee26d4d"
+dependencies = [
+ "async-trait",
+ "kasou",
+ "serde",
+ "tateru",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6438,6 +6450,7 @@ dependencies = [
  "gen-platform 0.1.0",
  "gen-types 0.1.0",
  "libc",
+ "maquina-engine",
  "serde",
  "serde_json",
  "tatara-build-remote",
@@ -6462,6 +6475,18 @@ dependencies = [
  "wasmtime 25.0.3",
  "wasmtime-wasi 25.0.3",
  "wat",
+]
+
+[[package]]
+name = "tateru"
+version = "0.1.0"
+source = "git+https://github.com/pleme-io/tateru#4c58ac3759800b3b3d3e07cc803d1c68ac5c9d39"
+dependencies = [
+ "libc",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

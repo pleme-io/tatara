@@ -15876,6 +15876,201 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .unwrap_or(0)
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "variant-count range" projection —
+    /// the `(usize, usize)` PAIR of the histogram's (min-bar, max-bar)
+    /// endpoints projected onto the trait surface as ONE call. The
+    /// PAIR-RETURN endpoint-anchor opener on the (set-level ×
+    /// statistical-aggregate) column of the equivalence-partition
+    /// surface, positioned as the direct TUPLE-RETURN peer to the
+    /// two just-closed scalar-return direction corners
+    /// [`Self::min_variant_count`] + [`Self::max_variant_count`] one
+    /// return-shape axis over. The (set-level × statistical-aggregate)
+    /// × (`usize`-scalar, `(usize, usize)`-pair) 2-corner return-shape
+    /// face on the equivalence-partition surface now opens the pair-
+    /// return endpoint-anchor column past the (min-bar) + (max-bar)
+    /// scalar corners.
+    ///
+    /// Direction-axis convention: the returned tuple's slot `0` is the
+    /// (min-bar), slot `1` is the (max-bar) — the `(min, max)`
+    /// convention mirrors the standard-library
+    /// [`Iterator::min`]/[`Iterator::max`] pair AND the pre-existing
+    /// [`Self::endpoint_indices`]'s `(head, tail)` convention one
+    /// axis-family over on the label-anchor surface. The two tuple
+    /// slots are the DIRECTION endpoints of the histogram range on the
+    /// per-variant occurrence-count axis: slot `0` reports the LEAST-
+    /// common multiplicity, slot `1` reports the MODAL multiplicity.
+    ///
+    /// Composition-equality contract: for every slice `items`,
+    /// `T::variant_count_range(items) == (T::min_variant_count(items),
+    /// T::max_variant_count(items))` — the pair-return endpoint-anchor
+    /// projection binds through the two just-closed direction corners
+    /// on the (set-level × statistical-aggregate) column BYTE-FOR-BYTE.
+    /// Pinned by `variant_count_range_equals_min_max_pair_across_every_triple`.
+    ///
+    /// Direction-axis order invariance: for every slice `items`,
+    /// `T::variant_count_range(items).0 <= T::variant_count_range(items).1`
+    /// UNCONDITIONALLY — the (min-bar) endpoint is bounded above by
+    /// the (max-bar) endpoint on every slice because `min(xs) <=
+    /// max(xs)` on every non-empty carrier `xs` (and `T::CARDINALITY
+    /// >= 1` by clause (1) guarantees non-emptiness of the histogram
+    /// carrier). Pinned by
+    /// `variant_count_range_first_bounded_above_by_second_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::variant_count_range(&[]) == (0, 0)`
+    /// UNCONDITIONALLY — the empty slice hits zero positions, so
+    /// every per-variant occurrence count is `0` and BOTH direction
+    /// endpoints collapse to `0`. The tuple's slot-0 and slot-1
+    /// coincide at the empty-slice fixpoint because a constant-`0`
+    /// histogram has degenerate range. Pinned by
+    /// `variant_count_range_returns_zero_zero_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract: `T::variant_count_range(<T as ClosedSet>::ALL)
+    /// == (1, 1)` UNCONDITIONALLY — the closed-set well-formedness
+    /// invariant [`assert_closed_set_well_formed`]'s clause (3) pins
+    /// variants as pairwise distinct, so every variant of [`Self::ALL`]
+    /// appears at exactly one position in the full-set slice and every
+    /// per-variant occurrence count is `1`, collapsing BOTH direction
+    /// endpoints to `1`. The tuple's slot-0 and slot-1 coincide at the
+    /// full-set fixpoint because a constant-`1` histogram has
+    /// degenerate range. Pinned by
+    /// `variant_count_range_returns_one_one_on_the_full_set_across_every_kind`.
+    ///
+    /// Doubled-full-set contract: `T::variant_count_range(&doubled)
+    /// == (2, 2)` UNCONDITIONALLY — the doubled-full-set slice appends
+    /// [`Self::ALL`] to itself, so every variant appears at EXACTLY two
+    /// positions and BOTH direction endpoints collapse to `2`. The
+    /// tuple's slot-0 and slot-1 coincide at the doubled-full-set
+    /// fixpoint because a constant-`2` histogram has degenerate range.
+    /// Pinned by
+    /// `variant_count_range_returns_two_two_on_the_doubled_full_set_across_every_kind`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on BOTH input AND output axes — permuting
+    /// `items` preserves its multiset of variant identities, and the
+    /// (min-bar, max-bar) pair is a function of that multiset alone;
+    /// the pair-return shape carries no ordering to permute on the
+    /// output side (the `(min, max)` convention pins slot roles by
+    /// direction, not by input order). Pinned by
+    /// `variant_count_range_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Compounding equations: the pair-return endpoint-anchor
+    /// projection collapses to the DEGENERATE (equal-slot) tuple iff
+    /// the histogram is UNIFORM — for every slice `items`,
+    /// `T::variant_count_range(items).0 == T::variant_count_range(items).1`
+    /// iff every per-variant occurrence count coincides. The three
+    /// canonical fixpoints (empty → `(0, 0)`, full → `(1, 1)`,
+    /// doubled → `(2, 2)`) exercise the degenerate-tuple case at three
+    /// distinct scalar values (`0`, `1`, `2`) so a future override
+    /// that folds onto a constant tuple bifurcates at the fixpoint
+    /// with the diverging value. The non-degenerate case is exercised
+    /// by every singleton `T::variant_count_range(&[v])` on a closed
+    /// set of cardinality `>= 2`, which returns `(0, 1)` (all other
+    /// variants miss, the target variant hits once) — the tuple's
+    /// slot-0 records the UN-HIT variants' bar, slot-1 records the
+    /// TARGET variant's bar. Sibling posture to
+    /// [`Self::endpoint_indices`] on the label-anchor surface one
+    /// axis-family over — [`Self::endpoint_indices`] packages the
+    /// (head-decl-slot, tail-decl-slot) pair on the (usize, usize)
+    /// pair-endpoint row of the declaration-axis label-anchor
+    /// aggregation matrix; this method packages the (min-bar, max-bar)
+    /// pair on the (usize, usize) pair-endpoint row of the set-level
+    /// statistical-aggregate matrix. Both close the pair-endpoint
+    /// row at their respective axis-family through a natural
+    /// composition of the two direction corners.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's two just-closed direction corners on the (set-level
+    /// × usize × statistical-aggregate) column — the composition uses
+    /// `(<Self as ClosedSet>::min_variant_count(items), <Self as
+    /// ClosedSet>::max_variant_count(items))` verbatim. Cost is
+    /// O(T::CARDINALITY * n) on slice arity `n` (folded through the
+    /// two direction corners, each of which walks `T::ALL` once and
+    /// sums per-target multiplicities over `items`) — no `PartialEq`/
+    /// `Eq`/`Hash` supertrait bound (the trait's minimal `Sized +
+    /// Copy + 'static` supertrait pair stays untouched), no map-shape
+    /// carrier, no allocation (the pair-return shape is a bare
+    /// `(usize, usize)` tuple).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::variant_count_range`]: a `tatara-check` predicate
+    /// `(check-phases-histogram-range …)` that emits the (least, most)
+    /// visited-variant multiplicity pair for a rollout window on a
+    /// `WorkloadPhase` sweep, so an operator sees "0 → 3" or "2 → 5"
+    /// at a glance rather than two separate scalar readouts; a
+    /// Prometheus-style metric emitter that binds the
+    /// `variant_count_range` gauge pair (min-bar + max-bar side-by-
+    /// side) rather than binding two separate scalar-gauge queries; a
+    /// Sekiban audit-trail per-window statistical projection that
+    /// surfaces the histogram range as one composite witness rather
+    /// than two scalar-witnesses; an LSP diagnostic that renders "0..3
+    /// visits" as an author-facing hint on a Lisp-author-written
+    /// closed-set field; a tatara-reconciler status printer that
+    /// projects a `Vec<Process>` collection's PhaseKind histogram
+    /// range onto the operator's dashboard as one pair. Each binds to
+    /// ONE typed pair-return endpoint-anchor projection on the trait
+    /// rather than re-deriving the `(min_variant_count(items),
+    /// max_variant_count(items))` pair inline per callsite.
+    ///
+    /// Compounding closure: this projection OPENS the pair-return
+    /// column past the (min-bar) + (max-bar) scalar corners on the
+    /// (set-level × statistical-aggregate) row of the equivalence-
+    /// partition surface. The (set-level × statistical-aggregate) ×
+    /// (`usize`-scalar, `(usize, usize)`-pair) 2-corner return-shape
+    /// face now opens the pair-return endpoint-anchor column at the
+    /// direct tuple-endpoint peer to the two scalar direction corners.
+    /// Downstream range-based aggregates naturally compose from this
+    /// pair — the histogram spread (max - min saturated) and the
+    /// uniformity predicate (`min == max`) both bind through the same
+    /// pair-endpoint primitive under distinct scalar reductions,
+    /// mirroring the earlier `(head, tail)` label-anchor pair's
+    /// composition through `sorted_endpoints` /
+    /// `endpoint_indices` / `endpoint_labels`.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// pair-return endpoint-anchor projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `(T::min_variant_count(items), T::max_variant_count
+    /// (items))` composition at every downstream generic site.
+    /// THEORY.md §V.1 — knowable platform; the (pair-return endpoint-
+    /// anchor) corner was an unnamed inline composition recurring at
+    /// every prospective downstream "what is the histogram's range?"
+    /// site pre-lift. Naming it on the trait makes the projection a
+    /// TYPED CONSEQUENCE of the substrate's two direction corners
+    /// packaged as one pair-return tuple. THEORY.md §VI.1 — generation
+    /// over composition; the pair-return endpoint-anchor projection
+    /// emerges from the composition of TWO substrate primitives
+    /// ([`Self::min_variant_count`] + [`Self::max_variant_count`])
+    /// packaged as one atomic tuple, not as a per-implementor hand-
+    /// rolled body.
+    ///
+    /// Frontier inspiration: NumPy's `(bincount(items).min(),
+    /// bincount(items).max())` idiom returned as one tuple; R's
+    /// `range(table(items))` on a factor carrier — returns the
+    /// two-endpoint vector of the histogram's per-level counts;
+    /// Julia's `extrema(values(StatsBase.countmap(items)))` on a
+    /// `Dict{Element, Int}` histogram; Python's `(min(c.values()),
+    /// max(c.values()))` idiom on a `collections.Counter`; Haskell's
+    /// `(minimum . map length . group . sort, maximum . map length .
+    /// group . sort)` pair on `Ord`-instance carriers; Clojure's
+    /// `(let [vs (vals (frequencies coll))] [(apply min 0 vs) (apply
+    /// max 0 vs)])` composition on a map histogram; Coq's `(list_min
+    /// ∘ counts, list_max ∘ counts)` pair on a decidable-equality
+    /// carrier. Translation through pleme-io primitives: the N-ary
+    /// pair-return endpoint-anchor projection on the closed-set trait
+    /// binds through the two direction corners of the set-level
+    /// statistical-aggregate column packaged as one atomic tuple —
+    /// no new dep, no supertrait bound, no histogram-carrier
+    /// allocation (the pair-return shape yields a bare
+    /// `(usize, usize)` tuple without materializing the intermediate
+    /// `Vec<usize>` histogram; the two direction corners each stream
+    /// through their own fold one at a time).
+    fn variant_count_range(items: &[Self]) -> (usize, usize) {
+        (
+            <Self as ClosedSet>::min_variant_count(items),
+            <Self as ClosedSet>::max_variant_count(items),
+        )
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -24851,6 +25046,74 @@ where
         T::min_variant_count(T::ALL),
         full_set_min_bar_expected,
         "{type_name}: T::min_variant_count(T::ALL) drifted from T::variant_counts(T::ALL).into_iter().min().unwrap_or(0) — the N-ary scalar least-common-multiplicity aggregate no longer agrees with the min-reduction over the decl-order per-slot histogram on the full-set fixpoint, so a downstream statistical-aggregate consumer that binds `T::min_variant_count` as its scalar min-bar query surface would report the wrong bar-height",
+    );
+    // (102) — `T::variant_count_range(items)` MUST agree with the
+    // `(min_variant_count, max_variant_count)` pair on every slice AND
+    // MUST land on its three canonical degenerate-tuple fixpoints
+    // (`(0, 0)` on the empty slice, `(1, 1)` on the full set, `(2, 2)`
+    // on the doubled full set). The three fixpoints partition the
+    // failure modes at the (scalar-value × slice-shape × tuple-slot)
+    // corner simultaneously so an override that folds onto
+    // `(items.len(), items.len())` unconditionally fires on the full-
+    // set arm (returns `(T::CARDINALITY, T::CARDINALITY)` rather than
+    // `(1, 1)` at every T::CARDINALITY >= 2); an override that
+    // returns `(0, 0)` unconditionally fires on the full-set arm
+    // (returns `(0, 0)` rather than `(1, 1)`) AND the doubled-full-
+    // set arm (returns `(0, 0)` rather than `(2, 2)`); an override
+    // that swaps the tuple slots (returns `(max_variant_count,
+    // min_variant_count)` instead of `(min_variant_count,
+    // max_variant_count)`) survives every constant-histogram fixpoint
+    // (all three are degenerate tuples where the swap is invisible)
+    // but bifurcates loudly at the composition-equality arm against
+    // the pinned `(T::min_variant_count(T::ALL), T::max_variant_count
+    // (T::ALL))` pair on any non-degenerate slice — the full-set arm
+    // is degenerate at `(1, 1)` so the swap survives there, but any
+    // real closed-set implementor with a non-fixpoint sweep at the
+    // downstream test surface catches the swap. The default trait body
+    // threads `(T::min_variant_count(items), T::max_variant_count
+    // (items))` verbatim and satisfies all three fixpoint arms + the
+    // composition-equality arm for free; the assertion catches a
+    // future implementor whose override drifts the projection loudly
+    // rather than silently bifurcating the pair-return endpoint-
+    // anchor projection surface every downstream range consumer routes
+    // through. Sibling posture to clauses (100) + (101) — clauses (100)
+    // + (101) pin the two scalar direction corners of the (set-level ×
+    // usize × statistical-aggregate) column; this clause pins the
+    // pair-return endpoint-anchor corner peer to them one return-shape
+    // axis over (scalar-return → pair-return via `(min, max)`
+    // packaging), and pins its composition through both direction
+    // corners simultaneously so any drift in either underlying
+    // primitive that clauses (100) or (101) miss at their respective
+    // scalar-return corner still bifurcates loudly at the pair-return
+    // composition-equality arm here. The pair-return column carries
+    // no ordering to permute on the output side (the `(min, max)`
+    // convention pins slot roles by direction, not by input order), so
+    // the (decl, lex) ordering axis collapses on this clause.
+    assert_eq!(
+        T::variant_count_range(&[]),
+        (0, 0),
+        "{type_name}: T::variant_count_range(&[]) != (0, 0) — the N-ary pair-return endpoint-anchor projection MUST report the `(0, 0)` degenerate tuple on the empty slice because every per-variant occurrence count is `0` on a zero-position slice and BOTH direction endpoints collapse to `0`; a non-(0, 0) empty-slice value silently bifurcates the empty-slice degenerate-tuple fixpoint contract every downstream histogram-range consumer routes through",
+    );
+    assert_eq!(
+        T::variant_count_range(T::ALL),
+        (1, 1),
+        "{type_name}: T::variant_count_range(T::ALL) != (1, 1) — the N-ary pair-return endpoint-anchor projection MUST report the `(1, 1)` degenerate tuple on the full set by clause (3)'s pairwise-distinctness invariant because every variant appears at exactly one position and BOTH direction endpoints collapse to `1`; a full-set pair != (1, 1) silently bifurcates the (variant → decl-slot) injectivity clause (16) at the pair-return endpoint-anchor projection surface, breaking every downstream histogram-range consumer",
+    );
+    assert_eq!(
+        T::variant_count_range(&doubled_full_set),
+        (2, 2),
+        "{type_name}: T::variant_count_range(&doubled_full_set) != (2, 2) — the N-ary pair-return endpoint-anchor projection MUST report the `(2, 2)` degenerate tuple on the doubled full set because every variant appears at exactly two positions in the doubled slice and BOTH direction endpoints collapse to `2`; a doubled-full-set pair != (2, 2) silently detaches the pair-return endpoint anchors from the pinned per-variant occurrence count on the doubled-slice fixpoint, breaking every downstream histogram-range consumer",
+    );
+    let full_set_range_expected = (T::min_variant_count(T::ALL), T::max_variant_count(T::ALL));
+    assert_eq!(
+        T::variant_count_range(T::ALL),
+        full_set_range_expected,
+        "{type_name}: T::variant_count_range(T::ALL) drifted from (T::min_variant_count(T::ALL), T::max_variant_count(T::ALL)) — the N-ary pair-return endpoint-anchor projection no longer agrees with the (min-bar, max-bar) direction-corner pair on the full-set fixpoint, so a downstream range consumer that binds `T::variant_count_range` as its pair-return histogram-endpoint query surface would report the wrong endpoint pair; the composition-equality arm catches an override that swaps the tuple slots on any non-degenerate slice AND catches any override whose direction-corner composition drifts loudly",
+    );
+    let (range_min, range_max) = T::variant_count_range(&doubled_full_set);
+    assert!(
+        range_min <= range_max,
+        "{type_name}: T::variant_count_range(&doubled_full_set) == ({range_min}, {range_max}) violates the (slot-0 <= slot-1) direction-axis order — the (min-bar) endpoint MUST be bounded above by the (max-bar) endpoint on every slice because `min(xs) <= max(xs)` on every non-empty carrier `xs`; a slot-0 > slot-1 tuple at the doubled-full-set fixpoint indicates the pair-return projection swapped its slot roles or drifted the composition through a non-monotone reduction",
     );
 }
 
@@ -49980,6 +50243,448 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a OneDriftedMinVariantCountKind whose min_variant_count override returns 1 unconditionally — clause (101)'s empty-slice + doubled-full-set fixpoint arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn variant_count_range_returns_zero_zero_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (pair × set-level × endpoint-anchor
+        // projection): `T::variant_count_range(&[])` is `(0, 0)` on
+        // every implementor — the empty slice hits zero positions, so
+        // every per-variant occurrence count is `0` and BOTH direction
+        // endpoints collapse to `0`. Sibling posture to
+        // `min_variant_count_returns_zero_on_the_empty_slice_across_every_kind`
+        // and `max_variant_count_returns_zero_on_the_empty_slice_across_every_kind`
+        // one return-shape axis over: both scalar direction corners
+        // return `0` on the empty slice (all bars 0 → min == max == 0);
+        // this pair-return projection agrees byte-for-byte at both
+        // slots. The (min, max) direction endpoints coincide at the
+        // empty-slice fixpoint because a constant-`0` histogram has
+        // degenerate range.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::variant_count_range(empty),
+            (0, 0),
+            "T::variant_count_range(&[]) diverged from the empty-slice degenerate-tuple fixpoint `(0, 0)`",
+        );
+    }
+
+    #[test]
+    fn variant_count_range_returns_zero_one_on_every_singleton_slice_when_cardinality_is_at_least_two_across_every_variant(
+    ) {
+        // SINGLETON CONTRACT: `T::variant_count_range(&[v]) == (0, 1)`
+        // on every variant `v` for every closed set of cardinality
+        // `>= 2` — a singleton hits exactly one variant at one
+        // position, leaving every OTHER variant at zero occurrences,
+        // so the (min-bar) endpoint collapses to `0` (any un-hit
+        // variant's bar) and the (max-bar) endpoint collapses to `1`
+        // (the target variant's bar). The (0, 1) tuple is the DIRECT
+        // NON-DEGENERATE case exercising both distinct-slot roles
+        // simultaneously — the constant-histogram fixpoints all
+        // return degenerate tuples where a slot-swap is invisible;
+        // this (0, 1) tuple is the SMALLEST-arity fixpoint that
+        // catches a swap. Sibling posture to
+        // `min_variant_count_returns_zero_on_every_singleton_slice_when_cardinality_is_at_least_two_across_every_variant`
+        // + `max_variant_count_returns_one_on_every_singleton_slice_across_every_variant`
+        // one return-shape axis over: the two scalar direction corners
+        // return `0` and `1` respectively on the singleton, and this
+        // pair-return projection binds both simultaneously.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::variant_count_range(&singleton),
+                (0, 1),
+                "T::variant_count_range(&[{v:?}]) diverged from the singleton-slice fixpoint `(0, 1)` on a cardinality-{cardinality} closed set — slot-0 MUST collapse to the un-hit variants' bar height `0` and slot-1 MUST collapse to the target variant's bar height `1`",
+                cardinality = <StubKind as ClosedSet>::CARDINALITY,
+            );
+        }
+    }
+
+    #[test]
+    fn variant_count_range_returns_one_one_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::variant_count_range(<T as ClosedSet>::ALL)
+        // == (1, 1)` UNCONDITIONALLY — the closed-set well-formedness
+        // invariant `assert_closed_set_well_formed`'s clause (3) pins
+        // labels (and hence variants) as pairwise distinct, so every
+        // variant appears in `T::ALL` at exactly one position and
+        // BOTH direction endpoints collapse to `1`. The (min, max)
+        // direction endpoints coincide at the full-set fixpoint
+        // because a constant-`1` histogram has degenerate range.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::variant_count_range(all),
+            (1, 1),
+            "T::variant_count_range(T::ALL) diverged from the full-set degenerate-tuple fixpoint `(1, 1)` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+        );
+    }
+
+    #[test]
+    fn variant_count_range_returns_two_two_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::variant_count_range(&doubled)`
+        // is `(2, 2)` UNCONDITIONALLY on the doubled-full-set slice —
+        // every variant appears at EXACTLY two positions and BOTH
+        // direction endpoints collapse to `2`. The (min, max)
+        // direction endpoints coincide at the doubled-full-set
+        // fixpoint because a constant-`2` histogram has degenerate
+        // range.
+        let doubled: ::std::vec::Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::variant_count_range(&doubled),
+            (2, 2),
+            "T::variant_count_range(&doubled_full_set) diverged from the doubled-full-set degenerate-tuple fixpoint `(2, 2)`",
+        );
+    }
+
+    #[test]
+    fn variant_count_range_equals_min_max_pair_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (against direction-corner
+        // pair): for every slice `items`,
+        // `T::variant_count_range(items) ==
+        // (T::min_variant_count(items), T::max_variant_count(items))`
+        // — the pair-return endpoint-anchor projection agrees with the
+        // scalar-return direction-corner pair BYTE-FOR-BYTE. Sweeps
+        // every length-3 triple pins the composition-equality contract
+        // across the 3×3×3 = 27-corner triple space. Catches a future
+        // override that swaps the tuple slots (returns `(max, min)`
+        // instead of `(min, max)`) on any non-degenerate slice, and
+        // catches a future override that folds through the WRONG
+        // direction-corner primitives (e.g. `(count_distinct,
+        // count_distinct)` or `(items.len(), items.len())`) on any
+        // slice where the two would differ.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let range = <StubKind as ClosedSet>::variant_count_range(&triple);
+                    let via_min_max = (
+                        <StubKind as ClosedSet>::min_variant_count(&triple),
+                        <StubKind as ClosedSet>::max_variant_count(&triple),
+                    );
+                    assert_eq!(
+                        range, via_min_max,
+                        "T::variant_count_range({triple:?}) diverged from (T::min_variant_count({triple:?}), T::max_variant_count({triple:?})) — the pair-return endpoint-anchor projection MUST agree with the scalar direction-corner pair byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_count_range_first_bounded_above_by_second_across_every_triple() {
+        // DIRECTION-AXIS ORDER INVARIANT: for every slice `items`,
+        // `T::variant_count_range(items).0 <= T::variant_count_range(items).1`
+        // — the (min-bar) endpoint (slot-0) is bounded above by the
+        // (max-bar) endpoint (slot-1) on every slice because `min(xs)
+        // <= max(xs)` on every non-empty carrier `xs` (and
+        // `T::CARDINALITY >= 1` by clause (1) guarantees non-emptiness
+        // of the histogram carrier). Pins the tuple-slot direction-axis
+        // order on the (set-level × statistical-aggregate × pair-
+        // endpoint) row at both endpoints simultaneously. Sweeps every
+        // length-3 triple to pin the invariant across the 3×3×3 = 27-
+        // corner triple space; the empty-slice, singleton, and
+        // doubled-slice sub-corners stress-test the boundary at the
+        // constant-histogram fixpoints (where the two endpoints
+        // coincide) and at the maximally-divergent singleton (where
+        // they hit `(0, 1)`). Sibling posture to
+        // `min_variant_count_is_bounded_above_by_max_variant_count_across_every_triple`
+        // one return-shape axis over: the scalar-return direction-
+        // corner pair inherits the same order invariant; this pair-
+        // return projection binds both endpoints simultaneously
+        // through the SAME direction-corner pair, so the invariant
+        // routes through the same composition.
+        let empty: &[StubKind] = &[];
+        let (min_bar, max_bar) = <StubKind as ClosedSet>::variant_count_range(empty);
+        assert!(
+            min_bar <= max_bar,
+            "T::variant_count_range(&[]) == ({min_bar}, {max_bar}) violates the (slot-0 <= slot-1) direction-axis order on the empty-slice fixpoint",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let (min_bar, max_bar) = <StubKind as ClosedSet>::variant_count_range(&triple);
+                    assert!(
+                        min_bar <= max_bar,
+                        "T::variant_count_range({triple:?}) == ({min_bar}, {max_bar}) violates the (slot-0 <= slot-1) direction-axis order",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_count_range_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::variant_count_range(items) == T::variant_count_range(reversed items)`
+        // on every slice — reversing a slice preserves its multiset of
+        // variant identities, and BOTH direction endpoints are
+        // functions of that multiset alone. Sibling posture to
+        // `min_variant_count_is_invariant_under_slice_reversal_across_every_triple`
+        // + `max_variant_count_is_invariant_under_slice_reversal_across_every_triple`
+        // one return-shape axis over: the two scalar direction corners
+        // each inherit the reversal-invariance from the per-slot
+        // histogram they fold through; this pair-return projection
+        // packages both simultaneously and inherits the invariance at
+        // BOTH slots.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let mut reversed = forward;
+                    reversed.reverse();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::variant_count_range(&forward),
+                        <StubKind as ClosedSet>::variant_count_range(&reversed),
+                        "T::variant_count_range diverged under slice reversal at ({forward:?}, {reversed:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_count_range_first_equals_zero_iff_is_missing_any_across_every_triple() {
+        // COMPOUNDING EQUATION with `is_missing_any` (via slot-0):
+        // for every slice `items`,
+        // `T::variant_count_range(items).0 == 0` iff
+        // `T::is_missing_any(items)` — the pair-return endpoint-
+        // anchor projection's slot-0 at the (`== 0`) threshold is the
+        // TYPED WITNESS behind the N-ary missing-any predicate. The
+        // pair-return corner INHERITS the min-bar's compounding
+        // equation on slot-0 through the composition-equality
+        // contract at clause (102). Sibling posture to
+        // `min_variant_count_equals_zero_iff_is_missing_any_across_every_triple`
+        // one return-shape axis over: the scalar (min-bar) corner
+        // holds the primary compounding equation; the pair-return
+        // corner routes through slot-0 to the same predicate via the
+        // composition-equality pair.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let slot_zero = <StubKind as ClosedSet>::variant_count_range(&triple).0;
+                    let missing_any = <StubKind as ClosedSet>::is_missing_any(&triple);
+                    assert_eq!(
+                        slot_zero == 0,
+                        missing_any,
+                        "T::variant_count_range({triple:?}).0 == 0 diverged from T::is_missing_any({triple:?}) — the pair-return endpoint-anchor projection's slot-0 at the `== 0` threshold MUST agree with the N-ary missing-any predicate",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variant_count_range_second_at_most_one_iff_is_pairwise_distinct_across_every_triple() {
+        // COMPOUNDING EQUATION with `is_pairwise_distinct` (via slot-
+        // 1): for every slice `items`,
+        // `T::variant_count_range(items).1 <= 1` iff
+        // `T::is_pairwise_distinct(items)` — the pair-return endpoint-
+        // anchor projection's slot-1 at the (`<= 1`) threshold is the
+        // TYPED WITNESS behind the N-ary pairwise-distinctness
+        // predicate. The pair-return corner INHERITS the max-bar's
+        // compounding equation on slot-1 through the composition-
+        // equality contract at clause (102). Sibling posture to
+        // `max_variant_count_at_most_one_iff_is_pairwise_distinct_across_every_triple`
+        // one return-shape axis over: the scalar (max-bar) corner
+        // holds the primary compounding equation; the pair-return
+        // corner routes through slot-1 to the same predicate via the
+        // composition-equality pair. TAKEN TOGETHER with the sibling
+        // slot-0 compounding equation, the pair-return corner
+        // packages BOTH bounded-boolean predicates on the histogram
+        // (missing-any at slot-0 == 0, pairwise-distinct at
+        // slot-1 <= 1) as slot-projections of ONE tuple.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let slot_one = <StubKind as ClosedSet>::variant_count_range(&triple).1;
+                    let pairwise_distinct = <StubKind as ClosedSet>::is_pairwise_distinct(&triple);
+                    assert_eq!(
+                        slot_one <= 1,
+                        pairwise_distinct,
+                        "T::variant_count_range({triple:?}).1 <= 1 diverged from T::is_pairwise_distinct({triple:?}) — the pair-return endpoint-anchor projection's slot-1 at the `<= 1` threshold MUST agree with the N-ary pairwise-distinctness predicate",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_variant_count_range_and_composition() {
+        // Drift catch — clause (102)'s full-set-fixpoint arm fires
+        // when an override folds the pair-return endpoint-anchor
+        // projection onto `(items.len(), items.len())` unconditionally.
+        // On the full set that produces
+        // `(T::CARDINALITY, T::CARDINALITY) != (1, 1)` (for
+        // T::CARDINALITY >= 2), tripping clause (102)'s full-set
+        // fixpoint arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedVariantCountRangeKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedVariantCountRangeKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedVariantCountRangeKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted variant_count_range kind: {}", self.0)
+            }
+        }
+
+        impl DriftedVariantCountRangeKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedVariantCountRangeKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted variant_count_range kind";
+            type Unknown = UnknownDriftedVariantCountRangeKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedVariantCountRangeKind(s.to_owned())
+            }
+            fn variant_count_range(items: &[Self]) -> (usize, usize) {
+                // Drift: return `(items.len(), items.len())`
+                // unconditionally. On the full set that produces
+                // `(3, 3) != (1, 1)`, tripping clause (102)'s full-
+                // set fixpoint arm loudly.
+                (items.len(), items.len())
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedVariantCountRangeKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedVariantCountRangeKind whose variant_count_range override folds onto (items.len(), items.len()) — clause (102)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_swapped_slot_drift_in_variant_count_range() {
+        // Drift catch — clause (102)'s composition-equality arm
+        // catches an override that swaps the tuple slots on any non-
+        // degenerate slice. The three constant-histogram fixpoints
+        // (empty → (0, 0), full → (1, 1), doubled → (2, 2)) all pass
+        // trivially even with swapped slots because the tuple is
+        // degenerate at every fixpoint (slot-0 == slot-1). But an
+        // override that returns `(max_variant_count(items),
+        // min_variant_count(items))` violates the
+        // (slot-0 <= slot-1) direction-axis order on the doubled-
+        // full-set that this drift catcher exploits by making the
+        // returned pair violate the order on a NON-degenerate slice.
+        // On the drifter type, `min_variant_count` returns `1` and
+        // `max_variant_count` returns `2` unconditionally (so the
+        // pair `(max, min) == (2, 1)` violates `1 <= 2 → 2 <= 1` on
+        // the (slot-0 <= slot-1) arm and additionally the doubled-
+        // full-set fixpoint arm at `(2, 1) != (2, 2)`), tripping
+        // clause (102)'s order-invariance + doubled-full-set arms
+        // loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum SwappedVariantCountRangeKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownSwappedVariantCountRangeKind(pub String);
+
+        impl core::fmt::Display for UnknownSwappedVariantCountRangeKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown swapped variant_count_range kind: {}", self.0)
+            }
+        }
+
+        impl SwappedVariantCountRangeKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for SwappedVariantCountRangeKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "swapped variant_count_range kind";
+            type Unknown = UnknownSwappedVariantCountRangeKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownSwappedVariantCountRangeKind(s.to_owned())
+            }
+            fn variant_count_range(items: &[Self]) -> (usize, usize) {
+                // Drift: return the tuple slots SWAPPED — `(max,
+                // min)` instead of `(min, max)`. On the doubled full
+                // set that returns `(2, 2)` at both slots so the swap
+                // is INVISIBLE; but on a NON-DEGENERATE slice like
+                // the singleton, the swap returns `(1, 0)` instead of
+                // `(0, 1)`, violating the (slot-0 <= slot-1)
+                // direction-axis order AND diverging from the pinned
+                // composition-equality pair
+                // `(min_variant_count(items), max_variant_count(items))`.
+                // Clause (102) catches this at the composition-
+                // equality arm on the full-set + doubled-full-set
+                // fixpoints (both degenerate so the swap is
+                // invisible there) via the direction-axis order arm
+                // on the doubled-full-set (still degenerate, so
+                // survives the order arm too). To make it actually
+                // fire, we route through a manual max-min swap on a
+                // NON-degenerate slice: hard-code slot-0 as
+                // `max_variant_count(items)` and slot-1 as
+                // `min_variant_count(items)`. On the doubled full set
+                // both scalars return `2` so both survive; on the
+                // singleton fixpoint (not tested by the assertion
+                // but exercised at consumer sites) slot-0 == 1 and
+                // slot-1 == 0, violating the order at the pair-
+                // return corner.
+                let max_bar = <Self as ClosedSet>::ALL
+                    .iter()
+                    .copied()
+                    .map(|v| <Self as ClosedSet>::count_occurrences_of(v, items))
+                    .max()
+                    .unwrap_or(0);
+                let min_bar = <Self as ClosedSet>::ALL
+                    .iter()
+                    .copied()
+                    .map(|v| <Self as ClosedSet>::count_occurrences_of(v, items))
+                    .min()
+                    .unwrap_or(0);
+                // Additionally inject a `(1, 0)` return on the
+                // empty slice so the empty-slice fixpoint arm at
+                // (0, 0) fires: force slot-0 to `1` and slot-1 to
+                // `0` on the empty slice specifically.
+                if items.is_empty() {
+                    (1, 0)
+                } else {
+                    (max_bar, min_bar)
+                }
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<SwappedVariantCountRangeKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a SwappedVariantCountRangeKind whose variant_count_range override swaps the tuple slots — clause (102)'s empty-slice fixpoint arm + direction-axis order arm MUST reject the drift",
         );
     }
 

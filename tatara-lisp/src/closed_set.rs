@@ -16307,6 +16307,210 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::count_occurrences_of(target, items) == 1
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "per-target multiplicity-≥2"
+    /// predicate — the `bool` per-target REPETITION test whose value
+    /// coincides with `T::count_occurrences_of(target, items) >= 2`,
+    /// i.e. `true` iff the target appears AT LEAST TWICE in `items`.
+    /// The PER-TARGET `bool`-RETURN MULTIPLICITY-BAND CLOSER on the
+    /// (per-target × bool) column of the equivalence-partition surface,
+    /// positioned as the direct MULTIPLICITY-BAND projection of the
+    /// [`Self::count_occurrences_of`] per-target multiplicity primitive
+    /// one MULTIPLICITY-BAND axis over from BOTH the (per-target × bool)
+    /// MULTIPLICITY-POSITIVE corner [`Self::occurs_in`] (mult `> 0`)
+    /// AND the (per-target × bool) MULTIPLICITY-EQUALS-ONE corner
+    /// [`Self::is_unique_occurrence_of`] (mult `== 1`). The three
+    /// bands (`== 0`, `== 1`, `>= 2`) partition the per-target
+    /// multiplicity axis exhaustively into three disjoint arms,
+    /// exposed on the trait through the disjoint predicate triple
+    /// (`!occurs_in`, `is_unique_occurrence_of`,
+    /// `is_repeated_occurrence_of`) that closes the (per-target × bool
+    /// × multiplicity-band) 3-corner face on the equivalence-partition
+    /// surface — every position on the per-target multiplicity axis
+    /// binds to exactly ONE of the three typed predicates.
+    ///
+    /// Count-composition identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::is_repeated_occurrence_of(v, items) == (T::count_occurrences_of(v, items) >= 2)`
+    /// — the bool predicate is EXACTLY the lower-bound test of the
+    /// per-target multiplicity primitive against `2`. Pinned by
+    /// clause (112) and by
+    /// `is_repeated_occurrence_of_holds_iff_count_occurrences_of_ge_two_across_every_target_and_triple`.
+    ///
+    /// Presence-and-repeat composition identity: for every slice
+    /// `items` and every target `v`,
+    /// `T::is_repeated_occurrence_of(v, items) == (T::occurs_in(v, items) && !T::is_unique_occurrence_of(v, items))`
+    /// — the (multiplicity `>= 2`) band factors through the
+    /// (multiplicity `> 0`) membership predicate conjoined with the
+    /// NEGATION of the (multiplicity `== 1`) uniqueness predicate.
+    /// Pinned by
+    /// `is_repeated_occurrence_of_equals_occurs_in_and_not_is_unique_across_every_target_and_triple`.
+    ///
+    /// Every-position composition identity: for every slice `items`
+    /// and every target `v`,
+    /// `T::is_repeated_occurrence_of(v, items) == (T::all_occurrences_of(v, items).len() >= 2)`
+    /// — the lower-bound-against-2 test factors through the every-
+    /// position vec's length arm. Pinned by
+    /// `is_repeated_occurrence_of_holds_iff_all_occurrences_of_len_ge_two_across_every_target_and_triple`.
+    ///
+    /// Endpoint-separation composition identity: for every slice
+    /// `items` and every target `v`,
+    /// `T::is_repeated_occurrence_of(v, items) == (T::occurrence_span_of(v, items).map(|s| s >= 1).unwrap_or(false))`
+    /// — a repeated occurrence pins the `(head, tail)` endpoint pair
+    /// at distinct slots (span `>= 1`), and any hit on a non-empty
+    /// slice with non-zero span means at least two occurrences; the
+    /// `None`-preserving `unwrap_or(false)` arm on the empty slice
+    /// collapses to `false` under the discriminant. Pinned by
+    /// `is_repeated_occurrence_of_equals_span_at_least_one_across_every_target_and_triple`.
+    ///
+    /// Multiplicity-band partition (trichotomy): for every slice
+    /// `items` and every target `v`, EXACTLY ONE of the three typed
+    /// predicates holds — `!T::occurs_in(v, items)` (multiplicity `==
+    /// 0`), `T::is_unique_occurrence_of(v, items)` (multiplicity `==
+    /// 1`), or `T::is_repeated_occurrence_of(v, items)` (multiplicity
+    /// `>= 2`) — and the three arms are PAIRWISE DISJOINT. Pinned by
+    /// `is_repeated_occurrence_of_and_is_unique_occurrence_of_are_pairwise_disjoint_across_every_target_and_triple`
+    /// and
+    /// `multiplicity_band_predicates_partition_the_per_target_axis_across_every_target_and_triple`.
+    ///
+    /// Empty-slice contract: `T::is_repeated_occurrence_of(v, &[])` is
+    /// `false` for every target `v` — the empty slice hits zero
+    /// positions, so the per-target multiplicity is `0` and the
+    /// lower-bound test against `2` fails. Pinned by clause (112) and
+    /// by
+    /// `is_repeated_occurrence_of_returns_false_on_the_empty_slice_across_every_target`.
+    ///
+    /// Matching-singleton contract: `T::is_repeated_occurrence_of(v,
+    /// &[v]) == false` for every target `v` — the sole position hits
+    /// the target with multiplicity `1`, so the lower-bound test
+    /// against `2` fails. Pinned by
+    /// `is_repeated_occurrence_of_returns_false_on_the_matching_singleton_across_every_target`.
+    ///
+    /// Non-matching-singleton contract: `T::is_repeated_occurrence_of(v,
+    /// &[w]) == false` for every target `v` and slice-element `w`
+    /// with `T::index_of(v) != T::index_of(w)` — the per-target
+    /// multiplicity is `0` at the target, and the lower-bound test
+    /// against `2` fails. Pinned by
+    /// `is_repeated_occurrence_of_returns_false_on_the_non_matching_singleton_across_every_target_pair`.
+    ///
+    /// Full-set contract: `T::is_repeated_occurrence_of(v, <T as
+    /// ClosedSet>::ALL) == false` UNCONDITIONALLY — clause (3)'s
+    /// pairwise-distinctness invariant forces every variant to appear
+    /// at EXACTLY ONE position of the full-set slice, so the per-
+    /// target multiplicity is `1` and the lower-bound test against `2`
+    /// fails at every target. Pinned by clause (112) at the full-set
+    /// fixpoint AND by
+    /// `is_repeated_occurrence_of_returns_false_on_the_full_set_across_every_target`.
+    ///
+    /// Doubled-full-set contract: `T::is_repeated_occurrence_of(v,
+    /// &[T::ALL, T::ALL].concat()) == true` UNCONDITIONALLY — the
+    /// doubled full set hits every variant at EXACTLY TWO positions,
+    /// so the per-target multiplicity is `2` and the lower-bound test
+    /// against `2` holds at every target. The doubled-full-set arm is
+    /// LOAD-BEARING — it is the ONLY canonical fixpoint arm that
+    /// separates the (multiplicity `>= 2`) band from the (multiplicity
+    /// `== 0`) absence band: on empty, matching-singleton, non-
+    /// matching-singleton, and full-set fixpoints both bands report
+    /// `false` (multiplicity is `0` or `1` at every corner); only the
+    /// doubled-full-set arm distinguishes them (`true` under the
+    /// repetition band, `false` under the absence band). Pinned by
+    /// clause (112) at the doubled-full-set fixpoint AND by
+    /// `is_repeated_occurrence_of_returns_true_on_the_doubled_full_set_across_every_target`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis on `T::ALL`
+    /// COLLAPSES on this predicate because it factors through
+    /// [`Self::count_occurrences_of`] (itself ordering-agnostic) via
+    /// a scalar-lower-bound test. Sibling posture to every predicate
+    /// on the equivalence-partition surface: no separate
+    /// `sorted_is_repeated_occurrence_of` peer is needed.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::count_occurrences_of`] via lower-bound against `2`.
+    /// The sweep cost inherits the multiplicity primitive: O(n) on
+    /// slice arity `n`, allocation-free, no `PartialEq`/`Eq`/`Hash`
+    /// supertrait bound (the trait's minimal `Sized + Copy + 'static`
+    /// supertrait pair stays untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::is_repeated_occurrence_of`]: a `tatara-check` predicate
+    /// `(check-phase-visited-more-than-once …)` reporting whether a
+    /// specific `WorkloadPhase` visits its rollout window AT LEAST
+    /// TWICE (a rollout-loop witness that distinguishes a
+    /// re-convergence retry from a single-shot success) in ONE
+    /// atomic bool rather than a count-and-then-compare composition;
+    /// a Sekiban audit-trail per-variant repetition bit across a
+    /// rollout window classifying variants into (absent, unique,
+    /// repeated) via the disjoint arms `!occurs_in`,
+    /// `is_unique_occurrence_of`, and `is_repeated_occurrence_of` —
+    /// this predicate CLOSES the third arm of the trichotomy;
+    /// a `tatara-lisp::macro_expand::Expander` hygiene pass that
+    /// flags a template identifier introduced MORE THAN ONCE
+    /// (a redefinition, distinct from an unbound identifier OR a
+    /// single-shot binding — a common bug shape in quasi-quote
+    /// templates that unquote-splice a variable set) in ONE typed
+    /// bool. Each binds to ONE typed N-ary per-target multiplicity-
+    /// ≥2 predicate on the trait rather than re-deriving
+    /// `T::count_occurrences_of(v, items) >= 2` inline per callsite.
+    ///
+    /// Compounding closure: the (per-target × bool × multiplicity-
+    /// band) 3-corner face on the equivalence-partition surface now
+    /// CLOSES EXHAUSTIVELY at three disjoint bands — (mult `== 0`)
+    /// via `!T::occurs_in`, (mult `== 1`) via
+    /// [`Self::is_unique_occurrence_of`], and (mult `>= 2`) via this
+    /// predicate. Every point on the per-target multiplicity axis
+    /// now binds to exactly ONE typed predicate on the trait; the
+    /// trichotomy partition is a TYPED THEOREM the substrate proves
+    /// once and every downstream consumer routes through. The natural
+    /// next lift past this corner is the set-level `has_repeat` bool
+    /// (`T::ALL.iter().any(|&v| T::is_repeated_occurrence_of(v, items))`
+    /// — some variant appears MORE THAN ONCE across the entire slice,
+    /// equivalently `T::max_variant_count(items) >= 2`,
+    /// equivalently `!T::is_pairwise_distinct(items)`) opening a
+    /// (set-level × bool × multiplicity-band `>= 2`) corner peer to
+    /// the just-lifted (per-target × bool × mult `>= 2`) corner one
+    /// arity axis over on the (arity × mult-band) face. Note that the
+    /// existing [`Self::is_pairwise_distinct`] predicate ALREADY
+    /// closes the set-level (mult `<= 1`) band; a set-level `has_repeat`
+    /// lift would simply expose the NEGATION as a typed alias — a
+    /// distinct question but not a fresh compounding closure.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary per-
+    /// target multiplicity-≥2 primitive becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `T::count_occurrences_of(v, items) >= 2` composition at every
+    /// downstream generic site. THEORY.md §V.1 — knowable platform;
+    /// naming the (per-target × bool × `>= 2`) corner on the trait
+    /// makes the projection a TYPED CONSEQUENCE of the substrate's
+    /// [`Self::count_occurrences_of`] primitive packaged as one
+    /// atomic lower-bound test — AND completes the trichotomy
+    /// partition on the per-target multiplicity axis as a TYPED
+    /// THEOREM the substrate proves once. THEORY.md §VI.1 —
+    /// generation over composition; the multiplicity-≥2 predicate
+    /// emerges from one composition (lower-bound against `2` on the
+    /// multiplicity primitive), not as a per-implementor hand-rolled
+    /// body.
+    ///
+    /// Frontier inspiration: Coq's `2 <=? List.count_occ eqb l x`
+    /// decidable-equality-derived repetition test on `list nat`;
+    /// Idris's `Data.List.count (== v) items >= 2`; Julia's
+    /// `count(==(v), items) >= 2`; Haskell's `length (filter (== v) items) >= 2`;
+    /// Rust's own `items.iter().filter(|&&w| w == v).count() >= 2`
+    /// binds through a `Self: PartialEq` supertrait bound; Python's
+    /// `items.count(v) >= 2`; SQL's `HAVING COUNT(*) >= 2` on a
+    /// `GROUP BY variant` aggregation — the canonical per-key
+    /// repetition witness on a relational carrier. Translation
+    /// through pleme-io primitives: the N-ary per-target multiplicity-
+    /// ≥2 predicate on the closed-set trait binds through lower-
+    /// bound against `2` on the substrate's multiplicity primitive —
+    /// no new dep, no supertrait bound (the [`Self::index_of`]
+    /// projection the multiplicity primitive already threads through
+    /// replaces the `PartialEq` bound the standard-library `count` +
+    /// `>= 2` signature chain demands), no allocation, O(n) on slice
+    /// arity `n` inherited verbatim from the multiplicity primitive.
+    fn is_repeated_occurrence_of(target: Self, items: &[Self]) -> bool {
+        <Self as ClosedSet>::count_occurrences_of(target, items) >= 2
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "per-slot variant histogram"
     /// projection — the `Vec<usize>` DECLARATION-ORDER histogram over
     /// [`Self::ALL`] whose slot `i` reports the multiplicity of
@@ -27801,6 +28005,77 @@ where
         assert_eq!(
             doubled_unique, expected_via_occurs_and_lt_two,
             "{type_name}: T::is_unique_occurrence_of({target_label:?}, &doubled_full_set) drifted from (T::occurs_in({target_label:?}, &doubled_full_set) && T::count_occurrences_of({target_label:?}, &doubled_full_set) < 2) — the multiplicity-1 predicate MUST factor through the (multiplicity `> 0`) membership predicate conjoined with the (multiplicity `< 2`) non-repeat predicate, so a downstream unique-occurrence consumer that binds this presence-and-non-repeat composition would disagree with the pinned predicate",
+            target_label = <T as ClosedSet>::label(target),
+        );
+    }
+    // (112) — `T::is_repeated_occurrence_of(target, items)` MUST agree
+    // with the lower-bound test of the per-target multiplicity
+    // primitive against `2` on every (target, slice) pair AND MUST
+    // land on its three canonical fixpoints (`false` at every target
+    // on the empty slice, `false` at every target on the full set,
+    // `true` at every target on the doubled full set) AND on TWO
+    // composition-equality arms on the doubled-slice fixpoint:
+    // (a) count-composition against `T::count_occurrences_of(target,
+    // items) >= 2`, (b) presence-and-repeat composition against
+    // `T::occurs_in(target, items) && !T::is_unique_occurrence_of(target,
+    // items)`. The three fixpoints + two composition arms partition
+    // failure modes at the (discriminant × slice-shape × composition-
+    // equality) corner simultaneously: an override that folds onto
+    // `true` unconditionally fires on the empty-slice AND full-set
+    // arms (returns `true` at every target rather than `false`); an
+    // override that folds onto `false` unconditionally fires on the
+    // doubled-full-set arm; an override that folds onto the WEAKER
+    // (multiplicity `> 0`) membership predicate (bifurcates at
+    // multiplicity `== 1`) fires on the full-set arm (returns `true`
+    // rather than `false` at every target); an override that folds
+    // onto the (multiplicity `== 1`) uniqueness predicate (bifurcates
+    // at multiplicity `>= 2`) fires on the doubled-full-set arm
+    // (returns `false` rather than `true`). Sibling posture to clause
+    // (111): closes the third band on the (per-target × bool ×
+    // multiplicity-band) face at the (bool, per-target, `>= 2`) corner
+    // peer to (bool, per-target, `== 1`) and (bool, per-target, `> 0`)
+    // corners already opened; together clauses (97) + (111) + (112)
+    // partition the per-target multiplicity axis into three PAIRWISE
+    // DISJOINT typed predicates (`!occurs_in`, `is_unique_occurrence_of`,
+    // `is_repeated_occurrence_of`) that exhaustively cover the axis.
+    // The default trait body threads
+    // `<Self as ClosedSet>::count_occurrences_of(target, items) >= 2`
+    // verbatim and satisfies every fixpoint arm + every composition-
+    // equality arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly rather
+    // than silently bifurcating the per-target multiplicity-≥2
+    // predicate surface every downstream repetition consumer routes
+    // through.
+    for target in T::ALL.iter().copied() {
+        let empty_repeated = T::is_repeated_occurrence_of(target, &[]);
+        assert!(
+            !empty_repeated,
+            "{type_name}: T::is_repeated_occurrence_of({target_label:?}, &[]) == true != false — the per-target multiplicity-≥2 predicate MUST report `false` on the empty slice because the multiplicity primitive returns `0` and the lower-bound test against `2` fails; a `true` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream per-target repetition consumer routes through",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let full_set_repeated = T::is_repeated_occurrence_of(target, T::ALL);
+        assert!(
+            !full_set_repeated,
+            "{type_name}: T::is_repeated_occurrence_of({target_label:?}, T::ALL) == true != false — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so the multiplicity primitive returns `1` and the lower-bound test against `2` fails; a `true` full-set repetition value silently detaches the multiplicity-≥2 predicate from the (variant → decl-slot) injectivity clause (16), breaking every downstream repetition consumer",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let doubled_repeated = T::is_repeated_occurrence_of(target, &doubled_full_set);
+        assert!(
+            doubled_repeated,
+            "{type_name}: T::is_repeated_occurrence_of({target_label:?}, &doubled_full_set) == false != true — the doubled full set hits every variant at EXACTLY TWO positions, so the multiplicity primitive returns `2` and the lower-bound test against `2` holds; the doubled-full-set arm is LOAD-BEARING — it is the ONLY canonical fixpoint arm that separates the (multiplicity `>= 2`) band from the (multiplicity `== 0`) absence band (empty, matching-singleton, non-matching-singleton, full-set all coincide on `false`)",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let expected_via_count_ge_two = T::count_occurrences_of(target, &doubled_full_set) >= 2;
+        assert_eq!(
+            doubled_repeated, expected_via_count_ge_two,
+            "{type_name}: T::is_repeated_occurrence_of({target_label:?}, &doubled_full_set) drifted from (T::count_occurrences_of({target_label:?}, &doubled_full_set) >= 2) — the multiplicity-≥2 predicate MUST equal the lower-bound test of the per-target multiplicity primitive against `2` on every slice, so a downstream repetition consumer that binds `T::count_occurrences_of(_, _) >= 2` as its repetition query surface would disagree with the pinned predicate",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let expected_via_occurs_and_not_unique = T::occurs_in(target, &doubled_full_set)
+            && !T::is_unique_occurrence_of(target, &doubled_full_set);
+        assert_eq!(
+            doubled_repeated, expected_via_occurs_and_not_unique,
+            "{type_name}: T::is_repeated_occurrence_of({target_label:?}, &doubled_full_set) drifted from (T::occurs_in({target_label:?}, &doubled_full_set) && !T::is_unique_occurrence_of({target_label:?}, &doubled_full_set)) — the multiplicity-≥2 predicate MUST factor through the (multiplicity `> 0`) membership predicate conjoined with the NEGATION of the (multiplicity `== 1`) uniqueness predicate; the trichotomy on the per-target multiplicity axis (`!occurs_in` XOR `is_unique_occurrence_of` XOR `is_repeated_occurrence_of`) demands this composition-equality identity",
             target_label = <T as ClosedSet>::label(target),
         );
     }
@@ -54021,6 +54296,469 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted an OccursInDriftedIsUniqueOccurrenceKind whose is_unique_occurrence_of override folds onto the weaker membership predicate — clause (111)'s doubled-full-set arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_returns_false_on_the_empty_slice_across_every_target() {
+        // EMPTY-SLICE CONTRACT (per-target × bool multiplicity-≥2
+        // predicate): `T::is_repeated_occurrence_of(v, &[])` is
+        // `false` for every target `v` — the empty slice hits zero
+        // positions, so the per-target multiplicity is `0` and the
+        // lower-bound test against `2` fails. Sibling posture to
+        // `is_unique_occurrence_of_returns_false_on_the_empty_slice_across_every_target`
+        // one MULTIPLICITY-BAND axis over: both bands report `false`
+        // on the empty slice because the multiplicity primitive
+        // returns `0` (below both threshold `1` and threshold `2`).
+        let empty: &[StubKind] = &[];
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                !<StubKind as ClosedSet>::is_repeated_occurrence_of(v, empty),
+                "T::is_repeated_occurrence_of({v:?}, &[]) diverged from the empty-slice fixpoint `false`",
+            );
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_returns_false_on_the_matching_singleton_across_every_target() {
+        // MATCHING-SINGLETON CONTRACT: `T::is_repeated_occurrence_of(v,
+        // &[v]) == false` for every target `v` — the sole position
+        // hits the target with multiplicity `1`, so the lower-bound
+        // test against `2` fails. Sibling posture to
+        // `is_unique_occurrence_of_returns_true_on_the_matching_singleton_across_every_target`
+        // one MULTIPLICITY-BAND axis over: the (mult `== 1`) band
+        // reports `true` on the matching singleton; the (mult `>= 2`)
+        // band reports `false` on the same fixpoint. The singleton
+        // sits at the DISCRIMINATING boundary between the two bands.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert!(
+                !<StubKind as ClosedSet>::is_repeated_occurrence_of(v, &singleton),
+                "T::is_repeated_occurrence_of({v:?}, {singleton:?}) diverged from the matching-singleton fixpoint `false`",
+            );
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_returns_false_on_the_non_matching_singleton_across_every_target_pair(
+    ) {
+        // NON-MATCHING-SINGLETON CONTRACT: for every target `v` and
+        // slice-element `w` with `T::index_of(v) != T::index_of(w)`,
+        // `T::is_repeated_occurrence_of(v, &[w]) == false` — the
+        // per-target multiplicity is `0` at the target, and the
+        // lower-bound test against `2` fails. Sweeps every (target,
+        // singleton-element) pair pins the miss contract across the
+        // full 3×3 = 9-corner matrix at the six OFF-DIAGONAL corners.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::index_of(v) != <StubKind as ClosedSet>::index_of(w) {
+                    let singleton = [w];
+                    assert!(
+                        !<StubKind as ClosedSet>::is_repeated_occurrence_of(v, &singleton),
+                        "T::is_repeated_occurrence_of({v:?}, {singleton:?}) diverged from the non-matching-singleton fixpoint `false`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_returns_false_on_the_full_set_across_every_target() {
+        // FULL-SET CONTRACT: `T::is_repeated_occurrence_of(v, T::ALL)
+        // == false` UNCONDITIONALLY — clause (3)'s pairwise-
+        // distinctness invariant forces every variant to appear at
+        // EXACTLY ONE position of the full-set slice, so the per-
+        // target multiplicity is `1` and the lower-bound test against
+        // `2` fails at every target. Sibling posture to
+        // `is_unique_occurrence_of_returns_true_on_the_full_set_across_every_target`
+        // one MULTIPLICITY-BAND axis over: the full set is the
+        // uniqueness fixpoint (mult `== 1` everywhere), NOT the
+        // repetition fixpoint.
+        let all = <StubKind as ClosedSet>::ALL;
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                !<StubKind as ClosedSet>::is_repeated_occurrence_of(v, all),
+                "T::is_repeated_occurrence_of({v:?}, T::ALL) diverged from `false` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+            );
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_returns_true_on_the_doubled_full_set_across_every_target() {
+        // DOUBLED-FULL-SET CONTRACT: `T::is_repeated_occurrence_of(v,
+        // T::ALL ++ T::ALL) == true` UNCONDITIONALLY — the doubled
+        // full set hits every variant at EXACTLY TWO positions, so
+        // the per-target multiplicity is `2` and the lower-bound test
+        // against `2` holds at every target. The doubled-full-set
+        // arm is LOAD-BEARING — it is the ONLY canonical fixpoint
+        // arm on which the repetition band diverges from the absence
+        // band (empty, matching-singleton, non-matching-singleton,
+        // full-set all coincide on `false`).
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &doubled),
+                "T::is_repeated_occurrence_of({v:?}, ALL++ALL) diverged from `true` — the doubled-slice fixpoint pins the multiplicity-≥2 predicate to `true` at every target",
+            );
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_holds_iff_count_occurrences_of_ge_two_across_every_target_and_triple(
+    ) {
+        // COUNT-COMPOSITION IDENTITY: for every slice `items` and
+        // every target `v`, `T::is_repeated_occurrence_of(v, items)
+        // == (T::count_occurrences_of(v, items) >= 2)` — the bool
+        // predicate is EXACTLY the lower-bound test of the per-
+        // target multiplicity primitive against `2`. Sweeping every
+        // length-3 triple × every target pins the identity across
+        // the full 3×27 = 81-corner (target × triple) matrix.
+        // Sibling posture to
+        // `is_unique_occurrence_of_holds_iff_count_occurrences_of_equals_one_across_every_target_and_triple`
+        // one MULTIPLICITY-BAND axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_predicate =
+                            <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple);
+                        let via_count_ge_two =
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &triple) >= 2;
+                        assert_eq!(
+                            via_predicate, via_count_ge_two,
+                            "T::is_repeated_occurrence_of({v:?}, {triple:?}) diverged from (T::count_occurrences_of({v:?}, {triple:?}) >= 2) — the multiplicity-≥2 predicate MUST equal the lower-bound test of the per-target multiplicity primitive against `2`",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_equals_occurs_in_and_not_is_unique_across_every_target_and_triple()
+    {
+        // PRESENCE-AND-REPEAT COMPOSITION IDENTITY: for every slice
+        // `items` and every target `v`,
+        // `T::is_repeated_occurrence_of(v, items) == (T::occurs_in(v, items) && !T::is_unique_occurrence_of(v, items))`
+        // — the (multiplicity `>= 2`) band factors through the
+        // (multiplicity `> 0`) membership predicate conjoined with
+        // the NEGATION of the (multiplicity `== 1`) uniqueness
+        // predicate. An INDEPENDENT cross-check distinct from the
+        // direct count-composition: any bifurcation at the count-
+        // composition or at this presence-and-repeat composition is
+        // caught at one of the two identities.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_predicate =
+                            <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple);
+                        let via_occurs_and_not_unique =
+                            <StubKind as ClosedSet>::occurs_in(v, &triple)
+                                && !<StubKind as ClosedSet>::is_unique_occurrence_of(v, &triple);
+                        assert_eq!(
+                            via_predicate, via_occurs_and_not_unique,
+                            "T::is_repeated_occurrence_of({v:?}, {triple:?}) diverged from (T::occurs_in({v:?}, {triple:?}) && !T::is_unique_occurrence_of({v:?}, {triple:?})) — the multiplicity-≥2 predicate MUST factor through the presence-and-repeat composition",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_holds_iff_all_occurrences_of_len_ge_two_across_every_target_and_triple(
+    ) {
+        // EVERY-POSITION COMPOSITION IDENTITY: for every slice
+        // `items` and every target `v`,
+        // `T::is_repeated_occurrence_of(v, items) == (T::all_occurrences_of(v, items).len() >= 2)`
+        // — the lower-bound-against-2 test factors through the
+        // every-position vec's length arm. An INDEPENDENT cross-
+        // check against the every-position Vec-return primitive
+        // distinct from the count-composition AND the presence-
+        // and-repeat composition.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_predicate =
+                            <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple);
+                        let via_positions_len =
+                            <StubKind as ClosedSet>::all_occurrences_of(v, &triple).len() >= 2;
+                        assert_eq!(
+                            via_predicate, via_positions_len,
+                            "T::is_repeated_occurrence_of({v:?}, {triple:?}) diverged from (T::all_occurrences_of({v:?}, {triple:?}).len() >= 2) — the multiplicity-≥2 predicate MUST equal the every-position vec's length-at-least-2 arm",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_equals_span_at_least_one_across_every_target_and_triple() {
+        // ENDPOINT-SEPARATION COMPOSITION IDENTITY: for every slice
+        // `items` and every target `v`,
+        // `T::is_repeated_occurrence_of(v, items) == T::occurrence_span_of(v, items).map(|s| s >= 1).unwrap_or(false)`
+        // — a repeated occurrence pins the `(head, tail)` endpoint
+        // pair at DISTINCT slots (span `>= 1`), and any hit on a
+        // non-empty slice with non-zero span means AT LEAST TWO
+        // occurrences. The `None`-preserving `unwrap_or(false)` arm
+        // on the empty slice collapses to `false` under the
+        // discriminant, matching the empty-slice fixpoint.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_predicate =
+                            <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple);
+                        let via_span_ge_one =
+                            <StubKind as ClosedSet>::occurrence_span_of(v, &triple)
+                                .map(|s| s >= 1)
+                                .unwrap_or(false);
+                        assert_eq!(
+                            via_predicate, via_span_ge_one,
+                            "T::is_repeated_occurrence_of({v:?}, {triple:?}) diverged from T::occurrence_span_of({v:?}, {triple:?}).map(|s| s >= 1).unwrap_or(false) — the multiplicity-≥2 predicate MUST equal the endpoint-span-at-least-one composition",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_and_is_unique_occurrence_of_are_pairwise_disjoint_across_every_target_and_triple(
+    ) {
+        // TRICHOTOMY DISJOINTNESS: for every slice `items` and every
+        // target `v`, AT MOST ONE of the three multiplicity-band
+        // predicates holds — `!T::occurs_in(v, items)` (mult `== 0`),
+        // `T::is_unique_occurrence_of(v, items)` (mult `== 1`),
+        // `T::is_repeated_occurrence_of(v, items)` (mult `>= 2`).
+        // The three arms are PAIRWISE DISJOINT: NO position on the
+        // per-target multiplicity axis binds to two of them at once.
+        // Together with the exhaustiveness pin below, the trichotomy
+        // partitions the axis into a discrete typed sum.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let absent = !<StubKind as ClosedSet>::occurs_in(v, &triple);
+                        let unique = <StubKind as ClosedSet>::is_unique_occurrence_of(v, &triple);
+                        let repeated =
+                            <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple);
+                        assert!(
+                            !(absent && unique),
+                            "T::is_repeated_occurrence_of trichotomy: (!occurs_in && is_unique_occurrence_of) held at ({v:?}, {triple:?}) — the (mult `== 0`) and (mult `== 1`) bands MUST be disjoint",
+                        );
+                        assert!(
+                            !(absent && repeated),
+                            "T::is_repeated_occurrence_of trichotomy: (!occurs_in && is_repeated_occurrence_of) held at ({v:?}, {triple:?}) — the (mult `== 0`) and (mult `>= 2`) bands MUST be disjoint",
+                        );
+                        assert!(
+                            !(unique && repeated),
+                            "T::is_repeated_occurrence_of trichotomy: (is_unique_occurrence_of && is_repeated_occurrence_of) held at ({v:?}, {triple:?}) — the (mult `== 1`) and (mult `>= 2`) bands MUST be disjoint",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn multiplicity_band_predicates_partition_the_per_target_axis_across_every_target_and_triple() {
+        // TRICHOTOMY EXHAUSTIVENESS: for every slice `items` and every
+        // target `v`, EXACTLY ONE of the three multiplicity-band
+        // predicates holds — `!T::occurs_in(v, items)` (mult `== 0`),
+        // `T::is_unique_occurrence_of(v, items)` (mult `== 1`),
+        // `T::is_repeated_occurrence_of(v, items)` (mult `>= 2`).
+        // Combined with the disjointness pin above, the three bands
+        // form a discrete typed partition of the per-target
+        // multiplicity axis — every position on the axis binds to
+        // exactly ONE typed predicate on the trait.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let absent = !<StubKind as ClosedSet>::occurs_in(v, &triple);
+                        let unique = <StubKind as ClosedSet>::is_unique_occurrence_of(v, &triple);
+                        let repeated =
+                            <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple);
+                        let arm_count =
+                            usize::from(absent) + usize::from(unique) + usize::from(repeated);
+                        assert_eq!(
+                            arm_count, 1,
+                            "T::is_repeated_occurrence_of trichotomy: ({v:?}, {triple:?}) lands on {arm_count} arms, not 1 — the (!occurs_in, is_unique_occurrence_of, is_repeated_occurrence_of) trichotomy MUST exhaustively cover the per-target multiplicity axis",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeated_occurrence_of_is_invariant_under_slice_reversal_across_every_target_and_triple()
+    {
+        // REVERSAL-INVARIANCE: `T::is_repeated_occurrence_of(v, items)`
+        // equals `T::is_repeated_occurrence_of(v, items.iter().rev().copied().collect::<Vec<_>>())`
+        // for every slice and every target — reversing a slice
+        // preserves its multiset of variant identities, and the
+        // multiplicity-≥2 predicate is a function of the multiset
+        // alone (inherited from `count_occurrences_of`'s reversal-
+        // invariance one return-shape axis over).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple),
+                            <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &reversed),
+                            "T::is_repeated_occurrence_of({v:?}, {triple:?}) diverged from T::is_repeated_occurrence_of({v:?}, {reversed:?}) — the predicate MUST be invariant under slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_true_drift_on_is_repeated_occurrence_of() {
+        // Drift catch — clause (112)'s empty-slice fixpoint arm fires
+        // when an override folds the per-target multiplicity-≥2
+        // predicate onto `true` regardless of target. The stub below
+        // overrides the default body to return `true` unconditionally;
+        // on the empty slice that produces `true != false` at every
+        // target, tripping clause (112)'s empty-slice fixpoint arm
+        // loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsRepeatedOccurrenceTrueKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsRepeatedOccurrenceTrueKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsRepeatedOccurrenceTrueKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted is_repeated_occurrence true kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedIsRepeatedOccurrenceTrueKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsRepeatedOccurrenceTrueKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_repeated_occurrence true kind";
+            type Unknown = UnknownDriftedIsRepeatedOccurrenceTrueKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsRepeatedOccurrenceTrueKind(s.to_owned())
+            }
+            fn is_repeated_occurrence_of(_target: Self, _items: &[Self]) -> bool {
+                true
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsRepeatedOccurrenceTrueKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsRepeatedOccurrenceTrueKind whose is_repeated_occurrence_of override folds onto true unconditionally — clause (112)'s empty-slice fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_occurs_in_drift_on_is_repeated_occurrence_of() {
+        // Drift catch — clause (112)'s full-set arm fires when an
+        // override folds the multiplicity-≥2 predicate onto the
+        // WEAKER (multiplicity `> 0`) membership predicate (bifurcates
+        // at multiplicity `== 1`). The stub below overrides the
+        // default body to return `T::occurs_in(target, items)`; on
+        // the full set that produces `true != false` at every target,
+        // tripping clause (112)'s full-set arm loudly. This is the
+        // load-bearing drift catch that distinguishes the strict
+        // (multiplicity `>= 2`) band from the weaker (multiplicity
+        // `> 0`) band.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum OccursInDriftedIsRepeatedOccurrenceKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownOccursInDriftedIsRepeatedOccurrenceKind(pub String);
+
+        impl core::fmt::Display for UnknownOccursInDriftedIsRepeatedOccurrenceKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown occurs-in-drifted is_repeated_occurrence kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl OccursInDriftedIsRepeatedOccurrenceKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for OccursInDriftedIsRepeatedOccurrenceKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "occurs-in-drifted is_repeated_occurrence kind";
+            type Unknown = UnknownOccursInDriftedIsRepeatedOccurrenceKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownOccursInDriftedIsRepeatedOccurrenceKind(s.to_owned())
+            }
+            fn is_repeated_occurrence_of(target: Self, items: &[Self]) -> bool {
+                // Drift: fold the strict (multiplicity `>= 2`) band
+                // onto the weaker (multiplicity `> 0`) band. On the
+                // full set the correct answer is `false` (multiplicity
+                // `1`), so `true` bifurcates loudly at clause (112)'s
+                // full-set arm.
+                <Self as ClosedSet>::occurs_in(target, items)
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<OccursInDriftedIsRepeatedOccurrenceKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted an OccursInDriftedIsRepeatedOccurrenceKind whose is_repeated_occurrence_of override folds onto the weaker membership predicate — clause (112)'s full-set arm MUST reject the drift",
         );
     }
 
